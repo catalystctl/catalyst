@@ -9,6 +9,8 @@ on:
 jobs:
   test:
     runs-on: self-hosted
+    container:
+      image: node:20-bullseye
     
     services:
       postgres:
@@ -23,7 +25,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
         ports:
-          - 5433:5432
+          - 5432:5432
 
     steps:
       - uses: actions/checkout@v3
@@ -55,7 +57,7 @@ jobs:
         working-directory: catalyst-backend
         run: npm run db:push
         env:
-          DATABASE_URL: postgresql://test:test@localhost:5433/test_db
+          DATABASE_URL: postgresql://test:test@postgres:5432/test_db
 
       - name: Run tests
         working-directory: catalyst-backend
@@ -63,6 +65,8 @@ jobs:
 
   security:
     runs-on: self-hosted
+    container:
+      image: node:20-bullseye
     steps:
       - uses: actions/checkout@v4
         with:
@@ -76,6 +80,8 @@ jobs:
   build:
     needs: test
     runs-on: self-hosted
+    container:
+      image: node:20-bullseye
     if: github.ref == 'refs/heads/main'
 
     steps:

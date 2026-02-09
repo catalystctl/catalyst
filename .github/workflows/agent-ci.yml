@@ -9,6 +9,8 @@ on:
 jobs:
   test:
     runs-on: self-hosted
+    container:
+      image: rust:1.75-bullseye
 
     steps:
       - uses: actions/checkout@v3
@@ -34,6 +36,8 @@ jobs:
   build:
     needs: test
     runs-on: self-hosted
+    container:
+      image: rust:1.75-bullseye
 
     strategy:
       matrix:
