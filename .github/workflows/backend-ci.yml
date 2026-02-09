@@ -63,8 +63,6 @@ jobs:
 
   security:
     runs-on: self-hosted
-    container:
-      image: node:20-bullseye
     steps:
       - uses: actions/checkout@v4
         with:
