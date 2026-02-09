@@ -37,7 +37,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: catalyst-backend
-        run: npm ci
+        run: npm ci --omit=optional
 
       - name: Generate Prisma Client
         working-directory: catalyst-backend
