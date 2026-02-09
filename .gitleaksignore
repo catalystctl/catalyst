@@ -1,0 +1,22 @@
+# Documentation examples with placeholder tokens (not real secrets)
+API-KEY-QUICKSTART.md:curl-auth-header:87
+API-KEY-QUICKSTART.md:curl-auth-header:90
+docs/README.md:curl-auth-header:140
+docs/README.md:curl-auth-header:145
+docs/api-keys.md:curl-auth-header:109
+docs/api-keys.md:curl-auth-header:116
+docs/api-keys.md:curl-auth-header:123
+docs/api-keys.md:curl-auth-header:130
+docs/automation-api-guide.md:curl-auth-header:56
+
+# Test files with intentionally invalid keys for testing
+tests/test-apikey-auth.sh:curl-auth-header:100
+tests/test-apikey-complete.sh:curl-auth-header:76
+
+# Deleted documentation file with example JWT tokens (commit 248b43d)
+backend-docs.md:generic-api-key:57
+backend-docs.md:generic-api-key:93
+backend-docs.md:generic-api-key:1939
+
+
+
