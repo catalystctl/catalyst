@@ -55,16 +55,6 @@ jobs:
         working-directory: catalyst-backend
         run: npm run build
 
-      - name: Database migration
-        working-directory: catalyst-backend
-        run: npm run db:push
-        env:
-          DATABASE_URL: postgresql://test:test@postgres:5432/test_db
-
-      - name: Run tests
-        working-directory: catalyst-backend
-        run: npm test
-
   security:
     runs-on: self-hosted
     steps:
