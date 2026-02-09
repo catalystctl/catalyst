@@ -521,13 +521,9 @@ impl WebSocketHandler {
     }
 
     async fn resolve_container_id(&self, server_id: &str, server_uuid: &str) -> String {
-        match self
-            .resolve_console_container_id(server_id, server_uuid)
+        self.resolve_console_container_id(server_id, server_uuid)
             .await
-        {
-            Some(value) => value,
-            None => String::new(),
-        }
+            .unwrap_or_default()
     }
 
     async fn stop_monitor_task(&self, server_id: &str) {
@@ -1147,19 +1143,19 @@ impl WebSocketHandler {
 
             // Create and start container
             self.runtime
-                .create_container(
-                    server_id,
-                    docker_image,
-                    &final_startup_command,
-                    &env_map,
+                .create_container(crate::runtime_manager::ContainerConfig {
+                    container_id: server_id,
+                    image: docker_image,
+                    startup_command: &final_startup_command,
+                    env: &env_map,
                     memory_mb,
                     cpu_cores,
-                    &server_dir,
-                    primary_port,
-                    &port_bindings,
+                    data_dir: &server_dir,
+                    port: primary_port,
+                    port_bindings: &port_bindings,
                     network_mode,
                     network_ip,
-                )
+                })
                 .await?;
 
             let is_running = match self.runtime.is_container_running(server_id).await {
@@ -2469,7 +2465,6 @@ impl WebSocketHandler {
                 .await
                 .ok()
                 .and_then(|output| parse_df_output_mb(&output))
-                .map(|(used_mb, total_mb)| (used_mb, total_mb))
             {
                 Some(value) => value,
                 None => {

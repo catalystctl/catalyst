@@ -24,6 +24,21 @@ use nix::unistd::mkfifo;
 use crate::errors::{AgentError, AgentResult};
 use crate::firewall_manager::FirewallManager;
 
+/// Parameters for creating a container
+pub struct ContainerConfig<'a> {
+    pub container_id: &'a str,
+    pub image: &'a str,
+    pub startup_command: &'a str,
+    pub env: &'a HashMap<String, String>,
+    pub memory_mb: u64,
+    pub cpu_cores: u64,
+    pub data_dir: &'a str,
+    pub port: u16,
+    pub port_bindings: &'a HashMap<u16, u16>,
+    pub network_mode: Option<&'a str>,
+    pub network_ip: Option<&'a str>,
+}
+
 #[derive(Clone)]
 pub struct ContainerdRuntime {
     socket_path: String,
@@ -50,30 +65,20 @@ impl ContainerdRuntime {
     }
 
     /// Create and start a container
-    pub async fn create_container(
-        &self,
-        container_id: &str,
-        image: &str,
-        startup_command: &str,
-        env: &HashMap<String, String>,
-        memory_mb: u64,
-        cpu_cores: u64,
-        data_dir: &str,
-        port: u16,
-        port_bindings: &HashMap<u16, u16>,
-        network_mode: Option<&str>,
-        network_ip: Option<&str>,
-    ) -> AgentResult<String> {
-        info!("Creating container: {} from image: {}", container_id, image);
+    pub async fn create_container(&self, config: ContainerConfig<'_>) -> AgentResult<String> {
+        info!(
+            "Creating container: {} from image: {}",
+            config.container_id, config.image
+        );
 
         // 1. Prepare FIFO for stdin
-        let console_fifo = self.prepare_console_fifo(container_id).await?;
+        let console_fifo = self.prepare_console_fifo(config.container_id).await?;
 
         // 2. Attach Console Writer
         // CRITICAL FIX: We must attach the writer *before* the container starts to ensure
         // the FIFO exists and handles are ready, but we must use a non-blocking open strategy
         // (O_RDWR) to avoid deadlocking waiting for the container to read.
-        self.attach_console_writer(container_id, console_fifo.path.clone())
+        self.attach_console_writer(config.container_id, console_fifo.path.clone())
             .await?;
 
         // Build nerdctl command
@@ -81,8 +86,8 @@ impl ContainerdRuntime {
         cmd.arg("--namespace").arg(&self.namespace).arg("run");
 
         // Set resource limits
-        cmd.arg(format!("--memory={}m", memory_mb));
-        cmd.arg("--cpus").arg(cpu_cores.to_string());
+        cmd.arg(format!("--memory={}m", config.memory_mb));
+        cmd.arg("--cpus").arg(config.cpu_cores.to_string());
 
         // Security hardening: prevent privilege escalation and drop unnecessary capabilities
         cmd.arg("--security-opt").arg("no-new-privileges");
@@ -93,7 +98,7 @@ impl ContainerdRuntime {
         cmd.arg("--cap-add").arg("NET_BIND_SERVICE");
 
         // Volume mount (host data directory → /data in container)
-        cmd.arg("-v").arg(format!("{}:/data", data_dir));
+        cmd.arg("-v").arg(format!("{}:/data", config.data_dir));
 
         // Provide stable host identifiers for apps that derive encryption keys from hardware UUID.
         add_readonly_mount(&mut cmd, "/etc/machine-id", "/etc/machine-id");
@@ -112,13 +117,13 @@ impl ContainerdRuntime {
         cmd.arg("-w").arg("/data");
 
         // Network mode
-        if let Some(network) = network_mode {
+        if let Some(network) = config.network_mode {
             if network == "host" {
                 cmd.arg("--network").arg("host");
             } else if network != "bridge" {
                 // Assume it's a custom network name (e.g., "mc-lan" for macvlan)
                 cmd.arg("--network").arg(network);
-                if let Some(ip) = network_ip {
+                if let Some(ip) = config.network_ip {
                     cmd.arg("--ip").arg(ip);
                 }
             }
@@ -126,13 +131,13 @@ impl ContainerdRuntime {
         }
 
         // Port mapping (only if not using host network)
-        if network_mode != Some("host") {
-            if port_bindings.is_empty() {
+        if config.network_mode != Some("host") {
+            if config.port_bindings.is_empty() {
                 // Backend contract: empty portBindings should still bind the primary port.
                 // Use an ephemeral host port while exposing the primary container port.
-                cmd.arg("-p").arg(format!("0.0.0.0::{}", port));
+                cmd.arg("-p").arg(format!("0.0.0.0::{}", config.port));
             } else {
-                for (container_port, host_port) in port_bindings {
+                for (container_port, host_port) in config.port_bindings {
                     cmd.arg("-p")
                         .arg(format!("0.0.0.0:{}:{}", host_port, container_port));
                 }
@@ -140,12 +145,12 @@ impl ContainerdRuntime {
         }
 
         // Set environment variables
-        for (key, value) in env {
+        for (key, value) in config.env {
             cmd.arg("-e").arg(format!("{}={}", key, value));
         }
 
         // Container name and image
-        cmd.arg("--name").arg(container_id);
+        cmd.arg("--name").arg(config.container_id);
         cmd.arg("-d"); // Detached
 
         // FIX: Removed "-i" because nerdctl does not support -i and -d together.
@@ -158,11 +163,11 @@ impl ContainerdRuntime {
         cmd.arg("--label")
             .arg(format!("catalyst.agent.socket_path={}", self.socket_path));
 
-        let entrypoint_arg = if !startup_command.is_empty() {
+        let entrypoint_arg = if !config.startup_command.is_empty() {
             let exec_path = format!("{}/catalyst-entrypoint", console_fifo.dir);
             let entrypoint = format!(
                 "#!/bin/bash\nset -e\nFIFO=\"{}\"\nexec 3<> \"$FIFO\"\nexec < \"$FIFO\"\nexec {}\n",
-                console_fifo.path, startup_command
+                console_fifo.path, config.startup_command
             );
             self.create_entrypoint_script(&console_fifo.dir, &entrypoint)
                 .await?;
@@ -174,7 +179,7 @@ impl ContainerdRuntime {
         if let Some(exec_path) = entrypoint_arg {
             cmd.arg("--entrypoint").arg(exec_path);
         }
-        cmd.arg(image);
+        cmd.arg(config.image);
 
         let output = cmd.output().await.map_err(|e| {
             AgentError::ContainerError(format!("Failed to create container: {}", e))
@@ -182,7 +187,7 @@ impl ContainerdRuntime {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            if let (Some(network), Some(ip)) = (network_mode, network_ip) {
+            if let (Some(network), Some(ip)) = (config.network_mode, config.network_ip) {
                 if network != "bridge" && network != "host" {
                     if let Err(err) = Self::release_static_ip(network, ip) {
                         warn!(
@@ -192,7 +197,7 @@ impl ContainerdRuntime {
                     }
                 }
             }
-            self.cleanup_console_fifo(container_id).await;
+            self.cleanup_console_fifo(config.container_id).await;
             return Err(AgentError::ContainerError(format!(
                 "Container creation failed: {}",
                 stderr
@@ -204,13 +209,13 @@ impl ContainerdRuntime {
         info!("Container created successfully: {}", container_full_id);
 
         // Get container IP for firewall configuration
-        let container_ip_opt = match self.get_container_ip(container_id).await {
+        let container_ip_opt = match self.get_container_ip(config.container_id).await {
             Ok(ip) if !ip.is_empty() => Some(ip),
             Ok(_) => None,
             Err(err) => {
                 warn!(
                     "Could not determine container IP for {}: {}. Skipping firewall configuration.",
-                    container_id, err
+                    config.container_id, err
                 );
                 None
             }
@@ -218,12 +223,12 @@ impl ContainerdRuntime {
 
         // Configure firewall to allow the ports, if we have a concrete container IP
         if let Some(container_ip) = container_ip_opt {
-            let ports_to_open: Vec<u16> = if port_bindings.is_empty() {
-                self.resolve_host_ports(container_id, port)
+            let ports_to_open: Vec<u16> = if config.port_bindings.is_empty() {
+                self.resolve_host_ports(config.container_id, config.port)
                     .await
                     .unwrap_or_default()
             } else {
-                port_bindings.values().copied().collect()
+                config.port_bindings.values().copied().collect()
             };
             for host_port in ports_to_open {
                 info!(
