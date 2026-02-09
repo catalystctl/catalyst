@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { serversApi } from '../../services/api/servers';
 import type { BackupStorageMode } from '../../types/server';
@@ -16,10 +16,11 @@ function TransferServerModal({ serverId, disabled = false }: Props) {
   const [transferMode, setTransferMode] = useState<BackupStorageMode>('local');
   const queryClient = useQueryClient();
   const { data: nodes = [], isLoading: nodesLoading } = useNodes();
+  const selectedTargetNodeId = targetNodeId || nodes[0]?.id || '';
 
   const mutation = useMutation({
     mutationFn: () => serversApi.transfer(serverId, {
-      targetNodeId,
+      targetNodeId: selectedTargetNodeId,
       transferMode,
     }),
     onSuccess: () => {
@@ -30,12 +31,6 @@ function TransferServerModal({ serverId, disabled = false }: Props) {
     },
     onError: () => notifyError('Failed to transfer server'),
   });
-
-  useEffect(() => {
-    if (!targetNodeId && nodes.length) {
-      setTargetNodeId(nodes[0].id);
-    }
-  }, [nodes, targetNodeId]);
 
   return (
     <div>
@@ -65,7 +60,7 @@ function TransferServerModal({ serverId, disabled = false }: Props) {
                 <span className="text-slate-500 dark:text-slate-400">Target node</span>
                 <select
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
-                  value={targetNodeId}
+                  value={selectedTargetNodeId}
                   onChange={(e) => setTargetNodeId(e.target.value)}
                   disabled={nodesLoading || !nodes.length}
                 >
@@ -104,7 +99,7 @@ function TransferServerModal({ serverId, disabled = false }: Props) {
                 <button
                   className="rounded-md bg-primary-600 px-4 py-2 font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
                   onClick={() => mutation.mutate()}
-                  disabled={mutation.isPending || !targetNodeId || !nodes.length || disabled}
+                  disabled={mutation.isPending || !selectedTargetNodeId || !nodes.length || disabled}
                 >
                   Transfer
                 </button>

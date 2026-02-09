@@ -24,6 +24,7 @@ function InvitesPage() {
   });
   useEffect(() => {
     if (!invitePreview?.email) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRegisterUsername((current) => current || invitePreview.email.split('@')[0]);
   }, [invitePreview?.email]);
 

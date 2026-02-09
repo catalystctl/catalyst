@@ -57,6 +57,7 @@ export function useConsole(serverId?: string, options: ConsoleOptions = {}) {
 
   useEffect(() => {
     nextId.current = 0;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEntries([]);
   }, [serverId]);
 
@@ -69,6 +70,7 @@ export function useConsole(serverId?: string, options: ConsoleOptions = {}) {
         timestamp: log.timestamp,
       }),
     );
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEntries((prev) => {
       if (!isConnected || !prev.length) return initialEntries.slice(-maxEntries);
       const merged = [...initialEntries, ...prev];

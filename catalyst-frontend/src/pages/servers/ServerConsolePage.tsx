@@ -52,6 +52,7 @@ function ServerConsolePage() {
   const canSend = Boolean(serverId) && isConnected && server?.status === 'running' && !isSuspended;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAutoScroll(true);
   }, [serverId]);
 

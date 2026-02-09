@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 const GRID_ROWS = 8;
 const GRID_COLS = 8;
 const INITIAL_POWER = 12;
+const randomGridIndex = () => Math.floor(Math.random() * GRID_ROWS * GRID_COLS);
 
 function NotFoundPage() {
   const [targetIndex, setTargetIndex] = useState(12);
@@ -19,15 +20,10 @@ function NotFoundPage() {
   useEffect(() => {
     if (power <= 0) return;
     const interval = window.setInterval(() => {
-      setTargetIndex(Math.floor(Math.random() * GRID_ROWS * GRID_COLS));
+      setTargetIndex(randomGridIndex());
       setPower((current) => Math.max(0, current - 1));
     }, 1200);
     return () => window.clearInterval(interval);
-  }, [power]);
-
-  useEffect(() => {
-    if (power > 0) return;
-    setMessage('timeout');
   }, [power]);
 
   const handleCellClick = (index: number) => {
@@ -35,7 +31,7 @@ function NotFoundPage() {
     if (index === targetIndex) {
       setScore((current) => current + 1);
       setMessage('hit');
-      setTargetIndex(Math.floor(Math.random() * GRID_ROWS * GRID_COLS));
+      setTargetIndex(randomGridIndex());
       setPower((current) => current + 2);
       window.setTimeout(() => setMessage('idle'), 350);
     } else {
@@ -44,6 +40,7 @@ function NotFoundPage() {
       window.setTimeout(() => setMessage('idle'), 350);
     }
   };
+  const displayedMessage = power <= 0 ? 'timeout' : message;
 
   return (
     <div className="app-shell relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 text-center text-slate-900 dark:text-slate-100">
@@ -68,20 +65,20 @@ function NotFoundPage() {
             </div>
             <div
               className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
-                message === 'hit'
+                displayedMessage === 'hit'
                   ? 'border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300'
-                  : message === 'miss'
+                  : displayedMessage === 'miss'
                     ? 'border-rose-200 bg-rose-100 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300'
-                    : message === 'timeout'
+                    : displayedMessage === 'timeout'
                       ? 'border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300'
                       : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'
               }`}
             >
-              {message === 'hit'
+              {displayedMessage === 'hit'
                 ? 'Direct hit!'
-                : message === 'miss'
+                : displayedMessage === 'miss'
                   ? 'Missed signal'
-                  : message === 'timeout'
+                  : displayedMessage === 'timeout'
                     ? 'Power depleted'
                     : 'Scanning'}
             </div>
@@ -96,7 +93,7 @@ function NotFoundPage() {
               onClick={() => {
                 setScore(0);
                 setPower(INITIAL_POWER);
-                setTargetIndex(Math.floor(Math.random() * GRID_ROWS * GRID_COLS));
+                setTargetIndex(randomGridIndex());
                 setMessage('idle');
               }}
             >

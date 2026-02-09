@@ -12,7 +12,7 @@ export class TaskScheduler {
   private logger: pino.Logger;
   private scheduledJobs: Map<string, any>;
   private taskExecutor?: TaskExecutor;
-  private checkInterval?: NodeJS.Timeout;
+  private checkInterval?: ReturnType<typeof setInterval>;
   private runningTasks: Set<string>;
 
   constructor(prisma: PrismaClient, logger: pino.Logger) {

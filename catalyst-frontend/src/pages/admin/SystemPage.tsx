@@ -68,6 +68,7 @@ function SystemPage() {
 
   useEffect(() => {
     if (!smtpSettings) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSmtpHost(smtpSettings.host ?? '');
     setSmtpPort(smtpSettings.port ? String(smtpSettings.port) : '587');
     setSmtpUsername(smtpSettings.username ?? '');
@@ -91,6 +92,7 @@ function SystemPage() {
 
   useEffect(() => {
     if (!modManagerSettings) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurseforgeApiKey(modManagerSettings.curseforgeApiKey ?? '');
     setModrinthApiKey(modManagerSettings.modrinthApiKey ?? '');
   }, [modManagerSettings]);

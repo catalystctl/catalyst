@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import {
   Archive,
   ArchiveRestore,
@@ -55,65 +55,63 @@ function FileContextMenu({
   const dangerClass =
     'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-rose-600 transition-colors hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10';
 
-  const menu = useMemo(
-    () => (
-      <div
-        ref={menuRef}
-        className="w-44 rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
-      >
-        <button type="button" className={itemClass} onClick={wrap(onOpen)}>
-          {entry.isDirectory ? <FolderOpen className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
-          {entry.isDirectory ? 'Open Folder' : 'Open File'}
+  const menu = (
+    <div
+      ref={menuRef}
+      className="w-44 rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+    >
+      <button type="button" className={itemClass} onClick={wrap(onOpen)}>
+        {entry.isDirectory ? <FolderOpen className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+        {entry.isDirectory ? 'Open Folder' : 'Open File'}
+      </button>
+      {onDownload && (
+        <button type="button" className={itemClass} onClick={wrap(onDownload)}>
+          <Download className="h-3.5 w-3.5" />
+          Download
         </button>
-        {onDownload && (
-          <button type="button" className={itemClass} onClick={wrap(onDownload)}>
-            <Download className="h-3.5 w-3.5" />
-            Download
-          </button>
-        )}
-        {onCopyPath && (
-          <button type="button" className={itemClass} onClick={wrap(onCopyPath)}>
-            <ClipboardCopy className="h-3.5 w-3.5" />
-            Copy Path
-          </button>
-        )}
-        {onRename && (
-          <button type="button" className={itemClass} onClick={wrap(onRename)}>
-            <Pencil className="h-3.5 w-3.5" />
-            Rename
-          </button>
-        )}
-        <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
-        {onCompress && (
-          <button type="button" className={itemClass} onClick={wrap(onCompress)}>
-            <Archive className="h-3.5 w-3.5" />
-            Compress
-          </button>
-        )}
-        {onDecompress && (
-          <button type="button" className={itemClass} onClick={wrap(onDecompress)}>
-            <ArchiveRestore className="h-3.5 w-3.5" />
-            Extract
-          </button>
-        )}
-        {onPermissions && (
-          <button type="button" className={itemClass} onClick={wrap(onPermissions)}>
-            <Shield className="h-3.5 w-3.5" />
-            Permissions
-          </button>
-        )}
-        <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
-        <button type="button" className={dangerClass} onClick={wrap(onDelete)}>
-          <Trash2 className="h-3.5 w-3.5" />
-          Delete
+      )}
+      {onCopyPath && (
+        <button type="button" className={itemClass} onClick={wrap(onCopyPath)}>
+          <ClipboardCopy className="h-3.5 w-3.5" />
+          Copy Path
         </button>
-      </div>
-    ),
-    [entry.isDirectory, onCompress, onDecompress, onDelete, onDownload, onCopyPath, onRename, onOpen, onPermissions],
+      )}
+      {onRename && (
+        <button type="button" className={itemClass} onClick={wrap(onRename)}>
+          <Pencil className="h-3.5 w-3.5" />
+          Rename
+        </button>
+      )}
+      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+      {onCompress && (
+        <button type="button" className={itemClass} onClick={wrap(onCompress)}>
+          <Archive className="h-3.5 w-3.5" />
+          Compress
+        </button>
+      )}
+      {onDecompress && (
+        <button type="button" className={itemClass} onClick={wrap(onDecompress)}>
+          <ArchiveRestore className="h-3.5 w-3.5" />
+          Extract
+        </button>
+      )}
+      {onPermissions && (
+        <button type="button" className={itemClass} onClick={wrap(onPermissions)}>
+          <Shield className="h-3.5 w-3.5" />
+          Permissions
+        </button>
+      )}
+      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+      <button type="button" className={dangerClass} onClick={wrap(onDelete)}>
+        <Trash2 className="h-3.5 w-3.5" />
+        Delete
+      </button>
+    </div>
   );
 
   useLayoutEffect(() => {
     if (!contextPosition || !menuRef.current) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMenuPosition(null);
       return;
     }

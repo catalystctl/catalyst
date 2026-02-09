@@ -692,7 +692,7 @@ function generateDeploymentScript(
   hostName: string,
   apiKey: string | null,
 ): string {
-  const shellEscape = (value: string) => `'${value.replace(/'/g, `'\"'\"'`)}'`;
+  const shellEscape = (value: string) => `'${value.replace(/'/g, `'"'"'`)}'`;
   const safeApiKey = apiKey ?? "";
 
   return `#!/usr/bin/env bash

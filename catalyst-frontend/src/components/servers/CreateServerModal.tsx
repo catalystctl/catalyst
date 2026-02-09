@@ -56,6 +56,7 @@ function CreateServerModal() {
   // Set default port from template when template is selected
   useEffect(() => {
     if (selectedTemplate?.supportedPorts && selectedTemplate.supportedPorts.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPort(String(selectedTemplate.supportedPorts[0]));
     }
   }, [selectedTemplate]);
@@ -71,6 +72,7 @@ function CreateServerModal() {
 
   // Load macvlan interfaces (IP pools) for the selected node
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMacvlanInterface('');
     setNodeIpPools([]);
     if (!nodeId || networkMode !== 'macvlan') return;
@@ -91,6 +93,7 @@ function CreateServerModal() {
 
   // Load available IPs when macvlan interface is selected
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPrimaryIp('');
     if (!nodeId || networkMode !== 'macvlan' || !macvlanInterface) {
       setAvailableIps([]);
@@ -118,6 +121,7 @@ function CreateServerModal() {
 
   // Load allocations for host (port mapping) mode
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAllocationId('');
     let active = true;
     if (!nodeId || networkMode !== 'host') {

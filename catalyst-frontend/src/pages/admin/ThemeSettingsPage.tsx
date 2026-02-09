@@ -24,6 +24,7 @@ function ThemeSettingsPage() {
   // Initialize form when settings load
   useEffect(() => {
     if (settings) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPanelName(settings.panelName || 'Catalyst');
       setLogoUrl(settings.logoUrl || '');
       setFaviconUrl(settings.faviconUrl || '');

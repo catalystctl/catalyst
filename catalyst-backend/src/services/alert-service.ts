@@ -21,7 +21,7 @@ interface AlertActions {
 export class AlertService {
   private prisma: PrismaClient;
   private logger: pino.Logger;
-  private checkInterval?: NodeJS.Timeout;
+  private checkInterval?: ReturnType<typeof setInterval>;
 
   constructor(prisma: PrismaClient, logger: pino.Logger) {
     this.prisma = prisma;

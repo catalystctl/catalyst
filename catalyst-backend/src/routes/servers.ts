@@ -12,6 +12,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import type { Readable } from "stream";
 import { pipeline } from "stream/promises";
 import { nanoid } from "nanoid";
 import { auth } from "../auth";
@@ -940,7 +941,9 @@ export async function serverRoutes(app: FastifyInstance) {
       if (headRes.status >= 200 && headRes.status < 400) {
         return { downloadUrl: hangarUrl, filename };
       }
-    } catch {}
+    } catch {
+      // Ignore and fall back to metadata/external URL resolution.
+    }
 
     // Fetch version metadata to check for externalUrl
     const vUrl = `${baseUrl}/api/v1/projects/${encodeURIComponent(slug)}/versions/${encodeURIComponent(versionId)}`;
@@ -970,7 +973,9 @@ export async function serverRoutes(app: FastifyInstance) {
               filename = jarAsset.name;
             }
           }
-        } catch {}
+        } catch {
+          // Ignore GitHub resolution errors and use the external URL directly.
+        }
       }
       if (!downloadUrl) downloadUrl = platformDl.externalUrl;
     }
@@ -1146,8 +1151,6 @@ export async function serverRoutes(app: FastifyInstance) {
 
     reply.status(403).send({ error: message });
     return false;
-
-    return true;
   };
 
   const generateSafeIdentifier = (prefix: string, length = 10) => {
@@ -2447,7 +2450,7 @@ export async function serverRoutes(app: FastifyInstance) {
             .send({ error: `Download failed: ${body}` });
         }
         await pipeline(
-          downloadResponse.body as unknown as NodeJS.ReadableStream,
+          downloadResponse.body as unknown as Readable,
           createWriteStream(resolvedPath)
         );
         await prisma.auditLog.create({
@@ -2821,7 +2824,7 @@ export async function serverRoutes(app: FastifyInstance) {
             .send({ error: `Download failed: ${body}` });
         }
         await pipeline(
-          downloadResponse.body as unknown as NodeJS.ReadableStream,
+          downloadResponse.body as unknown as Readable,
           createWriteStream(resolvedPath)
         );
         await prisma.auditLog.create({
@@ -3347,7 +3350,9 @@ export async function serverRoutes(app: FastifyInstance) {
           try {
             const { targetPath: oldPath } = await resolveServerPath(server.uuid, normalizeRequestPath(path.posix.join(normalizedBase, record.filename)));
             await fs.unlink(oldPath).catch(() => {});
-          } catch {}
+          } catch {
+            // Best-effort cleanup before writing the new file.
+          }
 
           // Download new file
           const normalizedFile = normalizeRequestPath(path.posix.join(normalizedBase, newFilename));
@@ -3463,7 +3468,9 @@ export async function serverRoutes(app: FastifyInstance) {
           try {
             const { targetPath: oldPath } = await resolveServerPath(server.uuid, normalizeRequestPath(path.posix.join(normalizedBase, record.filename)));
             await fs.unlink(oldPath).catch(() => {});
-          } catch {}
+          } catch {
+            // Best-effort cleanup before writing the new file.
+          }
 
           // Download new file
           const normalizedFile = normalizeRequestPath(path.posix.join(normalizedBase, newFilename));

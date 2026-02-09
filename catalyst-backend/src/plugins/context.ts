@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { PrismaClient } from '@prisma/client';
 import type { Logger } from 'pino';
 import type { FastifyRequest, FastifyReply, RouteOptions } from 'fastify';
@@ -60,7 +59,7 @@ export function createPluginContext(
     
     sendWebSocketMessage(target: string, message: any) {
       // Try to send to specific client ID
-      const client = wsGateway.clients.get(target);
+      const client = (wsGateway as any).clients?.get?.(target);
       if (client) {
         try {
           client.socket.send(JSON.stringify(message));

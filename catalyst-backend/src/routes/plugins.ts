@@ -1,7 +1,6 @@
-// @ts-nocheck
-import type { FastifyInstance } from 'fastify';
+import { prisma } from '../db.js';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { PluginLoader } from '../plugins/loader';
-import type { RbacMiddleware } from '../middleware/rbac';
 import { z } from 'zod';
 
 const EnablePluginSchema = z.object({
@@ -9,16 +8,45 @@ const EnablePluginSchema = z.object({
 });
 
 const UpdatePluginConfigSchema = z.object({
-// @ts-nocheck
-  config: z.record(z.any()),
+  config: z.record(z.string(), z.any()),
 });
+
+const ensureAdmin = async (
+  userId: string,
+  reply: FastifyReply,
+  requiredPermission: 'admin.read' | 'admin.write' = 'admin.read',
+) => {
+  const roles = await prisma.role.findMany({
+    where: {
+      users: {
+        some: { id: userId },
+      },
+    },
+    select: {
+      name: true,
+      permissions: true,
+    },
+  });
+  const permissions = roles.flatMap((role) => role.permissions);
+  const isAdmin =
+    permissions.includes('*') ||
+    permissions.includes('admin.write') ||
+    (requiredPermission === 'admin.read' && permissions.includes('admin.read'));
+  const hasRole = roles.some((role) => role.name.toLowerCase() === 'administrator');
+  if (!isAdmin && !hasRole) {
+    reply.status(403).send({
+      success: false,
+      error: 'Admin access required',
+    });
+    return false;
+  }
+  return true;
+};
 
 /**
  * Plugin management routes
  */
 export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoader) {
-  const rbac = (app as any).rbac as RbacMiddleware;
-  
   /**
    * GET /api/plugins
    * List all plugins
@@ -26,9 +54,11 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
   app.get(
     '/api/plugins',
     {
-      onRequest: rbac.checkPermission('admin.read'),
+      onRequest: [app.authenticate],
     },
     async (request, reply) => {
+      const isAdmin = await ensureAdmin(request.user.userId, reply, 'admin.read');
+      if (!isAdmin) return;
       const registry = pluginLoader.getRegistry();
       const plugins = registry.getAll();
       
@@ -62,9 +92,11 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
   app.get(
     '/api/plugins/:name',
     {
-      onRequest: rbac.checkPermission('admin.read'),
+      onRequest: [app.authenticate],
     },
     async (request, reply) => {
+      const isAdmin = await ensureAdmin(request.user.userId, reply, 'admin.read');
+      if (!isAdmin) return;
       const { name } = request.params as { name: string };
       const registry = pluginLoader.getRegistry();
       const plugin = registry.get(name);
@@ -109,9 +141,11 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
   app.post(
     '/api/plugins/:name/enable',
     {
-      onRequest: rbac.checkPermission('admin.write'),
+      onRequest: [app.authenticate],
     },
     async (request, reply) => {
+      const isAdmin = await ensureAdmin(request.user.userId, reply, 'admin.write');
+      if (!isAdmin) return;
       const { name } = request.params as { name: string };
       const body = EnablePluginSchema.parse(request.body);
       
@@ -142,9 +176,11 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
   app.post(
     '/api/plugins/:name/reload',
     {
-      onRequest: rbac.checkPermission('admin.write'),
+      onRequest: [app.authenticate],
     },
     async (request, reply) => {
+      const isAdmin = await ensureAdmin(request.user.userId, reply, 'admin.write');
+      if (!isAdmin) return;
       const { name } = request.params as { name: string };
       
       try {
@@ -170,9 +206,11 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
   app.put(
     '/api/plugins/:name/config',
     {
-      onRequest: rbac.checkPermission('admin.write'),
+      onRequest: [app.authenticate],
     },
     async (request, reply) => {
+      const isAdmin = await ensureAdmin(request.user.userId, reply, 'admin.write');
+      if (!isAdmin) return;
       const { name } = request.params as { name: string };
       const body = UpdatePluginConfigSchema.parse(request.body);
       

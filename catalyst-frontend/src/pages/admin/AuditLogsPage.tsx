@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import AdminTabs from '../../components/admin/AdminTabs';
 import EmptyState from '../../components/shared/EmptyState';
 import Button from '../../components/ui/button';
@@ -14,23 +14,25 @@ import { useAuditLogs } from '../../hooks/useAdmin';
 import { adminApi } from '../../services/api/admin';
 
 const pageSize = 50;
+const buildDefaultRange = () => {
+  const now = new Date();
+  const initialFrom = new Date(now);
+  initialFrom.setHours(now.getHours() - 24);
+  return {
+    from: initialFrom.toISOString().slice(0, 16),
+    to: now.toISOString().slice(0, 16),
+  };
+};
 
 function AuditLogsPage() {
   const [page, setPage] = useState(1);
   const [action, setAction] = useState('');
   const [resource, setResource] = useState('');
   const [userId, setUserId] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [defaultRange] = useState(buildDefaultRange);
+  const [from, setFrom] = useState(defaultRange.from);
+  const [to, setTo] = useState(defaultRange.to);
   const [range, setRange] = useState('24h');
-
-  useEffect(() => {
-    const now = new Date();
-    const initialFrom = new Date(now);
-    initialFrom.setHours(now.getHours() - 24);
-    setFrom(initialFrom.toISOString().slice(0, 16));
-    setTo(now.toISOString().slice(0, 16));
-  }, []);
 
   const { data, isLoading } = useAuditLogs({
     page,

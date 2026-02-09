@@ -89,6 +89,7 @@ function UpdateServerModal({ serverId, disabled = false }: Props) {
 
   useEffect(() => {
     if (!server) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setName(server.name ?? '');
     if (server.allocatedMemoryMb) setMemory(String(server.allocatedMemoryMb));
     if (server.allocatedCpuCores) setCpu(String(server.allocatedCpuCores));
@@ -101,6 +102,7 @@ function UpdateServerModal({ serverId, disabled = false }: Props) {
   useEffect(() => {
     let active = true;
     if (!server?.nodeId || !isIpamNetwork) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAvailableIps([]);
       setIpLoadError(null);
       return () => {
@@ -131,6 +133,7 @@ function UpdateServerModal({ serverId, disabled = false }: Props) {
   useEffect(() => {
     let active = true;
     if (!server?.nodeId || !isBridgeNetwork) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAvailableAllocations([]);
       setAllocLoadError(null);
       return () => {

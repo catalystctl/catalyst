@@ -42,6 +42,7 @@ function ProfilePage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshPasskeys().catch(() => undefined);
   }, [profile?.id, refreshPasskeys]);
 

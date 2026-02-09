@@ -1,6 +1,7 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { PrismaClient } from "@prisma/client";
+import { createReadStream, createWriteStream } from "fs";
 import * as fs from "fs/promises";
 import { PassThrough } from "stream";
 import * as path from "path";
@@ -372,7 +373,7 @@ export async function backupRoutes(app: FastifyInstance) {
           await fs.mkdir(`${BACKUP_DIR}/${server.uuid}`, { recursive: true });
           const { stream } = await openStorageStream(backup, server);
          await new Promise<void>((resolve, reject) => {
-           const writeStream = require("fs").createWriteStream(tmpPath);
+           const writeStream = createWriteStream(tmpPath);
            stream.pipe(writeStream);
            stream.on("error", reject);
            writeStream.on("finish", () => resolve());
@@ -531,7 +532,7 @@ export async function backupRoutes(app: FastifyInstance) {
          }
          await fs.access(backup.path);
          const stats = await fs.stat(backup.path);
-         const stream = require("fs").createReadStream(backup.path);
+         const stream = createReadStream(backup.path);
 
         reply.header("Content-Type", "application/gzip");
         reply.header("Content-Length", stats.size.toString());

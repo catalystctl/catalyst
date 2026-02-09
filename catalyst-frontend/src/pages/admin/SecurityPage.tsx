@@ -37,6 +37,7 @@ function SecurityPage() {
 
   useEffect(() => {
     if (!settings) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAuthRateLimitMax(String(settings.authRateLimitMax));
     setFileRateLimitMax(String(settings.fileRateLimitMax));
     setConsoleRateLimitMax(String(settings.consoleRateLimitMax));

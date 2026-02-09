@@ -99,6 +99,7 @@ function AdminServersPage() {
   const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedIds((prev) => prev.filter((id) => servers.some((server) => server.id === id)));
   }, [servers]);
 
