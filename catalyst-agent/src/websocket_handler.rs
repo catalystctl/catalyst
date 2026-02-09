@@ -1,29 +1,28 @@
+use base64::Engine;
+use futures::stream::SplitSink;
+use futures::{SinkExt, StreamExt};
+use regex::Regex;
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::OnceLock;
-use tokio::sync::RwLock;
-use sysinfo::{Disks, System};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt};
-use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::connect_async;
-use futures::{SinkExt, StreamExt};
-use futures::stream::SplitSink;
-use sha2::{Digest, Sha256};
-use tracing::{info, error, warn, debug};
-use regex::Regex;
-use serde_json::{json, Value};
 use std::time::Duration;
+use sysinfo::{Disks, System};
 use tokio::io::AsyncWriteExt;
-use base64::Engine;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt};
+use tokio::sync::RwLock;
+use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::Message;
+use tracing::{debug, error, info, warn};
 
-use crate::{AgentConfig, ContainerdRuntime, FileManager, StorageManager, AgentError, AgentResult};
+use crate::{AgentConfig, AgentError, AgentResult, ContainerdRuntime, FileManager, StorageManager};
 
-type WsStream = tokio_tungstenite::WebSocketStream<
-    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
->;
+type WsStream =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 type WsWrite = SplitSink<WsStream, Message>;
 
 /// Shell-escape a value for safe interpolation into a bash script.
@@ -170,7 +169,10 @@ impl WebSocketHandler {
         }
     }
 
-    async fn flush_buffered_metrics(&self, write: Arc<tokio::sync::Mutex<WsWrite>>) -> AgentResult<()> {
+    async fn flush_buffered_metrics(
+        &self,
+        write: Arc<tokio::sync::Mutex<WsWrite>>,
+    ) -> AgentResult<()> {
         let buffered = match self.storage_manager.read_buffered_metrics().await {
             Ok(v) => v,
             Err(e) => {
@@ -244,13 +246,14 @@ impl WebSocketHandler {
         }
 
         // Send handshake
-        let (auth_token, token_type) = if let Some(api_key) = self
-            .config
-            .server
-            .api_key
-            .as_ref()
-            .and_then(|value| if value.trim().is_empty() { None } else { Some(value) })
-        {
+        let (auth_token, token_type) = if let Some(api_key) =
+            self.config.server.api_key.as_ref().and_then(|value| {
+                if value.trim().is_empty() {
+                    None
+                } else {
+                    Some(value)
+                }
+            }) {
             (api_key.as_str(), "api_key")
         } else {
             (self.config.server.secret.as_str(), "secret")
@@ -353,7 +356,11 @@ impl WebSocketHandler {
         Ok(())
     }
 
-    async fn handle_message(&self, text: &str, write: &Arc<tokio::sync::Mutex<WsWrite>>) -> AgentResult<()> {
+    async fn handle_message(
+        &self,
+        text: &str,
+        write: &Arc<tokio::sync::Mutex<WsWrite>>,
+    ) -> AgentResult<()> {
         let msg: Value = serde_json::from_str(text)?;
 
         match msg["type"].as_str() {
@@ -363,17 +370,17 @@ impl WebSocketHandler {
                 self.start_server_with_details(&msg).await?;
             }
             Some("stop_server") => {
-                let server_uuid = msg["serverUuid"].as_str().ok_or_else(|| {
-                    AgentError::InvalidRequest("Missing serverUuid".to_string())
-                })?;
+                let server_uuid = msg["serverUuid"]
+                    .as_str()
+                    .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
                 let server_id = msg["serverId"].as_str().unwrap_or(server_uuid);
                 let container_id = self.resolve_container_id(server_id, server_uuid).await;
                 self.stop_server(server_id, container_id).await?;
             }
             Some("restart_server") => {
-                let server_uuid = msg["serverUuid"].as_str().ok_or_else(|| {
-                    AgentError::InvalidRequest("Missing serverUuid".to_string())
-                })?;
+                let server_uuid = msg["serverUuid"]
+                    .as_str()
+                    .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
                 let server_id = msg["serverId"].as_str().unwrap_or(server_uuid);
                 let container_id = self.resolve_container_id(server_id, server_uuid).await;
                 self.stop_server(server_id, container_id).await?;
@@ -389,7 +396,9 @@ impl WebSocketHandler {
             Some("download_backup") => self.handle_download_backup(&msg, write).await?,
             Some("upload_backup_start") => self.handle_upload_backup_start(&msg, write).await?,
             Some("upload_backup_chunk") => self.handle_upload_backup_chunk(&msg, write).await?,
-            Some("upload_backup_complete") => self.handle_upload_backup_complete(&msg, write).await?,
+            Some("upload_backup_complete") => {
+                self.handle_upload_backup_complete(&msg, write).await?
+            }
             Some("resize_storage") => self.handle_resize_storage(&msg, write).await?,
             Some("resume_console") => self.resume_console(&msg).await?,
             Some("request_immediate_stats") => {
@@ -410,17 +419,19 @@ impl WebSocketHandler {
     }
 
     async fn handle_server_control(&self, msg: &Value) -> AgentResult<()> {
-        let action = msg["action"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing action".to_string())
-        })?;
+        let action = msg["action"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing action".to_string()))?;
 
         if msg["suspended"].as_bool().unwrap_or(false) {
-            return Err(AgentError::InvalidRequest("Server is suspended".to_string()));
+            return Err(AgentError::InvalidRequest(
+                "Server is suspended".to_string(),
+            ));
         }
 
-        let server_id = msg["serverId"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing serverId".to_string())
-        })?;
+        let server_id = msg["serverId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
 
         let server_uuid = msg
             .get("serverUuid")
@@ -457,12 +468,12 @@ impl WebSocketHandler {
     }
 
     async fn resume_console(&self, msg: &Value) -> AgentResult<()> {
-        let server_id = msg["serverId"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing serverId".to_string())
-        })?;
-        let server_uuid = msg["serverUuid"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing serverUuid".to_string())
-        })?;
+        let server_id = msg["serverId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
+        let server_uuid = msg["serverUuid"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
 
         let container_id = self.resolve_container_id(server_id, server_uuid).await;
         if container_id.is_empty() {
@@ -544,13 +555,24 @@ impl WebSocketHandler {
             // This replaces polling and provides instant notification when containers exit
             let monitor = tokio::spawn(async move {
                 // Subscribe to container events
-                let mut event_stream = match monitor_handler.runtime.subscribe_to_container_events(&monitor_container_id).await {
+                let mut event_stream = match monitor_handler
+                    .runtime
+                    .subscribe_to_container_events(&monitor_container_id)
+                    .await
+                {
                     Ok(stream) => stream,
                     Err(e) => {
-                        error!("Failed to subscribe to events for {}: {}. Falling back to polling.", monitor_container_id, e);
+                        error!(
+                            "Failed to subscribe to events for {}: {}. Falling back to polling.",
+                            monitor_container_id, e
+                        );
                         // Fallback to polling if event stream fails
                         loop {
-                            let running = monitor_handler.runtime.is_container_running(&monitor_container_id).await.unwrap_or(false);
+                            let running = monitor_handler
+                                .runtime
+                                .is_container_running(&monitor_container_id)
+                                .await
+                                .unwrap_or(false);
                             if !running {
                                 let exit_code = monitor_handler
                                     .runtime
@@ -562,7 +584,13 @@ impl WebSocketHandler {
                                     None => "Container exited".to_string(),
                                 };
                                 let _ = monitor_handler
-                                    .emit_server_state_update(&monitor_server_id, "crashed", Some(reason), None, exit_code)
+                                    .emit_server_state_update(
+                                        &monitor_server_id,
+                                        "crashed",
+                                        Some(reason),
+                                        None,
+                                        exit_code,
+                                    )
                                     .await;
                                 break;
                             }
@@ -576,7 +604,10 @@ impl WebSocketHandler {
                 let stdout = match event_stream.stdout.take() {
                     Some(out) => out,
                     None => {
-                        error!("Failed to capture event stream stdout for {}", monitor_container_id);
+                        error!(
+                            "Failed to capture event stream stdout for {}",
+                            monitor_container_id
+                        );
                         return;
                     }
                 };
@@ -587,7 +618,7 @@ impl WebSocketHandler {
                 while let Ok(Some(event)) = reader.next_line().await {
                     let event = event.trim();
                     debug!("Container {} event: {}", monitor_container_id, event);
-                    
+
                     // Check for exit-related events
                     if event == "die" || event == "stop" || event == "kill" {
                         // Container has stopped, get exit code
@@ -601,7 +632,13 @@ impl WebSocketHandler {
                             None => "Container exited".to_string(),
                         };
                         let _ = monitor_handler
-                            .emit_server_state_update(&monitor_server_id, "crashed", Some(reason), None, exit_code)
+                            .emit_server_state_update(
+                                &monitor_server_id,
+                                "crashed",
+                                Some(reason),
+                                None,
+                                exit_code,
+                            )
                             .await;
                         break;
                     }
@@ -616,47 +653,79 @@ impl WebSocketHandler {
     }
 
     async fn install_server(&self, msg: &Value) -> AgentResult<()> {
-        let server_uuid = msg["serverUuid"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing serverUuid".to_string())
-        })?;
+        let server_uuid = msg["serverUuid"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
 
-        let server_id = msg["serverId"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing serverId".to_string())
-        })?;
+        let server_id = msg["serverId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
 
-        let template = msg["template"].as_object().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing template".to_string())
-        })?;
+        let template = msg["template"]
+            .as_object()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing template".to_string()))?;
 
-        let install_script = template.get("installScript")
+        let install_script = template
+            .get("installScript")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| AgentError::InvalidRequest("Missing installScript in template".to_string()))?;
+            .ok_or_else(|| {
+                AgentError::InvalidRequest("Missing installScript in template".to_string())
+            })?;
 
-        let environment = msg.get("environment")
+        let environment = msg
+            .get("environment")
             .and_then(|v| v.as_object())
-            .ok_or_else(|| AgentError::InvalidRequest("Missing or invalid environment".to_string()))?;
+            .ok_or_else(|| {
+                AgentError::InvalidRequest("Missing or invalid environment".to_string())
+            })?;
 
         info!("Installing server: {} (UUID: {})", server_id, server_uuid);
 
         // Destroy any existing container for this server before reinstalling
         let existing_container_id = self.resolve_container_id(server_id, server_uuid).await;
         if !existing_container_id.is_empty() {
-            info!("Found existing container {} for server {}, destroying before reinstall", existing_container_id, server_id);
+            info!(
+                "Found existing container {} for server {}, destroying before reinstall",
+                existing_container_id, server_id
+            );
             self.stop_monitor_task(server_id).await;
-            if self.runtime.is_container_running(&existing_container_id).await.unwrap_or(false) {
-                if let Err(e) = self.runtime.stop_container(&existing_container_id, 10).await {
-                    warn!("Failed to stop existing container {}: {}, attempting kill", existing_container_id, e);
-                    let _ = self.runtime.kill_container(&existing_container_id, "SIGKILL").await;
+            if self
+                .runtime
+                .is_container_running(&existing_container_id)
+                .await
+                .unwrap_or(false)
+            {
+                if let Err(e) = self
+                    .runtime
+                    .stop_container(&existing_container_id, 10)
+                    .await
+                {
+                    warn!(
+                        "Failed to stop existing container {}: {}, attempting kill",
+                        existing_container_id, e
+                    );
+                    let _ = self
+                        .runtime
+                        .kill_container(&existing_container_id, "SIGKILL")
+                        .await;
                 }
             }
             if self.runtime.container_exists(&existing_container_id).await {
-                self.runtime.remove_container(&existing_container_id).await?;
+                self.runtime
+                    .remove_container(&existing_container_id)
+                    .await?;
             }
-            self.emit_console_output(server_id, "system", "[Catalyst] Removed existing container.\n").await?;
+            self.emit_console_output(
+                server_id,
+                "system",
+                "[Catalyst] Removed existing container.\n",
+            )
+            .await?;
         }
 
         // Backend should provide SERVER_DIR automatically
-        let server_dir = environment.get("SERVER_DIR")
+        let server_dir = environment
+            .get("SERVER_DIR")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .unwrap_or_else(|| {
@@ -669,12 +738,14 @@ impl WebSocketHandler {
         self.storage_manager
             .ensure_mounted(server_uuid, &server_dir_path, disk_mb)
             .await?;
-        
+
         let server_dir_path = std::path::PathBuf::from(&server_dir);
-        
+
         tokio::fs::create_dir_all(&server_dir_path)
             .await
-            .map_err(|e| AgentError::IoError(format!("Failed to create server directory: {}", e)))?;
+            .map_err(|e| {
+                AgentError::IoError(format!("Failed to create server directory: {}", e))
+            })?;
 
         info!("Created server directory: {}", server_dir_path.display());
 
@@ -707,7 +778,10 @@ impl WebSocketHandler {
             let _ = tokio::fs::remove_dir_all(mnt_server).await;
             match tokio::fs::symlink(&server_dir, mnt_server).await {
                 Ok(_) => {
-                    info!("Created /mnt/server -> {} symlink for Pterodactyl compatibility", server_dir);
+                    info!(
+                        "Created /mnt/server -> {} symlink for Pterodactyl compatibility",
+                        server_dir
+                    );
                     true
                 }
                 Err(e) => {
@@ -780,10 +854,9 @@ impl WebSocketHandler {
             }
         }
 
-        let status = child
-            .wait()
-            .await
-            .map_err(|e| AgentError::IoError(format!("Failed to wait for install script: {}", e)))?;
+        let status = child.wait().await.map_err(|e| {
+            AgentError::IoError(format!("Failed to wait for install script: {}", e))
+        })?;
 
         if !status.success() {
             // Clean up /mnt/server symlink on failure too
@@ -919,28 +992,34 @@ impl WebSocketHandler {
     }
 
     async fn start_server_with_details(&self, msg: &Value) -> AgentResult<()> {
-        let server_id = msg["serverId"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing serverId".to_string())
-        })?;
+        let server_id = msg["serverId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
 
         let result: AgentResult<()> = async {
-            let server_uuid = msg["serverUuid"].as_str().ok_or_else(|| {
-                AgentError::InvalidRequest("Missing serverUuid".to_string())
-            })?;
+            let server_uuid = msg["serverUuid"]
+                .as_str()
+                .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
 
-            let template = msg["template"].as_object().ok_or_else(|| {
-                AgentError::InvalidRequest("Missing template".to_string())
-            })?;
+            let template = msg["template"]
+                .as_object()
+                .ok_or_else(|| AgentError::InvalidRequest("Missing template".to_string()))?;
 
-            let docker_image = msg.get("environment")
+            let docker_image = msg
+                .get("environment")
                 .and_then(|v| v.get("TEMPLATE_IMAGE"))
                 .and_then(|v| v.as_str())
                 .or_else(|| template.get("image").and_then(|v| v.as_str()))
-                .ok_or_else(|| AgentError::InvalidRequest("Missing image in template".to_string()))?;
+                .ok_or_else(|| {
+                    AgentError::InvalidRequest("Missing image in template".to_string())
+                })?;
 
-            let startup_command = template.get("startup")
+            let startup_command = template
+                .get("startup")
                 .and_then(|v| v.as_str())
-                .ok_or_else(|| AgentError::InvalidRequest("Missing startup in template".to_string()))?;
+                .ok_or_else(|| {
+                    AgentError::InvalidRequest("Missing startup in template".to_string())
+                })?;
 
             let memory_mb = msg["allocatedMemoryMb"].as_u64().ok_or_else(|| {
                 AgentError::InvalidRequest("Missing allocatedMemoryMb".to_string())
@@ -950,25 +1029,32 @@ impl WebSocketHandler {
                 AgentError::InvalidRequest("Missing allocatedCpuCores".to_string())
             })?;
 
-        let disk_mb = msg["allocatedDiskMb"].as_u64().unwrap_or(10240);
+            let disk_mb = msg["allocatedDiskMb"].as_u64().unwrap_or(10240);
 
-            let primary_port = msg["primaryPort"].as_u64().ok_or_else(|| {
-                AgentError::InvalidRequest("Missing primaryPort".to_string())
-            })? as u16;
+            let primary_port = msg["primaryPort"]
+                .as_u64()
+                .ok_or_else(|| AgentError::InvalidRequest("Missing primaryPort".to_string()))?
+                as u16;
             if primary_port == 0 {
-                return Err(AgentError::InvalidRequest("Invalid primaryPort".to_string()));
+                return Err(AgentError::InvalidRequest(
+                    "Invalid primaryPort".to_string(),
+                ));
             }
-        if primary_port == 0 {
-            return Err(AgentError::InvalidRequest("Invalid primaryPort".to_string()));
-        }
+            if primary_port == 0 {
+                return Err(AgentError::InvalidRequest(
+                    "Invalid primaryPort".to_string(),
+                ));
+            }
 
-            let network_mode = msg.get("networkMode")
-                .and_then(|v| v.as_str());
+            let network_mode = msg.get("networkMode").and_then(|v| v.as_str());
             let port_bindings_value = msg.get("portBindings");
 
-            let environment = msg.get("environment")
+            let environment = msg
+                .get("environment")
                 .and_then(|v| v.as_object())
-                .ok_or_else(|| AgentError::InvalidRequest("Missing or invalid environment".to_string()))?;
+                .ok_or_else(|| {
+                    AgentError::InvalidRequest("Missing or invalid environment".to_string())
+                })?;
 
             // Convert environment to HashMap
             let mut env_map = std::collections::HashMap::new();
@@ -979,12 +1065,11 @@ impl WebSocketHandler {
             }
 
             // Get SERVER_DIR from environment
-            let server_dir = environment.get("SERVER_DIR")
+            let server_dir = environment
+                .get("SERVER_DIR")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
-                .unwrap_or_else(|| {
-                    format!("/tmp/catalyst-servers/{}", server_uuid)
-                });
+                .unwrap_or_else(|| format!("/tmp/catalyst-servers/{}", server_uuid));
 
             let server_dir_path = PathBuf::from(&server_dir);
             self.storage_manager
@@ -994,8 +1079,10 @@ impl WebSocketHandler {
                 .await?;
 
             info!("Starting server: {} (UUID: {})", server_id, server_uuid);
-            info!("Image: {}, Port: {}, Memory: {}MB, CPU: {}",
-                  docker_image, primary_port, memory_mb, cpu_cores);
+            info!(
+                "Image: {}, Port: {}, Memory: {}MB, CPU: {}",
+                docker_image, primary_port, memory_mb, cpu_cores
+            );
             self.emit_console_output(server_id, "system", "[Catalyst] Starting server...\n")
                 .await?;
 
@@ -1036,7 +1123,9 @@ impl WebSocketHandler {
             if let Some(map) = port_bindings_value.and_then(|value| value.as_object()) {
                 for (container_port, host_port) in map {
                     let container_port = container_port.parse::<u16>().map_err(|_| {
-                        AgentError::InvalidRequest("Invalid portBindings container port".to_string())
+                        AgentError::InvalidRequest(
+                            "Invalid portBindings container port".to_string(),
+                        )
                     })?;
                     let host_port = host_port.as_u64().ok_or_else(|| {
                         AgentError::InvalidRequest("Invalid portBindings host port".to_string())
@@ -1057,19 +1146,21 @@ impl WebSocketHandler {
             }
 
             // Create and start container
-            self.runtime.create_container(
-                server_id,
-                docker_image,
-                &final_startup_command,
-                &env_map,
-                memory_mb,
-                cpu_cores,
-                &server_dir,
-                primary_port,
-                &port_bindings,
-                network_mode,
-                network_ip,
-            ).await?;
+            self.runtime
+                .create_container(
+                    server_id,
+                    docker_image,
+                    &final_startup_command,
+                    &env_map,
+                    memory_mb,
+                    cpu_cores,
+                    &server_dir,
+                    primary_port,
+                    &port_bindings,
+                    network_mode,
+                    network_ip,
+                )
+                .await?;
 
             let is_running = match self.runtime.is_container_running(server_id).await {
                 Ok(value) => value,
@@ -1103,18 +1194,28 @@ impl WebSocketHandler {
             }
 
             // Emit state update
-            self.emit_server_state_update(server_id, "running", None, Some(port_bindings.clone()), None)
-                .await?;
+            self.emit_server_state_update(
+                server_id,
+                "running",
+                None,
+                Some(port_bindings.clone()),
+                None,
+            )
+            .await?;
 
             info!("Server started successfully: {}", server_id);
             Ok(())
-        }.await;
+        }
+        .await;
 
         if let Err(err) = &result {
             let reason = format!("Start failed: {}", err);
-            let _ = self.emit_console_output(server_id, "stderr", &format!("[Catalyst] {}\n", reason))
+            let _ = self
+                .emit_console_output(server_id, "stderr", &format!("[Catalyst] {}\n", reason))
                 .await;
-            let _ = self.emit_server_state_update(server_id, "error", Some(reason), None, None).await;
+            let _ = self
+                .emit_server_state_update(server_id, "error", Some(reason), None, None)
+                .await;
         }
 
         result
@@ -1127,7 +1228,10 @@ impl WebSocketHandler {
                 server_id
             )));
         }
-        info!("Starting server: {} (container {})", server_id, container_id);
+        info!(
+            "Starting server: {} (container {})",
+            server_id, container_id
+        );
 
         // In production, fetch server config from database or local cache
         match self.runtime.start_container(&container_id).await {
@@ -1140,9 +1244,12 @@ impl WebSocketHandler {
             }
             Err(err) => {
                 let reason = format!("Start failed: {}", err);
-                let _ = self.emit_console_output(server_id, "stderr", &format!("[Catalyst] {}\n", reason))
+                let _ = self
+                    .emit_console_output(server_id, "stderr", &format!("[Catalyst] {}\n", reason))
                     .await;
-                let _ = self.emit_server_state_update(server_id, "error", Some(reason), None, None).await;
+                let _ = self
+                    .emit_server_state_update(server_id, "error", Some(reason), None, None)
+                    .await;
                 Err(err)
             }
         }
@@ -1155,7 +1262,10 @@ impl WebSocketHandler {
                 server_id
             )));
         }
-        info!("Stopping server: {} (container {})", server_id, container_id);
+        info!(
+            "Stopping server: {} (container {})",
+            server_id, container_id
+        );
 
         self.stop_monitor_task(server_id).await;
 
@@ -1165,9 +1275,7 @@ impl WebSocketHandler {
             .await
             .unwrap_or(false)
         {
-            self.runtime
-                .stop_container(&container_id, 30)
-                .await?;
+            self.runtime.stop_container(&container_id, 30).await?;
         }
 
         if self.runtime.container_exists(&container_id).await {
@@ -1206,19 +1314,19 @@ impl WebSocketHandler {
             None,
             Some(137),
         )
-            .await?;
+        .await?;
 
         Ok(())
     }
 
     async fn handle_console_input(&self, msg: &Value) -> AgentResult<()> {
-        let server_id = msg["serverId"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing serverId".to_string())
-        })?;
+        let server_id = msg["serverId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
 
-        let data = msg["data"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing data".to_string())
-        })?;
+        let data = msg["data"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing data".to_string()))?;
 
         let server_uuid = msg
             .get("serverUuid")
@@ -1226,16 +1334,15 @@ impl WebSocketHandler {
             .unwrap_or(server_id);
         let container_id = self.resolve_container_id(server_id, server_uuid).await;
         if container_id.is_empty() {
-            let err = AgentError::ContainerError(format!(
-                "Container not found for server {}",
-                server_id
-            ));
-            let _ = self.emit_console_output(
-                server_id,
-                "stderr",
-                &format!("[Catalyst] Console input failed: {}\n", err),
-            )
-            .await;
+            let err =
+                AgentError::ContainerError(format!("Container not found for server {}", server_id));
+            let _ = self
+                .emit_console_output(
+                    server_id,
+                    "stderr",
+                    &format!("[Catalyst] Console input failed: {}\n", err),
+                )
+                .await;
             return Err(err);
         }
 
@@ -1248,12 +1355,13 @@ impl WebSocketHandler {
 
         // Send to container stdin
         if let Err(err) = self.runtime.send_input(&container_id, data).await {
-            let _ = self.emit_console_output(
-                server_id,
-                "stderr",
-                &format!("[Catalyst] Console input failed: {}\n", err),
-            )
-            .await;
+            let _ = self
+                .emit_console_output(
+                    server_id,
+                    "stderr",
+                    &format!("[Catalyst] Console input failed: {}\n", err),
+                )
+                .await;
             return Err(err);
         }
 
@@ -1267,13 +1375,13 @@ impl WebSocketHandler {
             .or_else(|| msg["type"].as_str())
             .ok_or_else(|| AgentError::InvalidRequest("Missing operation".to_string()))?;
 
-        let server_id = msg["serverId"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing serverId".to_string())
-        })?;
+        let server_id = msg["serverId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
 
-        let path = msg["path"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing path".to_string())
-        })?;
+        let path = msg["path"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing path".to_string()))?;
 
         let request_id = msg["requestId"].as_str().map(|value| value.to_string());
         let result = match op_type {
@@ -1285,9 +1393,9 @@ impl WebSocketHandler {
                     Some(json!({ "data": base64::engine::general_purpose::STANDARD.encode(data) }))
                 }),
             "write" => {
-                let data = msg["data"].as_str().ok_or_else(|| {
-                    AgentError::InvalidRequest("Missing data".to_string())
-                })?;
+                let data = msg["data"]
+                    .as_str()
+                    .ok_or_else(|| AgentError::InvalidRequest("Missing data".to_string()))?;
                 self.file_manager
                     .write_file(server_id, path, data)
                     .await
@@ -1299,9 +1407,9 @@ impl WebSocketHandler {
                 .await
                 .map(|_| None),
             "rename" => {
-                let to = msg["to"].as_str().ok_or_else(|| {
-                    AgentError::InvalidRequest("Missing 'to' path".to_string())
-                })?;
+                let to = msg["to"]
+                    .as_str()
+                    .ok_or_else(|| AgentError::InvalidRequest("Missing 'to' path".to_string()))?;
                 self.file_manager
                     .rename_file(server_id, path, to)
                     .await
@@ -1356,27 +1464,30 @@ impl WebSocketHandler {
         msg: &Value,
         write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
-        let server_id = msg["serverId"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing serverId".to_string())
-        })?;
-        let server_uuid = msg["serverUuid"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing serverUuid".to_string())
-        })?;
-        let backup_name = msg["backupName"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing backupName".to_string())
-        })?;
+        let server_id = msg["serverId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
+        let server_uuid = msg["serverUuid"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
+        let backup_name = msg["backupName"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing backupName".to_string()))?;
         let backup_path_override = msg["backupPath"].as_str();
         let backup_id = msg["backupId"].as_str();
 
         let server_dir = msg["serverDir"]
             .as_str()
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(self.config.server.data_dir.as_path()).join(server_uuid));
+            .unwrap_or_else(|| {
+                PathBuf::from(self.config.server.data_dir.as_path()).join(server_uuid)
+            });
         let backup_path = match backup_path_override {
             Some(path) => self.resolve_backup_path(server_uuid, path, true).await?,
             None => {
                 let filename = format!("{}.tar.gz", backup_name);
-                self.resolve_backup_path(server_uuid, &filename, true).await?
+                self.resolve_backup_path(server_uuid, &filename, true)
+                    .await?
             }
         };
         let backup_dir = backup_path
@@ -1412,12 +1523,15 @@ impl WebSocketHandler {
 
         if !archive_result.status.success() {
             let stderr = String::from_utf8_lossy(&archive_result.stderr);
-            return Err(AgentError::IoError(format!("Backup archive failed: {}", stderr)));
+            return Err(AgentError::IoError(format!(
+                "Backup archive failed: {}",
+                stderr
+            )));
         }
 
-        let metadata = tokio::fs::metadata(&backup_path).await.map_err(|e| {
-            AgentError::IoError(format!("Failed to read backup metadata: {}", e))
-        })?;
+        let metadata = tokio::fs::metadata(&backup_path)
+            .await
+            .map_err(|e| AgentError::IoError(format!("Failed to read backup metadata: {}", e)))?;
         let size_mb = metadata.len() as f64 / (1024.0 * 1024.0);
 
         let mut file = tokio::fs::File::open(&backup_path).await?;
@@ -1456,12 +1570,12 @@ impl WebSocketHandler {
         msg: &Value,
         write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
-        let server_id = msg["serverId"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing serverId".to_string())
-        })?;
-        let backup_path = msg["backupPath"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing backupPath".to_string())
-        })?;
+        let server_id = msg["serverId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
+        let backup_path = msg["backupPath"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing backupPath".to_string()))?;
         let server_uuid = msg
             .get("serverUuid")
             .and_then(|value| value.as_str())
@@ -1470,7 +1584,9 @@ impl WebSocketHandler {
         let server_dir = msg["serverDir"]
             .as_str()
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(self.config.server.data_dir.as_path()).join(server_uuid));
+            .unwrap_or_else(|| {
+                PathBuf::from(self.config.server.data_dir.as_path()).join(server_uuid)
+            });
         let backup_file = self
             .resolve_backup_path(server_uuid, backup_path, false)
             .await?;
@@ -1502,7 +1618,10 @@ impl WebSocketHandler {
 
         if !restore_result.status.success() {
             let stderr = String::from_utf8_lossy(&restore_result.stderr);
-            return Err(AgentError::IoError(format!("Backup restore failed: {}", stderr)));
+            return Err(AgentError::IoError(format!(
+                "Backup restore failed: {}",
+                stderr
+            )));
         }
 
         let event = json!({
@@ -1524,12 +1643,12 @@ impl WebSocketHandler {
         msg: &Value,
         write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
-        let server_id = msg["serverId"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing serverId".to_string())
-        })?;
-        let backup_path = msg["backupPath"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing backupPath".to_string())
-        })?;
+        let server_id = msg["serverId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
+        let backup_path = msg["backupPath"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing backupPath".to_string()))?;
         let server_uuid = msg
             .get("serverUuid")
             .and_then(|value| value.as_str())
@@ -1561,15 +1680,15 @@ impl WebSocketHandler {
         msg: &Value,
         write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
-        let request_id = msg["requestId"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing requestId".to_string())
-        })?;
-        let server_id = msg["serverId"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing serverId".to_string())
-        })?;
-        let backup_path = msg["backupPath"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing backupPath".to_string())
-        })?;
+        let request_id = msg["requestId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing requestId".to_string()))?;
+        let server_id = msg["serverId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
+        let backup_path = msg["backupPath"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing backupPath".to_string()))?;
         let server_uuid = msg
             .get("serverUuid")
             .and_then(|value| value.as_str())
@@ -1611,15 +1730,15 @@ impl WebSocketHandler {
         msg: &Value,
         write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
-        let request_id = msg["requestId"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing requestId".to_string())
-        })?;
-        let server_id = msg["serverId"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing serverId".to_string())
-        })?;
-        let backup_path = msg["backupPath"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing backupPath".to_string())
-        })?;
+        let request_id = msg["requestId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing requestId".to_string()))?;
+        let server_id = msg["serverId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
+        let backup_path = msg["backupPath"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing backupPath".to_string()))?;
         let server_uuid = msg
             .get("serverUuid")
             .and_then(|value| value.as_str())
@@ -1715,12 +1834,12 @@ impl WebSocketHandler {
         msg: &Value,
         write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
-        let request_id = msg["requestId"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing requestId".to_string())
-        })?;
-        let backup_path = msg["backupPath"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing backupPath".to_string())
-        })?;
+        let request_id = msg["requestId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing requestId".to_string()))?;
+        let backup_path = msg["backupPath"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing backupPath".to_string()))?;
         let server_uuid = msg
             .get("serverUuid")
             .and_then(|value| value.as_str())
@@ -1751,20 +1870,20 @@ impl WebSocketHandler {
         msg: &Value,
         write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
-        let request_id = msg["requestId"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing requestId".to_string())
-        })?;
-        let data = msg["data"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing data".to_string())
-        })?;
+        let request_id = msg["requestId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing requestId".to_string()))?;
+        let data = msg["data"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing data".to_string()))?;
         let chunk = base64::engine::general_purpose::STANDARD
             .decode(data)
             .map_err(|_| AgentError::InvalidRequest("Invalid chunk data".to_string()))?;
 
         let mut uploads = self.active_uploads.write().await;
-        let file = uploads.get_mut(request_id).ok_or_else(|| {
-            AgentError::InvalidRequest("Unknown upload request".to_string())
-        })?;
+        let file = uploads
+            .get_mut(request_id)
+            .ok_or_else(|| AgentError::InvalidRequest("Unknown upload request".to_string()))?;
         file.write_all(&chunk).await?;
 
         let event = json!({
@@ -1784,9 +1903,9 @@ impl WebSocketHandler {
         msg: &Value,
         write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
-        let request_id = msg["requestId"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing requestId".to_string())
-        })?;
+        let request_id = msg["requestId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing requestId".to_string()))?;
         let mut uploads = self.active_uploads.write().await;
         if let Some(mut file) = uploads.remove(request_id) {
             file.flush().await?;
@@ -1826,7 +1945,9 @@ impl WebSocketHandler {
             .components()
             .any(|component| matches!(component, std::path::Component::ParentDir))
         {
-            return Err(AgentError::InvalidRequest("Invalid backup path".to_string()));
+            return Err(AgentError::InvalidRequest(
+                "Invalid backup path".to_string(),
+            ));
         }
 
         let normalized = if requested.is_absolute() {
@@ -1880,22 +2001,27 @@ impl WebSocketHandler {
         msg: &Value,
         write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
-        let server_id = msg["serverId"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing serverId".to_string())
-        })?;
-        let server_uuid = msg["serverUuid"].as_str().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing serverUuid".to_string())
-        })?;
-        let allocated_disk_mb = msg["allocatedDiskMb"].as_u64().ok_or_else(|| {
-            AgentError::InvalidRequest("Missing allocatedDiskMb".to_string())
-        })?;
+        let server_id = msg["serverId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
+        let server_uuid = msg["serverUuid"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
+        let allocated_disk_mb = msg["allocatedDiskMb"]
+            .as_u64()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing allocatedDiskMb".to_string()))?;
 
         let server_dir = PathBuf::from(self.config.server.data_dir.as_path()).join(server_uuid);
         let allow_online_grow = true;
 
         let result = self
             .storage_manager
-            .resize(server_uuid, &server_dir, allocated_disk_mb, allow_online_grow)
+            .resize(
+                server_uuid,
+                &server_dir,
+                allocated_disk_mb,
+                allow_online_grow,
+            )
             .await;
 
         let event = match &result {
@@ -1957,7 +2083,12 @@ impl WebSocketHandler {
         Ok(())
     }
 
-    async fn emit_console_output(&self, server_id: &str, stream: &str, data: &str) -> AgentResult<()> {
+    async fn emit_console_output(
+        &self,
+        server_id: &str,
+        stream: &str,
+        data: &str,
+    ) -> AgentResult<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -1988,18 +2119,16 @@ impl WebSocketHandler {
         system.refresh_cpu();
         system.refresh_memory();
         let cpu_percent = system.global_cpu_info().cpu_usage();
-        let memory_usage_mb = system.used_memory() / 1024 ;
-        let memory_total_mb = system.total_memory() / 1024 ;
+        let memory_usage_mb = system.used_memory() / 1024;
+        let memory_total_mb = system.total_memory() / 1024;
         let mut disks = Disks::new_with_refreshed_list();
         disks.refresh();
         let mut disk_usage_mb = 0u64;
         let mut disk_total_mb = 0u64;
         for disk in disks.list() {
             disk_total_mb += disk.total_space() / (1024 * 1024);
-            disk_usage_mb += disk
-                .total_space()
-                .saturating_sub(disk.available_space())
-                / (1024 * 1024);
+            disk_usage_mb +=
+                disk.total_space().saturating_sub(disk.available_space()) / (1024 * 1024);
         }
 
         let health = json!({
@@ -2032,7 +2161,7 @@ impl WebSocketHandler {
     /// This prevents status drift when containers exit unexpectedly or agent reconnects
     pub async fn reconcile_server_states(&self) -> AgentResult<()> {
         debug!("Starting server state reconciliation");
-        
+
         let containers = self.runtime.list_containers().await?;
         let writer = { self.write.read().await.clone() };
         let Some(ws) = writer else {
@@ -2064,16 +2193,22 @@ impl WebSocketHandler {
 
             let is_running = container.status.contains("Up");
             let state = if is_running { "running" } else { "stopped" };
-            
+
             // If container is stopped, try to get exit code
             let exit_code = if !is_running {
-                self.runtime.get_container_exit_code(&container.id).await.ok().flatten()
+                self.runtime
+                    .get_container_exit_code(&container.id)
+                    .await
+                    .ok()
+                    .flatten()
             } else {
                 None
             };
 
-            info!("Reconciling container: name='{}', uuid='{}', status='{}', state='{}'", 
-                  container.names, server_uuid, container.status, state);
+            info!(
+                "Reconciling container: name='{}', uuid='{}', status='{}', state='{}'",
+                container.names, server_uuid, container.status, state
+            );
 
             let msg = json!({
                 "type": "server_state_sync",
@@ -2104,7 +2239,10 @@ impl WebSocketHandler {
             warn!("Failed to send reconciliation complete: {}", err);
         }
 
-        info!("Server state reconciliation complete: {} containers checked", container_count);
+        info!(
+            "Server state reconciliation complete: {} containers checked",
+            container_count
+        );
         Ok(())
     }
 
@@ -2118,7 +2256,10 @@ impl WebSocketHandler {
             let mut event_stream = match self.runtime.subscribe_to_all_events().await {
                 Ok(stream) => stream,
                 Err(e) => {
-                    error!("Failed to subscribe to global events: {}. Retrying in 10s...", e);
+                    error!(
+                        "Failed to subscribe to global events: {}. Retrying in 10s...",
+                        e
+                    );
                     tokio::time::sleep(Duration::from_secs(10)).await;
                     continue;
                 }
@@ -2183,10 +2324,10 @@ impl WebSocketHandler {
                 match event_type {
                     "start" | "die" | "stop" | "kill" | "pause" | "unpause" => {
                         debug!("Container {} event: {}", container_name, event_type);
-                        
+
                         // Give the container a moment to stabilize state
                         tokio::time::sleep(Duration::from_millis(100)).await;
-                        
+
                         // Sync this specific container's state
                         if let Err(e) = self.sync_container_state(container_name).await {
                             warn!("Failed to sync state for {}: {}", container_name, e);
@@ -2226,11 +2367,19 @@ impl WebSocketHandler {
         }
 
         // Check if container is running and get its state
-        let is_running = self.runtime.is_container_running(container_name).await.unwrap_or(false);
+        let is_running = self
+            .runtime
+            .is_container_running(container_name)
+            .await
+            .unwrap_or(false);
         let state = if is_running { "running" } else { "stopped" };
-        
+
         let exit_code = if !is_running {
-            self.runtime.get_container_exit_code(container_name).await.ok().flatten()
+            self.runtime
+                .get_container_exit_code(container_name)
+                .await
+                .ok()
+                .flatten()
         } else {
             None
         };
@@ -2299,16 +2448,21 @@ impl WebSocketHandler {
             let stats = match self.runtime.get_stats(&container.id).await {
                 Ok(stats) => stats,
                 Err(err) => {
-                    warn!("Failed to fetch stats for container {}: {}", container.id, err);
+                    warn!(
+                        "Failed to fetch stats for container {}: {}",
+                        container.id, err
+                    );
                     continue;
                 }
             };
 
             let cpu_percent = parse_percent(&stats.cpu_percent).unwrap_or(0.0);
             let memory_usage_mb = parse_memory_usage_mb(&stats.memory_usage).unwrap_or(0);
-            let (network_rx_bytes, network_tx_bytes) = parse_io_pair_bytes(&stats.net_io).unwrap_or((0, 0));
-            let (disk_read_bytes, disk_write_bytes) = parse_io_pair_bytes(&stats.block_io).unwrap_or((0, 0));
-            let disk_io_mb = (disk_read_bytes + disk_write_bytes) / (1024 * 1024) ;
+            let (network_rx_bytes, network_tx_bytes) =
+                parse_io_pair_bytes(&stats.net_io).unwrap_or((0, 0));
+            let (disk_read_bytes, disk_write_bytes) =
+                parse_io_pair_bytes(&stats.block_io).unwrap_or((0, 0));
+            let disk_io_mb = (disk_read_bytes + disk_write_bytes) / (1024 * 1024);
             let (disk_usage_mb, disk_total_mb) = match self
                 .runtime
                 .exec(&container.id, vec!["df", "-m", "/data"])
@@ -2348,7 +2502,9 @@ impl WebSocketHandler {
                         Ok(_) => {}
                         Err(err) => {
                             warn!("Failed to send resource stats: {}. Buffering to disk.", err);
-                            if let Err(e) = self.storage_manager.append_buffered_metric(&payload).await {
+                            if let Err(e) =
+                                self.storage_manager.append_buffered_metric(&payload).await
+                            {
                                 warn!("Failed to buffer metric to disk: {}", e);
                             }
                         }
@@ -2365,17 +2521,20 @@ impl WebSocketHandler {
 
         Ok(())
     }
-
 }
 
 fn get_uptime() -> u64 {
     // Simplified uptime calculation
-   std::fs::read_to_string("/proc/uptime")
-       .ok()
-       .and_then(|s| s.split_whitespace().next().map(|first| first.parse::<f64>().ok()))
-       .flatten()
-       .map(|u| u as u64)
-       .unwrap_or(0)
+    std::fs::read_to_string("/proc/uptime")
+        .ok()
+        .and_then(|s| {
+            s.split_whitespace()
+                .next()
+                .map(|first| first.parse::<f64>().ok())
+        })
+        .flatten()
+        .map(|u| u as u64)
+        .unwrap_or(0)
 }
 
 fn normalize_container_name(name: &str) -> String {
@@ -2394,7 +2553,7 @@ fn parse_percent(value: &str) -> Option<f64> {
 
 fn parse_memory_usage_mb(value: &str) -> Option<u64> {
     let first = value.split('/').next()?.trim();
-    parse_size_to_bytes(first).map(|bytes| bytes / (1024 * 1024) )
+    parse_size_to_bytes(first).map(|bytes| bytes / (1024 * 1024))
 }
 
 fn parse_io_pair_bytes(value: &str) -> Option<(u64, u64)> {
@@ -2418,7 +2577,10 @@ fn parse_size_to_bytes(value: &str) -> Option<u64> {
     });
     let caps = re.captures(trimmed)?;
     let number = caps.get(1)?.as_str().parse::<f64>().ok()?;
-    let unit = caps.get(2).map(|m| m.as_str().to_lowercase()).unwrap_or_default();
+    let unit = caps
+        .get(2)
+        .map(|m| m.as_str().to_lowercase())
+        .unwrap_or_default();
     let multiplier = match unit.as_str() {
         "" | "b" => 1f64,
         "k" | "kb" => 1_000f64,

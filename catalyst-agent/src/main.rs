@@ -7,8 +7,8 @@ mod errors;
 mod file_manager;
 mod firewall_manager;
 mod runtime_manager;
-mod system_setup;
 mod storage_manager;
+mod system_setup;
 mod websocket_handler;
 
 pub use config::AgentConfig;
@@ -16,8 +16,8 @@ pub use errors::{AgentError, AgentResult};
 pub use file_manager::FileManager;
 pub use firewall_manager::FirewallManager;
 pub use runtime_manager::ContainerdRuntime;
-pub use system_setup::SystemSetup;
 pub use storage_manager::StorageManager;
+pub use system_setup::SystemSetup;
 pub use websocket_handler::WebSocketHandler;
 
 /// Catalyst Agent - Main application state

@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 use tokio::fs;
+use tokio::io::AsyncWriteExt;
 use tokio::task::spawn_blocking;
 use tracing::info;
-use tokio::io::AsyncWriteExt;
 
 use crate::{AgentError, AgentResult};
 use serde_json::Value;
@@ -312,8 +312,7 @@ fn run(command: &str, args: &[&str]) -> AgentResult<()> {
     if !status.success() {
         return Err(AgentError::FileSystemError(format!(
             "{} failed with status {}",
-            command,
-            status
+            command, status
         )));
     }
     Ok(())

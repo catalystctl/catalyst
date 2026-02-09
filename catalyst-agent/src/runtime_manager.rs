@@ -97,7 +97,11 @@ impl ContainerdRuntime {
 
         // Provide stable host identifiers for apps that derive encryption keys from hardware UUID.
         add_readonly_mount(&mut cmd, "/etc/machine-id", "/etc/machine-id");
-        add_readonly_mount(&mut cmd, "/var/lib/dbus/machine-id", "/var/lib/dbus/machine-id");
+        add_readonly_mount(
+            &mut cmd,
+            "/var/lib/dbus/machine-id",
+            "/var/lib/dbus/machine-id",
+        );
         add_readonly_mount(
             &mut cmd,
             "/sys/class/dmi/id/product_uuid",
@@ -147,7 +151,7 @@ impl ContainerdRuntime {
         // FIX: Removed "-i" because nerdctl does not support -i and -d together.
         // Since we are piping stdin via a mounted FIFO file inside the shell command below,
         // we do not need the container runtime to allocate an interactive stdin stream.
-        
+
         cmd.arg("-v")
             .arg(format!("{}:{}", console_fifo.dir, console_fifo.dir));
 
@@ -215,7 +219,9 @@ impl ContainerdRuntime {
         // Configure firewall to allow the ports, if we have a concrete container IP
         if let Some(container_ip) = container_ip_opt {
             let ports_to_open: Vec<u16> = if port_bindings.is_empty() {
-                self.resolve_host_ports(container_id, port).await.unwrap_or_default()
+                self.resolve_host_ports(container_id, port)
+                    .await
+                    .unwrap_or_default()
             } else {
                 port_bindings.values().copied().collect()
             };
@@ -260,7 +266,9 @@ impl ContainerdRuntime {
         }
 
         cmd.arg(image).arg("sh").arg("-c").arg(script);
-        cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        cmd.stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
 
         let child = cmd.spawn().map_err(|e| {
             AgentError::ContainerError(format!("Failed to run installer container: {}", e))
@@ -301,10 +309,7 @@ impl ContainerdRuntime {
             .permissions();
         fifo_perms.set_mode(0o660);
         fs::set_permissions(&fifo_path, fifo_perms).map_err(|e| {
-            AgentError::ContainerError(format!(
-                "Failed to set console FIFO permissions: {}",
-                e
-            ))
+            AgentError::ContainerError(format!("Failed to set console FIFO permissions: {}", e))
         })?;
 
         Ok(ConsoleFifo {
@@ -332,7 +337,9 @@ impl ContainerdRuntime {
                 .write(true)
                 .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC)
                 .open(&path_clone)
-                .map_err(|e| AgentError::ContainerError(format!("Failed to open console FIFO: {}", e)))?;
+                .map_err(|e| {
+                    AgentError::ContainerError(format!("Failed to open console FIFO: {}", e))
+                })?;
 
             // We remove O_NONBLOCK now that we have the handle.
             // We keep the handle open as O_RDWR.
@@ -1040,7 +1047,9 @@ impl ContainerdRuntime {
             return Ok(false);
         }
 
-        let state = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
+        let state = String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .to_lowercase();
         Ok(state == "true")
     }
 
@@ -1092,7 +1101,10 @@ impl ContainerdRuntime {
     /// Subscribe to container events for a specific container
     /// Returns a child process streaming events (one event per line)
     /// Events include: start, die, stop, kill, etc.
-    pub async fn subscribe_to_container_events(&self, container_id: &str) -> AgentResult<tokio::process::Child> {
+    pub async fn subscribe_to_container_events(
+        &self,
+        container_id: &str,
+    ) -> AgentResult<tokio::process::Child> {
         debug!("Subscribing to events for container: {}", container_id);
 
         let child = Command::new("nerdctl")
@@ -1106,7 +1118,9 @@ impl ContainerdRuntime {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| AgentError::ContainerError(format!("Failed to spawn events stream: {}", e)))?;
+            .map_err(|e| {
+                AgentError::ContainerError(format!("Failed to spawn events stream: {}", e))
+            })?;
 
         Ok(child)
     }
@@ -1114,7 +1128,10 @@ impl ContainerdRuntime {
     /// Subscribe to all container events in the namespace
     /// Returns events with format: container_name status (e.g., "server-uuid start")
     pub async fn subscribe_to_all_events(&self) -> AgentResult<tokio::process::Child> {
-        debug!("Subscribing to all container events in namespace: {}", self.namespace);
+        debug!(
+            "Subscribing to all container events in namespace: {}",
+            self.namespace
+        );
 
         // Use JSON format which is more reliable than custom formats
         let child = Command::new("nerdctl")
@@ -1126,7 +1143,9 @@ impl ContainerdRuntime {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| AgentError::ContainerError(format!("Failed to spawn global events stream: {}", e)))?;
+            .map_err(|e| {
+                AgentError::ContainerError(format!("Failed to spawn global events stream: {}", e))
+            })?;
 
         Ok(child)
     }
@@ -1169,7 +1188,11 @@ impl ContainerdRuntime {
         Ok(())
     }
 
-    async fn resolve_host_ports(&self, container_id: &str, container_port: u16) -> AgentResult<Vec<u16>> {
+    async fn resolve_host_ports(
+        &self,
+        container_id: &str,
+        container_port: u16,
+    ) -> AgentResult<Vec<u16>> {
         let output = Command::new("nerdctl")
             .arg("--namespace")
             .arg(&self.namespace)

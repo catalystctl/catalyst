@@ -154,9 +154,9 @@ impl FileManager {
                 .await
                 .map_err(|e| AgentError::FileSystemError(format!("Failed to delete: {}", e)))?;
         } else {
-            fs::remove_file(&full_path)
-                .await
-                .map_err(|e| AgentError::FileSystemError(format!("Failed to delete file: {}", e)))?;
+            fs::remove_file(&full_path).await.map_err(|e| {
+                AgentError::FileSystemError(format!("Failed to delete file: {}", e))
+            })?;
         }
 
         info!("Deleted successfully: {:?}", full_path);

@@ -101,7 +101,10 @@ impl FirewallManager {
             .map_err(|e| AgentError::FirewallError(format!("Failed to reload ufw: {}", e)))?;
         if !reload.status.success() {
             let stderr = String::from_utf8_lossy(&reload.stderr);
-            return Err(AgentError::FirewallError(format!("UFW reload failed: {}", stderr)));
+            return Err(AgentError::FirewallError(format!(
+                "UFW reload failed: {}",
+                stderr
+            )));
         }
 
         info!("✓ UFW configured to allow port {}", port);
@@ -156,7 +159,10 @@ impl FirewallManager {
             .map_err(|e| AgentError::FirewallError(format!("Failed to reload firewalld: {}", e)))?;
         if !reload.status.success() {
             let stderr = String::from_utf8_lossy(&reload.stderr);
-            return Err(AgentError::FirewallError(format!("firewalld reload failed: {}", stderr)));
+            return Err(AgentError::FirewallError(format!(
+                "firewalld reload failed: {}",
+                stderr
+            )));
         }
 
         info!("✓ firewalld configured to allow port {}", port);
@@ -187,7 +193,10 @@ impl FirewallManager {
             .map_err(|e| AgentError::FirewallError(format!("Failed to reload firewalld: {}", e)))?;
         if !reload.status.success() {
             let stderr = String::from_utf8_lossy(&reload.stderr);
-            return Err(AgentError::FirewallError(format!("firewalld reload failed: {}", stderr)));
+            return Err(AgentError::FirewallError(format!(
+                "firewalld reload failed: {}",
+                stderr
+            )));
         }
 
         Ok(())
