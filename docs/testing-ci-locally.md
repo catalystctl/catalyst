@@ -132,7 +132,9 @@ docker system prune -a
 **Use `act` only when you need to:**
 - Test the exact containerized CI environment
 - Debug CI-specific issues
-- Test service containers (PostgreSQL, etc.)
+- Test workflows without job containers (e.g., security job)
+
+**Note:** Workflows with `container:` specifications (backend test, agent test) don't work well with act due to nested container limitations. Use `test-ci-quick.sh` for these.
 
 ## More Info
 

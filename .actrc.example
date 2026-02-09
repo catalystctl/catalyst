@@ -1,0 +1,13 @@
+# act configuration (example)
+# Copy to .actrc to use
+
+# Use catthehacker images (includes all common tools)
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+-P ubuntu-22.04=catthehacker/ubuntu:act-22.04
+-P self-hosted=catthehacker/ubuntu:act-latest
+
+# Container architecture
+--container-architecture linux/amd64
+
+# Artifacts directory
+--artifact-server-path /tmp/artifacts
