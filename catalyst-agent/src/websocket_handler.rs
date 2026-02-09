@@ -192,7 +192,7 @@ impl WebSocketHandler {
             let metrics_value = serde_json::Value::Array(chunk.to_vec());
             let payload = json!({ "type": "resource_stats_batch", "metrics": metrics_value });
             let mut w = write.lock().await;
-            if let Err(e) = w.send(Message::Text(payload.to_string())).await {
+            if let Err(e) = w.send(Message::Text(payload.to_string().into())).await {
                 warn!("Failed to send buffered metrics batch: {}", e);
                 // leave buffer intact - will retry on next connect
                 return Ok(());
@@ -267,7 +267,7 @@ impl WebSocketHandler {
 
         {
             let mut w = write.lock().await;
-            w.send(Message::Text(handshake.to_string()))
+            w.send(Message::Text(handshake.to_string().into()))
                 .await
                 .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         }
@@ -301,7 +301,7 @@ impl WebSocketHandler {
                     "type": "heartbeat"
                 });
                 let mut w = write_clone.lock().await;
-                let _ = w.send(Message::Text(heartbeat.to_string())).await;
+                let _ = w.send(Message::Text(heartbeat.to_string().into())).await;
             }
         });
 
@@ -1448,7 +1448,7 @@ impl WebSocketHandler {
             let writer = { self.write.read().await.clone() };
             if let Some(ws) = writer {
                 let mut w = ws.lock().await;
-                let _ = w.send(Message::Text(payload.to_string())).await;
+                let _ = w.send(Message::Text(payload.to_string().into())).await;
             }
         }
 
@@ -1554,7 +1554,7 @@ impl WebSocketHandler {
         });
 
         let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string()))
+        w.send(Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -1627,7 +1627,7 @@ impl WebSocketHandler {
         });
 
         let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string()))
+        w.send(Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -1664,7 +1664,7 @@ impl WebSocketHandler {
         });
 
         let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string()))
+        w.send(Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -1702,7 +1702,7 @@ impl WebSocketHandler {
                 "error": "Backup file not found",
             });
             let mut w = write.lock().await;
-            w.send(Message::Text(event.to_string()))
+            w.send(Message::Text(event.to_string().into()))
                 .await
                 .map_err(|e| AgentError::NetworkError(e.to_string()))?;
             return Ok(());
@@ -1715,7 +1715,7 @@ impl WebSocketHandler {
             "success": true,
         });
         let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string()))
+        w.send(Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         Ok(())
@@ -1752,7 +1752,7 @@ impl WebSocketHandler {
                 "done": true,
             });
             let mut w = write.lock().await;
-            w.send(Message::Text(event.to_string()))
+            w.send(Message::Text(event.to_string().into()))
                 .await
                 .map_err(|e| AgentError::NetworkError(e.to_string()))?;
             return Ok(());
@@ -1769,7 +1769,7 @@ impl WebSocketHandler {
                     "done": true,
                 });
                 let mut w = write.lock().await;
-                w.send(Message::Text(event.to_string()))
+                w.send(Message::Text(event.to_string().into()))
                     .await
                     .map_err(|e| AgentError::NetworkError(e.to_string()))?;
                 return Ok(());
@@ -1788,7 +1788,7 @@ impl WebSocketHandler {
                         "done": true,
                     });
                     let mut w = write.lock().await;
-                    w.send(Message::Text(event.to_string()))
+                    w.send(Message::Text(event.to_string().into()))
                         .await
                         .map_err(|e| AgentError::NetworkError(e.to_string()))?;
                     break;
@@ -1802,7 +1802,7 @@ impl WebSocketHandler {
                     "done": true,
                 });
                 let mut w = write.lock().await;
-                w.send(Message::Text(done_event.to_string()))
+                w.send(Message::Text(done_event.to_string().into()))
                     .await
                     .map_err(|e| AgentError::NetworkError(e.to_string()))?;
                 break;
@@ -1817,7 +1817,7 @@ impl WebSocketHandler {
                 "done": false,
             });
             let mut w = write.lock().await;
-            w.send(Message::Text(event.to_string()))
+            w.send(Message::Text(event.to_string().into()))
                 .await
                 .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         }
@@ -1855,7 +1855,7 @@ impl WebSocketHandler {
             "success": true,
         });
         let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string()))
+        w.send(Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         Ok(())
@@ -1888,7 +1888,7 @@ impl WebSocketHandler {
             "success": true,
         });
         let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string()))
+        w.send(Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         Ok(())
@@ -1913,7 +1913,7 @@ impl WebSocketHandler {
             "success": true,
         });
         let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string()))
+        w.send(Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         Ok(())
@@ -2039,7 +2039,7 @@ impl WebSocketHandler {
         };
 
         let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string()))
+        w.send(Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -2071,7 +2071,7 @@ impl WebSocketHandler {
         let writer = { self.write.read().await.clone() };
         if let Some(ws) = writer {
             let mut w = ws.lock().await;
-            if let Err(err) = w.send(Message::Text(msg.to_string())).await {
+            if let Err(err) = w.send(Message::Text(msg.to_string().into())).await {
                 error!("Failed to send state update: {}", err);
             }
         }
@@ -2100,7 +2100,7 @@ impl WebSocketHandler {
         let writer = { self.write.read().await.clone() };
         if let Some(ws) = writer {
             let mut w = ws.lock().await;
-            if let Err(err) = w.send(Message::Text(msg.to_string())).await {
+            if let Err(err) = w.send(Message::Text(msg.to_string().into())).await {
                 error!("Failed to send console output: {}", err);
             }
         }
@@ -2112,13 +2112,13 @@ impl WebSocketHandler {
         debug!("Sending health report");
         let containers = self.runtime.list_containers().await?;
         let mut system = System::new();
-        system.refresh_cpu();
+        system.refresh_cpu_all();
         system.refresh_memory();
-        let cpu_percent = system.global_cpu_info().cpu_usage();
+        let cpu_percent = system.global_cpu_usage();
         let memory_usage_mb = system.used_memory() / 1024;
         let memory_total_mb = system.total_memory() / 1024;
         let mut disks = Disks::new_with_refreshed_list();
-        disks.refresh();
+        disks.refresh(true);
         let mut disk_usage_mb = 0u64;
         let mut disk_total_mb = 0u64;
         for disk in disks.list() {
@@ -2145,7 +2145,7 @@ impl WebSocketHandler {
         let writer = { self.write.read().await.clone() };
         if let Some(ws) = writer {
             let mut w = ws.lock().await;
-            w.send(Message::Text(health.to_string()))
+            w.send(Message::Text(health.to_string().into()))
                 .await
                 .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         }
@@ -2216,7 +2216,7 @@ impl WebSocketHandler {
             });
 
             let mut w = ws.lock().await;
-            if let Err(err) = w.send(Message::Text(msg.to_string())).await {
+            if let Err(err) = w.send(Message::Text(msg.to_string().into())).await {
                 warn!("Failed to send state sync: {}", err);
                 break;
             }
@@ -2231,7 +2231,7 @@ impl WebSocketHandler {
         });
 
         let mut w = ws.lock().await;
-        if let Err(err) = w.send(Message::Text(complete_msg.to_string())).await {
+        if let Err(err) = w.send(Message::Text(complete_msg.to_string().into())).await {
             warn!("Failed to send reconciliation complete: {}", err);
         }
 
@@ -2390,7 +2390,7 @@ impl WebSocketHandler {
         });
 
         let mut w = ws.lock().await;
-        w.send(Message::Text(msg.to_string()))
+        w.send(Message::Text(msg.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -2414,7 +2414,7 @@ impl WebSocketHandler {
         });
 
         let mut w = ws.lock().await;
-        w.send(Message::Text(msg.to_string()))
+        w.send(Message::Text(msg.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -2493,7 +2493,7 @@ impl WebSocketHandler {
             match &writer_opt {
                 Some(ws) => {
                     let mut w = ws.lock().await;
-                    match w.send(Message::Text(payload.to_string())).await {
+                    match w.send(Message::Text(payload.to_string().into())).await {
                         Ok(_) => {}
                         Err(err) => {
                             warn!("Failed to send resource stats: {}. Buffering to disk.", err);

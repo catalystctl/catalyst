@@ -3,7 +3,6 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::net::Ipv4Addr;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
-use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
@@ -349,10 +348,10 @@ impl ContainerdRuntime {
             // We remove O_NONBLOCK now that we have the handle.
             // We keep the handle open as O_RDWR.
             // SAFETY: fd is valid and owned by this thread; we only adjust flags.
-            if let Ok(flags) = fcntl(file.as_raw_fd(), FcntlArg::F_GETFL) {
+            if let Ok(flags) = fcntl(&file, FcntlArg::F_GETFL) {
                 let mut oflags = OFlag::from_bits_truncate(flags);
                 oflags.remove(OFlag::O_NONBLOCK);
-                let _ = fcntl(file.as_raw_fd(), FcntlArg::F_SETFL(oflags));
+                let _ = fcntl(&file, FcntlArg::F_SETFL(oflags));
             }
             Ok::<File, AgentError>(file)
         })
