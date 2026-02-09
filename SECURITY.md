@@ -36,11 +36,6 @@ Instead, please report them via one of the following methods:
    - Click "Report a vulnerability"
    - Fill out the advisory form with details
 
-2. **Email**
-   - Send an email to: [security@catalyst-project.com](mailto:security@catalyst-project.com)
-   - Use PGP key: [Available on request]
-   - Include detailed information about the vulnerability
-
 ### What to Include
 
 Please include the following information in your report:
@@ -262,11 +257,10 @@ For security-related modifications:
 
 ## Contact
 
-For security-related questions or concerns, contact:
+For security-related questions or concerns:
 
-- **Security Email**: security@catalyst-project.com
-- **General Issues**: https://github.com/karutoil/catalyst/issues
 - **Security Advisories**: https://github.com/karutoil/catalyst/security/advisories
+- **General Issues**: https://github.com/karutoil/catalyst/issues
 
 ---
 
