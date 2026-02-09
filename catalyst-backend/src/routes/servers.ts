@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { PrismaClient } from "@prisma/client";
 import { serialize } from '../utils/serialize';
 import { v4 as uuidv4 } from "uuid";
+import { randomBytes } from "crypto";
 import { decryptBackupConfig, encryptBackupConfig, redactBackupConfig } from "../services/backup-credentials";
 import { ServerStateMachine } from "../services/state-machine";
 import { ServerState } from "../shared-types";
@@ -1155,10 +1156,10 @@ export async function serverRoutes(app: FastifyInstance) {
 
   const generateSafeIdentifier = (prefix: string, length = 10) => {
     const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
-    const randomBytes = require('crypto').randomBytes(length);
+    const bytes = randomBytes(length);
     let id = "";
     for (let i = 0; i < length; i += 1) {
-      id += alphabet[randomBytes[i] % alphabet.length];
+      id += alphabet[bytes[i] % alphabet.length];
     }
     return `${prefix}${id}`;
   };
