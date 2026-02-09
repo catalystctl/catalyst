@@ -1156,10 +1156,24 @@ export async function serverRoutes(app: FastifyInstance) {
 
   const generateSafeIdentifier = (prefix: string, length = 10) => {
     const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
-    const bytes = randomBytes(length);
+    // Generate unbiased random values by using rejection sampling
+    // Get enough bytes to fill the length with proper rejection sampling
+    const randomBytesNeeded = Math.ceil(length * 256 / 252); // 252 = largest multiple of 36 <= 255
+    const bytes = randomBytes(randomBytesNeeded);
     let id = "";
-    for (let i = 0; i < length; i += 1) {
-      id += alphabet[bytes[i] % alphabet.length];
+    let byteIndex = 0;
+    while (id.length < length && byteIndex < bytes.length) {
+      const value = bytes[byteIndex++];
+      // Use rejection sampling: only use values 0-251 (evenly divisible by 36)
+      // This removes the bias from using modulo on 0-255
+      if (value < 252) {
+        id += alphabet[value % 36];
+      }
+    }
+    // Fallback: if we somehow didn't get enough valid bytes, pad with random chars
+    while (id.length < length) {
+      const byte = randomBytes(1)[0];
+      id += alphabet[byte % 36];
     }
     return `${prefix}${id}`;
   };
