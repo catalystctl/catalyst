@@ -1155,9 +1155,10 @@ export async function serverRoutes(app: FastifyInstance) {
 
   const generateSafeIdentifier = (prefix: string, length = 10) => {
     const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+    const randomBytes = require('crypto').randomBytes(length);
     let id = "";
     for (let i = 0; i < length; i += 1) {
-      id += alphabet[Math.floor(Math.random() * alphabet.length)];
+      id += alphabet[randomBytes[i] % alphabet.length];
     }
     return `${prefix}${id}`;
   };
@@ -1167,7 +1168,9 @@ export async function serverRoutes(app: FastifyInstance) {
   };
 
   const toDatabaseIdentifier = (value: string) => {
-    return value
+    // Limit input length to prevent ReDoS attacks
+    const sanitized = value.slice(0, 100);
+    return sanitized
       .toLowerCase()
       .replace(/[^a-z0-9_]/g, "_")
       .replace(/_{2,}/g, "_")
