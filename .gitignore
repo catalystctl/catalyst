@@ -26,3 +26,4 @@ tests/lib/node_modules/
 .DS_Store
 # act (local CI testing)
 .actrc
+docs/testing-ci-locally.md
