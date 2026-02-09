@@ -1,8 +1,37 @@
 # Testing CI/CD Locally
 
-Use `act` to test GitHub Actions workflows locally without committing.
+Two options for testing CI/CD locally before committing:
 
-## Quick Start
+## Option 1: Quick Local Testing (Recommended)
+
+**Fastest option** - runs CI steps directly on your machine without Docker overhead.
+
+```bash
+# Test everything
+./test-ci-quick.sh
+
+# Test specific components
+./test-ci-quick.sh backend
+./test-ci-quick.sh agent
+./test-ci-quick.sh security
+```
+
+**Pros:**
+- Very fast (seconds instead of minutes)
+- Uses your local environment (same as development)
+- Simple and easy to debug
+
+**Cons:**
+- Doesn't test in containerized environment
+- Requires local dependencies installed
+
+---
+
+## Option 2: act (Full GitHub Actions Simulation)
+
+Use `act` to test GitHub Actions workflows in Docker containers (exact CI environment).
+
+### Quick Start
 
 ```bash
 # List all workflows
@@ -22,7 +51,7 @@ act --list
 act -n  # dry-run mode
 ```
 
-## Direct act Commands
+### Direct act Commands
 
 ```bash
 # Test all workflows
@@ -50,32 +79,33 @@ act -v
 act --list
 ```
 
-## Common Use Cases
+### Common Use Cases
 
-### Test backend changes before commit
+#### Test backend changes before commit
 ```bash
 cd /root/catalyst3
 ./test-ci-locally.sh backend
 ```
 
-### Test only the build job
+#### Test only the build job
 ```bash
 act -W .github/workflows/backend-ci.yml -j test
 ```
 
-### Test with custom container
+#### Test with custom container
 ```bash
 act -P self-hosted=rust:1.75-bullseye -W .github/workflows/agent-ci.yml
 ```
 
-## Limitations
+### Limitations
 
 - Some GitHub-specific features may not work (e.g., GitHub token, artifacts)
 - Service containers may need additional setup
 - Self-hosted runner labels are mapped to Docker images
 - GITHUB_TOKEN is simulated (not real)
+- **Much slower than quick local testing** (Docker-in-Docker overhead)
 
-## Troubleshooting
+### Troubleshooting
 
 **Problem:** Permission denied on Docker socket
 ```bash
@@ -92,6 +122,17 @@ act --container-architecture linux/amd64
 ```bash
 docker system prune -a
 ```
+
+---
+
+## Recommendation
+
+**Use `test-ci-quick.sh` for fast iteration** - it runs the exact same checks as CI without Docker overhead.
+
+**Use `act` only when you need to:**
+- Test the exact containerized CI environment
+- Debug CI-specific issues
+- Test service containers (PostgreSQL, etc.)
 
 ## More Info
 
