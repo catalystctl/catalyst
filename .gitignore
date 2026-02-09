@@ -24,3 +24,5 @@ tests/lib/node_modules/
 .idea/
 *.swp
 .DS_Store
+# act (local CI testing)
+.actrc
