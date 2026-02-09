@@ -39,6 +39,10 @@ jobs:
         working-directory: catalyst-backend
         run: npm ci
 
+      - name: Generate Prisma Client
+        working-directory: catalyst-backend
+        run: npx prisma generate
+
       - name: Security audit
         working-directory: catalyst-backend
         run: npm audit --audit-level=high
