@@ -20,6 +20,7 @@ jobs:
         with:
           toolchain: stable
           override: true
+          components: rustfmt, clippy
 
       - name: Run cargo check
         run: cargo check --manifest-path catalyst-agent/Cargo.toml
@@ -52,6 +53,7 @@ jobs:
           toolchain: stable
           override: true
           target: ${{ matrix.target }}
+          components: rustfmt, clippy
 
       - name: Build release
         run: |
