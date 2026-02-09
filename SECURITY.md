@@ -1,5 +1,16 @@
 # Security Policy
 
+## License and Security
+
+Catalyst is licensed under the **GNU General Public License v3.0 (GPLv3)**. This means:
+
+- **You have the right to study** how the software works and modify it
+- **You have the right to distribute** copies and modifications
+- **Security through transparency**: The source code is open for security review
+- **No additional restrictions**: Security measures must not restrict GPL freedoms
+
+This security policy complements, but does not override, your rights under the GPLv3 license.
+
 ## Supported Versions
 
 We release patches for security vulnerabilities in the following versions:
@@ -54,11 +65,23 @@ After you submit a report, you can expect:
 
 ### Our Commitment
 
-- We will not take legal action against researchers who:
+- We will not take legal action against security researchers who:
   - Follow this disclosure process
   - Act in good faith
   - Avoid privacy violations and data destruction
   - Avoid service disruption
+  - Respect the GPLv3 license terms
+
+- We acknowledge your GPLv3 rights to:
+  - Study, modify, and redistribute this software
+  - Report security issues publicly if you choose
+  - Create and distribute security patches independently
+
+- We kindly request coordinated disclosure to:
+  - Protect users running unpatched versions
+  - Provide time for users to update
+  - Coordinate fixes across the community
+  - **This is a request, not a legal requirement under GPL**
 
 - We will work with you to:
   - Understand and validate the vulnerability
@@ -83,6 +106,46 @@ We classify vulnerabilities using the following severity levels:
 - **High**: Patch within 7 days, expedited release
 - **Medium**: Patch within 30 days, next scheduled release
 - **Low**: Patch within 90 days, regular release cycle
+
+## Security and GPL Freedoms
+
+### Your Rights Under GPLv3
+
+The GPLv3 license grants you important freedoms that apply to security:
+
+1. **Freedom to Study**: You can examine the source code for security vulnerabilities
+2. **Freedom to Modify**: You can create and deploy security patches
+3. **Freedom to Distribute**: You can share security fixes with others
+4. **No Tivoization**: Hardware running Catalyst cannot prevent you from running modified versions
+
+### Anti-Tivoization (GPLv3 Section 6)
+
+If you distribute Catalyst on hardware devices:
+- You must provide Installation Information to allow users to install modified versions
+- Users must be able to install security patches they create
+- Technical protection measures cannot prevent modification
+- This protects users' ability to secure their own systems
+
+### Patent Grant (GPLv3 Section 11)
+
+By contributing to or distributing Catalyst:
+- You grant a patent license for your contributions
+- You cannot use patent claims to restrict security fixes
+- Contributors cannot sue users for patent infringement related to security patches
+
+### Coordinated vs. Public Disclosure
+
+Under GPLv3, you have the right to:
+- **Publicly disclose** vulnerabilities immediately if you choose
+- **Create and distribute** security patches independently
+- **Fork the project** with security improvements
+
+However, we kindly request:
+- **Coordinated disclosure** to protect users of unpatched versions
+- **Reasonable time** for maintainers to develop and test fixes (typically 90 days)
+- **Collaboration** on fixes when possible
+
+**This is a request for responsible disclosure, not a legal restriction. Your GPL rights remain intact.**
 
 ## Security Best Practices
 
@@ -123,7 +186,7 @@ We classify vulnerabilities using the following severity levels:
 
 ## Security Features
 
-Catalyst includes the following security features:
+Catalyst is **free and open-source software**. Security features include:
 
 - **JWT-based authentication** with configurable expiration
 - **Role-based access control (RBAC)** with fine-grained permissions
@@ -137,7 +200,9 @@ Catalyst includes the following security features:
 - **Dependency scanning** via Dependabot
 - **SFTP chroot jails** for file access isolation
 
-## Known Security Considerations
+**All security features are open-source and auditable.** You are free to review, modify, and improve them under the GPLv3 license.
+
+## Community Security
 
 ### Agent-Backend Communication
 
@@ -172,10 +237,28 @@ When vulnerabilities are disclosed, they will be listed here with:
 
 ## Additional Resources
 
+- **GPLv3 License**: [LICENSE](LICENSE)
+- **GNU GPL FAQ**: https://www.gnu.org/licenses/gpl-faq.html
+- **FSF Security Guidelines**: https://www.fsf.org/
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
 - [CWE Top 25](https://cwe.mitre.org/top25/)
 - [GitHub Security Best Practices](https://docs.github.com/en/code-security)
 - [Catalyst Documentation](https://github.com/karutoil/catalyst/blob/main/README.md)
+
+## GPL Compliance
+
+If you distribute Catalyst (modified or unmodified):
+- **Provide source code** or a written offer for source code
+- **Include license notices** (GPLv3 LICENSE file)
+- **Preserve copyright notices** in all files
+- **Document modifications** you've made
+- **License derivative works** under GPLv3
+- **Provide Installation Information** if distributed on hardware
+
+For security-related modifications:
+- You may add additional permissions (GPLv3 Section 7)
+- You cannot add additional restrictions
+- Security fixes must remain GPLv3 licensed
 
 ## Contact
 
