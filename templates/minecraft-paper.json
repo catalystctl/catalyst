@@ -2,7 +2,7 @@
   "id": "minecraft-paper",
   "name": "Minecraft Server (Paper)",
   "description": "High-performance Minecraft server running Paper",
-  "author": "MCJARS",
+  "author": "Catalyst Maintainers",
   "version": "1.21.11",
   "image": "eclipse-temurin:21-jre",
   "images": [
