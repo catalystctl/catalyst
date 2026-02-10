@@ -19,7 +19,8 @@ use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{debug, error, info, warn};
 
-use crate::{AgentConfig, AgentError, AgentResult, ContainerdRuntime, FileManager, StorageManager};
+use crate::{AgentConfig, AgentError, AgentResult, ContainerdRuntime, FileManager, NetworkManager, StorageManager};
+use crate::config::CniNetworkConfig;
 
 type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
@@ -407,6 +408,9 @@ impl WebSocketHandler {
                     warn!("Failed to send immediate stats: {}", e);
                 }
             }
+            Some("create_network") => self.handle_create_network(&msg, write).await?,
+            Some("update_network") => self.handle_update_network(&msg, write).await?,
+            Some("delete_network") => self.handle_delete_network(&msg, write).await?,
             Some("node_handshake_response") => {
                 info!("Handshake accepted by backend");
             }
@@ -2062,6 +2066,131 @@ impl WebSocketHandler {
         result?;
 
         Ok(())
+    }
+
+    /// Handle create_network message
+    async fn handle_create_network(
+        &self,
+        msg: &Value,
+        write: &Arc<tokio::sync::Mutex<WsWrite>>,
+    ) -> AgentResult<()> {
+        let network = self.parse_network_config(msg)?;
+
+        let result = NetworkManager::create_network(&network);
+
+        let event = match &result {
+            Ok(_) => json!({
+                "type": "network_created",
+                "networkName": network.name,
+                "success": true,
+            }),
+            Err(err) => json!({
+                "type": "network_created",
+                "networkName": network.name,
+                "success": false,
+                "error": err.to_string(),
+            }),
+        };
+
+        let mut w = write.lock().await;
+        w.send(Message::Text(event.to_string().into()))
+            .await
+            .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+
+        result?;
+
+        Ok(())
+    }
+
+    /// Handle update_network message
+    async fn handle_update_network(
+        &self,
+        msg: &Value,
+        write: &Arc<tokio::sync::Mutex<WsWrite>>,
+    ) -> AgentResult<()> {
+        let old_name = msg["oldName"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing oldName".to_string()))?;
+
+        let network = self.parse_network_config(msg)?;
+
+        let result = NetworkManager::update_network(old_name, &network);
+
+        let event = match &result {
+            Ok(_) => json!({
+                "type": "network_updated",
+                "oldName": old_name,
+                "networkName": network.name,
+                "success": true,
+            }),
+            Err(err) => json!({
+                "type": "network_updated",
+                "oldName": old_name,
+                "networkName": network.name,
+                "success": false,
+                "error": err.to_string(),
+            }),
+        };
+
+        let mut w = write.lock().await;
+        w.send(Message::Text(event.to_string().into()))
+            .await
+            .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+
+        result?;
+
+        Ok(())
+    }
+
+    /// Handle delete_network message
+    async fn handle_delete_network(
+        &self,
+        msg: &Value,
+        write: &Arc<tokio::sync::Mutex<WsWrite>>,
+    ) -> AgentResult<()> {
+        let network_name = msg["networkName"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing networkName".to_string()))?;
+
+        let result = NetworkManager::delete_network(network_name);
+
+        let event = match &result {
+            Ok(_) => json!({
+                "type": "network_deleted",
+                "networkName": network_name,
+                "success": true,
+            }),
+            Err(err) => json!({
+                "type": "network_deleted",
+                "networkName": network_name,
+                "success": false,
+                "error": err.to_string(),
+            }),
+        };
+
+        let mut w = write.lock().await;
+        w.send(Message::Text(event.to_string().into()))
+            .await
+            .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+
+        result?;
+
+        Ok(())
+    }
+
+    /// Parse network configuration from message
+    fn parse_network_config(&self, msg: &Value) -> AgentResult<CniNetworkConfig> {
+        Ok(CniNetworkConfig {
+            name: msg["networkName"]
+                .as_str()
+                .ok_or_else(|| AgentError::InvalidRequest("Missing networkName".to_string()))?
+                .to_string(),
+            interface: msg["interface"].as_str().map(|s| s.to_string()),
+            cidr: msg["cidr"].as_str().map(|s| s.to_string()),
+            gateway: msg["gateway"].as_str().map(|s| s.to_string()),
+            range_start: msg["rangeStart"].as_str().map(|s| s.to_string()),
+            range_end: msg["rangeEnd"].as_str().map(|s| s.to_string()),
+        })
     }
 
     async fn emit_server_state_update(

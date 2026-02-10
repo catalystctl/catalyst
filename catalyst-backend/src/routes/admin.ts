@@ -1648,6 +1648,21 @@ export async function adminRoutes(app: FastifyInstance) {
         },
       });
 
+      // Send network creation request to agent
+      const wsGateway = (app as any).wsGateway;
+      if (wsGateway) {
+        await wsGateway.sendToAgent(nodeId, {
+          type: 'create_network',
+          networkName,
+          cidr,
+          gateway: gateway || undefined,
+          rangeStart: startIp || undefined,
+          rangeEnd: endIp || undefined,
+        }).catch((err: Error) => {
+          console.error(`Failed to send network creation to agent ${nodeId}:`, err);
+        });
+      }
+
       reply.status(201).send({ success: true, data: pool });
     }
   );
@@ -1710,6 +1725,22 @@ export async function adminRoutes(app: FastifyInstance) {
         },
       });
 
+      // Send network update request to agent
+      const wsGateway = (app as any).wsGateway;
+      if (wsGateway) {
+        await wsGateway.sendToAgent(pool.nodeId, {
+          type: 'update_network',
+          oldName: pool.networkName,
+          networkName: updated.networkName,
+          cidr: updated.cidr,
+          gateway: updated.gateway || undefined,
+          rangeStart: updated.startIp || undefined,
+          rangeEnd: updated.endIp || undefined,
+        }).catch((err: Error) => {
+          console.error(`Failed to send network update to agent ${pool.nodeId}:`, err);
+        });
+      }
+
       reply.send(serialize({ success: true, data: updated }));
     }
   );
@@ -1737,7 +1768,25 @@ export async function adminRoutes(app: FastifyInstance) {
         });
       }
 
+      // Get pool info before deletion for agent notification
+      const pool = await prisma.ipPool.findUnique({
+        where: { id: poolId },
+      });
+
       await prisma.ipPool.delete({ where: { id: poolId } });
+
+      // Send network deletion request to agent
+      if (pool) {
+        const wsGateway = (app as any).wsGateway;
+        if (wsGateway) {
+          await wsGateway.sendToAgent(pool.nodeId, {
+            type: 'delete_network',
+            networkName: pool.networkName,
+          }).catch((err: Error) => {
+            console.error(`Failed to send network deletion to agent ${pool.nodeId}:`, err);
+          });
+        }
+      }
 
       reply.send({ success: true });
     }
