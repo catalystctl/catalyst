@@ -3,7 +3,7 @@ export interface TemplateVariable {
   description?: string;
   default: string;
   required: boolean;
-  input?: 'text' | 'number' | 'select' | 'checkbox';
+  input?: 'text' | 'number' | 'password' | 'checkbox' | 'select' | 'textarea';
   rules?: string[];
 }
 
@@ -13,7 +13,8 @@ export interface TemplateImageOption {
   image: string;
 }
 
-type ModManagerTarget = 'mods' | 'datapacks' | 'modpacks';
+type ModManagerTarget = 'mods' | 'plugins' | 'datapacks' | 'modpacks' | 'addons';
+
 type ModManagerProvider =
   | string
   | {
@@ -24,11 +25,32 @@ type ModManagerProvider =
       curseforge?: {
         gameId?: string | number;
         gameSlug?: string;
-        classIds?: Partial<Record<ModManagerTarget, string | number>>;
         classSlugs?: Partial<Record<ModManagerTarget, string>>;
-        modLoaderMap?: Record<string, string | number>;
       };
     };
+
+export interface TemplateFeatures {
+  restartOnExit?: boolean;
+  maxInstances?: number;
+  configFile?: string;
+  modManager?: {
+    targets?: ModManagerTarget[];
+    providers: ModManagerProvider[];
+    paths?: Record<string, string>;
+  };
+  pluginManager?: {
+    providers: string[];
+    paths?: Record<string, string>;
+  };
+  backupPaths?: string[];
+  fileEditor?: {
+    enabled?: boolean;
+    restrictedPaths?: string[];
+  };
+  iconUrl?: string;
+  configFiles?: string[];
+  [key: string]: any;
+}
 
 export interface Template {
   id: string;
@@ -42,31 +64,11 @@ export interface Template {
   installImage?: string;
   startup: string;
   stopCommand: string;
-  sendSignalTo: string;
+  sendSignalTo: 'SIGTERM' | 'SIGINT' | 'SIGKILL';
   variables: TemplateVariable[];
   installScript?: string;
   supportedPorts: number[];
   allocatedMemoryMb: number;
   allocatedCpuCores: number;
-  features?: {
-    iconUrl?: string;
-    configFile?: string;
-    configFiles?: string[];
-    modManager?: {
-      providers: ModManagerProvider[];
-      targets?: ModManagerTarget[];
-      paths?: {
-        mods?: string;
-        datapacks?: string;
-        modpacks?: string;
-      };
-    };
-    pluginManager?: {
-      providers: string[];
-      paths?: {
-        plugins?: string;
-      };
-    };
-    [key: string]: any;
-  };
+  features?: TemplateFeatures;
 }

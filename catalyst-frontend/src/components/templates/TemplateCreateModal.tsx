@@ -37,7 +37,7 @@ function TemplateCreateModal() {
   const [defaultImage, setDefaultImage] = useState('');
   const [startup, setStartup] = useState('');
   const [stopCommand, setStopCommand] = useState('');
-  const [sendSignalTo, setSendSignalTo] = useState<'SIGTERM' | 'SIGKILL'>('SIGTERM');
+  const [sendSignalTo, setSendSignalTo] = useState<'SIGTERM' | 'SIGINT' | 'SIGKILL'>('SIGTERM');
   const [installScript, setInstallScript] = useState('');
   const [configFile, setConfigFile] = useState('');
   const [configFiles, setConfigFiles] = useState<string[]>([]);
@@ -45,6 +45,11 @@ function TemplateCreateModal() {
   const [allocatedMemoryMb, setAllocatedMemoryMb] = useState('1024');
   const [allocatedCpuCores, setAllocatedCpuCores] = useState('2');
   const [iconUrl, setIconUrl] = useState('');
+  const [restartOnExit, setRestartOnExit] = useState(false);
+  const [maxInstances, setMaxInstances] = useState('');
+  const [backupPaths, setBackupPaths] = useState('');
+  const [fileEditorEnabled, setFileEditorEnabled] = useState(true);
+  const [fileEditorRestrictedPaths, setFileEditorRestrictedPaths] = useState('');
   const [templateFeatures, setTemplateFeatures] = useState<Record<string, any>>({});
   const [variables, setVariables] = useState<VariableDraft[]>([createVariableDraft()]);
   const [importError, setImportError] = useState('');
@@ -118,7 +123,7 @@ function TemplateCreateModal() {
       installImage: payload.installImage ? String(payload.installImage) : undefined,
       startup: String(payload.startup ?? ''),
       stopCommand: String(payload.stopCommand ?? ''),
-      sendSignalTo: payload.sendSignalTo === 'SIGKILL' ? 'SIGKILL' : 'SIGTERM',
+      sendSignalTo: payload.sendSignalTo === 'SIGKILL' ? 'SIGKILL' : payload.sendSignalTo === 'SIGINT' ? 'SIGINT' : 'SIGTERM',
       variables: variablesPayload,
       installScript: payload.installScript ? String(payload.installScript) : undefined,
       supportedPorts: ports.length ? ports : [25565],
@@ -132,6 +137,15 @@ function TemplateCreateModal() {
         ...(Array.isArray(payload.features?.configFiles)
           ? { configFiles: payload.features.configFiles }
           : {}),
+        ...(payload.features?.restartOnExit ? { restartOnExit: Boolean(payload.features.restartOnExit) } : {}),
+        ...(payload.features?.maxInstances ? { maxInstances: Number(payload.features.maxInstances) } : {}),
+        ...(Array.isArray(payload.features?.backupPaths) ? { backupPaths: payload.features.backupPaths } : {}),
+        ...(payload.features?.fileEditor ? {
+          fileEditor: {
+            enabled: Boolean(payload.features.fileEditor.enabled),
+            ...(Array.isArray(payload.features.fileEditor.restrictedPaths) ? { restrictedPaths: payload.features.fileEditor.restrictedPaths } : {}),
+          },
+        } : {}),
       },
     };
   };
@@ -160,6 +174,15 @@ function TemplateCreateModal() {
           ...(iconUrl ? { iconUrl } : {}),
           ...(configFile ? { configFile } : {}),
           ...(configFiles.length ? { configFiles } : {}),
+          ...(restartOnExit ? { restartOnExit } : {}),
+          ...(maxInstances ? { maxInstances: Number(maxInstances) } : {}),
+          ...(backupPaths ? { backupPaths: backupPaths.split(',').map(p => p.trim()).filter(Boolean) } : {}),
+          ...(fileEditorEnabled ? {
+            fileEditor: {
+              enabled: fileEditorEnabled,
+              ...(fileEditorRestrictedPaths ? { restrictedPaths: fileEditorRestrictedPaths.split(',').map(p => p.trim()).filter(Boolean) } : {}),
+            },
+          } : { fileEditor: { enabled: false } }),
         },
       }),
     onSuccess: () => {
@@ -184,6 +207,11 @@ function TemplateCreateModal() {
       setAllocatedMemoryMb('1024');
       setAllocatedCpuCores('2');
       setIconUrl('');
+      setRestartOnExit(false);
+      setMaxInstances('');
+      setBackupPaths('');
+      setFileEditorEnabled(true);
+      setFileEditorRestrictedPaths('');
       setTemplateFeatures({});
       setVariables([createVariableDraft()]);
       setImportError('');
@@ -220,7 +248,7 @@ function TemplateCreateModal() {
     setStartup(String(payload.startup ?? ''));
     setStopCommand(String(payload.stopCommand ?? ''));
     setSendSignalTo(
-      payload.sendSignalTo === 'SIGKILL' ? 'SIGKILL' : 'SIGTERM',
+      payload.sendSignalTo === 'SIGKILL' ? 'SIGKILL' : payload.sendSignalTo === 'SIGINT' ? 'SIGINT' : 'SIGTERM',
     );
     setInstallScript(String(payload.installScript ?? ''));
     setConfigFile(String(payload.features?.configFile ?? ''));
@@ -237,6 +265,11 @@ function TemplateCreateModal() {
       payload.allocatedCpuCores ? String(payload.allocatedCpuCores) : '2',
     );
     setIconUrl(String(payload.features?.iconUrl ?? ''));
+    setRestartOnExit(Boolean(payload.features?.restartOnExit));
+    setMaxInstances(String(payload.features?.maxInstances ?? ''));
+    setBackupPaths(Array.isArray(payload.features?.backupPaths) ? payload.features.backupPaths.join(', ') : '');
+    setFileEditorEnabled(payload.features?.fileEditor?.enabled !== false);
+    setFileEditorRestrictedPaths(Array.isArray(payload.features?.fileEditor?.restrictedPaths) ? payload.features.fileEditor.restrictedPaths.join(', ') : '');
     setTemplateFeatures(payload.features ?? {});
     const importedVariables = Array.isArray(payload.variables)
       ? payload.variables.map((variable: any) => ({
@@ -605,10 +638,11 @@ function TemplateCreateModal() {
                       className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
                       value={sendSignalTo}
                       onChange={(event) =>
-                        setSendSignalTo(event.target.value as 'SIGTERM' | 'SIGKILL')
+                        setSendSignalTo(event.target.value as 'SIGTERM' | 'SIGINT' | 'SIGKILL')
                       }
                     >
                       <option value="SIGTERM">SIGTERM</option>
+                      <option value="SIGINT">SIGINT</option>
                       <option value="SIGKILL">SIGKILL</option>
                     </select>
                   </label>
@@ -779,8 +813,10 @@ function TemplateCreateModal() {
                         >
                           <option value="text">Text</option>
                           <option value="number">Number</option>
+                          <option value="password">Password</option>
                           <option value="select">Select</option>
                           <option value="checkbox">Checkbox</option>
+                          <option value="textarea">Textarea</option>
                         </select>
                       </label>
                       <label className="block space-y-1 md:col-span-2">
@@ -803,6 +839,60 @@ function TemplateCreateModal() {
                     </div>
                   </div>
                 ))}
+              </div>
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-all duration-300 dark:border-slate-800 dark:bg-slate-900/40">
+                <div className="text-sm font-semibold text-slate-900 dark:text-slate-200">
+                  Advanced features
+                </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300 bg-white text-primary-600 focus:ring-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-primary-400 dark:focus:ring-primary-400"
+                      checked={restartOnExit}
+                      onChange={(event) => setRestartOnExit(event.target.checked)}
+                    />
+                    Restart on exit
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-slate-500 dark:text-slate-400">Max instances (optional)</span>
+                    <input
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                      type="number"
+                      min={1}
+                      value={maxInstances}
+                      onChange={(event) => setMaxInstances(event.target.value)}
+                      placeholder="Unlimited"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300 bg-white text-primary-600 focus:ring-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-primary-400 dark:focus:ring-primary-400"
+                      checked={fileEditorEnabled}
+                      onChange={(event) => setFileEditorEnabled(event.target.checked)}
+                    />
+                    Enable file editor
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-slate-500 dark:text-slate-400">File editor restricted paths (optional)</span>
+                    <input
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                      value={fileEditorRestrictedPaths}
+                      onChange={(event) => setFileEditorRestrictedPaths(event.target.value)}
+                      placeholder="/sensitive, /config"
+                    />
+                  </label>
+                </div>
+                <label className="block space-y-1">
+                  <span className="text-slate-500 dark:text-slate-400">Backup paths (optional)</span>
+                  <input
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                    value={backupPaths}
+                    onChange={(event) => setBackupPaths(event.target.value)}
+                    placeholder="/world, /plugins, /config"
+                  />
+                </label>
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-4 text-xs dark:border-slate-800">

@@ -1,0 +1,112 @@
+{
+  "id": "minecraft-paper",
+  "name": "Minecraft Server (Paper)",
+  "description": "High-performance Minecraft server running Paper",
+  "author": "MCJARS",
+  "version": "1.21.4",
+  "image": "eclipse-temurin:21-jre",
+  "images": [
+    {
+      "name": "temurin-21",
+      "label": "Eclipse Temurin 21 JRE",
+      "image": "eclipse-temurin:21-jre"
+    },
+    {
+      "name": "temurin-17",
+      "label": "Eclipse Temurin 17 JRE",
+      "image": "eclipse-temurin:17-jre"
+    }
+  ],
+  "defaultImage": "eclipse-temurin:21-jre",
+  "installImage": "alpine:3.19",
+  "startup": "java -Xms{{MEMORY_XMS}}M -Xmx{{MEMORY}}M -jar paper.jar nogui",
+  "stopCommand": "stop",
+  "sendSignalTo": "SIGTERM",
+  "variables": [
+    {
+      "name": "MEMORY",
+      "description": "Amount of RAM in MB",
+      "default": "1024",
+      "required": true,
+      "input": "number",
+      "rules": [
+        "between:512,16384"
+      ]
+    },
+    {
+      "name": "MEMORY_XMS",
+      "description": "Initial heap size in MB",
+      "default": "512",
+      "required": false,
+      "input": "number",
+      "rules": [
+        "between:256,8192"
+      ]
+    },
+    {
+      "name": "PORT",
+      "description": "Server port",
+      "default": "25565",
+      "required": true,
+      "input": "number",
+      "rules": [
+        "between:1024,65535"
+      ]
+    },
+    {
+      "name": "VERSION",
+      "description": "Minecraft version to install",
+      "default": "1.21.4",
+      "required": true,
+      "input": "select"
+    },
+    {
+      "name": "BUILD",
+      "description": "Paper build number (leave empty for latest)",
+      "default": "",
+      "required": false,
+      "input": "text"
+    }
+  ],
+  "installScript": "#!/bin/sh\nset -e\n\necho '[Catalyst] Starting Minecraft Paper installation...'\n\nmkdir -p {{SERVER_DIR}}\ncd {{SERVER_DIR}}\n\necho '[Catalyst] Fetching Paper build information from MCJars API...'\n\nBUILD_NUM=\"{{BUILD}}\"\nVERSION_NUM=\"{{VERSION}}\"\n\nBUILD_NUM=${BUILD_NUM#\\'}\nBUILD_NUM=${BUILD_NUM%\\'}\nVERSION_NUM=${VERSION_NUM#\\'}\nVERSION_NUM=${VERSION_NUM%\\'}\n\nif [ -z \"$BUILD_NUM\" ]; then\n  BUILD_NUM=\"latest\"\nfi\n\necho \"[Catalyst] Using build: $BUILD_NUM for version: $VERSION_NUM\"\n\nAPI_URL=\"https://mcjars.app/api/v1/builds/PAPER/$VERSION_NUM/$BUILD_NUM\"\n\ncurl -s \"$API_URL\" > build_info.json\n\nif grep -q '\"success\":true' build_info.json; then\n  JAR_URL=$(grep -o '\"jarUrl\":\"[^\"]*\"' build_info.json | head -1 | cut -d'\"' -f4)\nelse\n  echo '[Catalyst] ERROR: Failed to fetch build information'\n  cat build_info.json\n  exit 1\nfi\n\nif [ -z \"$JAR_URL\" ]; then\n  echo '[Catalyst] ERROR: Could not find jarUrl in API response'\n  cat build_info.json\n  exit 1\nfi\n\necho '[Catalyst] Downloading Paper jar...'\ncurl -sL -o paper.jar \"$JAR_URL\"\n\nif [ ! -f \"paper.jar\" ]; then\n  echo '[Catalyst] ERROR: Failed to download paper.jar'\n  exit 1\nfi\n\necho 'eula=true' > eula.txt\n\necho '[Catalyst] Creating server.properties...'\ncat > server.properties << 'EOF'\nserver-port={{PORT}}\nserver-ip=\nmax-players=20\nlevel-seed=\ngamemode=survival\ndifficulty=easy\nallow-flight=false\nspawn-protection=16\nspawn-monsters=true\nonline-mode=true\npvp=true\nenable-command-block=false\nmax-world-size=29999984\nEOF\n\necho '[Catalyst] Minecraft Paper installation complete!'\n",
+  "supportedPorts": [
+    25565
+  ],
+  "allocatedMemoryMb": 1024,
+  "allocatedCpuCores": 2,
+  "features": {
+    "restartOnExit": true,
+    "configFile": "server.properties",
+    "pluginManager": {
+      "providers": [
+        "spigot",
+        "paper",
+        "modrinth"
+      ],
+      "paths": {
+        "plugins": "/plugins",
+        "datapacks": "/world/datapacks"
+      }
+    },
+    "backupPaths": [
+      "/world",
+      "/plugins",
+      "/world_nether",
+      "/world_the_end",
+      "/bukkit.yml",
+      "/spigot.yml",
+      "/paper.yml",
+      "/server.properties",
+      "/ops.json",
+      "/whitelist.json",
+      "/banned-players.json",
+      "/banned-ips.json"
+    ],
+    "fileEditor": {
+      "enabled": true,
+      "restrictedPaths": [
+        "/world"
+      ]
+    }
+  }
+}

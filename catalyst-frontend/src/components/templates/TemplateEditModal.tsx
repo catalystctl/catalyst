@@ -39,8 +39,8 @@ function TemplateEditModal({ template }: { template: Template }) {
   const [defaultImage, setDefaultImage] = useState(template.defaultImage ?? '');
   const [startup, setStartup] = useState(template.startup);
   const [stopCommand, setStopCommand] = useState(template.stopCommand);
-  const [sendSignalTo, setSendSignalTo] = useState<'SIGTERM' | 'SIGKILL'>(
-    template.sendSignalTo === 'SIGKILL' ? 'SIGKILL' : 'SIGTERM',
+  const [sendSignalTo, setSendSignalTo] = useState<'SIGTERM' | 'SIGINT' | 'SIGKILL'>(
+    template.sendSignalTo === 'SIGKILL' ? 'SIGKILL' : template.sendSignalTo === 'SIGINT' ? 'SIGINT' : 'SIGTERM',
   );
   const [installScript, setInstallScript] = useState(template.installScript ?? '');
   const [configFile, setConfigFile] = useState(template.features?.configFile ?? '');
@@ -51,6 +51,13 @@ function TemplateEditModal({ template }: { template: Template }) {
   const [allocatedMemoryMb, setAllocatedMemoryMb] = useState(String(template.allocatedMemoryMb));
   const [allocatedCpuCores, setAllocatedCpuCores] = useState(String(template.allocatedCpuCores));
   const [iconUrl, setIconUrl] = useState(template.features?.iconUrl ?? '');
+  const [restartOnExit, setRestartOnExit] = useState(template.features?.restartOnExit ?? false);
+  const [maxInstances, setMaxInstances] = useState(String(template.features?.maxInstances ?? ''));
+  const [backupPaths, setBackupPaths] = useState(template.features?.backupPaths?.join(', ') ?? '');
+  const [fileEditorEnabled, setFileEditorEnabled] = useState(template.features?.fileEditor?.enabled ?? true);
+  const [fileEditorRestrictedPaths, setFileEditorRestrictedPaths] = useState(
+    template.features?.fileEditor?.restrictedPaths?.join(', ') ?? '',
+  );
   const [templateFeatures, setTemplateFeatures] = useState<Record<string, any>>(
     template.features ?? {},
   );
@@ -98,7 +105,7 @@ function TemplateEditModal({ template }: { template: Template }) {
     setDefaultImage(template.defaultImage ?? '');
     setStartup(template.startup);
     setStopCommand(template.stopCommand);
-    setSendSignalTo(template.sendSignalTo === 'SIGKILL' ? 'SIGKILL' : 'SIGTERM');
+    setSendSignalTo(template.sendSignalTo === 'SIGKILL' ? 'SIGKILL' : template.sendSignalTo === 'SIGINT' ? 'SIGINT' : 'SIGTERM');
     setInstallScript(template.installScript ?? '');
     setConfigFile(template.features?.configFile ?? '');
     setConfigFiles(template.features?.configFiles ?? (template.features?.configFile ? [template.features.configFile] : []));
@@ -108,6 +115,11 @@ function TemplateEditModal({ template }: { template: Template }) {
     setAllocatedMemoryMb(String(template.allocatedMemoryMb));
     setAllocatedCpuCores(String(template.allocatedCpuCores));
     setIconUrl(template.features?.iconUrl ?? '');
+    setRestartOnExit(template.features?.restartOnExit ?? false);
+    setMaxInstances(String(template.features?.maxInstances ?? ''));
+    setBackupPaths(template.features?.backupPaths?.join(', ') ?? '');
+    setFileEditorEnabled(template.features?.fileEditor?.enabled ?? true);
+    setFileEditorRestrictedPaths(template.features?.fileEditor?.restrictedPaths?.join(', ') ?? '');
     setTemplateFeatures(template.features ?? {});
     setVariables(
       template.variables?.length
@@ -141,7 +153,7 @@ function TemplateEditModal({ template }: { template: Template }) {
     setInstallImage(String(payload.installImage ?? ''));
     setStartup(String(payload.startup ?? ''));
     setStopCommand(String(payload.stopCommand ?? ''));
-    setSendSignalTo(payload.sendSignalTo === 'SIGKILL' ? 'SIGKILL' : 'SIGTERM');
+    setSendSignalTo(payload.sendSignalTo === 'SIGKILL' ? 'SIGKILL' : payload.sendSignalTo === 'SIGINT' ? 'SIGINT' : 'SIGTERM');
     setInstallScript(String(payload.installScript ?? ''));
     setConfigFile(String(payload.features?.configFile ?? ''));
     setConfigFiles(
@@ -157,6 +169,11 @@ function TemplateEditModal({ template }: { template: Template }) {
     setAllocatedMemoryMb(payload.allocatedMemoryMb ? String(payload.allocatedMemoryMb) : '1024');
     setAllocatedCpuCores(payload.allocatedCpuCores ? String(payload.allocatedCpuCores) : '2');
     setIconUrl(String(payload.features?.iconUrl ?? ''));
+    setRestartOnExit(Boolean(payload.features?.restartOnExit));
+    setMaxInstances(String(payload.features?.maxInstances ?? ''));
+    setBackupPaths(Array.isArray(payload.features?.backupPaths) ? payload.features.backupPaths.join(', ') : '');
+    setFileEditorEnabled(payload.features?.fileEditor?.enabled !== false);
+    setFileEditorRestrictedPaths(Array.isArray(payload.features?.fileEditor?.restrictedPaths) ? payload.features.fileEditor.restrictedPaths.join(', ') : '');
     setTemplateFeatures(payload.features ?? {});
     const importedVariables = Array.isArray(payload.variables)
       ? payload.variables.map((variable: any) => ({
@@ -212,6 +229,15 @@ function TemplateEditModal({ template }: { template: Template }) {
           iconUrl: iconUrl || undefined,
           ...(configFile ? { configFile } : {}),
           ...(configFiles.length ? { configFiles } : {}),
+          ...(restartOnExit ? { restartOnExit } : {}),
+          ...(maxInstances ? { maxInstances: Number(maxInstances) } : {}),
+          ...(backupPaths ? { backupPaths: backupPaths.split(',').map(p => p.trim()).filter(Boolean) } : {}),
+          ...(fileEditorEnabled ? {
+            fileEditor: {
+              enabled: fileEditorEnabled,
+              ...(fileEditorRestrictedPaths ? { restrictedPaths: fileEditorRestrictedPaths.split(',').map(p => p.trim()).filter(Boolean) } : {}),
+            },
+          } : { fileEditor: { enabled: false } }),
         },
       }),
     onSuccess: () => {
@@ -506,10 +532,11 @@ function TemplateEditModal({ template }: { template: Template }) {
                       className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
                       value={sendSignalTo}
                       onChange={(event) =>
-                        setSendSignalTo(event.target.value as 'SIGTERM' | 'SIGKILL')
+                        setSendSignalTo(event.target.value as 'SIGTERM' | 'SIGINT' | 'SIGKILL')
                       }
                     >
                       <option value="SIGTERM">SIGTERM</option>
+                      <option value="SIGINT">SIGINT</option>
                       <option value="SIGKILL">SIGKILL</option>
                     </select>
                   </label>
@@ -678,8 +705,10 @@ function TemplateEditModal({ template }: { template: Template }) {
                         >
                           <option value="text">Text</option>
                           <option value="number">Number</option>
+                          <option value="password">Password</option>
                           <option value="select">Select</option>
                           <option value="checkbox">Checkbox</option>
+                          <option value="textarea">Textarea</option>
                         </select>
                       </label>
                       <label className="block space-y-1 md:col-span-2">
@@ -702,6 +731,60 @@ function TemplateEditModal({ template }: { template: Template }) {
                     </div>
                   </div>
                 ))}
+              </div>
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-all duration-300 dark:border-slate-800 dark:bg-slate-900/40">
+                <div className="text-sm font-semibold text-slate-900 dark:text-slate-200">
+                  Advanced features
+                </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300 bg-white text-primary-600 focus:ring-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-primary-400 dark:focus:ring-primary-400"
+                      checked={restartOnExit}
+                      onChange={(event) => setRestartOnExit(event.target.checked)}
+                    />
+                    Restart on exit
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-slate-500 dark:text-slate-400">Max instances (optional)</span>
+                    <input
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                      type="number"
+                      min={1}
+                      value={maxInstances}
+                      onChange={(event) => setMaxInstances(event.target.value)}
+                      placeholder="Unlimited"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300 bg-white text-primary-600 focus:ring-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-primary-400 dark:focus:ring-primary-400"
+                      checked={fileEditorEnabled}
+                      onChange={(event) => setFileEditorEnabled(event.target.checked)}
+                    />
+                    Enable file editor
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-slate-500 dark:text-slate-400">File editor restricted paths (optional)</span>
+                    <input
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                      value={fileEditorRestrictedPaths}
+                      onChange={(event) => setFileEditorRestrictedPaths(event.target.value)}
+                      placeholder="/sensitive, /config"
+                    />
+                  </label>
+                </div>
+                <label className="block space-y-1">
+                  <span className="text-slate-500 dark:text-slate-400">Backup paths (optional)</span>
+                  <input
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                    value={backupPaths}
+                    onChange={(event) => setBackupPaths(event.target.value)}
+                    placeholder="/world, /plugins, /config"
+                  />
+                </label>
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-4 text-xs dark:border-slate-800">

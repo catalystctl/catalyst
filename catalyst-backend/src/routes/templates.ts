@@ -93,7 +93,7 @@ export async function templateRoutes(app: FastifyInstance) {
         installImage?: string;
         startup: string;
         stopCommand: string;
-        sendSignalTo: string;
+        sendSignalTo: 'SIGTERM' | 'SIGINT' | 'SIGKILL';
         variables: any[];
         installScript?: string;
         configFile?: string;
@@ -160,7 +160,7 @@ export async function templateRoutes(app: FastifyInstance) {
           installImage?: string;
           startup?: string;
           stopCommand?: string;
-          sendSignalTo?: string;
+          sendSignalTo?: 'SIGTERM' | 'SIGINT' | 'SIGKILL';
           variables?: any[];
           installScript?: string;
           configFile?: string;
