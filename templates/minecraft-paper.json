@@ -3,7 +3,7 @@
   "name": "Minecraft Server (Paper)",
   "description": "High-performance Minecraft server running Paper",
   "author": "MCJARS",
-  "version": "1.21.4",
+  "version": "1.21.11",
   "image": "eclipse-temurin:21-jre",
   "images": [
     {
@@ -56,7 +56,7 @@
     {
       "name": "VERSION",
       "description": "Minecraft version to install",
-      "default": "1.21.4",
+      "default": "1.21.11",
       "required": true,
       "input": "select"
     },
