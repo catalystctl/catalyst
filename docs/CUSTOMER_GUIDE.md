@@ -1,6 +1,20 @@
 # Catalyst Customer Guide
 
-This guide is for customers/tenants who consume Catalyst-managed game server services.
+**For:** Customers/tenants consuming Catalyst-managed game server services
+
+## Table of Contents
+
+- [Account Access](#account-access)
+- [Service Overview](#service-overview)
+- [Common Tasks](#common-tasks)
+- [Support & SLA](#support--sla)
+- [Data & Retention](#data--retention)
+- [Security Best Practices](#security-best-practices)
+- [FAQ](#faq)
+
+---
+
+## Account Access
 
 ## Account Access
 

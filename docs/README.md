@@ -1,10 +1,32 @@
 # Catalyst API Documentation
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [Getting Started Guides](#getting-started-guides)
+- [Documentation Files](#documentation-files)
+- [Common Use Cases](#common-use-cases)
+- [Testing](#testing)
+- [Support](#support)
+
+---
+
 ## Overview
 
 This directory contains comprehensive documentation for integrating with Catalyst's API for automation, billing systems, and external integrations.
 
-## Documentation Files
+### 📚 Platform Documentation
+
+Looking for general Catalyst documentation?
+
+- **[Getting Started](GETTING_STARTED.md)** ⭐ - Complete setup guide for local development and production deployment
+- **[Architecture Overview](ARCHITECTURE.md)** 📐 - High-level system design, data flow, and technology choices
+- **[Features Catalog](FEATURES.md)** ✨ - Complete list of features, status, and implementation details
+- **[User Guide](USER_GUIDE.md)** 👤 - Guide for server owners managing their servers
+- **[Admin Guide](ADMIN_GUIDE.md)** 🔧 - Guide for system operators deploying and managing nodes
+- **[Customer Guide](CUSTOMER_GUIDE.md)** 🏢 - Guide for tenants accessing hosted services
+- **[CONTRIBUTING](../CONTRIBUTING.md)** 🤝 - Guide for contributing to Catalyst development
 
 ### Getting Started
 
@@ -29,6 +51,12 @@ This directory contains comprehensive documentation for integrating with Catalys
   - Python integration class
   - Error handling patterns
   - Production-ready code samples
+
+- **[PLUGIN_SYSTEM.md](./PLUGIN_SYSTEM.md)** - **Extending Catalyst**
+  - Complete plugin development guide
+  - Custom API routes and WebSocket handlers
+  - Scheduled tasks and event system
+  - Plugin examples and templates
 
 ## Quick Start Guide
 
@@ -229,7 +257,15 @@ curl -H "x-api-key: $API_KEY" http://localhost:3000/api/servers
 
 ## Additional Resources
 
-- **Main Project README:** `../README.md`
+### Platform Documentation
+- **Main Project README:** `../README.md` ⭐
+- **Getting Started:** `GETTING_STARTED.md` - Setup guide
+- **Architecture:** `ARCHITECTURE.md` - System design
+- **Features:** `FEATURES.md` - Feature catalog
+- **Security:** `SECURITY.md` - Security best practices
+- **Contributing:** `../CONTRIBUTING.md` - Development guide
+
+### API & Integration
 - **API Key Quick Start:** `../API-KEY-QUICKSTART.md`
 - **Test Scripts:**
   - `../test-apikey-complete.sh` - Full test suite

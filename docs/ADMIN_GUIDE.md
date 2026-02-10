@@ -1,6 +1,25 @@
 # Catalyst Admin Guide
 
-This guide is for platform operators and administrators running Catalyst in production.
+**For:** Platform operators and administrators running Catalyst in production
+
+## Table of Contents
+
+- [System Requirements](#system-requirements)
+- [Backend Setup (Production)](#backend-setup-production)
+- [Frontend Setup](#frontend-setup)
+- [Node & Agent Deployment](#node--agent-deployment)
+- [Networking & IPAM](#networking--ipam)
+- [Templates](#templates)
+- [RBAC & Permissions](#rbac--permissions)
+- [Backups](#backups)
+- [Observability](#observability)
+- [Operations Runbook](#operations-runbook)
+- [Security Checklist](#security-checklist)
+- [Upgrade Notes](#upgrade-notes)
+
+---
+
+## System Requirements
 
 ## System Requirements
 

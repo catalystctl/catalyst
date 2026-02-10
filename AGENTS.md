@@ -55,3 +55,18 @@ React frontend, plus shared types and end-to-end tests.
   (`.env.example` templates provided).
 - Agent configuration lives in `catalyst-agent/config.toml` (and `config-e2e.toml`
   for tests); avoid committing secrets.
+
+---
+
+## Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+- **[Getting Started](docs/GETTING_STARTED.md)** - Complete setup guide
+- **[Architecture](docs/ARCHITECTURE.md)** - System design and data flow
+- **[Features](docs/FEATURES.md)** - Complete feature catalog
+- **[API Reference](docs/README.md)** - REST API documentation
+- **[User Guide](docs/USER_GUIDE.md)** - Server owner guide
+- **[Admin Guide](docs/ADMIN_GUIDE.md)** - System operator guide
+- **[Plugin System](docs/PLUGIN_SYSTEM.md)** - Plugin development guide
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines

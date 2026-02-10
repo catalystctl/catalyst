@@ -1,6 +1,25 @@
 # Catalyst User Guide (End Users)
 
-This guide is for server owners/operators using the Catalyst panel to manage game servers.
+**For:** Server owners/operators managing game servers
+
+## Table of Contents
+
+- [Getting Started](#getting-started)
+- [Create a Server](#create-a-server)
+- [Start, Stop, Restart](#start-stop-restart)
+- [Console](#console)
+- [Files](#files)
+- [Backups](#backups)
+- [Schedules & Tasks](#schedules--tasks)
+- [Alerts](#alerts)
+- [Networking Tips](#networking-tips)
+- [Troubleshooting](#troubleshooting)
+- [FAQ](#faq)
+- [Glossary](#glossary)
+
+---
+
+## Getting Started
 
 ## Getting Started
 
