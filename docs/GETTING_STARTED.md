@@ -69,18 +69,18 @@ docker ps
 cd catalyst-backend
 
 # Install dependencies
-npm install
+bun install
 
 # Configure environment
 cp .env.example .env
 # Edit .env with your settings
 
 # Initialize database
-npm run db:push
-npm run db:seed
+bun run db:push
+bun run db:seed
 
 # Start development server
-npm run dev
+bun run dev
 ```
 
 Backend will start on **http://localhost:3000**
@@ -93,14 +93,14 @@ Open a new terminal:
 cd catalyst-frontend
 
 # Install dependencies
-npm install
+bun install
 
 # Configure environment
 cp .env.example .env
 # Edit .env with API URL (usually http://localhost:3000)
 
 # Start development server
-npm run dev
+bun run dev
 ```
 
 Frontend will start on **http://localhost:5173**
@@ -115,20 +115,20 @@ Frontend will start on **http://localhost:5173**
 
 **Backend:**
 ```bash
-npm run dev          # Start dev server with watch mode
-npm run build        # Compile TypeScript
+bun run dev          # Start dev server with watch mode
+bun run build        # Compile TypeScript
 npm start            # Start production server
-npm run lint         # Run ESLint
-npm run db:studio    # Open Prisma Studio GUI
+bun run lint         # Run ESLint
+bun run db:studio    # Open Prisma Studio GUI
 ```
 
 **Frontend:**
 ```bash
-npm run dev          # Start dev server
-npm run build        # Build production bundle
-npm run preview      # Preview production build
-npm run lint         # Run ESLint
-npm run test         # Run Vitest tests
+bun run dev          # Start dev server
+bun run build        # Build production bundle
+bun run preview      # Preview production build
+bun run lint         # Run ESLint
+bun run test         # Run Vitest tests
 ```
 
 **Testing:**
@@ -154,7 +154,7 @@ git clone https://github.com/your-repo/catalyst.git
 cd catalyst/catalyst-backend
 
 # Install production dependencies
-npm ci --only=production
+bun install --frozen-lockfile --only=production
 ```
 
 ### Step 2: Configure PostgreSQL
@@ -196,18 +196,18 @@ NODE_ENV=production
 ### Step 4: Initialize Database
 
 ```bash
-npm run db:push
-npm run db:seed
+bun run db:push
+bun run db:seed
 ```
 
 ### Step 5: Build and Start Backend
 
 ```bash
 # Build for production
-npm run build
+bun run build
 
 # Start with PM2 (recommended)
-npm install -g pm2
+bun install -g pm2
 pm2 start dist/index.js --name catalyst-backend
 pm2 save
 pm2 startup
@@ -303,8 +303,8 @@ If hosting frontend separately:
 
 ```bash
 cd catalyst-frontend
-npm ci
-npm run build
+bun install --frozen-lockfile
+bun run build
 ```
 
 Copy `dist/` to your web server and configure Nginx to serve it.
@@ -459,13 +459,13 @@ sudo nerdctl version
 **Problem:** Migration failed
 ```bash
 # Reset database (CAUTION: deletes all data!)
-npm run db:push -- --force-reset
-npm run db:seed
+bun run db:push -- --force-reset
+bun run db:seed
 ```
 
 **Problem:** Prisma client outdated
 ```bash
-npm run db:generate
+bun run db:generate
 ```
 
 ### Common Error Messages

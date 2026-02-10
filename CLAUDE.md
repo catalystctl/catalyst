@@ -15,33 +15,33 @@ Catalyst is a production-grade game server management platform built as a three-
 
 ### Backend (catalyst-backend/)
 ```bash
-npm install              # Install dependencies
-npm run dev              # Start in watch mode (port 3000)
-npm run build            # Compile TypeScript to dist/
-npm run start            # Run production build
-npm run lint             # Run ESLint on src/
-npm run test             # Run Vitest unit tests
+bun install              # Install dependencies
+bun run dev              # Start in watch mode (port 3000)
+bun run build            # Compile TypeScript to dist/
+bun run start            # Run production build
+bun run lint             # Run ESLint on src/
+bun run test             # Run Vitest unit tests
 ```
 
 ### Database (PostgreSQL + Prisma)
 ```bash
-npm run db:push          # Sync Prisma schema to PostgreSQL
-npm run db:migrate       # Create versioned migrations
-npm run db:seed          # Populate with test data
-npm run db:studio        # Open Prisma Studio GUI
-npm run db:generate      # Regenerate Prisma client
+bun run db:push          # Sync Prisma schema to PostgreSQL
+bun run db:migrate       # Create versioned migrations
+bun run db:seed          # Populate with test data
+bun run db:studio        # Open Prisma Studio GUI
+bun run db:generate      # Regenerate Prisma client
 ```
 
 ### Frontend (catalyst-frontend/)
 ```bash
-npm install              # Install dependencies
-npm run dev              # Start Vite dev server (port 5173)
-npm run build            # Build production bundle
-npm run preview          # Preview production build
-npm run lint             # Run ESLint
-npm run format           # Format with Prettier
-npm run test             # Run Vitest unit tests
-npm run test:e2e         # Run Playwright E2E tests
+bun install              # Install dependencies
+bun run dev              # Start Vite dev server (port 5173)
+bun run build            # Build production bundle
+bun run preview          # Preview production build
+bun run lint             # Run ESLint
+bun run format           # Format with Prettier
+bun run test             # Run Vitest unit tests
+bun run test:e2e         # Run Playwright E2E tests
 ```
 
 ### Agent (catalyst-agent/)

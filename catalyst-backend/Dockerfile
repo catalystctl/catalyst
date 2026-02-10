@@ -1,6 +1,6 @@
 # Catalyst Backend - Dockerfile
 
-FROM node:20-alpine
+FROM oven/bun:1.3-alpine
 
 WORKDIR /app
 
@@ -8,10 +8,10 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++ curl
 
 # Copy package files
-COPY package.json package-lock.json ./
+COPY package.json bun.lock ./
 
 # Install dependencies
-RUN npm ci
+RUN bun install --frozen-lockfile
 
 # Copy source code
 COPY src ./src
@@ -19,10 +19,10 @@ COPY tsconfig.json ./
 COPY prisma ./prisma
 
 # Generate Prisma Client
-RUN npx prisma generate
+RUN bunx prisma generate
 
 # Build TypeScript
-RUN npm run build
+RUN bun run build
 
 # Create non-root user
 RUN addgroup -S catalyst && adduser -S catalyst -G catalyst
@@ -32,4 +32,4 @@ USER catalyst
 EXPOSE 3000
 
 # Start backend
-CMD ["npm", "start"]
+CMD ["bun", "run", "start"]

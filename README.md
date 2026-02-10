@@ -16,6 +16,20 @@ Catalyst is a complete platform built for enterprise game server hosts, game com
 
 ## Quick Start
 
+### 📦 Prerequisites
+
+- **Docker & Docker Compose** - For PostgreSQL and Redis
+- **Bun 1.0+** - Package manager and runtime
+
+Install Bun on any Linux distribution:
+```bash
+# Universal installer (works on all distros)
+sudo ./scripts/install-bun.sh
+
+# Or install manually
+curl -fsSL https://bun.sh/install | bash
+```
+
 ### 🚀 Try It Locally (Development)
 
 ```bash
@@ -23,10 +37,10 @@ Catalyst is a complete platform built for enterprise game server hosts, game com
 docker-compose up -d
 
 # Backend (port 3000)
-cd catalyst-backend && npm install && npm run db:push && npm run dev
+cd catalyst-backend && bun install && bun run db:push && bun run dev
 
 # Frontend (port 5173)
-cd catalyst-frontend && npm install && npm run dev
+cd catalyst-frontend && bun install && bun run dev
 ```
 
 👉 [Full local setup guide](docs/GETTING_STARTED.md)

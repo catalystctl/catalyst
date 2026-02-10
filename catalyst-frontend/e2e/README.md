@@ -16,22 +16,22 @@ This test suite automatically:
 
 ### Automatic (Playwright launches the dev server)
 ```bash
-npm run test:screenshots
+bun run test:screenshots
 ```
 
 ### Headed Mode (See the browser in action)
 ```bash
-npm run test:screenshots:headed
+bun run test:screenshots:headed
 ```
 
 ### Manual (If you already have the dev server running on port 5173)
 ```bash
-npm run test:e2e -- screenshot-crawl
+bun run test:e2e -- screenshot-crawl
 ```
 
 ### Run all E2E tests
 ```bash
-npm run test:e2e
+bun run test:e2e
 ```
 
 ## Output
@@ -53,23 +53,23 @@ Responsive screenshots are saved as:
 1. **Database seeded** with admin user
    ```bash
    cd catalyst-backend
-   npm run db:seed
+   bun run db:seed
    ```
 
 2. **Frontend dev server running** (or configured in playwright.config.ts)
    ```bash
-   npm run dev
+   bun run dev
    ```
 
 3. **Backend API running** (for proper functionality)
    ```bash
    cd ../catalyst-backend
-   npm run dev
+   bun run dev
    ```
 
 4. **Playwright browsers installed**
    ```bash
-   npx playwright install
+   bunx playwright install
    ```
 
 ## Test Scenarios
@@ -113,8 +113,8 @@ Increase `waitForLoadState('networkidle')` timeouts if you have slow network or 
 ### "Cannot find module '@playwright/test'"
 Install Playwright:
 ```bash
-npm install
-npx playwright install
+bun install
+bunx playwright install
 ```
 
 ## Customization
@@ -144,10 +144,10 @@ For continuous integration, you can run this in your CI pipeline:
 # GitHub Actions example
 - name: Run screenshot tests
   run: |
-    npm install
-    cd catalyst-backend && npm run db:seed
+    bun install
+    cd catalyst-backend && bun run db:seed
     cd ../catalyst-frontend
-    npm run test:screenshots
+    bun run test:screenshots
 ```
 
 Then upload the `screenshots/` directory as artifacts.

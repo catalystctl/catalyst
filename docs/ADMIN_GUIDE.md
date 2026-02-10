@@ -35,13 +35,13 @@
 2. Run database migrations:
    ```bash
    cd catalyst-backend
-   npm install
-   npm run db:push
-   npm run db:seed
+   bun install
+   bun run db:push
+   bun run db:seed
    ```
 3. Build and run:
    ```bash
-   npm run build
+   bun run build
    npm start
    ```
 
@@ -49,9 +49,9 @@
 
 ```bash
 cd catalyst-frontend
-npm install
-npm run build
-npm run preview
+bun install
+bun run build
+bun run preview
 ```
 
 ## Node & Agent Deployment
@@ -110,6 +110,6 @@ npm run preview
 
 ## Upgrade Notes
 
-- Backend: `npm run build` then restart service.
+- Backend: `bun run build` then restart service.
 - Agent: rebuild with `cargo build --release`, then restart service.
 - Apply DB migrations before backend restart.

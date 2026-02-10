@@ -45,7 +45,7 @@ BACKUP_CREDENTIALS_KEY=""
 PANEL_SCHEME="https"
 PANEL_URL=""
 CADDY_SITE=""
-NODE_BIN=""
+BUN_BIN=""
 CADDY_BINARY_FALLBACK=false
 CONTAINER_NAMESPACE="${CATALYST_CONTAINER_NAMESPACE:-catalyst}"
 POSTGRES_CONTAINER_NAME="${CATALYST_POSTGRES_CONTAINER_NAME:-catalyst-postgres}"
@@ -249,50 +249,65 @@ ensure_base_packages() {
   esac
 }
 
-node_major_version() {
-  if ! command -v node >/dev/null 2>&1; then
-    echo "0"
-    return
-  fi
-  node -e "process.stdout.write(process.versions.node.split('.')[0])"
-}
-
-ensure_nodejs() {
-  local major
-  major="$(node_major_version)"
-  if [ "$major" -ge 20 ]; then
-    log "Node.js $(node -v) already installed."
+ensure_bun() {
+  # Check if Bun is already installed
+  if command -v bun >/dev/null 2>&1; then
+    log "Bun $(bun --version) already installed."
+    BUN_BIN="$(command -v bun)"
     return
   fi
 
-  log "Installing Node.js 20+..."
+  log "Installing Bun..."
+
+  # Install dependencies needed for Bun
   case "$PM" in
     apt)
-      if curl -fsSL https://deb.nodesource.com/setup_20.x | bash -; then
-        pkg_install nodejs
-      else
-        warn "NodeSource setup failed; falling back to distro nodejs package."
-        pkg_install nodejs npm
-      fi
+      pkg_install curl bash xz-utils
       ;;
     dnf|yum)
-      if curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -; then
-        pkg_install nodejs
-      else
-        warn "NodeSource setup failed; falling back to distro nodejs package."
-        pkg_install nodejs npm
-      fi
+      pkg_install curl bash xz
       ;;
-    apk|pacman)
-      pkg_install nodejs npm
+    apk)
+      pkg_install curl bash xz
+      ;;
+    pacman)
+      pkg_install curl bash xz
       ;;
   esac
 
-  major="$(node_major_version)"
-  if [ "$major" -lt 20 ]; then
-    die "Node.js 20+ is required. Installed version: $(node -v 2>/dev/null || echo unknown)"
+  # Download and run official Bun installer
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  (
+    cd "$tmp_dir"
+    curl -fsSL https://bun.sh/install | bash
+  ) || die "Failed to install Bun"
+  rm -rf "$tmp_dir"
+
+  # Add Bun to PATH for this session
+  export BUN_INSTALL="$HOME/.bun"
+  export PATH="$BUN_INSTALL/bin:$PATH"
+
+  # Verify installation
+  if ! command -v bun >/dev/null 2>&1; then
+    die "Bun installation failed - bun command not found"
   fi
-  command -v npm >/dev/null 2>&1 || die "npm is required but was not installed."
+
+  # Install Bun system-wide for the catalyst user
+  local user_home
+  user_home="$(eval echo ~$CATALYST_USER)"
+  mkdir -p "$user_home/.local/bin"
+
+  # Copy bun binary to system location
+  if [ -f "$BUN_INSTALL/bin/bun" ]; then
+    cp "$BUN_INSTALL/bin/bun" /usr/local/bin/bun
+    chmod +x /usr/local/bin/bun
+    BUN_BIN="/usr/local/bin/bun"
+  else
+    die "Bun binary not found at $BUN_INSTALL/bin/bun"
+  fi
+
+  log "Bun $(bun --version) installed successfully."
 }
 
 ensure_containerd_package() {
@@ -868,7 +883,7 @@ service_restart() {
 }
 
 write_backend_runner() {
-  NODE_BIN="$(command -v node)"
+  BUN_BIN="$(command -v bun)"
   cat > /usr/local/bin/catalyst-backend-run <<EOF
 #!/usr/bin/env sh
 set -eu
@@ -876,7 +891,7 @@ set -a
 . ${ENV_FILE}
 set +a
 cd ${APP_ROOT}/catalyst-backend
-exec ${NODE_BIN} dist/index.js
+exec ${BUN_BIN} dist/index.js
 EOF
   chmod 0755 /usr/local/bin/catalyst-backend-run
 }
@@ -954,18 +969,18 @@ build_backend() {
   log "Installing backend dependencies and building..."
   (
     cd "${APP_ROOT}/catalyst-backend"
-    npm ci --include=dev --no-audit --no-fund || npm install --include=dev --no-audit --no-fund
+    npm ci --include=dev --no-audit --no-fund || bun install --include=dev --no-audit --no-fund
     set -a
     # shellcheck disable=SC1090
     . "$ENV_FILE"
     set +a
-    npm run db:push
+    bun run db:push
     CATALYST_ADMIN_EMAIL="$ADMIN_EMAIL" \
     CATALYST_ADMIN_USERNAME="$ADMIN_USERNAME" \
     CATALYST_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
     CATALYST_ADMIN_NAME="$ADMIN_USERNAME" \
-      npx tsx scripts/bootstrap-production.ts
-    npm run build
+      bunx tsx scripts/bootstrap-production.ts
+    bun run build
   )
 }
 
@@ -973,8 +988,8 @@ build_frontend() {
   log "Installing frontend dependencies and building..."
   (
     cd "${APP_ROOT}/catalyst-frontend"
-    npm ci --include=dev --no-audit --no-fund || npm install --include=dev --no-audit --no-fund
-    npm run build
+    npm ci --include=dev --no-audit --no-fund || bun install --include=dev --no-audit --no-fund
+    bun run build
   )
 
   log "Deploying frontend static assets..."
@@ -1076,7 +1091,7 @@ main() {
   resolve_credentials
   persist_state
 
-  ensure_nodejs
+  ensure_bun
   ensure_container_runtime
   ensure_caddy
   ensure_catalyst_user

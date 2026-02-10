@@ -31,19 +31,19 @@ test_backend() {
     cd catalyst-backend
 
     print_step "Install dependencies..."
-    npm ci --omit=optional --quiet
+    bun install --frozen-lockfile
 
     print_step "Generate Prisma Client..."
-    npx prisma generate > /dev/null
+    bunx prisma generate > /dev/null
 
     print_step "Security audit (high severity only)..."
-    npm audit --audit-level=high || print_warning "Security vulnerabilities found"
+    bun pm scan || print_warning "Security vulnerabilities found"
 
     print_step "Lint..."
-    npm run lint
+    bun run lint
 
     print_step "Build..."
-    npm run build
+    bun run build
 
     print_success "Backend CI steps passed!"
     cd ..

@@ -8,19 +8,15 @@ set -e
 echo "=== Catalyst Backend Setup ==="
 
 # Check dependencies
-if ! command -v node &> /dev/null; then
-    echo "Error: Node.js is not installed"
-    exit 1
-fi
-
-if ! command -v npm &> /dev/null; then
-    echo "Error: npm is not installed"
+if ! command -v bun &> /dev/null; then
+    echo "Error: Bun is not installed"
+    echo "Install Bun: curl -fsSL https://bun.sh/install | bash"
     exit 1
 fi
 
 # Install dependencies
 echo "Installing dependencies..."
-npm install
+bun install
 
 # Wait for database
 echo "Waiting for database..."
@@ -28,7 +24,7 @@ sleep 5
 
 # Run migrations
 echo "Running database migrations..."
-npm run db:push
+bun run db:push
 
 # Seed database with sample data
 echo "Seeding database..."
@@ -113,4 +109,4 @@ echo "✓ Admin user created: admin@example.com (password: admin123)"
 echo "✓ Minecraft template available"
 echo ""
 echo "Starting backend..."
-npm run dev
+bun run dev

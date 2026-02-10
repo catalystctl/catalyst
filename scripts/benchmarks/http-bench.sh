@@ -17,7 +17,7 @@ BASE_URL="${BASE_URL:-http://localhost:3000}"
 EMAIL="${EMAIL:-admin@example.com}"
 PASSWORD="${PASSWORD:-admin123}"
 
-AUTOCANNON="npx -y autocannon@7.12.0"
+AUTOCANNON="bunx -y autocannon@7.12.0"
 
 require() {
   command -v "$1" >/dev/null 2>&1 || {

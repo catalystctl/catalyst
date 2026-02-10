@@ -109,7 +109,7 @@ log_success "Backend is ready"
 
 log_info "Checking database..."
 cd /root/catalyst3/catalyst-backend
-if ! npm run db:push > /dev/null 2>&1; then
+if ! bun run db:push > /dev/null 2>&1; then
     log_error "Database connection failed"
     exit 1
 fi

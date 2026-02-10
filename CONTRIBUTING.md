@@ -88,32 +88,32 @@ Catalyst has multiple components you can contribute to:
 cd catalyst-backend
 
 # Install dependencies
-npm install
+bun install
 
 # Copy environment file
 cp .env.example .env
 # Edit .env with your settings
 
 # Initialize database
-npm run db:push
-npm run db:seed
+bun run db:push
+bun run db:seed
 
 # Start development server
-npm run dev
+bun run dev
 ```
 
 Backend runs on **http://localhost:3000**
 
 **Key Commands:**
 ```bash
-npm run dev          # Start dev server with watch
-npm run build        # Compile TypeScript
+bun run dev          # Start dev server with watch
+bun run build        # Compile TypeScript
 npm start            # Start production server
-npm run lint         # Run ESLint
-npm run lint -- --fix # Auto-fix linting issues
-npm run db:studio    # Open Prisma Studio GUI
-npm run db:migrate   # Create versioned migration
-npm run db:generate  # Regenerate Prisma client
+bun run lint         # Run ESLint
+bun run lint -- --fix # Auto-fix linting issues
+bun run db:studio    # Open Prisma Studio GUI
+bun run db:migrate   # Create versioned migration
+bun run db:generate  # Regenerate Prisma client
 ```
 
 ### Frontend Setup
@@ -122,28 +122,28 @@ npm run db:generate  # Regenerate Prisma client
 cd catalyst-frontend
 
 # Install dependencies
-npm install
+bun install
 
 # Copy environment file
 cp .env.example .env
 # Edit .env with backend URL (http://localhost:3000)
 
 # Start development server
-npm run dev
+bun run dev
 ```
 
 Frontend runs on **http://localhost:5173**
 
 **Key Commands:**
 ```bash
-npm run dev          # Start dev server
-npm run build        # Build production bundle
-npm run preview      # Preview production build
-npm run lint         # Run ESLint
-npm run lint -- --fix # Auto-fix linting issues
-npm run format       # Format with Prettier
-npm run test         # Run Vitest tests
-npm run test:e2e    # Run Playwright E2E tests
+bun run dev          # Start dev server
+bun run build        # Build production bundle
+bun run preview      # Preview production build
+bun run lint         # Run ESLint
+bun run lint -- --fix # Auto-fix linting issues
+bun run format       # Format with Prettier
+bun run test         # Run Vitest tests
+bun run test:e2e    # Run Playwright E2E tests
 ```
 
 ### Agent Setup
@@ -174,10 +174,10 @@ cargo fmt
 docker-compose up -d
 
 # Start backend (terminal 1)
-cd catalyst-backend && npm run dev
+cd catalyst-backend && bun run dev
 
 # Start frontend (terminal 2)
-cd catalyst-frontend && npm run dev
+cd catalyst-frontend && bun run dev
 
 # Optional: Start agent (terminal 3)
 cd catalyst-agent && cargo run
@@ -370,7 +370,7 @@ describe('createUser', () => {
 **Run Backend Tests:**
 ```bash
 cd catalyst-backend
-npm run test
+bun run test
 ```
 
 ### Frontend Tests
@@ -392,7 +392,7 @@ describe('Button', () => {
 **Run Frontend Tests:**
 ```bash
 cd catalyst-frontend
-npm run test
+bun run test
 ```
 
 ### Agent Tests
@@ -452,10 +452,10 @@ cd tests
 1. **Run linters:**
    ```bash
    # Backend
-   cd catalyst-backend && npm run lint -- --fix
+   cd catalyst-backend && bun run lint -- --fix
 
    # Frontend
-   cd catalyst-frontend && npm run lint -- --fix && npm run format
+   cd catalyst-frontend && bun run lint -- --fix && bun run format
 
    # Agent
    cd catalyst-agent && cargo fmt && cargo clippy
@@ -659,8 +659,8 @@ app.post('/api/servers/:id/start',
 **Database Changes:**
 
 1. Update `prisma/schema.prisma`
-2. Run `npm run db:migrate`
-3. Regenerate client: `npm run db:generate`
+2. Run `bun run db:migrate`
+3. Regenerate client: `bun run db:generate`
 4. Update affected services
 
 ### Frontend Development
