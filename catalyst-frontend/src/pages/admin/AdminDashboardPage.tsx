@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import AdminTabs from '../../components/admin/AdminTabs';
 import EmptyState from '../../components/shared/EmptyState';
 import { useAdminStats, useAuditLogs } from '../../hooks/useAdmin';
 
@@ -73,7 +72,6 @@ function AdminDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <AdminTabs />
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-surface-dark dark:hover:border-primary-500/30">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>

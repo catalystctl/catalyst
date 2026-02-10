@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import AdminTabs from '../../components/admin/AdminTabs';
 import { useThemeSettings } from '../../hooks/useAdmin';
 import { adminApi } from '../../services/api/admin';
 import { useThemeStore } from '../../stores/themeStore';
@@ -105,7 +104,6 @@ function ThemeSettingsPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <AdminTabs />
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-surface-light dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark">
           <p className="text-slate-500 dark:text-slate-400">Loading theme settings...</p>
         </div>
@@ -115,7 +113,6 @@ function ThemeSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <AdminTabs />
 
       <div className="space-y-6">
         {/* Branding Section */}

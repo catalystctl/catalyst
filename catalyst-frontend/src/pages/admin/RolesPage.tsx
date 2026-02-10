@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import AdminTabs from '../../components/admin/AdminTabs';
 import EmptyState from '../../components/shared/EmptyState';
 import Input from '../../components/ui/input';
 import { rolesApi } from '../../services/api/roles';
@@ -168,6 +167,26 @@ const PERMISSION_PRESETS = [
   },
 ];
 
+// Helper to categorize permissions for display
+function getPermissionCategories(permissions: string[]) {
+  if (permissions.includes('*')) return [{ category: 'All Permissions', count: 1 }];
+
+  const categoryMap = new Map<string, number>();
+
+  for (const perm of permissions) {
+    const prefix = perm.split('.')[0];
+    const categoryLabel = PERMISSION_CATEGORIES.find((cat) =>
+      cat.permissions.some((p) => p.startsWith(prefix))
+    )?.label || prefix.charAt(0).toUpperCase() + prefix.slice(1);
+
+    categoryMap.set(categoryLabel, (categoryMap.get(categoryLabel) || 0) + 1);
+  }
+
+  return Array.from(categoryMap.entries())
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
 function RolesPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
@@ -307,13 +326,78 @@ function RolesPage() {
     })).filter((category) => category.permissions.length > 0);
   }, [permissionSearch]);
 
+  // Friendly permission labels
+  const PERMISSION_LABELS: Record<string, string> = {
+    // Server
+    'server.read': 'View servers',
+    'server.create': 'Create servers',
+    'server.start': 'Start servers',
+    'server.stop': 'Stop servers',
+    'server.delete': 'Delete servers',
+    'server.suspend': 'Suspend servers',
+    'server.transfer': 'Transfer servers',
+    'server.schedule': 'Manage schedules',
+    // Node
+    'node.read': 'View nodes',
+    'node.create': 'Create nodes',
+    'node.update': 'Edit nodes',
+    'node.delete': 'Delete nodes',
+    'node.view_stats': 'View stats',
+    'node.manage_allocation': 'Manage allocations',
+    // Location
+    'location.read': 'View locations',
+    'location.create': 'Create locations',
+    'location.update': 'Edit locations',
+    'location.delete': 'Delete locations',
+    // Template
+    'template.read': 'View templates',
+    'template.create': 'Create templates',
+    'template.update': 'Edit templates',
+    'template.delete': 'Delete templates',
+    // User
+    'user.read': 'View users',
+    'user.create': 'Create users',
+    'user.update': 'Edit users',
+    'user.delete': 'Delete users',
+    'user.ban': 'Ban users',
+    'user.unban': 'Unban users',
+    'user.set_roles': 'Assign roles',
+    // Role
+    'role.read': 'View roles',
+    'role.create': 'Create roles',
+    'role.update': 'Edit roles',
+    'role.delete': 'Delete roles',
+    // Backup
+    'backup.read': 'View backups',
+    'backup.create': 'Create backups',
+    'backup.delete': 'Delete backups',
+    'backup.restore': 'Restore backups',
+    // File
+    'file.read': 'Read files',
+    'file.write': 'Write files',
+    // Console
+    'console.read': 'View console',
+    'console.write': 'Send commands',
+    // Database
+    'database.create': 'Create databases',
+    'database.read': 'View databases',
+    'database.delete': 'Delete databases',
+    'database.rotate': 'Rotate passwords',
+    // Alert
+    'alert.read': 'View alerts',
+    'alert.create': 'Create alerts',
+    'alert.update': 'Edit alerts',
+    'alert.delete': 'Delete alerts',
+    // Admin
+    'admin.read': 'View admin panel',
+    'admin.write': 'Modify admin settings',
+    'apikey.manage': 'Manage API keys',
+  };
+
   // Format permission for display
   const formatPermission = (perm: string): string => {
     if (perm === '*') return '* (All Permissions)';
-    return perm
-      .split('.')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
+    return PERMISSION_LABELS[perm] || perm.split('.').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   };
 
   // Check if form is valid
@@ -322,8 +406,6 @@ function RolesPage() {
 
   return (
     <div className="space-y-6">
-      <AdminTabs />
-
       {/* Header */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-surface-dark dark:hover:border-primary-500/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -448,25 +530,29 @@ function RolesPage() {
                 <div className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">
                   Permissions
                 </div>
-                <div className="mt-2 flex max-h-24 flex-col gap-1 overflow-y-auto">
-                  {role.permissions?.slice(0, 3).map((permission: string) => (
-                    <div
-                      key={permission}
-                      className="rounded-md bg-slate-50 px-2 py-1 text-xs text-slate-700 dark:bg-slate-900/60 dark:text-slate-300"
-                    >
-                      {permission === '*' ? (
-                        <span className="font-medium text-yellow-600 dark:text-yellow-400">* (All)</span>
-                      ) : (
-                        permission
-                      )}
-                    </div>
-                  ))}
-                  {role.permissions?.length > 3 && (
-                    <div className="text-xs text-slate-500 dark:text-slate-500">
-                      +{role.permissions.length - 3} more
-                    </div>
-                  )}
-                </div>
+                {role.permissions?.includes('*') ? (
+                  <div className="mt-2 rounded-md bg-yellow-500/10 border border-yellow-500/20 px-2 py-1.5">
+                    <span className="text-xs font-medium text-yellow-700 dark:text-yellow-400">
+                      Full Administrator Access (*)
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex max-h-28 flex-col gap-1.5 overflow-y-auto">
+                    {getPermissionCategories(role.permissions || []).map((cat) => (
+                      <div
+                        key={cat.category}
+                        className="flex items-center justify-between rounded-md bg-slate-50 px-2 py-1 dark:bg-slate-900/60"
+                      >
+                        <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                          {cat.category}
+                        </span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-500">
+                          {cat.count} permission{cat.count === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -563,39 +649,75 @@ function RolesPage() {
                   />
                 </div>
 
-                <div className="space-y-3 max-h-64 overflow-y-auto">
-                  {filteredCategories.map((category) => (
-                    <div key={category.label}>
-                      <h4 className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">
-                        {category.label}
-                      </h4>
-                      <div className="grid grid-cols-2 gap-2">
-                        {category.permissions.map((permission) => (
-                          <label
-                            key={permission}
-                            className={`flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs transition-all duration-300 ${
-                              selectedPermissions.has(permission)
-                                ? 'border-primary-500 bg-primary-500/10 dark:bg-primary-500/20 dark:border-primary-500/30'
-                                : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950'
-                            }`}
-                          >
+                <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                  {filteredCategories.map((category) => {
+                    const allSelectedInCategory = category.permissions.every((p) => selectedPermissions.has(p));
+                    const someSelectedInCategory = category.permissions.some((p) => selectedPermissions.has(p));
+
+                    return (
+                      <div key={category.label} className="rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+                        {/* Category header with select all */}
+                        <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-700/50">
+                          <label className="flex items-center gap-2 cursor-pointer">
                             <input
                               type="checkbox"
-                              checked={selectedPermissions.has(permission)}
-                              onChange={() => togglePermission(permission)}
-                              className="h-4 w-4 rounded border-slate-200 bg-white text-primary-600 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-900 dark:text-primary-400"
+                              checked={allSelectedInCategory}
+                              ref={(input) => {
+                                if (input) {
+                                  input.indeterminate = someSelectedInCategory && !allSelectedInCategory;
+                                }
+                              }}
+                              onChange={() => {
+                                const newSet = new Set(selectedPermissions);
+                                if (allSelectedInCategory) {
+                                  // Deselect all in category
+                                  category.permissions.forEach((p) => newSet.delete(p));
+                                } else {
+                                  // Select all in category
+                                  category.permissions.forEach((p) => newSet.add(p));
+                                }
+                                setSelectedPermissions(newSet);
+                              }}
+                              className="h-4 w-4 rounded border-slate-300 bg-white text-primary-600 focus:ring-2 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-primary-400"
                             />
-                            <span className="text-slate-700 dark:text-slate-300">{formatPermission(permission)}</span>
+                            <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                              {category.label}
+                            </span>
                           </label>
-                        ))}
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                            {category.permissions.filter((p) => selectedPermissions.has(p))}/{category.permissions.length}
+                          </span>
+                        </div>
+
+                        {/* Permissions in this category - single column for better readability */}
+                        <div className="flex flex-col">
+                          {category.permissions.map((permission) => (
+                            <label
+                              key={permission}
+                              className={`flex items-center gap-3 border-b border-slate-50 px-3 py-2.5 last:border-b-0 transition-colors cursor-pointer ${
+                                selectedPermissions.has(permission)
+                                  ? 'bg-primary-50/50 dark:bg-primary-500/10'
+                                  : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedPermissions.has(permission)}
+                                onChange={() => togglePermission(permission)}
+                                className="h-4 w-4 rounded border-slate-300 bg-white text-primary-600 focus:ring-2 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-primary-400"
+                              />
+                              <span className="text-sm text-slate-700 dark:text-slate-300">{formatPermission(permission)}</span>
+                            </label>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Wildcard permission */}
                 <label
-                  className={`flex items-center gap-3 rounded-lg border px-3 py-2 mt-3 transition-all ${
+                  className={`flex items-center gap-3 rounded-lg border px-3 py-2 mt-3 transition-all cursor-pointer ${
                     selectedPermissions.has('*')
                       ? 'border-yellow-500/50 bg-yellow-500/10 dark:bg-yellow-500/20'
                       : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950/60'
@@ -690,20 +812,57 @@ function RolesPage() {
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">
                 Permissions ({viewingRole.permissions?.length || 0})
               </div>
-              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/60">
-                {viewingRole.permissions?.map((permission: string) => (
-                  <div
-                    key={permission}
-                    className={`rounded-md px-2 py-1 text-xs ${
-                      permission === '*'
-                        ? 'font-medium text-yellow-700 bg-yellow-500/10 dark:text-yellow-400 dark:bg-yellow-500/20'
-                        : 'text-slate-700 bg-white dark:text-slate-300 dark:bg-slate-950'
-                    }`}
-                  >
-                    {permission === '*' ? '* (All Permissions)' : permission}
+              {viewingRole.permissions?.includes('*') ? (
+                <div className="rounded-xl bg-yellow-500/10 border border-yellow-500/20 p-4">
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-full bg-yellow-500/20 p-1.5">
+                      <svg className="h-4 w-4 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-yellow-700 dark:text-yellow-400">
+                        Full Administrator Access
+                      </div>
+                      <div className="text-xs text-yellow-600/70 dark:text-yellow-400/70">
+                        This role has unrestricted access to all system permissions
+                      </div>
+                    </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-72 overflow-y-auto">
+                  {getPermissionCategories(viewingRole.permissions || []).map((cat) => (
+                    <div key={cat.category} className="rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+                      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5 dark:border-slate-700/50">
+                        <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                          {cat.category}
+                        </span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                          {cat.count} permission{cat.count === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                      <div className="divide-y divide-slate-50 dark:divide-slate-800/50">
+                        {viewingRole.permissions
+                          .filter((p: string) => {
+                            const prefix = p.split('.')[0];
+                            return PERMISSION_CATEGORIES.find((catData) =>
+                              catData.label === cat.category && catData.permissions.includes(p)
+                            ) || cat.category.toLowerCase() === prefix;
+                          })
+                          .map((permission: string) => (
+                            <div
+                              key={permission}
+                              className="px-4 py-2 text-sm text-slate-700 dark:text-slate-300"
+                            >
+                              {formatPermission(permission)}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Metadata */}
               <div className="mt-4 text-xs text-slate-500 dark:text-slate-400 space-y-1">

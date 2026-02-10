@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
 import ProtectedRoute, { hasAnyAdminPermission } from './components/auth/ProtectedRoute';
-import AdminRedirect from './components/auth/AdminRedirect';
 import { ToastProvider } from './components/providers/ToastProvider';
 import { useAuthInit } from './hooks/useAuthInit';
 import ErrorBoundary from './components/shared/ErrorBoundary';
@@ -139,8 +138,8 @@ function App() {
             <Route
               path="admin"
               element={
-                <ProtectedRoute requireAdmin>
-                  <AdminRedirect />
+                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
+                  <AdminDashboardPage />
                 </ProtectedRoute>
               }
             />

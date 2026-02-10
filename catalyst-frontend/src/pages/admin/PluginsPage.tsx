@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchPlugins, togglePlugin, reloadPlugin, fetchPluginDetails, updatePluginConfig } from '../../plugins/api';
 import { toast } from 'sonner';
 import * as Dialog from '@radix-ui/react-dialog';
-import AdminTabs from '../../components/admin/AdminTabs';
 import {
   Power,
   PowerOff,
@@ -240,7 +239,6 @@ export default function PluginsPage() {
   
   return (
     <div className="space-y-6">
-      <AdminTabs />
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-surface-dark dark:hover:border-primary-500/30">
         <div className="flex items-center justify-between">
           <div>

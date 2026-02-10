@@ -4,7 +4,6 @@ import { useApiKeys, useDeleteApiKey } from '../hooks/useApiKeys';
 import { ApiKey } from '../services/apiKeys';
 import { CreateApiKeyDialog } from '../components/apikeys/CreateApiKeyDialog';
 import EmptyState from '../components/shared/EmptyState';
-import AdminTabs from '../components/admin/AdminTabs';
 import Input from '../components/ui/input';
 
 // Helper to parse metadata which may be double-stringified
@@ -111,7 +110,6 @@ export function ApiKeysPage() {
 
   return (
     <div className="space-y-6">
-      <AdminTabs />
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-surface-light dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-surface-dark">
         <div className="flex items-center justify-between mb-6">
           <div>
