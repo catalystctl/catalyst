@@ -27,3 +27,4 @@ tests/lib/node_modules/
 # act (local CI testing)
 .actrc
 docs/testing-ci-locally.md
+api-1.json
