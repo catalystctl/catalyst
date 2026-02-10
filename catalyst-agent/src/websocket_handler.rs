@@ -7,7 +7,6 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
-use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -773,49 +772,34 @@ impl WebSocketHandler {
             final_script = final_script.replace(&placeholder, &escaped);
         }
 
-        info!("Executing installation script");
+        // Get the install image from template (fallback to Alpine if not specified)
+        let install_image = template
+            .get("installImage")
+            .and_then(|v| v.as_str())
+            .unwrap_or("alpine:3.19");
+
+        // Convert environment from Map<String, Value> to HashMap<String, String>
+        let mut env_map = HashMap::new();
+        for (key, value) in environment {
+            if let Some(s) = value.as_str() {
+                env_map.insert(key.clone(), s.to_string());
+            }
+        }
+
+        info!(
+            "Executing installation script in containerized environment using image: {}",
+            install_image
+        );
         self.emit_console_output(server_id, "system", "[Catalyst] Starting installation...\n")
             .await?;
 
-        // Pterodactyl eggs use /mnt/server as the install target directory.
-        // Create a symlink so those scripts write into our actual server dir.
-        let mnt_server = std::path::Path::new("/mnt/server");
-        let created_mnt_symlink = if final_script.contains("/mnt/server") {
-            if let Err(e) = tokio::fs::create_dir_all("/mnt").await {
-                warn!("Failed to create /mnt: {}", e);
-            }
-            // Remove existing /mnt/server if present (stale symlink or dir)
-            // remove_file handles symlinks; remove_dir_all handles real directories
-            let _ = tokio::fs::remove_file(mnt_server).await;
-            let _ = tokio::fs::remove_dir_all(mnt_server).await;
-            match tokio::fs::symlink(&server_dir, mnt_server).await {
-                Ok(_) => {
-                    info!(
-                        "Created /mnt/server -> {} symlink for Pterodactyl compatibility",
-                        server_dir
-                    );
-                    true
-                }
-                Err(e) => {
-                    warn!("Failed to create /mnt/server symlink: {}", e);
-                    false
-                }
-            }
-        } else {
-            false
-        };
-
-        // Execute the install script on the host
-        // NOTE: Script handles its own directory with cd {{SERVER_DIR}}
-        let mut command = tokio::process::Command::new("bash");
-        command
-            .arg("-c")
-            .arg(&final_script)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        let mut child = command
-            .spawn()
-            .map_err(|e| AgentError::IoError(format!("Failed to execute install script: {}", e)))?;
+        // Execute the install script in an ephemeral container for complete isolation
+        // The container mounts the server directory at /data and runs the script there
+        let mut child = self
+            .runtime
+            .spawn_installer_container(install_image, &final_script, &env_map, &server_dir)
+            .await
+            .map_err(|e| AgentError::IoError(format!("Failed to spawn installer container: {}", e)))?;
 
         let stdout = child
             .stdout
@@ -871,10 +855,6 @@ impl WebSocketHandler {
         })?;
 
         if !status.success() {
-            // Clean up /mnt/server symlink on failure too
-            if created_mnt_symlink {
-                let _ = tokio::fs::remove_file(mnt_server).await;
-            }
             let stderr_trimmed = stderr_buffer.trim();
             let stdout_trimmed = stdout_buffer.trim();
             let reason = if !stderr_trimmed.is_empty() {
@@ -894,12 +874,6 @@ impl WebSocketHandler {
                 "Install script failed: {}",
                 reason
             )));
-        }
-
-        // Clean up /mnt/server symlink
-        if created_mnt_symlink {
-            let _ = tokio::fs::remove_file(mnt_server).await;
-            info!("Removed /mnt/server symlink");
         }
 
         if stdout_buffer.trim().is_empty() && stderr_buffer.trim().is_empty() {
