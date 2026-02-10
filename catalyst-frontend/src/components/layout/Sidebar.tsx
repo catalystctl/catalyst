@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { hasAnyAdminPermission } from '../auth/ProtectedRoute';
 
 const links = [
   { to: '/dashboard', label: 'Dashboard' },
@@ -14,7 +15,8 @@ function Sidebar() {
   const isAdmin =
     user?.permissions?.includes('*') ||
     user?.permissions?.includes('admin.write') ||
-    user?.permissions?.includes('admin.read');
+    user?.permissions?.includes('admin.read') ||
+    hasAnyAdminPermission(user?.permissions);
   return (
     <aside
       className={`sticky top-[73px] flex h-[calc(100vh-73px)] flex-col border-r border-slate-200 bg-white px-2 py-6 text-sm shadow-surface-light transition-all duration-300 dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark ${

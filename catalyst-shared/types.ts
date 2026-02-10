@@ -24,6 +24,7 @@ export enum NetworkMode {
 }
 
 export enum Permission {
+  // Server permissions
   SERVER_START = "server.start",
   SERVER_STOP = "server.stop",
   SERVER_READ = "server.read",
@@ -32,16 +33,61 @@ export enum Permission {
   SERVER_SUSPEND = "server.suspend",
   SERVER_TRANSFER = "server.transfer",
   SERVER_SCHEDULE = "server.schedule",
+  // Node permissions
+  NODE_READ = "node.read",
+  NODE_CREATE = "node.create",
+  NODE_UPDATE = "node.update",
+  NODE_DELETE = "node.delete",
+  NODE_VIEW_STATS = "node.view_stats",
+  NODE_MANAGE_ALLOCATION = "node.manage_allocation",
+  // Location permissions
+  LOCATION_READ = "location.read",
+  LOCATION_CREATE = "location.create",
+  LOCATION_UPDATE = "location.update",
+  LOCATION_DELETE = "location.delete",
+  // Template permissions
+  TEMPLATE_READ = "template.read",
+  TEMPLATE_CREATE = "template.create",
+  TEMPLATE_UPDATE = "template.update",
+  TEMPLATE_DELETE = "template.delete",
+  // User management permissions
+  USER_READ = "user.read",
+  USER_CREATE = "user.create",
+  USER_UPDATE = "user.update",
+  USER_DELETE = "user.delete",
+  USER_BAN = "user.ban",
+  USER_UNBAN = "user.unban",
+  USER_SET_ROLES = "user.set_roles",
+  // Role management permissions
+  ROLE_READ = "role.read",
+  ROLE_CREATE = "role.create",
+  ROLE_UPDATE = "role.update",
+  ROLE_DELETE = "role.delete",
+  // Backup permissions
+  BACKUP_READ = "backup.read",
+  BACKUP_CREATE = "backup.create",
+  BACKUP_DELETE = "backup.delete",
+  BACKUP_RESTORE = "backup.restore",
+  // File and console permissions
   FILE_READ = "file.read",
   FILE_WRITE = "file.write",
   CONSOLE_READ = "console.read",
   CONSOLE_WRITE = "console.write",
+  // Database permissions
   DATABASE_CREATE = "database.create",
   DATABASE_READ = "database.read",
   DATABASE_DELETE = "database.delete",
   DATABASE_ROTATE = "database.rotate",
+  // Alert permissions
+  ALERT_READ = "alert.read",
+  ALERT_CREATE = "alert.create",
+  ALERT_UPDATE = "alert.update",
+  ALERT_DELETE = "alert.delete",
+  // Admin permissions
   ADMIN_READ = "admin.read",
   ADMIN_WRITE = "admin.write",
+  // API Key management
+  APIKEY_MANAGE = "apikey.manage",
 }
 
 // ============================================================================
@@ -282,6 +328,36 @@ export interface DeploymentTokenPayload {
   nodeId: string;
   secret: string;
   exp: number;
+}
+
+// ============================================================================
+// RBAC TYPES
+// ============================================================================
+
+export interface ScopedPermission {
+  permission: string;
+  resourceId?: string;
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  description?: string;
+  permissions: string[];
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface RoleCreateInput {
+  name: string;
+  description?: string;
+  permissions: string[];
+}
+
+export interface RoleUpdateInput {
+  name?: string;
+  description?: string;
+  permissions?: string[];
 }
 
 // ============================================================================

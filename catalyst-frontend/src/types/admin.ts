@@ -17,6 +17,9 @@ export interface AdminRole {
   name: string;
   description?: string | null;
   permissions: string[];
+  userCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface AdminRolesResponse {
@@ -30,6 +33,12 @@ export interface AdminUser {
   createdAt: string;
   updatedAt: string;
   roles: AdminUserRole[];
+  banned?: boolean;
+}
+
+export interface UserWithRoles extends AdminUser {
+  roles: AdminUserRole[];
+  permissions?: string[];
 }
 
 export interface PaginationMeta {
@@ -214,4 +223,49 @@ export interface AuthLockout {
 export interface AuthLockoutsResponse {
   lockouts: AuthLockout[];
   pagination: PaginationMeta;
+}
+
+// Role management types
+export interface Role {
+  id: string;
+  name: string;
+  description?: string;
+  permissions: string[];
+  userCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RoleCreateInput {
+  name: string;
+  description?: string;
+  permissions: string[];
+}
+
+export interface RoleUpdateInput {
+  name?: string;
+  description?: string;
+  permissions?: string[];
+}
+
+export interface RolePreset {
+  key: string;
+  label: string;
+  description: string;
+  permissions: string[];
+}
+
+export interface PermissionCategory {
+  label: string;
+  permissions: string[];
+}
+
+export interface RoleUsersResponse {
+  user: {
+    id: string;
+    email: string;
+    username: string;
+  };
+  roles: Role[];
+  permissions: string[];
 }

@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
-import ProtectedRoute from './components/auth/ProtectedRoute';
+import ProtectedRoute, { hasAnyAdminPermission } from './components/auth/ProtectedRoute';
+import AdminRedirect from './components/auth/AdminRedirect';
 import { ToastProvider } from './components/providers/ToastProvider';
 import { useAuthInit } from './hooks/useAuthInit';
 import ErrorBoundary from './components/shared/ErrorBoundary';
@@ -26,6 +27,7 @@ import NetworkPage from './pages/admin/NetworkPage';
 import DatabasePage from './pages/admin/DatabasePage';
 import AdminAlertsPage from './pages/admin/AlertsPage';
 import UsersPage from './pages/admin/UsersPage';
+import RolesPage from './pages/admin/RolesPage';
 import SystemPage from './pages/admin/SystemPage';
 import AuditLogsPage from './pages/admin/AuditLogsPage';
 import SecurityPage from './pages/admin/SecurityPage';
@@ -66,7 +68,8 @@ function App() {
       const hasAdminAccess =
         user?.permissions?.includes('*') ||
         user?.permissions?.includes('admin.write') ||
-        user?.permissions?.includes('admin.read');
+        user?.permissions?.includes('admin.read') ||
+        hasAnyAdminPermission(user?.permissions);
 
       if (hasAdminAccess) {
         try {
@@ -128,7 +131,7 @@ function App() {
             <Route
               path="admin/templates/:templateId"
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute requirePermissions={['template.read', 'template.create', 'template.update', 'template.delete', 'admin.read', 'admin.write']}>
                   <TemplateDetailsPage />
                 </ProtectedRoute>
               }
@@ -137,22 +140,30 @@ function App() {
               path="admin"
               element={
                 <ProtectedRoute requireAdmin>
-                  <AdminDashboardPage />
+                  <AdminRedirect />
                 </ProtectedRoute>
               }
             />
             <Route
               path="admin/users"
               element={
-                <ProtectedRoute requireAdminWrite>
+                <ProtectedRoute requirePermissions={['user.read', 'user.create', 'user.update', 'user.delete', 'user.set_roles', 'admin.read', 'admin.write']}>
                   <UsersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="admin/roles"
+              element={
+                <ProtectedRoute requirePermissions={['role.read', 'role.create', 'role.update', 'role.delete', 'admin.read', 'admin.write']}>
+                  <RolesPage />
                 </ProtectedRoute>
               }
             />
             <Route
               path="admin/servers"
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute requirePermissions={['server.read', 'server.create', 'server.delete', 'admin.read', 'admin.write']}>
                   <AdminServersPage />
                 </ProtectedRoute>
               }
@@ -160,7 +171,7 @@ function App() {
             <Route
               path="admin/nodes"
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute requirePermissions={['node.read', 'node.create', 'node.update', 'node.delete', 'admin.read', 'admin.write']}>
                   <AdminNodesPage />
                 </ProtectedRoute>
               }
@@ -168,7 +179,7 @@ function App() {
             <Route
               path="admin/templates"
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute requirePermissions={['template.read', 'template.create', 'template.update', 'template.delete', 'admin.read', 'admin.write']}>
                   <AdminTemplatesPage />
                 </ProtectedRoute>
               }
@@ -176,7 +187,7 @@ function App() {
             <Route
               path="admin/database"
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
                   <DatabasePage />
                 </ProtectedRoute>
               }
@@ -184,7 +195,7 @@ function App() {
             <Route
               path="admin/network"
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
                   <NetworkPage />
                 </ProtectedRoute>
               }
@@ -200,7 +211,7 @@ function App() {
             <Route
               path="admin/security"
               element={
-                <ProtectedRoute requireAdminWrite>
+                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
                   <SecurityPage />
                 </ProtectedRoute>
               }
@@ -216,7 +227,7 @@ function App() {
             <Route
               path="admin/alerts"
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute requirePermissions={['alert.read', 'alert.create', 'alert.update', 'alert.delete', 'admin.read', 'admin.write']}>
                   <AdminAlertsPage />
                 </ProtectedRoute>
               }
@@ -224,7 +235,7 @@ function App() {
             <Route
               path="admin/audit-logs"
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
                   <AuditLogsPage />
                 </ProtectedRoute>
               }
@@ -232,7 +243,7 @@ function App() {
             <Route
               path="admin/api-keys"
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute requirePermissions={['apikey.manage', 'admin.read', 'admin.write']}>
                   <ApiKeysPage />
                 </ProtectedRoute>
               }
@@ -240,7 +251,7 @@ function App() {
             <Route
               path="admin/plugins"
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
                   <PluginsPage />
                 </ProtectedRoute>
               }
@@ -248,7 +259,7 @@ function App() {
             <Route
               path="admin/plugin/:pluginTabId"
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
                   <PluginTabPage location="admin" />
                 </ProtectedRoute>
               }

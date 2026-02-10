@@ -8,27 +8,18 @@ import { Prisma } from "@prisma/client";
 import { auth } from "../auth";
 import { serialize } from '../utils/serialize';
 
-const ensureAdmin = async (
+import { hasPermission } from "../lib/permissions";
+
+const ensurePermission = async (
   prisma: PrismaClient,
   userId: string,
   reply: FastifyReply,
-  requiredPermission: "admin.read" | "admin.write" = "admin.read",
+  requiredPermission: string,
+  nodeId?: string
 ) => {
-  const roles = await prisma.role.findMany({
-    where: {
-      users: {
-        some: { id: userId },
-      },
-    },
-  });
-  const permissions = roles.flatMap((role) => role.permissions);
-  const isAdmin =
-    permissions.includes("*") ||
-    permissions.includes("admin.write") ||
-    (requiredPermission === "admin.read" && permissions.includes("admin.read"));
-  const hasRole = roles.some((role) => role.name.toLowerCase() === "administrator");
-  if (!isAdmin && !hasRole) {
-    reply.status(403).send({ error: "Admin access required" });
+  const has = await hasPermission(prisma, userId, requiredPermission, nodeId);
+  if (!has) {
+    reply.status(403).send({ error: "Insufficient permissions" });
     return false;
   }
   return true;
@@ -127,8 +118,8 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.write");
-      if (!isAdmin) return;
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.create");
+      if (!hasPerm) return;
       const { name, description, locationId, hostname, publicAddress, maxMemoryMb, maxCpuCores, serverDataDir } =
         request.body as {
           name: string;
@@ -198,8 +189,9 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.read");
-      if (!isAdmin) return;
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.read");
+      if (!hasPerm) return;
+
       const nodes = await prisma.node.findMany({
         omit: { secret: true },
         include: {
@@ -218,8 +210,8 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.read");
-      if (!isAdmin) return;
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.read");
+      if (!hasPerm) return;
       const { nodeId } = request.params as { nodeId: string };
 
       const node = await prisma.node.findUnique({
@@ -250,8 +242,8 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/deployment-token",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.write");
-      if (!isAdmin) return;
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.create");
+      if (!hasPerm) return;
       const { nodeId } = request.params as { nodeId: string };
 
       const node = await prisma.node.findUnique({
@@ -316,8 +308,8 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/api-key",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.read");
-      if (!isAdmin) return;
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.read");
+      if (!hasPerm) return;
       const { nodeId } = request.params as { nodeId: string };
 
       const node = await prisma.node.findUnique({
@@ -367,8 +359,8 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/api-key",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.write");
-      if (!isAdmin) return;
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.create");
+      if (!hasPerm) return;
       const { nodeId } = request.params as { nodeId: string };
       const { regenerate } = (request.body as { regenerate?: boolean }) || {};
 
@@ -449,8 +441,8 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.write");
-      if (!isAdmin) return;
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.update");
+      if (!hasPerm) return;
       const { nodeId } = request.params as { nodeId: string };
       const { name, description, hostname, publicAddress, maxMemoryMb, maxCpuCores, serverDataDir } =
         request.body as {
@@ -512,8 +504,8 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/stats",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.read");
-      if (!isAdmin) return;
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.view_stats");
+      if (!hasPerm) return;
       const { nodeId } = request.params as { nodeId: string };
 
       const node = await prisma.node.findUnique({
@@ -670,8 +662,8 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.write");
-      if (!isAdmin) return;
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.delete");
+      if (!hasPerm) return;
       const { nodeId } = request.params as { nodeId: string };
 
       const node = await prisma.node.findUnique({
@@ -704,8 +696,8 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/ip-pools",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.read");
-      if (!isAdmin) return;
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.read");
+      if (!hasPerm) return;
       const { nodeId } = request.params as { nodeId: string };
 
       const node = await prisma.node.findUnique({ where: { id: nodeId } });
@@ -741,8 +733,8 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/ip-availability",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.read");
-      if (!isAdmin) return;
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.read");
+      if (!hasPerm) return;
       const { nodeId } = request.params as { nodeId: string };
       const { networkName, limit = "200" } = request.query as {
         networkName?: string;
@@ -778,8 +770,8 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/allocations",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.write");
-      if (!isAdmin) return;
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.manage_allocation");
+      if (!hasPerm) return;
       const { nodeId } = request.params as { nodeId: string };
       const { serverId, search } = request.query as {
         serverId?: string;
@@ -837,8 +829,8 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/allocations",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.write");
-      if (!isAdmin) return;
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.manage_allocation");
+      if (!hasPerm) return;
       const { nodeId } = request.params as { nodeId: string };
       const { ip, ports, alias, notes } = request.body as {
         ip: string;
@@ -893,8 +885,8 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/allocations/:allocationId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.write");
-      if (!isAdmin) return;
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.manage_allocation");
+      if (!hasPerm) return;
       const { nodeId, allocationId } = request.params as {
         nodeId: string;
         allocationId: string;
@@ -924,8 +916,8 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/allocations/:allocationId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.write");
-      if (!isAdmin) return;
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.manage_allocation");
+      if (!hasPerm) return;
       const { nodeId, allocationId } = request.params as {
         nodeId: string;
         allocationId: string;

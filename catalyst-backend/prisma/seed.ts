@@ -88,44 +88,86 @@ async function main() {
     where: { name: "Administrator" },
     update: {
       description: "Full system access",
-      permissions: [
-        "*",
-        "server.start",
-        "server.stop",
-        "server.read",
-        "file.read",
-        "file.write",
-        "console.read",
-        "console.write",
-        "server.create",
-        "server.delete",
-        "server.suspend",
-        "admin.read",
-        "admin.write",
-      ],
+      permissions: ["*"],
     },
     create: {
       name: "Administrator",
       description: "Full system access",
+      permissions: ["*"],
+    },
+  });
+
+  console.log("✓ Administrator role created");
+
+  // Create moderator role
+  const moderatorRole = await prisma.role.upsert({
+    where: { name: "Moderator" },
+    update: {
+      description: "Limited management permissions",
       permissions: [
-        "*",
+        "node.read",
+        "node.update",
+        "node.view_stats",
+        "location.read",
+        "template.read",
+        "user.read",
+        "server.read",
         "server.start",
         "server.stop",
-        "server.read",
         "file.read",
         "file.write",
         "console.read",
         "console.write",
-        "server.create",
-        "server.delete",
-        "server.suspend",
-        "admin.read",
-        "admin.write",
+        "alert.read",
+        "alert.create",
+        "alert.update",
+        "alert.delete",
+      ],
+    },
+    create: {
+      name: "Moderator",
+      description: "Limited management permissions",
+      permissions: [
+        "node.read",
+        "node.update",
+        "node.view_stats",
+        "location.read",
+        "template.read",
+        "user.read",
+        "server.read",
+        "server.start",
+        "server.stop",
+        "file.read",
+        "file.write",
+        "console.read",
+        "console.write",
+        "alert.read",
+        "alert.create",
+        "alert.update",
+        "alert.delete",
       ],
     },
   });
 
-  // Assign role to user
+  console.log("✓ Moderator role created");
+
+  // Create user role
+  const userRole = await prisma.role.upsert({
+    where: { name: "User" },
+    update: {
+      description: "Basic user permissions",
+      permissions: ["server.read"],
+    },
+    create: {
+      name: "User",
+      description: "Basic user permissions",
+      permissions: ["server.read"],
+    },
+  });
+
+  console.log("✓ User role created");
+
+  // Assign admin role to user
   await prisma.user.update({
     where: { id: user.id },
     data: {
@@ -136,7 +178,7 @@ async function main() {
     },
   });
 
-  console.log("✓ Admin role assigned");
+  console.log("✓ Admin role assigned to default user");
 
   // Create Minecraft template
   const minecraftTemplate = await prisma.serverTemplate.upsert({

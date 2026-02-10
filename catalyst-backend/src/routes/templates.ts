@@ -1,29 +1,17 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { PrismaClient } from "@prisma/client";
+import { hasPermission } from "../lib/permissions";
 import { serialize } from '../utils/serialize';
 
-const ensureAdmin = async (
-  prisma: PrismaClient,
+const ensurePermission = async (
+  prisma: any,
   userId: string,
   reply: FastifyReply,
-  requiredPermission: "admin.read" | "admin.write" = "admin.read",
+  requiredPermission: string
 ) => {
-  const roles = await prisma.role.findMany({
-    where: {
-      users: {
-        some: { id: userId },
-      },
-    },
-  });
-  const permissions = roles.flatMap((role) => role.permissions);
-  const isAdmin =
-    permissions.includes("*") ||
-    permissions.includes("admin.write") ||
-    (requiredPermission === "admin.read" && permissions.includes("admin.read"));
-  const hasRole = roles.some((role) => role.name.toLowerCase() === "administrator");
-  if (!isAdmin && !hasRole) {
-    reply.status(403).send({ error: "Admin access required" });
+  const has = await hasPermission(prisma, userId, requiredPermission);
+  if (!has) {
+    reply.status(403).send({ error: "Insufficient permissions" });
     return false;
   }
   return true;
@@ -37,8 +25,8 @@ export async function templateRoutes(app: FastifyInstance) {
     "/",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.read");
-      if (!isAdmin) return;
+      const has = await ensurePermission(prisma, request.user.userId, reply, "template.read");
+      if (!has) return;
       const templates = await prisma.serverTemplate.findMany({
         orderBy: { createdAt: "desc" },
       });
@@ -52,8 +40,8 @@ export async function templateRoutes(app: FastifyInstance) {
     "/:templateId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.read");
-      if (!isAdmin) return;
+      const has = await ensurePermission(prisma, request.user.userId, reply, "template.read");
+      if (!has) return;
       const { templateId } = request.params as { templateId: string };
 
       const template = await prisma.serverTemplate.findUnique({
@@ -73,8 +61,8 @@ export async function templateRoutes(app: FastifyInstance) {
     "/",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.write");
-      if (!isAdmin) return;
+      const has = await ensurePermission(prisma, request.user.userId, reply, "template.create");
+      if (!has) return;
       const {
         name,
         description,
@@ -146,8 +134,8 @@ export async function templateRoutes(app: FastifyInstance) {
     "/:templateId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.write");
-      if (!isAdmin) return;
+      const has = await ensurePermission(prisma, request.user.userId, reply, "template.update");
+      if (!has) return;
       const { templateId } = request.params as { templateId: string };
       const { images, defaultImage } = request.body as {
         images?: Array<{ name: string; label?: string; image: string }>;
@@ -222,8 +210,8 @@ export async function templateRoutes(app: FastifyInstance) {
     "/:templateId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const isAdmin = await ensureAdmin(prisma, request.user.userId, reply, "admin.write");
-      if (!isAdmin) return;
+      const has = await ensurePermission(prisma, request.user.userId, reply, "template.delete");
+      if (!has) return;
       const { templateId } = request.params as { templateId: string };
 
       // Check if template is in use

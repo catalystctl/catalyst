@@ -16,6 +16,8 @@ import type {
   SecuritySettings,
   AuthLockout,
   AuthLockoutsResponse,
+  Role,
+  RolePreset,
 } from '../../types/admin';
 
 type ApiResponse<T> = {
@@ -234,5 +236,46 @@ export const adminApi = {
   updateThemeSettings: async (payload: any) => {
     const { data } = await apiClient.patch<ApiResponse<any>>('/api/admin/theme-settings', payload);
     return data.data;
+  },
+  // Ban a user
+  banUser: async (userId: string, reason?: string) => {
+    const { data } = await apiClient.post<ApiResponse<void>>(
+      `/api/admin/users/${userId}/ban`,
+      { reason }
+    );
+    return data;
+  },
+  // Unban a user
+  unbanUser: async (userId: string) => {
+    const { data } = await apiClient.post<ApiResponse<void>>(
+      `/api/admin/users/${userId}/unban`
+    );
+    return data;
+  },
+  // Get user roles
+  getUserRoles: async (userId: string) => {
+    const { data } = await apiClient.get<ApiResponse<{ roles: Role[]; permissions: string[] }>>(
+      `/api/roles/users/${userId}/roles`
+    );
+    return data.data;
+  },
+  // Assign role to user
+  assignRole: async (roleId: string, userId: string) => {
+    const { data } = await apiClient.post<ApiResponse<void>>(
+      `/api/roles/${roleId}/users/${userId}`
+    );
+    return data;
+  },
+  // Remove role from user
+  removeRole: async (roleId: string, userId: string) => {
+    const { data } = await apiClient.delete<ApiResponse<void>>(
+      `/api/roles/${roleId}/users/${userId}`
+    );
+    return data;
+  },
+  // Get role presets
+  getRolePresets: async () => {
+    const { data } = await apiClient.get<ApiResponse<RolePreset[]>>('/api/roles/presets');
+    return data.data || [];
   },
 };

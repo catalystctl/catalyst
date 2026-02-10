@@ -23,6 +23,7 @@ import { backupRoutes } from "./routes/backups";
 import { RbacMiddleware } from "./middleware/rbac";
 import { startSFTPServer } from "./sftp-server";
 import { adminRoutes } from "./routes/admin";
+import { roleRoutes } from "./routes/roles";
 import { taskRoutes } from "./routes/tasks";
 import { TaskScheduler } from "./services/task-scheduler";
 import { alertRoutes } from "./routes/alerts";
@@ -486,6 +487,7 @@ async function bootstrap() {
     await app.register(metricsRoutes, { prefix: "/api" });
     await app.register(backupRoutes, { prefix: "/api/servers" });
     await app.register(adminRoutes, { prefix: "/api/admin" });
+    await app.register(roleRoutes, { prefix: "/api/roles" });
     await app.register(taskRoutes, { prefix: "/api/servers" });
     await app.register(alertRoutes, { prefix: "/api" });
     await app.register(apiKeyRoutes);
