@@ -588,6 +588,14 @@ impl WebSocketHandler {
         }
     }
 
+    /// Stop all log streams for a server
+    /// This is important when switching from installer container to game server container
+    async fn stop_log_streams_for_server(&self, server_id: &str) {
+        let mut streams = self.active_log_streams.write().await;
+        // Remove all stream keys that start with server_id:
+        streams.retain(|key| !key.starts_with(&format!("{}:", server_id)));
+    }
+
     fn spawn_exit_monitor(&self, server_id: &str, container_id: &str) {
         let handler = self.clone();
         let server_id = server_id.to_string();
@@ -884,6 +892,10 @@ impl WebSocketHandler {
         self.ensure_hytale_runtime_permissions(server_id, template, &server_dir)
             .await?;
 
+        // Stop any existing log streams for this server before marking as stopped
+        // This ensures clean state when transitioning to game server container
+        self.stop_log_streams_for_server(server_id).await;
+
         // Emit state update
         self.emit_server_state_update(server_id, "stopped", None, None, None)
             .await?;
@@ -897,6 +909,17 @@ impl WebSocketHandler {
         let server_id = server_id.to_string();
         let container_id = container_id.to_string();
         tokio::spawn(async move {
+            // First, clean up any stale streams for this server
+            // This prevents issues when switching from installer to game server container
+            {
+                let mut streams = handler.active_log_streams.write().await;
+                streams.retain(|key| {
+                    // Keep only streams that don't belong to this server
+                    // or keep the exact stream we're about to create (prevents duplicates)
+                    !key.starts_with(&format!("{}:", server_id)) || *key == format!("{}:{}", server_id, container_id)
+                });
+            }
+
             let stream_key = format!("{}:{}", server_id, container_id);
             {
                 let mut guard = handler.active_log_streams.write().await;
@@ -1171,6 +1194,9 @@ impl WebSocketHandler {
 
             let container_id = self.resolve_container_id(server_id, server_uuid).await;
             if !container_id.is_empty() {
+                // Stop any existing log streams for this server before starting new one
+                // This is critical when transitioning from installer to game server container
+                self.stop_log_streams_for_server(server_id).await;
                 self.spawn_log_stream(server_id, &container_id);
                 self.spawn_exit_monitor(server_id, &container_id);
             }
