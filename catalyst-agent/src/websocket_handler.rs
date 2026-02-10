@@ -438,16 +438,18 @@ impl WebSocketHandler {
             .and_then(|value| value.as_str())
             .unwrap_or(server_id);
         let container_id = self.resolve_container_id(server_id, server_uuid).await;
-        if container_id.is_empty() {
-            return Err(AgentError::ContainerError(format!(
-                "Container not found for server {}",
-                server_id
-            )));
-        }
 
         match action {
             "install" => self.install_server(msg).await?,
-            "start" => self.start_server(server_id, container_id).await?,
+            "start" => {
+                if container_id.is_empty() {
+                    return Err(AgentError::ContainerError(format!(
+                        "Container not found for server {}",
+                        server_id
+                    )));
+                }
+                self.start_server(server_id, container_id).await?
+            }
             "stop" => self.stop_server(server_id, container_id).await?,
             "kill" => self.kill_server(server_id, container_id).await?,
             "restart" => {
@@ -524,6 +526,56 @@ impl WebSocketHandler {
         self.resolve_console_container_id(server_id, server_uuid)
             .await
             .unwrap_or_default()
+    }
+
+    async fn cleanup_all_server_containers(&self, server_id: &str, server_uuid: &str) -> AgentResult<()> {
+        let mut cleaned = 0;
+
+        for container_name in &[server_id, server_uuid] {
+            if self.runtime.container_exists(container_name).await {
+                info!(
+                    "Found container {} for server {}, removing during cleanup",
+                    container_name, server_id
+                );
+                self.stop_monitor_task(server_id).await;
+                if self
+                    .runtime
+                    .is_container_running(container_name)
+                    .await
+                    .unwrap_or(false)
+                {
+                    if let Err(e) = self.runtime.stop_container(container_name, 10).await {
+                        warn!(
+                            "Failed to stop container {}: {}, attempting kill",
+                            container_name, e
+                        );
+                        let _ = self
+                            .runtime
+                            .kill_container(container_name, "SIGKILL")
+                            .await;
+                    }
+                }
+                if self.runtime.container_exists(container_name).await {
+                    if let Err(e) = self.runtime.remove_container(container_name).await {
+                        warn!("Failed to remove container {}: {}", container_name, e);
+                    } else {
+                        cleaned += 1;
+                    }
+                }
+            }
+        }
+
+        if cleaned > 0 {
+            info!("Cleaned up {} containers for server {}", cleaned, server_id);
+            self.emit_console_output(
+                server_id,
+                "system",
+                &format!("[Catalyst] Cleaned up {} container(s) during error state cleanup.\n", cleaned),
+            )
+            .await?;
+        }
+
+        Ok(())
     }
 
     async fn stop_monitor_task(&self, server_id: &str) {
@@ -677,47 +729,7 @@ impl WebSocketHandler {
 
         info!("Installing server: {} (UUID: {})", server_id, server_uuid);
 
-        // Destroy any existing container for this server before reinstalling
-        let existing_container_id = self.resolve_container_id(server_id, server_uuid).await;
-        if !existing_container_id.is_empty() {
-            info!(
-                "Found existing container {} for server {}, destroying before reinstall",
-                existing_container_id, server_id
-            );
-            self.stop_monitor_task(server_id).await;
-            if self
-                .runtime
-                .is_container_running(&existing_container_id)
-                .await
-                .unwrap_or(false)
-            {
-                if let Err(e) = self
-                    .runtime
-                    .stop_container(&existing_container_id, 10)
-                    .await
-                {
-                    warn!(
-                        "Failed to stop existing container {}: {}, attempting kill",
-                        existing_container_id, e
-                    );
-                    let _ = self
-                        .runtime
-                        .kill_container(&existing_container_id, "SIGKILL")
-                        .await;
-                }
-            }
-            if self.runtime.container_exists(&existing_container_id).await {
-                self.runtime
-                    .remove_container(&existing_container_id)
-                    .await?;
-            }
-            self.emit_console_output(
-                server_id,
-                "system",
-                "[Catalyst] Removed existing container.\n",
-            )
-            .await?;
-        }
+        self.cleanup_all_server_containers(server_id, server_uuid).await?;
 
         // Backend should provide SERVER_DIR automatically
         let server_dir = environment
@@ -1135,11 +1147,7 @@ impl WebSocketHandler {
                 }
             }
 
-            // Clean up any existing container with this name before creating a new one
-            if self.runtime.container_exists(server_id).await {
-                info!("Removing existing container {} before starting", server_id);
-                let _ = self.runtime.remove_container(server_id).await;
-            }
+            self.cleanup_all_server_containers(server_id, server_uuid).await?;
 
             // Create and start container
             self.runtime
@@ -1253,10 +1261,11 @@ impl WebSocketHandler {
 
     async fn stop_server(&self, server_id: &str, container_id: String) -> AgentResult<()> {
         if container_id.is_empty() {
-            return Err(AgentError::ContainerError(format!(
-                "Container not found for server {}",
-                server_id
-            )));
+            info!("No container found for server {}, marking as stopped", server_id);
+            self.stop_monitor_task(server_id).await;
+            self.emit_server_state_update(server_id, "stopped", None, None, None)
+                .await?;
+            return Ok(());
         }
         info!(
             "Stopping server: {} (container {})",
@@ -1286,10 +1295,17 @@ impl WebSocketHandler {
 
     async fn kill_server(&self, server_id: &str, container_id: String) -> AgentResult<()> {
         if container_id.is_empty() {
-            return Err(AgentError::ContainerError(format!(
-                "Container not found for server {}",
-                server_id
-            )));
+            info!("No container found for server {}, marking as crashed", server_id);
+            self.stop_monitor_task(server_id).await;
+            self.emit_server_state_update(
+                server_id,
+                "crashed",
+                Some("Killed by agent".to_string()),
+                None,
+                Some(137),
+            )
+            .await?;
+            return Ok(());
         }
         info!("Killing server: {} (container {})", server_id, container_id);
 
