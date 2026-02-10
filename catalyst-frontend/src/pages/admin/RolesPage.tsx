@@ -4,6 +4,8 @@ import EmptyState from '../../components/shared/EmptyState';
 import Input from '../../components/ui/input';
 import { rolesApi } from '../../services/api/roles';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { NodeAssignmentsSelector } from '../../components/admin/NodeAssignmentsSelector';
+import type { NodeAssignmentWithExpiration } from '../../components/admin/NodeAssignmentsSelector';
 
 // Permission categories for organization
 const PERMISSION_CATEGORIES = [
@@ -29,6 +31,7 @@ const PERMISSION_CATEGORIES = [
       'node.delete',
       'node.view_stats',
       'node.manage_allocation',
+      'node.assign',
     ],
   },
   {
@@ -127,6 +130,7 @@ const PERMISSION_PRESETS = [
       'node.read',
       'node.update',
       'node.view_stats',
+      'node.assign',
       'location.read',
       'template.read',
       'user.read',
@@ -200,6 +204,7 @@ function RolesPage() {
   const [description, setDescription] = useState('');
   const [selectedPermissions, setSelectedPermissions] = useState<Set<string>>(new Set());
   const [permissionSearch, setPermissionSearch] = useState('');
+  const [selectedNodeIds, setSelectedNodeIds] = useState<NodeAssignmentWithExpiration[]>([]);
 
   // Fetch roles
   const { data: roles = [], isLoading } = useQuery({
@@ -283,10 +288,11 @@ function RolesPage() {
     setDescription('');
     setSelectedPermissions(new Set());
     setPermissionSearch('');
+    setSelectedNodeIds([]);
   };
 
   // Start editing
-  const startEdit = (role: any) => {
+  const startEdit = async (role: any) => {
     const requestId = editingRequestRef.current + 1;
     editingRequestRef.current = requestId;
     setEditingRole(role);
@@ -295,6 +301,21 @@ function RolesPage() {
     setSelectedPermissions(new Set(role.permissions || []));
     setIsCreateOpen(false);
     setViewingRole(null);
+
+    // Load node assignments for this role
+    try {
+      const response = await fetch(`/api/roles/${role.id}/nodes`, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json();
+      const nodes = data.data || [];
+      setSelectedNodeIds(nodes.map((n: any) => ({
+        nodeId: n.id,
+        nodeName: n.name,
+      })));
+    } catch {
+      setSelectedNodeIds([]);
+    }
   };
 
   // Start viewing
@@ -344,6 +365,7 @@ function RolesPage() {
     'node.delete': 'Delete nodes',
     'node.view_stats': 'View stats',
     'node.manage_allocation': 'Manage allocations',
+    'node.assign': 'Assign nodes',
     // Location
     'location.read': 'View locations',
     'location.create': 'Create locations',
@@ -739,6 +761,14 @@ function RolesPage() {
                   </div>
                 </label>
               </div>
+
+              {/* Node Assignments */}
+              <NodeAssignmentsSelector
+                roleId={editingRole?.id}
+                selectedNodes={selectedNodeIds}
+                onSelectionChange={setSelectedNodeIds}
+                disabled={createMutation.isPending || updateMutation.isPending}
+              />
             </div>
 
             {/* Actions */}

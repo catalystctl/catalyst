@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { serversApi } from '../../services/api/servers';
 import { useTemplates } from '../../hooks/useTemplates';
-import { useNodes } from '../../hooks/useNodes';
+import { useNodes, useAccessibleNodes } from '../../hooks/useNodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import type { Template } from '../../types/template';
 import { nodesApi } from '../../services/api/nodes';
@@ -46,9 +46,14 @@ function CreateServerModal() {
 
   const { data: templates = [] } = useTemplates();
   const { data: nodes = [] } = useNodes();
+  const { data: accessibleNodes = [] } = useAccessibleNodes();
   const [availableIps, setAvailableIps] = useState<string[]>([]);
   const [ipLoadError, setIpLoadError] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  // Determine which nodes to show - accessible nodes for non-admins, all nodes for admins
+  const isAdmin = user?.permissions?.includes('*') || user?.permissions?.includes('admin.write');
+  const availableNodes = isAdmin ? nodes : accessibleNodes;
 
   // Get selected template
   const selectedTemplate = useMemo(() => templates.find(t => t.id === templateId), [templates, templateId]);
@@ -67,8 +72,8 @@ function CreateServerModal() {
     return selectedTemplate.variables.filter(v => v.name !== 'SERVER_DIR');
   }, [selectedTemplate]);
 
-  const selectedNode = useMemo(() => nodes.find((node) => node.id === nodeId), [nodes, nodeId]);
-  const locationId = selectedNode?.locationId || nodes[0]?.locationId || '';
+  const selectedNode = useMemo(() => availableNodes.find((node) => node.id === nodeId), [availableNodes, nodeId]);
+  const locationId = selectedNode?.locationId || availableNodes[0]?.locationId || '';
 
   // Load macvlan interfaces (IP pools) for the selected node
   useEffect(() => {
@@ -452,7 +457,7 @@ function CreateServerModal() {
                             onChange={(e) => setNodeId(e.target.value)}
                           >
                             <option value="">Select a node...</option>
-                            {nodes.map((n) => (
+                            {availableNodes.map((n) => (
                               <option key={n.id} value={n.id}>
                                 {n.name}
                               </option>

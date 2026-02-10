@@ -12,31 +12,32 @@ generator client {
 // ============================================================================
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  name          String
-  emailVerified Boolean  @default(false)
-  image         String?
-  twoFactorEnabled Boolean @default(false)
-  role          String?
-  banned        Boolean  @default(false)
-  banReason     String?
-  banExpires    DateTime?
-  username      String   @unique
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id               String    @id @default(cuid())
+  email            String    @unique
+  name             String
+  emailVerified    Boolean   @default(false)
+  image            String?
+  twoFactorEnabled Boolean   @default(false)
+  role             String?
+  banned           Boolean   @default(false)
+  banReason        String?
+  banExpires       DateTime?
+  username         String    @unique
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  accounts   account[]
-  sessions   session[]
-  twoFactor  twoFactor[]
-  passkeys   passkey[]
-  roles      Role[]
-  servers    ServerAccess[]
-  auditLog   AuditLog[]
-  invitesSent ServerAccessInvite[] @relation("ServerInviteSender")
-  alertRules AlertRule[]
-  alerts     Alert[]
-  apiKeys    apikey[] @relation("UserApiKeys")
+  accounts        account[]
+  sessions        session[]
+  twoFactor       twoFactor[]
+  passkeys        passkey[]
+  roles           Role[]
+  servers         ServerAccess[]
+  auditLog        AuditLog[]
+  invitesSent     ServerAccessInvite[] @relation("ServerInviteSender")
+  alertRules      AlertRule[]
+  alerts          Alert[]
+  apiKeys         apikey[]             @relation("UserApiKeys")
+  nodeAssignments NodeAssignment[]
 }
 
 model session {
@@ -56,11 +57,11 @@ model session {
 }
 
 model account {
-  id                    String   @id @default(cuid())
+  id                    String    @id @default(cuid())
   accountId             String
   providerId            String
   userId                String
-  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessToken           String?
   refreshToken          String?
   idToken               String?
@@ -68,8 +69,8 @@ model account {
   refreshTokenExpiresAt DateTime?
   scope                 String?
   password              String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   @@unique([providerId, accountId])
   @@index([userId])
@@ -113,12 +114,13 @@ model verification {
   @@index([identifier])
   @@index([expiresAt])
 }
+
 model twoFactor {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   secret      String
   backupCodes String
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([secret])
   @@index([userId])
@@ -153,7 +155,6 @@ model apikey {
   @@index([expiresAt])
 }
 
-
 // ============================================================================
 // ROLES & PERMISSIONS
 // ============================================================================
@@ -166,8 +167,9 @@ model Role {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  users       User[]
-  serverRoles ServerRole[]
+  users           User[]
+  serverRoles     ServerRole[]
+  nodeAssignments NodeAssignment[]
 }
 
 model ServerRole {
@@ -182,29 +184,29 @@ model ServerRole {
 }
 
 model ServerAccess {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  serverId  String
-  server    Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serverId    String
+  server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
   permissions String[] // Permission enum values
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@unique([userId, serverId])
   @@index([serverId, userId])
 }
 
 model ServerAccessInvite {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   serverId        String
-  server          Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  server          Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
   email           String
-  token           String   @unique
+  token           String    @unique
   permissions     String[]
   invitedByUserId String
-  invitedByUser   User     @relation("ServerInviteSender", fields: [invitedByUserId], references: [id], onDelete: Cascade)
-  createdAt       DateTime @default(now())
+  invitedByUser   User      @relation("ServerInviteSender", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  createdAt       DateTime  @default(now())
   expiresAt       DateTime
   acceptedAt      DateTime?
   cancelledAt     DateTime?
@@ -213,36 +215,64 @@ model ServerAccessInvite {
   @@index([expiresAt])
 }
 
+model NodeAssignment {
+  id     String @id @default(cuid())
+  nodeId String
+  node   Node   @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  // Either assigned to a user OR a role (not both)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  roleId String?
+  role   Role?   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  // Audit trail
+  assignedBy String // User ID who made the assignment
+  assignedAt DateTime  @default(now())
+  expiresAt  DateTime? // Optional expiration for temporary access
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Ensure one assignment per (node, user) or (node, role) combination
+  @@unique([nodeId, userId])
+  @@unique([nodeId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@index([nodeId, expiresAt])
+}
+
 model SystemSetting {
-  id                 String   @id
-  smtpHost           String?
-  smtpPort           Int?
-  smtpUsername       String?
-  smtpPassword       String?
-  smtpFrom           String?
-  smtpReplyTo        String?
-  smtpSecure         Boolean  @default(false)
-  smtpRequireTls     Boolean  @default(false)
-  smtpPool           Boolean  @default(false)
-  smtpMaxConnections Int?
-  smtpMaxMessages    Int?
-  curseforgeApiKey   String?
-  modrinthApiKey     String?
-  authRateLimitMax         Int?
-  fileRateLimitMax         Int?
-  consoleRateLimitMax      Int?
-  consoleOutputLinesMax    Int?
+  id                          String   @id
+  smtpHost                    String?
+  smtpPort                    Int?
+  smtpUsername                String?
+  smtpPassword                String?
+  smtpFrom                    String?
+  smtpReplyTo                 String?
+  smtpSecure                  Boolean  @default(false)
+  smtpRequireTls              Boolean  @default(false)
+  smtpPool                    Boolean  @default(false)
+  smtpMaxConnections          Int?
+  smtpMaxMessages             Int?
+  curseforgeApiKey            String?
+  modrinthApiKey              String?
+  authRateLimitMax            Int?
+  fileRateLimitMax            Int?
+  consoleRateLimitMax         Int?
+  consoleOutputLinesMax       Int?
   consoleOutputByteLimitBytes Int?
-  agentMessageMax          Int?
-  agentMetricsMax          Int?
-  serverMetricsMax         Int?
-  lockoutMaxAttempts       Int?
-  lockoutWindowMinutes     Int?
-  lockoutDurationMinutes   Int?
-  auditRetentionDays       Int?
-  maxBufferMb              Int?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  agentMessageMax             Int?
+  agentMetricsMax             Int?
+  serverMetricsMax            Int?
+  lockoutMaxAttempts          Int?
+  lockoutWindowMinutes        Int?
+  lockoutDurationMinutes      Int?
+  auditRetentionDays          Int?
+  maxBufferMb                 Int?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
 }
 
 model ThemeSettings {
@@ -276,28 +306,29 @@ model Location {
 }
 
 model Node {
-  id             String   @id @default(cuid())
-  name           String   @unique
-  description    String?
-  serverDataDir  String   @default("/var/lib/catalyst/servers")
-  locationId     String
-  location       Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
-  hostname       String
-  publicAddress  String
-  secret         String   @unique
-  maxMemoryMb    Int
-  maxCpuCores    Int
-  isOnline       Boolean  @default(false)
-  lastSeenAt     DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            String    @id @default(cuid())
+  name          String    @unique
+  description   String?
+  serverDataDir String    @default("/var/lib/catalyst/servers")
+  locationId    String
+  location      Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  hostname      String
+  publicAddress String
+  secret        String    @unique
+  maxMemoryMb   Int
+  maxCpuCores   Int
+  isOnline      Boolean   @default(false)
+  lastSeenAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  servers    Server[]
+  servers          Server[]
   deploymentTokens DeploymentToken[]
-  metrics    NodeMetrics[]
-  alerts     Alert[]
-  ipPools    IpPool[]
-  allocations NodeAllocation[]
+  metrics          NodeMetrics[]
+  alerts           Alert[]
+  ipPools          IpPool[]
+  allocations      NodeAllocation[]
+  nodeAssignments  NodeAssignment[]
 }
 
 model IpPool {
@@ -319,13 +350,13 @@ model IpPool {
 }
 
 model IpAllocation {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   poolId     String
-  pool       IpPool   @relation(fields: [poolId], references: [id], onDelete: Cascade)
-  serverId   String?  @unique
-  server     Server?  @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  pool       IpPool    @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  serverId   String?   @unique
+  server     Server?   @relation(fields: [serverId], references: [id], onDelete: Cascade)
   ip         String
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
   releasedAt DateTime?
 
   @@unique([poolId, ip])
@@ -353,14 +384,14 @@ model NodeAllocation {
 }
 
 model DeploymentToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   nodeId    String
-  node      Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-  token     String   @unique
-  secret    String   @unique
+  node      Node      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  secret    String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 }
 
 // ============================================================================
@@ -368,26 +399,26 @@ model DeploymentToken {
 // ============================================================================
 
 model ServerTemplate {
-  id                 String   @id @default(cuid())
-  name               String   @unique
-  description        String?
-  author             String
-  version            String
-  image              String
-  images             Json     @default("[]")
-  defaultImage       String?
-  installImage       String?
-  startup            String
-  stopCommand        String
-  sendSignalTo       String   @default("SIGTERM")
-  variables          Json     // Array of EnvironmentVariable
-  installScript      String?
-  supportedPorts     Int[]
-  allocatedMemoryMb  Int
+  id                String   @id @default(cuid())
+  name              String   @unique
+  description       String?
+  author            String
+  version           String
+  image             String
+  images            Json     @default("[]")
+  defaultImage      String?
+  installImage      String?
+  startup           String
+  stopCommand       String
+  sendSignalTo      String   @default("SIGTERM")
+  variables         Json // Array of EnvironmentVariable
+  installScript     String?
+  supportedPorts    Int[]
+  allocatedMemoryMb Int
   allocatedCpuCores Int
-  features           Json     @default("{}")
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  features          Json     @default("{}")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   servers Server[]
 }
@@ -397,57 +428,57 @@ model ServerTemplate {
 // ============================================================================
 
 model Server {
-  id             String   @id @default(cuid())
-  uuid           String   @unique
-  name           String
-  description    String?
-  templateId     String
-  template       ServerTemplate @relation(fields: [templateId], references: [id])
-  nodeId         String
-  node           Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-  locationId     String
-  location       Location @relation(fields: [locationId], references: [id])
-  ownerId        String
-  status         String   @default("stopped")
-  suspendedAt    DateTime?
+  id                String         @id @default(cuid())
+  uuid              String         @unique
+  name              String
+  description       String?
+  templateId        String
+  template          ServerTemplate @relation(fields: [templateId], references: [id])
+  nodeId            String
+  node              Node           @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  locationId        String
+  location          Location       @relation(fields: [locationId], references: [id])
+  ownerId           String
+  status            String         @default("stopped")
+  suspendedAt       DateTime?
   suspendedByUserId String?
-  suspensionReason String?
+  suspensionReason  String?
   allocatedMemoryMb Int
   allocatedCpuCores Int
-  allocatedDiskMb  Int     @default(10240)
-  
+  allocatedDiskMb   Int            @default(10240)
+
   // Container info
-  containerId    String?
-  containerName  String?
-  
+  containerId   String?
+  containerName String?
+
   // Networking
-  networkMode    String   @default("bridge")
-  primaryPort    Int
-  primaryIp      String?
-  portBindings   Json     @default("{}") // Record<number, number>
-  
+  networkMode  String  @default("bridge")
+  primaryPort  Int
+  primaryIp    String?
+  portBindings Json    @default("{}") // Record<number, number>
+
   // Configuration
-  environment    Json     @default("{}")
+  environment    Json    @default("{}")
   startupCommand String?
 
   // Backups
-  backupStorageMode   String   @default("local") // local, s3, stream
-  backupRetentionCount Int     @default(0)
-  backupRetentionDays  Int     @default(0)
-  backupAllocationMb  Int     @default(0)
-  databaseAllocation  Int     @default(0)
-  backupS3Config      Json    @default("{}")
-  backupSftpConfig    Json    @default("{}")
-  
+  backupStorageMode    String @default("local") // local, s3, stream
+  backupRetentionCount Int    @default(0)
+  backupRetentionDays  Int    @default(0)
+  backupAllocationMb   Int    @default(0)
+  databaseAllocation   Int    @default(0)
+  backupS3Config       Json   @default("{}")
+  backupSftpConfig     Json   @default("{}")
+
   // Crash detection & auto-restart
-  restartPolicy  String   @default("on-failure") // always, on-failure, never
-  crashCount     Int      @default(0)
-  maxCrashCount  Int      @default(5)
-  lastCrashAt    DateTime?
-  lastExitCode   Int?
-  
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  restartPolicy String    @default("on-failure") // always, on-failure, never
+  crashCount    Int       @default(0)
+  maxCrashCount Int       @default(5)
+  lastCrashAt   DateTime?
+  lastExitCode  Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   access         ServerAccess[]
   invites        ServerAccessInvite[]
@@ -468,22 +499,22 @@ model Server {
 // ============================================================================
 
 model InstalledMod {
-  id            String   @id @default(cuid())
-  serverId      String
-  server        Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  filename      String
-  type          String   @default("mod") // mod, plugin, datapack, modpack
-  provider      String   // modrinth, curseforge, spigot, paper
-  game          String?
-  projectId     String
-  versionId     String
-  projectName   String?
-  latestVersionId String?
+  id                String    @id @default(cuid())
+  serverId          String
+  server            Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  filename          String
+  type              String    @default("mod") // mod, plugin, datapack, modpack
+  provider          String // modrinth, curseforge, spigot, paper
+  game              String?
+  projectId         String
+  versionId         String
+  projectName       String?
+  latestVersionId   String?
   latestVersionName String?
-  updateCheckedAt DateTime?
-  hasUpdate     Boolean  @default(false)
-  installedAt   DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  updateCheckedAt   DateTime?
+  hasUpdate         Boolean   @default(false)
+  installedAt       DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   @@unique([serverId, filename])
   @@index([serverId, type])
@@ -507,16 +538,16 @@ model DatabaseHost {
 }
 
 model ServerDatabase {
-  id        String   @id @default(cuid())
+  id        String       @id @default(cuid())
   serverId  String
-  server    Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  server    Server       @relation(fields: [serverId], references: [id], onDelete: Cascade)
   hostId    String
   host      DatabaseHost @relation(fields: [hostId], references: [id], onDelete: Cascade)
   name      String
   username  String
   password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
   @@unique([hostId, name])
   @@unique([hostId, username])
@@ -524,39 +555,39 @@ model ServerDatabase {
 }
 
 model Backup {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   serverId    String
-  server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  server      Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
   name        String
-  path        String   // File path on disk or S3 URL
-  storageMode String   @default("local")
+  path        String // File path on disk or S3 URL
+  storageMode String    @default("local")
   sizeMb      Float
-  compressed  Boolean  @default(true)
-  checksum    String?  // SHA256 checksum for integrity
-  metadata    Json     @default("{}")  // Server config snapshot
-  createdAt   DateTime @default(now())
+  compressed  Boolean   @default(true)
+  checksum    String? // SHA256 checksum for integrity
+  metadata    Json      @default("{}") // Server config snapshot
+  createdAt   DateTime  @default(now())
   restoredAt  DateTime?
 
   @@index([serverId, createdAt])
 }
 
 model ScheduledTask {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   serverId    String
-  server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  server      Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
   name        String
   description String?
-  action      String   // restart, stop, start, backup, command
-  payload     Json?    // Additional data (e.g., command to run)
-  schedule    String   // Cron expression (e.g., "0 3 * * *" for 3 AM daily)
-  enabled     Boolean  @default(true)
+  action      String // restart, stop, start, backup, command
+  payload     Json? // Additional data (e.g., command to run)
+  schedule    String // Cron expression (e.g., "0 3 * * *" for 3 AM daily)
+  enabled     Boolean   @default(true)
   lastRunAt   DateTime?
   nextRunAt   DateTime?
-  lastStatus  String?  // success, failed, skipped
+  lastStatus  String? // success, failed, skipped
   lastError   String?
-  runCount    Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  runCount    Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([serverId, enabled])
   @@index([enabled, nextRunAt])
@@ -578,29 +609,29 @@ model ServerLog {
 // ============================================================================
 
 model AuditLog {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  action    String
-  resource  String
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  resource   String
   resourceId String?
-  details   Json?
-  timestamp DateTime @default(now())
+  details    Json?
+  timestamp  DateTime @default(now())
 
   @@index([userId, timestamp])
 }
 
 model AuthLockout {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   email         String
   ipAddress     String
   userAgent     String?
-  failureCount  Int      @default(0)
+  failureCount  Int       @default(0)
   firstFailedAt DateTime
   lastFailedAt  DateTime
   lockedUntil   DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@unique([email, ipAddress])
   @@index([email])
@@ -612,58 +643,58 @@ model AuthLockout {
 // ============================================================================
 
 model ServerMetrics {
-  id            String   @id @default(cuid())
-  serverId      String
-  server        Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  cpuPercent    Float
-  memoryUsageMb Int
+  id             String   @id @default(cuid())
+  serverId       String
+  server         Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  cpuPercent     Float
+  memoryUsageMb  Int
   networkRxBytes BigInt
   networkTxBytes BigInt
-  diskIoMb      Int      @default(0)
-  diskUsageMb   Int
-  timestamp     DateTime @default(now())
-  
-  @@index([serverId, timestamp])
+  diskIoMb       Int      @default(0)
+  diskUsageMb    Int
+  timestamp      DateTime @default(now())
+
   @@unique([serverId, timestamp])
+  @@index([serverId, timestamp])
 }
 
 model NodeMetrics {
-  id                String   @id @default(cuid())
-  nodeId            String
-  node              Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-  cpuPercent        Float
-  memoryUsageMb     Int
-  memoryTotalMb     Int
-  diskUsageMb       Int
-  diskTotalMb       Int
-  networkRxBytes    BigInt
-  networkTxBytes    BigInt
-  containerCount    Int
-  timestamp         DateTime @default(now())
-  
+  id             String   @id @default(cuid())
+  nodeId         String
+  node           Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  cpuPercent     Float
+  memoryUsageMb  Int
+  memoryTotalMb  Int
+  diskUsageMb    Int
+  diskTotalMb    Int
+  networkRxBytes BigInt
+  networkTxBytes BigInt
+  containerCount Int
+  timestamp      DateTime @default(now())
+
   @@index([nodeId, timestamp])
 }
 
 model Alert {
-  id          String   @id @default(cuid())
-  ruleId      String?
-  rule        AlertRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  serverId    String?
-  server      Server?  @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  nodeId      String?
-  node        Node?    @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-  type        String   // resource_threshold, node_offline, server_crashed, custom
-  severity    String   // info, warning, critical
-  title       String
-  message     String   @db.Text
-  metadata    Json     @default("{}")
-  resolved    Boolean  @default(false)
-  resolvedAt  DateTime?
-  resolvedBy  String?
-  createdAt   DateTime @default(now())
-  deliveries  AlertDelivery[]
+  id         String          @id @default(cuid())
+  ruleId     String?
+  rule       AlertRule?      @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  userId     String?
+  user       User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  serverId   String?
+  server     Server?         @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  nodeId     String?
+  node       Node?           @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  type       String // resource_threshold, node_offline, server_crashed, custom
+  severity   String // info, warning, critical
+  title      String
+  message    String          @db.Text
+  metadata   Json            @default("{}")
+  resolved   Boolean         @default(false)
+  resolvedAt DateTime?
+  resolvedBy String?
+  createdAt  DateTime        @default(now())
+  deliveries AlertDelivery[]
 
   @@index([serverId, resolved, createdAt])
   @@index([nodeId, resolved, createdAt])
@@ -677,13 +708,13 @@ model AlertRule {
   name        String
   description String?
   enabled     Boolean  @default(true)
-  type        String   // resource_threshold, node_offline, server_crashed
-  target      String   // server, node, global
-  targetId    String?  // Specific server/node ID, or null for global
+  type        String // resource_threshold, node_offline, server_crashed
+  target      String // server, node, global
+  targetId    String? // Specific server/node ID, or null for global
   userId      String?
   user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  conditions  Json     // Threshold values, etc.
-  actions     Json     // Webhook URLs, notification methods
+  conditions  Json // Threshold values, etc.
+  actions     Json // Webhook URLs, notification methods
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   alerts      Alert[]
@@ -694,17 +725,17 @@ model AlertRule {
 }
 
 model AlertDelivery {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   alertId       String
-  alert         Alert    @relation(fields: [alertId], references: [id], onDelete: Cascade)
-  channel       String   // email, webhook
+  alert         Alert     @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  channel       String // email, webhook
   target        String
-  status        String   @default("pending") // pending, sent, failed
-  attempts      Int      @default(0)
+  status        String    @default("pending") // pending, sent, failed
+  attempts      Int       @default(0)
   lastAttemptAt DateTime?
   lastError     String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([alertId, status])
   @@index([channel, status])
@@ -715,16 +746,16 @@ model AlertDelivery {
 // ============================================================================
 
 model Plugin {
-  id          String   @id @default(cuid())
-  name        String   @unique
+  id          String          @id @default(cuid())
+  name        String          @unique
   version     String
-  enabled     Boolean  @default(false)
-  config      Json     @default("{}")
-  installedAt DateTime @default(now())
+  enabled     Boolean         @default(false)
+  config      Json            @default("{}")
+  installedAt DateTime        @default(now())
   enabledAt   DateTime?
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime        @updatedAt
   storage     PluginStorage[]
-  
+
   @@index([enabled])
   @@index([name, enabled])
 }
@@ -737,7 +768,7 @@ model PluginStorage {
   value      Json
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-  
+
   @@unique([pluginName, key])
   @@index([pluginName])
 }

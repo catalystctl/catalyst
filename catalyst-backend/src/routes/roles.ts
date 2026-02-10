@@ -13,6 +13,7 @@ import {
   getUserRoles,
   getUserPermissions,
   PERMISSION_PRESETS,
+  getNodeAssignments,
 } from '../lib/permissions';
 import { serialize } from '../utils/serialize';
 
@@ -548,6 +549,178 @@ export async function roleRoutes(app: FastifyInstance) {
           ...preset,
         })),
       });
+    }
+  );
+
+  // GET /api/roles/:roleId/nodes - Get nodes assigned to a role
+  app.get(
+    '/:roleId/nodes',
+    { onRequest: [authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const currentUserId = (request as any).user.userId;
+
+      if (!(await checkPermission(currentUserId, 'node.read', reply))) return;
+
+      const { roleId } = request.params as { roleId: string };
+
+      const role = await prisma.role.findUnique({
+        where: { id: roleId },
+      });
+
+      if (!role) {
+        return reply.status(404).send({ error: 'Role not found' });
+      }
+
+      // Get all nodes assigned to this role
+      const assignments = await prisma.nodeAssignment.findMany({
+        where: {
+          roleId,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } },
+          ],
+        },
+        include: {
+          node: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              isOnline: true,
+              location: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const nodes = assignments.map((a) => ({
+        ...a.node,
+        assignmentId: a.id,
+        assignedAt: a.assignedAt,
+        expiresAt: a.expiresAt,
+      }));
+
+      reply.send(serialize({
+        success: true,
+        data: nodes,
+      }));
+    }
+  );
+
+  // GET /api/users/:userId/nodes - Get nodes accessible to a user
+  app.get(
+    '/users/:userId/nodes',
+    { onRequest: [authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const currentUserId = (request as any).user.userId;
+
+      // Users can view their own accessible nodes
+      if (currentUserId !== (request.params as any).userId) {
+        if (!(await checkPermission(currentUserId, 'node.read', reply))) return;
+      }
+
+      const { userId } = request.params as { userId: string };
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      // Get all node assignments for this user (direct + role-based)
+      const allAssignments = await prisma.nodeAssignment.findMany({
+        where: {
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } },
+          ],
+        },
+        include: {
+          node: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              isOnline: true,
+              location: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          role: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      // Filter assignments that apply to this user
+      const userRoleIds = (await prisma.role.findMany({
+        where: {
+          users: {
+            some: { id: userId },
+          },
+        },
+        select: { id: true },
+      })).map((r) => r.id);
+
+      const applicableAssignments = allAssignments.filter((a) => {
+        if (a.userId === userId) return true;
+        if (a.roleId && userRoleIds.includes(a.roleId)) return true;
+        return false;
+      });
+
+      // Get unique node details
+      const nodeIds = [...new Set(applicableAssignments.map((a) => a.nodeId))];
+      const nodes = await prisma.node.findMany({
+        where: {
+          id: { in: nodeIds },
+        },
+        include: {
+          location: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      // Add assignment info to each node
+      const nodesWithAssignments = nodes.map((node) => {
+        const nodeAssignments = applicableAssignments
+          .filter((a) => a.nodeId === node.id)
+          .map((a) => ({
+            id: a.id,
+            userId: a.userId,
+            roleId: a.roleId,
+            roleName: a.role?.name || null,
+            assignedBy: a.assignedBy,
+            assignedAt: a.assignedAt,
+            expiresAt: a.expiresAt,
+          }));
+        return {
+          ...node,
+          assignments: nodeAssignments,
+        };
+      });
+
+      reply.send(serialize({
+        success: true,
+        data: nodesWithAssignments,
+      }));
     }
   );
 }

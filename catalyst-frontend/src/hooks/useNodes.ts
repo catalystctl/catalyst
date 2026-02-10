@@ -8,6 +8,13 @@ export function useNodes() {
   });
 }
 
+export function useAccessibleNodes() {
+  return useQuery({
+    queryKey: ['nodes', 'accessible'],
+    queryFn: nodesApi.getAccessibleNodes,
+  });
+}
+
 export function useNode(nodeId?: string) {
   return useQuery({
     queryKey: ['node', nodeId],

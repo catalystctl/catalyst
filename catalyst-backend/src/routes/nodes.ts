@@ -8,7 +8,15 @@ import { Prisma } from "@prisma/client";
 import { auth } from "../auth";
 import { serialize } from '../utils/serialize';
 
-import { hasPermission } from "../lib/permissions";
+import {
+  hasPermission,
+  hasNodeAccess,
+  getUserAccessibleNodes,
+  getNodeAssignments,
+  assignNode,
+  removeNodeAssignment,
+  isAdminUser,
+} from "../lib/permissions";
 
 const ensurePermission = async (
   prisma: PrismaClient,
@@ -192,14 +200,37 @@ export async function nodeRoutes(app: FastifyInstance) {
       const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.read");
       if (!hasPerm) return;
 
-      const nodes = await prisma.node.findMany({
-        omit: { secret: true },
-        include: {
-          _count: {
-            select: { servers: true },
+      const userId = request.user.userId;
+
+      // Check if user is admin - admins see all nodes
+      const isAdmin = await isAdminUser(prisma, userId, true);
+
+      let nodes;
+      if (isAdmin) {
+        // Admins see all nodes
+        nodes = await prisma.node.findMany({
+          omit: { secret: true },
+          include: {
+            _count: {
+              select: { servers: true },
+            },
           },
-        },
-      });
+        });
+      } else {
+        // Non-admins only see nodes they have access to
+        const accessibleNodeIds = await getUserAccessibleNodes(prisma, userId);
+        nodes = await prisma.node.findMany({
+          where: {
+            id: { in: accessibleNodeIds },
+          },
+          omit: { secret: true },
+          include: {
+            _count: {
+              select: { servers: true },
+            },
+          },
+        });
+      }
 
       reply.send(serialize({ success: true, data: nodes }));
     }
@@ -213,6 +244,13 @@ export async function nodeRoutes(app: FastifyInstance) {
       const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.read");
       if (!hasPerm) return;
       const { nodeId } = request.params as { nodeId: string };
+      const userId = request.user.userId;
+
+      // Check if user has access to this specific node
+      const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
+      if (!hasAccess) {
+        return reply.status(403).send({ error: "You don't have access to this node" });
+      }
 
       const node = await prisma.node.findUnique({
         where: { id: nodeId },
@@ -507,6 +545,13 @@ export async function nodeRoutes(app: FastifyInstance) {
       const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.view_stats");
       if (!hasPerm) return;
       const { nodeId } = request.params as { nodeId: string };
+      const userId = request.user.userId;
+
+      // Check if user has access to this specific node
+      const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
+      if (!hasAccess) {
+        return reply.status(403).send({ error: "You don't have access to this node" });
+      }
 
       const node = await prisma.node.findUnique({
         where: { id: nodeId },
@@ -699,6 +744,13 @@ export async function nodeRoutes(app: FastifyInstance) {
       const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.read");
       if (!hasPerm) return;
       const { nodeId } = request.params as { nodeId: string };
+      const userId = request.user.userId;
+
+      // Check if user has access to this specific node
+      const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
+      if (!hasAccess) {
+        return reply.status(403).send({ error: "You don't have access to this node" });
+      }
 
       const node = await prisma.node.findUnique({ where: { id: nodeId } });
       if (!node) {
@@ -736,6 +788,14 @@ export async function nodeRoutes(app: FastifyInstance) {
       const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.read");
       if (!hasPerm) return;
       const { nodeId } = request.params as { nodeId: string };
+      const userId = request.user.userId;
+
+      // Check if user has access to this specific node
+      const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
+      if (!hasAccess) {
+        return reply.status(403).send({ error: "You don't have access to this node" });
+      }
+
       const { networkName, limit = "200" } = request.query as {
         networkName?: string;
         limit?: string;
@@ -773,6 +833,14 @@ export async function nodeRoutes(app: FastifyInstance) {
       const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.manage_allocation");
       if (!hasPerm) return;
       const { nodeId } = request.params as { nodeId: string };
+      const userId = request.user.userId;
+
+      // Check if user has access to this specific node
+      const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
+      if (!hasAccess) {
+        return reply.status(403).send({ error: "You don't have access to this node" });
+      }
+
       const { serverId, search } = request.query as {
         serverId?: string;
         search?: string;
@@ -832,6 +900,14 @@ export async function nodeRoutes(app: FastifyInstance) {
       const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.manage_allocation");
       if (!hasPerm) return;
       const { nodeId } = request.params as { nodeId: string };
+      const userId = request.user.userId;
+
+      // Check if user has access to this specific node
+      const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
+      if (!hasAccess) {
+        return reply.status(403).send({ error: "You don't have access to this node" });
+      }
+
       const { ip, ports, alias, notes } = request.body as {
         ip: string;
         ports: string;
@@ -891,6 +967,14 @@ export async function nodeRoutes(app: FastifyInstance) {
         nodeId: string;
         allocationId: string;
       };
+      const userId = request.user.userId;
+
+      // Check if user has access to this specific node
+      const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
+      if (!hasAccess) {
+        return reply.status(403).send({ error: "You don't have access to this node" });
+      }
+
       const { alias, notes } = request.body as { alias?: string; notes?: string };
 
       const allocation = await prisma.nodeAllocation.findUnique({
@@ -922,6 +1006,13 @@ export async function nodeRoutes(app: FastifyInstance) {
         nodeId: string;
         allocationId: string;
       };
+      const userId = request.user.userId;
+
+      // Check if user has access to this specific node
+      const hasAccess = await hasNodeAccess(prisma, userId, nodeId);
+      if (!hasAccess) {
+        return reply.status(403).send({ error: "You don't have access to this node" });
+      }
 
       const allocation = await prisma.nodeAllocation.findUnique({
         where: { id: allocationId },
@@ -935,6 +1026,227 @@ export async function nodeRoutes(app: FastifyInstance) {
 
       await prisma.nodeAllocation.delete({ where: { id: allocationId } });
       reply.send({ success: true });
+    }
+  );
+
+  // ============================================================================
+  // NODE ASSIGNMENT ROUTES
+  // ============================================================================
+
+  // Get all assignments for a node
+  app.get(
+    "/:nodeId/assignments",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.assign");
+      if (!hasPerm) return;
+
+      const { nodeId } = request.params as { nodeId: string };
+
+      // Verify node exists
+      const node = await prisma.node.findUnique({
+        where: { id: nodeId },
+      });
+
+      if (!node) {
+        return reply.status(404).send({ error: "Node not found" });
+      }
+
+      const assignments = await getNodeAssignments(prisma, nodeId);
+      reply.send(serialize({ success: true, data: assignments }));
+    }
+  );
+
+  // Assign node to user or role
+  app.post(
+    "/:nodeId/assign",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.assign");
+      if (!hasPerm) return;
+
+      const { nodeId } = request.params as { nodeId: string };
+      const { targetType, targetId, expiresAt } = request.body as {
+        targetType: "user" | "role";
+        targetId: string;
+        expiresAt?: string; // ISO date string
+      };
+
+      // Validate targetType
+      if (targetType !== "user" && targetType !== "role") {
+        return reply.status(400).send({ error: "targetType must be 'user' or 'role'" });
+      }
+
+      // Verify node exists
+      const node = await prisma.node.findUnique({
+        where: { id: nodeId },
+      });
+
+      if (!node) {
+        return reply.status(404).send({ error: "Node not found" });
+      }
+
+      // Verify target exists
+      if (targetType === "user") {
+        const user = await prisma.user.findUnique({
+          where: { id: targetId },
+        });
+        if (!user) {
+          return reply.status(404).send({ error: "User not found" });
+        }
+      } else {
+        const role = await prisma.role.findUnique({
+          where: { id: targetId },
+        });
+        if (!role) {
+          return reply.status(404).send({ error: "Role not found" });
+        }
+      }
+
+      // Parse expiration date if provided
+      let expirationDate: Date | undefined;
+      if (expiresAt) {
+        expirationDate = new Date(expiresAt);
+        if (isNaN(expirationDate.getTime())) {
+          return reply.status(400).send({ error: "Invalid expiresAt date" });
+        }
+        if (expirationDate <= new Date()) {
+          return reply.status(400).send({ error: "expiresAt must be in the future" });
+        }
+      }
+
+      // Check if assignment already exists
+      const existingAssignment = await prisma.nodeAssignment.findFirst({
+        where: {
+          nodeId,
+          ...(targetType === "user" ? { userId: targetId } : { roleId: targetId }),
+        },
+      });
+
+      if (existingAssignment) {
+        return reply.status(409).send({
+          error: "Assignment already exists",
+          existingAssignmentId: existingAssignment.id,
+        });
+      }
+
+      // Create the assignment
+      const assignment = await assignNode(
+        prisma,
+        nodeId,
+        targetType,
+        targetId,
+        request.user.userId,
+        expirationDate
+      );
+
+      // Log the action
+      await prisma.auditLog.create({
+        data: {
+          userId: request.user.userId,
+          action: `node.assign.${targetType}`,
+          resource: "node",
+          resourceId: nodeId,
+          details: {
+            targetType,
+            targetId,
+            assignmentId: assignment.id,
+            expiresAt: expirationDate?.toISOString(),
+          },
+        },
+      });
+
+      reply.status(201).send(serialize({ success: true, data: assignment }));
+    }
+  );
+
+  // Remove a node assignment
+  app.delete(
+    "/:nodeId/assignments/:assignmentId",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.assign");
+      if (!hasPerm) return;
+
+      const { nodeId, assignmentId } = request.params as {
+        nodeId: string;
+        assignmentId: string;
+      };
+
+      // Verify assignment exists and belongs to this node
+      const assignment = await prisma.nodeAssignment.findUnique({
+        where: { id: assignmentId },
+      });
+
+      if (!assignment) {
+        return reply.status(404).send({ error: "Assignment not found" });
+      }
+
+      if (assignment.nodeId !== nodeId) {
+        return reply.status(404).send({ error: "Assignment not found for this node" });
+      }
+
+      // Delete the assignment
+      await removeNodeAssignment(prisma, assignmentId);
+
+      // Log the action
+      await prisma.auditLog.create({
+        data: {
+          userId: request.user.userId,
+          action: "node.unassign",
+          resource: "node",
+          resourceId: nodeId,
+          details: {
+            assignmentId,
+            wasUserAssignment: !!assignment.userId,
+            wasRoleAssignment: !!assignment.roleId,
+          },
+        },
+      });
+
+      reply.send({ success: true });
+    }
+  );
+
+  // Get nodes accessible to current user
+  // This endpoint is used by the frontend to populate node selection dropdowns
+  app.get(
+    "/accessible",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user.userId;
+
+      // Check if user has node.read permission
+      const hasPerm = await ensurePermission(prisma, userId, reply, "node.read");
+      if (!hasPerm) return;
+
+      // Get accessible node IDs
+      const accessibleNodeIds = await getUserAccessibleNodes(prisma, userId);
+
+      // Fetch node details
+      const nodes = await prisma.node.findMany({
+        where: {
+          id: { in: accessibleNodeIds },
+        },
+        omit: { secret: true },
+        include: {
+          location: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          _count: {
+            select: { servers: true },
+          },
+        },
+        orderBy: { name: "asc" },
+      });
+
+      reply.send(serialize({
+        success: true,
+        data: nodes,
+      }));
     }
   );
 }

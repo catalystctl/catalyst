@@ -6,6 +6,8 @@ import NodeStatusBadge from '../../components/nodes/NodeStatusBadge';
 import NodeUpdateModal from '../../components/nodes/NodeUpdateModal';
 import NodeDeleteDialog from '../../components/nodes/NodeDeleteDialog';
 import NodeMetricsCard from '../../components/nodes/NodeMetricsCard';
+import NodeAssignmentsList from '../../components/nodes/NodeAssignmentsList';
+import NodeAssignmentModal from '../../components/nodes/NodeAssignmentModal';
 import { nodesApi } from '../../services/api/nodes';
 import { useAuthStore } from '../../stores/authStore';
 import { notifyError, notifySuccess } from '../../utils/notify';
@@ -26,6 +28,7 @@ function NodeDetailsPage() {
   const [generatedApiKey, setGeneratedApiKey] = useState<string | null>(null);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
+  const [showAssignmentModal, setShowAssignmentModal] = useState(false);
 
   // Check if API key exists for this node
   const { data: apiKeyStatus } = useQuery({
@@ -87,6 +90,10 @@ function NodeDetailsPage() {
 
   const canWrite = useMemo(
     () => user?.permissions?.includes('admin.write') || user?.permissions?.includes('*'),
+    [user?.permissions],
+  );
+  const canAssignNodes = useMemo(
+    () => user?.permissions?.includes('node.assign') || user?.permissions?.includes('*') || user?.permissions?.includes('admin.write'),
     [user?.permissions],
   );
   const lastSeen = node?.lastSeenAt ? new Date(node.lastSeenAt).toLocaleString() : 'n/a';
@@ -253,6 +260,24 @@ function NodeDetailsPage() {
           </div>
         )}
       </div>
+
+      {/* Node Assignments Section */}
+      {canWrite || canAssignNodes ? (
+        <>
+          <NodeAssignmentsList nodeId={nodeId!} canManage={canAssignNodes} />
+          {canAssignNodes && (
+            <div className="flex justify-center">
+              <button
+                className="rounded-lg border-2 border-dashed border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-surface-light transition-all duration-300 hover:border-primary-500 hover:text-primary-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:shadow-surface-dark dark:hover:border-primary-500/30 dark:hover:text-primary-400"
+                onClick={() => setShowAssignmentModal(true)}
+              >
+                + Assign Node to User or Role
+              </button>
+            </div>
+          )}
+        </>
+      ) : null}
+
       {deployInfo ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-slate-950/60 px-4 backdrop-blur-sm">
           <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
@@ -436,6 +461,13 @@ function NodeDetailsPage() {
           </div>
         </div>
       ) : null}
+
+      {/* Node Assignment Modal */}
+      <NodeAssignmentModal
+        nodeId={nodeId!}
+        open={showAssignmentModal}
+        onClose={() => setShowAssignmentModal(false)}
+      />
     </div>
   );
 }

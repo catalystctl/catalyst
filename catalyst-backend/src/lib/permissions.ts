@@ -352,6 +352,7 @@ export const PERMISSION_CATEGORIES = {
       "node.delete",
       "node.view_stats",
       "node.manage_allocation",
+      "node.assign",
     ],
   },
   location: {
@@ -499,3 +500,375 @@ export const PERMISSION_PRESETS = {
     ],
   },
 } as const;
+
+// ============================================================================
+// NODE ASSIGNMENT & ACCESS
+// ============================================================================
+
+/**
+ * Node assignment type for user responses
+ */
+export interface NodeAssignmentInfo {
+  id: string;
+  nodeId: string;
+  nodeName: string;
+  userId?: string | null;
+  roleId?: string | null;
+  roleName?: string | null;
+  assignedBy: string;
+  assignedAt: Date;
+  expiresAt?: Date | null;
+  source: "user" | "role";
+}
+
+/**
+ * Check if a user has access to a specific node
+ * Access is granted if:
+ * 1. User has a direct assignment to the node (not expired)
+ * 2. User has a role that is assigned to the node (not expired)
+ * 3. User has admin permissions (admin.write or wildcard)
+ *
+ * @param prisma - Prisma client
+ * @param userId - User ID to check
+ * @param nodeId - Node ID to check
+ * @returns True if user has access to the node
+ */
+export async function hasNodeAccess(
+  prisma: PrismaClient,
+  userId: string,
+  nodeId: string
+): Promise<boolean> {
+  // First check if user is admin
+  const isAdmin = await isAdminUser(prisma, userId, true);
+  if (isAdmin) return true;
+
+  const now = new Date();
+
+  // Check direct user assignment (highest priority)
+  const userAssignment = await prisma.nodeAssignment.findFirst({
+    where: {
+      nodeId,
+      userId,
+      OR: [
+        { expiresAt: null },
+        { expiresAt: { gt: now } },
+      ],
+    },
+  });
+
+  if (userAssignment) {
+    return true;
+  }
+
+  // Check role-based assignments
+  const userRoles = await prisma.role.findMany({
+    where: {
+      users: {
+        some: { id: userId },
+      },
+    },
+    select: { id: true },
+  });
+
+  if (userRoles.length > 0) {
+    const roleIds = userRoles.map((r) => r.id);
+
+    const roleAssignment = await prisma.nodeAssignment.findFirst({
+      where: {
+        nodeId,
+        roleId: { in: roleIds },
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: now } },
+        ],
+      },
+    });
+
+    if (roleAssignment) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Get all nodes accessible to a user
+ * Includes nodes from direct assignments and role assignments
+ *
+ * @param prisma - Prisma client
+ * @param userId - User ID
+ * @returns Array of node IDs that user can access
+ */
+export async function getUserAccessibleNodes(
+  prisma: PrismaClient,
+  userId: string
+): Promise<string[]> {
+  const isAdmin = await isAdminUser(prisma, userId, true);
+  if (isAdmin) {
+    // Admins have access to all nodes
+    const allNodes = await prisma.node.findMany({
+      select: { id: true },
+    });
+    return allNodes.map((n) => n.id);
+  }
+
+  const now = new Date();
+  const accessibleNodeIds = new Set<string>();
+
+  // Get direct user assignments
+  const userAssignments = await prisma.nodeAssignment.findMany({
+    where: {
+      userId,
+      OR: [
+        { expiresAt: null },
+        { expiresAt: { gt: now } },
+      ],
+    },
+    select: { nodeId: true },
+  });
+
+  for (const assignment of userAssignments) {
+    accessibleNodeIds.add(assignment.nodeId);
+  }
+
+  // Get role-based assignments
+  const userRoles = await prisma.role.findMany({
+    where: {
+      users: {
+        some: { id: userId },
+      },
+    },
+    select: { id: true },
+  });
+
+  if (userRoles.length > 0) {
+    const roleIds = userRoles.map((r) => r.id);
+
+    const roleAssignments = await prisma.nodeAssignment.findMany({
+      where: {
+        roleId: { in: roleIds },
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: now } },
+        ],
+      },
+      select: { nodeId: true },
+    });
+
+    for (const assignment of roleAssignments) {
+      accessibleNodeIds.add(assignment.nodeId);
+    }
+  }
+
+  return Array.from(accessibleNodeIds);
+}
+
+/**
+ * Get all node assignments for a user
+ * Includes both direct assignments and inherited role assignments
+ *
+ * @param prisma - Prisma client
+ * @param userId - User ID
+ * @returns Array of node assignment info
+ */
+export async function getUserNodeAssignments(
+  prisma: PrismaClient,
+  userId: string
+): Promise<NodeAssignmentInfo[]> {
+  const now = new Date();
+  const assignments: NodeAssignmentInfo[] = [];
+
+  // Get direct user assignments
+  const userAssignments = await prisma.nodeAssignment.findMany({
+    where: {
+      userId,
+      OR: [
+        { expiresAt: null },
+        { expiresAt: { gt: now } },
+      ],
+    },
+    include: {
+      node: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  for (const assignment of userAssignments) {
+    assignments.push({
+      id: assignment.id,
+      nodeId: assignment.nodeId,
+      nodeName: assignment.node.name,
+      userId: assignment.userId,
+      roleId: assignment.roleId,
+      assignedBy: assignment.assignedBy,
+      assignedAt: assignment.assignedAt,
+      expiresAt: assignment.expiresAt,
+      source: "user",
+    });
+  }
+
+  // Get role-based assignments
+  const userRoles = await prisma.role.findMany({
+    where: {
+      users: {
+        some: { id: userId },
+      },
+    },
+    select: { id: true, name: true },
+  });
+
+  if (userRoles.length > 0) {
+    const roleIds = userRoles.map((r) => r.id);
+
+    const roleAssignments = await prisma.nodeAssignment.findMany({
+      where: {
+        roleId: { in: roleIds },
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: now } },
+        ],
+      },
+      include: {
+        node: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        role: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    for (const assignment of roleAssignments) {
+      assignments.push({
+        id: assignment.id,
+        nodeId: assignment.nodeId,
+        nodeName: assignment.node.name,
+        userId: assignment.userId,
+        roleId: assignment.roleId,
+        roleName: assignment.role?.name || null,
+        assignedBy: assignment.assignedBy,
+        assignedAt: assignment.assignedAt,
+        expiresAt: assignment.expiresAt,
+        source: "role",
+      });
+    }
+  }
+
+  return assignments;
+}
+
+/**
+ * Get all assignments for a specific node
+ *
+ * @param prisma - Prisma client
+ * @param nodeId - Node ID
+ * @returns Array of node assignment info
+ */
+export async function getNodeAssignments(
+  prisma: PrismaClient,
+  nodeId: string
+): Promise<NodeAssignmentInfo[]> {
+  const now = new Date();
+  const assignments: NodeAssignmentInfo[] = [];
+
+  const allAssignments = await prisma.nodeAssignment.findMany({
+    where: {
+      nodeId,
+      OR: [
+        { expiresAt: null },
+        { expiresAt: { gt: now } },
+      ],
+    },
+    include: {
+      node: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      role: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: {
+      assignedAt: "desc",
+    },
+  });
+
+  for (const assignment of allAssignments) {
+    assignments.push({
+      id: assignment.id,
+      nodeId: assignment.nodeId,
+      nodeName: assignment.node.name,
+      userId: assignment.userId,
+      roleId: assignment.roleId,
+      roleName: assignment.role?.name || null,
+      assignedBy: assignment.assignedBy,
+      assignedAt: assignment.assignedAt,
+      expiresAt: assignment.expiresAt,
+      source: assignment.userId ? "user" : "role",
+    });
+  }
+
+  return assignments;
+}
+
+/**
+ * Assign a node to a user or role
+ *
+ * @param prisma - Prisma client
+ * @param nodeId - Node ID to assign
+ * @param targetType - "user" or "role"
+ * @param targetId - User ID or Role ID
+ * @param assignedBy - User ID making the assignment
+ * @param expiresAt - Optional expiration date
+ * @returns The created assignment
+ */
+export async function assignNode(
+  prisma: PrismaClient,
+  nodeId: string,
+  targetType: "user" | "role",
+  targetId: string,
+  assignedBy: string,
+  expiresAt?: Date
+) {
+  return prisma.nodeAssignment.create({
+    data: {
+      nodeId,
+      userId: targetType === "user" ? targetId : null,
+      roleId: targetType === "role" ? targetId : null,
+      assignedBy,
+      expiresAt,
+    },
+  });
+}
+
+/**
+ * Remove a node assignment
+ *
+ * @param prisma - Prisma client
+ * @param assignmentId - Assignment ID to remove
+ * @returns The deleted assignment
+ */
+export async function removeNodeAssignment(
+  prisma: PrismaClient,
+  assignmentId: string
+) {
+  return prisma.nodeAssignment.delete({
+    where: { id: assignmentId },
+  });
+}

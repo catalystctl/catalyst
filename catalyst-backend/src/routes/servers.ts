@@ -24,6 +24,10 @@ import {
   shouldUseIpam,
 } from "../utils/ipam";
 import {
+  hasNodeAccess,
+  getUserAccessibleNodes,
+} from "../lib/permissions";
+import {
   DatabaseProvisioningError,
   dropDatabase,
   provisionDatabase,
@@ -1090,6 +1094,20 @@ export async function serverRoutes(app: FastifyInstance) {
     return roles.some((role) => role.name.toLowerCase() === "administrator");
   };
 
+  // Check if user can access a server - either as owner, admin, or via node assignment
+  const canAccessServer = async (userId: string, server: { ownerId: string; nodeId: string }): Promise<boolean> => {
+    // Owner can always access
+    if (server.ownerId === userId) return true;
+
+    // Admin can access all servers
+    if (await isAdminUser(userId, "admin.write")) return true;
+
+    // User with node assignment can access all servers on that node
+    if (await hasNodeAccess(prisma, userId, server.nodeId)) return true;
+
+    return false;
+  };
+
   const isArchiveName = (value: string) => {
     const lowered = value.toLowerCase();
     return (
@@ -1234,9 +1252,13 @@ export async function serverRoutes(app: FastifyInstance) {
       };
 
       const userId = request.user.userId;
+
+      // Check if user can create servers - either admin or has node assignment
       const canCreate = await isAdminUser(userId, "admin.write");
-      if (!canCreate) {
-        return reply.status(403).send({ error: "Admin access required" });
+      const hasNodeAccessResult = await hasNodeAccess(prisma, userId, nodeId);
+
+      if (!canCreate && !hasNodeAccessResult) {
+        return reply.status(403).send({ error: "Admin access or node assignment required" });
       }
 
       // Validate required fields
@@ -1629,6 +1651,9 @@ export async function serverRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
 
+      // Get nodes accessible to user (via direct assignment or role)
+      const accessibleNodeIds = await getUserAccessibleNodes(prisma, userId);
+
       const servers = await prisma.server.findMany({
         where: {
           OR: [
@@ -1638,6 +1663,11 @@ export async function serverRoutes(app: FastifyInstance) {
                 some: { userId, permissions: { has: "server.read" } },
               },
             },
+            // Include all servers on nodes user has access to
+            ...(accessibleNodeIds.length > 0
+              ? [{ nodeId: { in: accessibleNodeIds } }]
+              : []
+            ),
           ],
         },
         include: {
@@ -1695,10 +1725,11 @@ export async function serverRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Server not found" });
       }
 
-      // Check if user has access
+      // Check if user has access - owner, explicit access, or node assignment
       const hasAccess =
         server.ownerId === userId ||
-        server.access.some((a) => a.userId === userId);
+        server.access.some((a) => a.userId === userId) ||
+        (await hasNodeAccess(prisma, userId, server.nodeId));
 
       if (!hasAccess) {
         return reply.status(403).send({ error: "Forbidden" });
@@ -1729,8 +1760,9 @@ export async function serverRoutes(app: FastifyInstance) {
         return;
       }
 
-      // Check permission
-      if (server.ownerId !== userId && !(await isAdminUser(userId, "admin.write"))) {
+      // Check permission - owner, admin, or node-assigned user can access
+      if (!(await canAccessServer(userId, server))) {
+        // Also check for explicit server access as fallback
         const access = await prisma.serverAccess.findUnique({
           where: { userId_serverId: { userId, serverId } },
         });
@@ -4322,7 +4354,8 @@ export async function serverRoutes(app: FastifyInstance) {
         });
       }
 
-      if (server.ownerId !== userId && !(await isAdminUser(userId, "admin.write"))) {
+      // Check permission - owner, admin, or node-assigned user can delete
+      if (!(await canAccessServer(userId, server))) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -4358,8 +4391,8 @@ export async function serverRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Server not found" });
       }
 
-      // Check if user has access
-      if (server.ownerId !== userId) {
+      // Check if user has access - owner, admin, or node-assigned user
+      if (!(await canAccessServer(userId, server))) {
         const access = await prisma.serverAccess.findUnique({
           where: { userId_serverId: { userId, serverId } },
         });

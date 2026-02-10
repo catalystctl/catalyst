@@ -40,6 +40,7 @@ export enum Permission {
   NODE_DELETE = "node.delete",
   NODE_VIEW_STATS = "node.view_stats",
   NODE_MANAGE_ALLOCATION = "node.manage_allocation",
+  NODE_ASSIGN = "node.assign",
   // Location permissions
   LOCATION_READ = "location.read",
   LOCATION_CREATE = "location.create",

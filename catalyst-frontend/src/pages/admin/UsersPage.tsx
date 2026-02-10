@@ -5,6 +5,8 @@ import Input from '../../components/ui/input';
 import { useAdminRoles, useAdminServers, useAdminUsers } from '../../hooks/useAdmin';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { NodeAssignmentsSelector } from '../../components/admin/NodeAssignmentsSelector';
+import type { NodeAssignmentWithExpiration } from '../../components/admin/NodeAssignmentsSelector';
 
 const pageSize = 20;
 
@@ -28,6 +30,7 @@ function UsersPage() {
   const [editPassword, setEditPassword] = useState('');
   const [editRoleIds, setEditRoleIds] = useState<string[]>([]);
   const [editServerIds, setEditServerIds] = useState<string[]>([]);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<NodeAssignmentWithExpiration[]>([]);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useAdminUsers({ page, limit: pageSize, search: search.trim() || undefined });
@@ -221,7 +224,7 @@ function UsersPage() {
                   <div className="flex gap-2">
                     <button
                       className="rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-primary-500/30"
-                      onClick={() => {
+                      onClick={async () => {
                         const nextId = user.id;
                         const requestId = editingRequestRef.current + 1;
                         editingRequestRef.current = requestId;
@@ -233,6 +236,8 @@ function UsersPage() {
                         setEditServerIds([]);
                         setEditRoleSearch('');
                         setEditServerSearch('');
+
+                        // Load user's server selections
                         adminApi
                           .getUserServers(nextId)
                           .then((serverSelection) => {
@@ -243,6 +248,27 @@ function UsersPage() {
                           .catch(() => {
                             notifyError('Failed to load user servers');
                           });
+
+                        // Load user's node assignments
+                        try {
+                          const response = await fetch(`/api/roles/users/${nextId}/nodes`, {
+                            headers: { 'Content-Type': 'application/json' },
+                          });
+                          const data = await response.json();
+                          const nodes = data.data || [];
+
+                          if (editingRequestRef.current === requestId) {
+                            setSelectedNodeIds(nodes.map((n: any) => ({
+                              nodeId: n.nodeId,
+                              nodeName: n.name,
+                              source: n.source || 'user',
+                              roleName: n.roleName,
+                              expiresAt: n.expiresAt,
+                            })));
+                          }
+                        } catch {
+                          setSelectedNodeIds([]);
+                        }
                       }}
                     >
                       Edit
@@ -441,6 +467,13 @@ function UsersPage() {
                     ) : null}
                   </div>
                 </div>
+                {/* Node Assignments for new user */}
+                <NodeAssignmentsSelector
+                  selectedNodes={[]} // Empty for new user
+                  onSelectionChange={() => {}}
+                  disabled={false}
+                  label="Node Access (optional)"
+                />
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-4 text-xs dark:border-slate-800">
@@ -587,6 +620,13 @@ function UsersPage() {
                     ) : null}
                   </div>
                 </div>
+                {/* Node Assignments */}
+                <NodeAssignmentsSelector
+                  userId={editingUserId}
+                  selectedNodes={selectedNodeIds}
+                  onSelectionChange={setSelectedNodeIds}
+                  disabled={updateMutation.isPending}
+                />
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-4 text-xs dark:border-slate-800">
@@ -600,6 +640,7 @@ function UsersPage() {
                     setEditingUserId(null);
                     setEditRoleSearch('');
                     setEditServerSearch('');
+                    setSelectedNodeIds([]);
                   }}
                 >
                   Cancel

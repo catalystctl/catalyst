@@ -8,6 +8,19 @@ type ApiResponse<T> = {
   error?: string;
 };
 
+export type NodeAssignment = {
+  id: string;
+  nodeId: string;
+  nodeName: string;
+  userId?: string | null;
+  roleId?: string | null;
+  roleName?: string | null;
+  assignedBy: string;
+  assignedAt: Date;
+  expiresAt?: Date | null;
+  source: 'user' | 'role';
+};
+
 export const nodesApi = {
   list: async () => {
     const { data } = await apiClient.get<ApiResponse<NodeInfo[]>>('/api/nodes');
@@ -143,5 +156,40 @@ export const nodesApi = {
       }>
     >(`/api/nodes/${nodeId}/api-key`, { regenerate });
     return data.data;
+  },
+
+  // Node Assignment APIs
+  getAssignments: async (nodeId: string) => {
+    const { data } = await apiClient.get<ApiResponse<NodeAssignment[]>>(
+      `/api/nodes/${nodeId}/assignments`,
+    );
+    return data.data || [];
+  },
+
+  assignNode: async (
+    nodeId: string,
+    payload: {
+      targetType: 'user' | 'role';
+      targetId: string;
+      expiresAt?: string;
+    },
+  ) => {
+    const { data } = await apiClient.post<ApiResponse<NodeAssignment>>(
+      `/api/nodes/${nodeId}/assign`,
+      payload,
+    );
+    return data.data;
+  },
+
+  removeAssignment: async (nodeId: string, assignmentId: string) => {
+    const { data } = await apiClient.delete<ApiResponse<void>>(
+      `/api/nodes/${nodeId}/assignments/${assignmentId}`,
+    );
+    return data;
+  },
+
+  getAccessibleNodes: async () => {
+    const { data } = await apiClient.get<ApiResponse<NodeInfo[]>>('/api/nodes/accessible');
+    return data.data || [];
   },
 };
