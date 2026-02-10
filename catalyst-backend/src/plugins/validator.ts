@@ -54,7 +54,7 @@ export function hasPermission(userPermissions: string[], requiredPermissions: st
     // Check wildcard permissions (e.g., 'server.*' matches 'server.start')
     const parts = required.split('.');
     for (let i = parts.length; i > 0; i--) {
-      const wildcardPerm = parts.slice(0, i).join('.') + '.*';
+      const wildcardPerm = `${parts.slice(0, i).join('.')}.*`;
       if (userPermissions.includes(wildcardPerm)) return true;
     }
     

@@ -651,7 +651,7 @@ export async function getUserAccessibleNodes(
 
   const now = new Date();
   const accessibleNodeIds = new Set<string>();
-  let hasWildcard = false;
+  const hasWildcard = false;
 
   // Check for wildcard assignment for user
   const userWildcard = await prisma.nodeAssignment.findFirst({

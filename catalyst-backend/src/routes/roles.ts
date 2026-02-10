@@ -802,7 +802,7 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       // Get unique node details
-      const nodeIds = [...new Set(applicableAssignments.map((a) => a.nodeId).filter(id => id != null))];
+      const nodeIds = [...new Set(applicableAssignments.map((a) => a.nodeId).filter(id => id !== null))];
       const nodes = await prisma.node.findMany({
         where: {
           id: { in: nodeIds },
