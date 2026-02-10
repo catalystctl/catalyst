@@ -20,7 +20,7 @@ This directory contains comprehensive documentation for integrating with Catalys
 
 Looking for general Catalyst documentation?
 
-- **[Getting Started](GETTING_STARTED.md)** ⭐ - Complete setup guide for local development and production deployment
+- **[Getting Started](GETTING_STARTED.md)** ⭐ - Complete setup guide for local development and staging/testing deployment
 - **[Architecture Overview](ARCHITECTURE.md)** 📐 - High-level system design, data flow, and technology choices
 - **[Features Catalog](FEATURES.md)** ✨ - Complete list of features, status, and implementation details
 - **[User Guide](USER_GUIDE.md)** 👤 - Guide for server owners managing their servers
@@ -50,7 +50,7 @@ Looking for general Catalyst documentation?
   - WHMCS module examples
   - Python integration class
   - Error handling patterns
-  - Production-ready code samples
+  - Testing-oriented code samples (adapt before production use)
 
 - **[PLUGIN_SYSTEM.md](./PLUGIN_SYSTEM.md)** - **Extending Catalyst**
   - Complete plugin development guide

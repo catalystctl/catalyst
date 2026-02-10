@@ -1,8 +1,8 @@
 # Catalyst
 
-![Production Ready](https://img.shields.io/badge/status-production%20ready-brightgreen) ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue) ![React 18](https://img.shields.io/badge/React-18-cyan) ![Rust](https://img.shields.io/badge/Rust-1.70-orange) ![License](https://img.shields.io/badge/license-MIT-green)
+![Early Testing](https://img.shields.io/badge/status-early%20testing-orange) ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue) ![React 18](https://img.shields.io/badge/React-18-cyan) ![Rust](https://img.shields.io/badge/Rust-1.70-orange) ![License](https://img.shields.io/badge/license-GPLv3-green)
 
-**The modern, production-grade game server management platform.** Deploy and manage 1000s of game servers with real-time control, enterprise security, and seamless automation.
+**An experimental game server management platform in early testing.** Expect breaking changes and instability while core workflows are being validated.
 
 ---
 
@@ -31,14 +31,14 @@ cd catalyst-frontend && npm install && npm run dev
 
 👉 [Full local setup guide](docs/GETTING_STARTED.md)
 
-### 🌐 Deploy to Production
+### 🌐 Deploy to Staging/Test (Experimental)
 
 1. Deploy backend with PostgreSQL
 2. Install agent on nodes (auto-configures containerd/CNI)
 3. Create node in admin panel with deployment token
 4. Start managing servers!
 
-👉 [Production deployment guide](docs/ADMIN_GUIDE.md)
+👉 [Deployment guide for test environments](docs/ADMIN_GUIDE.md)
 
 ### 🔌 Integrate via API
 
@@ -117,11 +117,11 @@ Web-based file editor, SFTP access (port 2022), upload/download with path valida
 
 ## What Makes Catalyst Different?
 
-### 🎯 Production-Ready from Day One
+### 🎯 Early Testing and Rapid Iteration
 
-- Tested with 100+ servers per node
-- 60+ API endpoints, comprehensive E2E testing
-- Enterprise security built-in (RBAC, audit logs, TLS)
+- Core workflows are actively being validated in test environments
+- 60+ API endpoints are available but may change as feedback comes in
+- Security controls exist, but hardening and scale validation are still in progress
 
 ### 🔧 Modern Architecture
 
@@ -142,7 +142,7 @@ Web-based file editor, SFTP access (port 2022), upload/download with path valida
 
 | Guide | For You If... | Description |
 |-------|---------------|-------------|
-| **[Getting Started](docs/GETTING_STARTED.md)** | New to Catalyst | Complete setup guide for local & production |
+| **[Getting Started](docs/GETTING_STARTED.md)** | New to Catalyst | Complete setup guide for local & staging/testing |
 | **[User Guide](docs/USER_GUIDE.md)** | Server Owner | Manage your servers, files, backups, console |
 | **[Admin Guide](docs/ADMIN_GUIDE.md)** | System Operator | Deploy nodes, configure networking, monitor health |
 | **[Customer Guide](docs/CUSTOMER_GUIDE.md)** | Tenant | Access and use your hosted services |
@@ -179,11 +179,11 @@ Web-based file editor, SFTP access (port 2022), upload/download with path valida
 
 | Category | Status |
 |----------|--------|
-| Core Features | ✅ Complete |
-| Security (RBAC, Audit, TLS) | ✅ Production |
-| Plugin System | ✅ Ready |
-| REST API | ✅ 60+ endpoints |
-| Testing | ✅ E2E + Unit tests |
+| Core Features | ⚠️ Early testing |
+| Security (RBAC, Audit, TLS) | ⚠️ Early testing |
+| Plugin System | ⚠️ Experimental |
+| REST API | ⚠️ 60+ endpoints (subject to change) |
+| Testing | ✅ E2E + Unit tests (ongoing) |
 | Frontend UI | 🚧 In active development |
 | v2 (Scaling, CLI, Mobile) | 🔮 Planned |
 
@@ -213,8 +213,8 @@ Frontend `.env` (see `catalyst-frontend/.env.example`):
 
 ## Security Notes
 
-- Enforce strong `JWT_SECRET` and `BETTER_AUTH_SECRET` in production
-- Use TLS for HTTP/WebSocket in production
+- Enforce strong `JWT_SECRET` and `BETTER_AUTH_SECRET` for any internet-exposed deployment
+- Use TLS for HTTP/WebSocket for any non-local environment
 - Limit admin permissions via RBAC
 
 ---
@@ -249,4 +249,4 @@ MIT © 2025 Catalyst Contributors
 
 ---
 
-**Built for scale. Ready for production.**
+**Built for experimentation. Early testing and unstable.**
