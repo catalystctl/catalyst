@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 use std::process::Command;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::config::CniNetworkConfig;
 use crate::AgentError;
@@ -52,6 +52,9 @@ impl NetworkManager {
         } else {
             Self::detect_default_gateway()?
         };
+
+        // Validate network configuration
+        Self::validate_network_config(&cidr, &gateway, &range_start, &range_end)?;
 
         // Generate CNI configuration
         let cni_config = Self::generate_cni_config(
@@ -125,6 +128,9 @@ impl NetworkManager {
         } else {
             Self::detect_default_gateway()?
         };
+
+        // Validate network configuration
+        Self::validate_network_config(&cidr, &gateway, &range_start, &range_end)?;
 
         // Generate CNI configuration
         let cni_config = Self::generate_cni_config(
@@ -281,9 +287,7 @@ range_end = "{}"
         let mut in_network = false;
         let mut skipped = false;
 
-        for i in 0..lines.len() {
-            let line = lines[i];
-
+        for line in &lines {
             // Check if this is the network we're updating
             if line.contains(&format!("name = \"{}\"", old_name)) {
                 in_network = true;
@@ -345,12 +349,16 @@ range_end = "{}"
 
             // If we're in the network block, skip until we hit the next section
             if in_network {
-                if line.starts_with("[") && !line.contains("networking.networks]") {
-                    in_network = false;
-                    result.push(line.to_string());
-                } else if !line.starts_with("[") && !line.trim().is_empty() && !line.contains("interface")
-                    && !line.contains("cidr") && !line.contains("gateway") && !line.contains("range_")
-                {
+                // Check if we've exited the network block (either a new section or a non-network line)
+                let exited_network = (line.starts_with("[") && !line.contains("networking.networks]"))
+                    || (!line.starts_with("[")
+                        && !line.trim().is_empty()
+                        && !line.contains("interface")
+                        && !line.contains("cidr")
+                        && !line.contains("gateway")
+                        && !line.contains("range_"));
+
+                if exited_network {
                     in_network = false;
                     result.push(line.to_string());
                 }
@@ -507,5 +515,126 @@ range_end = "{}"
         Err(AgentError::InternalError(
             "Could not detect default gateway".to_string(),
         ))
+    }
+
+    /// Validate network configuration parameters
+    fn validate_network_config(
+        cidr: &str,
+        gateway: &str,
+        range_start: &str,
+        range_end: &str,
+    ) -> Result<(), AgentError> {
+        // Parse and validate CIDR
+        let cidr_parts: Vec<&str> = cidr.split('/').collect();
+        if cidr_parts.len() != 2 {
+            return Err(AgentError::InternalError(format!(
+                "Invalid CIDR format: '{}'. Expected format: x.x.x.x/yy",
+                cidr
+            )));
+        }
+
+        let base_ip = cidr_parts[0];
+        let prefix_len: u8 = cidr_parts[1].parse().map_err(|_| {
+            AgentError::InternalError(format!("Invalid CIDR prefix length: '{}'", cidr_parts[1]))
+        })?;
+
+        if !(8..=30).contains(&prefix_len) {
+            return Err(AgentError::InternalError(format!(
+                "Invalid CIDR prefix length: '{}'. Must be between 8 and 30",
+                prefix_len
+            )));
+        }
+
+        // Parse IP addresses for comparison
+        let gateway_ip = Self::parse_ipv4(gateway)?;
+        let range_start_ip = Self::parse_ipv4(range_start)?;
+        let range_end_ip = Self::parse_ipv4(range_end)?;
+
+        // Validate gateway is within the subnet
+        if !Self::ip_in_subnet(gateway, base_ip, prefix_len) {
+            return Err(AgentError::InternalError(format!(
+                "Gateway '{}' is not within the subnet '{}/{}'",
+                gateway, base_ip, prefix_len
+            )));
+        }
+
+        // Validate range start is within the subnet
+        if !Self::ip_in_subnet(range_start, base_ip, prefix_len) {
+            return Err(AgentError::InternalError(format!(
+                "Range start '{}' is not within the subnet '{}/{}'",
+                range_start, base_ip, prefix_len
+            )));
+        }
+
+        // Validate range end is within the subnet
+        if !Self::ip_in_subnet(range_end, base_ip, prefix_len) {
+            return Err(AgentError::InternalError(format!(
+                "Range end '{}' is not within the subnet '{}/{}'",
+                range_end, base_ip, prefix_len
+            )));
+        }
+
+        // Validate range start < range end
+        if range_start_ip >= range_end_ip {
+            return Err(AgentError::InternalError(format!(
+                "Range start '{}' must be less than range end '{}'",
+                range_start, range_end
+            )));
+        }
+
+        // Validate gateway is not in the allocation range
+        if gateway_ip >= range_start_ip && gateway_ip <= range_end_ip {
+            warn!(
+                "Gateway '{}' is within the allocation range {}-{}. This may cause issues.",
+                gateway, range_start, range_end
+            );
+        }
+
+        // Warn if range is too small
+        let range_size = range_end_ip.saturating_sub(range_start_ip);
+        if range_size < 10 {
+            warn!(
+                "IP range {}-{} is very small ({} addresses). Consider using a larger range.",
+                range_start, range_end, range_size + 1
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Parse IPv4 address to u32 for comparison
+    fn parse_ipv4(ip: &str) -> Result<u32, AgentError> {
+        let parts: Vec<&str> = ip.split('.').collect();
+        if parts.len() != 4 {
+            return Err(AgentError::InternalError(format!("Invalid IP address: '{}'", ip)));
+        }
+
+        let mut result: u32 = 0;
+        for (i, part) in parts.iter().enumerate() {
+            let octet: u8 = part.parse().map_err(|_| {
+                AgentError::InternalError(format!("Invalid IP address octet: '{}'", part))
+            })?;
+            result |= (octet as u32) << (24 - i * 8);
+        }
+
+        Ok(result)
+    }
+
+    /// Check if an IP address is within a subnet
+    fn ip_in_subnet(ip: &str, network: &str, prefix_len: u8) -> bool {
+        let ip_parsed = Self::parse_ipv4(ip);
+        let network_parsed = Self::parse_ipv4(network);
+
+        match (ip_parsed, network_parsed) {
+            (Ok(ip_val), Ok(net_val)) => {
+                let mask = if prefix_len == 0 {
+                    0
+                } else {
+                    0xFFFFFFFFu32 << (32 - prefix_len)
+                };
+                (ip_val & mask) == (net_val & mask)
+            }
+            _ => false,
+        }
     }
 }
