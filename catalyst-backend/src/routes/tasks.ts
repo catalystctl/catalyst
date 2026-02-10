@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import cron from 'node-cron';
 import cronParser from 'cron-parser';
 import { serialize } from '../utils/serialize';
+import { hasNodeAccess } from '../lib/permissions';
 
 export async function taskRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
@@ -16,7 +17,7 @@ export async function taskRoutes(app: FastifyInstance) {
   ) => {
     const server = await prisma.server.findUnique({
       where: { id: serverId },
-      select: { ownerId: true, suspendedAt: true, suspensionReason: true },
+      select: { ownerId: true, suspendedAt: true, suspensionReason: true, nodeId: true },
     });
 
     if (!server) {
@@ -44,7 +45,14 @@ export async function taskRoutes(app: FastifyInstance) {
       },
     });
 
-    if (!serverAccess || !serverAccess.permissions.includes('server.schedule')) {
+    const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+
+    if (!serverAccess && !hasNodeAccessToServer) {
+      reply.status(403).send({ error: message });
+      return false;
+    }
+
+    if (!hasNodeAccessToServer && !serverAccess?.permissions.includes('server.schedule')) {
       reply.status(403).send({ error: message });
       return false;
     }
@@ -139,32 +147,14 @@ export async function taskRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = (request as any).user;
       const { serverId } = request.params as { serverId: string };
-      const server = await prisma.server.findUnique({
-        where: { id: serverId },
-        select: { suspendedAt: true, suspensionReason: true },
-      });
 
-      if (process.env.SUSPENSION_ENFORCED !== 'false' && server?.suspendedAt) {
-        return reply.status(423).send({
-          error: 'Server is suspended',
-          suspendedAt: server.suspendedAt,
-          suspensionReason: server.suspensionReason ?? null,
-        });
-      }
-
-      // Check server access
-      const serverAccess = await prisma.serverAccess.findFirst({
-        where: {
-          serverId,
-          userId: user.userId,
-        },
-      });
-
-      if (!serverAccess) {
-        return reply.status(403).send({
-          error: 'You do not have access to this server',
-        });
-      }
+      const canSchedule = await ensureSchedulePermission(
+        user.userId,
+        serverId,
+        reply,
+        'You do not have permission to view tasks for this server',
+      );
+      if (!canSchedule) return;
 
       const tasks = await prisma.scheduledTask.findMany({
         where: { serverId },
@@ -182,32 +172,14 @@ export async function taskRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = (request as any).user;
       const { serverId, taskId } = request.params as { serverId: string; taskId: string };
-      const server = await prisma.server.findUnique({
-        where: { id: serverId },
-        select: { suspendedAt: true, suspensionReason: true },
-      });
 
-      if (process.env.SUSPENSION_ENFORCED !== 'false' && server?.suspendedAt) {
-        return reply.status(423).send({
-          error: 'Server is suspended',
-          suspendedAt: server.suspendedAt,
-          suspensionReason: server.suspensionReason ?? null,
-        });
-      }
-
-      // Check server access
-      const serverAccess = await prisma.serverAccess.findFirst({
-        where: {
-          serverId,
-          userId: user.userId,
-        },
-      });
-
-      if (!serverAccess) {
-        return reply.status(403).send({
-          error: 'You do not have access to this server',
-        });
-      }
+      const canSchedule = await ensureSchedulePermission(
+        user.userId,
+        serverId,
+        reply,
+        'You do not have permission to view tasks for this server',
+      );
+      if (!canSchedule) return;
 
       const task = await prisma.scheduledTask.findFirst({
         where: {

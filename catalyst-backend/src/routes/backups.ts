@@ -13,6 +13,7 @@ import {
 } from "../services/backup-storage";
 import { randomUUID } from "crypto";
 import { serialize } from '../utils/serialize';
+import { hasNodeAccess } from '../lib/permissions';
 
 export async function backupRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
@@ -51,7 +52,7 @@ export async function backupRoutes(app: FastifyInstance) {
   ) => {
     const server = await prisma.server.findUnique({
       where: { id: serverId },
-      select: { id: true, ownerId: true, suspendedAt: true, suspensionReason: true },
+      select: { id: true, ownerId: true, suspendedAt: true, suspensionReason: true, nodeId: true },
     });
     if (!server) {
       reply.status(404).send({ error: "Server not found" });
@@ -75,7 +76,8 @@ export async function backupRoutes(app: FastifyInstance) {
         permissions: { has: permission },
       },
     });
-    if (!access) {
+    const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+    if (!access && !hasNodeAccessToServer) {
       reply.status(403).send({ error: "Forbidden" });
       return null;
     }

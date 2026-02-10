@@ -2,6 +2,7 @@ import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { PrismaClient } from "@prisma/client";
 import { serialize } from '../utils/serialize';
+import { hasNodeAccess } from '../lib/permissions';
 
 export async function metricsRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
@@ -31,7 +32,7 @@ export async function metricsRoutes(app: FastifyInstance) {
       const [server, metrics, access] = await Promise.all([
         prisma.server.findUnique({
           where: { id: serverId },
-          select: { id: true, ownerId: true, suspendedAt: true, suspensionReason: true },
+          select: { id: true, ownerId: true, nodeId: true, suspendedAt: true, suspensionReason: true },
         }),
         prisma.serverMetrics.findMany({
           where: {
@@ -76,8 +77,9 @@ export async function metricsRoutes(app: FastifyInstance) {
         });
       }
 
-      // Check permissions - user must be owner OR have explicit permission
-      if (server.ownerId !== userId && !access?.permissions?.includes("server.read")) {
+      // Check permissions - owner, explicit access, or node assignment
+      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+      if (server.ownerId !== userId && !access?.permissions?.includes("server.read") && !hasNodeAccessToServer) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -237,6 +239,7 @@ export async function metricsRoutes(app: FastifyInstance) {
             name: true,
             status: true,
             ownerId: true,
+            nodeId: true,
             allocatedMemoryMb: true,
             allocatedCpuCores: true,
             suspendedAt: true,
@@ -280,8 +283,9 @@ export async function metricsRoutes(app: FastifyInstance) {
         });
       }
 
-      // Check permissions - user must be owner OR have explicit permission
-      if (server.ownerId !== userId && !access?.permissions?.includes("server.read")) {
+      // Check permissions - owner, explicit access, or node assignment
+      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+      if (server.ownerId !== userId && !access?.permissions?.includes("server.read") && !hasNodeAccessToServer) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 

@@ -64,7 +64,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
         name: name.trim(),
         action,
         schedule,
-        payload: action === 'command' && command.trim() ? { command: command.trim() } : undefined,
+        payload: action === 'command' && command.trim() ? { command: command.trim() } : {},
       });
     },
     onSuccess: () => {

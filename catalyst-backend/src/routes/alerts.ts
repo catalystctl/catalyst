@@ -2,6 +2,7 @@ import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import { serialize } from '../utils/serialize';
+import { hasNodeAccess } from '../lib/permissions';
 
 export async function alertRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
@@ -37,7 +38,7 @@ export async function alertRoutes(app: FastifyInstance) {
   }) => {
     const server = await prisma.server.findUnique({
       where: { id: serverId },
-      select: { id: true, ownerId: true },
+      select: { id: true, ownerId: true, nodeId: true },
     });
     if (!server) {
       reply.status(404).send({ error: 'Server not found' });
@@ -54,6 +55,11 @@ export async function alertRoutes(app: FastifyInstance) {
       },
     });
     if (access) {
+      return server;
+    }
+    // Check for node access
+    const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+    if (hasNodeAccessToServer) {
       return server;
     }
     reply.status(403).send({ error: 'Forbidden' });

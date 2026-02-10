@@ -571,10 +571,56 @@ export async function roleRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'Role not found' });
       }
 
-      // Get all nodes assigned to this role
+      // Check for wildcard assignment first
+      const wildcardAssignment = await prisma.nodeAssignment.findFirst({
+        where: {
+          roleId,
+          nodeId: null,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } },
+          ],
+        },
+      });
+
+      // If wildcard exists, return all nodes with wildcard indicator
+      if (wildcardAssignment) {
+        const allNodes = await prisma.node.findMany({
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            isOnline: true,
+            location: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        });
+
+        const nodes = allNodes.map((node) => ({
+          ...node,
+          assignmentId: wildcardAssignment.id,
+          assignedAt: wildcardAssignment.assignedAt,
+          expiresAt: wildcardAssignment.expiresAt,
+          isWildcard: true,
+        }));
+
+        return reply.send(serialize({
+          success: true,
+          data: nodes,
+          hasWildcard: true,
+          wildcardAssignmentId: wildcardAssignment.id,
+        }));
+      }
+
+      // Get all nodes assigned to this role (specific nodes)
       const assignments = await prisma.nodeAssignment.findMany({
         where: {
           roleId,
+          nodeId: { not: null },
           OR: [
             { expiresAt: null },
             { expiresAt: { gt: new Date() } },
@@ -608,6 +654,7 @@ export async function roleRoutes(app: FastifyInstance) {
       reply.send(serialize({
         success: true,
         data: nodes,
+        hasWildcard: false,
       }));
     }
   );
@@ -634,9 +681,90 @@ export async function roleRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'User not found' });
       }
 
+      // Get user's roles
+      const userRoleIds = (await prisma.role.findMany({
+        where: {
+          users: {
+            some: { id: userId },
+          },
+        },
+        select: { id: true },
+      })).map((r) => r.id);
+
+      // Check for wildcard assignment (direct or role-based)
+      const directWildcard = await prisma.nodeAssignment.findFirst({
+        where: {
+          userId,
+          nodeId: null,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } },
+          ],
+        },
+      });
+
+      const roleWildcard = await prisma.nodeAssignment.findFirst({
+        where: {
+          roleId: { in: userRoleIds },
+          nodeId: null,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } },
+          ],
+        },
+      });
+
+      const wildcardAssignment = directWildcard || roleWildcard;
+
+      // If wildcard exists, return all nodes
+      if (wildcardAssignment) {
+        // Get role name if wildcard is from a role
+        let roleName: string | null = null;
+        if (roleWildcard) {
+          const role = await prisma.role.findUnique({
+            where: { id: roleWildcard.roleId! },
+            select: { name: true },
+          });
+          roleName = role?.name ?? null;
+        }
+
+        const allNodes = await prisma.node.findMany({
+          include: {
+            location: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        });
+
+        const nodesWithAssignments = allNodes.map((node) => ({
+          ...node,
+          assignments: [{
+            id: wildcardAssignment.id,
+            userId: wildcardAssignment.userId,
+            roleId: wildcardAssignment.roleId,
+            roleName: roleName,
+            assignedBy: wildcardAssignment.assignedBy,
+            assignedAt: wildcardAssignment.assignedAt,
+            expiresAt: wildcardAssignment.expiresAt,
+            source: wildcardAssignment.userId ? 'user' : 'role',
+          }],
+        }));
+
+        return reply.send(serialize({
+          success: true,
+          data: nodesWithAssignments,
+          hasWildcard: true,
+          wildcardSource: wildcardAssignment.userId ? 'user' : 'role',
+        }));
+      }
+
       // Get all node assignments for this user (direct + role-based)
       const allAssignments = await prisma.nodeAssignment.findMany({
         where: {
+          nodeId: { not: null },
           OR: [
             { expiresAt: null },
             { expiresAt: { gt: new Date() } },
@@ -667,15 +795,6 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       // Filter assignments that apply to this user
-      const userRoleIds = (await prisma.role.findMany({
-        where: {
-          users: {
-            some: { id: userId },
-          },
-        },
-        select: { id: true },
-      })).map((r) => r.id);
-
       const applicableAssignments = allAssignments.filter((a) => {
         if (a.userId === userId) return true;
         if (a.roleId && userRoleIds.includes(a.roleId)) return true;
@@ -683,7 +802,7 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       // Get unique node details
-      const nodeIds = [...new Set(applicableAssignments.map((a) => a.nodeId))];
+      const nodeIds = [...new Set(applicableAssignments.map((a) => a.nodeId).filter(id => id != null))];
       const nodes = await prisma.node.findMany({
         where: {
           id: { in: nodeIds },
@@ -710,6 +829,7 @@ export async function roleRoutes(app: FastifyInstance) {
             assignedBy: a.assignedBy,
             assignedAt: a.assignedAt,
             expiresAt: a.expiresAt,
+            source: a.userId ? 'user' : 'role',
           }));
         return {
           ...node,
@@ -720,6 +840,7 @@ export async function roleRoutes(app: FastifyInstance) {
       reply.send(serialize({
         success: true,
         data: nodesWithAssignments,
+        hasWildcard: false,
       }));
     }
   );

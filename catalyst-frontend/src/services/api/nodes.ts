@@ -192,4 +192,25 @@ export const nodesApi = {
     const { data } = await apiClient.get<ApiResponse<NodeInfo[]>>('/api/nodes/accessible');
     return data.data || [];
   },
+
+  // Wildcard assignment - assign all nodes (current and future)
+  assignWildcard: async (payload: {
+    targetType: 'user' | 'role';
+    targetId: string;
+    expiresAt?: string;
+  }) => {
+    const { data } = await apiClient.post<ApiResponse<NodeAssignment>>(
+      '/api/nodes/assign-wildcard',
+      payload,
+    );
+    return data.data;
+  },
+
+  // Remove wildcard assignment
+  removeWildcard: async (targetType: 'user' | 'role', targetId: string) => {
+    const { data } = await apiClient.delete<ApiResponse<void>>(
+      `/api/nodes/assign-wildcard/${targetType}/${targetId}`,
+    );
+    return data;
+  },
 };

@@ -346,8 +346,8 @@ function UsersPage() {
         />
       )}
       {isCreateOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10">
-          <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 md:m-4 md:h-auto md:max-h-[90vh]">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-5 dark:border-slate-800">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -364,12 +364,13 @@ function UsersPage() {
                 Close
               </button>
             </div>
-            <div className="space-y-6 px-6 py-5 text-sm text-slate-900 dark:text-slate-100">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                  Account details
-                </div>
-                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="flex-1 overflow-y-auto px-6 py-5 text-sm text-slate-900 dark:text-slate-100">
+              <div className="space-y-6">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Account details
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
                   <label className="text-xs text-slate-600 dark:text-slate-300">
                     Email
                     <input
@@ -475,6 +476,7 @@ function UsersPage() {
                   label="Node Access (optional)"
                 />
               </div>
+              </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-4 text-xs dark:border-slate-800">
               <span className="text-xs text-slate-500 dark:text-slate-400">
@@ -504,8 +506,8 @@ function UsersPage() {
         </div>
       ) : null}
       {editingUserId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10">
-          <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 md:m-4 md:h-auto md:max-h-[90vh]">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-5 dark:border-slate-800">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Edit user</h2>
@@ -520,41 +522,42 @@ function UsersPage() {
                 Close
               </button>
             </div>
-            <div className="space-y-6 px-6 py-5 text-sm text-slate-900 dark:text-slate-100">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                  Account details
+            <div className="flex-1 overflow-y-auto px-6 py-5 text-sm text-slate-900 dark:text-slate-100">
+              <div className="space-y-6">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Account details
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <label className="text-xs text-slate-600 dark:text-slate-300">
+                      Email
+                      <input
+                        type="email"
+                        value={editEmail}
+                        onChange={(event) => setEditEmail(event.target.value)}
+                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                      />
+                    </label>
+                    <label className="text-xs text-slate-600 dark:text-slate-300">
+                      Username
+                      <input
+                        value={editUsername}
+                        onChange={(event) => setEditUsername(event.target.value)}
+                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                      />
+                    </label>
+                    <label className="text-xs text-slate-600 dark:text-slate-300">
+                      Password (leave blank to keep)
+                      <input
+                        type="password"
+                        value={editPassword}
+                        onChange={(event) => setEditPassword(event.target.value)}
+                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                      />
+                    </label>
+                  </div>
                 </div>
-                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <label className="text-xs text-slate-600 dark:text-slate-300">
-                    Email
-                    <input
-                      type="email"
-                      value={editEmail}
-                      onChange={(event) => setEditEmail(event.target.value)}
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
-                    />
-                  </label>
-                  <label className="text-xs text-slate-600 dark:text-slate-300">
-                    Username
-                    <input
-                      value={editUsername}
-                      onChange={(event) => setEditUsername(event.target.value)}
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
-                    />
-                  </label>
-                  <label className="text-xs text-slate-600 dark:text-slate-300">
-                    Password (leave blank to keep)
-                    <input
-                      type="password"
-                      value={editPassword}
-                      onChange={(event) => setEditPassword(event.target.value)}
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
-                    />
-                  </label>
-                </div>
-              </div>
-              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="grid gap-4 lg:grid-cols-2">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
                   <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Roles
@@ -619,6 +622,7 @@ function UsersPage() {
                       </span>
                     ) : null}
                   </div>
+                </div>
                 </div>
                 {/* Node Assignments */}
                 <NodeAssignmentsSelector

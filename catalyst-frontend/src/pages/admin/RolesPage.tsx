@@ -583,8 +583,8 @@ function RolesPage() {
 
       {/* Create/Edit Modal */}
       {isCreateOpen || editingRole ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10">
-          <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 md:m-4 md:h-auto md:max-h-[90vh]">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-5 dark:border-slate-800">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -606,7 +606,8 @@ function RolesPage() {
               </button>
             </div>
 
-            <div className="space-y-6 px-6 py-5 text-sm text-slate-900 dark:text-slate-100">
+            <div className="flex-1 overflow-y-auto px-6 py-5 text-sm text-slate-900 dark:text-slate-100">
+              <div className="space-y-6">
               {/* Presets - only for create */}
               {!editingRole && presets.length > 0 && (
                 <div>
@@ -770,6 +771,7 @@ function RolesPage() {
                 disabled={createMutation.isPending || updateMutation.isPending}
               />
             </div>
+            </div>
 
             {/* Actions */}
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-4 text-xs dark:border-slate-800">
@@ -817,8 +819,8 @@ function RolesPage() {
 
       {/* Role Detail Modal */}
       {viewingRole && !editingRole && !isCreateOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10">
-          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="flex h-full w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 md:m-4 md:h-auto md:max-h-[90vh]">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-5 dark:border-slate-800">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -838,7 +840,7 @@ function RolesPage() {
               </button>
             </div>
 
-            <div className="px-6 py-5 text-sm text-slate-900 dark:text-slate-100">
+            <div className="flex-1 overflow-y-auto px-6 py-5 text-sm text-slate-900 dark:text-slate-100">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">
                 Permissions ({viewingRole.permissions?.length || 0})
               </div>

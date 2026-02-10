@@ -11,10 +11,18 @@ import { useAuthStore } from '../../stores/authStore';
 
 function CreateServerModal() {
   const { user } = useAuthStore();
+  const { data: accessibleNodesData } = useAccessibleNodes();
+  const accessibleNodes = accessibleNodesData?.nodes || [];
+  const hasNodeWildcard = accessibleNodesData?.hasWildcard || false;
+
+  // User can create server if they have explicit permission OR have access to any node
   const canCreateServer =
     user?.permissions?.includes('*') ||
     user?.permissions?.includes('admin.write') ||
-    user?.permissions?.includes('server.create');
+    user?.permissions?.includes('server.create') ||
+    hasNodeWildcard ||
+    accessibleNodes.length > 0;
+
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [templateId, setTemplateId] = useState('');
@@ -43,17 +51,16 @@ function CreateServerModal() {
   >([]);
   const [step, setStep] = useState<'details' | 'resources' | 'build' | 'startup'>('details');
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const { data: templates = [] } = useTemplates();
   const { data: nodes = [] } = useNodes();
-  const { data: accessibleNodes = [] } = useAccessibleNodes();
   const [availableIps, setAvailableIps] = useState<string[]>([]);
   const [ipLoadError, setIpLoadError] = useState<string | null>(null);
-  const queryClient = useQueryClient();
 
-  // Determine which nodes to show - accessible nodes for non-admins, all nodes for admins
+  // Determine which nodes to show - accessible nodes for non-admins, all nodes for admins or wildcard users
   const isAdmin = user?.permissions?.includes('*') || user?.permissions?.includes('admin.write');
-  const availableNodes = isAdmin ? nodes : accessibleNodes;
+  const availableNodes = isAdmin || hasNodeWildcard ? nodes : accessibleNodes;
 
   // Get selected template
   const selectedTemplate = useMemo(() => templates.find(t => t.id === templateId), [templates, templateId]);

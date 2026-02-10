@@ -218,10 +218,10 @@ export async function nodeRoutes(app: FastifyInstance) {
         });
       } else {
         // Non-admins only see nodes they have access to
-        const accessibleNodeIds = await getUserAccessibleNodes(prisma, userId);
+        const accessibleResult = await getUserAccessibleNodes(prisma, userId);
         nodes = await prisma.node.findMany({
           where: {
-            id: { in: accessibleNodeIds },
+            id: { in: accessibleResult.nodeIds },
           },
           omit: { secret: true },
           include: {
@@ -1221,12 +1221,12 @@ export async function nodeRoutes(app: FastifyInstance) {
       if (!hasPerm) return;
 
       // Get accessible node IDs
-      const accessibleNodeIds = await getUserAccessibleNodes(prisma, userId);
+      const accessibleResult = await getUserAccessibleNodes(prisma, userId);
 
       // Fetch node details
       const nodes = await prisma.node.findMany({
         where: {
-          id: { in: accessibleNodeIds },
+          id: { in: accessibleResult.nodeIds },
         },
         omit: { secret: true },
         include: {
@@ -1246,7 +1246,157 @@ export async function nodeRoutes(app: FastifyInstance) {
       reply.send(serialize({
         success: true,
         data: nodes,
+        hasWildcard: accessibleResult.hasWildcard,
       }));
+    }
+  );
+
+  // ============================================================================
+  // WILDCARD ASSIGNMENT ROUTE
+  // ============================================================================
+
+  // Assign all nodes (wildcard) to user or role
+  app.post(
+    "/assign-wildcard",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.assign");
+      if (!hasPerm) return;
+
+      const { targetType, targetId, expiresAt } = request.body as {
+        targetType: "user" | "role";
+        targetId: string;
+        expiresAt?: string; // ISO date string
+      };
+
+      // Validate targetType
+      if (targetType !== "user" && targetType !== "role") {
+        return reply.status(400).send({ error: "targetType must be 'user' or 'role'" });
+      }
+
+      // Verify target exists
+      if (targetType === "user") {
+        const user = await prisma.user.findUnique({
+          where: { id: targetId },
+        });
+        if (!user) {
+          return reply.status(404).send({ error: "User not found" });
+        }
+      } else {
+        const role = await prisma.role.findUnique({
+          where: { id: targetId },
+        });
+        if (!role) {
+          return reply.status(404).send({ error: "Role not found" });
+        }
+      }
+
+      // Parse expiration date if provided
+      let expirationDate: Date | undefined;
+      if (expiresAt) {
+        expirationDate = new Date(expiresAt);
+        if (isNaN(expirationDate.getTime())) {
+          return reply.status(400).send({ error: "Invalid expiresAt date" });
+        }
+        if (expirationDate <= new Date()) {
+          return reply.status(400).send({ error: "expiresAt must be in the future" });
+        }
+      }
+
+      // Check if wildcard assignment already exists
+      const existingWildcard = await prisma.nodeAssignment.findFirst({
+        where: {
+          nodeId: null,
+          ...(targetType === "user" ? { userId: targetId } : { roleId: targetId }),
+        },
+      });
+
+      if (existingWildcard) {
+        return reply.status(409).send({
+          error: "Wildcard assignment already exists",
+          existingAssignmentId: existingWildcard.id,
+        });
+      }
+
+      // Create the wildcard assignment (nodeId = null means all nodes)
+      const assignment = await assignNode(
+        prisma,
+        null, // null = wildcard (all nodes)
+        targetType,
+        targetId,
+        request.user.userId,
+        expirationDate
+      );
+
+      // Log the action
+      await prisma.auditLog.create({
+        data: {
+          userId: request.user.userId,
+          action: `node.assign_wildcard.${targetType}`,
+          resource: "node",
+          resourceId: "*", // Wildcard indicator
+          details: {
+            targetType,
+            targetId,
+            assignmentId: assignment.id,
+            expiresAt: expirationDate?.toISOString(),
+          },
+        },
+      });
+
+      reply.status(201).send(serialize({ success: true, data: assignment }));
+    }
+  );
+
+  // Remove wildcard assignment from user or role
+  app.delete(
+    "/assign-wildcard/:targetType/:targetId",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.assign");
+      if (!hasPerm) return;
+
+      const { targetType, targetId } = request.params as {
+        targetType: "user" | "role";
+        targetId: string;
+      };
+
+      // Validate targetType
+      if (targetType !== "user" && targetType !== "role") {
+        return reply.status(400).send({ error: "targetType must be 'user' or 'role'" });
+      }
+
+      // Find the wildcard assignment
+      const wildcardAssignment = await prisma.nodeAssignment.findFirst({
+        where: {
+          nodeId: null,
+          ...(targetType === "user" ? { userId: targetId } : { roleId: targetId }),
+        },
+      });
+
+      if (!wildcardAssignment) {
+        return reply.status(404).send({ error: "Wildcard assignment not found" });
+      }
+
+      // Delete the wildcard assignment
+      await removeNodeAssignment(prisma, wildcardAssignment.id);
+
+      // Log the action
+      await prisma.auditLog.create({
+        data: {
+          userId: request.user.userId,
+          action: "node.unassign_wildcard",
+          resource: "node",
+          resourceId: "*",
+          details: {
+            targetType,
+            targetId,
+            assignmentId: wildcardAssignment.id,
+          },
+        },
+      });
+
+      reply.send({ success: true });
     }
   );
 }

@@ -11,7 +11,16 @@ export function useNodes() {
 export function useAccessibleNodes() {
   return useQuery({
     queryKey: ['nodes', 'accessible'],
-    queryFn: nodesApi.getAccessibleNodes,
+    queryFn: async () => {
+      const response = await fetch('/api/nodes/accessible', {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json();
+      return {
+        nodes: data.data || [],
+        hasWildcard: data.hasWildcard || false,
+      };
+    },
   });
 }
 

@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { nodesApi } from '../../services/api/nodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
 
 export type NodeAssignmentWithExpiration = {
-  nodeId: string;
+  nodeId: string | null; // null for wildcard (*)
   nodeName: string;
   expiresAt?: string;
   source?: 'user' | 'role'; // For users - shows inherited vs direct
   roleName?: string;
+  isWildcard?: boolean; // true if this is a wildcard assignment
 };
 
 type Props = {
@@ -32,6 +33,13 @@ export function NodeAssignmentsSelector({
   const [search, setSearch] = useState('');
   const [expirationNodeId, setExpirationNodeId] = useState<string | null>(null);
   const [expirationDate, setExpirationDate] = useState('');
+  const [hasWildcard, setHasWildcard] = useState(false);
+
+  // Check for wildcard assignment
+  useEffect(() => {
+    const wildcard = selectedNodes.some(n => n.isWildcard || n.nodeId === null);
+    setHasWildcard(wildcard);
+  }, [selectedNodes]);
 
   // Fetch available nodes
   const { data: nodes = [], isLoading: nodesLoading } = useQuery({
@@ -40,56 +48,154 @@ export function NodeAssignmentsSelector({
   });
 
   // Fetch current assignments for roles
-  const { data: roleAssignments = [], isLoading: roleAssignmentsLoading } = useQuery({
+  const { data: roleAssignmentsData, isLoading: roleAssignmentsLoading } = useQuery({
     queryKey: ['roles', roleId, 'nodes'],
     queryFn: async () => {
-      if (!roleId) return [];
+      if (!roleId) return { data: [], hasWildcard: false };
       const response = await fetch(`/api/roles/${roleId}/nodes`, {
         headers: { 'Content-Type': 'application/json' },
       });
       const data = await response.json();
-      return data.data || [];
+      return { data: data.data || [], hasWildcard: data.hasWildcard || false };
     },
     enabled: !!roleId,
   });
 
   // Fetch current assignments for users
-  const { data: userAssignments = [], isLoading: userAssignmentsLoading } = useQuery({
+  const { data: userAssignmentsData, isLoading: userAssignmentsLoading } = useQuery({
     queryKey: ['users', userId, 'nodes'],
     queryFn: async () => {
-      if (!userId) return [];
+      if (!userId) return { data: [], hasWildcard: false };
       const response = await fetch(`/api/roles/users/${userId}/nodes`, {
         headers: { 'Content-Type': 'application/json' },
       });
       const data = await response.json();
-      return data.data || [];
+      return { data: data.data || [], hasWildcard: data.hasWildcard || false };
     },
     enabled: !!userId,
   });
 
   // Initialize selections from fetched data
-  const assignments = userId ? userAssignments : roleAssignments;
+  const assignmentsData = userId ? userAssignmentsData : roleAssignmentsData;
+  const assignments = assignmentsData?.data || [];
+  const hasWildcardFromApi = assignmentsData?.hasWildcard || false;
 
-  // Toggle node selection
-  const toggleNode = (nodeId: string, nodeName: string) => {
+  // Update wildcard state when API data changes
+  useEffect(() => {
+    if (hasWildcardFromApi && !hasWildcard) {
+      // Add wildcard to selected nodes if API says it exists but we don't have it
+      const wildcardNode: NodeAssignmentWithExpiration = {
+        nodeId: null,
+        nodeName: 'All Nodes (*)',
+        isWildcard: true,
+        source: userId ? 'user' : undefined,
+      };
+      if (!selectedNodes.some(n => n.isWildcard)) {
+        onSelectionChange([wildcardNode]);
+      }
+      setHasWildcard(true);
+    } else if (!hasWildcardFromApi && hasWildcard) {
+      // Remove wildcard from selected nodes if API says it doesn't exist
+      const newSelection = selectedNodes.filter(n => !n.isWildcard && n.nodeId !== null);
+      onSelectionChange(newSelection);
+      setHasWildcard(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasWildcardFromApi]);
+
+  // Toggle wildcard (all nodes)
+  const toggleWildcard = async () => {
     if (disabled) return;
 
-    const existingIndex = selectedNodes.findIndex(n => n.nodeId === nodeId);
-    const newSelection = [...selectedNodes];
+    const targetType = userId ? 'user' : 'role';
+    const targetId = userId || roleId;
 
+    // Optimistic UI update - update state immediately
+    if (hasWildcard) {
+      // Remove wildcard from local state immediately
+      const newSelection = selectedNodes.filter(n => !n.isWildcard && n.nodeId !== null);
+      onSelectionChange(newSelection);
+      setHasWildcard(false);
+    } else {
+      // Clear all specific nodes and add wildcard immediately
+      const wildcardNode: NodeAssignmentWithExpiration = {
+        nodeId: null,
+        nodeName: 'All Nodes (*)',
+        isWildcard: true,
+        source: userId ? 'user' : undefined,
+      };
+      onSelectionChange([wildcardNode]);
+      setHasWildcard(true);
+    }
+
+    try {
+      if (hasWildcard) {
+        // Remove wildcard assignment
+        await nodesApi.removeWildcard(targetType, targetId!);
+        notifySuccess('Wildcard assignment removed');
+      } else {
+        // Add wildcard assignment - this will remove all specific node assignments
+        await nodesApi.assignWildcard({
+          targetType,
+          targetId: targetId!,
+        });
+        notifySuccess('All nodes assigned (wildcard)');
+      }
+      // Invalidate queries after successful API call
+      queryClient.invalidateQueries({ queryKey: ['roles', roleId, 'nodes'] });
+      queryClient.invalidateQueries({ queryKey: ['users', userId, 'nodes'] });
+    } catch (error: any) {
+      // Revert on error
+      notifyError(error?.response?.data?.error || 'Failed to update wildcard assignment');
+      // Revert the optimistic update
+      if (hasWildcard) {
+        // We tried to remove but failed - add it back
+        const wildcardNode: NodeAssignmentWithExpiration = {
+          nodeId: null,
+          nodeName: 'All Nodes (*)',
+          isWildcard: true,
+          source: userId ? 'user' : undefined,
+        };
+        onSelectionChange([...selectedNodes, wildcardNode]);
+        setHasWildcard(true);
+      } else {
+        // We tried to add but failed - restore previous selection
+        queryClient.invalidateQueries({ queryKey: ['roles', roleId, 'nodes'] });
+        queryClient.invalidateQueries({ queryKey: ['users', userId, 'nodes'] });
+      }
+    }
+  };
+
+  // Toggle node selection
+  const toggleNode = async (nodeId: string, nodeName: string) => {
+    if (disabled || hasWildcard) return; // Don't allow individual node selection when wildcard is active
+
+    const existingIndex = selectedNodes.findIndex(n => n.nodeId === nodeId);
+    const previousSelection = [...selectedNodes];
+
+    // Optimistic UI update
+    const newSelection = [...selectedNodes];
     if (existingIndex >= 0) {
       // Remove node
       newSelection.splice(existingIndex, 1);
-
-      // Also remove from server
-      removeNodeAssignment(nodeId);
     } else {
       // Add node (without expiration initially, user can set it)
-      newSelection.push({ nodeId, nodeName });
-      addNodeAssignment(nodeId);
+      newSelection.push({ nodeId, nodeName, source: userId ? 'user' : undefined });
     }
-
     onSelectionChange(newSelection);
+
+    try {
+      if (existingIndex >= 0) {
+        // Remove from server
+        await removeNodeAssignment(nodeId);
+      } else {
+        // Add to server
+        await addNodeAssignment(nodeId);
+      }
+    } catch (error: any) {
+      // Revert on error
+      onSelectionChange(previousSelection);
+    }
   };
 
   // Add node assignment to server
@@ -104,11 +210,12 @@ export function NodeAssignmentsSelector({
       });
 
       notifySuccess('Node assigned');
-      queryClient.invalidateQueries({ queryKey: ['nodes', nodeId, 'assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['roles', roleId, 'nodes'] });
+      queryClient.invalidateQueries({ queryKey: ['users', userId, 'nodes'] });
+      return true;
     } catch (error: any) {
       notifyError(error?.response?.data?.error || 'Failed to assign node');
-      // Revert the local change
-      onSelectionChange(selectedNodes);
+      return false;
     }
   };
 
@@ -126,12 +233,14 @@ export function NodeAssignmentsSelector({
       if (assignment) {
         await nodesApi.removeAssignment(nodeId, assignment.id);
         notifySuccess('Node unassigned');
-        queryClient.invalidateQueries({ queryKey: ['nodes', nodeId, 'assignments'] });
+        queryClient.invalidateQueries({ queryKey: ['roles', roleId, 'nodes'] });
+        queryClient.invalidateQueries({ queryKey: ['users', userId, 'nodes'] });
+        return true;
       }
+      return false;
     } catch (error: any) {
       notifyError(error?.response?.data?.error || 'Failed to unassign node');
-      // Revert the local change
-      onSelectionChange(selectedNodes);
+      return false;
     }
   };
 
@@ -175,15 +284,23 @@ export function NodeAssignmentsSelector({
     }
   };
 
-  // Filter nodes by search
-  const filteredNodes = nodes.filter(node =>
-    node.name.toLowerCase().includes(search.toLowerCase()) ||
-    node.location?.name.toLowerCase().includes(search.toLowerCase())
+  // Filter nodes by search (memoized for performance)
+  const filteredNodes = useMemo(() =>
+    nodes.filter(node =>
+      node.name.toLowerCase().includes(search.toLowerCase()) ||
+      node.location?.name.toLowerCase().includes(search.toLowerCase())
+    ), [nodes, search]
   );
 
-  // Separate inherited (for users) and direct assignments
-  const directAssignments = selectedNodes.filter(n => n.source === 'user' || !n.source);
-  const inheritedAssignments = selectedNodes.filter(n => n.source === 'role');
+  // Separate inherited (for users) and direct assignments (memoized)
+  const directAssignments = useMemo(() =>
+    selectedNodes.filter(n => n.source === 'user' || !n.source),
+    [selectedNodes]
+  );
+  const inheritedAssignments = useMemo(() =>
+    selectedNodes.filter(n => n.source === 'role'),
+    [selectedNodes]
+  );
 
   const isLoading = nodesLoading || roleAssignmentsLoading || userAssignmentsLoading;
 
@@ -218,7 +335,7 @@ export function NodeAssignmentsSelector({
               )}
               {inheritedAssignments.map(node => (
                 <div
-                  key={node.nodeId}
+                  key={node.nodeId || 'wildcard'}
                   className="flex items-center justify-between rounded-md border border-purple-200 bg-purple-50 px-2 py-1.5 dark:border-purple-500/30 dark:bg-purple-500/10"
                 >
                   <div className="flex items-center gap-2">
@@ -237,7 +354,7 @@ export function NodeAssignmentsSelector({
                   </span>
                 </div>
               ))}
-              {directAssignments.map(node => (
+              {directAssignments.filter(n => !n.isWildcard).map(node => (
                 <div
                   key={node.nodeId}
                   className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-800 dark:bg-slate-950"
@@ -254,7 +371,7 @@ export function NodeAssignmentsSelector({
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => {
-                          setExpirationNodeId(node.nodeId);
+                          setExpirationNodeId(node.nodeId!);
                           setExpirationDate(node.expiresAt || '');
                         }}
                         className="rounded px-1.5 py-0.5 text-[10px] text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-300"
@@ -262,7 +379,7 @@ export function NodeAssignmentsSelector({
                         Set Expiration
                       </button>
                       <button
-                        onClick={() => toggleNode(node.nodeId, node.nodeName)}
+                        onClick={() => toggleNode(node.nodeId!, node.nodeName)}
                         className="rounded p-0.5 text-slate-400 transition-colors hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/20 dark:hover:text-rose-400"
                       >
                         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -273,11 +390,68 @@ export function NodeAssignmentsSelector({
                   )}
                 </div>
               ))}
+              {/* Wildcard assignment badge */}
+              {directAssignments.some(n => n.isWildcard) && (
+                <div className="flex items-center justify-between rounded-md border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/10">
+                  <div className="flex items-center gap-2">
+                    <svg className="h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-semibold text-amber-900 dark:text-amber-200">All Nodes (*)</span>
+                      <span className="text-[10px] text-amber-700 dark:text-amber-400">Access to all current and future nodes</span>
+                    </div>
+                  </div>
+                  {!disabled && (
+                    <button
+                      onClick={() => toggleWildcard()}
+                      className="rounded px-2 py-1 text-[10px] text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-300 dark:hover:bg-amber-900/20"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Wildcard option at the top of available nodes */}
+          <div className="mb-2">
+            <label
+              className={`flex items-center gap-2 rounded-md border px-2 py-2 text-xs transition-all cursor-pointer ${
+                hasWildcard
+                  ? 'border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10'
+                  : 'border-slate-200 bg-white hover:border-amber-500 hover:bg-amber-50/50 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-amber-500/30 dark:hover:bg-amber-500/5'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={hasWildcard}
+                disabled={disabled}
+                onChange={() => toggleWildcard()}
+                className="h-4 w-4 rounded border-slate-300 bg-white text-amber-600 focus:ring-2 focus:ring-amber-500 dark:border-slate-700 dark:bg-slate-900 dark:text-amber-400 disabled:opacity-50"
+              />
+              <div className="flex flex-col">
+                <span className="font-semibold text-slate-900 dark:text-slate-200">All Nodes (*)</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400">Access to all current and future nodes</span>
+              </div>
+            </label>
+            {hasWildcard && (
+              <div className="mt-1 text-[10px] text-amber-600 dark:text-amber-400 px-2">
+                Individual node selection is disabled when wildcard is active
+              </div>
+            )}
+          </div>
+
+          {/* Available nodes header */}
+          {!hasWildcard && (
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1 px-1">
+              Select individual nodes
             </div>
           )}
 
           {/* Available nodes */}
-          <div className="max-h-36 overflow-y-auto pr-1">
+          <div className={`max-h-36 overflow-y-auto pr-1 ${hasWildcard ? 'opacity-50 pointer-events-none' : ''}`}>
             {filteredNodes.length === 0 ? (
               <div className="py-2 text-center text-xs text-slate-500 dark:text-slate-400">
                 No nodes found

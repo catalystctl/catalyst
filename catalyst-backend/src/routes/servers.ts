@@ -453,7 +453,8 @@ export async function serverRoutes(app: FastifyInstance) {
           permissions: { has: permission },
         },
       });
-      if (!access) {
+      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+      if (!access && !hasNodeAccessToServer) {
         reply.status(403).send({ error: "Forbidden" });
         return null;
       }
@@ -1652,7 +1653,8 @@ export async function serverRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
 
       // Get nodes accessible to user (via direct assignment or role)
-      const accessibleNodeIds = await getUserAccessibleNodes(prisma, userId);
+      const accessibleResult = await getUserAccessibleNodes(prisma, userId);
+      const accessibleNodeIds = accessibleResult.nodeIds;
 
       const servers = await prisma.server.findMany({
         where: {
@@ -2143,7 +2145,9 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
-      if (!access && server.ownerId !== userId) {
+      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+
+      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -3590,7 +3594,9 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
-      if (!access && server.ownerId !== userId) {
+      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+
+      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -3646,7 +3652,9 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
-      if (!access && server.ownerId !== userId) {
+      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+
+      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -3713,7 +3721,9 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
-      if (!access && server.ownerId !== userId) {
+      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+
+      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -3777,7 +3787,9 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
-      if (!access && server.ownerId !== userId) {
+      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+
+      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -3855,7 +3867,9 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
-      if (!access && server.ownerId !== userId) {
+      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+
+      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -3917,7 +3931,9 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
-      if (!access && server.ownerId !== userId) {
+      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+
+      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -4005,8 +4021,8 @@ export async function serverRoutes(app: FastifyInstance) {
         return;
       }
 
-      // Check permissions
-      const access = await prisma.serverAccess.findFirst({
+      // Check permissions - owner, explicit access, or node assignment
+      const hasExplicitAccess = await prisma.serverAccess.findFirst({
         where: {
           serverId,
           userId,
@@ -4014,7 +4030,9 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
-      if (!access && server.ownerId !== userId) {
+      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+
+      if (!hasExplicitAccess && server.ownerId !== userId && !hasNodeAccessToServer) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -4086,7 +4104,9 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
-      if (!access && server.ownerId !== userId) {
+      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+
+      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -4154,7 +4174,9 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
-      if (!access && server.ownerId !== userId) {
+      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+
+      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -4230,7 +4252,9 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
-      if (!access && server.ownerId !== userId) {
+      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+
+      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -4297,7 +4321,9 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
-      if (!access && server.ownerId !== userId) {
+      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+
+      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -4429,7 +4455,7 @@ export async function serverRoutes(app: FastifyInstance) {
 
       const server = await prisma.server.findUnique({
         where: { id: serverId },
-        select: { id: true, ownerId: true },
+        select: { id: true, ownerId: true, nodeId: true },
       });
 
       if (!server) {
@@ -4440,7 +4466,8 @@ export async function serverRoutes(app: FastifyInstance) {
         const access = await prisma.serverAccess.findFirst({
           where: { serverId, userId, permissions: { has: "server.read" } },
         });
-        if (!access) {
+        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+        if (!access && !hasNodeAccessToServer) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }
@@ -5255,7 +5282,8 @@ export async function serverRoutes(app: FastifyInstance) {
             permissions: { has: "server.install" },
           },
         });
-        if (!access) {
+        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+        if (!access && !hasNodeAccessToServer) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }
@@ -5380,7 +5408,8 @@ export async function serverRoutes(app: FastifyInstance) {
             permissions: { has: "server.start" },
           },
         });
-        if (!access) {
+        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+        if (!access && !hasNodeAccessToServer) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }
@@ -5501,7 +5530,8 @@ export async function serverRoutes(app: FastifyInstance) {
             permissions: { has: "server.stop" },
           },
         });
-        if (!access) {
+        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+        if (!access && !hasNodeAccessToServer) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }
@@ -5579,7 +5609,13 @@ export async function serverRoutes(app: FastifyInstance) {
             permissions: { has: "server.stop" }, // Needs both start and stop
           },
         });
-        if (!access || !access.permissions.includes("server.start")) {
+        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+        if (!access && !hasNodeAccessToServer) {
+          return reply.status(403).send({ error: "Forbidden" });
+        }
+        // Also need to check for server.start permission
+        const hasStartAccess = access?.permissions.includes("server.start");
+        if (!hasStartAccess && !hasNodeAccessToServer) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }
@@ -6182,17 +6218,23 @@ export async function serverRoutes(app: FastifyInstance) {
 
 
       // Check if user has permission
-      const serverAccess = await prisma.serverAccess.findFirst({
+      const hasExplicitAccess = await prisma.serverAccess.findFirst({
         where: {
           serverId: id,
           userId: request.user.userId,
         },
       });
 
-      if (!serverAccess || !serverAccess.permissions.includes("server.transfer")) {
-        return reply.status(403).send({
-          error: "You do not have permission to transfer this server",
-        });
+      const hasNodeAccessToServer = await hasNodeAccess(prisma, request.user.userId, server.nodeId);
+
+      if (server.ownerId !== request.user.userId) {
+        if (!hasExplicitAccess || !hasExplicitAccess.permissions.includes("server.transfer")) {
+          if (!hasNodeAccessToServer) {
+            return reply.status(403).send({
+              error: "You do not have permission to transfer this server",
+            });
+          }
+        }
       }
 
       // Check if already on target node

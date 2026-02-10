@@ -216,31 +216,34 @@ model ServerAccessInvite {
 }
 
 model NodeAssignment {
-  id     String @id @default(cuid())
-  nodeId String
-  node   Node   @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  id     String   @id @default(cuid())
+  nodeId String?
+  node   Node?    @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
   // Either assigned to a user OR a role (not both)
+  // nodeId is null for wildcard "all nodes" assignments
   userId String?
-  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   roleId String?
-  role   Role?   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  role   Role?    @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   // Audit trail
-  assignedBy String // User ID who made the assignment
-  assignedAt DateTime  @default(now())
+  assignedBy String   // User ID who made the assignment
+  assignedAt DateTime @default(now())
   expiresAt  DateTime? // Optional expiration for temporary access
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Ensure one assignment per (node, user) or (node, role) combination
+  // Wildcard assignments have null nodeId - only one wildcard per user/role
   @@unique([nodeId, userId])
   @@unique([nodeId, roleId])
   @@index([userId])
   @@index([roleId])
   @@index([nodeId, expiresAt])
+  @@index([userId, nodeId]) // Index for wildcard lookups (null for wildcard)
 }
 
 model SystemSetting {
