@@ -8,6 +8,7 @@ import { createReadStream, createWriteStream } from 'fs';
 import { generateKeyPairSync } from 'crypto';
 import type { Logger } from 'pino';
 import { auth } from './auth';
+import { realpathSync } from 'fs';
 
 const { Server: SSHServer, utils } = ssh2;
 type SFTPStream = ssh2.SFTPStream;
@@ -44,6 +45,7 @@ interface SFTPSession {
   username: string;
   serverId: string;
   serverPath: string;
+  realServerPath: string;  // Canonical path with symlinks resolved
   permissions: string[];
 }
 
@@ -113,6 +115,17 @@ async function validateTokenAndGetServer(username: string, password: string): Pr
       // Directory creation errors are non-fatal
     }
 
+    // Resolve the canonical path to prevent symlink escape attacks
+    // This MUST be done after directory creation to get the final path
+    let realServerPath: string;
+    try {
+      realServerPath = realpathSync(serverPath);
+    } catch (err) {
+      // If realpath fails (directory doesn't exist yet), use the lexical path
+      // This is safe since we just created it above
+      realServerPath = serverPath;
+    }
+
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { email: true, username: true },
@@ -123,6 +136,7 @@ async function validateTokenAndGetServer(username: string, password: string): Pr
       username: user?.username ?? user?.email ?? userId,
       serverId,
       serverPath,
+      realServerPath,
       permissions,
     };
   } catch (err) {
@@ -138,15 +152,66 @@ function hasPermission(session: SFTPSession, permission: string): boolean {
   return session.permissions.includes(permission);
 }
 
-function normalizePath(serverPath: string, requestedPath: string): string {
+/**
+ * Validates and normalizes a requested path, ensuring it stays within the server directory.
+ * Uses realpath to resolve symlinks and prevent symlink-based escape attacks.
+ *
+ * @param serverPath - The lexical server path (for error messages and join)
+ * @param realServerPath - The canonical server path with symlinks resolved
+ * @param requestedPath - The user-requested path (relative or absolute)
+ * @returns The normalized, validated path
+ * @throws Error if path traversal or symlink escape is detected
+ */
+function normalizePath(serverPath: string, realServerPath: string, requestedPath: string): string {
   const normalized = join(serverPath, requestedPath);
-  
-  // Prevent directory traversal
-  if (!normalized.startsWith(serverPath)) {
+
+  // Lexical check first - catches obvious traversal attempts
+  // Must check exact match or path + separator to prevent prefix attacks
+  const lexicalOk = normalized === serverPath ||
+                    normalized.startsWith(serverPath + '/') ||
+                    normalized.startsWith(serverPath + '\\');
+  if (!lexicalOk) {
     throw new Error('Path traversal attempt detected');
   }
-  
-  return normalized;
+
+  // Resolve symlinks to detect escape attempts via malicious symlinks
+  // This is the critical security check that prevents the vulnerability
+  let realPath: string;
+  try {
+    realPath = realpathSync(normalized);
+  } catch (err) {
+    // File doesn't exist yet (e.g., for OPEN/WRITE operations)
+    // In this case, validate the parent directory's real path
+    const parentDir = join(normalized, '..');
+    try {
+      const realParent = realpathSync(parentDir);
+      // Ensure parent is still within bounds (exact match or path + separator)
+      const parentOk = realParent === realServerPath ||
+                       realParent.startsWith(realServerPath + '/') ||
+                       realParent.startsWith(realServerPath + '\\');
+      if (!parentOk) {
+        throw new Error('Path traversal attempt detected via parent directory');
+      }
+      return normalized;
+    } catch {
+      // Parent doesn't exist either, return normalized path
+      // The file operation will fail if the parent is invalid
+      return normalized;
+    }
+  }
+
+  // Critical security check: verify the resolved path is within the server directory
+  // Must check exact match or path + separator to prevent prefix attacks
+  // This catches symlink escape attacks where a symlink inside the server dir
+  // points outside (e.g., ln -s / /data/escape) or to similar-named directories
+  const realPathOk = realPath === realServerPath ||
+                     realPath.startsWith(realServerPath + '/') ||
+                     realPath.startsWith(realServerPath + '\\');
+  if (!realPathOk) {
+    throw new Error('Path traversal attempt detected via symbolic link');
+  }
+
+  return realPath;
 }
 
 function startSFTPServer(logger: Logger) {
@@ -264,7 +329,7 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
     .on('OPEN', (reqid, filename, flags, _attrs) => {
       enqueue(async () => {
         try {
-          const fullPath = normalizePath(session.serverPath, filename);
+          const fullPath = normalizePath(session.serverPath, session.realServerPath, filename);
           
           if (flags & utils.sftp.OPEN_MODE.WRITE) {
             if (!hasPermission(session, 'file.write')) {
@@ -374,7 +439,7 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
     .on('OPENDIR', (reqid, dirpath) => {
       enqueue(async () => {
         try {
-          const fullPath = normalizePath(session.serverPath, dirpath);
+          const fullPath = normalizePath(session.serverPath, session.realServerPath, dirpath);
 
           if (!hasPermission(session, 'file.read')) {
             return sftpStream.status(reqid, utils.sftp.STATUS_CODE.PERMISSION_DENIED);
@@ -430,7 +495,28 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
           for (const entry of entries) {
             const entryPath = join(handleData.path, entry.name);
             try {
-              const stats = await fs.stat(entryPath);
+              // Use lstat to get info about the symlink itself, not its target
+              // This prevents leaking information about files/dirs outside the sandbox
+              const stats = await fs.lstat(entryPath);
+
+              // For symlinks, verify the target doesn't escape the sandbox
+              if (stats.isSymbolicLink()) {
+                try {
+                  const realTargetPath = realpathSync(entryPath);
+                  const targetOk = realTargetPath === session.realServerPath ||
+                                  realTargetPath.startsWith(session.realServerPath + '/') ||
+                                  realTargetPath.startsWith(session.realServerPath + '\\');
+                  if (!targetOk) {
+                    // Skip symlinks that point outside the server directory
+                    // Don't include them in the directory listing at all
+                    continue;
+                  }
+                } catch {
+                  // Can't resolve symlink, skip it
+                  continue;
+                }
+              }
+
               fileList.push({
                 filename: entry.name,
                 longname: formatLongname(entry.name, stats),
@@ -458,7 +544,7 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
     .on('STAT', (reqid, filepath) => {
       enqueue(async () => {
         try {
-          const fullPath = normalizePath(session.serverPath, filepath);
+          const fullPath = normalizePath(session.serverPath, session.realServerPath, filepath);
 
           if (!hasPermission(session, 'file.read')) {
             return sftpStream.status(reqid, utils.sftp.STATUS_CODE.PERMISSION_DENIED);
@@ -482,7 +568,7 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
     .on('LSTAT', (reqid, filepath) => {
       enqueue(async () => {
         try {
-          const fullPath = normalizePath(session.serverPath, filepath);
+          const fullPath = normalizePath(session.serverPath, session.realServerPath, filepath);
 
           if (!hasPermission(session, 'file.read')) {
             return sftpStream.status(reqid, utils.sftp.STATUS_CODE.PERMISSION_DENIED);
@@ -506,7 +592,7 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
     .on('REMOVE', (reqid, filepath) => {
       enqueue(async () => {
         try {
-          const fullPath = normalizePath(session.serverPath, filepath);
+          const fullPath = normalizePath(session.serverPath, session.realServerPath, filepath);
 
           if (!hasPermission(session, 'file.delete')) {
             return sftpStream.status(reqid, utils.sftp.STATUS_CODE.PERMISSION_DENIED);
@@ -531,7 +617,7 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
     .on('RMDIR', (reqid, dirpath) => {
       enqueue(async () => {
         try {
-          const fullPath = normalizePath(session.serverPath, dirpath);
+          const fullPath = normalizePath(session.serverPath, session.realServerPath, dirpath);
 
           if (!hasPermission(session, 'file.delete')) {
             return sftpStream.status(reqid, utils.sftp.STATUS_CODE.PERMISSION_DENIED);
@@ -556,7 +642,7 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
     .on('MKDIR', (reqid, dirpath, attrs) => {
       enqueue(async () => {
         try {
-          const fullPath = normalizePath(session.serverPath, dirpath);
+          const fullPath = normalizePath(session.serverPath, session.realServerPath, dirpath);
 
           if (!hasPermission(session, 'file.write')) {
             return sftpStream.status(reqid, utils.sftp.STATUS_CODE.PERMISSION_DENIED);
@@ -581,8 +667,8 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
     .on('RENAME', (reqid, oldPath, newPath) => {
       enqueue(async () => {
         try {
-          const fullOldPath = normalizePath(session.serverPath, oldPath);
-          const fullNewPath = normalizePath(session.serverPath, newPath);
+          const fullOldPath = normalizePath(session.serverPath, session.realServerPath, oldPath);
+          const fullNewPath = normalizePath(session.serverPath, session.realServerPath, newPath);
 
           if (!hasPermission(session, 'file.write')) {
             return sftpStream.status(reqid, utils.sftp.STATUS_CODE.PERMISSION_DENIED);
