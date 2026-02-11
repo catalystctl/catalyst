@@ -36,6 +36,8 @@ import { fromNodeHeaders } from "better-auth/node";
 import { normalizeHostIp } from "./utils/ipam";
 import { PluginLoader } from "./plugins/loader";
 import { pluginRoutes } from "./routes/plugins";
+import { FileTunnelService } from "./services/file-tunnel";
+import { fileTunnelRoutes } from "./routes/file-tunnel";
 
 const logger = pino(
   process.env.NODE_ENV === "production"
@@ -50,7 +52,15 @@ const logger = pino(
 
 const app = Fastify({
   logger: true,
-  bodyLimit: 104857600, // 100MB for file uploads
+  bodyLimit: 1048576, // 1MB default limit (lowered from 100MB)
+});
+
+// Parse application/octet-stream as raw Buffer (used by file tunnel stream responses)
+app.addContentTypeParser("application/octet-stream", function (_request, payload, done) {
+  const chunks: Buffer[] = [];
+  payload.on("data", (chunk: Buffer) => chunks.push(chunk));
+  payload.on("end", () => done(null, Buffer.concat(chunks)));
+  payload.on("error", done);
 });
 
 app.setErrorHandler((error, _request, reply) => {
@@ -70,6 +80,7 @@ const wsGateway = new WebSocketGateway(prisma, logger);
 const rbac = new RbacMiddleware(prisma);
 const taskScheduler = new TaskScheduler(prisma, logger);
 const alertService = new AlertService(prisma, logger);
+const fileTunnel = new FileTunnelService(logger);
 const pluginLoader = new PluginLoader(
   process.env.PLUGINS_DIR || path.join(process.cwd(), '..', 'catalyst-plugins'),
   prisma,
@@ -263,6 +274,7 @@ const authenticate = async (request: any, reply: any) => {
 
 (app as any).authenticate = authenticate;
 (app as any).wsGateway = wsGateway;
+(app as any).fileTunnel = fileTunnel;
 (app as any).taskScheduler = taskScheduler;
 (app as any).alertService = alertService;
 (app as any).auth = auth;
@@ -492,6 +504,8 @@ async function bootstrap() {
     await app.register(alertRoutes, { prefix: "/api" });
     await app.register(apiKeyRoutes);
     await app.register((app) => pluginRoutes(app, pluginLoader));
+    // File tunnel routes need higher body limit for upload/stream endpoints
+    await app.register((app) => fileTunnelRoutes(app, prisma, logger, fileTunnel), { bodyLimit: 104857600 });
 
     // Agent binary download endpoint (public)
     app.get("/api/agent/download", async (_request, reply) => {

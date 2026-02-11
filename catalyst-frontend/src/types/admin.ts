@@ -200,6 +200,11 @@ export interface SecuritySettings {
   lockoutDurationMinutes: number;
   auditRetentionDays: number;
   maxBufferMb: number;
+  // File tunnel settings
+  fileTunnelRateLimitMax: number;
+  fileTunnelMaxUploadMb: number;
+  fileTunnelMaxPendingPerNode: number;
+  fileTunnelConcurrentMax: number;
 }
 
 export interface ModManagerSettings {

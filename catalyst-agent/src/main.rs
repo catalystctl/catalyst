@@ -5,6 +5,7 @@ use tracing::{error, info, warn};
 mod config;
 mod errors;
 mod file_manager;
+mod file_tunnel;
 mod firewall_manager;
 mod network_manager;
 mod runtime_manager;
@@ -15,6 +16,7 @@ mod websocket_handler;
 pub use config::AgentConfig;
 pub use errors::{AgentError, AgentResult};
 pub use file_manager::FileManager;
+pub use file_tunnel::FileTunnelClient;
 pub use firewall_manager::FirewallManager;
 pub use network_manager::NetworkManager;
 pub use runtime_manager::ContainerdRuntime;
@@ -28,6 +30,7 @@ pub struct CatalystAgent {
     pub runtime: Arc<ContainerdRuntime>,
     pub ws_handler: Arc<WebSocketHandler>,
     pub file_manager: Arc<FileManager>,
+    pub file_tunnel: Arc<FileTunnelClient>,
     pub storage_manager: Arc<StorageManager>,
     pub backend_connected: Arc<RwLock<bool>>,
 }
@@ -42,8 +45,9 @@ impl CatalystAgent {
             config.containerd.namespace.clone(),
         ));
 
-        let file_manager = Arc::new(FileManager::new(config.server.data_dir.clone()));
+        let file_manager = Arc::new(FileManager::new(config.server.data_dir.join("servers")));
         let storage_manager = Arc::new(StorageManager::new(config.server.data_dir.clone()));
+        let file_tunnel = Arc::new(FileTunnelClient::new(config.clone(), file_manager.clone()));
 
         let ws_handler = Arc::new(WebSocketHandler::new(
             config.clone(),
@@ -57,6 +61,7 @@ impl CatalystAgent {
             runtime,
             ws_handler,
             file_manager,
+            file_tunnel,
             storage_manager,
             backend_connected: Arc::new(RwLock::new(false)),
         })
@@ -84,10 +89,17 @@ impl CatalystAgent {
             agent.start_health_monitoring().await;
         });
 
+        // Start file tunnel (HTTP-based file operations)
+        let file_tunnel = self.file_tunnel.clone();
+        let tunnel_task = tokio::spawn(async move {
+            file_tunnel.run().await;
+        });
+
         // Start HTTP server for local management
         tokio::select! {
             _ = ws_task => {},
             _ = health_task => {},
+            _ = tunnel_task => {},
         }
 
         Ok(())
@@ -117,6 +129,7 @@ impl CatalystAgent {
             runtime: self.runtime.clone(),
             ws_handler: self.ws_handler.clone(),
             file_manager: self.file_manager.clone(),
+            file_tunnel: self.file_tunnel.clone(),
             storage_manager: self.storage_manager.clone(),
             backend_connected: self.backend_connected.clone(),
         }

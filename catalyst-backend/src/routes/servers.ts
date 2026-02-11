@@ -405,6 +405,21 @@ export async function serverRoutes(app: FastifyInstance) {
     return `/${parts.join("/")}`;
   };
 
+  // File tunnel service for proxying file operations to agents
+  const fileTunnel = (app as any).fileTunnel as import("../services/file-tunnel").FileTunnelService;
+
+  /** Send a file operation to the agent via the HTTP file tunnel and return the response. */
+  const tunnelFileOp = async (
+    nodeId: string,
+    operation: string,
+    serverUuid: string,
+    filePath: string,
+    data?: Record<string, unknown>,
+    uploadData?: Buffer,
+  ) => {
+    return fileTunnel.queueRequest(nodeId, operation, serverUuid, filePath, data, uploadData);
+  };
+
   const resolveTemplateImage = (
     template: { image: string; images?: any; defaultImage?: string | null },
     environment: Record<string, string>
@@ -2154,40 +2169,24 @@ export async function serverRoutes(app: FastifyInstance) {
       const normalizedPath = normalizeRequestPath(requestedPath);
 
       try {
-        const { targetPath } = await resolveServerPath(server.uuid, normalizedPath);
-        const stats = await fs.stat(targetPath).catch(() => null);
-        if (!stats) {
-          return reply.status(404).send({ error: "Path not found" });
+        const result = await tunnelFileOp(server.nodeId, "list", server.uuid, normalizedPath);
+        if (!result.success) {
+          const errMsg = result.error || "Failed to list files";
+          const status = errMsg.includes("not found") || errMsg.includes("missing") ? 404 : 400;
+          return reply.status(status).send({ error: errMsg });
         }
-        if (!stats.isDirectory()) {
-          return reply.status(400).send({ error: "Path is not a directory" });
-        }
-
-        const entries = await fs.readdir(targetPath, { withFileTypes: true });
-        const files = await Promise.all(
-          entries.map(async (entry) => {
-            const entryPath = path.join(targetPath, entry.name);
-            const entryStats = await fs.stat(entryPath);
-            const isDirectory = entry.isDirectory();
-            return {
-              name: entry.name,
-              size: isDirectory ? 0 : entryStats.size,
-              isDirectory,
-              mode: entryStats.mode & 0o777,
-              modified: entryStats.mtime.toISOString(),
-              type: isDirectory ? "directory" : "file",
-            };
-          })
-        );
 
         reply.send({
           success: true,
           data: {
             path: normalizedPath,
-            files,
+            files: result.data,
           },
         });
-      } catch (error) {
+      } catch (error: any) {
+        if (error?.message?.includes("timed out")) {
+          return reply.status(504).send({ error: "Agent file operation timed out" });
+        }
         reply.status(400).send({ error: "Invalid path" });
       }
     }
@@ -2494,19 +2493,10 @@ export async function serverRoutes(app: FastifyInstance) {
       const normalizedFile = normalizeRequestPath(path.posix.join(normalizedBase, filename));
 
       try {
-        const { targetPath: resolvedPath } = await resolveServerPath(server.uuid, normalizedFile);
-        await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
-        const downloadResponse = await fetch(downloadUrl, { redirect: "follow" });
-        if (!downloadResponse.ok || !downloadResponse.body) {
-          const body = await downloadResponse.text();
-          return reply
-            .status(downloadResponse.status)
-            .send({ error: `Download failed: ${body}` });
+        const result = await tunnelFileOp(server.nodeId, "install-url", server.uuid, normalizedFile, { url: downloadUrl });
+        if (!result.success) {
+          return reply.status(400).send({ error: result.error || "Failed to install asset" });
         }
-        await pipeline(
-          downloadResponse.body as unknown as Readable,
-          createWriteStream(resolvedPath)
-        );
         await prisma.auditLog.create({
           data: {
             userId,
@@ -2868,19 +2858,10 @@ export async function serverRoutes(app: FastifyInstance) {
       const normalizedFile = normalizeRequestPath(path.posix.join(normalizedBase, filename));
 
       try {
-        const { targetPath: resolvedPath } = await resolveServerPath(server.uuid, normalizedFile);
-        await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
-        const downloadResponse = await fetchDownload(downloadUrl, baseUrl, headers);
-        if (!downloadResponse.ok || !downloadResponse.body) {
-          const body = await downloadResponse.text();
-          return reply
-            .status(downloadResponse.status)
-            .send({ error: `Download failed: ${body}` });
+        const result = await tunnelFileOp(server.nodeId, "install-url", server.uuid, normalizedFile, { url: downloadUrl });
+        if (!result.success) {
+          return reply.status(400).send({ error: result.error || "Failed to install asset" });
         }
-        await pipeline(
-          downloadResponse.body as unknown as Readable,
-          createWriteStream(resolvedPath)
-        );
         await prisma.auditLog.create({
           data: {
             userId,
@@ -2939,23 +2920,20 @@ export async function serverRoutes(app: FastifyInstance) {
       const targetValue = normalizeTargetValue(target) ?? "mods";
       const normalizedBase = resolveTemplatePath(modManager.paths?.[targetValue], targetValue);
       try {
-        const { targetPath: dirPath } = await resolveServerPath(server.uuid, normalizedBase);
-        const entries = await fs.readdir(dirPath, { withFileTypes: true }).catch(() => []);
+        const listResult = await tunnelFileOp(server.nodeId, "list", server.uuid, normalizedBase);
+        const agentEntries: any[] = listResult.success && Array.isArray(listResult.data) ? listResult.data : [];
         const dbRecords = await prisma.installedMod.findMany({
           where: { serverId },
         });
         const dbMap = new Map(dbRecords.map((record) => [record.filename, record]));
-        const files = await Promise.all(
-          entries
-            .filter((entry) => entry.isFile())
-            .map(async (entry) => {
-              const filePath = path.join(dirPath, entry.name);
-              const stat = await fs.stat(filePath).catch(() => null);
+        const files = agentEntries
+          .filter((entry: any) => !entry.isDirectory)
+          .map((entry: any) => {
               const meta = dbMap.get(entry.name);
               return {
                 name: entry.name,
-                size: stat?.size ?? 0,
-                modifiedAt: stat?.mtime?.toISOString() ?? null,
+                size: entry.size ?? 0,
+                modifiedAt: entry.modified ?? null,
                 provider: meta?.provider ?? null,
                 projectId: meta?.projectId ?? null,
                 versionId: meta?.versionId ?? null,
@@ -2965,8 +2943,7 @@ export async function serverRoutes(app: FastifyInstance) {
                 latestVersionName: meta?.latestVersionName ?? null,
                 updateCheckedAt: meta?.updateCheckedAt?.toISOString() ?? null,
               };
-            })
-        );
+          });
         reply.send({ success: true, data: files });
       } catch {
         reply.send({ success: true, data: [] });
@@ -2991,23 +2968,20 @@ export async function serverRoutes(app: FastifyInstance) {
 
       const normalizedBase = resolveTemplatePath(pluginManager.paths?.plugins, "plugins");
       try {
-        const { targetPath: dirPath } = await resolveServerPath(server.uuid, normalizedBase);
-        const entries = await fs.readdir(dirPath, { withFileTypes: true }).catch(() => []);
+        const listResult = await tunnelFileOp(server.nodeId, "list", server.uuid, normalizedBase);
+        const agentEntries: any[] = listResult.success && Array.isArray(listResult.data) ? listResult.data : [];
         const dbRecords = await prisma.installedMod.findMany({
           where: { serverId, type: "plugin" },
         });
         const dbMap = new Map(dbRecords.map((record) => [record.filename, record]));
-        const files = await Promise.all(
-          entries
-            .filter((entry) => entry.isFile())
-            .map(async (entry) => {
-              const filePath = path.join(dirPath, entry.name);
-              const stat = await fs.stat(filePath).catch(() => null);
+        const files = agentEntries
+          .filter((entry: any) => !entry.isDirectory)
+          .map((entry: any) => {
               const meta = dbMap.get(entry.name);
               return {
                 name: entry.name,
-                size: stat?.size ?? 0,
-                modifiedAt: stat?.mtime?.toISOString() ?? null,
+                size: entry.size ?? 0,
+                modifiedAt: entry.modified ?? null,
                 provider: meta?.provider ?? null,
                 projectId: meta?.projectId ?? null,
                 versionId: meta?.versionId ?? null,
@@ -3017,8 +2991,7 @@ export async function serverRoutes(app: FastifyInstance) {
                 latestVersionName: meta?.latestVersionName ?? null,
                 updateCheckedAt: meta?.updateCheckedAt?.toISOString() ?? null,
               };
-            })
-        );
+          });
         reply.send({ success: true, data: files });
       } catch {
         reply.send({ success: true, data: [] });
@@ -3053,8 +3026,10 @@ export async function serverRoutes(app: FastifyInstance) {
       const normalizedFile = normalizeRequestPath(path.posix.join(normalizedBase, safeName));
 
       try {
-        const { targetPath: resolvedPath } = await resolveServerPath(server.uuid, normalizedFile);
-        await fs.unlink(resolvedPath);
+        const result = await tunnelFileOp(server.nodeId, "delete", server.uuid, normalizedFile);
+        if (!result.success) {
+          return reply.status(400).send({ error: result.error || "Failed to uninstall mod" });
+        }
         await prisma.installedMod.deleteMany({ where: { serverId, filename: safeName } });
         await prisma.auditLog.create({
           data: {
@@ -3098,8 +3073,10 @@ export async function serverRoutes(app: FastifyInstance) {
       const normalizedFile = normalizeRequestPath(path.posix.join(normalizedBase, safeName));
 
       try {
-        const { targetPath: resolvedPath } = await resolveServerPath(server.uuid, normalizedFile);
-        await fs.unlink(resolvedPath);
+        const result = await tunnelFileOp(server.nodeId, "delete", server.uuid, normalizedFile);
+        if (!result.success) {
+          return reply.status(400).send({ error: result.error || "Failed to uninstall plugin" });
+        }
         await prisma.installedMod.deleteMany({ where: { serverId, filename: safeName } });
         await prisma.auditLog.create({
           data: {
@@ -3400,23 +3377,18 @@ export async function serverRoutes(app: FastifyInstance) {
           const targetValue = record.type === "datapack" ? "datapacks" : record.type === "modpack" ? "modpacks" : "mods";
           const normalizedBase = resolveTemplatePath(modManager.paths?.[targetValue], targetValue);
 
-          // Delete old file
+          // Delete old file via tunnel
           try {
-            const { targetPath: oldPath } = await resolveServerPath(server.uuid, normalizeRequestPath(path.posix.join(normalizedBase, record.filename)));
-            await fs.unlink(oldPath).catch(() => {});
+            const oldFile = normalizeRequestPath(path.posix.join(normalizedBase, record.filename));
+            await tunnelFileOp(server.nodeId, "delete", server.uuid, oldFile);
           } catch {
             // Best-effort cleanup before writing the new file.
           }
 
-          // Download new file
+          // Download new file via tunnel
           const normalizedFile = normalizeRequestPath(path.posix.join(normalizedBase, newFilename));
-          const { targetPath: resolvedPath } = await resolveServerPath(server.uuid, normalizedFile);
-          await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
-
-          const dlRes = await fetchDownload(downloadUrl, baseUrl, headers);
-          if (!dlRes.ok || !dlRes.body) throw new Error("Download failed");
-          const arrayBuffer = await dlRes.arrayBuffer();
-          await fs.writeFile(resolvedPath, Buffer.from(arrayBuffer));
+          const installResult = await tunnelFileOp(server.nodeId, "install-url", server.uuid, normalizedFile, { url: downloadUrl });
+          if (!installResult.success) throw new Error(installResult.error || "Download failed");
 
           // Update DB record
           await prisma.installedMod.update({
@@ -3518,23 +3490,18 @@ export async function serverRoutes(app: FastifyInstance) {
             continue;
           }
 
-          // Delete old file
+          // Delete old file via tunnel
           try {
-            const { targetPath: oldPath } = await resolveServerPath(server.uuid, normalizeRequestPath(path.posix.join(normalizedBase, record.filename)));
-            await fs.unlink(oldPath).catch(() => {});
+            const oldFile = normalizeRequestPath(path.posix.join(normalizedBase, record.filename));
+            await tunnelFileOp(server.nodeId, "delete", server.uuid, oldFile);
           } catch {
             // Best-effort cleanup before writing the new file.
           }
 
-          // Download new file
+          // Download new file via tunnel
           const normalizedFile = normalizeRequestPath(path.posix.join(normalizedBase, newFilename));
-          const { targetPath: resolvedPath } = await resolveServerPath(server.uuid, normalizedFile);
-          await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
-
-          const dlRes = await fetchDownload(downloadUrl, baseUrl, headers);
-          if (!dlRes.ok || !dlRes.body) throw new Error("Download failed");
-          const arrayBuffer = await dlRes.arrayBuffer();
-          await fs.writeFile(resolvedPath, Buffer.from(arrayBuffer));
+          const installResult = await tunnelFileOp(server.nodeId, "install-url", server.uuid, normalizedFile, { url: downloadUrl });
+          if (!installResult.success) throw new Error(installResult.error || "Download failed");
 
           // Update DB record
           await prisma.installedMod.update({
@@ -3603,19 +3570,23 @@ export async function serverRoutes(app: FastifyInstance) {
       const normalizedPath = normalizeRequestPath(requestedPath);
 
       try {
-        const { targetPath } = await resolveServerPath(server.uuid, normalizedPath);
-        const stats = await fs.stat(targetPath).catch(() => null);
-        if (!stats) {
-          return reply.status(404).send({ error: "File not found" });
-        }
-        if (!stats.isFile()) {
-          return reply.status(400).send({ error: "Path is not a file" });
+        const result = await tunnelFileOp(server.nodeId, "download", server.uuid, normalizedPath);
+        if (!result.success) {
+          const errMsg = result.error || "File not found";
+          const status = errMsg.includes("not found") || errMsg.includes("missing") ? 404 : 400;
+          return reply.status(status).send({ error: errMsg });
         }
 
-        const data = await fs.readFile(targetPath);
-        reply.type("application/octet-stream");
-        reply.send(data);
-      } catch (error) {
+        if (result.body) {
+          reply.type(result.contentType || "application/octet-stream");
+          reply.send(result.body);
+        } else {
+          reply.status(500).send({ error: "No file data received from agent" });
+        }
+      } catch (error: any) {
+        if (error?.message?.includes("timed out")) {
+          return reply.status(504).send({ error: "Agent file operation timed out" });
+        }
         reply.status(400).send({ error: "Invalid path" });
       }
     }
@@ -3671,11 +3642,26 @@ export async function serverRoutes(app: FastifyInstance) {
       const filePath = path.posix.join(normalizedPath, safeFilename);
 
       try {
-        const { targetPath } = await resolveServerPath(server.uuid, filePath);
-        await fs.mkdir(path.dirname(targetPath), { recursive: true });
-        await pipeline(upload.file, createWriteStream(targetPath));
+        // Buffer the upload data and send to agent
+        const chunks: Buffer[] = [];
+        for await (const chunk of upload.file) {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        }
+        const uploadData = Buffer.concat(chunks);
+
+        const result = await tunnelFileOp(
+          server.nodeId, "upload", server.uuid, filePath,
+          { filename: safeFilename },
+          uploadData
+        );
+        if (!result.success) {
+          return reply.status(400).send({ error: result.error || "Failed to upload file" });
+        }
         reply.send({ success: true });
-      } catch (error) {
+      } catch (error: any) {
+        if (error?.message?.includes("timed out")) {
+          return reply.status(504).send({ error: "Agent file operation timed out" });
+        }
         reply.status(400).send({ error: "Failed to upload file" });
       }
     }
@@ -3733,15 +3719,18 @@ export async function serverRoutes(app: FastifyInstance) {
       }
 
       try {
-        const { targetPath } = await resolveServerPath(server.uuid, normalizedPath);
-        if (isDirectory) {
-          await fs.mkdir(targetPath, { recursive: true });
-        } else {
-          await fs.mkdir(path.dirname(targetPath), { recursive: true });
-          await fs.writeFile(targetPath, content ?? "");
+        const result = await tunnelFileOp(server.nodeId, "create", server.uuid, normalizedPath, {
+          isDirectory,
+          content: content ?? "",
+        });
+        if (!result.success) {
+          return reply.status(400).send({ error: result.error || "Failed to create item" });
         }
         reply.send({ success: true });
-      } catch (error) {
+      } catch (error: any) {
+        if (error?.message?.includes("timed out")) {
+          return reply.status(504).send({ error: "Agent file operation timed out" });
+        }
         reply.status(400).send({ error: "Failed to create item" });
       }
     }
@@ -3795,33 +3784,19 @@ export async function serverRoutes(app: FastifyInstance) {
 
       try {
         const normalizedArchive = normalizeRequestPath(archiveName);
-        const archiveLower = normalizedArchive.toLowerCase();
-        const { baseDir, targetPath } = await resolveServerPath(server.uuid, normalizedArchive);
-        const archiveDir = path.dirname(targetPath);
-        await fs.mkdir(archiveDir, { recursive: true });
+        const normalizedPaths = paths.map((p) => normalizeRequestPath(p));
 
-        const relativePaths = await Promise.all(
-          paths.map(async (filePath) => {
-            const normalizedPath = normalizeRequestPath(filePath);
-            const resolved = await resolveServerPath(server.uuid, normalizedPath);
-            const relative = path.relative(baseDir, resolved.targetPath);
-            if (!relative || relative.startsWith("..")) {
-              throw new Error("Invalid file path");
-            }
-            return relative;
-          })
-        );
-
-        if (archiveLower.endsWith(".zip")) {
-          await execFileAsync("zip", ["-r", targetPath, ...relativePaths], { cwd: baseDir, maxBuffer: maxBufferBytes });
-        } else {
-          await execFileAsync("tar", ["-czf", targetPath, "-C", baseDir, ...relativePaths], { maxBuffer: maxBufferBytes });
+        const result = await tunnelFileOp(server.nodeId, "compress", server.uuid, normalizedArchive, {
+          paths: normalizedPaths,
+        });
+        if (!result.success) {
+          return reply.status(500).send({ error: result.error || "Failed to compress files" });
         }
 
         reply.send({ success: true, data: { archivePath: normalizedArchive } });
       } catch (error: any) {
-        if (isMaxBufferError(error)) {
-          return reply.status(413).send(maxBufferErrorResponse());
+        if (error?.message?.includes("timed out")) {
+          return reply.status(504).send({ error: "Agent file operation timed out" });
         }
         reply.status(500).send({ error: "Failed to compress files" });
       }
@@ -3875,24 +3850,19 @@ export async function serverRoutes(app: FastifyInstance) {
 
       try {
         const normalizedArchive = normalizeRequestPath(archivePath);
-        const archiveLower = normalizedArchive.toLowerCase();
         const normalizedTarget = normalizeRequestPath(targetPath);
-        const { targetPath: archiveFullPath } = await resolveServerPath(server.uuid, normalizedArchive);
-        const { targetPath: targetFullPath } = await resolveServerPath(server.uuid, normalizedTarget);
-        await fs.mkdir(targetFullPath, { recursive: true });
 
-        const isZip = archiveLower.endsWith(".zip");
-        await validateArchiveEntries(archiveFullPath, isZip);
-        if (isZip) {
-          await execFileAsync("unzip", ["-o", archiveFullPath, "-d", targetFullPath], { maxBuffer: maxBufferBytes });
-        } else {
-          await execFileAsync("tar", ["-xzf", archiveFullPath, "-C", targetFullPath], { maxBuffer: maxBufferBytes });
+        const result = await tunnelFileOp(server.nodeId, "decompress", server.uuid, normalizedArchive, {
+          targetPath: normalizedTarget,
+        });
+        if (!result.success) {
+          return reply.status(500).send({ error: result.error || "Failed to decompress archive" });
         }
 
         reply.send({ success: true });
       } catch (error: any) {
-        if (isMaxBufferError(error)) {
-          return reply.status(413).send(maxBufferErrorResponse());
+        if (error?.message?.includes("timed out")) {
+          return reply.status(504).send({ error: "Agent file operation timed out" });
         }
         reply.status(500).send({ error: "Failed to decompress archive" });
       }
@@ -3939,61 +3909,19 @@ export async function serverRoutes(app: FastifyInstance) {
 
       try {
         const normalizedArchive = normalizeRequestPath(archivePath);
-        const archiveLower = normalizedArchive.toLowerCase();
-        const { targetPath: archiveFullPath } = await resolveServerPath(server.uuid, normalizedArchive);
 
-        const stats = await fs.stat(archiveFullPath).catch(() => null);
-        if (!stats || stats.isDirectory()) {
-          return reply.status(404).send({ error: "Archive not found" });
+        const result = await tunnelFileOp(server.nodeId, "archive-contents", server.uuid, normalizedArchive);
+        if (!result.success) {
+          const errMsg = result.error || "Failed to read archive contents";
+          const status = errMsg.includes("not found") ? 404 : 500;
+          return reply.status(status).send({ error: errMsg });
         }
 
-        const isZip = archiveLower.endsWith(".zip");
-        const isTar = archiveLower.endsWith(".tar.gz") || archiveLower.endsWith(".tgz");
-        if (!isZip && !isTar) {
-          return reply.status(400).send({ error: "Unsupported archive type" });
-        }
-
-        type ArchiveEntry = { name: string; size: number; isDirectory: boolean; modified?: string };
-        const entries: ArchiveEntry[] = [];
-
-        if (isZip) {
-          const { stdout } = await execFileAsync("unzip", ["-Z", "-l", archiveFullPath], { maxBuffer: maxBufferBytes });
-          // zipinfo -l format: perms version os size type csize method date time name
-          for (const line of stdout.split("\n")) {
-            const match = line.match(/^([d-])\S+\s+\S+\s+\S+\s+(\d+)\s+\S+\s+\d+\s+\S+\s+(\d{2}-\w{3}-\d{2})\s+(\d{2}:\d{2})\s+(.+)$/);
-            if (!match) continue;
-            const isDir = match[1] === "d" || match[5].endsWith("/");
-            const name = match[5].replace(/\/$/, "");
-            if (!name || name === "." || name.startsWith("..")) continue;
-            entries.push({
-              name,
-              size: parseInt(match[2], 10) || 0,
-              isDirectory: isDir,
-            });
-          }
-        } else {
-          const { stdout } = await execFileAsync("tar", ["-tzvf", archiveFullPath], { maxBuffer: maxBufferBytes });
-          for (const line of stdout.split("\n")) {
-            // tar -tzvf format: drwxr-xr-x user/group  0 2024-01-01 00:00 path/to/dir/
-            const match = line.match(/^([d-])[\S]+\s+\S+\s+(\d+)\s+(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})\s+(.+)$/);
-            if (!match) continue;
-            const isDir = match[1] === "d" || match[5].endsWith("/");
-            const name = match[5].replace(/\/$/, "");
-            if (!name || name === "." || name.startsWith("..")) continue;
-            entries.push({
-              name,
-              size: parseInt(match[2], 10) || 0,
-              isDirectory: isDir,
-              modified: `${match[3]}T${match[4]}:00Z`,
-            });
-          }
-        }
-
-        reply.send({ success: true, data: entries });
+        reply.send({ success: true, data: result.data });
       } catch (error: any) {
         request.log.error({ err: error, archivePath }, "Failed to read archive contents");
-        if (isMaxBufferError(error)) {
-          return reply.status(413).send(maxBufferErrorResponse());
+        if (error?.message?.includes("timed out")) {
+          return reply.status(504).send({ error: "Agent file operation timed out" });
         }
         reply.status(500).send({ error: error?.message || "Failed to read archive contents" });
       }
@@ -4116,10 +4044,16 @@ export async function serverRoutes(app: FastifyInstance) {
       }
 
       try {
-        const { targetPath } = await resolveServerPath(server.uuid, normalizedPath);
-        await fs.mkdir(path.dirname(targetPath), { recursive: true });
-        await fs.writeFile(targetPath, content);
-      } catch (error) {
+        const result = await tunnelFileOp(server.nodeId, "write", server.uuid, normalizedPath, {
+          content,
+        });
+        if (!result.success) {
+          return reply.status(400).send({ error: result.error || "Failed to write file" });
+        }
+      } catch (error: any) {
+        if (error?.message?.includes("timed out")) {
+          return reply.status(504).send({ error: "Agent file operation timed out" });
+        }
         return reply.status(400).send({ error: "Failed to write file" });
       }
 
@@ -4198,9 +4132,16 @@ export async function serverRoutes(app: FastifyInstance) {
       }
 
       try {
-        const { targetPath } = await resolveServerPath(server.uuid, normalizedPath);
-        await fs.chmod(targetPath, parsedMode);
-      } catch (error) {
+        const result = await tunnelFileOp(server.nodeId, "permissions", server.uuid, normalizedPath, {
+          mode: parsedMode,
+        });
+        if (!result.success) {
+          return reply.status(400).send({ error: result.error || "Failed to update permissions" });
+        }
+      } catch (error: any) {
+        if (error?.message?.includes("timed out")) {
+          return reply.status(504).send({ error: "Agent file operation timed out" });
+        }
         return reply.status(400).send({ error: "Failed to update permissions" });
       }
 
@@ -4264,9 +4205,14 @@ export async function serverRoutes(app: FastifyInstance) {
       }
 
       try {
-        const { targetPath } = await resolveServerPath(server.uuid, normalizedPath);
-        await fs.rm(targetPath, { recursive: true, force: true });
-      } catch (error) {
+        const result = await tunnelFileOp(server.nodeId, "delete", server.uuid, normalizedPath);
+        if (!result.success) {
+          return reply.status(400).send({ error: result.error || "Failed to delete selection" });
+        }
+      } catch (error: any) {
+        if (error?.message?.includes("timed out")) {
+          return reply.status(504).send({ error: "Agent file operation timed out" });
+        }
         return reply.status(400).send({ error: "Failed to delete selection" });
       }
 
@@ -4334,11 +4280,16 @@ export async function serverRoutes(app: FastifyInstance) {
       }
 
       try {
-        const { targetPath: sourcePath } = await resolveServerPath(server.uuid, normalizedFrom);
-        const { targetPath: destPath } = await resolveServerPath(server.uuid, normalizedTo);
-        await fs.mkdir(path.dirname(destPath), { recursive: true });
-        await fs.rename(sourcePath, destPath);
-      } catch (error) {
+        const result = await tunnelFileOp(server.nodeId, "rename", server.uuid, normalizedFrom, {
+          to: normalizedTo,
+        });
+        if (!result.success) {
+          return reply.status(400).send({ error: result.error || "Failed to rename" });
+        }
+      } catch (error: any) {
+        if (error?.message?.includes("timed out")) {
+          return reply.status(504).send({ error: "Agent file operation timed out" });
+        }
         return reply.status(400).send({ error: "Failed to rename" });
       }
 

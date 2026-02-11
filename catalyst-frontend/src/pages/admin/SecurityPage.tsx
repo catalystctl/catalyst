@@ -25,6 +25,11 @@ function SecurityPage() {
   const [lockoutDurationMinutes, setLockoutDurationMinutes] = useState('15');
   const [auditRetentionDays, setAuditRetentionDays] = useState('90');
   const [maxBufferMb, setMaxBufferMb] = useState('50');
+  // File tunnel settings
+  const [fileTunnelRateLimitMax, setFileTunnelRateLimitMax] = useState('100');
+  const [fileTunnelMaxUploadMb, setFileTunnelMaxUploadMb] = useState('100');
+  const [fileTunnelMaxPendingPerNode, setFileTunnelMaxPendingPerNode] = useState('50');
+  const [fileTunnelConcurrentMax, setFileTunnelConcurrentMax] = useState('10');
   const [search, setSearch] = useState('');
   const [lockoutPage, setLockoutPage] = useState(1);
   const lockoutPageSize = 20;
@@ -50,6 +55,11 @@ function SecurityPage() {
     setLockoutDurationMinutes(String(settings.lockoutDurationMinutes));
     setAuditRetentionDays(String(settings.auditRetentionDays));
     setMaxBufferMb(String(settings.maxBufferMb));
+    // File tunnel settings
+    setFileTunnelRateLimitMax(String(settings.fileTunnelRateLimitMax ?? 100));
+    setFileTunnelMaxUploadMb(String(settings.fileTunnelMaxUploadMb ?? 100));
+    setFileTunnelMaxPendingPerNode(String(settings.fileTunnelMaxPendingPerNode ?? 50));
+    setFileTunnelConcurrentMax(String(settings.fileTunnelConcurrentMax ?? 10));
   }, [settings]);
 
   const canSubmit = useMemo(
@@ -67,7 +77,11 @@ function SecurityPage() {
       Number(lockoutWindowMinutes) > 0 &&
       Number(lockoutDurationMinutes) > 0 &&
       Number(auditRetentionDays) > 0 &&
-      Number(maxBufferMb) >= 1,
+      Number(maxBufferMb) >= 1 &&
+      Number(fileTunnelRateLimitMax) > 0 &&
+      Number(fileTunnelMaxUploadMb) > 0 &&
+      Number(fileTunnelMaxPendingPerNode) > 0 &&
+      Number(fileTunnelConcurrentMax) > 0,
     [
       authRateLimitMax,
       fileRateLimitMax,
@@ -82,6 +96,10 @@ function SecurityPage() {
       lockoutDurationMinutes,
       auditRetentionDays,
       maxBufferMb,
+      fileTunnelRateLimitMax,
+      fileTunnelMaxUploadMb,
+      fileTunnelMaxPendingPerNode,
+      fileTunnelConcurrentMax,
     ],
   );
 
@@ -101,6 +119,11 @@ function SecurityPage() {
         lockoutDurationMinutes: Number(lockoutDurationMinutes),
         auditRetentionDays: Number(auditRetentionDays),
         maxBufferMb: Number(maxBufferMb),
+        // File tunnel settings
+        fileTunnelRateLimitMax: Number(fileTunnelRateLimitMax),
+        fileTunnelMaxUploadMb: Number(fileTunnelMaxUploadMb),
+        fileTunnelMaxPendingPerNode: Number(fileTunnelMaxPendingPerNode),
+        fileTunnelConcurrentMax: Number(fileTunnelConcurrentMax),
       }),
     onSuccess: () => {
       notifySuccess('Security settings updated');
@@ -339,6 +362,91 @@ function SecurityPage() {
             <input
               value={maxBufferMb}
               onChange={(event) => setMaxBufferMb(event.target.value)}
+              type="number"
+              min="1"
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">File tunnel settings</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Limits for the agent file tunnel used for file operations.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <label className="block text-xs text-slate-500 dark:text-slate-300">
+            <span className="flex items-center gap-1">
+              Tunnel requests / min
+              <span className="group relative">
+                <Info className="h-3.5 w-3.5 cursor-help text-slate-400 dark:text-slate-500" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                  Maximum file tunnel requests per minute per agent node.
+                </span>
+              </span>
+            </span>
+            <input
+              value={fileTunnelRateLimitMax}
+              onChange={(event) => setFileTunnelRateLimitMax(event.target.value)}
+              type="number"
+              min="1"
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+            />
+          </label>
+          <label className="block text-xs text-slate-500 dark:text-slate-300">
+            <span className="flex items-center gap-1">
+              Max upload size (MB)
+              <span className="group relative">
+                <Info className="h-3.5 w-3.5 cursor-help text-slate-400 dark:text-slate-500" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                  Maximum file upload size in megabytes for file tunnel operations.
+                </span>
+              </span>
+            </span>
+            <input
+              value={fileTunnelMaxUploadMb}
+              onChange={(event) => setFileTunnelMaxUploadMb(event.target.value)}
+              type="number"
+              min="1"
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+            />
+          </label>
+          <label className="block text-xs text-slate-500 dark:text-slate-300">
+            <span className="flex items-center gap-1">
+              Max pending per node
+              <span className="group relative">
+                <Info className="h-3.5 w-3.5 cursor-help text-slate-400 dark:text-slate-500" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                  Maximum pending file operations queued per agent node.
+                </span>
+              </span>
+            </span>
+            <input
+              value={fileTunnelMaxPendingPerNode}
+              onChange={(event) => setFileTunnelMaxPendingPerNode(event.target.value)}
+              type="number"
+              min="1"
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+            />
+          </label>
+          <label className="block text-xs text-slate-500 dark:text-slate-300">
+            <span className="flex items-center gap-1">
+              Max concurrent (agent)
+              <span className="group relative">
+                <Info className="h-3.5 w-3.5 cursor-help text-slate-400 dark:text-slate-500" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                  Maximum concurrent file operations processed by each agent. Requires agent restart to take effect.
+                </span>
+              </span>
+            </span>
+            <input
+              value={fileTunnelConcurrentMax}
+              onChange={(event) => setFileTunnelConcurrentMax(event.target.value)}
               type="number"
               min="1"
               className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"

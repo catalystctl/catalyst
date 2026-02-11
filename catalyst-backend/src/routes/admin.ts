@@ -1318,6 +1318,10 @@ export async function adminRoutes(app: FastifyInstance) {
         lockoutDurationMinutes = DEFAULT_SECURITY_SETTINGS.lockoutDurationMinutes,
         auditRetentionDays = DEFAULT_SECURITY_SETTINGS.auditRetentionDays,
         maxBufferMb = DEFAULT_SECURITY_SETTINGS.maxBufferMb,
+        fileTunnelRateLimitMax = DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitMax,
+        fileTunnelMaxUploadMb = DEFAULT_SECURITY_SETTINGS.fileTunnelMaxUploadMb,
+        fileTunnelMaxPendingPerNode = DEFAULT_SECURITY_SETTINGS.fileTunnelMaxPendingPerNode,
+        fileTunnelConcurrentMax = DEFAULT_SECURITY_SETTINGS.fileTunnelConcurrentMax,
       } = request.body as Partial<typeof DEFAULT_SECURITY_SETTINGS>;
 
       const numericFields = [
@@ -1334,6 +1338,10 @@ export async function adminRoutes(app: FastifyInstance) {
         lockoutDurationMinutes,
         auditRetentionDays,
         maxBufferMb,
+        fileTunnelRateLimitMax,
+        fileTunnelMaxUploadMb,
+        fileTunnelMaxPendingPerNode,
+        fileTunnelConcurrentMax,
       ];
       if (numericFields.some((value) => !Number.isFinite(value) || Number(value) <= 0)) {
         return reply.status(400).send({ error: 'Security settings must be positive numbers' });
@@ -1353,6 +1361,10 @@ export async function adminRoutes(app: FastifyInstance) {
         lockoutDurationMinutes: Number(lockoutDurationMinutes),
         auditRetentionDays: Number(auditRetentionDays),
         maxBufferMb: Number(maxBufferMb),
+        fileTunnelRateLimitMax: Number(fileTunnelRateLimitMax),
+        fileTunnelMaxUploadMb: Number(fileTunnelMaxUploadMb),
+        fileTunnelMaxPendingPerNode: Number(fileTunnelMaxPendingPerNode),
+        fileTunnelConcurrentMax: Number(fileTunnelConcurrentMax),
       });
 
       await createAuditLog(user.userId, {
@@ -1372,6 +1384,10 @@ export async function adminRoutes(app: FastifyInstance) {
           lockoutDurationMinutes,
           auditRetentionDays,
           maxBufferMb,
+          fileTunnelRateLimitMax,
+          fileTunnelMaxUploadMb,
+          fileTunnelMaxPendingPerNode,
+          fileTunnelConcurrentMax,
         },
       });
 

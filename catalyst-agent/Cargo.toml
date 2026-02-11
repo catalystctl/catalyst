@@ -30,6 +30,8 @@ base64 = "0.22"
 sysinfo = "0.38"
 nix = { version = "0.31", features = ["fs"] }
 libc = "0.2"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+tokio-stream = "0.1"
 
 [profile.release]
 opt-level = 3

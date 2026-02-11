@@ -33,6 +33,11 @@ export type SecuritySettings = {
   lockoutDurationMinutes: number;
   auditRetentionDays: number;
   maxBufferMb: number;
+  // File tunnel security settings
+  fileTunnelRateLimitMax: number;
+  fileTunnelMaxUploadMb: number;
+  fileTunnelMaxPendingPerNode: number;
+  fileTunnelConcurrentMax: number;
 };
 
 export type ModManagerSettings = {
@@ -76,6 +81,11 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   lockoutDurationMinutes: 15,
   auditRetentionDays: 90,
   maxBufferMb: 50,
+  // File tunnel security settings
+  fileTunnelRateLimitMax: 100,
+  fileTunnelMaxUploadMb: 100,
+  fileTunnelMaxPendingPerNode: 50,
+  fileTunnelConcurrentMax: 10,
 };
 
 export const getSmtpSettings = async (): Promise<SmtpSettings> => {
@@ -165,6 +175,10 @@ export const getSecuritySettings = async (): Promise<SecuritySettings> => {
       settings.lockoutDurationMinutes ?? DEFAULT_SECURITY_SETTINGS.lockoutDurationMinutes,
     auditRetentionDays: settings.auditRetentionDays ?? DEFAULT_SECURITY_SETTINGS.auditRetentionDays,
     maxBufferMb: settings.maxBufferMb ?? DEFAULT_SECURITY_SETTINGS.maxBufferMb,
+    fileTunnelRateLimitMax: settings.fileTunnelRateLimitMax ?? DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitMax,
+    fileTunnelMaxUploadMb: settings.fileTunnelMaxUploadMb ?? DEFAULT_SECURITY_SETTINGS.fileTunnelMaxUploadMb,
+    fileTunnelMaxPendingPerNode: settings.fileTunnelMaxPendingPerNode ?? DEFAULT_SECURITY_SETTINGS.fileTunnelMaxPendingPerNode,
+    fileTunnelConcurrentMax: settings.fileTunnelConcurrentMax ?? DEFAULT_SECURITY_SETTINGS.fileTunnelConcurrentMax,
   };
 };
 
@@ -217,6 +231,10 @@ export const upsertSecuritySettings = async (payload: SecuritySettings) => {
       lockoutDurationMinutes: payload.lockoutDurationMinutes,
       auditRetentionDays: payload.auditRetentionDays,
       maxBufferMb: payload.maxBufferMb,
+      fileTunnelRateLimitMax: payload.fileTunnelRateLimitMax,
+      fileTunnelMaxUploadMb: payload.fileTunnelMaxUploadMb,
+      fileTunnelMaxPendingPerNode: payload.fileTunnelMaxPendingPerNode,
+      fileTunnelConcurrentMax: payload.fileTunnelConcurrentMax,
     },
     update: {
       authRateLimitMax: payload.authRateLimitMax,
@@ -232,6 +250,10 @@ export const upsertSecuritySettings = async (payload: SecuritySettings) => {
       lockoutDurationMinutes: payload.lockoutDurationMinutes,
       auditRetentionDays: payload.auditRetentionDays,
       maxBufferMb: payload.maxBufferMb,
+      fileTunnelRateLimitMax: payload.fileTunnelRateLimitMax,
+      fileTunnelMaxUploadMb: payload.fileTunnelMaxUploadMb,
+      fileTunnelMaxPendingPerNode: payload.fileTunnelMaxPendingPerNode,
+      fileTunnelConcurrentMax: payload.fileTunnelConcurrentMax,
     },
   });
 };

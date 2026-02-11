@@ -274,6 +274,11 @@ model SystemSetting {
   lockoutDurationMinutes      Int?
   auditRetentionDays          Int?
   maxBufferMb                 Int?
+  // File tunnel security settings
+  fileTunnelRateLimitMax      Int?
+  fileTunnelMaxUploadMb       Int?
+  fileTunnelMaxPendingPerNode Int?
+  fileTunnelConcurrentMax     Int?
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 }
