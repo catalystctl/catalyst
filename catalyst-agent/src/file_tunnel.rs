@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Semaphore;
+use tokio::sync::{RwLock, Semaphore};
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -48,13 +48,18 @@ struct TunnelResponse {
 pub struct FileTunnelClient {
     config: Arc<AgentConfig>,
     file_manager: Arc<FileManager>,
+    backend_connected: Arc<RwLock<bool>>,
     client: Client,
     base_url: String,
     request_semaphore: Arc<Semaphore>,
 }
 
 impl FileTunnelClient {
-    pub fn new(config: Arc<AgentConfig>, file_manager: Arc<FileManager>) -> Self {
+    pub fn new(
+        config: Arc<AgentConfig>,
+        file_manager: Arc<FileManager>,
+        backend_connected: Arc<RwLock<bool>>,
+    ) -> Self {
         let client = Client::builder()
             .pool_max_idle_per_host(POLL_CONCURRENCY + 2)
             .timeout(Duration::from_secs(90))
@@ -77,6 +82,7 @@ impl FileTunnelClient {
         Self {
             config,
             file_manager,
+            backend_connected,
             client,
             base_url,
             request_semaphore,
@@ -102,10 +108,21 @@ impl FileTunnelClient {
             let node_id = self.config.server.node_id.clone();
             let api_key = self.config.server.api_key.clone();
             let file_manager = self.file_manager.clone();
+            let backend_connected = self.backend_connected.clone();
             let request_semaphore = self.request_semaphore.clone();
 
             handles.push(tokio::spawn(async move {
-                poll_worker(i, client, base_url, node_id, api_key, file_manager, request_semaphore).await;
+                poll_worker(
+                    i,
+                    client,
+                    base_url,
+                    node_id,
+                    api_key,
+                    file_manager,
+                    backend_connected,
+                    request_semaphore,
+                )
+                .await;
             }));
         }
 
@@ -125,12 +142,18 @@ async fn poll_worker(
     node_id: String,
     api_key: String,
     file_manager: Arc<FileManager>,
+    backend_connected: Arc<RwLock<bool>>,
     request_semaphore: Arc<Semaphore>,
 ) {
     let poll_url = format!("{}/api/internal/file-tunnel/poll", base_url);
     let mut retry_delay = RETRY_DELAY;
 
     loop {
+        if !*backend_connected.read().await {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            continue;
+        }
+
         match client
             .get(&poll_url)
             .header("X-Node-Id", &node_id)

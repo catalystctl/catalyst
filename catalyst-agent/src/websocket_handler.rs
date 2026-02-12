@@ -54,11 +54,56 @@ fn normalize_startup_for_sh(command: &str) -> String {
     .into_owned()
 }
 
+#[derive(Clone, Debug)]
+struct StopPolicy {
+    stop_command: Option<String>,
+    stop_signal: String,
+}
+
+impl Default for StopPolicy {
+    fn default() -> Self {
+        Self {
+            stop_command: None,
+            stop_signal: "SIGTERM".to_string(),
+        }
+    }
+}
+
+fn parse_stop_policy(msg: &Value) -> StopPolicy {
+    let mut policy = StopPolicy::default();
+    let Some(template) = msg.get("template").and_then(Value::as_object) else {
+        return policy;
+    };
+
+    if let Some(command) = template
+        .get("stopCommand")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        policy.stop_command = Some(command.to_string());
+    }
+
+    if let Some(raw_signal) = template
+        .get("sendSignalTo")
+        .and_then(Value::as_str)
+        .map(str::trim)
+    {
+        let normalized = raw_signal.to_ascii_uppercase();
+        if matches!(normalized.as_str(), "SIGTERM" | "SIGINT") {
+            policy.stop_signal = normalized;
+        }
+    }
+
+    policy
+}
+
 pub struct WebSocketHandler {
     config: Arc<AgentConfig>,
     runtime: Arc<ContainerdRuntime>,
     file_manager: Arc<FileManager>,
     storage_manager: Arc<StorageManager>,
+    backend_connected: Arc<RwLock<bool>>,
     write: Arc<RwLock<Option<Arc<tokio::sync::Mutex<WsWrite>>>>>,
     active_log_streams: Arc<RwLock<HashSet<String>>>,
     monitor_tasks: Arc<RwLock<HashMap<String, tokio::task::JoinHandle<()>>>>,
@@ -72,6 +117,7 @@ impl Clone for WebSocketHandler {
             runtime: self.runtime.clone(),
             file_manager: self.file_manager.clone(),
             storage_manager: self.storage_manager.clone(),
+            backend_connected: self.backend_connected.clone(),
             write: self.write.clone(),
             active_log_streams: self.active_log_streams.clone(),
             monitor_tasks: self.monitor_tasks.clone(),
@@ -96,17 +142,24 @@ impl WebSocketHandler {
         runtime: Arc<ContainerdRuntime>,
         file_manager: Arc<FileManager>,
         storage_manager: Arc<StorageManager>,
+        backend_connected: Arc<RwLock<bool>>,
     ) -> Self {
         Self {
             config,
             runtime,
             file_manager,
             storage_manager,
+            backend_connected,
             write: Arc::new(RwLock::new(None)),
             active_log_streams: Arc::new(RwLock::new(HashSet::new())),
             monitor_tasks: Arc::new(RwLock::new(HashMap::new())),
             active_uploads: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    async fn set_backend_connected(&self, connected: bool) {
+        let mut status = self.backend_connected.write().await;
+        *status = connected;
     }
 
     async fn flush_buffered_metrics(
@@ -155,13 +208,17 @@ impl WebSocketHandler {
                 }
                 Err(e) => {
                     error!("Connection error: {}", e);
-                    tokio::time::sleep(Duration::from_secs(5)).await;
                 }
             }
+
+            self.set_backend_connected(false).await;
+            tokio::time::sleep(Duration::from_secs(5)).await;
         }
     }
 
     async fn establish_connection(&self) -> AgentResult<()> {
+        self.set_backend_connected(false).await;
+
         // Include token in URL for rate limit bypass before WebSocket upgrade
         let (auth_token, token_type) = self.select_agent_auth_token()?;
 
@@ -310,7 +367,9 @@ impl WebSocketHandler {
                     .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
                 let server_id = msg["serverId"].as_str().unwrap_or(server_uuid);
                 let container_id = self.resolve_container_id(server_id, server_uuid).await;
-                self.stop_server(server_id, container_id).await?;
+                let stop_policy = parse_stop_policy(&msg);
+                self.stop_server(server_id, container_id, &stop_policy)
+                    .await?;
             }
             Some("kill_server") => {
                 let server_uuid = msg["serverUuid"]
@@ -326,7 +385,9 @@ impl WebSocketHandler {
                     .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
                 let server_id = msg["serverId"].as_str().unwrap_or(server_uuid);
                 let container_id = self.resolve_container_id(server_id, server_uuid).await;
-                self.stop_server(server_id, container_id).await?;
+                let stop_policy = parse_stop_policy(&msg);
+                self.stop_server(server_id, container_id, &stop_policy)
+                    .await?;
                 tokio::time::sleep(Duration::from_secs(2)).await;
                 self.start_server_with_details(&msg).await?;
             }
@@ -355,6 +416,7 @@ impl WebSocketHandler {
             Some("delete_network") => self.handle_delete_network(&msg, write).await?,
             Some("node_handshake_response") => {
                 info!("Handshake accepted by backend");
+                self.set_backend_connected(true).await;
             }
             _ => {
                 warn!("Unknown message type: {}", msg["type"]);
@@ -384,6 +446,7 @@ impl WebSocketHandler {
             .and_then(|value| value.as_str())
             .unwrap_or(server_id);
         let container_id = self.resolve_container_id(server_id, server_uuid).await;
+        let stop_policy = parse_stop_policy(msg);
 
         match action {
             "install" => self.install_server(msg).await?,
@@ -396,10 +459,10 @@ impl WebSocketHandler {
                 }
                 self.start_server(server_id, container_id).await?
             }
-            "stop" => self.stop_server(server_id, container_id).await?,
+            "stop" => self.stop_server(server_id, container_id, &stop_policy).await?,
             "kill" => self.kill_server(server_id, container_id).await?,
             "restart" => {
-                self.stop_server(server_id, container_id).await?;
+                self.stop_server(server_id, container_id, &stop_policy).await?;
                 tokio::time::sleep(Duration::from_secs(2)).await;
                 let container_id = self.resolve_container_id(server_id, server_uuid).await;
                 self.start_server(server_id, container_id).await?;
@@ -1277,7 +1340,30 @@ impl WebSocketHandler {
         }
     }
 
-    async fn stop_server(&self, server_id: &str, container_id: String) -> AgentResult<()> {
+    async fn wait_for_container_shutdown(&self, container_id: &str, timeout: Duration) -> bool {
+        let deadline = tokio::time::Instant::now() + timeout;
+        loop {
+            if !self
+                .runtime
+                .is_container_running(container_id)
+                .await
+                .unwrap_or(false)
+            {
+                return true;
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return false;
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+    }
+
+    async fn stop_server(
+        &self,
+        server_id: &str,
+        container_id: String,
+        stop_policy: &StopPolicy,
+    ) -> AgentResult<()> {
         if container_id.is_empty() {
             info!("No container found for server {}, marking as stopped", server_id);
             self.stop_monitor_task(server_id).await;
@@ -1298,7 +1384,75 @@ impl WebSocketHandler {
             .await
             .unwrap_or(false)
         {
-            self.runtime.stop_container(&container_id, 30).await?;
+            let mut stopped_gracefully = false;
+            if let Some(command) = stop_policy.stop_command.as_deref() {
+                let payload = if command.ends_with('\n') {
+                    command.to_string()
+                } else {
+                    format!("{}\n", command)
+                };
+                let _ = self
+                    .emit_console_output(
+                        server_id,
+                        "system",
+                        "[Catalyst] Sending graceful stop command to server process...\n",
+                    )
+                    .await;
+
+                match self.runtime.send_input(&container_id, &payload).await {
+                    Ok(()) => {
+                        if self
+                            .wait_for_container_shutdown(&container_id, Duration::from_secs(20))
+                            .await
+                        {
+                            stopped_gracefully = true;
+                        } else {
+                            let _ = self
+                                .emit_console_output(
+                                    server_id,
+                                    "system",
+                                    &format!(
+                                        "[Catalyst] Stop command timed out, sending {}...\n",
+                                        stop_policy.stop_signal
+                                    ),
+                                )
+                                .await;
+                        }
+                    }
+                    Err(err) => {
+                        warn!(
+                            "Graceful stop command failed for server {} (container {}): {}",
+                            server_id, container_id, err
+                        );
+                        let _ = self
+                            .emit_console_output(
+                                server_id,
+                                "system",
+                                &format!(
+                                    "[Catalyst] Stop command failed ({}), sending {}...\n",
+                                    err, stop_policy.stop_signal
+                                ),
+                            )
+                            .await;
+                    }
+                }
+            }
+
+            if !stopped_gracefully {
+                let _ = self
+                    .emit_console_output(
+                        server_id,
+                        "system",
+                        &format!(
+                            "[Catalyst] Requesting graceful shutdown with {}...\n",
+                            stop_policy.stop_signal
+                        ),
+                    )
+                    .await;
+                self.runtime
+                    .stop_container_with_signal(&container_id, &stop_policy.stop_signal, 30)
+                    .await?;
+            }
         }
 
         if self.runtime.container_exists(&container_id).await {
@@ -1329,9 +1483,15 @@ impl WebSocketHandler {
 
         self.stop_monitor_task(server_id).await;
 
-        self.runtime
-            .kill_container(&container_id, "SIGKILL")
-            .await?;
+        let _ = self
+            .emit_console_output(
+                server_id,
+                "system",
+                "[Catalyst] Force killing server with SIGKILL...\n",
+            )
+            .await;
+
+        self.runtime.force_kill_container(&container_id).await?;
 
         if self.runtime.container_exists(&container_id).await {
             self.runtime.remove_container(&container_id).await?;

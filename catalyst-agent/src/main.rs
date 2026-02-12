@@ -47,13 +47,19 @@ impl CatalystAgent {
 
         let file_manager = Arc::new(FileManager::new(config.server.data_dir.join("servers")));
         let storage_manager = Arc::new(StorageManager::new(config.server.data_dir.clone()));
-        let file_tunnel = Arc::new(FileTunnelClient::new(config.clone(), file_manager.clone()));
+        let backend_connected = Arc::new(RwLock::new(false));
+        let file_tunnel = Arc::new(FileTunnelClient::new(
+            config.clone(),
+            file_manager.clone(),
+            backend_connected.clone(),
+        ));
 
         let ws_handler = Arc::new(WebSocketHandler::new(
             config.clone(),
             runtime.clone(),
             file_manager.clone(),
             storage_manager.clone(),
+            backend_connected.clone(),
         ));
 
         Ok(Self {
@@ -63,7 +69,7 @@ impl CatalystAgent {
             file_manager,
             file_tunnel,
             storage_manager,
-            backend_connected: Arc::new(RwLock::new(false)),
+            backend_connected,
         })
     }
 

@@ -269,6 +269,11 @@ impl ContainerdRuntime {
                 config.port, config.port_bindings,
             ).await {
                 warn!("CNI network setup failed: {}", e);
+                let _ = self.remove_container(config.container_id).await;
+                return Err(AgentError::ContainerError(format!(
+                    "CNI network setup failed for {}: {}",
+                    config.container_id, e
+                )));
             }
         }
 
@@ -449,11 +454,24 @@ impl ContainerdRuntime {
     }
 
     pub async fn stop_container(&self, container_id: &str, timeout_secs: u64) -> AgentResult<()> {
-        info!("Stopping container: {}", container_id);
+        self.stop_container_with_signal(container_id, "SIGTERM", timeout_secs)
+            .await
+    }
+
+    pub async fn stop_container_with_signal(
+        &self,
+        container_id: &str,
+        signal: &str,
+        timeout_secs: u64,
+    ) -> AgentResult<()> {
+        info!(
+            "Stopping container: {} with signal {}",
+            container_id, signal
+        );
         let mut tasks = TasksClient::new(self.channel.clone());
-        // SIGTERM
+        let sig = parse_signal(signal);
         let req = TaskKillRequest {
-            container_id: container_id.to_string(), signal: 15, all: true, ..Default::default()
+            container_id: container_id.to_string(), signal: sig, all: true, ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
         if let Err(e) = tasks.kill(req).await {
@@ -463,7 +481,10 @@ impl ContainerdRuntime {
         match tokio::time::timeout(Duration::from_secs(timeout_secs), self.wait_for_exit(container_id)).await {
             Ok(Ok(_)) | Ok(Err(_)) => {}
             Err(_) => {
-                warn!("Container {} did not stop in {}s, sending SIGKILL", container_id, timeout_secs);
+                warn!(
+                    "Container {} did not stop in {}s after {}, sending SIGKILL",
+                    container_id, timeout_secs, signal
+                );
                 let req = TaskKillRequest {
                     container_id: container_id.to_string(), signal: 9, all: true, ..Default::default()
                 };
@@ -480,7 +501,7 @@ impl ContainerdRuntime {
 
     pub async fn kill_container(&self, container_id: &str, signal: &str) -> AgentResult<()> {
         info!("Killing container: {} with signal {}", container_id, signal);
-        let sig = match signal { "SIGKILL"|"9" => 9u32, "SIGTERM"|"15" => 15, "SIGINT"|"2" => 2, _ => 9 };
+        let sig = parse_signal(signal);
         let mut tasks = TasksClient::new(self.channel.clone());
         let req = TaskKillRequest {
             container_id: container_id.to_string(), signal: sig, all: true, ..Default::default()
@@ -495,6 +516,10 @@ impl ContainerdRuntime {
         let req = with_namespace!(req, &self.namespace);
         let _ = tasks.delete(req).await;
         Ok(())
+    }
+
+    pub async fn force_kill_container(&self, container_id: &str) -> AgentResult<()> {
+        self.kill_container(container_id, "SIGKILL").await
     }
 
     pub async fn remove_container(&self, container_id: &str) -> AgentResult<()> {
@@ -1085,11 +1110,9 @@ impl ContainerdRuntime {
         let env_list: Vec<String> = env_map.into_iter().map(|(k, v)| format!("{}={}", k, v)).collect();
 
         let args = if !config.startup_command.is_empty() {
-            let fifo = io_dir.join("stdin");
             let escaped_startup = shell_escape_value(config.startup_command);
             let wrapped_command = format!(
-                "export PATH=\"/opt/java/openjdk/bin:${{PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}}\"; FIFO=\"{}\"; exec 3<> \"$FIFO\"; exec < \"$FIFO\"; exec /bin/sh -c {}",
-                fifo.display(),
+                "export PATH=\"/opt/java/openjdk/bin:${{PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}}\"; exec /bin/sh -c {}",
                 escaped_startup
             );
             vec!["/bin/sh".to_string(), "-c".to_string(), wrapped_command]
@@ -1156,27 +1179,38 @@ impl ContainerdRuntime {
     }
 
     async fn setup_cni_network(&self, container_id: &str, pid: u32, network_mode: Option<&str>, network_ip: Option<&str>, primary_port: u16, port_bindings: &HashMap<u16, u16>) -> AgentResult<()> {
-        let netns = format!("/proc/{}/ns/net", pid);
         let network = network_mode.unwrap_or("bridge");
         if network == "host" { return Ok(()); }
+        let netns = self.resolve_task_netns(container_id, pid).await?;
         let mut cfg = if network == "bridge" || network == "default" {
             serde_json::json!({"cniVersion":"0.4.0","name":"catalyst","type":"bridge","bridge":"catalyst0","isGateway":true,"ipMasq":true,"ipam":{"type":"host-local","ranges":[[{"subnet":"10.42.0.0/16"}]],"routes":[{"dst":"0.0.0.0/0"}],"dataDir":"/var/lib/cni/networks"}})
         } else {
-            // macvlan or custom network — auto-detect host network config
-            let (iface, subnet, gateway) = detect_host_network().unwrap_or_else(|| {
-                warn!("Could not detect host network, falling back to eth0/192.168.1.0");
-                ("eth0".to_string(), "192.168.1.0/24".to_string(), "192.168.1.1".to_string())
-            });
-            info!("macvlan network '{}': master={}, subnet={}, gateway={}", network, iface, subnet, gateway);
-            serde_json::json!({"cniVersion":"0.4.0","name":network,"type":"macvlan","master":iface,"mode":"bridge","ipam":{"type":"host-local","ranges":[[{"subnet":subnet,"gateway":gateway}]],"routes":[{"dst":"0.0.0.0/0"}],"dataDir":"/var/lib/cni/networks"}})
+            // For custom networks, prefer explicit CNI config written by NetworkManager.
+            if let Some(cfg) = load_named_cni_plugin_config(network) {
+                cfg
+            } else {
+                // Fallback: synthesize a macvlan config from detected host network.
+                let (iface, subnet, gateway) = detect_host_network().unwrap_or_else(|| {
+                    warn!("Could not detect host network, falling back to eth0/192.168.1.0");
+                    ("eth0".to_string(), "192.168.1.0/24".to_string(), "192.168.1.1".to_string())
+                });
+                info!("macvlan network '{}': master={}, subnet={}, gateway={}", network, iface, subnet, gateway);
+                serde_json::json!({"cniVersion":"0.4.0","name":network,"type":"macvlan","master":iface,"mode":"bridge","ipam":{"type":"host-local","ranges":[[{"subnet":subnet,"gateway":gateway}]],"routes":[{"dst":"0.0.0.0/0"}],"dataDir":"/var/lib/cni/networks"}})
+            }
         };
         if let Some(ip) = network_ip {
             if let Some(ipam) = cfg.get_mut("ipam") {
                 // Determine prefix length from the subnet in config
                 let prefix = ipam.get("ranges").and_then(|r| r.get(0)).and_then(|r| r.get(0))
                     .and_then(|r| r.get("subnet")).and_then(|s| s.as_str())
+                    .or_else(|| ipam.get("subnet").and_then(|s| s.as_str()))
                     .and_then(|s| s.split('/').nth(1)).unwrap_or("24");
                 ipam["addresses"] = serde_json::json!([{"address":format!("{}/{}", ip, prefix)}]);
+            } else {
+                warn!(
+                    "Ignoring requested static IP {} for network {} because ipam config is missing",
+                    ip, network
+                );
             }
         }
         // Store CNI config for proper teardown
@@ -1193,6 +1227,44 @@ impl ContainerdRuntime {
         Ok(())
     }
 
+    async fn resolve_task_netns(&self, container_id: &str, initial_pid: u32) -> AgentResult<String> {
+        let mut pid = initial_pid;
+        let mut last_get_err: Option<String> = None;
+
+        for _ in 0..20 {
+            if pid > 0 {
+                let netns = format!("/proc/{}/ns/net", pid);
+                if Path::new(&netns).exists() {
+                    return Ok(netns);
+                }
+            }
+
+            let mut tasks = TasksClient::new(self.channel.clone());
+            let req = containerd_client::services::v1::GetRequest {
+                container_id: container_id.to_string(),
+                ..Default::default()
+            };
+            let req = with_namespace!(req, &self.namespace);
+            match tasks.get(req).await {
+                Ok(resp) => {
+                    pid = resp.into_inner().process.map(|p| p.pid).unwrap_or(0);
+                }
+                Err(err) => {
+                    last_get_err = Some(format!("{}: {}", err.code(), err.message()));
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+
+        let detail = last_get_err
+            .map(|value| format!(", last task.get error: {}", value))
+            .unwrap_or_default();
+        Err(AgentError::ContainerError(format!(
+            "Unable to resolve task network namespace for {} (initial pid {}, last pid {}){}",
+            container_id, initial_pid, pid, detail
+        )))
+    }
+
     async fn exec_cni_plugin(&self, config: &serde_json::Value, command: &str, cid: &str, netns: &str, ifname: &str) -> AgentResult<serde_json::Value> {
         let ptype = config["type"].as_str().unwrap_or("bridge");
         let ppath = format!("{}/{}", CNI_BIN_DIR, ptype);
@@ -1204,7 +1276,24 @@ impl ContainerdRuntime {
             .spawn().map_err(|e| AgentError::ContainerError(format!("CNI: {}", e)))?;
         if let Some(mut stdin) = child.stdin.take() { use tokio::io::AsyncWriteExt; stdin.write_all(cfg.as_bytes()).await?; drop(stdin); }
         let out = child.wait_with_output().await?;
-        if !out.status.success() { return Err(AgentError::ContainerError(format!("CNI {} failed: {}", command, String::from_utf8_lossy(&out.stderr)))); }
+        if !out.status.success() {
+            let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            let plugin_msg = serde_json::from_slice::<serde_json::Value>(&out.stdout)
+                .ok()
+                .and_then(|v| v.get("msg").and_then(|m| m.as_str()).map(|s| s.to_string()))
+                .unwrap_or_default();
+            return Err(AgentError::ContainerError(format!(
+                "CNI {} failed (plugin={}, netns={}, status={}): msg='{}' stderr='{}' stdout='{}'",
+                command,
+                ptype,
+                netns,
+                out.status,
+                plugin_msg,
+                stderr,
+                stdout
+            )));
+        }
         Ok(serde_json::from_slice(&out.stdout).unwrap_or(serde_json::json!({})))
     }
 
@@ -1252,6 +1341,66 @@ impl ContainerdRuntime {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+fn load_named_cni_plugin_config(network: &str) -> Option<serde_json::Value> {
+    let candidates = [
+        format!("/etc/cni/net.d/{}.conflist", network),
+        format!("/etc/cni/net.d/{}.conf", network),
+    ];
+
+    for path in candidates {
+        let raw = match fs::read_to_string(&path) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let parsed = match serde_json::from_str::<serde_json::Value>(&raw) {
+            Ok(v) => v,
+            Err(e) => {
+                warn!(
+                    "Invalid CNI config JSON at {} for network {}: {}",
+                    path, network, e
+                );
+                continue;
+            }
+        };
+
+        // Handle .conflist files by selecting the first plugin entry.
+        if let Some(plugins) = parsed.get("plugins").and_then(|v| v.as_array()) {
+            if let Some(first) = plugins.first() {
+                let mut cfg = first.clone();
+                if cfg.get("name").is_none() {
+                    cfg["name"] = parsed
+                        .get("name")
+                        .cloned()
+                        .unwrap_or_else(|| serde_json::json!(network));
+                }
+                if cfg.get("cniVersion").is_none() {
+                    cfg["cniVersion"] = parsed
+                        .get("cniVersion")
+                        .cloned()
+                        .unwrap_or_else(|| serde_json::json!("0.4.0"));
+                }
+                info!("Loaded CNI network '{}' from {}", network, path);
+                return Some(cfg);
+            }
+        }
+
+        // Handle single-plugin .conf files.
+        if parsed.get("type").is_some() {
+            let mut cfg = parsed;
+            if cfg.get("name").is_none() {
+                cfg["name"] = serde_json::json!(network);
+            }
+            if cfg.get("cniVersion").is_none() {
+                cfg["cniVersion"] = serde_json::json!("0.4.0");
+            }
+            info!("Loaded CNI network '{}' from {}", network, path);
+            return Some(cfg);
+        }
+    }
+
+    None
+}
 
 /// Auto-detect the host's default network interface, subnet, and gateway.
 fn detect_host_network() -> Option<(String, String, String)> {
@@ -1309,6 +1458,15 @@ fn set_dir_perms(path: &Path, mode: u32) {
 fn shell_escape_value(value: &str) -> String {
     let escaped = value.replace('\'', "'\"'\"'");
     format!("'{}'", escaped)
+}
+
+fn parse_signal(signal: &str) -> u32 {
+    match signal.to_ascii_uppercase().as_str() {
+        "SIGTERM" | "15" => 15,
+        "SIGINT" | "2" => 2,
+        "SIGKILL" | "9" => 9,
+        _ => 9,
+    }
 }
 
 fn grpc_err(e: tonic::Status) -> AgentError {
