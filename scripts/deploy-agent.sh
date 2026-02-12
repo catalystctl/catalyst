@@ -145,18 +145,26 @@ install_nerdctl() {
 
 install_cni_plugins() {
     local required=(bridge host-local portmap macvlan)
-    local missing=0
-    local plugin
+    local cni_dirs=("/opt/cni/bin" "/usr/libexec/cni")
+    local found_dir=""
 
-    for plugin in "${required[@]}"; do
-        if [ ! -x "/opt/cni/bin/${plugin}" ]; then
-            missing=1
+    # Check if plugins exist in any known directory
+    for cni_dir in "${cni_dirs[@]}"; do
+        local all_present=true
+        for plugin in "${required[@]}"; do
+            if [ ! -x "${cni_dir}/${plugin}" ]; then
+                all_present=false
+                break
+            fi
+        done
+        if [ "$all_present" = true ]; then
+            found_dir="$cni_dir"
             break
         fi
     done
 
-    if [ "$missing" -eq 0 ]; then
-        log "CNI plugins already present in /opt/cni/bin"
+    if [ -n "$found_dir" ]; then
+        log "CNI plugins already present in ${found_dir}"
         return 0
     fi
 

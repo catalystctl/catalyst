@@ -278,12 +278,22 @@ install_buildctl() {
 has_required_cni_plugins() {
   local required=(bridge host-local portmap macvlan)
   local plugin
-  for plugin in "${required[@]}"; do
-    if [ ! -x "/opt/cni/bin/${plugin}" ]; then
-      return 1
+  # Check multiple CNI plugin directories (Fedora uses /usr/libexec/cni)
+  local cni_dirs=("/opt/cni/bin" "/usr/libexec/cni")
+
+  for cni_dir in "${cni_dirs[@]}"; do
+    local found=true
+    for plugin in "${required[@]}"; do
+      if [ ! -x "${cni_dir}/${plugin}" ]; then
+        found=false
+        break
+      fi
+    done
+    if [ "$found" = true ]; then
+      return 0
     fi
   done
-  return 0
+  return 1
 }
 
 install_cni_plugins() {
