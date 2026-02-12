@@ -745,4 +745,132 @@ export async function authRoutes(app: FastifyInstance) {
       reply.send(serialize({ success: true, data: response }));
     }
   );
+
+  // Password recovery - Forgot password
+  app.post(
+    "/forgot-password",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { email } = request.body as { email: string };
+
+      if (!email || !email.trim()) {
+        return reply.status(400).send({ error: "Email is required" });
+      }
+
+      const normalizedEmail = email.trim().toLowerCase();
+
+      // Check if user exists
+      const user = await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+      });
+
+      // Always return success to prevent email enumeration
+      if (!user) {
+        return reply.send({
+          success: true,
+          message: "If an account exists, a reset link has been sent",
+        });
+      }
+
+      try {
+        // Use better-auth's handler for forget-password endpoint
+        const origin = request.headers.origin || request.headers.host || "http://localhost:3000";
+        const redirectUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/reset-password`;
+        const url = new URL("/api/auth/forget-password", origin);
+
+        const headers = new Headers();
+        headers.set("content-type", "application/json");
+
+        const authResponse = await auth.handler(
+          new Request(url.toString(), {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              email: normalizedEmail,
+              redirectTo: redirectUrl,
+            }),
+          })
+        );
+
+        // Check response but don't expose errors to prevent email enumeration
+        if (!authResponse.ok) {
+          const responseText = await authResponse.text();
+          app.log.warn(
+            { status: authResponse.status, response: responseText },
+            "Password reset request returned non-OK status"
+          );
+        }
+
+        reply.send({
+          success: true,
+          message: "If an account exists, a reset link has been sent",
+        });
+      } catch (error: any) {
+        // Log error but still return success to prevent email enumeration
+        app.log.error({ error: error.message }, "Failed to send password reset email");
+        reply.send({
+          success: true,
+          message: "If an account exists, a reset link has been sent",
+        });
+      }
+    }
+  );
+
+  // Password recovery - Validate reset token
+  app.get(
+    "/reset-password/validate",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { token } = request.query as { token?: string };
+
+      if (!token) {
+        return reply.status(400).send({ error: "Token is required", valid: false });
+      }
+
+      try {
+        // Check if the token exists and is valid in the verification table
+        const verification = await prisma.verification.findFirst({
+          where: {
+            value: token,
+            expiresAt: { gt: new Date() },
+          },
+        });
+
+        if (verification) {
+          reply.send({ success: true, valid: true });
+        } else {
+          reply.send({ success: false, valid: false, error: "Invalid or expired token" });
+        }
+      } catch (error: any) {
+        app.log.error({ error: error.message }, "Failed to validate reset token");
+        reply.send({ success: false, valid: false, error: "Invalid or expired token" });
+      }
+    }
+  );
+
+  // Password recovery - Reset password with token
+  app.post(
+    "/reset-password",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { token, password } = request.body as { token: string; password: string };
+
+      if (!token || !password) {
+        return reply.status(400).send({ error: "Token and password are required" });
+      }
+
+      if (password.length < 8) {
+        return reply.status(400).send({ error: "Password must be at least 8 characters" });
+      }
+
+      try {
+        // Use better-auth's reset password API
+        const response = await auth.api.resetPassword({
+          body: { token, newPassword: password },
+        });
+
+        reply.send({ success: true, message: "Password has been reset successfully" });
+      } catch (error: any) {
+        const message = error?.message || "Failed to reset password";
+        reply.status(400).send({ error: message });
+      }
+    }
+  );
 }

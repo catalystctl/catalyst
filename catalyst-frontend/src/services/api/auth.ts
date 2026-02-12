@@ -46,16 +46,28 @@ export const authApi = {
       if (!data?.user) {
         throw new Error(data?.error?.message || data?.error || 'Login failed');
       }
+
+      // better-auth's sign-in response does not include Catalyst role permissions.
+      // Immediately fetch the canonical user profile (with permissions) so admin UI
+      // and ProtectedRoute checks work without requiring a full page refresh.
+      let hydratedUser: User | null = null;
+      try {
+        hydratedUser = (await authApi.refresh()).user;
+      } catch {
+        hydratedUser = null;
+      }
+
       return {
         token,
         rememberMe: values.rememberMe,
-        user: {
-          id: data.user.id,
-          email: data.user.email,
-          username: data.user.username,
-          role: 'user',
-          permissions: data.user.permissions ?? [],
-        },
+        user:
+          hydratedUser ?? ({
+            id: data.user.id,
+            email: data.user.email,
+            username: data.user.username,
+            role: 'user',
+            permissions: data.user.permissions ?? [],
+          } satisfies User),
       };
     } catch (error: any) {
       if (error?.response?.data?.code === 'PASSKEY_REQUIRED') {
@@ -85,15 +97,23 @@ export const authApi = {
     if (!data?.user) {
       throw new Error(data?.error?.message || data?.error || 'Registration failed');
     }
+
+    let hydratedUser: User | null = null;
+    try {
+      hydratedUser = (await authApi.refresh()).user;
+    } catch {
+      hydratedUser = null;
+    }
     return {
       token,
-      user: {
-        id: data.user.id,
-        email: data.user.email,
-        username: data.user.username,
-        role: 'user',
-        permissions: data.user.permissions ?? [],
-      },
+      user:
+        hydratedUser ?? ({
+          id: data.user.id,
+          email: data.user.email,
+          username: data.user.username,
+          role: 'user',
+          permissions: data.user.permissions ?? [],
+        } satisfies User),
     };
   },
 
@@ -128,16 +148,24 @@ export const authApi = {
     if (!data?.user || !token) {
       throw new Error('Two-factor verification failed');
     }
+
+    let hydratedUser: User | null = null;
+    try {
+      hydratedUser = (await authApi.refresh()).user;
+    } catch {
+      hydratedUser = null;
+    }
     return {
       token,
       rememberMe: payload.rememberMe,
-      user: {
-        id: data.user.id,
-        email: data.user.email,
-        username: data.user.username,
-        role: 'user',
-        permissions: data.user.permissions ?? [],
-      },
+      user:
+        hydratedUser ?? ({
+          id: data.user.id,
+          email: data.user.email,
+          username: data.user.username,
+          role: 'user',
+          permissions: data.user.permissions ?? [],
+        } satisfies User),
     };
   },
 

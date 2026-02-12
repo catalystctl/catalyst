@@ -75,6 +75,8 @@ function LoginPage() {
       setSession({ user: data.user });
       useAuthStore.setState({ isAuthenticated: true });
       console.log('[LoginPage] User session and authentication status set');
+      // Ensure we hydrate permissions immediately (better-auth user object does not include Catalyst RBAC).
+      await syncPasskeySession();
       return true;
     }
     

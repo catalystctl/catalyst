@@ -1,15 +1,22 @@
+import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Breadcrumbs from './Breadcrumbs';
 import { useWebSocketConnection } from '../../hooks/useWebSocketConnection';
 import { useServerStateUpdates } from '../../hooks/useServerStateUpdates';
 import { useThemeStore } from '../../stores/themeStore';
-import { Menu, X } from 'lucide-react';
+import { useCmdK } from '../../hooks/useKeyboardShortcut';
+import { Menu, X, Search } from 'lucide-react';
+import SearchPalette from '../search/SearchPalette';
 
 function AppLayout() {
   useWebSocketConnection();
   useServerStateUpdates();
   const { sidebarCollapsed, toggleSidebar } = useThemeStore();
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  // Global Cmd+K shortcut
+  useCmdK(() => setIsSearchOpen(true));
 
   // On mobile: sidebarCollapsed=false means sidebar is open (showing)
   // On desktop: sidebarCollapsed=false means sidebar is expanded (normal width)
@@ -47,7 +54,14 @@ function AppLayout() {
           <Menu className="h-5 w-5" />
         </button>
         <span className="text-lg font-semibold text-slate-900 dark:text-white">Catalyst</span>
-        <div className="w-9" /> {/* Spacer for centering */}
+        <button
+          type="button"
+          onClick={() => setIsSearchOpen(true)}
+          className="rounded-lg p-2 text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+          aria-label="Search"
+        >
+          <Search className="h-5 w-5" />
+        </button>
       </div>
 
       {/* Sidebar - responsive */}
@@ -77,6 +91,12 @@ function AppLayout() {
           <Outlet />
         </div>
       </main>
+
+      {/* Search palette */}
+      <SearchPalette
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+      />
     </div>
   );
 }
