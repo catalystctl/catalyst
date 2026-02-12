@@ -258,15 +258,7 @@ impl WebSocketHandler {
         })?;
         match parsed_url.scheme() {
             "wss" => {}
-            "ws" => {
-                let host = parsed_url.host_str().unwrap_or_default();
-                if !matches!(host, "localhost" | "127.0.0.1" | "::1") {
-                    return Err(AgentError::ConfigError(
-                        "Refusing insecure ws:// backend_url for non-local host (use wss://)"
-                            .to_string(),
-                    ));
-                }
-            }
+            "ws" => {}
             other => {
                 return Err(AgentError::ConfigError(format!(
                     "Invalid backend_url scheme '{}': expected ws:// or wss://",
