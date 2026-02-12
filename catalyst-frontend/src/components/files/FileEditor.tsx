@@ -96,6 +96,29 @@ function FileEditor({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isDirty, isSaving, isSuspended, onSave]);
 
+  // Warn before closing page with unsaved changes
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Modern browsers ignore the custom message and show a generic one
+      e.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
+  // Handle close with unsaved changes confirmation
+  const handleClose = () => {
+    if (isDirty) {
+      const confirmed = window.confirm('You have unsaved changes. Are you sure you want to close this file?');
+      if (!confirmed) return;
+    }
+    onClose();
+  };
+
   if (!file) return null;
 
   const btnSecondary =
@@ -159,7 +182,7 @@ function FileEditor({
           <button
             type="button"
             className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
-            onClick={onClose}
+            onClick={handleClose}
             title="Close"
           >
             <X className="h-4 w-4" />

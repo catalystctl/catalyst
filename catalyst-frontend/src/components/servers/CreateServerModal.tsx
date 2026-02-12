@@ -26,6 +26,7 @@ function CreateServerModal() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [templateId, setTemplateId] = useState('');
+  const [templateSearch, setTemplateSearch] = useState('');
   const [nodeId, setNodeId] = useState('');
   const [description, setDescription] = useState('');
   const [memory, setMemory] = useState('1024');
@@ -64,6 +65,16 @@ function CreateServerModal() {
 
   // Get selected template
   const selectedTemplate = useMemo(() => templates.find(t => t.id === templateId), [templates, templateId]);
+
+  // Filter templates by search
+  const filteredTemplates = useMemo(() => {
+    if (!templateSearch.trim()) return templates;
+    const search = templateSearch.toLowerCase();
+    return templates.filter(t =>
+      t.name.toLowerCase().includes(search) ||
+      (t.description && t.description.toLowerCase().includes(search))
+    );
+  }, [templates, templateSearch]);
 
   // Set default port from template when template is selected
   useEffect(() => {
@@ -243,6 +254,7 @@ function CreateServerModal() {
       setName('');
       setDescription('');
       setTemplateId('');
+      setTemplateSearch('');
       setNodeId('');
       setEnvironment({});
       setImageVariant('');
@@ -427,6 +439,13 @@ function CreateServerModal() {
                       <div className="grid gap-5 md:grid-cols-2">
                         <label className="block space-y-2">
                           <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Template</span>
+                          <input
+                            type="text"
+                            placeholder="Search templates..."
+                            value={templateSearch}
+                            onChange={(e) => setTemplateSearch(e.target.value)}
+                            className="mb-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                          />
                           <select
                             className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
                             value={templateId}
@@ -449,11 +468,15 @@ function CreateServerModal() {
                             }}
                           >
                             <option value="">Select a template...</option>
-                            {templates.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.name}
-                              </option>
-                            ))}
+                            {filteredTemplates.length === 0 ? (
+                              <option disabled>No templates found</option>
+                            ) : (
+                              filteredTemplates.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name}
+                                </option>
+                              ))
+                            )}
                           </select>
                         </label>
                         <label className="block space-y-2">

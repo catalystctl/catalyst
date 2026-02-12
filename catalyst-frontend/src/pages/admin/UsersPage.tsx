@@ -7,6 +7,7 @@ import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { NodeAssignmentsSelector } from '../../components/admin/NodeAssignmentsSelector';
 import type { NodeAssignmentWithExpiration } from '../../components/admin/NodeAssignmentsSelector';
+import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
 
 const pageSize = 20;
 
@@ -31,6 +32,7 @@ function UsersPage() {
   const [editRoleIds, setEditRoleIds] = useState<string[]>([]);
   const [editServerIds, setEditServerIds] = useState<string[]>([]);
   const [selectedNodeIds, setSelectedNodeIds] = useState<NodeAssignmentWithExpiration[]>([]);
+  const [deletingUser, setDeletingUser] = useState<{ id: string; username: string } | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useAdminUsers({ page, limit: pageSize, search: search.trim() || undefined });
@@ -275,7 +277,7 @@ function UsersPage() {
                     </button>
                     <button
                       className="rounded-md border border-rose-700 px-2 py-1 text-xs font-semibold text-rose-200 transition-all duration-300 hover:border-rose-500"
-                      onClick={() => deleteMutation.mutate(user.id)}
+                      onClick={() => setDeletingUser({ id: user.id, username: user.username })}
                       disabled={deleteMutation.isPending}
                     >
                       Delete
@@ -661,6 +663,25 @@ function UsersPage() {
           </div>
         </div>
       ) : null}
+
+      {/* Delete user confirmation dialog */}
+      <ConfirmDialog
+        open={!!deletingUser}
+        title="Delete user?"
+        message={`Are you sure you want to delete "${deletingUser?.username}"? This action cannot be undone and all associated data will be removed.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deletingUser) {
+            deleteMutation.mutate(deletingUser.id, {
+              onSuccess: () => setDeletingUser(null),
+            });
+          }
+        }}
+        onCancel={() => setDeletingUser(null)}
+      />
     </div>
   );
 }

@@ -11,6 +11,8 @@ import { adminApi } from './services/api/admin';
 import { useAuthStore } from './stores/authStore';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import TwoFactorPage from './pages/auth/TwoFactorPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import ServersPage from './pages/servers/ServersPage';
@@ -96,6 +98,8 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/two-factor" element={<TwoFactorPage />} />
         <Route path="/invites/:token" element={<InvitesPage />} />
         <Route

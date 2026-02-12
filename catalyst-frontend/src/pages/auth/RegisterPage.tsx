@@ -1,9 +1,10 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import type { RegisterSchema } from '../../validators/auth';
 import { registerSchema } from '../../validators/auth';
+import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
 
 function RegisterPage() {
   const navigate = useNavigate();
@@ -11,8 +12,11 @@ function RegisterPage() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<RegisterSchema>({ resolver: zodResolver(registerSchema) });
+
+  const passwordValue = watch('password', '');
 
   const onSubmit = async (values: RegisterSchema) => {
     try {
@@ -82,6 +86,7 @@ function RegisterPage() {
               placeholder="••••••••"
               {...register('password')}
             />
+            <PasswordStrengthMeter password={passwordValue} />
             {errors.password ? (
               <p className="text-xs text-red-400">{errors.password.message}</p>
             ) : null}
@@ -95,6 +100,16 @@ function RegisterPage() {
             {isLoading ? 'Creating…' : 'Create account'}
           </button>
         </form>
+
+        <p className="mt-4 text-center text-sm text-slate-600 dark:text-slate-400">
+          Already have an account?{' '}
+          <Link
+            to="/login"
+            className="font-medium text-primary-600 transition-all duration-300 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          >
+            Sign in
+          </Link>
+        </p>
       </div>
     </div>
   );

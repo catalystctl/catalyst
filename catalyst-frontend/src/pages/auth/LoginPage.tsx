@@ -1,7 +1,7 @@
 import { type BaseSyntheticEvent, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { authApi } from '../../services/api/auth';
 import type { LoginSchema } from '../../validators/auth';
@@ -340,9 +340,17 @@ function LoginPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm text-slate-600 dark:text-slate-300" htmlFor="password">
-              Password
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block text-sm text-slate-600 dark:text-slate-300" htmlFor="password">
+                Password
+              </label>
+              <Link
+                to="/forgot-password"
+                className="text-xs font-medium text-primary-600 transition-all duration-300 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+              >
+                Forgot password?
+              </Link>
+            </div>
             <input
               id="password"
               type="password"

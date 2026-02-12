@@ -6,6 +6,7 @@ import { rolesApi } from '../../services/api/roles';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { NodeAssignmentsSelector } from '../../components/admin/NodeAssignmentsSelector';
 import type { NodeAssignmentWithExpiration } from '../../components/admin/NodeAssignmentsSelector';
+import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
 
 // Permission categories for organization
 const PERMISSION_CATEGORIES = [
@@ -197,6 +198,7 @@ function RolesPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<any>(null);
   const [viewingRole, setViewingRole] = useState<any>(null);
+  const [deletingRole, setDeletingRole] = useState<any>(null);
   const editingRequestRef = useRef(0);
 
   // Form state
@@ -530,11 +532,7 @@ function RolesPage() {
                   {role.userCount === 0 ? (
                     <button
                       className="rounded-md border border-rose-700 px-2 py-1 text-xs font-semibold text-rose-200 transition-all duration-300 hover:border-rose-500"
-                      onClick={() => {
-                        if (confirm(`Are you sure you want to delete "${role.name}"?`)) {
-                          deleteMutation.mutate(role.id);
-                        }
-                      }}
+                      onClick={() => setDeletingRole(role)}
                       disabled={deleteMutation.isPending}
                     >
                       Delete
@@ -928,11 +926,7 @@ function RolesPage() {
                 </button>
                 {viewingRole.userCount === 0 && (
                   <button
-                    onClick={() => {
-                      if (confirm(`Are you sure you want to delete "${viewingRole.name}"?`)) {
-                        deleteMutation.mutate(viewingRole.id);
-                      }
-                    }}
+                    onClick={() => setDeletingRole(viewingRole)}
                     disabled={deleteMutation.isPending}
                     className="rounded-md border border-rose-700 px-3 py-1.5 text-xs font-semibold text-rose-200 transition-all duration-300 hover:border-rose-500 disabled:opacity-60"
                   >
@@ -944,6 +938,28 @@ function RolesPage() {
           </div>
         </div>
       ) : null}
+
+      {/* Delete confirmation dialog */}
+      <ConfirmDialog
+        open={!!deletingRole}
+        title="Delete role?"
+        message={`Are you sure you want to delete "${deletingRole?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deletingRole) {
+            deleteMutation.mutate(deletingRole.id, {
+              onSuccess: () => {
+                setDeletingRole(null);
+                setViewingRole(null);
+              },
+            });
+          }
+        }}
+        onCancel={() => setDeletingRole(null)}
+      />
     </div>
   );
 }

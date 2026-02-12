@@ -26,6 +26,7 @@ import { roleRoutes } from "./routes/roles";
 import { taskRoutes } from "./routes/tasks";
 import { TaskScheduler } from "./services/task-scheduler";
 import { alertRoutes } from "./routes/alerts";
+import { dashboardRoutes } from "./routes/dashboard";
 import { apiKeyRoutes } from "./routes/api-keys";
 import { AlertService } from "./services/alert-service";
 import { getSecuritySettings } from "./services/mailer";
@@ -505,6 +506,7 @@ async function bootstrap() {
     await app.register(roleRoutes, { prefix: "/api/roles" });
     await app.register(taskRoutes, { prefix: "/api/servers" });
     await app.register(alertRoutes, { prefix: "/api" });
+    await app.register(dashboardRoutes, { prefix: "/api/dashboard" });
     await app.register(apiKeyRoutes);
     await app.register((app) => pluginRoutes(app, pluginLoader));
     // File tunnel routes need higher body limit for upload/stream endpoints

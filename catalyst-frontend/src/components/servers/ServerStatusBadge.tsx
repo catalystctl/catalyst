@@ -1,3 +1,4 @@
+import { Play, Square, Loader2, AlertTriangle, ArrowRightLeft, Ban } from 'lucide-react';
 import type { ServerStatus } from '../../types/server';
 
 const colorMap: Record<ServerStatus, string> = {
@@ -11,9 +12,24 @@ const colorMap: Record<ServerStatus, string> = {
   suspended: 'bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400',
 };
 
+const iconMap: Record<ServerStatus, React.ReactNode> = {
+  stopped: <Square className="h-3 w-3" />,
+  installing: <Loader2 className="h-3 w-3 animate-spin" />,
+  starting: <Loader2 className="h-3 w-3 animate-spin" />,
+  running: <Play className="h-3 w-3" />,
+  stopping: <Loader2 className="h-3 w-3 animate-spin" />,
+  crashed: <AlertTriangle className="h-3 w-3" />,
+  transferring: <ArrowRightLeft className="h-3 w-3" />,
+  suspended: <Ban className="h-3 w-3" />,
+};
+
 function ServerStatusBadge({ status }: { status: ServerStatus }) {
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${colorMap[status]}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${colorMap[status]}`}
+      aria-label={`Server status: ${status}`}
+    >
+      {iconMap[status]}
       {status}
     </span>
   );

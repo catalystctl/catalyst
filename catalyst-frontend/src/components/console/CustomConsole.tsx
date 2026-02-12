@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AnsiToHtml from 'ansi-to-html';
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown, Download, Trash2 } from 'lucide-react';
 
 type ConsoleEntry = {
   id: string;
@@ -22,6 +22,8 @@ type CustomConsoleProps = {
   isLoading?: boolean;
   isError?: boolean;
   onRetry?: () => void;
+  onClear?: () => void;
+  serverId?: string;
 };
 
 const streamBorderColors: Record<string, string> = {
@@ -59,7 +61,7 @@ const syntaxRules: Array<{ pattern: RegExp; cls: string }> = [
   { pattern: /\b(INFO|DEBUG|TRACE|NOTICE)\b/gi, cls: 'chl-info' },
   // UUIDs
   { pattern: /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, cls: 'chl-uuid' },
-    // Timestamps  (HH:MM:SS or ISO-ish dates)
+  // Timestamps  (HH:MM:SS or ISO-ish dates)
   { pattern: /\b\d{1,2}:\d{2}(?::\d{2})(?:\.\d+)?\b/g, cls: 'chl-time' },
   { pattern: /\b\d{4}[-/]\d{2}[-/]\d{2}[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?Z?\b/g, cls: 'chl-time' },
   // IPv4 addresses
@@ -135,6 +137,8 @@ function CustomConsole({
   isLoading,
   isError,
   onRetry,
+  onClear,
+  serverId,
 }: CustomConsoleProps) {
   const outputRef = useRef<HTMLDivElement | null>(null);
   const [expandedIds, setExpandedIds] = useState(() => new Set<string>());
@@ -152,6 +156,25 @@ function CustomConsole({
     }
     return filtered;
   }, [entries, scrollback, searchQuery, streamFilter]);
+
+  // Export console output to a file
+  const handleExport = () => {
+    const lines = normalizedEntries.map((entry) => {
+      const timestamp = entry.timestamp ? `[${entry.timestamp}] ` : '';
+      const stream = entry.stream !== 'stdout' ? `[${entry.stream.toUpperCase()}] ` : '';
+      return `${timestamp}${stream}${entry.data}`;
+    });
+    const content = lines.join('\n');
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `console-${serverId || 'output'}-${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.log`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     if (!outputRef.current || !autoScroll) return;
@@ -183,6 +206,30 @@ function CustomConsole({
 
   return (
     <div className={`relative ${className}`}>
+      {/* Console toolbar */}
+      <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={normalizedEntries.length === 0}
+          title="Export console log"
+          className="rounded border border-slate-200 bg-white/90 px-2 py-1 text-xs font-medium text-slate-600 shadow-sm backdrop-blur-sm transition-all hover:border-primary-500 hover:text-slate-900 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-300 dark:hover:border-primary-500/50 dark:hover:text-white"
+        >
+          <Download className="h-3.5 w-3.5" />
+        </button>
+        {onClear ? (
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={normalizedEntries.length === 0}
+            title="Clear console"
+            className="rounded border border-slate-200 bg-white/90 px-2 py-1 text-xs font-medium text-slate-600 shadow-sm backdrop-blur-sm transition-all hover:border-rose-500 hover:text-rose-600 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-300 dark:hover:border-rose-500/50 dark:hover:text-rose-400"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+      </div>
+
       <div
         ref={outputRef}
         onScroll={handleScroll}

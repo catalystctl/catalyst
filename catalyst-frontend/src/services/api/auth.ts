@@ -153,4 +153,29 @@ export const authApi = {
   async logout(): Promise<void> {
     await authClient.signOut();
   },
+
+  async forgotPassword(email: string): Promise<void> {
+    const response = await apiClient.post('/api/auth/forgot-password', { email });
+    const data = response.data;
+    if (!data?.success) {
+      throw new Error(data?.error || 'Failed to send reset email');
+    }
+  },
+
+  async validateResetToken(token: string): Promise<boolean> {
+    const response = await apiClient.get(`/api/auth/reset-password/validate?token=${encodeURIComponent(token)}`);
+    const data = response.data;
+    if (!data?.success || !data?.valid) {
+      throw new Error('Invalid or expired token');
+    }
+    return true;
+  },
+
+  async resetPassword(token: string, password: string): Promise<void> {
+    const response = await apiClient.post('/api/auth/reset-password', { token, password });
+    const data = response.data;
+    if (!data?.success) {
+      throw new Error(data?.error || 'Failed to reset password');
+    }
+  },
 };
