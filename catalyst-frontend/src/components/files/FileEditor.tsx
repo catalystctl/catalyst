@@ -127,9 +127,9 @@ function FileEditor({
     'inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-primary-500 disabled:opacity-50';
 
   return (
-    <div className="flex h-full flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
+    <div className="flex h-full flex-col gap-2 sm:gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
               {file.name}
@@ -147,7 +147,7 @@ function FileEditor({
           </div>
           <p className="mt-0.5 truncate text-xs text-slate-400 dark:text-slate-500">{file.path}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           <button
             type="button"
             className={btnSecondary}
@@ -156,7 +156,7 @@ function FileEditor({
             title="Revert changes"
           >
             <RotateCcw className="h-3.5 w-3.5" />
-            Revert
+            <span className="hidden sm:inline">Revert</span>
           </button>
           {onDownload && (
             <button
@@ -164,9 +164,10 @@ function FileEditor({
               className={btnSecondary}
               onClick={onDownload}
               disabled={isSaving || isLoading}
+              title="Download"
             >
               <Download className="h-3.5 w-3.5" />
-              Download
+              <span className="hidden sm:inline">Download</span>
             </button>
           )}
           <button
@@ -177,7 +178,7 @@ function FileEditor({
             title="Save (Ctrl+S)"
           >
             <Save className="h-3.5 w-3.5" />
-            Save
+            <span className="hidden sm:inline">Save</span>
           </button>
           <button
             type="button"

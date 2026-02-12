@@ -17,6 +17,7 @@ import {
   X,
   Loader2,
   AlertTriangle,
+  Menu,
 } from 'lucide-react';
 import FileEditor from './FileEditor';
 import FileList from './FileList';
@@ -97,6 +98,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
     currentMaxBufferMb: number;
     recommendedMaxBufferMb: number;
   } | null>(null);
+  const [showSidebar, setShowSidebar] = useState(false);
 
   useEffect(() => {
     setSelectedPaths(new Set());
@@ -503,35 +505,72 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
     'inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-primary-500 disabled:opacity-50';
 
   return (
-    <div className="grid grid-cols-[220px_1fr] gap-4">
+    <div className="flex flex-col lg:grid lg:grid-cols-[220px_1fr] gap-4">
+      {/* Mobile sidebar toggle */}
+      <button
+        type="button"
+        className="lg:hidden flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+        onClick={() => setShowSidebar(!showSidebar)}
+      >
+        <Menu className="h-4 w-4" />
+        Folders
+      </button>
+
+      {/* Sidebar - mobile overlay + desktop sidebar */}
+      {/* Mobile overlay */}
+      {showSidebar && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={() => setShowSidebar(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-        <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-          Folders
+      <div
+        className={`
+          fixed inset-y-0 left-0 z-50 w-64 transform rounded-none border-r border-slate-200 bg-white p-3 transition-transform duration-300 dark:border-slate-800 dark:bg-slate-900
+          lg:static lg:z-auto lg:w-auto lg:transform-none lg:rounded-xl lg:border lg:transition-none
+          ${showSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        `}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+            Folders
+          </div>
+          <button
+            type="button"
+            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 lg:hidden dark:hover:bg-slate-800 dark:hover:text-slate-300"
+            onClick={() => setShowSidebar(false)}
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
-        <FileTree serverId={serverId} activePath={path} onNavigate={(nextPath) => setPath(nextPath)} />
+        <FileTree serverId={serverId} activePath={path} onNavigate={(nextPath) => {
+          setPath(nextPath);
+          setShowSidebar(false);
+        }} />
       </div>
 
       {/* Main content */}
-      <div className="space-y-3">
+      <div className="space-y-3 min-w-0">
         {/* Breadcrumb + toolbar */}
         <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
           {/* Breadcrumbs */}
-          <nav className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+          <nav className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 overflow-x-auto">
             <button
               type="button"
-              className="rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
               onClick={() => setPath('/')}
               title="Root"
             >
               <Home className="h-3.5 w-3.5" />
             </button>
             {breadcrumbs.map((crumb) => (
-              <div key={crumb.path} className="flex items-center gap-1">
+              <div key={crumb.path} className="flex items-center gap-1 shrink-0">
                 <ChevronRight className="h-3 w-3 text-slate-300 dark:text-slate-600" />
                 <button
                   type="button"
-                  className="rounded px-1.5 py-0.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+                  className="rounded px-1.5 py-0.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white whitespace-nowrap"
                   onClick={() => setPath(crumb.path)}
                 >
                   {crumb.name}
@@ -550,7 +589,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
               title="Go up"
             >
               <ArrowUp className="h-3.5 w-3.5" />
-              Up
+              <span className="hidden sm:inline">Up</span>
             </button>
             <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
             <button
@@ -560,7 +599,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
               disabled={isSuspended}
             >
               <Upload className="h-3.5 w-3.5" />
-              Upload
+              <span className="hidden sm:inline">Upload</span>
             </button>
             <button
               type="button"
@@ -569,7 +608,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
               disabled={isSuspended}
             >
               <FilePlus className="h-3.5 w-3.5" />
-              New File
+              <span className="hidden sm:inline">New File</span>
             </button>
             <button
               type="button"
@@ -578,12 +617,12 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
               disabled={isSuspended}
             >
               <FolderPlus className="h-3.5 w-3.5" />
-              New Folder
+              <span className="hidden sm:inline">New Folder</span>
             </button>
             <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
             <button type="button" className={tbtn} onClick={() => refetch()}>
               <RefreshCw className="h-3.5 w-3.5" />
-              Refresh
+              <span className="hidden sm:inline">Refresh</span>
             </button>
 
             {/* Selection actions */}
@@ -591,7 +630,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
               <>
                 <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
                 <span className="text-xs text-slate-500 dark:text-slate-400">
-                  {selectedEntries.length} selected
+                  {selectedEntries.length}
                 </span>
                 <button
                   type="button"
@@ -600,7 +639,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
                   disabled={isSuspended}
                 >
                   <Archive className="h-3.5 w-3.5" />
-                  Compress
+                  <span className="hidden sm:inline">Compress</span>
                 </button>
                 {selectedArchive && (
                   <button
@@ -610,7 +649,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
                     disabled={isSuspended}
                   >
                     <ArchiveRestore className="h-3.5 w-3.5" />
-                    Extract
+                    <span className="hidden sm:inline">Extract</span>
                   </button>
                 )}
                 <button
@@ -620,14 +659,14 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
                   disabled={isSuspended}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  Delete
+                  <span className="hidden sm:inline">Delete</span>
                 </button>
                 <button
                   type="button"
-                  className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
                   onClick={() => setSelectedPaths(new Set())}
                 >
-                  <XCircle className="h-3.5 w-3.5" />
+                  <XCircle className="h-4 w-4" />
                 </button>
               </>
             )}
@@ -651,7 +690,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
         {/* Create panel */}
         {createMode && (
           <form
-            className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
+            className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 dark:border-slate-800 dark:bg-slate-900"
             onSubmit={handleCreateSubmit}
           >
             <div className="flex items-center justify-between">
@@ -701,7 +740,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
 
         {/* Compress panel */}
         {showCompress && (
-          <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
                 Compress {selectedEntries.length} item(s)
@@ -716,7 +755,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
                   Archive name
                 </span>
                 <input
-                  className="w-full max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-primary-400"
+                  className="w-full sm:max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-primary-400"
                   value={archiveName}
                   onChange={(e) => setArchiveName(e.target.value)}
                   placeholder="archive.tar.gz"
@@ -739,9 +778,9 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
 
         {/* Decompress panel */}
         {showDecompress && selectedArchive && (
-          <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white truncate mr-2">
                 Extract: {selectedArchive.name}
               </h3>
               <button type="button" className={tbtn} onClick={() => setShowDecompress(false)}>
@@ -754,7 +793,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
                   Target path
                 </span>
                 <input
-                  className="w-full max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-primary-400"
+                  className="w-full sm:max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-primary-400"
                   value={decompressTarget}
                   onChange={(e) => setDecompressTarget(e.target.value)}
                   placeholder="/"
@@ -777,7 +816,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
 
         {/* Delete confirmation */}
         {confirmDelete && selectedEntries.length > 0 && (
-          <div className="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 dark:border-rose-500/20 dark:bg-rose-500/5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 dark:border-rose-500/20 dark:bg-rose-500/5">
             <span className="text-sm text-rose-700 dark:text-rose-300">
               Delete {selectedEntries.length} item(s)? This cannot be undone.
             </span>
@@ -859,12 +898,12 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
 
       {/* File editor overlay */}
       {activeFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6">
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={closeActiveFile}
           />
-          <div className="relative z-10 flex h-[90vh] w-full max-w-6xl flex-col rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 p-4">
+          <div className="relative z-10 flex h-[95vh] sm:h-[90vh] w-full max-w-6xl flex-col rounded-lg sm:rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 p-2 sm:p-4">
               <FileEditor
                 file={activeFile}
                 isLoading={isFileLoading}
@@ -886,13 +925,13 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
 
       {/* Permissions modal */}
       {permissionsEntry && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setPermissionsEntry(null)}
           />
           <form
-            className="relative z-10 w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+            className="relative z-10 w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 sm:p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
             onSubmit={handlePermissionsSubmit}
           >
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
@@ -926,7 +965,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
                 {permissionsError}
               </div>
             )}
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-4 flex flex-col-reverse sm:flex-row justify-end gap-2">
               <button type="button" className={tbtn} onClick={() => setPermissionsEntry(null)}>
                 Cancel
               </button>
@@ -944,20 +983,20 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
 
       {/* Archive browser modal */}
       {archiveBrowsePath && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6">
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setArchiveBrowsePath(null)}
           />
-          <div className="relative z-10 flex h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+          <div className="relative z-10 flex h-[95vh] sm:h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg sm:rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+            <div className="flex items-center justify-between border-b border-slate-200 px-3 sm:px-4 py-3 dark:border-slate-800">
               <div className="flex min-w-0 items-center gap-2">
                 <Archive className="h-4 w-4 shrink-0 text-slate-400" />
                 <span className="truncate text-sm font-semibold text-slate-900 dark:text-white">
                   {archiveBrowsePath.split('/').pop()}
                 </span>
-                <span className="text-xs text-slate-400 dark:text-slate-500">— read-only preview</span>
+                <span className="hidden sm:inline text-xs text-slate-400 dark:text-slate-500">— read-only preview</span>
               </div>
               <button
                 type="button"
@@ -969,10 +1008,10 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
             </div>
 
             {/* Breadcrumbs */}
-            <div className="flex items-center gap-1 border-b border-slate-100 px-4 py-2 text-xs dark:border-slate-800/60">
+            <div className="flex items-center gap-1 border-b border-slate-100 px-3 sm:px-4 py-2 text-xs dark:border-slate-800/60 overflow-x-auto">
               <button
                 type="button"
-                className="rounded px-1.5 py-0.5 font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+                className="rounded px-1.5 py-0.5 font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white shrink-0"
                 onClick={() => setArchiveBrowseDir('/')}
               >
                 <Home className="inline h-3 w-3" />
@@ -981,11 +1020,11 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
                 archiveBrowseDir.split('/').filter(Boolean).map((seg, i, arr) => {
                   const segPath = '/' + arr.slice(0, i + 1).join('/');
                   return (
-                    <span key={segPath} className="flex items-center gap-1">
+                    <span key={segPath} className="flex items-center gap-1 shrink-0">
                       <ChevronRight className="h-3 w-3 text-slate-300 dark:text-slate-600" />
                       <button
                         type="button"
-                        className="rounded px-1.5 py-0.5 font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+                        className="rounded px-1.5 py-0.5 font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white whitespace-nowrap"
                         onClick={() => setArchiveBrowseDir(segPath)}
                       >
                         {seg}
@@ -1012,7 +1051,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between border-t border-slate-200 px-4 py-2 dark:border-slate-800">
+            <div className="flex items-center justify-between border-t border-slate-200 px-3 sm:px-4 py-2 dark:border-slate-800">
               <span className="text-[11px] text-slate-400 dark:text-slate-500">
                 {archiveEntries.length} entries total
               </span>
@@ -1029,17 +1068,17 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
       )}
 
       {bufferError && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setBufferError(null)}
           />
-          <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+          <div className="relative w-full max-w-md rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-xl dark:border-slate-700 dark:bg-slate-900">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/20">
                 <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               </div>
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Buffer Limit Exceeded</h3>
+              <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white">Buffer Limit Exceeded</h3>
             </div>
             <p className="mb-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
               This operation produced more output than the current buffer limit allows. This typically

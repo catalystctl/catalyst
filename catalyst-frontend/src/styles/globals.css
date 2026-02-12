@@ -411,3 +411,13 @@ select option {
 .dark .console-output .chl-num {
   color: #fb923c;
 }
+
+/* Hide scrollbar utility - useful for horizontal scroll containers */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
