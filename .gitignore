@@ -32,3 +32,4 @@ catalyst-agent/config.toml
 catalyst-agent/config-e2e.toml
 catalyst-agent/SECURITY_ADVISOR.md
 .kilocode/setup-script
+catalyst-frontend/.vite/

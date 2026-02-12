@@ -395,7 +395,11 @@ File: [catalyst-agent/src/runtime_manager.rs](../catalyst-agent/src/runtime_mana
 Agent connects to Containerd via Unix socket (not Docker):
 - Configuration: `socket_path: /run/containerd/containerd.sock` in `config.toml`
 - Namespace isolation: defaults to `"catalyst"` namespace
+<<<<<<< HEAD
 - Container creation expects pre-cached images or pull via `ctr`
+=======
+- Container creation expects pre-cached images or manual pull via `nerdctl`
+>>>>>>> origin/main
 - No automatic image pulls; template specifies `image` + `installImage`
 
 **When adding agent operations:**

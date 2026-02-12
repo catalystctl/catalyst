@@ -1,0 +1,58 @@
+# Catalyst Agent Configuration
+# Copy this file to /opt/catalyst-agent/config.toml
+
+[server]
+# Backend WebSocket URL
+backend_url = "ws://localhost:3000/ws"
+
+# Unique node identifier (UUID or hostname)
+node_id = "cml0ai9k000027yto58m2n3oh"
+
+# Node secret key (obtain from backend when creating node)
+secret = "dev-secret-key-12345"
+
+# Optional agent API key (preferred for better-auth)
+api_key = "catalystIneLDtFwjwAjTMcpGkEUVzqaeZwBFYvNsdGrFWlIzjvovgGDzQuSREdDuNEvekJU"
+
+# Hostname of this server
+hostname = "game-server-1.example.com"
+
+# Data directory for container volumes
+data_dir = "/var/lib/catalyst"
+
+# Maximum concurrent WebSocket connections
+max_connections = 100
+
+[containerd]
+# Path to containerd socket
+socket_path = "/run/containerd/containerd.sock"
+
+# Containerd namespace for Catalyst containers
+namespace = "catalyst"
+
+[networking]
+# Configure one or more macvlan networks (optional). If omitted, the agent will
+# provision a default mc-lan-static network based on the primary interface.
+#
+# [[networking.networks]]
+# name = "mc-lan-static"
+# interface = "eth0"
+# cidr = "10.5.5.0/24"
+# gateway = "10.5.5.1"
+# range_start = "10.5.5.50"
+# range_end = "10.5.5.200"
+#
+# [[networking.networks]]
+# name = "mc-public"
+# interface = "eth0"
+# cidr = "98.168.52.0/24"
+# gateway = "98.168.52.1"
+# range_start = "98.168.52.50"
+# range_end = "98.168.52.200"
+
+[logging]
+# Log level: trace, debug, info, warn, error
+level = "info"
+
+# Log format: json or text
+format = "json"
