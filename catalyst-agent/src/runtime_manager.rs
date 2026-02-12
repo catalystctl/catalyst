@@ -48,6 +48,20 @@ const RUNTIME_NAME: &str = "io.containerd.runc.v2";
 const SPEC_TYPE_URL: &str = "types.containerd.io/opencontainers/runtime-spec/1/Spec";
 const CONSOLE_BASE_DIR: &str = "/tmp/catalyst-console";
 const CNI_BIN_DIR: &str = "/opt/cni/bin";
+const PORT_FWD_STATE_DIR: &str = "/var/lib/cni/results";
+const PORT_FWD_STATE_PREFIX: &str = "catalyst-";
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PortForwardState {
+    container_ip: String,
+    forwards: Vec<PortForward>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PortForward {
+    host_port: u16,
+    container_port: u16,
+}
 
 /// Parameters for creating a container
 pub struct ContainerConfig<'a> {
@@ -334,15 +348,8 @@ impl ContainerdRuntime {
             "TERM=xterm".to_string(),
         ];
         for (k, v) in env { env_list.push(format!("{}={}", k, v)); }
-        let caps = [
-            "CAP_CHOWN",
-            "CAP_DAC_OVERRIDE",
-            "CAP_DAC_READ_SEARCH",
-            "CAP_FOWNER",
-            "CAP_SETUID",
-            "CAP_SETGID",
-            "CAP_NET_BIND_SERVICE",
-        ];
+        // Keep container capabilities minimal; many images drop privileges via setuid/setgid.
+        let caps = ["CAP_CHOWN", "CAP_SETUID", "CAP_SETGID", "CAP_NET_BIND_SERVICE"];
 
         let spec = serde_json::json!({
             "ociVersion": "1.1.0",
@@ -358,7 +365,8 @@ impl ContainerdRuntime {
             "mounts": base_mounts(data_dir),
             "linux": {
                 "namespaces": [{"type":"pid"},{"type":"ipc"},{"type":"uts"},{"type":"mount"}],
-                "maskedPaths": masked_paths(), "readonlyPaths": readonly_paths()
+                "maskedPaths": masked_paths(), "readonlyPaths": readonly_paths(),
+                "seccomp": default_seccomp_profile()
             }
         });
         let spec_any = Any { type_url: SPEC_TYPE_URL.to_string(), value: spec.to_string().into_bytes() };
@@ -1123,15 +1131,8 @@ impl ContainerdRuntime {
         let mem_limit = (config.memory_mb as i64) * 1024 * 1024;
         let cpu_quota = (config.cpu_cores as i64) * 100_000;
         let cgroup_path = format!("/{}/{}", self.namespace, config.container_id);
-        let caps = [
-            "CAP_CHOWN",
-            "CAP_DAC_OVERRIDE",
-            "CAP_DAC_READ_SEARCH",
-            "CAP_FOWNER",
-            "CAP_SETUID",
-            "CAP_SETGID",
-            "CAP_NET_BIND_SERVICE",
-        ];
+        // Keep container capabilities minimal; many images drop privileges via setuid/setgid.
+        let caps = ["CAP_CHOWN", "CAP_SETUID", "CAP_SETGID", "CAP_NET_BIND_SERVICE"];
         let mut mounts = base_mounts(config.data_dir);
         mounts.push(serde_json::json!({"destination":io_dir.to_string_lossy().to_string(),"type":"bind","source":io_dir.to_string_lossy().to_string(),"options":["rbind","rw"]}));
 
@@ -1174,7 +1175,8 @@ impl ContainerdRuntime {
                     {"allow":true,"type":"c","major":1,"minor":5,"access":"rwm"},{"allow":true,"type":"c","major":1,"minor":8,"access":"rwm"},
                     {"allow":true,"type":"c","major":1,"minor":9,"access":"rwm"},{"allow":true,"type":"c","major":5,"minor":0,"access":"rwm"},
                     {"allow":true,"type":"c","major":5,"minor":1,"access":"rwm"}]},
-                "namespaces":ns,"maskedPaths":masked_paths(),"readonlyPaths":readonly_paths()}
+                "namespaces":ns,"maskedPaths":masked_paths(),"readonlyPaths":readonly_paths(),
+                "seccomp": default_seccomp_profile()}
         }))
     }
 
@@ -1221,8 +1223,36 @@ impl ContainerdRuntime {
         if let Ok(j) = serde_json::to_string_pretty(&result) { let _ = fs::write(&rp, &j); }
         let cip = result.get("ips").and_then(|v|v.as_array()).and_then(|a|a.first()).and_then(|ip|ip.get("address")).and_then(|v|v.as_str()).unwrap_or("").split('/').next().unwrap_or("");
         if !cip.is_empty() {
-            if !port_bindings.is_empty() { for (cp,hp) in port_bindings { self.setup_port_forward(*hp,*cp,cip).await?; } }
-            else if primary_port > 0 { self.setup_port_forward(primary_port,primary_port,cip).await?; }
+            let mut forwards: Vec<PortForward> = Vec::new();
+            if !port_bindings.is_empty() {
+                for (cp, hp) in port_bindings {
+                    self.setup_port_forward(*hp, *cp, cip).await?;
+                    forwards.push(PortForward {
+                        host_port: *hp,
+                        container_port: *cp,
+                    });
+                }
+            } else if primary_port > 0 {
+                self.setup_port_forward(primary_port, primary_port, cip).await?;
+                forwards.push(PortForward {
+                    host_port: primary_port,
+                    container_port: primary_port,
+                });
+            }
+
+            if !forwards.is_empty() {
+                let state = PortForwardState {
+                    container_ip: cip.to_string(),
+                    forwards,
+                };
+                let state_path = format!(
+                    "{}/{}{}-ports.json",
+                    PORT_FWD_STATE_DIR, PORT_FWD_STATE_PREFIX, container_id
+                );
+                if let Ok(j) = serde_json::to_string_pretty(&state) {
+                    let _ = fs::write(&state_path, &j);
+                }
+            }
         }
         Ok(())
     }
@@ -1312,7 +1342,63 @@ impl ContainerdRuntime {
         Ok(())
     }
 
+    async fn teardown_port_forward(&self, container_id: &str) -> AgentResult<()> {
+        let state_path = format!(
+            "{}/{}{}-ports.json",
+            PORT_FWD_STATE_DIR, PORT_FWD_STATE_PREFIX, container_id
+        );
+        if !Path::new(&state_path).exists() {
+            return Ok(());
+        }
+
+        let raw = match fs::read_to_string(&state_path) {
+            Ok(v) => v,
+            Err(e) => {
+                warn!("Failed to read port-forward state {}: {}", state_path, e);
+                let _ = fs::remove_file(&state_path);
+                return Ok(());
+            }
+        };
+        let state: PortForwardState = match serde_json::from_str(&raw) {
+            Ok(v) => v,
+            Err(e) => {
+                warn!("Failed to parse port-forward state {}: {}", state_path, e);
+                let _ = fs::remove_file(&state_path);
+                return Ok(());
+            }
+        };
+
+        for fwd in &state.forwards {
+            let _ = self
+                .teardown_port_forward_rules(fwd.host_port, fwd.container_port, &state.container_ip)
+                .await;
+        }
+        let _ = fs::remove_file(&state_path);
+        Ok(())
+    }
+
+    async fn teardown_port_forward_rules(&self, hp: u16, cp: u16, cip: &str) -> AgentResult<()> {
+        if cip.is_empty() {
+            return Ok(());
+        }
+        let dest = format!("{}:{}", cip, cp);
+        let hps = hp.to_string();
+        let cps = cp.to_string();
+        for args in [
+            vec!["-t","nat","-D","PREROUTING","-p","tcp","--dport",&hps,"-j","DNAT","--to-destination",&dest],
+            vec!["-t","nat","-D","OUTPUT","-p","tcp","--dport",&hps,"-j","DNAT","--to-destination",&dest],
+            vec!["-t","nat","-D","POSTROUTING","-p","tcp","-d",cip,"--dport",&cps,"-j","MASQUERADE"],
+        ] {
+            let o = Command::new("iptables").args(&args).output().await?;
+            if !o.status.success() {
+                warn!("iptables: {}", String::from_utf8_lossy(&o.stderr));
+            }
+        }
+        Ok(())
+    }
+
     async fn teardown_cni_network(&self, container_id: &str) -> AgentResult<()> {
+        let _ = self.teardown_port_forward(container_id).await;
         let rp = format!("/var/lib/cni/results/catalyst-{}", container_id);
         if !Path::new(&rp).exists() { return Ok(()); }
         // Load stored CNI config for proper teardown (bridge vs macvlan)
@@ -1490,8 +1576,78 @@ fn base_mounts(data_dir: &str) -> Vec<serde_json::Value> {
     ]
 }
 
-fn masked_paths() -> Vec<&'static str> { vec!["/proc/kcore","/proc/latency_stats","/proc/timer_list","/proc/timer_stats","/proc/sched_debug","/sys/firmware"] }
+fn masked_paths() -> Vec<&'static str> {
+    vec![
+        // Original masked paths
+        "/proc/kcore",
+        "/proc/latency_stats",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/proc/sched_debug",
+        "/sys/firmware",
+        // Additional security-sensitive paths
+        "/proc/kallsyms",      // Kernel symbols - useful for exploit development
+        "/proc/self/mem",      // Memory manipulation vector
+        "/sys/kernel",         // Kernel parameters and addresses
+        "/sys/class",          // Hardware enumeration for fingerprinting
+        "/proc/slabinfo",      // Kernel slab allocator info
+        "/proc/modules",       // Loaded kernel modules
+    ]
+}
 fn readonly_paths() -> Vec<&'static str> { vec!["/proc/asound","/proc/bus","/proc/fs","/proc/irq","/proc/sys","/proc/sysrq-trigger"] }
+
+fn seccomp_arches() -> Vec<&'static str> {
+    match std::env::consts::ARCH {
+        "x86_64" => vec!["SCMP_ARCH_X86_64", "SCMP_ARCH_X86", "SCMP_ARCH_X32"],
+        "aarch64" => vec!["SCMP_ARCH_AARCH64", "SCMP_ARCH_ARM"],
+        "arm" => vec!["SCMP_ARCH_ARM"],
+        _ => Vec::new(),
+    }
+}
+
+fn default_seccomp_profile() -> serde_json::Value {
+    // Deny-list a small set of high-risk syscalls while keeping broad compatibility.
+    // This is intentionally conservative; consumers can harden further via host policy.
+    serde_json::json!({
+        "defaultAction": "SCMP_ACT_ALLOW",
+        "architectures": seccomp_arches(),
+        "syscalls": [
+            {
+                "names": [
+                    "acct",
+                    "add_key",
+                    "bpf",
+                    "delete_module",
+                    "finit_module",
+                    "init_module",
+                    "iopl",
+                    "ioperm",
+                    "kexec_file_load",
+                    "kexec_load",
+                    "keyctl",
+                    "mount",
+                    "open_by_handle_at",
+                    "perf_event_open",
+                    "pivot_root",
+                    "process_vm_readv",
+                    "process_vm_writev",
+                    "ptrace",
+                    "quotactl",
+                    "reboot",
+                    "request_key",
+                    "setns",
+                    "swapoff",
+                    "swapon",
+                    "syslog",
+                    "umount2",
+                    "unshare"
+                ],
+                "action": "SCMP_ACT_ERRNO",
+                "errnoRet": 1
+            }
+        ]
+    })
+}
 
 fn find_container_cgroup(container_id: &str) -> Option<String> { find_cgroup_recursive("/sys/fs/cgroup", container_id) }
 fn find_cgroup_recursive(dir: &str, cid: &str) -> Option<String> {

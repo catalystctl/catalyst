@@ -2,10 +2,11 @@ use base64::Engine;
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
 use regex::Regex;
+use reqwest::Url;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -23,6 +24,8 @@ type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 type WsWrite = SplitSink<WsStream, Message>;
 const CONTAINER_SERVER_DIR: &str = "/data";
+const MAX_BACKUP_UPLOAD_BYTES: u64 = 10 * 1024 * 1024 * 1024; // 10GB
+const BACKUP_UPLOAD_INACTIVITY_TIMEOUT: Duration = Duration::from_secs(600); // 10 minutes
 
 /// Shell-escape a value for safe interpolation into a bash script.
 /// Wraps the value in single quotes and escapes any embedded single quotes.
@@ -52,6 +55,27 @@ fn normalize_startup_for_sh(command: &str) -> String {
         }
     })
     .into_owned()
+}
+
+fn validate_safe_path_segment(value: &str, label: &str) -> AgentResult<()> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.len() > 128 {
+        return Err(AgentError::InvalidRequest(format!(
+            "Invalid {}: must be 1-128 characters",
+            label
+        )));
+    }
+    if trimmed.contains('\\') {
+        return Err(AgentError::InvalidRequest(format!("Invalid {}: contains \\\\", label)));
+    }
+    let mut components = Path::new(trimmed).components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(_)), None) => Ok(()),
+        _ => Err(AgentError::InvalidRequest(format!(
+            "Invalid {}: must be a single path segment",
+            label
+        ))),
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -98,6 +122,13 @@ fn parse_stop_policy(msg: &Value) -> StopPolicy {
     policy
 }
 
+struct BackupUploadSession {
+    file: tokio::fs::File,
+    path: PathBuf,
+    bytes_written: u64,
+    last_activity: tokio::time::Instant,
+}
+
 pub struct WebSocketHandler {
     config: Arc<AgentConfig>,
     runtime: Arc<ContainerdRuntime>,
@@ -107,7 +138,7 @@ pub struct WebSocketHandler {
     write: Arc<RwLock<Option<Arc<tokio::sync::Mutex<WsWrite>>>>>,
     active_log_streams: Arc<RwLock<HashSet<String>>>,
     monitor_tasks: Arc<RwLock<HashMap<String, tokio::task::JoinHandle<()>>>>,
-    active_uploads: Arc<RwLock<HashMap<String, tokio::fs::File>>>,
+    active_uploads: Arc<RwLock<HashMap<String, BackupUploadSession>>>,
 }
 
 impl Clone for WebSocketHandler {
@@ -219,15 +250,36 @@ impl WebSocketHandler {
     async fn establish_connection(&self) -> AgentResult<()> {
         self.set_backend_connected(false).await;
 
-        // Include token in URL for rate limit bypass before WebSocket upgrade
         let (auth_token, token_type) = self.select_agent_auth_token()?;
 
-        let ws_url = format!(
-            "{}?nodeId={}&token={}",
-            self.config.server.backend_url,
-            self.config.server.node_id,
-            auth_token
-        );
+        // Enforce secure transport for non-local backends.
+        let mut parsed_url = Url::parse(&self.config.server.backend_url).map_err(|e| {
+            AgentError::ConfigError(format!("Invalid server.backend_url: {}", e))
+        })?;
+        match parsed_url.scheme() {
+            "wss" => {}
+            "ws" => {
+                let host = parsed_url.host_str().unwrap_or_default();
+                if !matches!(host, "localhost" | "127.0.0.1" | "::1") {
+                    return Err(AgentError::ConfigError(
+                        "Refusing insecure ws:// backend_url for non-local host (use wss://)"
+                            .to_string(),
+                    ));
+                }
+            }
+            other => {
+                return Err(AgentError::ConfigError(format!(
+                    "Invalid backend_url scheme '{}': expected ws:// or wss://",
+                    other
+                )));
+            }
+        }
+
+        // Put non-sensitive identity data in the URL; send secrets in the handshake message.
+        parsed_url
+            .query_pairs_mut()
+            .append_pair("nodeId", &self.config.server.node_id);
+        let ws_url = parsed_url;
 
         info!(
             "Connecting to backend: {}?nodeId={}",
@@ -235,7 +287,7 @@ impl WebSocketHandler {
         );
         info!("Using {} auth token for agent connection", token_type);
 
-        let (ws_stream, _) = connect_async(&ws_url)
+        let (ws_stream, _) = connect_async(ws_url.as_str())
             .await
             .map_err(|e| AgentError::NetworkError(format!("Failed to connect: {}", e)))?;
 
@@ -249,7 +301,6 @@ impl WebSocketHandler {
         }
 
         // Send handshake
-        let (auth_token, token_type) = self.select_agent_auth_token()?;
         let handshake = json!({
             "type": "node_handshake",
             "token": auth_token,
@@ -282,9 +333,12 @@ impl WebSocketHandler {
             warn!("Failed to flush buffered metrics: {}", e);
         }
 
+        // Connection-scoped background tasks. Abort on disconnect to avoid accumulation.
+        let mut connection_tasks: Vec<tokio::task::JoinHandle<()>> = Vec::new();
+
         // Start heartbeat task
         let write_clone = write.clone();
-        tokio::spawn(async move {
+        connection_tasks.push(tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(15));
             loop {
                 interval.tick().await;
@@ -295,12 +349,12 @@ impl WebSocketHandler {
                 let mut w = write_clone.lock().await;
                 let _ = w.send(Message::Text(heartbeat.to_string().into())).await;
             }
-        });
+        }));
 
         // Start periodic state reconciliation task (every 5 minutes)
         // This catches any status drift that may occur
         let handler_clone = self.clone();
-        tokio::spawn(async move {
+        connection_tasks.push(tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(300));
             loop {
                 interval.tick().await;
@@ -309,16 +363,26 @@ impl WebSocketHandler {
                     warn!("Periodic reconciliation failed: {}", e);
                 }
             }
-        });
+        }));
 
         // Start global event monitor for instant state syncing
         // This provides real-time state updates with zero polling
         let handler_clone = self.clone();
-        tokio::spawn(async move {
+        connection_tasks.push(tokio::spawn(async move {
             if let Err(e) = handler_clone.monitor_global_events().await {
                 error!("Global event monitor failed: {}", e);
             }
-        });
+        }));
+
+        // Garbage-collect stale backup upload sessions to avoid disk/fd leaks on partial uploads.
+        let handler_clone = self.clone();
+        connection_tasks.push(tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60));
+            loop {
+                interval.tick().await;
+                handler_clone.cleanup_stale_uploads().await;
+            }
+        }));
 
         // Listen for messages
         while let Some(msg) = read.next().await {
@@ -340,12 +404,58 @@ impl WebSocketHandler {
             }
         }
 
+        for task in connection_tasks {
+            task.abort();
+        }
+
+        // Drop any in-progress uploads on disconnect to avoid stale sessions accumulating across
+        // reconnects and to release file descriptors.
+        self.cleanup_all_uploads().await;
+
         {
             let mut guard = self.write.write().await;
             *guard = None;
         }
 
         Ok(())
+    }
+
+    async fn cleanup_all_uploads(&self) {
+        let sessions: Vec<BackupUploadSession> = {
+            let mut uploads = self.active_uploads.write().await;
+            uploads.drain().map(|(_, session)| session).collect()
+        };
+
+        for session in sessions {
+            let path = session.path.clone();
+            drop(session.file);
+            let _ = tokio::fs::remove_file(&path).await;
+        }
+    }
+
+    async fn cleanup_stale_uploads(&self) {
+        let now = tokio::time::Instant::now();
+        let sessions: Vec<BackupUploadSession> = {
+            let mut uploads = self.active_uploads.write().await;
+            let stale_keys: Vec<String> = uploads
+                .iter()
+                .filter(|(_, session)| {
+                    now.duration_since(session.last_activity) > BACKUP_UPLOAD_INACTIVITY_TIMEOUT
+                })
+                .map(|(key, _)| key.clone())
+                .collect();
+
+            stale_keys
+                .into_iter()
+                .filter_map(|key| uploads.remove(&key))
+                .collect()
+        };
+
+        for session in sessions {
+            let path = session.path.clone();
+            drop(session.file);
+            let _ = tokio::fs::remove_file(&path).await;
+        }
     }
 
     async fn handle_message(
@@ -795,15 +905,18 @@ impl WebSocketHandler {
 
         self.cleanup_all_server_containers(server_id, server_uuid).await?;
 
-        // Backend provides a host path for mounting. Inside containers, files are available at /data.
-        let host_server_dir = environment
-            .get("SERVER_DIR")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| {
-                // Fallback: create based on UUID
-                format!("/tmp/catalyst-servers/{}", server_uuid)
-            });
+        // Derive host mount path on-agent (defense in depth). Do not trust control-plane host paths.
+        validate_safe_path_segment(server_uuid, "serverUuid")?;
+        let derived_server_dir = self.config.server.data_dir.join(server_uuid);
+        let host_server_dir = derived_server_dir.to_string_lossy().to_string();
+        if let Some(provided) = environment.get("SERVER_DIR").and_then(|v| v.as_str()) {
+            if provided != host_server_dir {
+                warn!(
+                    "Ignoring backend-provided SERVER_DIR for {}: '{}' (using '{}')",
+                    server_uuid, provided, host_server_dir
+                );
+            }
+        }
 
         let disk_mb = msg["allocatedDiskMb"].as_u64().unwrap_or(10240);
         let server_dir_path = PathBuf::from(&host_server_dir);
@@ -1147,12 +1260,18 @@ impl WebSocketHandler {
                 }
             }
 
-            // Backend provides host mount path via SERVER_DIR. Inside containers, the mounted path is /data.
-            let host_server_dir = environment
-                .get("SERVER_DIR")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| format!("/tmp/catalyst-servers/{}", server_uuid));
+            // Derive host mount path on-agent (defense in depth). Do not trust control-plane host paths.
+            validate_safe_path_segment(server_uuid, "serverUuid")?;
+            let derived_server_dir = self.config.server.data_dir.join(server_uuid);
+            let host_server_dir = derived_server_dir.to_string_lossy().to_string();
+            if let Some(provided) = environment.get("SERVER_DIR").and_then(|v| v.as_str()) {
+                if provided != host_server_dir {
+                    warn!(
+                        "Ignoring backend-provided SERVER_DIR for {}: '{}' (using '{}')",
+                        server_uuid, provided, host_server_dir
+                    );
+                }
+            }
 
             let server_dir_path = PathBuf::from(&host_server_dir);
             self.storage_manager
@@ -1677,12 +1796,17 @@ impl WebSocketHandler {
         let backup_path_override = msg["backupPath"].as_str();
         let backup_id = msg["backupId"].as_str();
 
-        let server_dir = msg["serverDir"]
-            .as_str()
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                PathBuf::from(self.config.server.data_dir.as_path()).join(server_uuid)
-            });
+        validate_safe_path_segment(server_uuid, "serverUuid")?;
+        let server_dir = self.config.server.data_dir.join(server_uuid);
+        if let Some(provided) = msg["serverDir"].as_str() {
+            let derived = server_dir.to_string_lossy();
+            if provided != derived {
+                warn!(
+                    "Ignoring backend-provided serverDir for {}: '{}' (using '{}')",
+                    server_uuid, provided, derived
+                );
+            }
+        }
         let backup_path = match backup_path_override {
             Some(path) => self.resolve_backup_path(server_uuid, path, true).await?,
             None => {
@@ -1782,12 +1906,17 @@ impl WebSocketHandler {
             .and_then(|value| value.as_str())
             .unwrap_or(server_id);
 
-        let server_dir = msg["serverDir"]
-            .as_str()
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                PathBuf::from(self.config.server.data_dir.as_path()).join(server_uuid)
-            });
+        validate_safe_path_segment(server_uuid, "serverUuid")?;
+        let server_dir = self.config.server.data_dir.join(server_uuid);
+        if let Some(provided) = msg["serverDir"].as_str() {
+            let derived = server_dir.to_string_lossy();
+            if provided != derived {
+                warn!(
+                    "Ignoring backend-provided serverDir for {}: '{}' (using '{}')",
+                    server_uuid, provided, derived
+                );
+            }
+        }
         let backup_file = self
             .resolve_backup_path(server_uuid, backup_path, false)
             .await?;
@@ -2048,11 +2177,41 @@ impl WebSocketHandler {
         let backup_file = self
             .resolve_backup_path(server_uuid, backup_path, true)
             .await?;
-        let file = tokio::fs::File::create(&backup_file).await?;
-        self.active_uploads
-            .write()
-            .await
-            .insert(request_id.to_string(), file);
+        let file = match tokio::fs::File::create(&backup_file).await {
+            Ok(f) => f,
+            Err(e) => {
+                let event = json!({
+                    "type": "backup_upload_response",
+                    "requestId": request_id,
+                    "success": false,
+                    "error": format!("Failed to create upload file: {}", e),
+                });
+                let mut w = write.lock().await;
+                w.send(Message::Text(event.to_string().into()))
+                    .await
+                    .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+                return Ok(());
+            }
+        };
+
+        let session = BackupUploadSession {
+            file,
+            path: backup_file.clone(),
+            bytes_written: 0,
+            last_activity: tokio::time::Instant::now(),
+        };
+
+        let old_session = {
+            let mut uploads = self.active_uploads.write().await;
+            let old = uploads.remove(request_id);
+            uploads.insert(request_id.to_string(), session);
+            old
+        };
+        if let Some(old) = old_session {
+            let path = old.path.clone();
+            drop(old.file);
+            let _ = tokio::fs::remove_file(&path).await;
+        }
 
         let event = json!({
             "type": "backup_upload_response",
@@ -2081,11 +2240,71 @@ impl WebSocketHandler {
             .decode(data)
             .map_err(|_| AgentError::InvalidRequest("Invalid chunk data".to_string()))?;
 
-        let mut uploads = self.active_uploads.write().await;
-        let file = uploads
-            .get_mut(request_id)
-            .ok_or_else(|| AgentError::InvalidRequest("Unknown upload request".to_string()))?;
-        file.write_all(&chunk).await?;
+        let mut session = {
+            let mut uploads = self.active_uploads.write().await;
+            match uploads.remove(request_id) {
+                Some(s) => s,
+                None => {
+                    let event = json!({
+                        "type": "backup_upload_chunk_response",
+                        "requestId": request_id,
+                        "success": false,
+                        "error": "Unknown upload request",
+                    });
+                    let mut w = write.lock().await;
+                    w.send(Message::Text(event.to_string().into()))
+                        .await
+                        .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+                    return Ok(());
+                }
+            }
+        };
+
+        let next_total = session
+            .bytes_written
+            .saturating_add(chunk.len() as u64);
+        if next_total > MAX_BACKUP_UPLOAD_BYTES {
+            let path = session.path.clone();
+            drop(session.file);
+            let _ = tokio::fs::remove_file(&path).await;
+            let event = json!({
+                "type": "backup_upload_chunk_response",
+                "requestId": request_id,
+                "success": false,
+                "error": format!("Upload too large (max {} bytes)", MAX_BACKUP_UPLOAD_BYTES),
+            });
+            let mut w = write.lock().await;
+            w.send(Message::Text(event.to_string().into()))
+                .await
+                .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+            return Ok(());
+        }
+
+        if let Err(e) = session.file.write_all(&chunk).await {
+            let path = session.path.clone();
+            drop(session.file);
+            let _ = tokio::fs::remove_file(&path).await;
+            let event = json!({
+                "type": "backup_upload_chunk_response",
+                "requestId": request_id,
+                "success": false,
+                "error": format!("Write failed: {}", e),
+            });
+            let mut w = write.lock().await;
+            w.send(Message::Text(event.to_string().into()))
+                .await
+                .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+            return Ok(());
+        }
+
+        session.bytes_written = next_total;
+        session.last_activity = tokio::time::Instant::now();
+
+        // Reinsert the session now that the write has completed.
+        self.active_uploads
+            .write()
+            .await
+            .insert(request_id.to_string(), session);
 
         let event = json!({
             "type": "backup_upload_chunk_response",
@@ -2107,9 +2326,40 @@ impl WebSocketHandler {
         let request_id = msg["requestId"]
             .as_str()
             .ok_or_else(|| AgentError::InvalidRequest("Missing requestId".to_string()))?;
-        let mut uploads = self.active_uploads.write().await;
-        if let Some(mut file) = uploads.remove(request_id) {
-            file.flush().await?;
+        let session = {
+            let mut uploads = self.active_uploads.write().await;
+            uploads.remove(request_id)
+        };
+
+        if let Some(mut s) = session {
+            if let Err(e) = s.file.flush().await {
+                let path = s.path.clone();
+                drop(s);
+                let _ = tokio::fs::remove_file(&path).await;
+                let event = json!({
+                    "type": "backup_upload_response",
+                    "requestId": request_id,
+                    "success": false,
+                    "error": format!("Flush failed: {}", e),
+                });
+                let mut w = write.lock().await;
+                w.send(Message::Text(event.to_string().into()))
+                    .await
+                    .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+                return Ok(());
+            }
+        } else {
+            let event = json!({
+                "type": "backup_upload_response",
+                "requestId": request_id,
+                "success": false,
+                "error": "Unknown upload request",
+            });
+            let mut w = write.lock().await;
+            w.send(Message::Text(event.to_string().into()))
+                .await
+                .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+            return Ok(());
         }
 
         let event = json!({
@@ -2134,6 +2384,7 @@ impl WebSocketHandler {
         requested_path: &str,
         allow_create: bool,
     ) -> AgentResult<PathBuf> {
+        validate_safe_path_segment(server_uuid, "serverUuid")?;
         let base_dir = self.backup_base_dir(server_uuid);
         if allow_create {
             tokio::fs::create_dir_all(&base_dir).await.map_err(|e| {

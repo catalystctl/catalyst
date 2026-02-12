@@ -5,6 +5,8 @@ use tracing::{info, warn};
 
 use crate::config::CniNetworkConfig;
 use crate::AgentError;
+use serde_json::json;
+use toml::Value as TomlValue;
 
 const CNI_DIR: &str = "/etc/cni/net.d";
 const CONFIG_PATH: &str = "/opt/catalyst-agent/config.toml";
@@ -13,10 +15,89 @@ const CONFIG_PATH: &str = "/opt/catalyst-agent/config.toml";
 pub struct NetworkManager;
 
 impl NetworkManager {
+    fn validate_network_name(name: &str) -> Result<(), AgentError> {
+        let name = name.trim();
+        if name.is_empty() || name.len() > 63 {
+            return Err(AgentError::InvalidRequest(
+                "Invalid network name: must be 1-63 characters".to_string(),
+            ));
+        }
+        if name.contains('/') || name.contains('\\') {
+            return Err(AgentError::InvalidRequest(
+                "Invalid network name: must not contain path separators".to_string(),
+            ));
+        }
+
+        let mut chars = name.chars();
+        let Some(first) = chars.next() else {
+            return Err(AgentError::InvalidRequest(
+                "Invalid network name: must not be empty".to_string(),
+            ));
+        };
+        if !first.is_ascii_alphanumeric() {
+            return Err(AgentError::InvalidRequest(
+                "Invalid network name: must start with an alphanumeric character".to_string(),
+            ));
+        }
+        if !name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        {
+            return Err(AgentError::InvalidRequest(
+                "Invalid network name: allowed characters are a-z, A-Z, 0-9, '-', '_', '.'"
+                    .to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn normalize_interface_name(interface: &str) -> String {
+        // `ip link` can show stacked interfaces as `eth0@if3`. For config and `ip` commands,
+        // we want the actual interface name (`eth0`).
+        interface.trim().split('@').next().unwrap_or("").to_string()
+    }
+
+    fn validate_interface_name(interface: &str) -> Result<(), AgentError> {
+        let interface = interface.trim();
+        if interface.is_empty() || interface.len() > 15 {
+            return Err(AgentError::InvalidRequest(
+                "Invalid interface name: must be 1-15 characters".to_string(),
+            ));
+        }
+        if interface.contains('/') || interface.contains('\\') {
+            return Err(AgentError::InvalidRequest(
+                "Invalid interface name: must not contain path separators".to_string(),
+            ));
+        }
+        let mut chars = interface.chars();
+        let Some(first) = chars.next() else {
+            return Err(AgentError::InvalidRequest(
+                "Invalid interface name: must not be empty".to_string(),
+            ));
+        };
+        if !first.is_ascii_alphanumeric() {
+            return Err(AgentError::InvalidRequest(
+                "Invalid interface name: must start with an alphanumeric character".to_string(),
+            ));
+        }
+        if !interface
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        {
+            return Err(AgentError::InvalidRequest(
+                "Invalid interface name: allowed characters are a-z, A-Z, 0-9, '-', '_', '.'"
+                    .to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Create a new CNI network configuration
     pub fn create_network(
         network: &CniNetworkConfig,
     ) -> Result<(), AgentError> {
+        Self::validate_network_name(&network.name)?;
         let cni_config_path = format!("{}/{}.conflist", CNI_DIR, network.name);
 
         // Check if network already exists
@@ -29,10 +110,11 @@ impl NetworkManager {
 
         // Detect interface if not specified
         let interface = if let Some(ref iface) = network.interface {
-            iface.clone()
+            Self::normalize_interface_name(iface)
         } else {
             Self::detect_network_interface()?
         };
+        Self::validate_interface_name(&interface)?;
 
         // Detect CIDR if not specified
         let cidr = if let Some(ref cidr) = network.cidr {
@@ -83,6 +165,8 @@ impl NetworkManager {
         old_name: &str,
         network: &CniNetworkConfig,
     ) -> Result<(), AgentError> {
+        Self::validate_network_name(old_name)?;
+        Self::validate_network_name(&network.name)?;
         let old_cni_path = format!("{}/{}.conflist", CNI_DIR, old_name);
 
         // Check if old network exists
@@ -105,10 +189,11 @@ impl NetworkManager {
 
         // Detect interface if not specified
         let interface = if let Some(ref iface) = network.interface {
-            iface.clone()
+            Self::normalize_interface_name(iface)
         } else {
             Self::detect_network_interface()?
         };
+        Self::validate_interface_name(&interface)?;
 
         // Detect CIDR if not specified
         let cidr = if let Some(ref cidr) = network.cidr {
@@ -156,6 +241,7 @@ impl NetworkManager {
 
     /// Delete a CNI network configuration
     pub fn delete_network(network_name: &str) -> Result<(), AgentError> {
+        Self::validate_network_name(network_name)?;
         let cni_config_path = format!("{}/{}.conflist", CNI_DIR, network_name);
 
         // Check if network exists
@@ -187,34 +273,34 @@ impl NetworkManager {
         range_end: &str,
         gateway: &str,
     ) -> String {
-        format!(
-            r#"{{
-  "cniVersion": "1.0.0",
-  "name": "{}",
-  "plugins": [
-    {{
-      "type": "macvlan",
-      "master": "{}",
-      "mode": "bridge",
-      "ipam": {{
-        "type": "host-local",
-        "ranges": [[
-          {{
-            "subnet": "{}",
-            "rangeStart": "{}",
-            "rangeEnd": "{}",
-            "gateway": "{}"
-          }}
-        ]],
-        "routes": [
-          {{ "dst": "0.0.0.0/0" }}
-        ]
-      }}
-    }}
-  ]
-}}"#,
-            name, interface, cidr, range_start, range_end, gateway
-        )
+        // Build JSON via a serializer to avoid config injection via user-controlled fields.
+        let config = json!({
+            "cniVersion": "1.0.0",
+            "name": name,
+            "plugins": [
+                {
+                    "type": "macvlan",
+                    "master": interface,
+                    "mode": "bridge",
+                    "ipam": {
+                        "type": "host-local",
+                        "ranges": [[
+                            {
+                                "subnet": cidr,
+                                "rangeStart": range_start,
+                                "rangeEnd": range_end,
+                                "gateway": gateway,
+                            }
+                        ]],
+                        "routes": [
+                            { "dst": "0.0.0.0/0" }
+                        ],
+                    }
+                }
+            ]
+        });
+
+        serde_json::to_string_pretty(&config).unwrap_or_else(|_| "{}".to_string())
     }
 
     /// Persist network configuration to config.toml
@@ -226,41 +312,32 @@ impl NetworkManager {
         range_start: &str,
         range_end: &str,
     ) -> Result<(), AgentError> {
-        // Read existing config or create new one
-        let mut config = if Path::new(CONFIG_PATH).exists() {
-            fs::read_to_string(CONFIG_PATH)
-                .map_err(|e| AgentError::IoError(format!("Failed to read config: {}", e)))?
-        } else {
-            String::new()
-        };
+        let mut config = Self::load_agent_config_toml()?;
+        let networks = Self::networks_array_mut(&mut config)?;
 
-        // Check if networking section exists
-        if !config.contains("[networking]") {
-            config.push_str("\n[networking]\n");
+        // If already present, treat as idempotent.
+        if networks.iter().any(|value| {
+            value
+                .as_table()
+                .and_then(|t| t.get("name"))
+                .and_then(TomlValue::as_str)
+                == Some(network.name.as_str())
+        }) {
+            info!("✓ Network '{}' already present in {}", network.name, CONFIG_PATH);
+            return Ok(());
         }
 
-        // Append network configuration
-        let network_entry = format!(
-            r#"
-[[networking.networks]]
-name = "{}"
-interface = "{}"
-cidr = "{}"
-gateway = "{}"
-range_start = "{}"
-range_end = "{}"
-"#,
-            network.name, interface, cidr, gateway, range_start, range_end
-        );
+        networks.push(Self::build_network_toml_entry(
+            &network.name,
+            interface,
+            cidr,
+            gateway,
+            range_start,
+            range_end,
+        ));
 
-        config.push_str(&network_entry);
-
-        // Write back to config
-        fs::write(CONFIG_PATH, config)
-            .map_err(|e| AgentError::IoError(format!("Failed to write config: {}", e)))?;
-
+        Self::store_agent_config_toml(&config)?;
         info!("✓ Persisted network '{}' to {}", network.name, CONFIG_PATH);
-
         Ok(())
     }
 
@@ -274,56 +351,46 @@ range_end = "{}"
         range_start: &str,
         range_end: &str,
     ) -> Result<(), AgentError> {
-        if !Path::new(CONFIG_PATH).exists() {
-            return Self::persist_to_config(network, interface, cidr, gateway, range_start, range_end);
+        let mut config = Self::load_agent_config_toml()?;
+        let networks = Self::networks_array_mut(&mut config)?;
+
+        let mut updated = false;
+        for value in networks.iter_mut() {
+            let Some(table) = value.as_table_mut() else { continue };
+            let Some(existing_name) = table
+                .get("name")
+                .and_then(TomlValue::as_str)
+                .map(str::to_string)
+            else {
+                continue;
+            };
+            if existing_name == old_name {
+                *value = Self::build_network_toml_entry(
+                    &network.name,
+                    interface,
+                    cidr,
+                    gateway,
+                    range_start,
+                    range_end,
+                );
+                updated = true;
+                break;
+            }
         }
 
-        let config = fs::read_to_string(CONFIG_PATH)
-            .map_err(|e| AgentError::IoError(format!("Failed to read config: {}", e)))?;
-
-        // Find and replace the network entry
-        let lines: Vec<&str> = config.lines().collect();
-        let mut result = Vec::new();
-        let mut in_network = false;
-        let mut skipped = false;
-
-        for line in &lines {
-            // Check if this is the network we're updating
-            if line.contains(&format!("name = \"{}\"", old_name)) {
-                in_network = true;
-                skipped = true;
-                continue;
-            }
-
-            // If we're in the network block, check if we've exited it
-            if in_network {
-                if line.starts_with("[") || (line.contains("name = \"") && !line.contains(old_name)) {
-                    in_network = false;
-                    // Add the updated network entry before the next section
-                    result.push(format!(
-                        "[[networking.networks]]\nname = \"{}\"\ninterface = \"{}\"\ncidr = \"{}\"\ngateway = \"{}\"\nrange_start = \"{}\"\nrange_end = \"{}\"",
-                        network.name, interface, cidr, gateway, range_start, range_end
-                    ));
-                }
-                continue;
-            }
-
-            result.push(line.to_string());
-        }
-
-        // If we updated the last network, append it
-        if skipped && !in_network && !result.iter().any(|l| l.contains(&format!("name = \"{}\"", network.name))) {
-            result.push(format!(
-                "[[networking.networks]]\nname = \"{}\"\ninterface = \"{}\"\ncidr = \"{}\"\ngateway = \"{}\"\nrange_start = \"{}\"\nrange_end = \"{}\"",
-                network.name, interface, cidr, gateway, range_start, range_end
+        if !updated {
+            networks.push(Self::build_network_toml_entry(
+                &network.name,
+                interface,
+                cidr,
+                gateway,
+                range_start,
+                range_end,
             ));
         }
 
-        fs::write(CONFIG_PATH, result.join("\n"))
-            .map_err(|e| AgentError::IoError(format!("Failed to write config: {}", e)))?;
-
+        Self::store_agent_config_toml(&config)?;
         info!("✓ Updated network '{}' in {}", network.name, CONFIG_PATH);
-
         Ok(())
     }
 
@@ -333,47 +400,98 @@ range_end = "{}"
             return Ok(());
         }
 
-        let config = fs::read_to_string(CONFIG_PATH)
-            .map_err(|e| AgentError::IoError(format!("Failed to read config: {}", e)))?;
+        let mut config = Self::load_agent_config_toml()?;
+        let Ok(networks) = Self::networks_array_mut(&mut config) else {
+            return Ok(());
+        };
 
-        let lines: Vec<&str> = config.lines().collect();
-        let mut result = Vec::new();
-        let mut in_network = false;
+        networks.retain(|value| {
+            value
+                .as_table()
+                .and_then(|t| t.get("name"))
+                .and_then(TomlValue::as_str)
+                != Some(network_name)
+        });
 
-        for line in lines {
-            // Check if this is the network we're removing
-            if line.contains(&format!("name = \"{}\"", network_name)) {
-                in_network = true;
-                continue;
-            }
-
-            // If we're in the network block, skip until we hit the next section
-            if in_network {
-                // Check if we've exited the network block (either a new section or a non-network line)
-                let exited_network = (line.starts_with("[") && !line.contains("networking.networks]"))
-                    || (!line.starts_with("[")
-                        && !line.trim().is_empty()
-                        && !line.contains("interface")
-                        && !line.contains("cidr")
-                        && !line.contains("gateway")
-                        && !line.contains("range_"));
-
-                if exited_network {
-                    in_network = false;
-                    result.push(line.to_string());
-                }
-                continue;
-            }
-
-            result.push(line.to_string());
-        }
-
-        fs::write(CONFIG_PATH, result.join("\n"))
-            .map_err(|e| AgentError::IoError(format!("Failed to write config: {}", e)))?;
-
+        Self::store_agent_config_toml(&config)?;
         info!("✓ Removed network '{}' from {}", network_name, CONFIG_PATH);
-
         Ok(())
+    }
+
+    fn load_agent_config_toml() -> Result<TomlValue, AgentError> {
+        if !Path::new(CONFIG_PATH).exists() {
+            return Ok(TomlValue::Table(toml::value::Table::new()));
+        }
+        let raw = fs::read_to_string(CONFIG_PATH)
+            .map_err(|e| AgentError::IoError(format!("Failed to read config: {}", e)))?;
+        toml::from_str::<TomlValue>(&raw)
+            .map_err(|e| AgentError::IoError(format!("Failed to parse config TOML: {}", e)))
+    }
+
+    fn store_agent_config_toml(value: &TomlValue) -> Result<(), AgentError> {
+        let raw = toml::to_string_pretty(value)
+            .map_err(|e| AgentError::IoError(format!("Failed to serialize config TOML: {}", e)))?;
+        fs::write(CONFIG_PATH, raw)
+            .map_err(|e| AgentError::IoError(format!("Failed to write config: {}", e)))
+    }
+
+    fn networks_array_mut(value: &mut TomlValue) -> Result<&mut Vec<TomlValue>, AgentError> {
+        if !value.is_table() {
+            *value = TomlValue::Table(toml::value::Table::new());
+        }
+        let root = value
+            .as_table_mut()
+            .ok_or_else(|| AgentError::IoError("Invalid config TOML: expected table".to_string()))?;
+
+        let networking = root
+            .entry("networking")
+            .or_insert_with(|| TomlValue::Table(toml::value::Table::new()));
+        if !networking.is_table() {
+            *networking = TomlValue::Table(toml::value::Table::new());
+        }
+        let networking_table = networking.as_table_mut().ok_or_else(|| {
+            AgentError::IoError("Invalid config TOML: networking must be a table".to_string())
+        })?;
+
+        let networks = networking_table
+            .entry("networks")
+            .or_insert_with(|| TomlValue::Array(Vec::new()));
+        if !networks.is_array() {
+            *networks = TomlValue::Array(Vec::new());
+        }
+        networks.as_array_mut().ok_or_else(|| {
+            AgentError::IoError("Invalid config TOML: networking.networks must be an array".to_string())
+        })
+    }
+
+    fn build_network_toml_entry(
+        name: &str,
+        interface: &str,
+        cidr: &str,
+        gateway: &str,
+        range_start: &str,
+        range_end: &str,
+    ) -> TomlValue {
+        let mut table = toml::value::Table::new();
+        table.insert("name".to_string(), TomlValue::String(name.to_string()));
+        table.insert(
+            "interface".to_string(),
+            TomlValue::String(interface.to_string()),
+        );
+        table.insert("cidr".to_string(), TomlValue::String(cidr.to_string()));
+        table.insert(
+            "gateway".to_string(),
+            TomlValue::String(gateway.to_string()),
+        );
+        table.insert(
+            "range_start".to_string(),
+            TomlValue::String(range_start.to_string()),
+        );
+        table.insert(
+            "range_end".to_string(),
+            TomlValue::String(range_end.to_string()),
+        );
+        TomlValue::Table(table)
     }
 
     /// Detect the primary network interface
@@ -397,7 +515,8 @@ range_end = "{}"
                     None
                 })
                 .unwrap_or_default();
-            if !interface.is_empty() {
+            let interface = Self::normalize_interface_name(&interface);
+            if !interface.is_empty() && interface != "lo" && Self::validate_interface_name(&interface).is_ok() {
                 return Ok(interface);
             }
         }
@@ -422,7 +541,8 @@ range_end = "{}"
                     }
                 })
                 .unwrap_or_default();
-            if !interface.is_empty() {
+            let interface = Self::normalize_interface_name(&interface);
+            if !interface.is_empty() && interface != "lo" && Self::validate_interface_name(&interface).is_ok() {
                 return Ok(interface);
             }
         }

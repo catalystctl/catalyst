@@ -1,7 +1,7 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use tokio::fs;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::{AgentError, AgentResult};
 
@@ -384,7 +384,9 @@ impl FileManager {
         let archive_lower = archive_path.to_lowercase();
         if archive_lower.ends_with(".zip") {
             let output = tokio::process::Command::new("zip")
-                .args(["-r", &archive_full.to_string_lossy()])
+                // Prevent option-injection from user-controlled file/archive names.
+                // `--` forces zip to treat subsequent args as positional paths.
+                .args(["-r", "--", &archive_full.to_string_lossy()])
                 .args(&relative_paths)
                 .current_dir(&canonical_base)
                 .output()
@@ -405,6 +407,8 @@ impl FileManager {
                     "-C",
                     &canonical_base.to_string_lossy(),
                 ])
+                // Prevent option-injection from user-controlled filenames.
+                .arg("--")
                 .args(&relative_paths)
                 .output()
                 .await
@@ -477,10 +481,128 @@ impl FileManager {
             }
         }
 
+        // Security: Validate that no symlinks were extracted that escape the target directory.
+        // This prevents archive symlink attacks where a malicious archive contains symlinks
+        // pointing outside the server directory (e.g., to /etc/cron.d).
+        self.validate_extracted_symlinks(&target_full, &server_id).await?;
+
         info!(
             "Archive decompressed: {:?} -> {:?}",
             archive_full, target_full
         );
+        Ok(())
+    }
+
+    /// Validate that no symlinks in the extracted directory point outside the server base.
+    /// This is a security measure to prevent archive symlink attacks.
+    async fn validate_extracted_symlinks(
+        &self,
+        extract_dir: &std::path::Path,
+        server_id: &str,
+    ) -> AgentResult<()> {
+        let server_base = self.data_dir.join(server_id);
+        let canonical_base = server_base
+            .canonicalize()
+            .map_err(|e| AgentError::FileSystemError(format!("Cannot resolve server dir: {}", e)))?;
+
+        // Walk the extracted directory looking for symlinks
+        let mut dangerous_symlinks = Vec::new();
+        self.check_symlinks_recursive(extract_dir, &canonical_base, &mut dangerous_symlinks)
+            .await?;
+
+        if !dangerous_symlinks.is_empty() {
+            // Log the dangerous symlinks found
+            for symlink in &dangerous_symlinks {
+                warn!(
+                    "Dangerous symlink detected in extracted archive: {:?}",
+                    symlink
+                );
+            }
+
+            // Clean up the extracted content to prevent exploitation
+            let _ = fs::remove_dir_all(extract_dir).await;
+
+            return Err(AgentError::SecurityViolation(format!(
+                "Archive contains {} symlink(s) that escape the server directory. \
+                 Extraction aborted and target directory cleaned up for security.",
+                dangerous_symlinks.len()
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Recursively check for symlinks that escape the base directory.
+    async fn check_symlinks_recursive(
+        &self,
+        dir: &std::path::Path,
+        canonical_base: &std::path::Path,
+        dangerous_symlinks: &mut Vec<String>,
+    ) -> AgentResult<()> {
+        let mut entries = match fs::read_dir(dir).await {
+            Ok(e) => e,
+            Err(e) => {
+                debug!("Cannot read directory {:?}: {}", dir, e);
+                return Ok(()); // Skip directories we can't read
+            }
+        };
+
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("Error reading dir: {}", e)))?
+        {
+            let path = entry.path();
+
+            // Check if this entry is a symlink
+            match entry.file_type().await {
+                Ok(ft) if ft.is_symlink() => {
+                    // Read the symlink target
+                    match std::fs::read_link(&path) {
+                        Ok(target) => {
+                            // Resolve the symlink to its absolute target
+                            let parent = path.parent().unwrap_or(dir);
+                            let resolved = parent.join(&target);
+
+                            // Try to canonicalize - this will fail if target doesn't exist
+                            // but we still want to check the path
+                            if let Ok(canon_target) = resolved.canonicalize() {
+                                // Check if the resolved target is outside the server base
+                                if !canon_target.starts_with(canonical_base) {
+                                    dangerous_symlinks
+                                        .push(format!("{} -> {}", path.display(), target.display()));
+                                }
+                            } else if resolved.is_absolute() {
+                                // Absolute symlink to non-existent path - still dangerous
+                                if !resolved.starts_with(canonical_base) {
+                                    dangerous_symlinks
+                                        .push(format!("{} -> {}", path.display(), target.display()));
+                                }
+                            } else {
+                                // Relative symlink - resolve against base and check
+                                let full_resolved = canonical_base.join(&target);
+                                if let Ok(canon) = full_resolved.canonicalize() {
+                                    if !canon.starts_with(canonical_base) {
+                                        dangerous_symlinks
+                                            .push(format!("{} -> {}", path.display(), target.display()));
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            debug!("Cannot read symlink {:?}: {}", path, e);
+                        }
+                    }
+                }
+                Ok(ft) if ft.is_dir() => {
+                    // Recurse into subdirectories
+                    Box::pin(self.check_symlinks_recursive(&path, canonical_base, dangerous_symlinks))
+                        .await?;
+                }
+                _ => {}
+            }
+        }
+
         Ok(())
     }
 

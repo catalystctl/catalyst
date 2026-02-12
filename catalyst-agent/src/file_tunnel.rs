@@ -1,8 +1,13 @@
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{RwLock, Semaphore};
+use tokio::io::AsyncWriteExt;
 
+use futures::StreamExt;
 use reqwest::Client;
+use reqwest::header::LOCATION;
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::{error, info, warn};
@@ -14,6 +19,8 @@ const POLL_CONCURRENCY: usize = 4;
 const MAX_CONCURRENT_REQUESTS: usize = 50; // Max concurrent file operations
 const RETRY_DELAY: Duration = Duration::from_secs(2);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(30);
+const MAX_INSTALL_URL_BYTES: u64 = 100 * 1024 * 1024; // 100MB cap to prevent memory/disk exhaustion
+const MAX_INSTALL_URL_REDIRECTS: usize = 10;
 
 #[derive(Debug, Deserialize)]
 struct TunnelRequest {
@@ -542,6 +549,84 @@ async fn handle_archive_contents(
     }
 }
 
+fn is_ipv6_site_local(v6: &std::net::Ipv6Addr) -> bool {
+    // Deprecated site-local unicast: fec0::/10
+    // Mask the top 10 bits of the first 16-bit segment.
+    let seg0 = v6.segments()[0];
+    (seg0 & 0xffc0) == 0xfec0
+}
+
+fn is_forbidden_install_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            if v4.is_private()
+                || v4.is_loopback()
+                || v4.is_link_local()
+                || v4.is_multicast()
+                || v4.is_unspecified()
+                || v4.is_broadcast()
+            {
+                return true;
+            }
+            // CGNAT 100.64.0.0/10
+            let [a, b, ..] = v4.octets();
+            a == 100 && (64..=127).contains(&b)
+        }
+        IpAddr::V6(v6) => {
+            if let Some(v4) = v6.to_ipv4() {
+                return is_forbidden_install_ip(IpAddr::V4(v4));
+            }
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_multicast()
+                || v6.is_unicast_link_local()
+                || v6.is_unique_local()
+                || is_ipv6_site_local(&v6)
+        }
+    }
+}
+
+async fn validate_install_url(url: &Url) -> Result<(), String> {
+    match url.scheme() {
+        "http" | "https" => {}
+        other => return Err(format!("Unsupported URL scheme '{}'", other)),
+    }
+
+    if url.username() != "" || url.password().is_some() {
+        return Err("install-url cannot include embedded credentials".to_string());
+    }
+
+    let host = url
+        .host_str()
+        .ok_or_else(|| "URL is missing a host".to_string())?;
+    let port = url
+        .port_or_known_default()
+        .ok_or_else(|| "URL is missing a port".to_string())?;
+
+    // If the host is already an IP literal, validate directly.
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        if is_forbidden_install_ip(ip) {
+            return Err("Refusing to download from a private/link-local/loopback IP".to_string());
+        }
+        return Ok(());
+    }
+
+    // Resolve host to IPs and block any private/link-local/loopback ranges.
+    let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host, port))
+        .await
+        .map_err(|e| format!("DNS lookup failed for '{}': {}", host, e))?
+        .collect();
+    if addrs.is_empty() {
+        return Err(format!("DNS lookup returned no addresses for '{}'", host));
+    }
+    for addr in addrs {
+        if is_forbidden_install_ip(addr.ip()) {
+            return Err("Refusing to download from a private/link-local/loopback IP".to_string());
+        }
+    }
+    Ok(())
+}
+
 async fn handle_install_url(
     ctx: &TunnelCtx<'_>,
     fm: &FileManager,
@@ -555,6 +640,20 @@ async fn handle_install_url(
         }
     };
 
+    let mut current_url = match Url::parse(url) {
+        Ok(u) => u,
+        Err(e) => {
+            send_json_response(
+                ctx,
+                false,
+                None,
+                Some(format!("Invalid URL '{}': {}", url, e)),
+            )
+            .await;
+            return;
+        }
+    };
+
     // Resolve and ensure parent directory exists
     let target_path = match fm.resolve_and_ensure_parent(&req.server_uuid, &req.path).await {
         Ok(p) => p,
@@ -564,45 +663,167 @@ async fn handle_install_url(
         }
     };
 
-    // Download from the external URL
-    let dl_client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::limited(10))
+    // Download from the external URL with SSRF protections and a hard size cap.
+    let dl_client = match reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
         .timeout(std::time::Duration::from_secs(300))
         .build()
-        .unwrap_or_else(|_| reqwest::Client::new());
-
-    let response = match dl_client.get(url).send().await {
-        Ok(r) => r,
+    {
+        Ok(c) => c,
         Err(e) => {
-            send_json_response(ctx, false, None, Some(format!("Download failed: {}", e))).await;
+            send_json_response(
+                ctx,
+                false,
+                None,
+                Some(format!("Failed to build download client: {}", e)),
+            )
+            .await;
             return;
         }
     };
 
-    if !response.status().is_success() {
-        send_json_response(
-            ctx,
-            false,
-            None,
-            Some(format!("Download returned HTTP {}", response.status())),
-        )
-        .await;
+    for _ in 0..=MAX_INSTALL_URL_REDIRECTS {
+        if let Err(err) = validate_install_url(&current_url).await {
+            send_json_response(ctx, false, None, Some(err)).await;
+            return;
+        }
+
+        let response = match dl_client.get(current_url.clone()).send().await {
+            Ok(r) => r,
+            Err(e) => {
+                send_json_response(ctx, false, None, Some(format!("Download failed: {}", e)))
+                    .await;
+                return;
+            }
+        };
+
+        if response.status().is_redirection() {
+            let location = response
+                .headers()
+                .get(LOCATION)
+                .and_then(|v| v.to_str().ok())
+                .ok_or_else(|| "Redirect response missing Location header".to_string());
+            let location = match location {
+                Ok(v) => v,
+                Err(e) => {
+                    send_json_response(ctx, false, None, Some(e)).await;
+                    return;
+                }
+            };
+            let next_url = match current_url.join(location) {
+                Ok(u) => u,
+                Err(e) => {
+                    send_json_response(
+                        ctx,
+                        false,
+                        None,
+                        Some(format!("Invalid redirect URL '{}': {}", location, e)),
+                    )
+                    .await;
+                    return;
+                }
+            };
+            current_url = next_url;
+            continue;
+        }
+
+        if !response.status().is_success() {
+            send_json_response(
+                ctx,
+                false,
+                None,
+                Some(format!("Download returned HTTP {}", response.status())),
+            )
+            .await;
+            return;
+        }
+
+        if let Some(len) = response.content_length() {
+            if len > MAX_INSTALL_URL_BYTES {
+                send_json_response(
+                    ctx,
+                    false,
+                    None,
+                    Some(format!(
+                        "Download too large: {} bytes (max {} bytes)",
+                        len, MAX_INSTALL_URL_BYTES
+                    )),
+                )
+                .await;
+                return;
+            }
+        }
+
+        let mut file = match tokio::fs::File::create(&target_path).await {
+            Ok(f) => f,
+            Err(e) => {
+                send_json_response(ctx, false, None, Some(format!("Write failed: {}", e))).await;
+                return;
+            }
+        };
+
+        let mut written: u64 = 0;
+        let mut stream = response.bytes_stream();
+        while let Some(chunk) = stream.next().await {
+            let chunk = match chunk {
+                Ok(c) => c,
+                Err(e) => {
+                    drop(file);
+                    let _ = tokio::fs::remove_file(&target_path).await;
+                    send_json_response(
+                        ctx,
+                        false,
+                        None,
+                        Some(format!("Download read failed: {}", e)),
+                    )
+                    .await;
+                    return;
+                }
+            };
+
+            written = written.saturating_add(chunk.len() as u64);
+            if written > MAX_INSTALL_URL_BYTES {
+                drop(file);
+                let _ = tokio::fs::remove_file(&target_path).await;
+                send_json_response(
+                    ctx,
+                    false,
+                    None,
+                    Some(format!(
+                        "Download too large: exceeded max {} bytes",
+                        MAX_INSTALL_URL_BYTES
+                    )),
+                )
+                .await;
+                return;
+            }
+
+            if let Err(e) = file.write_all(&chunk).await {
+                drop(file);
+                let _ = tokio::fs::remove_file(&target_path).await;
+                send_json_response(ctx, false, None, Some(format!("Write failed: {}", e))).await;
+                return;
+            }
+        }
+
+        if let Err(e) = file.flush().await {
+            drop(file);
+            let _ = tokio::fs::remove_file(&target_path).await;
+            send_json_response(ctx, false, None, Some(format!("Write failed: {}", e))).await;
+            return;
+        }
+
+        send_json_response(ctx, true, None, None).await;
         return;
     }
 
-    match response.bytes().await {
-        Ok(bytes) => {
-            if let Err(e) = tokio::fs::write(&target_path, &bytes).await {
-                send_json_response(ctx, false, None, Some(format!("Write failed: {}", e))).await;
-            } else {
-                send_json_response(ctx, true, None, None).await;
-            }
-        }
-        Err(e) => {
-            send_json_response(ctx, false, None, Some(format!("Download read failed: {}", e)))
-                .await;
-        }
-    }
+    send_json_response(
+        ctx,
+        false,
+        None,
+        Some("Too many redirects".to_string()),
+    )
+    .await;
 }
 
 // --- Response Helpers ---

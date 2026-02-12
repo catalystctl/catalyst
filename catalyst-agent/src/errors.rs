@@ -19,6 +19,9 @@ pub enum AgentError {
     #[error("Permission denied: {0}")]
     PermissionDenied(String),
 
+    #[error("Security violation: {0}")]
+    SecurityViolation(String),
+
     #[error("Not found: {0}")]
     NotFound(String),
 

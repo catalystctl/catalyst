@@ -1,7 +1,10 @@
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 use std::process::Command;
 use tracing::{error, info, warn};
+
+use sha2::{Digest, Sha256};
 
 use crate::config::CniNetworkConfig;
 use crate::{AgentConfig, AgentError};
@@ -329,6 +332,44 @@ impl SystemSetup {
         Ok(())
     }
 
+    fn sha256_file(path: &str) -> Result<String, AgentError> {
+        let mut file =
+            fs::File::open(path).map_err(|e| AgentError::IoError(format!("Open {}: {}", path, e)))?;
+        let mut hasher = Sha256::new();
+        let mut buffer = [0u8; 8192];
+        loop {
+            let read = file
+                .read(&mut buffer)
+                .map_err(|e| AgentError::IoError(format!("Read {}: {}", path, e)))?;
+            if read == 0 {
+                break;
+            }
+            hasher.update(&buffer[..read]);
+        }
+        Ok(format!("{:x}", hasher.finalize()))
+    }
+
+    fn extract_sha256_hex(text: &str) -> Option<String> {
+        for raw in text.split_whitespace() {
+            let token = raw.trim_matches(|c: char| c == '=' || c == '(' || c == ')');
+            if token.len() == 64 && token.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Some(token.to_ascii_lowercase());
+            }
+        }
+        None
+    }
+
+    fn expected_cni_plugins_sha256(version: &str, arch: &str) -> Option<&'static str> {
+        // Pinned checksums for the CNI plugins tarball. Keep in sync with the version in
+        // ensure_cni_plugins().
+        match (version, arch) {
+            // Values are from the upstream GitHub release artifacts.
+            ("v1.9.0", "amd64") => Some("58c037b23b0792b91c1a464f3c5d6d2d124ea74df761911c2c5ec8c714e5432d"),
+            ("v1.9.0", "arm64") => Some("259604308a06b35957f5203771358fbb9e89d09579b65b3e50551ffefc536d63"),
+            _ => None,
+        }
+    }
+
     /// Ensure required CNI plugin binaries are installed
     async fn ensure_cni_plugins(pkg_manager: &str) -> Result<(), AgentError> {
         if Self::has_required_cni_plugins() {
@@ -378,7 +419,7 @@ impl SystemSetup {
                 )));
             }
         };
-        let version = "v1.4.1";
+        let version = "v1.9.0";
         let url = format!(
             "https://github.com/containernetworking/plugins/releases/download/{}/cni-plugins-linux-{}-{}.tgz",
             version, arch, version
@@ -388,6 +429,41 @@ impl SystemSetup {
             .map_err(|e| AgentError::IoError(format!("Failed to create /opt/cni/bin: {}", e)))?;
         let archive_path = format!("/tmp/cni-plugins-{}-{}.tgz", version, arch);
         Self::run_command("curl", &["-fsSL", "-o", &archive_path, &url], None)?;
+
+        // Verify download integrity before extracting as root.
+        let expected_sha256 = match Self::expected_cni_plugins_sha256(version, arch) {
+            Some(v) => v.to_string(),
+            None => {
+                // Fallback: download the release-provided checksum file. This is weaker than
+                // a pinned checksum, but still prevents silent corruption.
+                let checksum_url = format!("{}.sha256", url);
+                let checksum_path = format!("/tmp/cni-plugins-{}-{}.tgz.sha256", version, arch);
+                Self::run_command(
+                    "curl",
+                    &["-fsSL", "-o", &checksum_path, &checksum_url],
+                    None,
+                )?;
+                let raw = fs::read_to_string(&checksum_path).map_err(|e| {
+                    AgentError::IoError(format!("Failed to read checksum file: {}", e))
+                })?;
+                let _ = fs::remove_file(&checksum_path);
+                Self::extract_sha256_hex(&raw).ok_or_else(|| {
+                    AgentError::InstallationError(
+                        "Failed to parse downloaded checksum file".to_string(),
+                    )
+                })?
+            }
+        };
+
+        let actual_sha256 = Self::sha256_file(&archive_path)?;
+        if actual_sha256 != expected_sha256.to_ascii_lowercase() {
+            let _ = fs::remove_file(&archive_path);
+            return Err(AgentError::InstallationError(format!(
+                "CNI plugins checksum mismatch: expected {}, got {}",
+                expected_sha256, actual_sha256
+            )));
+        }
+
         Self::run_command(
             "tar",
             &["-xz", "-C", "/opt/cni/bin", "-f", &archive_path],
