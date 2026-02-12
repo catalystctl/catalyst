@@ -484,9 +484,18 @@ impl SystemSetup {
 
     fn has_required_cni_plugins() -> bool {
         const REQUIRED: [&str; 4] = ["bridge", "host-local", "portmap", "macvlan"];
-        REQUIRED
-            .iter()
-            .all(|name| Path::new(&format!("/opt/cni/bin/{}", name)).exists())
+        // Check multiple CNI plugin directories (Fedora uses /usr/libexec/cni)
+        const CNI_BIN_DIRS: [&str; 2] = ["/opt/cni/bin", "/usr/libexec/cni"];
+
+        for dir in CNI_BIN_DIRS {
+            let has_all = REQUIRED
+                .iter()
+                .all(|name| Path::new(&format!("{}/{}", dir, name)).exists());
+            if has_all {
+                return true;
+            }
+        }
+        false
     }
 
     /// Setup CNI networking with macvlan and host-local IPAM (static IPs)

@@ -47,8 +47,29 @@ use crate::firewall_manager::FirewallManager;
 const RUNTIME_NAME: &str = "io.containerd.runc.v2";
 const SPEC_TYPE_URL: &str = "types.containerd.io/opencontainers/runtime-spec/1/Spec";
 const CONSOLE_BASE_DIR: &str = "/tmp/catalyst-console";
-const CNI_BIN_DIR: &str = "/opt/cni/bin";
 const PORT_FWD_STATE_DIR: &str = "/var/lib/cni/results";
+
+// CNI plugin directories to search, in order of preference
+// Fedora/RHEL install to /usr/libexec/cni, others typically use /opt/cni/bin
+const CNI_BIN_DIRS: &[&str] = &["/opt/cni/bin", "/usr/libexec/cni"];
+
+/// Discover the CNI plugin directory by checking which one has required plugins
+fn discover_cni_bin_dir() -> &'static str {
+    const REQUIRED_PLUGINS: &[&str] = &["bridge", "host-local", "macvlan"];
+
+    for dir in CNI_BIN_DIRS {
+        let has_all = REQUIRED_PLUGINS.iter().all(|plugin| {
+            Path::new(&format!("{}/{}", dir, plugin)).exists()
+        });
+        if has_all {
+            return dir;
+        }
+    }
+
+    // Default to /opt/cni/bin if no directory has all plugins
+    // (error will be raised later when plugin is not found)
+    CNI_BIN_DIRS[0]
+}
 const PORT_FWD_STATE_PREFIX: &str = "catalyst-";
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -1297,11 +1318,17 @@ impl ContainerdRuntime {
 
     async fn exec_cni_plugin(&self, config: &serde_json::Value, command: &str, cid: &str, netns: &str, ifname: &str) -> AgentResult<serde_json::Value> {
         let ptype = config["type"].as_str().unwrap_or("bridge");
-        let ppath = format!("{}/{}", CNI_BIN_DIR, ptype);
-        if !Path::new(&ppath).exists() { return Err(AgentError::ContainerError(format!("CNI plugin not found: {}", ppath))); }
+        let cni_bin_dir = discover_cni_bin_dir();
+        let ppath = format!("{}/{}", cni_bin_dir, ptype);
+        if !Path::new(&ppath).exists() {
+            return Err(AgentError::ContainerError(format!(
+                "CNI plugin not found: {} (searched directories: {:?})",
+                ppath, CNI_BIN_DIRS
+            )));
+        }
         let cfg = serde_json::to_string(config).map_err(|e| AgentError::ContainerError(e.to_string()))?;
         let mut child = Command::new(&ppath)
-            .env("CNI_COMMAND",command).env("CNI_CONTAINERID",cid).env("CNI_NETNS",netns).env("CNI_IFNAME",ifname).env("CNI_PATH",CNI_BIN_DIR)
+            .env("CNI_COMMAND",command).env("CNI_CONTAINERID",cid).env("CNI_NETNS",netns).env("CNI_IFNAME",ifname).env("CNI_PATH",cni_bin_dir)
             .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
             .spawn().map_err(|e| AgentError::ContainerError(format!("CNI: {}", e)))?;
         if let Some(mut stdin) = child.stdin.take() { use tokio::io::AsyncWriteExt; stdin.write_all(cfg.as_bytes()).await?; drop(stdin); }
