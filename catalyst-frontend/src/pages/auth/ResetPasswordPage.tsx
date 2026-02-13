@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { authApi } from '../../services/api/auth';
 import { notifyError, notifySuccess } from '../../utils/notify';
@@ -17,7 +17,7 @@ function ResetPasswordPage() {
   const [isValid, setIsValid] = useState(false);
 
   // Validate token on mount
-  useState(() => {
+  useEffect(() => {
     if (!token) {
       setIsValidating(false);
       return;
@@ -31,7 +31,7 @@ function ResetPasswordPage() {
         notifyError('Invalid or expired reset link');
       })
       .finally(() => setIsValidating(false));
-  });
+  }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

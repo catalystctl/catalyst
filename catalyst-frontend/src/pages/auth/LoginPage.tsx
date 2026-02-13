@@ -38,12 +38,11 @@ function LoginPage() {
     register,
     handleSubmit,
     control,
-    formState: { errors, isValid },
+    formState: { errors },
   } = useForm<LoginSchema>({ 
     resolver: zodResolver(loginSchema),
   });
   
-  console.log('[LoginPage] Form errors:', errors, 'isValid:', isValid);
 
   const location = useLocation();
   const from = (location.state as { from?: { pathname?: string } } | undefined)?.from?.pathname;
@@ -84,12 +83,10 @@ function LoginPage() {
   };
 
   const onSubmit = async (values: LoginSchema, fallbackOverride?: boolean | BaseSyntheticEvent) => {
-    console.log('[LoginPage] onSubmit called with values:', values);
     const allowFallback =
       typeof fallbackOverride === 'boolean' ? fallbackOverride : allowPasskeyFallback;
     try {
       if (!values.email || !values.password) {
-        console.log('[LoginPage] No email/password, setting passkey step');
         setAuthStep('passkey');
         return;
       }
@@ -231,10 +228,7 @@ function LoginPage() {
             </Alert>
           )}
 
-          <form className="mt-6 space-y-4" onSubmit={(e) => {
-            console.log('[LoginPage] Form submit event triggered', e);
-            return handleSubmit(onSubmit)(e);
-          }}>
+          <form className="mt-6 space-y-4" onSubmit={handleSubmit(onSubmit)}>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -271,7 +265,6 @@ function LoginPage() {
               type="submit" 
               className="w-full" 
               disabled={isLoading || authStep === 'passkey'}
-              onClick={() => console.log('[LoginPage] Button clicked! isLoading:', isLoading, 'authStep:', authStep)}
             >
               {isLoading ? 'Signing in…' : 'Sign in'}
             </Button>

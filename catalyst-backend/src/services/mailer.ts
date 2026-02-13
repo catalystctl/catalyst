@@ -68,8 +68,8 @@ export const sanitizeConsoleOutputByteLimit = (value: number | null | undefined)
 };
 
 export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
-  authRateLimitMax: 5,
-  fileRateLimitMax: 30,
+  authRateLimitMax: 30,
+  fileRateLimitMax: 120,
   consoleRateLimitMax: 60,
   consoleOutputLinesMax: 2000,
   consoleOutputByteLimitBytes: resolveConsoleOutputByteLimitDefault(),

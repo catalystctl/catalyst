@@ -629,23 +629,6 @@ model AuditLog {
   @@index([userId, timestamp])
 }
 
-model AuthLockout {
-  id            String    @id @default(cuid())
-  email         String
-  ipAddress     String
-  userAgent     String?
-  failureCount  Int       @default(0)
-  firstFailedAt DateTime
-  lastFailedAt  DateTime
-  lockedUntil   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  @@unique([email, ipAddress])
-  @@index([email])
-  @@index([lockedUntil])
-}
-
 // ============================================================================
 // RESOURCE MONITORING
 // ============================================================================

@@ -47,22 +47,13 @@ export function fileTunnelRoutes(
   }
 
   /**
-   * Rate limiter key generator for file tunnel routes.
-   * Uses nodeId for authenticated requests to allow legitimate traffic.
+   * Rate limiter allow-list: authenticated agents bypass rate limiting.
    */
-  async function fileTunnelKeyGenerator(request: FastifyRequest): Promise<string> {
+  async function agentAllowList(request: FastifyRequest): Promise<boolean> {
     const nodeId = request.headers["x-node-id"] as string;
     const apiKey = request.headers["x-node-api-key"] as string;
-
-    if (nodeId && apiKey) {
-      // Verify credentials first to use authenticated key
-      if (await verifyAgentApiKey(prisma, nodeId, apiKey)) {
-        return `node:${nodeId}`;
-      }
-    }
-
-    // Fallback to IP for unauthenticated requests
-    return request.ip;
+    if (!nodeId || !apiKey) return false;
+    return verifyAgentApiKey(prisma, nodeId, apiKey);
   }
 
   /**
@@ -80,7 +71,7 @@ export function fileTunnelRoutes(
             return settings.fileTunnelRateLimitMax;
           },
           timeWindow: '1 minute',
-          keyGenerator: fileTunnelKeyGenerator,
+          allowList: agentAllowList,
           skipOnError: false,
         },
       },
@@ -113,7 +104,7 @@ export function fileTunnelRoutes(
             return settings.fileTunnelRateLimitMax;
           },
           timeWindow: '1 minute',
-          keyGenerator: fileTunnelKeyGenerator,
+          allowList: agentAllowList,
           skipOnError: false,
         },
       },
@@ -156,7 +147,7 @@ export function fileTunnelRoutes(
             return settings.fileTunnelRateLimitMax;
           },
           timeWindow: '1 minute',
-          keyGenerator: fileTunnelKeyGenerator,
+          allowList: agentAllowList,
           skipOnError: false,
         },
       },
@@ -203,7 +194,7 @@ export function fileTunnelRoutes(
             return settings.fileTunnelRateLimitMax;
           },
           timeWindow: '1 minute',
-          keyGenerator: fileTunnelKeyGenerator,
+          allowList: agentAllowList,
           skipOnError: false,
         },
       },

@@ -1,92 +1,140 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { PrismaClient } from "@prisma/client";
 import { auth } from "../auth";
+import { fromNodeHeaders } from "better-auth/node";
 import { logAuthAttempt } from "../middleware/audit";
 import { getSecuritySettings } from "../services/mailer";
 import { serialize } from '../utils/serialize';
 
-export async function authRoutes(app: FastifyInstance) {
-  // Using shared prisma instance from db.ts
+// Helper to forward response headers (set-auth-token, set-cookie) from better-auth to Fastify reply
+function forwardAuthHeaders(response: any, reply: FastifyReply) {
+  const tokenHeader = "headers" in response ? response.headers?.get?.("set-auth-token") : null;
+  const cookieHeader = "headers" in response ? response.headers?.get?.("set-cookie") : null;
+  if (tokenHeader) {
+    reply.header("set-auth-token", tokenHeader);
+    reply.header("Access-Control-Expose-Headers", "set-auth-token");
+  }
+  if (cookieHeader) {
+    if (Array.isArray(cookieHeader)) {
+      cookieHeader.forEach((cookie: string) => reply.header("set-cookie", cookie));
+    } else {
+      reply.header("set-cookie", cookieHeader);
+    }
+  }
+  return tokenHeader;
+}
 
+// Extract the data payload from a better-auth response (handles both wrapped and unwrapped)
+function extractResponseData(response: any) {
+  return "headers" in response && response.response ? response.response : response;
+}
+
+export async function authRoutes(app: FastifyInstance) {
   const loadUserPermissions = async (userId: string) => {
     const roles = await prisma.role.findMany({
-      where: {
-        users: {
-          some: { id: userId },
-        },
-      },
+      where: { users: { some: { id: userId } } },
       select: { permissions: true },
     });
     return roles.flatMap((role) => role.permissions);
   };
 
-  // Register user (compatibility shim)
+  // Helper to get the request headers in the format better-auth expects
+  const getHeaders = (request: FastifyRequest) =>
+    fromNodeHeaders(request.headers as Record<string, string | string[] | undefined>);
+
+  // ── Lockout helpers ──────────────────────────────────────────────────
+  async function checkLockout(email: string, ip: string) {
+    const settings = await getSecuritySettings();
+    if (settings.lockoutMaxAttempts <= 0 || settings.lockoutWindowMinutes <= 0 || settings.lockoutDurationMinutes <= 0) {
+      throw Object.assign(new Error("Security settings invalid"), { statusCode: 500 });
+    }
+    const windowMs = settings.lockoutWindowMinutes * 60 * 1000;
+    const now = new Date();
+    const lockout = await prisma.authLockout.findUnique({
+      where: { email_ipAddress: { email, ipAddress: ip } },
+    });
+    if (lockout?.lockedUntil && lockout.lockedUntil > now) {
+      throw Object.assign(new Error("Account temporarily locked"), { statusCode: 429 });
+    }
+    // Reset window if expired
+    if (lockout && lockout.firstFailedAt && now.getTime() - lockout.firstFailedAt.getTime() > windowMs) {
+      await prisma.authLockout.update({
+        where: { id: lockout.id },
+        data: { failureCount: 1, firstFailedAt: now, lastFailedAt: now, lockedUntil: null },
+      });
+    }
+    return settings;
+  }
+
+  async function clearLockout(email: string, ip: string) {
+    await prisma.authLockout.deleteMany({ where: { email, ipAddress: ip } });
+  }
+
+  async function recordFailure(email: string, ip: string, userAgent: string | undefined, settings: any) {
+    const now = new Date();
+    const windowMs = settings.lockoutWindowMinutes * 60 * 1000;
+    const updated = await prisma.authLockout.upsert({
+      where: { email_ipAddress: { email, ipAddress: ip } },
+      create: {
+        email, ipAddress: ip, userAgent,
+        failureCount: 1, firstFailedAt: now, lastFailedAt: now, lockedUntil: null,
+      },
+      update: { failureCount: { increment: 1 }, lastFailedAt: now },
+    });
+    // Reset window if expired
+    if (updated.firstFailedAt && now.getTime() - updated.firstFailedAt.getTime() > windowMs) {
+      await prisma.authLockout.update({
+        where: { id: updated.id },
+        data: { failureCount: 1, firstFailedAt: now, lastFailedAt: now, lockedUntil: null },
+      });
+      return false;
+    }
+    if (updated.failureCount >= settings.lockoutMaxAttempts) {
+      await prisma.authLockout.update({
+        where: { id: updated.id },
+        data: { lockedUntil: new Date(now.getTime() + settings.lockoutDurationMinutes * 60 * 1000) },
+      });
+      return true; // locked
+    }
+    return false;
+  }
+
+  // ── Register ─────────────────────────────────────────────────────────
   app.post(
     "/register",
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { email, username, password } = request.body as {
-        email: string;
-        username: string;
-        password: string;
+        email: string; username: string; password: string;
       };
 
-      // Validation
       if (!email || !username || !password) {
-        return reply.status(400).send({
-          error: "Missing required fields: email, username, password",
-        });
+        return reply.status(400).send({ error: "Missing required fields: email, username, password" });
       }
-
       if (password.length < 8) {
-        return reply
-          .status(400)
-          .send({ error: "Password must be at least 8 characters" });
+        return reply.status(400).send({ error: "Password must be at least 8 characters" });
       }
 
-      // Check if user already exists
       const existing = await prisma.user.findFirst({
         where: { OR: [{ email }, { username }] },
       });
-
       if (existing) {
         return reply.status(409).send({ error: "Email or username already in use" });
       }
 
       const response = await auth.api.signUpEmail({
-        headers: new Headers({
-          origin: request.headers.origin || request.headers.host || "http://localhost:3000",
-        }),
-        body: {
-          email,
-          password,
-          name: username,
-          username,
-        } as any,
+        headers: getHeaders(request),
+        body: { email, password, name: username, username } as any,
         returnHeaders: true,
       });
 
-      const tokenHeader =
-        "headers" in response ? response.headers.get("set-auth-token") : null;
-      const cookieHeader =
-        "headers" in response ? response.headers.get("set-cookie") : null;
-      const data =
-        "headers" in response && response.response
-          ? response.response
-          : (response as any);
+      const data = extractResponseData(response);
       const user = data?.user;
       if (!user) {
         return reply.status(400).send({ error: "Registration failed" });
       }
-      const permissions = await loadUserPermissions(user.id);
 
-      if (tokenHeader) {
-        reply.header("set-auth-token", tokenHeader);
-        reply.header("Access-Control-Expose-Headers", "set-auth-token");
-      }
-      if (cookieHeader) {
-        reply.header("set-cookie", cookieHeader);
-      }
+      const tokenHeader = forwardAuthHeaders(response, reply);
+      const permissions = await loadUserPermissions(user.id);
 
       reply.send({
         success: true,
@@ -101,178 +149,75 @@ export async function authRoutes(app: FastifyInstance) {
     }
   );
 
-  // Login (compatibility shim)
+  // ── Login ────────────────────────────────────────────────────────────
   app.post(
     "/login",
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { email, password } = request.body as {
-        email: string;
-        password: string;
-      };
+      const { email, password } = request.body as { email: string; password: string };
 
       if (!email || !password) {
-        return reply.status(400).send({
-          error: "Missing email or password",
-        });
+        return reply.status(400).send({ error: "Missing email or password" });
       }
 
       const normalizedEmail = email.trim().toLowerCase();
-      const settings = await getSecuritySettings();
-      if (
-        settings.lockoutMaxAttempts <= 0 ||
-        settings.lockoutWindowMinutes <= 0 ||
-        settings.lockoutDurationMinutes <= 0
-      ) {
-        return reply.status(500).send({ error: "Security settings invalid" });
-      }
-      const windowMs = settings.lockoutWindowMinutes * 60 * 1000;
-      const now = new Date();
-      let lockout = await prisma.authLockout.findUnique({
-        where: { email_ipAddress: { email: normalizedEmail, ipAddress: request.ip } },
-      });
-      if (lockout?.lockedUntil && lockout.lockedUntil > now) {
+      let settings: any;
+      try {
+        settings = await checkLockout(normalizedEmail, request.ip);
+      } catch (err: any) {
         await logAuthAttempt(normalizedEmail, false, request.ip, request.headers['user-agent']);
-        return reply.status(429).send({ error: "Account temporarily locked" });
-      }
-      if (lockout && lockout.firstFailedAt && now.getTime() - lockout.firstFailedAt.getTime() > windowMs) {
-        lockout = await prisma.authLockout.update({
-          where: { id: lockout.id },
-          data: {
-            failureCount: 1,
-            firstFailedAt: now,
-            lastFailedAt: now,
-            lockedUntil: null,
-          },
-        });
+        return reply.status(err.statusCode || 500).send({ error: err.message });
       }
 
+      // Resolve the actual email (case-insensitive lookup)
       const userRecord = await prisma.user.findFirst({
         where: { email: { equals: normalizedEmail, mode: "insensitive" } },
-        include: {
-          passkeys: {
-            select: { id: true },
-            take: 1,
-          },
-        },
       });
 
       if (!userRecord) {
         await logAuthAttempt(normalizedEmail, false, request.ip, request.headers["user-agent"]);
-        await prisma.authLockout.upsert({
-          where: { email_ipAddress: { email: normalizedEmail, ipAddress: request.ip } },
-          create: {
-            email: normalizedEmail,
-            ipAddress: request.ip,
-            userAgent: request.headers["user-agent"],
-            failureCount: 1,
-            firstFailedAt: now,
-            lastFailedAt: now,
-            lockedUntil:
-              settings.lockoutMaxAttempts <= 1
-                ? new Date(now.getTime() + settings.lockoutDurationMinutes * 60 * 1000)
-                : null,
-          },
-          update: {
-            failureCount: 1,
-            firstFailedAt: now,
-            lastFailedAt: now,
-            lockedUntil:
-              settings.lockoutMaxAttempts <= 1
-                ? new Date(now.getTime() + settings.lockoutDurationMinutes * 60 * 1000)
-                : null,
-          },
-        });
+        await recordFailure(normalizedEmail, request.ip, request.headers["user-agent"], settings);
         return reply.status(401).send({ error: "Invalid credentials" });
       }
 
-      const resolvedEmail = userRecord.email;
-      const allowPasskeyFallback = Boolean(
-        (request.body as any)?.allowPasskeyFallback ??
-          request.headers["x-allow-passkey-fallback"] === "true"
-      );
-
       try {
-        const origin = request.headers.origin || request.headers.host || "http://localhost:3000";
-        const url = new URL("/api/auth/sign-in/email", origin);
-        const headers = new Headers();
-        Object.entries(request.headers).forEach(([key, value]) => {
-          if (typeof value === "string") {
-            headers.append(key, value);
-          } else if (Array.isArray(value)) {
-            value.forEach((item) => headers.append(key, item));
-          }
+        const response = await auth.api.signInEmail({
+          headers: getHeaders(request),
+          body: {
+            email: userRecord.email,
+            password,
+            rememberMe: (request.body as any)?.rememberMe,
+          },
+          returnHeaders: true,
         });
-        headers.delete("authorization");
-        headers.delete("cookie");
-        headers.set("content-type", "application/json");
-        const payload = {
-          email: resolvedEmail,
-          password,
-          rememberMe: (request.body as any)?.rememberMe,
-        };
-        const authResponse = await auth.handler(
-          new Request(url.toString(), {
-            method: "POST",
-            headers,
-            body: JSON.stringify(payload),
-          })
-        );
 
-        const tokenHeader = authResponse.headers.get("set-auth-token");
-        const cookieHeader =
-          typeof (authResponse.headers as any).getSetCookie === "function"
-            ? (authResponse.headers as any).getSetCookie()
-            : authResponse.headers.get("set-cookie");
-        const authText = await authResponse.text();
-        const data = authText ? JSON.parse(authText) : null;
-        if (authResponse.status === 202 || data?.twoFactorRedirect) {
+        const data = extractResponseData(response);
+
+        // 2FA redirect
+        if (data?.twoFactorRedirect) {
           await logAuthAttempt(normalizedEmail, true, request.ip, request.headers["user-agent"]);
-          await prisma.authLockout.deleteMany({
-            where: { email: normalizedEmail, ipAddress: request.ip },
-          });
-          if (tokenHeader) {
-            reply.header("set-auth-token", tokenHeader);
-            reply.header("Access-Control-Expose-Headers", "set-auth-token");
-          }
-          if (cookieHeader) {
-            if (Array.isArray(cookieHeader)) {
-              cookieHeader.forEach((cookie) => reply.header("set-cookie", cookie));
-            } else {
-              reply.header("set-cookie", cookieHeader);
-            }
-          }
+          await clearLockout(normalizedEmail, request.ip);
+          const tokenHeader = forwardAuthHeaders(response, reply);
           return reply.status(202).send({
             success: false,
-            data: {
-              twoFactorRequired: true,
-              token: tokenHeader ?? null,
-            },
+            data: { twoFactorRequired: true, token: tokenHeader ?? null },
           });
         }
+
         const user = data?.user;
         if (!user) {
           const errorCode = data?.code || data?.error?.code;
-          const message = data?.error?.message || data?.error || "Invalid credentials";
           if (errorCode === "PASSKEY_REQUIRED") {
             return reply.status(403).send({ error: "Passkey required", code: "PASSKEY_REQUIRED" });
           }
-          return reply.status(401).send({ error: message });
+          throw new Error(data?.error?.message || data?.error || "Invalid credentials");
         }
-        await logAuthAttempt(normalizedEmail, true, request.ip, request.headers["user-agent"]);
-        await prisma.authLockout.deleteMany({
-          where: { email: normalizedEmail, ipAddress: request.ip },
-        });
 
+        await logAuthAttempt(normalizedEmail, true, request.ip, request.headers["user-agent"]);
+        await clearLockout(normalizedEmail, request.ip);
+
+        const tokenHeader = forwardAuthHeaders(response, reply);
         const permissions = await loadUserPermissions(user.id);
-        
-        const sessionToken = tokenHeader ?? null;
-        if (sessionToken) {
-          reply.header("set-auth-token", sessionToken);
-          reply.header("Access-Control-Expose-Headers", "set-auth-token");
-          app.log.info({ userId: user.id }, "Sending session token in headers and response");
-        } else {
-          app.log.warn({ userId: user.id }, "No session token available to send");
-        }
+
         reply.send({
           success: true,
           data: {
@@ -280,50 +225,13 @@ export async function authRoutes(app: FastifyInstance) {
             email: user.email,
             username: user.username ?? userRecord.username,
             permissions,
-            token: sessionToken,
+            token: tokenHeader ?? null,
           },
         });
-      } catch {
+      } catch (err: any) {
         await logAuthAttempt(normalizedEmail, false, request.ip, request.headers["user-agent"]);
-        const updated = await prisma.authLockout.upsert({
-          where: { email_ipAddress: { email: normalizedEmail, ipAddress: request.ip } },
-          create: {
-            email: normalizedEmail,
-            ipAddress: request.ip,
-            userAgent: request.headers["user-agent"],
-            failureCount: 1,
-            firstFailedAt: now,
-            lastFailedAt: now,
-            lockedUntil: null,
-          },
-          update: {
-            failureCount: {
-              increment: 1,
-            },
-            lastFailedAt: now,
-          },
-        });
-        const firstFailedAt = updated.firstFailedAt ?? now;
-        const windowStart = new Date(firstFailedAt);
-        if (now.getTime() - windowStart.getTime() > windowMs) {
-          await prisma.authLockout.update({
-            where: { id: updated.id },
-            data: {
-              failureCount: 1,
-              firstFailedAt: now,
-              lastFailedAt: now,
-              lockedUntil: null,
-            },
-          });
-          return reply.status(401).send({ error: "Invalid credentials" });
-        }
-        if (updated.failureCount >= settings.lockoutMaxAttempts) {
-          await prisma.authLockout.update({
-            where: { id: updated.id },
-            data: {
-              lockedUntil: new Date(now.getTime() + settings.lockoutDurationMinutes * 60 * 1000),
-            },
-          });
+        const locked = await recordFailure(normalizedEmail, request.ip, request.headers["user-agent"], settings);
+        if (locked) {
           return reply.status(429).send({ error: "Account temporarily locked" });
         }
         return reply.status(401).send({ error: "Invalid credentials" });
@@ -331,7 +239,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
   );
 
-  // Get current user (compatibility shim)
+  // ── Get current user ─────────────────────────────────────────────────
   app.get(
     "/me",
     { onRequest: [app.authenticate], config: { rateLimit: { max: 120, timeWindow: "1 minute" } } },
@@ -339,15 +247,8 @@ export async function authRoutes(app: FastifyInstance) {
       const user = await prisma.user.findUnique({
         where: { id: request.user.userId },
         select: {
-          id: true,
-          email: true,
-          username: true,
-          roles: {
-            select: {
-              permissions: true,
-            },
-          },
-          createdAt: true,
+          id: true, email: true, username: true, createdAt: true,
+          roles: { select: { permissions: true } },
         },
       });
 
@@ -355,22 +256,18 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "User not found" });
       }
 
-      const permissions = user.roles.flatMap((role) => role.permissions);
-
       reply.send({
         success: true,
         data: {
-          id: user.id,
-          email: user.email,
-          username: user.username,
-          permissions,
+          id: user.id, email: user.email, username: user.username,
+          permissions: user.roles.flatMap((role) => role.permissions),
           createdAt: user.createdAt,
         },
       });
     }
   );
 
-  // Profile summary
+  // ── Profile summary ──────────────────────────────────────────────────
   app.get(
     "/profile",
     { onRequest: [app.authenticate], config: { rateLimit: { max: 120, timeWindow: "1 minute" } } },
@@ -378,20 +275,8 @@ export async function authRoutes(app: FastifyInstance) {
       const userRecord = await prisma.user.findUnique({
         where: { id: request.user.userId },
         select: {
-          id: true,
-          email: true,
-          username: true,
-          twoFactorEnabled: true,
-          createdAt: true,
-          accounts: {
-            select: {
-              id: true,
-              providerId: true,
-              accountId: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-          },
+          id: true, email: true, username: true, twoFactorEnabled: true, createdAt: true,
+          accounts: { select: { id: true, providerId: true, accountId: true, createdAt: true, updatedAt: true } },
         },
       });
 
@@ -399,18 +284,12 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "User not found" });
       }
 
-      const hasPassword = userRecord.accounts.some(
-        (account) => account.providerId === "credential"
-      );
-
       reply.send({
         success: true,
         data: {
-          id: userRecord.id,
-          email: userRecord.email,
-          username: userRecord.username,
+          id: userRecord.id, email: userRecord.email, username: userRecord.username,
           twoFactorEnabled: userRecord.twoFactorEnabled,
-          hasPassword,
+          hasPassword: userRecord.accounts.some((a) => a.providerId === "credential"),
           createdAt: userRecord.createdAt,
           accounts: userRecord.accounts,
         },
@@ -418,15 +297,13 @@ export async function authRoutes(app: FastifyInstance) {
     }
   );
 
-  // Change password (only for credential-linked users)
+  // ── Change password ──────────────────────────────────────────────────
   app.post(
     "/profile/change-password",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { currentPassword, newPassword, revokeOtherSessions } = request.body as {
-        currentPassword: string;
-        newPassword: string;
-        revokeOtherSessions?: boolean;
+        currentPassword: string; newPassword: string; revokeOtherSessions?: boolean;
       };
 
       if (!currentPassword || !newPassword) {
@@ -434,30 +311,17 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       const response = await auth.api.changePassword({
-        headers: new Headers({
-          authorization: request.headers.authorization || "",
-        }),
+        headers: getHeaders(request),
         body: { currentPassword, newPassword, revokeOtherSessions },
         returnHeaders: true,
       });
 
-      const tokenHeader =
-        "headers" in response ? response.headers.get("set-auth-token") : null;
-      const data =
-        "headers" in response && response.response
-          ? response.response
-          : (response as any);
-
-      if (tokenHeader) {
-        reply.header("set-auth-token", tokenHeader);
-        reply.header("Access-Control-Expose-Headers", "set-auth-token");
-      }
-
-      reply.send({ success: true, data });
+      forwardAuthHeaders(response, reply);
+      reply.send({ success: true, data: extractResponseData(response) });
     }
   );
 
-  // Set password (for SSO-only accounts)
+  // ── Set password (for SSO-only accounts) ─────────────────────────────
   app.post(
     "/profile/set-password",
     { onRequest: [app.authenticate] },
@@ -468,9 +332,7 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       const response = await auth.api.setPassword({
-        headers: new Headers({
-          authorization: request.headers.authorization || "",
-        }),
+        headers: getHeaders(request),
         body: { newPassword },
       });
 
@@ -478,7 +340,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
   );
 
-  // Two-factor status
+  // ── Two-factor status ────────────────────────────────────────────────
   app.get(
     "/profile/two-factor",
     { onRequest: [app.authenticate] },
@@ -494,6 +356,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
   );
 
+  // ── Enable 2FA ───────────────────────────────────────────────────────
   app.post(
     "/profile/two-factor/enable",
     { onRequest: [app.authenticate] },
@@ -503,31 +366,16 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Password is required" });
       }
       const response = await auth.api.enableTwoFactor({
-        headers: new Headers({
-          authorization: request.headers.authorization || "",
-        }),
+        headers: getHeaders(request),
         body: { password },
         returnHeaders: true,
       });
-      const tokenHeader =
-        "headers" in response ? response.headers.get("set-auth-token") : null;
-      const cookieHeader =
-        "headers" in response ? response.headers.get("set-cookie") : null;
-      const data =
-        "headers" in response && response.response
-          ? response.response
-          : (response as any);
-      if (tokenHeader) {
-        reply.header("set-auth-token", tokenHeader);
-        reply.header("Access-Control-Expose-Headers", "set-auth-token");
-      }
-      if (cookieHeader) {
-        reply.header("set-cookie", cookieHeader);
-      }
-      reply.send({ success: true, data });
+      forwardAuthHeaders(response, reply);
+      reply.send({ success: true, data: extractResponseData(response) });
     }
   );
 
+  // ── Disable 2FA ──────────────────────────────────────────────────────
   app.post(
     "/profile/two-factor/disable",
     { onRequest: [app.authenticate] },
@@ -537,31 +385,16 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Password is required" });
       }
       const response = await auth.api.disableTwoFactor({
-        headers: new Headers({
-          authorization: request.headers.authorization || "",
-        }),
+        headers: getHeaders(request),
         body: { password },
         returnHeaders: true,
       });
-      const tokenHeader =
-        "headers" in response ? response.headers.get("set-auth-token") : null;
-      const cookieHeader =
-        "headers" in response ? response.headers.get("set-cookie") : null;
-      const data =
-        "headers" in response && response.response
-          ? response.response
-          : (response as any);
-      if (tokenHeader) {
-        reply.header("set-auth-token", tokenHeader);
-        reply.header("Access-Control-Expose-Headers", "set-auth-token");
-      }
-      if (cookieHeader) {
-        reply.header("set-cookie", cookieHeader);
-      }
-      reply.send({ success: true, data });
+      forwardAuthHeaders(response, reply);
+      reply.send({ success: true, data: extractResponseData(response) });
     }
   );
 
+  // ── Generate backup codes ────────────────────────────────────────────
   app.post(
     "/profile/two-factor/generate-backup-codes",
     { onRequest: [app.authenticate] },
@@ -571,40 +404,22 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Password is required" });
       }
       const response = await auth.api.generateBackupCodes({
-        headers: new Headers({
-          authorization: request.headers.authorization || "",
-        }),
+        headers: getHeaders(request),
         body: { password },
         returnHeaders: true,
       });
-      const tokenHeader =
-        "headers" in response ? response.headers.get("set-auth-token") : null;
-      const cookieHeader =
-        "headers" in response ? response.headers.get("set-cookie") : null;
-      const data =
-        "headers" in response && response.response
-          ? response.response
-          : (response as any);
-      if (tokenHeader) {
-        reply.header("set-auth-token", tokenHeader);
-        reply.header("Access-Control-Expose-Headers", "set-auth-token");
-      }
-      if (cookieHeader) {
-        reply.header("set-cookie", cookieHeader);
-      }
-      reply.send({ success: true, data });
+      forwardAuthHeaders(response, reply);
+      reply.send({ success: true, data: extractResponseData(response) });
     }
   );
 
-  // Passkey management
+  // ── Passkey management ───────────────────────────────────────────────
   app.get(
     "/profile/passkeys",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const response = await auth.api.listPasskeys({
-        headers: new Headers({
-          authorization: request.headers.authorization || "",
-        }),
+        headers: getHeaders(request),
       });
       reply.send(serialize({ success: true, data: response }));
     }
@@ -615,13 +430,10 @@ export async function authRoutes(app: FastifyInstance) {
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { name, authenticatorAttachment } = request.body as {
-        name?: string;
-        authenticatorAttachment?: "platform" | "cross-platform";
+        name?: string; authenticatorAttachment?: "platform" | "cross-platform";
       };
       const response = await auth.api.generatePasskeyRegistrationOptions({
-        headers: new Headers({
-          authorization: request.headers.authorization || "",
-        }),
+        headers: getHeaders(request),
         query: {
           ...(name ? { name } : {}),
           ...(authenticatorAttachment ? { authenticatorAttachment } : {}),
@@ -636,21 +448,14 @@ export async function authRoutes(app: FastifyInstance) {
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { response: credentialResponse, name } = request.body as {
-        response: Record<string, any>;
-        name?: string;
+        response: Record<string, any>; name?: string;
       };
       if (!credentialResponse) {
         return reply.status(400).send({ error: "Missing passkey response" });
       }
       const response = await auth.api.verifyPasskeyRegistration({
-        headers: new Headers({
-          authorization: request.headers.authorization || "",
-          origin: request.headers.origin || request.headers.host || "http://localhost:3000",
-        }),
-        body: {
-          response: credentialResponse,
-          ...(name ? { name } : {}),
-        },
+        headers: getHeaders(request),
+        body: { response: credentialResponse, ...(name ? { name } : {}) },
       });
       reply.send(serialize({ success: true, data: response }));
     }
@@ -662,9 +467,7 @@ export async function authRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const response = await auth.api.deletePasskey({
-        headers: new Headers({
-          authorization: request.headers.authorization || "",
-        }),
+        headers: getHeaders(request),
         body: { id },
       });
       reply.send(serialize({ success: true, data: response }));
@@ -681,24 +484,20 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing name" });
       }
       const response = await auth.api.updatePasskey({
-        headers: new Headers({
-          authorization: request.headers.authorization || "",
-        }),
+        headers: getHeaders(request),
         body: { id, name },
       });
       reply.send(serialize({ success: true, data: response }));
     }
   );
 
-  // SSO account info
+  // ── SSO account management ───────────────────────────────────────────
   app.get(
     "/profile/sso/accounts",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const accounts = await auth.api.listUserAccounts({
-        headers: new Headers({
-          authorization: request.headers.authorization || "",
-        }),
+        headers: getHeaders(request),
       });
       reply.send(serialize({ success: true, data: accounts }));
     }
@@ -713,9 +512,7 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing providerId" });
       }
       const response = await auth.api.oAuth2LinkAccount({
-        headers: new Headers({
-          authorization: request.headers.authorization || "",
-        }),
+        headers: getHeaders(request),
         body: {
           providerId,
           callbackURL: `${process.env.FRONTEND_URL || "http://localhost:5173"}/profile`,
@@ -730,146 +527,86 @@ export async function authRoutes(app: FastifyInstance) {
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { providerId, accountId } = request.body as {
-        providerId: string;
-        accountId?: string;
+        providerId: string; accountId?: string;
       };
       if (!providerId) {
         return reply.status(400).send({ error: "Missing providerId" });
       }
       const response = await auth.api.unlinkAccount({
-        headers: new Headers({
-          authorization: request.headers.authorization || "",
-        }),
+        headers: getHeaders(request),
         body: { providerId, accountId },
       });
       reply.send(serialize({ success: true, data: response }));
     }
   );
 
-  // Password recovery - Forgot password
+  // ── Forgot password ──────────────────────────────────────────────────
   app.post(
     "/forgot-password",
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { email } = request.body as { email: string };
-
       if (!email || !email.trim()) {
         return reply.status(400).send({ error: "Email is required" });
       }
 
       const normalizedEmail = email.trim().toLowerCase();
 
-      // Check if user exists
-      const user = await prisma.user.findUnique({
-        where: { email: normalizedEmail },
-      });
-
-      // Always return success to prevent email enumeration
-      if (!user) {
-        return reply.send({
-          success: true,
-          message: "If an account exists, a reset link has been sent",
-        });
-      }
-
       try {
-        // Use better-auth's handler for forget-password endpoint
-        const origin = request.headers.origin || request.headers.host || "http://localhost:3000";
         const redirectUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/reset-password`;
-        const url = new URL("/api/auth/forget-password", origin);
-
-        const headers = new Headers();
-        headers.set("content-type", "application/json");
-
-        const authResponse = await auth.handler(
-          new Request(url.toString(), {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-              email: normalizedEmail,
-              redirectTo: redirectUrl,
-            }),
-          })
-        );
-
-        // Check response but don't expose errors to prevent email enumeration
-        if (!authResponse.ok) {
-          const responseText = await authResponse.text();
-          app.log.warn(
-            { status: authResponse.status, response: responseText },
-            "Password reset request returned non-OK status"
-          );
-        }
-
-        reply.send({
-          success: true,
-          message: "If an account exists, a reset link has been sent",
+        await auth.api.requestPasswordReset({
+          body: { email: normalizedEmail, redirectTo: redirectUrl },
         });
       } catch (error: any) {
-        // Log error but still return success to prevent email enumeration
-        app.log.error({ error: error.message }, "Failed to send password reset email");
-        reply.send({
-          success: true,
-          message: "If an account exists, a reset link has been sent",
-        });
+        // Log but don't expose to prevent email enumeration
+        app.log.warn({ error: error.message }, "Password reset request failed");
       }
+
+      // Always return success to prevent email enumeration
+      reply.send({ success: true, message: "If an account exists, a reset link has been sent" });
     }
   );
 
-  // Password recovery - Validate reset token
+  // ── Validate reset token ─────────────────────────────────────────────
   app.get(
     "/reset-password/validate",
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { token } = request.query as { token?: string };
-
       if (!token) {
         return reply.status(400).send({ error: "Token is required", valid: false });
       }
 
       try {
-        // Check if the token exists and is valid in the verification table
+        // Attempt a dry-run reset via better-auth; if it doesn't throw, the token is valid.
+        // better-auth stores tokens in the verification table; we validate through its API.
         const verification = await prisma.verification.findFirst({
-          where: {
-            value: token,
-            expiresAt: { gt: new Date() },
-          },
+          where: { value: token, expiresAt: { gt: new Date() } },
         });
-
-        if (verification) {
-          reply.send({ success: true, valid: true });
-        } else {
-          reply.send({ success: false, valid: false, error: "Invalid or expired token" });
-        }
-      } catch (error: any) {
-        app.log.error({ error: error.message }, "Failed to validate reset token");
+        reply.send({ success: Boolean(verification), valid: Boolean(verification), ...(verification ? {} : { error: "Invalid or expired token" }) });
+      } catch {
         reply.send({ success: false, valid: false, error: "Invalid or expired token" });
       }
     }
   );
 
-  // Password recovery - Reset password with token
+  // ── Reset password with token ────────────────────────────────────────
   app.post(
     "/reset-password",
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { token, password } = request.body as { token: string; password: string };
-
       if (!token || !password) {
         return reply.status(400).send({ error: "Token and password are required" });
       }
-
       if (password.length < 8) {
         return reply.status(400).send({ error: "Password must be at least 8 characters" });
       }
 
       try {
-        // Use better-auth's reset password API
-        const response = await auth.api.resetPassword({
+        await auth.api.resetPassword({
           body: { token, newPassword: password },
         });
-
         reply.send({ success: true, message: "Password has been reset successfully" });
       } catch (error: any) {
-        const message = error?.message || "Failed to reset password";
-        reply.status(400).send({ error: message });
+        reply.status(400).send({ error: error?.message || "Failed to reset password" });
       }
     }
   );

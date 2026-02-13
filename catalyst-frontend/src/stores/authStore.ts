@@ -40,12 +40,9 @@ export const useAuthStore = create<AuthState>()(
       isRefreshing: false,
       error: null,
       login: async (values, options) => {
-        console.log('[authStore.login] Starting login for:', values.email);
         set({ isLoading: true, error: null });
         try {
-          console.log('[authStore.login] Calling authApi.login');
           const { user, token } = await authApi.login(values, options);
-          console.log('[authStore.login] authApi.login returned successfully');
           if (token && values.rememberMe) {
             localStorage.setItem('catalyst-auth-token', token);
             sessionStorage.removeItem('catalyst-session-token');
@@ -80,7 +77,8 @@ export const useAuthStore = create<AuthState>()(
             set({ isLoading: false, error: null, token, rememberMe: Boolean(values.rememberMe) });
             throw err;
           }
-          const message = err.response?.data?.error || err.message || 'Login failed';
+          const rawError = err.response?.data?.error;
+          const message = (typeof rawError === 'string' ? rawError : rawError?.message || rawError?.error) || err.message || 'Login failed';
           set({ isLoading: false, error: message });
           throw err;
         }
@@ -97,7 +95,8 @@ export const useAuthStore = create<AuthState>()(
           }
           set({ user, token: token || null, isAuthenticated: true, isLoading: false, isReady: true, error: null });
         } catch (err: any) {
-          const message = err.response?.data?.error || err.message || 'Registration failed';
+          const rawError = err.response?.data?.error;
+          const message = (typeof rawError === 'string' ? rawError : rawError?.message || rawError?.error) || err.message || 'Registration failed';
           set({ isLoading: false, error: message });
           throw err;
         }
@@ -116,7 +115,8 @@ export const useAuthStore = create<AuthState>()(
               error: null,
             });
           } catch (error: any) {
-          const message = error.response?.data?.error || error.message || 'Session expired';
+          const rawError = error.response?.data?.error;
+          const message = (typeof rawError === 'string' ? rawError : rawError?.message || rawError?.error) || error.message || 'Session expired';
           localStorage.removeItem('catalyst-auth-token');
           sessionStorage.removeItem('catalyst-session-token');
           set({
@@ -184,7 +184,8 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
         } catch (err: any) {
-          const message = err.response?.data?.error || err.message || 'Two-factor verification failed';
+          const rawError = err.response?.data?.error;
+          const message = (typeof rawError === 'string' ? rawError : rawError?.message || rawError?.error) || err.message || 'Two-factor verification failed';
           set({ isLoading: false, error: message });
           throw err;
         }

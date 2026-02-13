@@ -307,17 +307,19 @@ async function bootstrap() {
     
     await app.register(fastifyRateLimit, {
       global: true,
-      max: 200, // Per-IP limit: 200 requests
+      max: 600, // Per-IP limit: 600 requests
       timeWindow: '1 minute',
-      errorResponseBuilder: () => ({
-        error: 'Rate limit exceeded',
-        message: 'Too many requests. Please try again later.',
-      }),
+      errorResponseBuilder: (_req, context) => {
+        const err = new Error('Too many requests. Please try again later.');
+        (err as any).statusCode = context.statusCode;
+        return err;
+      },
       keyGenerator: (request) => {
         // Use user ID for authenticated requests, IP for unauthenticated
         return (request as any).user?.userId || request.ip;
       },
       allowList: async (request) => {
+        // Node agent API keys bypass rate limiting entirely
         const query = (request.query as { nodeId?: string; token?: string }) || {};
         const headerNodeId =
           typeof (request.headers["x-catalyst-node-id"] ?? request.headers["x-catalyst-nodeid"]) === "string"

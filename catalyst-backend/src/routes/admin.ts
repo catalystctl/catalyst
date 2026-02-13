@@ -1,6 +1,7 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { PrismaClient } from '@prisma/client';
+import { fromNodeHeaders } from 'better-auth/node';
 import { ServerState } from '../shared-types';
 import { ServerStateMachine } from '../services/state-machine';
 import { normalizeHostIp, releaseIpForServer, summarizePool } from '../utils/ipam';
@@ -249,9 +250,7 @@ export async function adminRoutes(app: FastifyInstance) {
       }
 
       const signUpResponse = await auth.api.signUpEmail({
-        headers: new Headers({
-          origin: request.headers.origin || request.headers.host || 'http://localhost:3000',
-        }),
+        headers: fromNodeHeaders(request.headers as Record<string, string | string[] | undefined>),
         body: {
           email,
           password,
@@ -390,9 +389,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
       if (password) {
         await auth.api.setUserPassword({
-          headers: new Headers({
-            authorization: request.headers.authorization || "",
-          }),
+          headers: fromNodeHeaders(request.headers as Record<string, string | string[] | undefined>),
           body: { newPassword: password, userId },
         });
       }

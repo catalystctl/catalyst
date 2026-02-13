@@ -105,7 +105,8 @@ function UsersPage() {
       setIsCreateOpen(false);
     },
     onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to create user';
+      const rawError = error?.response?.data?.error;
+      const message = (typeof rawError === 'string' ? rawError : rawError?.message || rawError?.error) || 'Failed to create user';
       notifyError(message);
     },
   });
@@ -127,7 +128,8 @@ function UsersPage() {
       setEditServerSearch('');
     },
     onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to update user';
+      const rawError = error?.response?.data?.error;
+      const message = (typeof rawError === 'string' ? rawError : rawError?.message || rawError?.error) || 'Failed to update user';
       notifyError(message);
     },
   });
@@ -139,7 +141,8 @@ function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
     },
     onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to delete user';
+      const rawError = error?.response?.data?.error;
+      const message = (typeof rawError === 'string' ? rawError : rawError?.message || rawError?.error) || 'Failed to delete user';
       notifyError(message);
     },
   });

@@ -14,11 +14,9 @@ export const authApi = {
     values: LoginSchema,
     options?: { forcePasskeyFallback?: boolean },
   ): Promise<{ token: string; user: User; rememberMe?: boolean }> {
-    console.log('[authApi.login] Starting login with email:', values.email);
     let token = '';
     try {
       const forceFallback = Boolean(options?.forcePasskeyFallback);
-      console.log('[authApi.login] Calling authClient.signIn.email');
       const response = await authClient.signIn.email(
         {
           email: values.email,
@@ -46,7 +44,7 @@ export const authApi = {
         throw createPasskeyRequiredError();
       }
       if (!data?.user) {
-        throw new Error(data?.error?.message || data?.error || 'Login failed');
+        throw new Error(data?.error?.message || data?.error?.error || (typeof data?.error === 'string' ? data.error : null) || 'Login failed');
       }
 
       // better-auth's sign-in response does not include Catalyst role permissions.
@@ -97,7 +95,7 @@ export const authApi = {
     const data = (response as any)?.data ?? response;
     token = token || data?.token || data?.session?.token || '';
     if (!data?.user) {
-      throw new Error(data?.error?.message || data?.error || 'Registration failed');
+      throw new Error(data?.error?.message || data?.error?.error || (typeof data?.error === 'string' ? data.error : null) || 'Registration failed');
     }
 
     let hydratedUser: User | null = null;
