@@ -514,11 +514,13 @@ async function bootstrap() {
 
     // Agent binary download endpoint (public)
     app.get("/api/agent/download", async (_request, reply) => {
+      // Use musl static binary for portability across Linux distributions
       const agentPath = path.resolve(
         process.cwd(),
         "..",
         "catalyst-agent",
         "target",
+        "x86_64-unknown-linux-musl",
         "release",
         "catalyst-agent"
       );
@@ -526,11 +528,11 @@ async function bootstrap() {
       if (!fs.existsSync(agentPath)) {
         // Attempt to build the agent automatically (only in development)
         if (process.env.NODE_ENV === "production") {
-          return reply.status(404).send({ error: "Agent binary not found. Please build with 'cargo build --release' in catalyst-agent/" });
+          return reply.status(404).send({ error: "Agent binary not found. Please build with 'cargo build --release --target x86_64-unknown-linux-musl' in catalyst-agent/" });
         }
 
         app.log.warn("Agent binary not found, attempting to build...");
-        
+
         const agentDir = path.resolve(process.cwd(), "..", "catalyst-agent");
         if (!fs.existsSync(agentDir)) {
           return reply.status(404).send({ error: "Agent source code not found" });
@@ -538,9 +540,9 @@ async function bootstrap() {
 
         try {
           const { execSync } = await import("child_process");
-          app.log.info("Building agent with 'cargo build --release'...");
-          
-          execSync("cargo build --release", {
+          app.log.info("Building agent with 'cargo build --release --target x86_64-unknown-linux-musl'...");
+
+          execSync("cargo build --release --target x86_64-unknown-linux-musl", {
             cwd: agentDir,
             stdio: "inherit",
             timeout: 300000, // 5 minutes

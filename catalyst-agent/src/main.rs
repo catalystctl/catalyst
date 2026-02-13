@@ -43,6 +43,7 @@ impl CatalystAgent {
         let runtime = Arc::new(ContainerdRuntime::new(
             config.containerd.socket_path.clone(),
             config.containerd.namespace.clone(),
+            config.networking.dns_servers.clone(),
         ).await?);
 
         let file_manager = Arc::new(FileManager::new(config.server.data_dir.join("servers")));

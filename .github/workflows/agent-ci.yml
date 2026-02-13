@@ -45,10 +45,14 @@ jobs:
 
     strategy:
       matrix:
-        target: [x86_64-unknown-linux-gnu]
+        target: [x86_64-unknown-linux-gnu, x86_64-unknown-linux-musl]
 
     steps:
       - uses: actions/checkout@v3
+
+      - name: Install musl tools (for musl target)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: apt-get update && apt-get install -y musl-tools musl-dev
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1

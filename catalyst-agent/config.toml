@@ -48,6 +48,11 @@ namespace = "catalyst"
 # range_start = "98.168.52.50"
 # range_end = "98.168.52.200"
 
+# DNS servers for containers. Defaults to Cloudflare (1.1.1.1) and Google (8.8.8.8).
+# This is important for systems like Fedora that use systemd-resolved (127.0.0.53)
+# which doesn't work inside containers.
+# dns_servers = ["1.1.1.1", "8.8.8.8"]
+
 [logging]
 # Log level: trace, debug, info, warn, error
 level = "info"

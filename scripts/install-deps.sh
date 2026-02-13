@@ -132,13 +132,13 @@ install_runtime_tools() {
   log "Installing runtime utilities required by the agent"
   case "$PM" in
     apt)
-      $SUDO apt-get install -y iproute2 iptables rsync util-linux e2fsprogs
+      $SUDO apt-get install -y iproute2 iptables rsync util-linux e2fsprogs musl-tools musl-dev
       ;;
     apk)
       $SUDO apk add --no-cache iproute2 iptables rsync util-linux e2fsprogs
       ;;
     dnf|yum)
-      $SUDO $PM -y install iproute iptables rsync util-linux e2fsprogs
+      $SUDO $PM -y install iproute iptables rsync util-linux e2fsprogs openssl-devel musl-gcc
       ;;
     pacman)
       $SUDO pacman -Sy --noconfirm iproute2 iptables rsync util-linux e2fsprogs

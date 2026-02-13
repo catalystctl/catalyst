@@ -196,22 +196,25 @@ pub struct ContainerdRuntime {
     namespace: String,
     channel: tonic::transport::Channel,
     container_io: Arc<Mutex<HashMap<String, ContainerIo>>>,
+    dns_servers: Vec<String>,
 }
 
 impl ContainerdRuntime {
     /// Connect to containerd socket and create runtime
-    pub async fn new(socket_path: PathBuf, namespace: String) -> AgentResult<Self> {
+    pub async fn new(socket_path: PathBuf, namespace: String, dns_servers: Vec<String>) -> AgentResult<Self> {
         let channel = containerd_client::connect(&socket_path)
             .await
             .map_err(|e| AgentError::ContainerError(format!(
                 "Failed to connect to containerd at {}: {}", socket_path.display(), e
             )))?;
         info!("Connected to containerd at {}", socket_path.display());
+        info!("DNS servers configured for containers: {:?}", dns_servers);
         Ok(Self {
             _socket_path: socket_path.to_string_lossy().to_string(),
             namespace,
             channel,
             container_io: Arc::new(Mutex::new(HashMap::new())),
+            dns_servers,
         })
     }
 
@@ -364,6 +367,17 @@ impl ContainerdRuntime {
         File::create(&stderr_path).map_err(|e|
             AgentError::ContainerError(format!("stderr: {}", e)))?;
 
+        // Create /etc/resolv.conf for DNS resolution using configured DNS servers
+        let resolv_path = io_dir.join("resolv.conf");
+        let mut resolv_content = String::new();
+        for dns in &self.dns_servers {
+            resolv_content.push_str(&format!("nameserver {}\n", dns));
+        }
+        resolv_content.push_str("options attempts:3 timeout:2\n");
+        info!("Installer {} resolv.conf:\n{}", container_id, resolv_content);
+        fs::write(&resolv_path, &resolv_content).map_err(|e|
+            AgentError::ContainerError(format!("resolv.conf: {}", e)))?;
+
         let mut env_list = vec![
             "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string(),
             "TERM=xterm".to_string(),
@@ -371,6 +385,15 @@ impl ContainerdRuntime {
         for (k, v) in env { env_list.push(format!("{}={}", k, v)); }
         // Keep container capabilities minimal; many images drop privileges via setuid/setgid.
         let caps = ["CAP_CHOWN", "CAP_SETUID", "CAP_SETGID", "CAP_NET_BIND_SERVICE"];
+
+        // Build mounts including DNS resolv.conf
+        let mut mounts = base_mounts(data_dir);
+        mounts.push(serde_json::json!({
+            "destination": "/etc/resolv.conf",
+            "type": "bind",
+            "source": resolv_path.to_string_lossy().to_string(),
+            "options": ["rbind", "rw"]
+        }));
 
         let spec = serde_json::json!({
             "ociVersion": "1.1.0",
@@ -383,7 +406,7 @@ impl ContainerdRuntime {
             },
             "root": {"path":"rootfs","readonly":false},
             "hostname": &container_id,
-            "mounts": base_mounts(data_dir),
+            "mounts": mounts,
             "linux": {
                 "namespaces": [{"type":"pid"},{"type":"ipc"},{"type":"uts"},{"type":"mount"}],
                 "maskedPaths": masked_paths(), "readonlyPaths": readonly_paths(),
@@ -1167,14 +1190,16 @@ impl ContainerdRuntime {
         mounts.push(serde_json::json!({"destination":"/etc/hosts","type":"bind","source":hosts_path.to_string_lossy().to_string(),"options":["rbind","rw"]}));
 
         // Provide /etc/resolv.conf for DNS resolution inside the container
+        // Use configured DNS servers (defaults to 1.1.1.1, 8.8.8.8)
         let resolv_path = io_dir.join("resolv.conf");
         {
-            let host_resolv = fs::read_to_string("/etc/resolv.conf").unwrap_or_default();
-            // Use host DNS config plus public fallbacks
-            let mut resolv = host_resolv.trim().to_string();
-            if !resolv.contains("8.8.8.8") {
-                resolv.push_str("\nnameserver 8.8.8.8\nnameserver 8.8.4.4\n");
+            let mut resolv = String::new();
+            for dns in &self.dns_servers {
+                resolv.push_str(&format!("nameserver {}\n", dns));
             }
+            // Add options for better DNS behavior
+            resolv.push_str("options attempts:3 timeout:2\n");
+            info!("Container {} resolv.conf:\n{}", config.container_id, resolv);
             fs::write(&resolv_path, &resolv).ok();
         }
         mounts.push(serde_json::json!({"destination":"/etc/resolv.conf","type":"bind","source":resolv_path.to_string_lossy().to_string(),"options":["rbind","rw"]}));

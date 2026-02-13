@@ -228,7 +228,7 @@ ensure_base_packages() {
     apt)
       pkg_install ca-certificates curl jq openssl git rsync tar xz-utils unzip \
         bash sed grep coreutils gnupg lsb-release pkg-config build-essential python3 \
-        openssh-client
+        openssh-client libssl-dev musl-tools musl-dev
       ;;
     apk)
       pkg_install ca-certificates curl jq openssl git rsync tar xz unzip bash sed grep \
@@ -236,11 +236,11 @@ ensure_base_packages() {
       ;;
     dnf)
       pkg_install ca-certificates curl jq openssl git rsync tar xz unzip bash sed grep \
-        coreutils gcc gcc-c++ make pkgconf-pkg-config python3 openssh-clients
+        coreutils gcc gcc-c++ make pkgconf-pkg-config python3 openssh-clients openssl-devel
       ;;
     yum)
       pkg_install ca-certificates curl jq openssl git rsync tar xz unzip bash sed grep \
-        coreutils gcc gcc-c++ make pkgconfig python3 openssh-clients
+        coreutils gcc gcc-c++ make pkgconfig python3 openssh-clients openssl-devel
       ;;
     pacman)
       pkg_install ca-certificates curl jq openssl git rsync tar xz unzip bash sed grep \

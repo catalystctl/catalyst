@@ -45,10 +45,26 @@ pub struct LoggingConfig {
     pub format: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct NetworkingConfig {
     #[serde(default)]
     pub networks: Vec<CniNetworkConfig>,
+    /// DNS servers for containers. Defaults to Cloudflare (1.1.1.1) and Google (8.8.8.8) if not set.
+    #[serde(default = "default_dns_servers")]
+    pub dns_servers: Vec<String>,
+}
+
+impl Default for NetworkingConfig {
+    fn default() -> Self {
+        Self {
+            networks: Vec::new(),
+            dns_servers: default_dns_servers(),
+        }
+    }
+}
+
+fn default_dns_servers() -> Vec<String> {
+    vec!["1.1.1.1".to_string(), "8.8.8.8".to_string()]
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

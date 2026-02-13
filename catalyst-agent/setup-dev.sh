@@ -19,15 +19,20 @@ fi
 echo "Building debug version..."
 cargo build
 
-# Build release version
-echo "Building release version..."
+# Build release version (native)
+echo "Building native release version..."
 cargo build --release
+
+# Build static musl release (portable)
+echo "Building static musl release version (portable across Linux distributions)..."
+cargo build --release --target x86_64-unknown-linux-musl
 
 echo ""
 echo "✓ Agent build complete!"
 echo ""
 echo "Debug binary: ./target/debug/catalyst-agent"
-echo "Release binary: ./target/release/catalyst-agent"
+echo "Native release: ./target/release/catalyst-agent"
+echo "Static release: ./target/x86_64-unknown-linux-musl/release/catalyst-agent"
 echo ""
 echo "To run locally:"
 echo "  export NODE_ID=local-node"
