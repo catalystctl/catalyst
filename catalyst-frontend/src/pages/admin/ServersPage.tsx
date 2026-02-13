@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ChevronDown, Play, Square, RotateCw, Ban, CheckCircle, Trash2 } from 'lucide-react';
 import EmptyState from '../../components/shared/EmptyState';
-import Input from '../../components/ui/input';
+import ConfirmDialog from '../../components/shared/ConfirmDialog';
+import Pagination from '../../components/shared/Pagination';
+import { Input } from '../../components/ui/input';
 import {
   Select,
   SelectContent,
@@ -9,6 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../../components/ui/dropdown-menu';
 import UpdateServerModal from '../../components/servers/UpdateServerModal';
 import DeleteServerDialog from '../../components/servers/DeleteServerDialog';
 import { useAdminNodes, useAdminServers } from '../../hooks/useAdmin';
@@ -98,7 +109,6 @@ function AdminServersPage() {
   const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedIds((prev) => prev.filter((id) => servers.some((server) => server.id === id)));
   }, [servers]);
 
@@ -146,6 +156,22 @@ function AdminServersPage() {
       return;
     }
     bulkActionMutation.mutate({ serverIds, action });
+  };
+
+  const getStatusBadgeClass = (serverStatus: string) => {
+    if (serverStatus === 'running') {
+      return 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300';
+    }
+    if (serverStatus === 'stopped') {
+      return 'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300';
+    }
+    if (serverStatus === 'suspended') {
+      return 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300';
+    }
+    if (serverStatus === 'starting' || serverStatus === 'stopping') {
+      return 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300';
+    }
+    return 'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300';
   };
 
   return (
@@ -281,8 +307,46 @@ function AdminServersPage() {
       </div>
 
       {isLoading ? (
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 px-4 py-6 text-slate-600 dark:text-slate-200">
-          Loading servers...
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark dark:hover:border-primary-500/30">
+          <div className="grid grid-cols-12 gap-3 border-b border-slate-200 px-5 py-3 text-xs uppercase text-slate-500 dark:border-slate-800 dark:text-slate-500">
+            <div className="col-span-1">Select</div>
+            <div className="col-span-2">Server</div>
+            <div className="col-span-1">Status</div>
+            <div className="col-span-2">Node</div>
+            <div className="col-span-2">Template</div>
+            <div className="col-span-2">Owner</div>
+            <div className="col-span-2 text-right">Actions</div>
+          </div>
+          <div className="divide-y divide-slate-200 dark:divide-slate-800">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="grid grid-cols-12 gap-3 px-5 py-4">
+                <div className="col-span-1">
+                  <div className="h-4 w-4 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <div className="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div className="h-3 w-16 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                </div>
+                <div className="col-span-1">
+                  <div className="h-5 w-16 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <div className="h-4 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div className="h-3 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                </div>
+                <div className="col-span-2">
+                  <div className="h-4 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                </div>
+                <div className="col-span-2">
+                  <div className="h-4 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                </div>
+                <div className="col-span-2 flex justify-end gap-1">
+                  <div className="h-6 w-14 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div className="h-6 w-14 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       ) : filteredServers.length ? (
         <div className="space-y-4">
@@ -308,202 +372,196 @@ function AdminServersPage() {
                 {selectedIds.length} selected
               </span>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                className="rounded-md border border-emerald-600 px-3 py-1 font-semibold text-emerald-600 transition-all duration-300 hover:border-emerald-500 disabled:opacity-60 dark:text-emerald-300"
-                onClick={() => handleBulkAction('start', selectedIds, `${selectedIds.length} servers`)}
-                disabled={!selectedIds.length || bulkActionMutation.isPending}
-              >
-                Start
-              </button>
-              <button
-                className="rounded-md border border-amber-600 px-3 py-1 font-semibold text-amber-600 transition-all duration-300 hover:border-amber-500 disabled:opacity-60 dark:text-amber-300"
-                onClick={() => handleBulkAction('stop', selectedIds, `${selectedIds.length} servers`)}
-                disabled={!selectedIds.length || bulkActionMutation.isPending}
-              >
-                Stop
-              </button>
-              <button
-                className="rounded-md border border-primary-600 px-3 py-1 font-semibold text-primary-600 transition-all duration-300 hover:border-primary-500 disabled:opacity-60 dark:text-primary-300"
-                onClick={() =>
-                  handleBulkAction('restart', selectedIds, `${selectedIds.length} servers`)
-                }
-                disabled={!selectedIds.length || bulkActionMutation.isPending}
-              >
-                Restart
-              </button>
-              <button
-                className="rounded-md border border-rose-600 px-3 py-1 font-semibold text-rose-600 transition-all duration-300 hover:border-rose-500 disabled:opacity-60 dark:text-rose-300"
-                onClick={() =>
-                  handleBulkAction('suspend', selectedIds, `${selectedIds.length} servers`)
-                }
-                disabled={!selectedIds.length || bulkActionMutation.isPending}
-              >
-                Suspend
-              </button>
-              <button
-                className="rounded-md border border-emerald-600 px-3 py-1 font-semibold text-emerald-600 transition-all duration-300 hover:border-emerald-500 disabled:opacity-60 dark:text-emerald-300"
-                onClick={() =>
-                  handleBulkAction('unsuspend', selectedIds, `${selectedIds.length} servers`)
-                }
-                disabled={!selectedIds.length || bulkActionMutation.isPending}
-              >
-                Unsuspend
-              </button>
-              <button
-                className="rounded-md border border-rose-700 px-3 py-1 font-semibold text-rose-700 transition-all duration-300 hover:border-rose-500 disabled:opacity-60 dark:text-rose-300"
-                onClick={() => handleBulkAction('delete', selectedIds, `${selectedIds.length} servers`)}
-                disabled={!selectedIds.length || bulkActionMutation.isPending}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            {filteredServers.map((server: AdminServer) => {
-              const isSelected = selectedIds.includes(server.id);
-              const isSuspended = server.status === 'suspended';
-              const isRunning = server.status === 'running';
-              const isStopped = server.status === 'stopped';
-              const isStarting = server.status === 'starting';
-              const isStopping = server.status === 'stopping';
-              const isBusy = isStarting || isStopping;
-              return (
-                <div
-                  key={server.id}
-                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-surface-light transition-all duration-300 hover:-translate-y-1 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-950/60 dark:shadow-surface-dark dark:hover:border-primary-500/30"
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-primary-500/30"
+                  disabled={!selectedIds.length || bulkActionMutation.isPending}
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <label className="pt-1">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() =>
-                            setSelectedIds((prev) =>
-                              prev.includes(server.id)
-                                ? prev.filter((id) => id !== server.id)
-                                : [...prev, server.id],
-                            )
-                          }
-                          className="h-4 w-4 rounded border-slate-200 bg-white text-primary-600 dark:border-slate-700 dark:bg-slate-900 dark:text-primary-400"
-                        />
-                      </label>
-                      <div>
-                        <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                          {server.name}
-                        </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-500">{server.id}</div>
-                      </div>
-                    </div>
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
-                      {server.status}
+                  Actions
+                  {selectedIds.length > 0 && (
+                    <span className="ml-1 rounded-full bg-primary-100 px-1.5 py-0.5 text-[10px] font-bold text-primary-700 dark:bg-primary-900/50 dark:text-primary-300">
+                      {selectedIds.length}
                     </span>
-                  </div>
-                  <div className="mt-4 grid gap-3 text-xs text-slate-600 dark:text-slate-300 md:grid-cols-2">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
-                      <div className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">
-                        Node
+                  )}
+                  <ChevronDown className="ml-1 h-3 w-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                <DropdownMenuItem
+                  onClick={() => handleBulkAction('start', selectedIds, `${selectedIds.length} servers`)}
+                  className="text-emerald-600 focus:text-emerald-700 dark:text-emerald-400"
+                >
+                  <Play className="mr-2 h-4 w-4" />
+                  Start
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleBulkAction('stop', selectedIds, `${selectedIds.length} servers`)}
+                  className="text-amber-600 focus:text-amber-700 dark:text-amber-400"
+                >
+                  <Square className="mr-2 h-4 w-4" />
+                  Stop
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleBulkAction('restart', selectedIds, `${selectedIds.length} servers`)}
+                  className="text-primary-600 focus:text-primary-700 dark:text-primary-400"
+                >
+                  <RotateCw className="mr-2 h-4 w-4" />
+                  Restart
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => handleBulkAction('suspend', selectedIds, `${selectedIds.length} servers`)}
+                  className="text-rose-600 focus:text-rose-700 dark:text-rose-400"
+                >
+                  <Ban className="mr-2 h-4 w-4" />
+                  Suspend
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleBulkAction('unsuspend', selectedIds, `${selectedIds.length} servers`)}
+                  className="text-emerald-600 focus:text-emerald-700 dark:text-emerald-400"
+                >
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Unsuspend
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => handleBulkAction('delete', selectedIds, `${selectedIds.length} servers`)}
+                  className="text-rose-700 focus:text-rose-800 dark:text-rose-500"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark dark:hover:border-primary-500/30">
+            <div className="grid grid-cols-12 gap-3 border-b border-slate-200 px-5 py-3 text-xs uppercase text-slate-500 dark:border-slate-800 dark:text-slate-500">
+              <div className="col-span-1">Select</div>
+              <div className="col-span-2">Server</div>
+              <div className="col-span-1">Status</div>
+              <div className="col-span-2">Node</div>
+              <div className="col-span-2">Template</div>
+              <div className="col-span-2">Owner</div>
+              <div className="col-span-2 text-right">Actions</div>
+            </div>
+            <div className="divide-y divide-slate-200 dark:divide-slate-800">
+              {filteredServers.map((server: AdminServer) => {
+                const isSelected = selectedIds.includes(server.id);
+                const isSuspended = server.status === 'suspended';
+                const isRunning = server.status === 'running';
+                const isStopped = server.status === 'stopped';
+                const isStarting = server.status === 'starting';
+                const isStopping = server.status === 'stopping';
+                const isBusy = isStarting || isStopping;
+                return (
+                  <div
+                    key={server.id}
+                    className="grid grid-cols-12 gap-3 px-5 py-4 text-sm text-slate-600 transition-all duration-200 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/50"
+                  >
+                    <div className="col-span-1 flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() =>
+                          setSelectedIds((prev) =>
+                            prev.includes(server.id)
+                              ? prev.filter((id) => id !== server.id)
+                              : [...prev, server.id],
+                          )
+                        }
+                        className="h-4 w-4 rounded border-slate-200 bg-white text-primary-600 dark:border-slate-700 dark:bg-slate-900 dark:text-primary-400"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <div className="font-semibold text-slate-900 dark:text-slate-100">
+                        {server.name}
                       </div>
-                      <div className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
+                      <div className="text-xs text-slate-500 dark:text-slate-400">{server.id}</div>
+                    </div>
+                    <div className="col-span-1 flex items-center">
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-xs ${getStatusBadgeClass(server.status)}`}
+                      >
+                        {server.status}
+                      </span>
+                    </div>
+                    <div className="col-span-2">
+                      <div className="font-medium text-slate-900 dark:text-slate-100">
                         {server.node.name}
                       </div>
-                      <div className="text-[10px] text-slate-500 dark:text-slate-500">
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
                         {server.node.hostname}
                       </div>
                     </div>
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
-                      <div className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">
-                        Template
-                      </div>
-                      <div className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
-                        {server.template.name}
-                      </div>
+                    <div className="col-span-2 flex items-center">
+                      <span className="text-slate-900 dark:text-slate-100">{server.template.name}</span>
                     </div>
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
-                      <div className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">
-                        Owner
-                      </div>
-                      <div className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
+                    <div className="col-span-2 flex items-center">
+                      <span className="text-slate-900 dark:text-slate-100">
                         {server.owner?.username || server.owner?.email || 'Unassigned'}
-                      </div>
+                      </span>
+                    </div>
+                    <div className="col-span-2 flex items-center justify-end gap-1">
+                      <Link
+                        to={`/servers/${server.id}/console`}
+                        className="rounded border border-slate-600 px-2 py-0.5 text-xs font-semibold text-slate-600 transition-all duration-300 hover:border-slate-500 hover:bg-slate-50 dark:border-slate-400 dark:text-slate-400 dark:hover:bg-slate-800/50"
+                      >
+                        Console
+                      </Link>
+                      <button
+                        className="rounded border border-emerald-600 px-2 py-0.5 text-xs font-semibold text-emerald-600 transition-all duration-300 hover:border-emerald-500 hover:bg-emerald-50 disabled:opacity-60 dark:text-emerald-300 dark:hover:bg-emerald-950/50"
+                        onClick={() => handleBulkAction('start', [server.id], server.name)}
+                        disabled={bulkActionMutation.isPending || isSuspended || isRunning || isBusy}
+                      >
+                        Start
+                      </button>
+                      <button
+                        className="rounded border border-amber-600 px-2 py-0.5 text-xs font-semibold text-amber-600 transition-all duration-300 hover:border-amber-500 hover:bg-amber-50 disabled:opacity-60 dark:text-amber-300 dark:hover:bg-amber-950/50"
+                        onClick={() => handleBulkAction('stop', [server.id], server.name)}
+                        disabled={bulkActionMutation.isPending || isSuspended || isStopped || isBusy}
+                      >
+                        Stop
+                      </button>
+                      {isSuspended ? (
+                        <button
+                          className="rounded border border-emerald-600 px-2 py-0.5 text-xs font-semibold text-emerald-600 transition-all duration-300 hover:border-emerald-500 hover:bg-emerald-50 disabled:opacity-60 dark:text-emerald-300 dark:hover:bg-emerald-950/50"
+                          onClick={() => handleBulkAction('unsuspend', [server.id], server.name)}
+                          disabled={bulkActionMutation.isPending}
+                        >
+                          Unsuspend
+                        </button>
+                      ) : (
+                        <button
+                          className="rounded border border-rose-600 px-2 py-0.5 text-xs font-semibold text-rose-600 transition-all duration-300 hover:border-rose-500 hover:bg-rose-50 disabled:opacity-60 dark:text-rose-300 dark:hover:bg-rose-950/50"
+                          onClick={() => handleBulkAction('suspend', [server.id], server.name)}
+                          disabled={bulkActionMutation.isPending}
+                        >
+                          Suspend
+                        </button>
+                      )}
+                      <UpdateServerModal serverId={server.id} disabled={bulkActionMutation.isPending} />
+                      <DeleteServerDialog
+                        serverId={server.id}
+                        serverName={server.name}
+                        disabled={bulkActionMutation.isPending}
+                      />
                     </div>
                   </div>
-                  <div className="mt-4 flex flex-wrap justify-end gap-2 text-xs">
-                    <button
-                      className="rounded-md border border-emerald-600 px-3 py-1 font-semibold text-emerald-600 transition-all duration-300 hover:border-emerald-500 disabled:opacity-60 dark:text-emerald-300"
-                      onClick={() => handleBulkAction('start', [server.id], server.name)}
-                      disabled={bulkActionMutation.isPending || isSuspended || isRunning || isBusy}
-                    >
-                      Start
-                    </button>
-                    <button
-                      className="rounded-md border border-amber-600 px-3 py-1 font-semibold text-amber-600 transition-all duration-300 hover:border-amber-500 disabled:opacity-60 dark:text-amber-300"
-                      onClick={() => handleBulkAction('stop', [server.id], server.name)}
-                      disabled={bulkActionMutation.isPending || isSuspended || isStopped || isBusy}
-                    >
-                      Stop
-                    </button>
-                    <button
-                      className="rounded-md border border-primary-600 px-3 py-1 font-semibold text-primary-600 transition-all duration-300 hover:border-primary-500 disabled:opacity-60 dark:text-primary-300"
-                      onClick={() => handleBulkAction('restart', [server.id], server.name)}
-                      disabled={bulkActionMutation.isPending || isSuspended || isStopped || isBusy}
-                    >
-                      Restart
-                    </button>
-                    {isSuspended ? (
-                      <button
-                        className="rounded-md border border-emerald-600 px-3 py-1 font-semibold text-emerald-600 transition-all duration-300 hover:border-emerald-500 disabled:opacity-60 dark:text-emerald-300"
-                        onClick={() => handleBulkAction('unsuspend', [server.id], server.name)}
-                        disabled={bulkActionMutation.isPending}
-                      >
-                        Unsuspend
-                      </button>
-                    ) : (
-                      <button
-                        className="rounded-md border border-rose-700 px-3 py-1 font-semibold text-rose-600 transition-all duration-300 hover:border-rose-500 disabled:opacity-60 dark:text-rose-300"
-                        onClick={() => handleBulkAction('suspend', [server.id], server.name)}
-                        disabled={bulkActionMutation.isPending}
-                      >
-                        Suspend
-                      </button>
-                    )}
-                    <UpdateServerModal serverId={server.id} disabled={bulkActionMutation.isPending} />
-                    <DeleteServerDialog
-                      serverId={server.id}
-                      serverName={server.name}
-                      disabled={bulkActionMutation.isPending}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {pagination ? (
-            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500 shadow-surface-light dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400 dark:shadow-surface-dark">
-              <span>
-                Page {pagination.page} of {pagination.totalPages}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-200 disabled:opacity-50"
-                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                  disabled={page <= 1}
-                >
-                  Previous
-                </button>
-                <button
-                  className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-200 disabled:opacity-50"
-                  onClick={() =>
-                    setPage((prev) => (pagination.page < pagination.totalPages ? prev + 1 : prev))
-                  }
-                  disabled={pagination.page >= pagination.totalPages}
-                >
-                  Next
-                </button>
-              </div>
+                );
+              })}
             </div>
-          ) : null}
+            {pagination ? (
+              <div className="border-t border-slate-200 px-5 py-4 dark:border-slate-800">
+                <Pagination
+                  page={pagination.page}
+                  totalPages={pagination.totalPages}
+                  onPageChange={setPage}
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : (
         <EmptyState
@@ -515,99 +573,71 @@ function AdminServersPage() {
           }
         />
       )}
-      {suspendTargets ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-950">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Suspend server</h2>
-              <button
-                className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
-                onClick={() => setSuspendTargets(null)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="mt-4 space-y-3 text-sm text-slate-900 dark:text-slate-100">
-              <div className="text-xs text-slate-500 dark:text-slate-400">
-                Server: {suspendTargets.label}
-              </div>
-              <label className="block space-y-1">
-                <span className="text-slate-600 dark:text-slate-300">Reason (optional)</span>
-                <input
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
-                  value={suspendReason}
-                  onChange={(event) => setSuspendReason(event.target.value)}
-                  placeholder="e.g., Billing issue"
-                />
-              </label>
-            </div>
-            <div className="mt-5 flex justify-end gap-2 text-xs">
-              <button
-                className="rounded-md border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
-                onClick={() => setSuspendTargets(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="rounded-md bg-rose-600 px-4 py-2 font-semibold text-white shadow-lg shadow-rose-500/20 transition-all duration-300 hover:bg-rose-500 disabled:opacity-60"
-                onClick={() =>
-                  bulkActionMutation.mutate({
-                    serverIds: suspendTargets.serverIds,
-                    action: 'suspend',
-                    reason: suspendReason.trim() || undefined,
-                  })
-                }
-                disabled={bulkActionMutation.isPending}
-              >
-                Suspend
-              </button>
-            </div>
+
+      <ConfirmDialog
+        open={!!suspendTargets}
+        title="Suspend Servers"
+        message={
+          <div className="space-y-3">
+            <p>
+              You are about to suspend <span className="font-semibold">{suspendTargets?.label}</span>.
+            </p>
+            <label className="block space-y-1">
+              <span className="text-sm text-slate-600 dark:text-slate-300">Reason (optional)</span>
+              <input
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                value={suspendReason}
+                onChange={(event) => setSuspendReason(event.target.value)}
+                placeholder="e.g., Billing issue"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </label>
           </div>
-        </div>
-      ) : null}
-      {deleteTargets ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-950">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Delete servers</h2>
-              <button
-                className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
-                onClick={() => setDeleteTargets(null)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="mt-4 space-y-2 text-sm text-slate-600 dark:text-slate-300">
-              <div>
-                You are about to delete <span className="font-semibold">{deleteTargets.label}</span>.
-              </div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">
-                Servers must be stopped before deletion. This cannot be undone.
-              </div>
-            </div>
-            <div className="mt-5 flex justify-end gap-2 text-xs">
-              <button
-                className="rounded-md border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
-                onClick={() => setDeleteTargets(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="rounded-md bg-rose-700 px-4 py-2 font-semibold text-white shadow-lg shadow-rose-500/20 transition-all duration-300 hover:bg-rose-600 disabled:opacity-60"
-                onClick={() =>
-                  bulkActionMutation.mutate({
-                    serverIds: deleteTargets.serverIds,
-                    action: 'delete',
-                  })
-                }
-                disabled={bulkActionMutation.isPending}
-              >
-                Delete
-              </button>
-            </div>
+        }
+        confirmText="Suspend"
+        cancelText="Cancel"
+        onConfirm={() =>
+          suspendTargets &&
+          bulkActionMutation.mutate({
+            serverIds: suspendTargets.serverIds,
+            action: 'suspend',
+            reason: suspendReason.trim() || undefined,
+          })
+        }
+        onCancel={() => {
+          setSuspendTargets(null);
+          setSuspendReason('');
+        }}
+        variant="warning"
+        loading={bulkActionMutation.isPending}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTargets}
+        title="Delete Servers"
+        message={
+          <div className="space-y-2">
+            <p>
+              You are about to delete <span className="font-semibold">{deleteTargets?.label}</span>.
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Servers must be stopped before deletion. This cannot be undone.
+            </p>
           </div>
-        </div>
-      ) : null}
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={() =>
+          deleteTargets &&
+          bulkActionMutation.mutate({
+            serverIds: deleteTargets.serverIds,
+            action: 'delete',
+          })
+        }
+        onCancel={() => setDeleteTargets(null)}
+        variant="danger"
+        loading={bulkActionMutation.isPending}
+      />
     </div>
   );
 }
