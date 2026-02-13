@@ -1,13 +1,14 @@
 function NodeStatusBadge({ isOnline }: { isOnline: boolean }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
         isOnline
-          ? 'border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400'
-          : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700/60 dark:bg-slate-700/40 dark:text-slate-300'
+          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
+          : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
       }`}
     >
-      {isOnline ? 'online' : 'offline'}
+      <span className={`h-1.5 w-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-500'}`} />
+      {isOnline ? 'Online' : 'Offline'}
     </span>
   );
 }
