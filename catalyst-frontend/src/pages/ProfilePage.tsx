@@ -3,6 +3,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useProfile, useProfileSsoAccounts } from '../hooks/useProfile';
 import { type Passkey, profileApi } from '../services/api/profile';
 import { notifyError, notifySuccess } from '../utils/notify';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 
 function ProfilePage() {
   const queryClient = useQueryClient();
@@ -42,7 +47,6 @@ function ProfilePage() {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshPasskeys().catch(() => undefined);
   }, [profile?.id, refreshPasskeys]);
 
@@ -149,9 +153,7 @@ function ProfilePage() {
 
   const updatePasskeyMutation = useMutation({
     mutationFn: async () => {
-      if (!editingPasskeyId) {
-        return;
-      }
+      if (!editingPasskeyId) return;
       return profileApi.updatePasskey(editingPasskeyId, editingPasskeyName);
     },
     onSuccess: async () => {
@@ -200,324 +202,298 @@ function ProfilePage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200">
-              {(profile?.username?.slice(0, 2) || profile?.email?.slice(0, 2) || 'U').toUpperCase()}
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-slate-900 dark:text-white">
-                {profile?.username || 'Catalyst User'}
+      <Card>
+        <CardContent className="px-6 py-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200">
+                {(profile?.username?.slice(0, 2) || profile?.email?.slice(0, 2) || 'U').toUpperCase()}
               </div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">{profile?.email}</div>
+              <div>
+                <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                  {profile?.username || 'Catalyst User'}
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">{profile?.email}</div>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+              <Badge variant="outline">2FA {profile?.twoFactorEnabled ? 'enabled' : 'disabled'}</Badge>
+              <Badge variant="outline">Password {profile?.hasPassword ? 'set' : 'unset'}</Badge>
+              {profile?.createdAt && (
+                <Badge variant="outline">Joined {new Date(profile.createdAt).toLocaleDateString()}</Badge>
+              )}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-            <span className="rounded-full border border-slate-200 px-3 py-1 dark:border-slate-800">
-              2FA {profile?.twoFactorEnabled ? 'enabled' : 'disabled'}
-            </span>
-            <span className="rounded-full border border-slate-200 px-3 py-1 dark:border-slate-800">
-              Password {profile?.hasPassword ? 'set' : 'unset'}
-            </span>
-            {profile?.createdAt ? (
-              <span className="rounded-full border border-slate-200 px-3 py-1 dark:border-slate-800">
-                Joined {new Date(profile.createdAt).toLocaleDateString()}
-              </span>
-            ) : null}
-          </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
         <div className="space-y-6">
-          <div className="rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Password</h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Update or set your account password.</p>
-              </div>
-            </div>
-            {profile?.hasPassword ? (
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(event) => setCurrentPassword(event.target.value)}
-                  placeholder="Current password"
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
-                />
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  placeholder="New password"
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
-                />
-                <button
-                  className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
-                  onClick={() => changePasswordMutation.mutate()}
-                  disabled={!currentPassword || !newPassword || changePasswordMutation.isPending}
-                >
-                  Update password
-                </button>
-              </div>
-            ) : (
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <input
-                  type="password"
-                  value={setPasswordValue}
-                  onChange={(event) => setSetPasswordValue(event.target.value)}
-                  placeholder="Set a new password"
-                  className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
-                />
-                <button
-                  className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
-                  onClick={() => setPasswordMutation.mutate()}
-                  disabled={!setPasswordValue || setPasswordMutation.isPending}
-                >
-                  Set password
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  Two-factor authentication
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {profile?.twoFactorEnabled ? '2FA is enabled' : '2FA is disabled'}
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <input
-                type="password"
-                value={twoFactorPassword}
-                onChange={(event) => setTwoFactorPassword(event.target.value)}
-                placeholder="Confirm password"
-                className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
-              />
-              {profile?.twoFactorEnabled ? (
-                <button
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
-                  onClick={() => disableTwoFactorMutation.mutate()}
-                  disabled={!twoFactorPassword || disableTwoFactorMutation.isPending}
-                >
-                  Disable 2FA
-                </button>
-              ) : (
-                <button
-                  className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
-                  onClick={() => enableTwoFactorMutation.mutate()}
-                  disabled={!twoFactorPassword || enableTwoFactorMutation.isPending}
-                >
-                  Enable 2FA
-                </button>
-              )}
-              <button
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
-                onClick={() => generateBackupCodesMutation.mutate()}
-                disabled={!twoFactorPassword || generateBackupCodesMutation.isPending}
-              >
-                Generate backup codes
-              </button>
-            </div>
-            {backupCodes.length > 0 ? (
-              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-                <div className="font-semibold text-slate-700 dark:text-slate-200">Backup codes</div>
-                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                  {backupCodes.map((code) => (
-                    <span key={code} className="rounded bg-white px-2 py-1 dark:bg-slate-800">
-                      {code}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            {twoFactorModalOpen ? (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-                <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-xl dark:border-slate-800 dark:bg-slate-900">
-                  <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Set up authenticator</h2>
-                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                    Scan the QR code in your authenticator app to finish enabling TOTP.
-                  </p>
-                  {qrValue ? (
-                    <img
-                      src={qrValue}
-                      alt="TOTP QR code"
-                      className="mt-4 w-full rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"
-                    />
-                  ) : null}
-                  {twoFactorSetup?.otpAuthUrl ? (
-                    <a
-                      href={twoFactorSetup.otpAuthUrl}
-                      className="mt-3 block text-xs font-medium text-primary-600 hover:text-primary-500"
-                    >
-                      Open in authenticator app
-                    </a>
-                  ) : null}
-                  {twoFactorSetup?.secret ? (
-                    <div className="mt-3 text-xs text-slate-600 dark:text-slate-300">
-                      Manual code: <span className="font-semibold">{twoFactorSetup.secret}</span>
-                    </div>
-                  ) : null}
-                  {twoFactorSetup?.backupCodes?.length ? (
-                    <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-                      <div className="font-semibold text-slate-700 dark:text-slate-200">Backup codes</div>
-                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                        {twoFactorSetup.backupCodes.map((code) => (
-                          <span key={code} className="rounded bg-white px-2 py-1 dark:bg-slate-800">
-                            {code}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="mt-4 w-full rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500"
-                    onClick={() => {
-                      setTwoFactorModalOpen(false);
-                      setTwoFactorSetup(null);
-                    }}
+          <Card>
+            <CardHeader>
+              <CardTitle>Password</CardTitle>
+              <CardDescription>Update or set your account password.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {profile?.hasPassword ? (
+                <div className="grid gap-3 md:grid-cols-3">
+                  <Input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Current password"
+                  />
+                  <Input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="New password"
+                  />
+                  <Button
+                    onClick={() => changePasswordMutation.mutate()}
+                    disabled={!currentPassword || !newPassword || changePasswordMutation.isPending}
                   >
-                    Done
-                  </button>
+                    Update password
+                  </Button>
                 </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3">
+                  <Input
+                    type="password"
+                    value={setPasswordValue}
+                    onChange={(e) => setSetPasswordValue(e.target.value)}
+                    placeholder="Set a new password"
+                    className="flex-1"
+                  />
+                  <Button
+                    onClick={() => setPasswordMutation.mutate()}
+                    disabled={!setPasswordValue || setPasswordMutation.isPending}
+                  >
+                    Set password
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Two-factor authentication</CardTitle>
+              <CardDescription>{profile?.twoFactorEnabled ? '2FA is enabled' : '2FA is disabled'}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap items-center gap-3">
+                <Input
+                  type="password"
+                  value={twoFactorPassword}
+                  onChange={(e) => setTwoFactorPassword(e.target.value)}
+                  placeholder="Confirm password"
+                  className="flex-1"
+                />
+                {profile?.twoFactorEnabled ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => disableTwoFactorMutation.mutate()}
+                    disabled={!twoFactorPassword || disableTwoFactorMutation.isPending}
+                  >
+                    Disable 2FA
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => enableTwoFactorMutation.mutate()}
+                    disabled={!twoFactorPassword || enableTwoFactorMutation.isPending}
+                  >
+                    Enable 2FA
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={() => generateBackupCodesMutation.mutate()}
+                  disabled={!twoFactorPassword || generateBackupCodesMutation.isPending}
+                >
+                  Generate backup codes
+                </Button>
               </div>
-            ) : null}
-          </div>
+              {backupCodes.length > 0 && (
+                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+                  <div className="font-semibold text-slate-700 dark:text-slate-200">Backup codes</div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                    {backupCodes.map((code) => (
+                      <span key={code} className="rounded bg-white px-2 py-1 dark:bg-slate-800">
+                        {code}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         <div className="space-y-6">
-          <div className="rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Passkeys</h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Add hardware-backed sign-in methods for faster access.
-                </p>
+          <Card>
+            <CardHeader>
+              <CardTitle>Passkeys</CardTitle>
+              <CardDescription>Add hardware-backed sign-in methods for faster access.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap items-center gap-3">
+                <Input
+                  value={passkeyName}
+                  onChange={(e) => setPasskeyName(e.target.value)}
+                  placeholder="Passkey name (optional)"
+                  className="flex-1"
+                />
+                <Button onClick={() => addPasskeyMutation.mutate()} disabled={addPasskeyMutation.isPending}>
+                  Add passkey
+                </Button>
               </div>
-            </div>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <input
-                value={passkeyName}
-                onChange={(event) => setPasskeyName(event.target.value)}
-                placeholder="Passkey name (optional)"
-                className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
-              />
-              <button
-                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
-                onClick={() => addPasskeyMutation.mutate()}
-                disabled={addPasskeyMutation.isPending}
-              >
-                Add passkey
-              </button>
-            </div>
-            <div className="mt-4 space-y-2">
-              {passkeys.length === 0 ? (
-                <div className="text-sm text-slate-500 dark:text-slate-400">No passkeys registered.</div>
-              ) : (
-                passkeys.map((passkey) => (
-                  <div
-                    key={passkey.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-200"
-                  >
-                    {editingPasskeyId === passkey.id ? (
-                      <input
-                        value={editingPasskeyName}
-                        onChange={(event) => setEditingPasskeyName(event.target.value)}
-                        className="rounded border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
-                      />
-                    ) : (
-                      <span>{passkey.name || 'Unnamed passkey'}</span>
-                    )}
-                    <div className="flex items-center gap-2">
-                      {editingPasskeyId === passkey.id ? (
-                        <button
-                          className="text-xs font-semibold text-primary-600 hover:text-primary-500"
-                          onClick={() => updatePasskeyMutation.mutate()}
-                          disabled={!editingPasskeyName}
-                        >
-                          Save
-                        </button>
-                      ) : (
-                        <button
-                          className="text-xs font-semibold text-primary-600 hover:text-primary-500"
-                          onClick={() => {
-                            setEditingPasskeyId(passkey.id);
-                            setEditingPasskeyName(passkey.name || '');
-                          }}
-                        >
-                          Rename
-                        </button>
-                      )}
-                      <button
-                        className="text-xs font-semibold text-rose-500 hover:text-rose-400"
-                        onClick={() => deletePasskeyMutation.mutate(passkey.id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">SSO accounts</h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Manage linked billing or panel providers.
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {availableProviders.map((provider) => (
-                <button
-                  key={provider}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
-                  onClick={() => linkSsoMutation.mutate(provider)}
-                >
-                  Link {provider.toUpperCase()}
-                </button>
-              ))}
-            </div>
-            <div className="mt-4 space-y-2">
-              {(ssoAccounts ?? []).filter((account) => account.providerId !== 'credential').length === 0 ? (
-                <div className="text-sm text-slate-500 dark:text-slate-400">No SSO accounts linked.</div>
-              ) : (
-                (ssoAccounts ?? [])
-                  .filter((account) => account.providerId !== 'credential')
-                  .map((account) => (
+              <div className="mt-4 space-y-2">
+                {passkeys.length === 0 ? (
+                  <div className="text-sm text-slate-500 dark:text-slate-400">No passkeys registered.</div>
+                ) : (
+                  passkeys.map((passkey) => (
                     <div
-                      key={account.id}
+                      key={passkey.id}
                       className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-200"
                     >
-                      <span>
-                        {account.providerId.toUpperCase()} • {account.accountId}
-                      </span>
-                      <button
-                        className="text-xs font-semibold text-rose-500 hover:text-rose-400"
-                        onClick={() =>
-                          unlinkSsoMutation.mutate({ providerId: account.providerId, accountId: account.accountId })
-                        }
-                      >
-                        Unlink
-                      </button>
+                      {editingPasskeyId === passkey.id ? (
+                        <Input
+                          value={editingPasskeyName}
+                          onChange={(e) => setEditingPasskeyName(e.target.value)}
+                          className="h-8 w-auto"
+                        />
+                      ) : (
+                        <span>{passkey.name || 'Unnamed passkey'}</span>
+                      )}
+                      <div className="flex items-center gap-2">
+                        {editingPasskeyId === passkey.id ? (
+                          <button
+                            className="text-xs font-semibold text-primary-600 hover:text-primary-500"
+                            onClick={() => updatePasskeyMutation.mutate()}
+                            disabled={!editingPasskeyName}
+                          >
+                            Save
+                          </button>
+                        ) : (
+                          <button
+                            className="text-xs font-semibold text-primary-600 hover:text-primary-500"
+                            onClick={() => {
+                              setEditingPasskeyId(passkey.id);
+                              setEditingPasskeyName(passkey.name || '');
+                            }}
+                          >
+                            Rename
+                          </button>
+                        )}
+                        <button
+                          className="text-xs font-semibold text-rose-500 hover:text-rose-400"
+                          onClick={() => deletePasskeyMutation.mutate(passkey.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   ))
-              )}
-            </div>
-          </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>SSO accounts</CardTitle>
+              <CardDescription>Manage linked billing or panel providers.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {availableProviders.map((provider) => (
+                  <Button key={provider} variant="outline" onClick={() => linkSsoMutation.mutate(provider)}>
+                    Link {provider.toUpperCase()}
+                  </Button>
+                ))}
+              </div>
+              <div className="mt-4 space-y-2">
+                {(ssoAccounts ?? []).filter((account) => account.providerId !== 'credential').length === 0 ? (
+                  <div className="text-sm text-slate-500 dark:text-slate-400">No SSO accounts linked.</div>
+                ) : (
+                  (ssoAccounts ?? [])
+                    .filter((account) => account.providerId !== 'credential')
+                    .map((account) => (
+                      <div
+                        key={account.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-200"
+                      >
+                        <span>
+                          {account.providerId.toUpperCase()} • {account.accountId}
+                        </span>
+                        <button
+                          className="text-xs font-semibold text-rose-500 hover:text-rose-400"
+                          onClick={() =>
+                            unlinkSsoMutation.mutate({ providerId: account.providerId, accountId: account.accountId })
+                          }
+                        >
+                          Unlink
+                        </button>
+                      </div>
+                    ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
+
+      <Dialog open={twoFactorModalOpen} onOpenChange={setTwoFactorModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Set up authenticator</DialogTitle>
+            <DialogDescription>
+              Scan the QR code in your authenticator app to finish enabling TOTP.
+            </DialogDescription>
+          </DialogHeader>
+          {qrValue && (
+            <img
+              src={qrValue}
+              alt="TOTP QR code"
+              className="w-full rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"
+            />
+          )}
+          {twoFactorSetup?.otpAuthUrl && (
+            <a
+              href={twoFactorSetup.otpAuthUrl}
+              className="block text-xs font-medium text-primary-600 hover:text-primary-500"
+            >
+              Open in authenticator app
+            </a>
+          )}
+          {twoFactorSetup?.secret && (
+            <div className="text-xs text-slate-600 dark:text-slate-300">
+              Manual code: <span className="font-semibold">{twoFactorSetup.secret}</span>
+            </div>
+          )}
+          {twoFactorSetup?.backupCodes?.length && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+              <div className="font-semibold text-slate-700 dark:text-slate-200">Backup codes</div>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                {twoFactorSetup.backupCodes.map((code) => (
+                  <span key={code} className="rounded bg-white px-2 py-1 dark:bg-slate-800">
+                    {code}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          <Button
+            onClick={() => {
+              setTwoFactorModalOpen(false);
+              setTwoFactorSetup(null);
+            }}
+          >
+            Done
+          </Button>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import EmptyState from '../../components/shared/EmptyState';
-import Input from '../../components/ui/input';
+import { Input } from '../../components/ui/input';
 import { rolesApi } from '../../services/api/roles';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { NodeAssignmentsSelector } from '../../components/admin/NodeAssignmentsSelector';
