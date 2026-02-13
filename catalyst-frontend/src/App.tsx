@@ -165,7 +165,7 @@ function App() {
             <Route
               path="admin/servers"
               element={
-                <ProtectedRoute requirePermissions={['server.read', 'server.create', 'server.delete', 'admin.read', 'admin.write']}>
+                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']} redirectTo="/servers">
                   <AdminServersPage />
                 </ProtectedRoute>
               }

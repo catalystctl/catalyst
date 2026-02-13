@@ -24,6 +24,11 @@ function DashboardPage() {
     user?.permissions?.includes('*') ||
     user?.permissions?.includes('admin.write') ||
     user?.permissions?.includes('server.create');
+  
+  const isAdmin =
+    user?.permissions?.includes('*') ||
+    user?.permissions?.includes('admin.write') ||
+    user?.permissions?.includes('admin.read');
 
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
   const { data: activities, isLoading: activitiesLoading } = useDashboardActivity(5);
@@ -79,20 +84,36 @@ function DashboardPage() {
       show: canCreateServer,
     },
     {
+      title: 'View Servers',
+      description: 'Manage your servers',
+      icon: Server,
+      href: '/servers',
+      color: 'bg-emerald-500',
+      show: !canCreateServer,
+    },
+    {
       title: 'Register Node',
       description: 'Add infrastructure',
       icon: HardDrive,
       href: '/admin/nodes',
       color: 'bg-emerald-500',
-      show: true,
+      show: isAdmin,
     },
     {
       title: 'View Alerts',
       description: alertsUnacked > 0 ? `${alertsUnacked} need attention` : 'All clear',
       icon: Shield,
-      href: '/admin/alerts',
+      href: isAdmin ? '/admin/alerts' : '/profile',
       color: alertsUnacked > 0 ? 'bg-rose-500' : 'bg-slate-500',
-      show: true,
+      show: isAdmin,
+    },
+    {
+      title: 'Profile Settings',
+      description: 'Manage your account',
+      icon: Activity,
+      href: '/profile',
+      color: 'bg-violet-500',
+      show: !isAdmin,
     },
   ].filter((action) => action.show);
 
@@ -123,7 +144,7 @@ function DashboardPage() {
             </div>
           </div>
 
-          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className={`mt-8 grid grid-cols-1 gap-4 ${isAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
             <Link
               to="/servers"
               className="group flex items-center gap-4 rounded-2xl bg-white/10 p-4 backdrop-blur-sm transition-all hover:bg-white/20"
@@ -144,45 +165,67 @@ function DashboardPage() {
               <ArrowRight className="h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
             </Link>
 
-            <Link
-              to="/admin/nodes"
-              className="group flex items-center gap-4 rounded-2xl bg-white/10 p-4 backdrop-blur-sm transition-all hover:bg-white/20"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20">
-                <HardDrive className="h-6 w-6" />
-              </div>
-              <div className="flex-1">
-                {statsLoading ? (
-                  <Skeleton className="h-8 w-16 bg-white/20" />
-                ) : (
-                  <div className="text-3xl font-bold">{nodesTotal}</div>
-                )}
-                <div className="text-sm text-primary-200">
-                  {nodesOnline} connected
+            {isAdmin && (
+              <Link
+                to="/admin/nodes"
+                className="group flex items-center gap-4 rounded-2xl bg-white/10 p-4 backdrop-blur-sm transition-all hover:bg-white/20"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20">
+                  <HardDrive className="h-6 w-6" />
                 </div>
-              </div>
-              <ArrowRight className="h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
-            </Link>
+                <div className="flex-1">
+                  {statsLoading ? (
+                    <Skeleton className="h-8 w-16 bg-white/20" />
+                  ) : (
+                    <div className="text-3xl font-bold">{nodesTotal}</div>
+                  )}
+                  <div className="text-sm text-primary-200">
+                    {nodesOnline} connected
+                  </div>
+                </div>
+                <ArrowRight className="h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
+              </Link>
+            )}
 
-            <Link
-              to="/admin/alerts"
-              className="group flex items-center gap-4 rounded-2xl bg-white/10 p-4 backdrop-blur-sm transition-all hover:bg-white/20"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20">
-                <AlertTriangle className="h-6 w-6" />
-              </div>
-              <div className="flex-1">
-                {statsLoading ? (
-                  <Skeleton className="h-8 w-16 bg-white/20" />
-                ) : (
-                  <div className="text-3xl font-bold">{stats?.alerts ?? 0}</div>
-                )}
-                <div className="text-sm text-primary-200">
-                  {alertsUnacked > 0 ? `${alertsUnacked} unacknowledged` : 'All resolved'}
+            {isAdmin && (
+              <Link
+                to="/admin/alerts"
+                className="group flex items-center gap-4 rounded-2xl bg-white/10 p-4 backdrop-blur-sm transition-all hover:bg-white/20"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20">
+                  <AlertTriangle className="h-6 w-6" />
                 </div>
-              </div>
-              <ArrowRight className="h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
-            </Link>
+                <div className="flex-1">
+                  {statsLoading ? (
+                    <Skeleton className="h-8 w-16 bg-white/20" />
+                  ) : (
+                    <div className="text-3xl font-bold">{stats?.alerts ?? 0}</div>
+                  )}
+                  <div className="text-sm text-primary-200">
+                    {alertsUnacked > 0 ? `${alertsUnacked} unacknowledged` : 'All resolved'}
+                  </div>
+                </div>
+                <ArrowRight className="h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
+              </Link>
+            )}
+
+            {!isAdmin && (
+              <Link
+                to="/profile"
+                className="group flex items-center gap-4 rounded-2xl bg-white/10 p-4 backdrop-blur-sm transition-all hover:bg-white/20"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20">
+                  <Activity className="h-6 w-6" />
+                </div>
+                <div className="flex-1">
+                  <div className="text-3xl font-bold">Account</div>
+                  <div className="text-sm text-primary-200">
+                    Manage your profile
+                  </div>
+                </div>
+                <ArrowRight className="h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -278,13 +321,15 @@ function DashboardPage() {
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
               Recent Activity
             </h2>
-            <Link
-              to="/admin/audit-logs"
-              className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-            >
-              View all
-              <ArrowRight className="h-3 w-3" />
-            </Link>
+            {isAdmin && (
+              <Link
+                to="/admin/audit-logs"
+                className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+              >
+                View all
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+            )}
           </div>
 
           <div className="mt-4">

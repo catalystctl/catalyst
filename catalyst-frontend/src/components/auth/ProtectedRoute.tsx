@@ -61,9 +61,10 @@ type Props = {
   requireAdmin?: boolean;
   requireAdminWrite?: boolean;
   requirePermissions?: string[];
+  redirectTo?: string;
 };
 
-function ProtectedRoute({ children, requireAdmin, requireAdminWrite, requirePermissions }: Props) {
+function ProtectedRoute({ children, requireAdmin, requireAdminWrite, requirePermissions, redirectTo }: Props) {
   const location = useLocation();
   const { isAuthenticated, isReady, user } = useAuthStore();
   const userPermissions = user?.permissions || [];
@@ -88,15 +89,15 @@ function ProtectedRoute({ children, requireAdmin, requireAdminWrite, requirePerm
   }
 
   if (requireAdminWrite && !hasAdminWrite) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={redirectTo ?? '/dashboard'} replace />;
   }
 
   if (requirePermissions && !hasRequiredAccess) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={redirectTo ?? '/dashboard'} replace />;
   }
 
   if (requireAdmin && !hasAdminAccess) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={redirectTo ?? '/dashboard'} replace />;
   }
 
   return children;
