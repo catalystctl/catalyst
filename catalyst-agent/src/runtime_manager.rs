@@ -383,8 +383,9 @@ impl ContainerdRuntime {
             "TERM=xterm".to_string(),
         ];
         for (k, v) in env { env_list.push(format!("{}={}", k, v)); }
-        // Keep container capabilities minimal; many images drop privileges via setuid/setgid.
-        let caps = ["CAP_CHOWN", "CAP_SETUID", "CAP_SETGID", "CAP_NET_BIND_SERVICE"];
+        // Install containers need broader capabilities than runtime containers because
+        // install scripts commonly fix file ownership/permissions for the runtime user.
+        let caps = ["CAP_CHOWN", "CAP_FOWNER", "CAP_DAC_OVERRIDE", "CAP_SETUID", "CAP_SETGID", "CAP_NET_BIND_SERVICE"];
 
         // Build mounts including DNS resolv.conf
         let mut mounts = base_mounts(data_dir);
@@ -395,11 +396,19 @@ impl ContainerdRuntime {
             "options": ["rbind", "rw"]
         }));
 
+        // Wrap the install script so all files are chowned to the runtime user (1000:1000)
+        // after the user-provided script completes. The installer runs as root but the
+        // runtime container runs as 1000:1000, so files must be accessible.
+        let wrapped_script = format!(
+            "{}\n\necho '[Catalyst] Fixing file ownership for runtime user...'\nchown -R 1000:1000 /data",
+            script
+        );
+
         let spec = serde_json::json!({
             "ociVersion": "1.1.0",
             "process": {
                 "terminal": false, "user": {"uid":0,"gid":0},
-                "args": ["sh", "-c", script], "env": env_list,
+                "args": ["sh", "-c", &wrapped_script], "env": env_list,
                 "cwd": "/data",
                 "capabilities":{"bounding":caps,"effective":caps,"permitted":caps,"ambient":caps},
                 "noNewPrivileges": true
@@ -1159,6 +1168,8 @@ impl ContainerdRuntime {
             );
         }
         env_map.insert("TERM".to_string(), "xterm".to_string());
+        // Runtime container runs as 1000:1000; set HOME to the data dir
+        env_map.insert("HOME".to_string(), "/data".to_string());
         let env_list: Vec<String> = env_map.into_iter().map(|(k, v)| format!("{}={}", k, v)).collect();
 
         let args = if !config.startup_command.is_empty() {
@@ -1175,8 +1186,8 @@ impl ContainerdRuntime {
         let mem_limit = (config.memory_mb as i64) * 1024 * 1024;
         let cpu_quota = (config.cpu_cores as i64) * 100_000;
         let cgroup_path = format!("/{}/{}", self.namespace, config.container_id);
-        // Keep container capabilities minimal; many images drop privileges via setuid/setgid.
-        let caps = ["CAP_CHOWN", "CAP_SETUID", "CAP_SETGID", "CAP_NET_BIND_SERVICE"];
+        // Runtime containers run as non-root (1000:1000) and need minimal capabilities.
+        let caps = ["CAP_NET_BIND_SERVICE"];
         let mut mounts = base_mounts(config.data_dir);
         mounts.push(serde_json::json!({"destination":io_dir.to_string_lossy().to_string(),"type":"bind","source":io_dir.to_string_lossy().to_string(),"options":["rbind","rw"]}));
 
@@ -1212,7 +1223,7 @@ impl ContainerdRuntime {
 
         Ok(serde_json::json!({
             "ociVersion":"1.1.0",
-            "process":{"terminal":false,"user":{"uid":0,"gid":0},"args":args,"env":env_list,"cwd":"/data",
+            "process":{"terminal":false,"user":{"uid":1000,"gid":1000},"args":args,"env":env_list,"cwd":"/data",
                 "capabilities":{"bounding":caps,"effective":caps,"permitted":caps,"ambient":caps},
                 "noNewPrivileges":true,"rlimits":[{"type":"RLIMIT_NOFILE","hard":65536u64,"soft":65536u64}]},
             "root":{"path":"rootfs","readonly":false},"hostname":config.container_id,"mounts":mounts,
