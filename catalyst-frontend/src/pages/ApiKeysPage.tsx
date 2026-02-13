@@ -4,7 +4,7 @@ import { useApiKeys, useDeleteApiKey } from '../hooks/useApiKeys';
 import { ApiKey } from '../services/apiKeys';
 import { CreateApiKeyDialog } from '../components/apikeys/CreateApiKeyDialog';
 import EmptyState from '../components/shared/EmptyState';
-import Input from '../components/ui/input';
+import { Input } from '../components/ui/input';
 
 // Helper to parse metadata which may be double-stringified
 const parseMetadata = (metadata: Record<string, any> | string | null): Record<string, any> | null => {

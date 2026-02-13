@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import EmptyState from '../../components/shared/EmptyState';
-import Input from '../../components/ui/input';
+import { Input } from '../../components/ui/input';
 import { useAdminRoles, useAdminServers, useAdminUsers } from '../../hooks/useAdmin';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';

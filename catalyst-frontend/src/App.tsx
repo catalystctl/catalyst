@@ -20,7 +20,6 @@ import ServerDetailsPage from './pages/servers/ServerDetailsPage';
 import NodeDetailsPage from './pages/nodes/NodeDetailsPage';
 import TemplatesPage from './pages/templates/TemplatesPage';
 import TemplateDetailsPage from './pages/templates/TemplateDetailsPage';
-import AdminTemplatesPage from './pages/admin/TemplatesPage';
 import AdminNodesPage from './pages/admin/NodesPage';
 import AdminServersPage from './pages/admin/ServersPage';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
@@ -166,7 +165,7 @@ function App() {
             <Route
               path="admin/servers"
               element={
-                <ProtectedRoute requirePermissions={['server.read', 'server.create', 'server.delete', 'admin.read', 'admin.write']}>
+                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']} redirectTo="/servers">
                   <AdminServersPage />
                 </ProtectedRoute>
               }
@@ -183,7 +182,9 @@ function App() {
               path="admin/templates"
               element={
                 <ProtectedRoute requirePermissions={['template.read', 'template.create', 'template.update', 'template.delete', 'admin.read', 'admin.write']}>
-                  <AdminTemplatesPage />
+                  <div className="space-y-6">
+                    <TemplatesPage />
+                  </div>
                 </ProtectedRoute>
               }
             />

@@ -14,9 +14,11 @@ export const authApi = {
     values: LoginSchema,
     options?: { forcePasskeyFallback?: boolean },
   ): Promise<{ token: string; user: User; rememberMe?: boolean }> {
+    console.log('[authApi.login] Starting login with email:', values.email);
     let token = '';
     try {
       const forceFallback = Boolean(options?.forcePasskeyFallback);
+      console.log('[authApi.login] Calling authClient.signIn.email');
       const response = await authClient.signIn.email(
         {
           email: values.email,

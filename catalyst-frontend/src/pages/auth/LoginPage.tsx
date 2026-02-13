@@ -1,5 +1,5 @@
 import { type BaseSyntheticEvent, useEffect, useRef, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
@@ -8,6 +8,19 @@ import type { LoginSchema } from '../../validators/auth';
 import { loginSchema } from '../../validators/auth';
 import { authClient } from '../../services/authClient';
 import { notifyError } from '../../utils/notify';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -24,8 +37,13 @@ function LoginPage() {
   const {
     register,
     handleSubmit,
-    formState: { errors },
-  } = useForm<LoginSchema>({ resolver: zodResolver(loginSchema) });
+    control,
+    formState: { errors, isValid },
+  } = useForm<LoginSchema>({ 
+    resolver: zodResolver(loginSchema),
+  });
+  
+  console.log('[LoginPage] Form errors:', errors, 'isValid:', isValid);
 
   const location = useLocation();
   const from = (location.state as { from?: { pathname?: string } } | undefined)?.from?.pathname;
@@ -41,19 +59,8 @@ function LoginPage() {
   };
 
   const applyPasskeySession = async (data?: any, tokenOverride?: string | null) => {
-    // Extract token from session if not provided as override
     const token = tokenOverride || data?.session?.token || null;
-    
-    console.log('[LoginPage] applyPasskeySession called', {
-      hasData: !!data,
-      hasTokenOverride: !!tokenOverride,
-      hasSessionToken: !!data?.session?.token,
-      extractedToken: token ? 'yes' : 'no',
-      dataKeys: data ? Object.keys(data) : [],
-      hasUser: !!data?.user,
-      fullData: data,
-    });
-    
+
     if (token) {
       const rememberMe = localStorage.getItem('catalyst-remember-me') === 'true';
       if (rememberMe) {
@@ -63,35 +70,26 @@ function LoginPage() {
         sessionStorage.setItem('catalyst-session-token', token);
         localStorage.removeItem('catalyst-auth-token');
       }
-      console.log('[LoginPage] Token saved to storage', { rememberMe, tokenLength: token.length });
-      
-      // CRITICAL: Set token in Zustand store immediately so WebSocket can use it
       useAuthStore.setState({ token });
-      console.log('[LoginPage] Token set in Zustand store');
     }
-    
+
     if (data?.user) {
-      // Now set the session with user and authenticated status
       setSession({ user: data.user });
       useAuthStore.setState({ isAuthenticated: true });
-      console.log('[LoginPage] User session and authentication status set');
-      // Ensure we hydrate permissions immediately (better-auth user object does not include Catalyst RBAC).
       await syncPasskeySession();
       return true;
     }
-    
-    console.log('[LoginPage] No user in data, calling syncPasskeySession');
+
     return syncPasskeySession();
   };
 
-  const onSubmit = async (
-    values: LoginSchema,
-    fallbackOverride?: boolean | BaseSyntheticEvent,
-  ) => {
+  const onSubmit = async (values: LoginSchema, fallbackOverride?: boolean | BaseSyntheticEvent) => {
+    console.log('[LoginPage] onSubmit called with values:', values);
     const allowFallback =
       typeof fallbackOverride === 'boolean' ? fallbackOverride : allowPasskeyFallback;
     try {
       if (!values.email || !values.password) {
+        console.log('[LoginPage] No email/password, setting passkey step');
         setAuthStep('passkey');
         return;
       }
@@ -100,10 +98,7 @@ function LoginPage() {
         { ...values, allowPasskeyFallback: Boolean(allowFallback) },
         allowFallback ? { forcePasskeyFallback: true } : undefined,
       );
-      // Redirect on successful login
-      setTimeout(() => {
-        navigate(from || '/servers');
-      }, 100);
+      setTimeout(() => navigate(from || '/servers'), 100);
       setLastRememberMe(values.rememberMe);
     } catch (err) {
       if ((err as any).code === 'PASSKEY_REQUIRED') {
@@ -123,23 +118,15 @@ function LoginPage() {
       await authClient.signIn.passkey({
         fetchOptions: {
           onError(context) {
-            if (context.error?.code === 'AUTH_CANCELLED' || context.error?.name === 'AbortError') {
+            if (context.error?.code === 'AUTH_CANCELLED' || context.error?.name === 'AbortError')
               return;
-            }
             notifyError(context.error?.message || 'Passkey sign-in failed');
           },
           onSuccess(context) {
             const token = context.response?.headers?.get?.('set-auth-token') || null;
-            console.log('[LoginPage] Passkey onSuccess', {
-              hasData: !!context.data,
-              hasToken: !!token,
-              contextData: context.data,
-            });
             void applyPasskeySession(context.data, token).then(() => {
               setAuthStep(null);
-              setTimeout(() => {
-                navigate(from || '/servers');
-              }, 100);
+              setTimeout(() => navigate(from || '/servers'), 100);
             });
           },
         },
@@ -156,44 +143,38 @@ function LoginPage() {
   };
 
   useEffect(() => {
-    if (passkeyAutoFillAttempted.current) {
+    if (passkeyAutoFillAttempted.current) return;
+    if (
+      typeof window === 'undefined' ||
+      !window.PublicKeyCredential?.isConditionalMediationAvailable
+    )
       return;
-    }
-    if (!PublicKeyCredential?.isConditionalMediationAvailable) {
-      return;
-    }
-    void PublicKeyCredential.isConditionalMediationAvailable().then((isAvailable) => {
+    void window.PublicKeyCredential.isConditionalMediationAvailable().then((isAvailable) => {
       if (!isAvailable) return;
       passkeyAutoFillAttempted.current = true;
-      return authClient.signIn.passkey({
-        autoFill: true,
-        fetchOptions: {
-          onError(context) {
-            if (context.error?.code === 'AUTH_CANCELLED' || context.error?.name === 'AbortError') {
-              return;
-            }
-            notifyError(context.error?.message || 'Passkey sign-in failed');
+      return authClient.signIn
+        .passkey({
+          autoFill: true,
+          fetchOptions: {
+            onError(context) {
+              if (context.error?.code === 'AUTH_CANCELLED' || context.error?.name === 'AbortError')
+                return;
+              notifyError(context.error?.message || 'Passkey sign-in failed');
+            },
+            onSuccess(context) {
+              const token = context.response?.headers?.get?.('set-auth-token') || null;
+              void applyPasskeySession(context.data, token).then(() => {
+                setAuthStep(null);
+                setAllowPasskeyFallback(false);
+                setTimeout(() => navigate(from || '/servers'), 100);
+              });
+            },
           },
-          onSuccess(context) {
-            const token = context.response?.headers?.get?.('set-auth-token') || null;
-            void applyPasskeySession(context.data, token).then(() => {
-              setAuthStep(null);
-              setAllowPasskeyFallback(false);
-              setTimeout(() => {
-                navigate(from || '/servers');
-              }, 100);
-            });
-          },
-        },
         })
         .catch((err: any) => {
-          if (err?.code === 'AUTH_CANCELLED' || err?.name === 'AbortError') {
-            return;
-          }
+          if (err?.code === 'AUTH_CANCELLED' || err?.name === 'AbortError') return;
         })
-        .finally(() => {
-          setPasskeySubmitting(false);
-        });
+        .finally(() => setPasskeySubmitting(false));
     });
   }, []);
 
@@ -201,7 +182,7 @@ function LoginPage() {
     try {
       await authApi.signInWithProvider(providerId);
     } catch {
-      // handled by redirect plugin
+      return;
     }
   };
 
@@ -213,19 +194,15 @@ function LoginPage() {
     setTotpSubmitting(true);
     setTotpError(null);
     try {
-      await verifyTwoFactor({
-        code: totpCode,
-        trustDevice: totpTrustDevice,
-        rememberMe: lastRememberMe,
-      });
+      await verifyTwoFactor({ code: totpCode, trustDevice: totpTrustDevice });
       setAuthStep(null);
       setTotpCode('');
       setTotpTrustDevice(false);
-      setTimeout(() => {
-        navigate(from || '/servers');
-      }, 100);
+      setTimeout(() => navigate(from || '/servers'), 100);
     } catch (err: any) {
-      setTotpError(err?.response?.data?.message || err?.message || 'Two-factor verification failed');
+      setTotpError(
+        err?.response?.data?.message || err?.message || 'Two-factor verification failed',
+      );
     } finally {
       setTotpSubmitting(false);
     }
@@ -233,180 +210,181 @@ function LoginPage() {
 
   return (
     <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex flex-col items-center text-center">
-          <img src="/logo.png" alt="Catalyst logo" className="h-12 w-12" />
-          <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
-            Catalyst Panel
-          </span>
-        </div>
-        <h1 className="mt-6 text-2xl font-semibold text-slate-900 dark:text-white">Welcome back</h1>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-          Sign in to manage your servers.
-        </p>
+      <Card className="w-full max-w-md">
+        <CardContent className="px-6 py-8">
+          <div className="flex flex-col items-center text-center">
+            <img src="/logo.png" alt="Catalyst logo" className="h-12 w-12" />
+            <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+              Catalyst Panel
+            </span>
+          </div>
+          <h1 className="mt-6 text-2xl font-semibold text-slate-900 dark:text-white">
+            Welcome back
+          </h1>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+            Sign in to manage your servers.
+          </p>
 
-        {error && !authStep ? (
-          <div className="mt-4 rounded-lg border border-rose-200 bg-rose-100/60 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
-            {error}
-          </div>
-        ) : null}
-        {authStep === 'passkey' ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-            <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-xl dark:border-slate-800 dark:bg-slate-900">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Passkey required</h2>
-              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                This account requires a passkey. Use your saved passkey to continue.
-              </p>
-              <button
-                type="button"
-                className="mt-4 w-full rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-70"
-                onClick={handlePasskeySignIn}
-                disabled={passkeySubmitting}
-              >
-                {passkeySubmitting ? 'Waiting for passkey…' : 'Use passkey'}
-              </button>
-              <button
-                type="button"
-                className="mt-3 w-full text-sm font-medium text-slate-600 transition-all duration-300 hover:text-primary-600 dark:text-slate-300 dark:hover:text-primary-400"
-                onClick={() => {
-                  setAllowPasskeyFallback(true);
-                  void handleSubmit((values) =>
-                    onSubmit({ ...values, allowPasskeyFallback: true }, true),
-                  )();
-                }}
-                disabled={passkeySubmitting}
-              >
-                Use another way
-              </button>
+          {error && !authStep && (
+            <Alert variant="destructive" className="mt-4">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          <form className="mt-6 space-y-4" onSubmit={(e) => {
+            console.log('[LoginPage] Form submit event triggered', e);
+            return handleSubmit(onSubmit)(e);
+          }}>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="username webauthn"
+                placeholder="you@example.com"
+                {...register('email')}
+              />
+              {errors.email && <p className="text-xs text-red-400">{errors.email.message}</p>}
             </div>
-          </div>
-        ) : null}
-        {authStep === 'totp' ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-            <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-xl dark:border-slate-800 dark:bg-slate-900">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                Two-factor verification
-              </h2>
-              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                Enter the code from your authenticator app or backup code.
-              </p>
-              {totpError ? (
-                <div className="mt-3 rounded-lg border border-rose-200 bg-rose-100/60 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
-                  {totpError}
-                </div>
-              ) : null}
-              <div className="mt-4 space-y-3">
-                <input
-                  type="text"
-                  value={totpCode}
-                  onChange={(event) => setTotpCode(event.target.value)}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
-                  placeholder="123456"
-                />
-                <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    className="rounded border-slate-300"
-                    checked={totpTrustDevice}
-                    onChange={(event) => setTotpTrustDevice(event.target.checked)}
-                  />
-                  Trust this device for 30 days
-                </label>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs font-medium text-primary-600 transition-all duration-300 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+                >
+                  Forgot password?
+                </Link>
               </div>
-              <button
-                type="button"
-                className="mt-4 w-full rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-70"
-                onClick={handleTotpSubmit}
-                disabled={totpSubmitting}
-              >
-                {totpSubmitting ? 'Verifying…' : 'Verify'}
-              </button>
+              <Input
+                id="password"
+                type="password"
+                autoComplete="current-password webauthn"
+                placeholder="••••••••"
+                {...register('password')}
+              />
+              {errors.password && <p className="text-xs text-red-400">{errors.password.message}</p>}
             </div>
-          </div>
-        ) : null}
 
-        <form className="mt-6 space-y-4" onSubmit={handleSubmit(onSubmit)}>
-          <div className="space-y-2">
-            <label className="block text-sm text-slate-600 dark:text-slate-300" htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="username webauthn"
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
-              placeholder="you@example.com"
-              {...register('email')}
-            />
-            {errors.email ? <p className="text-xs text-red-400">{errors.email.message}</p> : null}
-          </div>
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={isLoading || authStep === 'passkey'}
+              onClick={() => console.log('[LoginPage] Button clicked! isLoading:', isLoading, 'authStep:', authStep)}
+            >
+              {isLoading ? 'Signing in…' : 'Sign in'}
+            </Button>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="block text-sm text-slate-600 dark:text-slate-300" htmlFor="password">
-                Password
-              </label>
-              <Link
-                to="/forgot-password"
-                className="text-xs font-medium text-primary-600 transition-all duration-300 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
-              >
-                Forgot password?
-              </Link>
+            <div className="flex items-center gap-2">
+              <Controller
+                name="rememberMe"
+                control={control}
+                render={({ field }) => (
+                  <Checkbox
+                    id="rememberMe"
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                )}
+              />
+              <Label htmlFor="rememberMe" className="text-sm font-normal">
+                Remember me
+              </Label>
             </div>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password webauthn"
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
-              placeholder="••••••••"
-              {...register('password')}
-            />
-            {errors.password ? (
-              <p className="text-xs text-red-400">{errors.password.message}</p>
-            ) : null}
+          </form>
+
+          <div className="mt-4">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handlePasskeySignIn}
+              disabled={passkeySubmitting}
+            >
+              {passkeySubmitting ? 'Waiting for passkey…' : 'Sign in with passkey'}
+            </Button>
           </div>
 
-          <button
-            type="submit"
-            className="w-full rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-70"
-            disabled={isLoading || authStep === 'passkey'}
-          >
-            {isLoading ? 'Signing in…' : 'Sign in'}
-          </button>
-          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-            <input type="checkbox" className="rounded border-slate-300" {...register('rememberMe')} />
-            Remember me
-          </label>
-        </form>
+          <div className="mt-6 space-y-2">
+            <Button variant="outline" className="w-full" onClick={() => handleProvider('whmcs')}>
+              Continue with WHMCS
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => handleProvider('paymenter')}
+            >
+              Continue with Paymenter
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-        <div className="mt-4">
-          <button
-            type="button"
-            className="w-full rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition-all duration-300 hover:border-primary-500 dark:border-slate-700 dark:text-slate-200"
-            onClick={handlePasskeySignIn}
-            disabled={passkeySubmitting}
-          >
-            {passkeySubmitting ? 'Waiting for passkey…' : 'Sign in with passkey'}
-          </button>
-        </div>
+      <Dialog open={authStep === 'passkey'} onOpenChange={() => setAuthStep(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Passkey required</DialogTitle>
+            <DialogDescription>
+              This account requires a passkey. Use your saved passkey to continue.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Button className="w-full" onClick={handlePasskeySignIn} disabled={passkeySubmitting}>
+              {passkeySubmitting ? 'Waiting for passkey…' : 'Use passkey'}
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full"
+              onClick={() => {
+                setAllowPasskeyFallback(true);
+                void handleSubmit((values) =>
+                  onSubmit({ ...values, allowPasskeyFallback: true }, true),
+                )();
+              }}
+              disabled={passkeySubmitting}
+            >
+              Use another way
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-        <div className="mt-6 space-y-2">
-          <button
-            type="button"
-            className="w-full rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition-all duration-300 hover:border-primary-500 dark:border-slate-700 dark:text-slate-200"
-            onClick={() => handleProvider('whmcs')}
-          >
-            Continue with WHMCS
-          </button>
-          <button
-            type="button"
-            className="w-full rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition-all duration-300 hover:border-primary-500 dark:border-slate-700 dark:text-slate-200"
-            onClick={() => handleProvider('paymenter')}
-          >
-            Continue with Paymenter
-          </button>
-        </div>
-      </div>
+      <Dialog open={authStep === 'totp'} onOpenChange={() => setAuthStep(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Two-factor verification</DialogTitle>
+            <DialogDescription>
+              Enter the code from your authenticator app or backup code.
+            </DialogDescription>
+          </DialogHeader>
+          {totpError && (
+            <Alert variant="destructive">
+              <AlertDescription>{totpError}</AlertDescription>
+            </Alert>
+          )}
+          <div className="space-y-3">
+            <Input
+              type="text"
+              value={totpCode}
+              onChange={(e) => setTotpCode(e.target.value)}
+              placeholder="123456"
+            />
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="trustDevice"
+                checked={totpTrustDevice}
+                onCheckedChange={(checked) => setTotpTrustDevice(checked as boolean)}
+              />
+              <Label htmlFor="trustDevice" className="text-sm font-normal">
+                Trust this device for 30 days
+              </Label>
+            </div>
+            <Button className="w-full" onClick={handleTotpSubmit} disabled={totpSubmitting}>
+              {totpSubmitting ? 'Verifying…' : 'Verify'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

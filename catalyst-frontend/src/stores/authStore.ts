@@ -40,10 +40,12 @@ export const useAuthStore = create<AuthState>()(
       isRefreshing: false,
       error: null,
       login: async (values, options) => {
+        console.log('[authStore.login] Starting login for:', values.email);
         set({ isLoading: true, error: null });
         try {
-          localStorage.setItem('catalyst-remember-me', values.rememberMe ? 'true' : 'false');
+          console.log('[authStore.login] Calling authApi.login');
           const { user, token } = await authApi.login(values, options);
+          console.log('[authStore.login] authApi.login returned successfully');
           if (token && values.rememberMe) {
             localStorage.setItem('catalyst-auth-token', token);
             sessionStorage.removeItem('catalyst-session-token');
