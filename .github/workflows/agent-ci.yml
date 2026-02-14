@@ -19,7 +19,9 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Install protoc
-        run: apt-get update && apt-get install -y protobuf-compiler
+        run: |
+          apt-get update && apt-get install -y protobuf-compiler
+          which protoc && protoc --version
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -30,15 +32,23 @@ jobs:
 
       - name: Run cargo check
         run: cargo check --manifest-path catalyst-agent/Cargo.toml
+        env:
+          PROTOC: /usr/bin/protoc
 
       - name: Run cargo fmt check
         run: cargo fmt --manifest-path catalyst-agent/Cargo.toml -- --check
+        env:
+          PROTOC: /usr/bin/protoc
 
       - name: Run cargo clippy
         run: cargo clippy --manifest-path catalyst-agent/Cargo.toml -- -D warnings
+        env:
+          PROTOC: /usr/bin/protoc
 
       - name: Run tests
         run: cargo test --manifest-path catalyst-agent/Cargo.toml
+        env:
+          PROTOC: /usr/bin/protoc
 
   build:
     needs: test
@@ -54,7 +64,9 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Install protoc
-        run: apt-get update && apt-get install -y protobuf-compiler
+        run: |
+          apt-get update && apt-get install -y protobuf-compiler
+          which protoc && protoc --version
 
       - name: Install musl tools (for musl target)
         if: matrix.target == 'x86_64-unknown-linux-musl'
@@ -72,6 +84,8 @@ jobs:
         run: |
           cd catalyst-agent
           cargo build --release --target ${{ matrix.target }}
+        env:
+          PROTOC: /usr/bin/protoc
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
