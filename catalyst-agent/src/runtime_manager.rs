@@ -8,32 +8,32 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use containerd_client::services::v1::container::Runtime;
 use containerd_client::services::v1::containers_client::ContainersClient;
 use containerd_client::services::v1::content_client::ContentClient;
+use containerd_client::services::v1::events_client::EventsClient;
 use containerd_client::services::v1::images_client::ImagesClient;
 use containerd_client::services::v1::snapshots::snapshots_client::SnapshotsClient;
-use containerd_client::services::v1::tasks_client::TasksClient;
-use containerd_client::services::v1::events_client::EventsClient;
-use containerd_client::services::v1::{
-    Container, CreateContainerRequest, DeleteContainerRequest, GetContainerRequest,
-    InfoRequest, ListContainersRequest, ReadContentRequest,
-};
-use containerd_client::services::v1::{
-    CreateTaskRequest, DeleteTaskRequest, ExecProcessRequest,
-    KillRequest as TaskKillRequest, StartRequest, WaitRequest,
-};
-use containerd_client::services::v1::container::Runtime;
-use containerd_client::services::v1::GetImageRequest;
 use containerd_client::services::v1::snapshots::{
-    PrepareSnapshotRequest, RemoveSnapshotRequest, MountsRequest,
+    MountsRequest, PrepareSnapshotRequest, RemoveSnapshotRequest,
 };
+use containerd_client::services::v1::tasks_client::TasksClient;
+use containerd_client::services::v1::GetImageRequest;
 use containerd_client::services::v1::SubscribeRequest;
+use containerd_client::services::v1::{
+    Container, CreateContainerRequest, DeleteContainerRequest, GetContainerRequest, InfoRequest,
+    ListContainersRequest, ReadContentRequest,
+};
+use containerd_client::services::v1::{
+    CreateTaskRequest, DeleteTaskRequest, ExecProcessRequest, KillRequest as TaskKillRequest,
+    StartRequest, WaitRequest,
+};
 use containerd_client::with_namespace;
 use prost_types::Any;
-use tonic::Request;
 use tokio::process::Command;
 use tokio::sync::Mutex;
 use tokio::task::spawn_blocking;
+use tonic::Request;
 use tracing::{debug, error, info, warn};
 
 use nix::errno::Errno;
@@ -58,9 +58,9 @@ fn discover_cni_bin_dir() -> &'static str {
     const REQUIRED_PLUGINS: &[&str] = &["bridge", "host-local", "macvlan"];
 
     for dir in CNI_BIN_DIRS {
-        let has_all = REQUIRED_PLUGINS.iter().all(|plugin| {
-            Path::new(&format!("{}/{}", dir, plugin)).exists()
-        });
+        let has_all = REQUIRED_PLUGINS
+            .iter()
+            .all(|plugin| Path::new(&format!("{}/{}", dir, plugin)).exists());
         if has_all {
             return dir;
         }
@@ -167,12 +167,16 @@ impl InstallerHandle {
 
     pub async fn cleanup(&self) -> AgentResult<()> {
         let mut tasks = TasksClient::new(self.channel.clone());
-        let req = DeleteTaskRequest { container_id: self.container_id.clone() };
+        let req = DeleteTaskRequest {
+            container_id: self.container_id.clone(),
+        };
         let req = with_namespace!(req, &self.namespace);
         let _ = tasks.delete(req).await;
 
         let mut containers = ContainersClient::new(self.channel.clone());
-        let req = DeleteContainerRequest { id: self.container_id.clone() };
+        let req = DeleteContainerRequest {
+            id: self.container_id.clone(),
+        };
         let req = with_namespace!(req, &self.namespace);
         let _ = containers.delete(req).await;
 
@@ -201,12 +205,20 @@ pub struct ContainerdRuntime {
 
 impl ContainerdRuntime {
     /// Connect to containerd socket and create runtime
-    pub async fn new(socket_path: PathBuf, namespace: String, dns_servers: Vec<String>) -> AgentResult<Self> {
+    pub async fn new(
+        socket_path: PathBuf,
+        namespace: String,
+        dns_servers: Vec<String>,
+    ) -> AgentResult<Self> {
         let channel = containerd_client::connect(&socket_path)
             .await
-            .map_err(|e| AgentError::ContainerError(format!(
-                "Failed to connect to containerd at {}: {}", socket_path.display(), e
-            )))?;
+            .map_err(|e| {
+                AgentError::ContainerError(format!(
+                    "Failed to connect to containerd at {}: {}",
+                    socket_path.display(),
+                    e
+                ))
+            })?;
         info!("Connected to containerd at {}", socket_path.display());
         info!("DNS servers configured for containers: {:?}", dns_servers);
         Ok(Self {
@@ -221,7 +233,10 @@ impl ContainerdRuntime {
     /// Create and start a container via containerd gRPC
     pub async fn create_container(&self, config: ContainerConfig<'_>) -> AgentResult<String> {
         let qualified_image = Self::qualify_image_ref(config.image);
-        info!("Creating container: {} from image: {}", config.container_id, qualified_image);
+        info!(
+            "Creating container: {} from image: {}",
+            config.container_id, qualified_image
+        );
 
         self.ensure_image(config.image).await?;
 
@@ -230,28 +245,37 @@ impl ContainerdRuntime {
 
         // Prepare I/O paths
         let io_dir = PathBuf::from(CONSOLE_BASE_DIR).join(config.container_id);
-        fs::create_dir_all(&io_dir).map_err(|e|
-            AgentError::ContainerError(format!("Failed to create I/O directory: {}", e)))?;
+        fs::create_dir_all(&io_dir).map_err(|e| {
+            AgentError::ContainerError(format!("Failed to create I/O directory: {}", e))
+        })?;
         set_dir_perms(&io_dir, 0o755);
 
         let stdin_path = io_dir.join("stdin");
         let stdout_path = io_dir.join("stdout");
         let stderr_path = io_dir.join("stderr");
-        if stdin_path.exists() { fs::remove_file(&stdin_path).ok(); }
-        create_fifo(&stdin_path).map_err(|e|
-            AgentError::ContainerError(format!("Failed to create stdin FIFO: {}", e)))?;
-        File::create(&stdout_path).map_err(|e|
-            AgentError::ContainerError(format!("stdout: {}", e)))?;
-        File::create(&stderr_path).map_err(|e|
-            AgentError::ContainerError(format!("stderr: {}", e)))?;
+        if stdin_path.exists() {
+            fs::remove_file(&stdin_path).ok();
+        }
+        create_fifo(&stdin_path).map_err(|e| {
+            AgentError::ContainerError(format!("Failed to create stdin FIFO: {}", e))
+        })?;
+        File::create(&stdout_path)
+            .map_err(|e| AgentError::ContainerError(format!("stdout: {}", e)))?;
+        File::create(&stderr_path)
+            .map_err(|e| AgentError::ContainerError(format!("stderr: {}", e)))?;
 
         let stdin_writer = open_fifo_rdwr(&stdin_path)?;
         {
             let mut io_map = self.container_io.lock().await;
-            io_map.insert(config.container_id.to_string(), ContainerIo {
-                _stdin_fifo: stdin_path.clone(), _stdout_file: stdout_path.clone(),
-                _stderr_file: stderr_path.clone(), stdin_writer: Some(stdin_writer),
-            });
+            io_map.insert(
+                config.container_id.to_string(),
+                ContainerIo {
+                    _stdin_fifo: stdin_path.clone(),
+                    _stdout_file: stdout_path.clone(),
+                    _stderr_file: stderr_path.clone(),
+                    stdin_writer: Some(stdin_writer),
+                },
+            );
         }
 
         // Build OCI spec
@@ -271,14 +295,19 @@ impl ContainerdRuntime {
             id: config.container_id.to_string(),
             image: qualified_image,
             labels: HashMap::from([("catalyst.managed".to_string(), "true".to_string())]),
-            runtime: Some(Runtime { name: RUNTIME_NAME.to_string(), options: None }),
+            runtime: Some(Runtime {
+                name: RUNTIME_NAME.to_string(),
+                options: None,
+            }),
             spec: Some(spec_any),
             snapshot_key: snap_key.clone(),
             snapshotter: "overlayfs".to_string(),
             ..Default::default()
         };
         let mut client = ContainersClient::new(self.channel.clone());
-        let req = CreateContainerRequest { container: Some(container) };
+        let req = CreateContainerRequest {
+            container: Some(container),
+        };
         let req = with_namespace!(req, &self.namespace);
         client.create(req).await.map_err(grpc_err)?;
 
@@ -302,10 +331,17 @@ impl ContainerdRuntime {
 
         // Set up CNI networking before starting
         if !use_host_network {
-            if let Err(e) = self.setup_cni_network(
-                config.container_id, pid, config.network_mode, config.network_ip,
-                config.port, config.port_bindings,
-            ).await {
+            if let Err(e) = self
+                .setup_cni_network(
+                    config.container_id,
+                    pid,
+                    config.network_mode,
+                    config.network_ip,
+                    config.port,
+                    config.port_bindings,
+                )
+                .await
+            {
                 warn!("CNI network setup failed: {}", e);
                 let _ = self.remove_container(config.container_id).await;
                 return Err(AgentError::ContainerError(format!(
@@ -326,13 +362,20 @@ impl ContainerdRuntime {
             let resolv_dest = "/etc/resolv.conf";
             let nsenter_output = Command::new("nsenter")
                 .args(["-t", &pid.to_string(), "-m", "--", "sh", "-c"])
-                .arg(format!("echo '{}' > {}", resolv_content.trim(), resolv_dest))
+                .arg(format!(
+                    "echo '{}' > {}",
+                    resolv_content.trim(),
+                    resolv_dest
+                ))
                 .output()
                 .await;
 
             match nsenter_output {
                 Ok(output) if output.status.success() => {
-                    info!("Updated resolv.conf in container {} with DNS: {:?}", config.container_id, self.dns_servers);
+                    info!(
+                        "Updated resolv.conf in container {} with DNS: {:?}",
+                        config.container_id, self.dns_servers
+                    );
                 }
                 Ok(output) => {
                     warn!(
@@ -342,20 +385,29 @@ impl ContainerdRuntime {
                     );
                 }
                 Err(e) => {
-                    warn!("Failed to run nsenter for resolv.conf update in {}: {}", config.container_id, e);
+                    warn!(
+                        "Failed to run nsenter for resolv.conf update in {}: {}",
+                        config.container_id, e
+                    );
                 }
             }
         }
 
         // Start task
-        let req = StartRequest { container_id: config.container_id.to_string(), ..Default::default() };
+        let req = StartRequest {
+            container_id: config.container_id.to_string(),
+            ..Default::default()
+        };
         let req = with_namespace!(req, &self.namespace);
         tasks.start(req).await.map_err(|e| {
             self.cleanup_io(config.container_id);
             grpc_err(e)
         })?;
 
-        info!("Container created and started: {} (pid {})", config.container_id, pid);
+        info!(
+            "Container created and started: {} (pid {})",
+            config.container_id, pid
+        );
 
         // Configure firewall
         if let Ok(ip) = self.get_container_ip(config.container_id).await {
@@ -378,26 +430,34 @@ impl ContainerdRuntime {
 
     /// Spawn an ephemeral installer container via containerd gRPC
     pub async fn spawn_installer_container(
-        &self, image: &str, script: &str, env: &HashMap<String, String>, data_dir: &str,
+        &self,
+        image: &str,
+        script: &str,
+        env: &HashMap<String, String>,
+        data_dir: &str,
     ) -> AgentResult<InstallerHandle> {
         let container_id = format!("catalyst-installer-{}", uuid::Uuid::new_v4());
         let qualified_image = Self::qualify_image_ref(image);
-        info!("Spawning installer {} with image: {}", container_id, qualified_image);
+        info!(
+            "Spawning installer {} with image: {}",
+            container_id, qualified_image
+        );
         self.ensure_image(image).await?;
 
         let io_dir = PathBuf::from(CONSOLE_BASE_DIR).join(&container_id);
-        fs::create_dir_all(&io_dir).map_err(|e|
-            AgentError::ContainerError(format!("mkdir: {}", e)))?;
+        fs::create_dir_all(&io_dir)
+            .map_err(|e| AgentError::ContainerError(format!("mkdir: {}", e)))?;
         let stdin_path = io_dir.join("stdin");
         let stdout_path = io_dir.join("stdout");
         let stderr_path = io_dir.join("stderr");
-        if stdin_path.exists() { fs::remove_file(&stdin_path).ok(); }
-        create_fifo(&stdin_path).map_err(|e|
-            AgentError::ContainerError(format!("fifo: {}", e)))?;
-        File::create(&stdout_path).map_err(|e|
-            AgentError::ContainerError(format!("stdout: {}", e)))?;
-        File::create(&stderr_path).map_err(|e|
-            AgentError::ContainerError(format!("stderr: {}", e)))?;
+        if stdin_path.exists() {
+            fs::remove_file(&stdin_path).ok();
+        }
+        create_fifo(&stdin_path).map_err(|e| AgentError::ContainerError(format!("fifo: {}", e)))?;
+        File::create(&stdout_path)
+            .map_err(|e| AgentError::ContainerError(format!("stdout: {}", e)))?;
+        File::create(&stderr_path)
+            .map_err(|e| AgentError::ContainerError(format!("stderr: {}", e)))?;
 
         // Create /etc/resolv.conf for DNS resolution using configured DNS servers
         let resolv_path = io_dir.join("resolv.conf");
@@ -406,18 +466,30 @@ impl ContainerdRuntime {
             resolv_content.push_str(&format!("nameserver {}\n", dns));
         }
         resolv_content.push_str("options attempts:3 timeout:2\n");
-        info!("Installer {} resolv.conf:\n{}", container_id, resolv_content);
-        fs::write(&resolv_path, &resolv_content).map_err(|e|
-            AgentError::ContainerError(format!("resolv.conf: {}", e)))?;
+        info!(
+            "Installer {} resolv.conf:\n{}",
+            container_id, resolv_content
+        );
+        fs::write(&resolv_path, &resolv_content)
+            .map_err(|e| AgentError::ContainerError(format!("resolv.conf: {}", e)))?;
 
         let mut env_list = vec![
             "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string(),
             "TERM=xterm".to_string(),
         ];
-        for (k, v) in env { env_list.push(format!("{}={}", k, v)); }
+        for (k, v) in env {
+            env_list.push(format!("{}={}", k, v));
+        }
         // Install containers need broader capabilities than runtime containers because
         // install scripts commonly fix file ownership/permissions for the runtime user.
-        let caps = ["CAP_CHOWN", "CAP_FOWNER", "CAP_DAC_OVERRIDE", "CAP_SETUID", "CAP_SETGID", "CAP_NET_BIND_SERVICE"];
+        let caps = [
+            "CAP_CHOWN",
+            "CAP_FOWNER",
+            "CAP_DAC_OVERRIDE",
+            "CAP_SETUID",
+            "CAP_SETGID",
+            "CAP_NET_BIND_SERVICE",
+        ];
 
         // Build mounts including DNS resolv.conf
         let mut mounts = base_mounts(data_dir);
@@ -454,19 +526,30 @@ impl ContainerdRuntime {
                 "seccomp": default_seccomp_profile()
             }
         });
-        let spec_any = Any { type_url: SPEC_TYPE_URL.to_string(), value: spec.to_string().into_bytes() };
+        let spec_any = Any {
+            type_url: SPEC_TYPE_URL.to_string(),
+            value: spec.to_string().into_bytes(),
+        };
 
         let snap_key = format!("{}-snap", container_id);
         self.prepare_snapshot(&qualified_image, &snap_key).await?;
 
         let container = Container {
-            id: container_id.clone(), image: qualified_image,
-            runtime: Some(Runtime { name: RUNTIME_NAME.to_string(), options: None }),
-            spec: Some(spec_any), snapshot_key: snap_key.clone(),
-            snapshotter: "overlayfs".to_string(), ..Default::default()
+            id: container_id.clone(),
+            image: qualified_image,
+            runtime: Some(Runtime {
+                name: RUNTIME_NAME.to_string(),
+                options: None,
+            }),
+            spec: Some(spec_any),
+            snapshot_key: snap_key.clone(),
+            snapshotter: "overlayfs".to_string(),
+            ..Default::default()
         };
         let mut client = ContainersClient::new(self.channel.clone());
-        let req = CreateContainerRequest { container: Some(container) };
+        let req = CreateContainerRequest {
+            container: Some(container),
+        };
         let req = with_namespace!(req, &self.namespace);
         client.create(req).await.map_err(grpc_err)?;
 
@@ -477,18 +560,25 @@ impl ContainerdRuntime {
             stdin: stdin_path.to_string_lossy().to_string(),
             stdout: stdout_path.to_string_lossy().to_string(),
             stderr: stderr_path.to_string_lossy().to_string(),
-            rootfs: mounts, ..Default::default()
+            rootfs: mounts,
+            ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
         tasks.create(req).await.map_err(grpc_err)?;
 
-        let req = StartRequest { container_id: container_id.clone(), ..Default::default() };
+        let req = StartRequest {
+            container_id: container_id.clone(),
+            ..Default::default()
+        };
         let req = with_namespace!(req, &self.namespace);
         tasks.start(req).await.map_err(grpc_err)?;
 
         Ok(InstallerHandle {
-            container_id, namespace: self.namespace.clone(), channel: self.channel.clone(),
-            stdout_path, stderr_path,
+            container_id,
+            namespace: self.namespace.clone(),
+            channel: self.channel.clone(),
+            stdout_path,
+            stderr_path,
         })
     }
 
@@ -498,7 +588,8 @@ impl ContainerdRuntime {
         // Check if a task already exists for this container
         let mut tasks = TasksClient::new(self.channel.clone());
         let get_req = containerd_client::services::v1::GetRequest {
-            container_id: container_id.to_string(), ..Default::default()
+            container_id: container_id.to_string(),
+            ..Default::default()
         };
         let get_req = with_namespace!(get_req, &self.namespace);
         match tasks.get(get_req).await {
@@ -506,13 +597,21 @@ impl ContainerdRuntime {
                 if let Some(process) = resp.into_inner().process {
                     if process.status == 2 {
                         // Task is already running
-                        info!("Container {} already has a running task, nothing to do", container_id);
+                        info!(
+                            "Container {} already has a running task, nothing to do",
+                            container_id
+                        );
                         let _ = self.ensure_container_io(container_id).await;
                         return Ok(());
                     }
                     // Task exists but is not running (stopped/created) - delete it first
-                    info!("Container {} has a stale task (status={}), deleting before restart", container_id, process.status);
-                    let del_req = DeleteTaskRequest { container_id: container_id.to_string() };
+                    info!(
+                        "Container {} has a stale task (status={}), deleting before restart",
+                        container_id, process.status
+                    );
+                    let del_req = DeleteTaskRequest {
+                        container_id: container_id.to_string(),
+                    };
                     let del_req = with_namespace!(del_req, &self.namespace);
                     let _ = tasks.delete(del_req).await;
                 }
@@ -527,7 +626,10 @@ impl ContainerdRuntime {
 
         let _ = self.ensure_container_io(container_id).await;
         let snap_key = format!("{}-snap", container_id);
-        let mounts = self.get_snapshot_mounts(&snap_key).await.unwrap_or_default();
+        let mounts = self
+            .get_snapshot_mounts(&snap_key)
+            .await
+            .unwrap_or_default();
         let io_dir = PathBuf::from(CONSOLE_BASE_DIR).join(container_id);
 
         let req = CreateTaskRequest {
@@ -535,12 +637,16 @@ impl ContainerdRuntime {
             stdin: io_dir.join("stdin").to_string_lossy().to_string(),
             stdout: io_dir.join("stdout").to_string_lossy().to_string(),
             stderr: io_dir.join("stderr").to_string_lossy().to_string(),
-            rootfs: mounts, ..Default::default()
+            rootfs: mounts,
+            ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
         tasks.create(req).await.map_err(grpc_err)?;
 
-        let req = StartRequest { container_id: container_id.to_string(), ..Default::default() };
+        let req = StartRequest {
+            container_id: container_id.to_string(),
+            ..Default::default()
+        };
         let req = with_namespace!(req, &self.namespace);
         tasks.start(req).await.map_err(grpc_err)?;
         Ok(())
@@ -564,14 +670,24 @@ impl ContainerdRuntime {
         let mut tasks = TasksClient::new(self.channel.clone());
         let sig = parse_signal(signal);
         let req = TaskKillRequest {
-            container_id: container_id.to_string(), signal: sig, all: true, ..Default::default()
+            container_id: container_id.to_string(),
+            signal: sig,
+            all: true,
+            ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
         if let Err(e) = tasks.kill(req).await {
-            if is_not_found(&e) { return Ok(()); }
+            if is_not_found(&e) {
+                return Ok(());
+            }
             return Err(grpc_err(e));
         }
-        match tokio::time::timeout(Duration::from_secs(timeout_secs), self.wait_for_exit(container_id)).await {
+        match tokio::time::timeout(
+            Duration::from_secs(timeout_secs),
+            self.wait_for_exit(container_id),
+        )
+        .await
+        {
             Ok(Ok(_)) | Ok(Err(_)) => {}
             Err(_) => {
                 warn!(
@@ -579,14 +695,19 @@ impl ContainerdRuntime {
                     container_id, timeout_secs, signal
                 );
                 let req = TaskKillRequest {
-                    container_id: container_id.to_string(), signal: 9, all: true, ..Default::default()
+                    container_id: container_id.to_string(),
+                    signal: 9,
+                    all: true,
+                    ..Default::default()
                 };
                 let req = with_namespace!(req, &self.namespace);
                 let _ = tasks.kill(req).await;
                 let _ = self.wait_for_exit(container_id).await;
             }
         }
-        let req = DeleteTaskRequest { container_id: container_id.to_string() };
+        let req = DeleteTaskRequest {
+            container_id: container_id.to_string(),
+        };
         let req = with_namespace!(req, &self.namespace);
         let _ = tasks.delete(req).await;
         Ok(())
@@ -597,15 +718,23 @@ impl ContainerdRuntime {
         let sig = parse_signal(signal);
         let mut tasks = TasksClient::new(self.channel.clone());
         let req = TaskKillRequest {
-            container_id: container_id.to_string(), signal: sig, all: true, ..Default::default()
+            container_id: container_id.to_string(),
+            signal: sig,
+            all: true,
+            ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
         if let Err(e) = tasks.kill(req).await {
-            if is_not_found(&e) { return Ok(()); }
+            if is_not_found(&e) {
+                return Ok(());
+            }
             return Err(grpc_err(e));
         }
-        let _ = tokio::time::timeout(Duration::from_secs(5), self.wait_for_exit(container_id)).await;
-        let req = DeleteTaskRequest { container_id: container_id.to_string() };
+        let _ =
+            tokio::time::timeout(Duration::from_secs(5), self.wait_for_exit(container_id)).await;
+        let req = DeleteTaskRequest {
+            container_id: container_id.to_string(),
+        };
         let req = with_namespace!(req, &self.namespace);
         let _ = tasks.delete(req).await;
         Ok(())
@@ -615,14 +744,17 @@ impl ContainerdRuntime {
     /// This method is designed to NEVER fail - it will always attempt cleanup
     /// and is meant for stuck/unresponsive containers.
     pub async fn force_kill_container(&self, container_id: &str) -> AgentResult<()> {
-        info!("Force killing container: {} with SIGKILL (signal 9)", container_id);
+        info!(
+            "Force killing container: {} with SIGKILL (signal 9)",
+            container_id
+        );
         let mut tasks = TasksClient::new(self.channel.clone());
 
         // Send SIGKILL (signal 9) directly - no parsing, always use numeric value
         let kill_req = TaskKillRequest {
             container_id: container_id.to_string(),
             signal: 9, // SIGKILL - cannot be caught, blocked, or ignored
-            all: true,  // Kill all processes in the container
+            all: true, // Kill all processes in the container
             ..Default::default()
         };
         let kill_req = with_namespace!(kill_req, &self.namespace);
@@ -637,20 +769,24 @@ impl ContainerdRuntime {
                     info!("Container {} not found, already gone", container_id);
                     return Ok(());
                 }
-                warn!("SIGKILL request failed for {}: {}, proceeding with cleanup", container_id, e);
+                warn!(
+                    "SIGKILL request failed for {}: {}, proceeding with cleanup",
+                    container_id, e
+                );
             }
         }
 
         // Wait briefly for exit, but don't block forever
         // SIGKILL should terminate immediately, but we give it 3 seconds max
-        let exit_result = tokio::time::timeout(
-            Duration::from_secs(3),
-            self.wait_for_exit(container_id)
-        ).await;
+        let exit_result =
+            tokio::time::timeout(Duration::from_secs(3), self.wait_for_exit(container_id)).await;
 
         match exit_result {
             Ok(_) => info!("Container {} exited after SIGKILL", container_id),
-            Err(_) => warn!("Container {} did not exit within 3s after SIGKILL, forcing cleanup", container_id),
+            Err(_) => warn!(
+                "Container {} did not exit within 3s after SIGKILL, forcing cleanup",
+                container_id
+            ),
         }
 
         // Always attempt to delete the task regardless of what happened above
@@ -674,27 +810,40 @@ impl ContainerdRuntime {
         let _ = self.teardown_cni_network(container_id).await;
         let mut tasks = TasksClient::new(self.channel.clone());
         let req = TaskKillRequest {
-            container_id: container_id.to_string(), signal: 9, all: true, ..Default::default()
+            container_id: container_id.to_string(),
+            signal: 9,
+            all: true,
+            ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
         let _ = tasks.kill(req).await;
-        let _ = tokio::time::timeout(Duration::from_secs(3), self.wait_for_exit(container_id)).await;
-        let req = DeleteTaskRequest { container_id: container_id.to_string() };
+        let _ =
+            tokio::time::timeout(Duration::from_secs(3), self.wait_for_exit(container_id)).await;
+        let req = DeleteTaskRequest {
+            container_id: container_id.to_string(),
+        };
         let req = with_namespace!(req, &self.namespace);
         let _ = tasks.delete(req).await;
 
         let mut client = ContainersClient::new(self.channel.clone());
-        let req = DeleteContainerRequest { id: container_id.to_string() };
+        let req = DeleteContainerRequest {
+            id: container_id.to_string(),
+        };
         let req = with_namespace!(req, &self.namespace);
         let _ = client.delete(req).await;
 
         let snap_key = format!("{}-snap", container_id);
         let mut snaps = SnapshotsClient::new(self.channel.clone());
-        let req = RemoveSnapshotRequest { snapshotter: "overlayfs".to_string(), key: snap_key };
+        let req = RemoveSnapshotRequest {
+            snapshotter: "overlayfs".to_string(),
+            key: snap_key,
+        };
         let req = with_namespace!(req, &self.namespace);
         let _ = snaps.remove(req).await;
 
-        { self.container_io.lock().await.remove(container_id); }
+        {
+            self.container_io.lock().await.remove(container_id);
+        }
         let _ = fs::remove_dir_all(PathBuf::from(CONSOLE_BASE_DIR).join(container_id));
         Ok(())
     }
@@ -703,7 +852,11 @@ impl ContainerdRuntime {
 
     pub async fn send_input(&self, container_id: &str, input: &str) -> AgentResult<()> {
         debug!("Sending input to container: {}", container_id);
-        if !self.is_container_running(container_id).await.unwrap_or(false) {
+        if !self
+            .is_container_running(container_id)
+            .await
+            .unwrap_or(false)
+        {
             return Err(AgentError::ContainerError(format!(
                 "Cannot send input: container {} is not running",
                 container_id
@@ -713,16 +866,20 @@ impl ContainerdRuntime {
         let has_io = self.ensure_container_io(container_id).await?;
         let handle = {
             let mut m = self.container_io.lock().await;
-            m.get_mut(container_id).and_then(|io| io.stdin_writer.as_ref().and_then(|w| w.try_clone().ok()))
+            m.get_mut(container_id)
+                .and_then(|io| io.stdin_writer.as_ref().and_then(|w| w.try_clone().ok()))
         };
         if let Some(h) = handle {
             let input = input.to_string();
             spawn_blocking(move || {
                 let mut w = h;
-                w.write_all(input.as_bytes()).map_err(|e| AgentError::ContainerError(format!("stdin: {}", e)))?;
+                w.write_all(input.as_bytes())
+                    .map_err(|e| AgentError::ContainerError(format!("stdin: {}", e)))?;
                 let _ = w.flush();
                 Ok::<(), AgentError>(())
-            }).await.map_err(|e| AgentError::ContainerError(e.to_string()))??;
+            })
+            .await
+            .map_err(|e| AgentError::ContainerError(e.to_string()))??;
             return Ok(());
         }
 
@@ -738,20 +895,33 @@ impl ContainerdRuntime {
         let io_dir = PathBuf::from(CONSOLE_BASE_DIR).join(container_id);
         let ep = io_dir.join(format!("e-{}-in", exec_id));
         let eo = io_dir.join(format!("e-{}-out", exec_id));
-        if ep.exists() { fs::remove_file(&ep).ok(); }
+        if ep.exists() {
+            fs::remove_file(&ep).ok();
+        }
         create_fifo(&ep).ok();
         File::create(&eo).ok();
         let spec = serde_json::json!({"args":["sh","-c","cat > /proc/1/fd/0"],"env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],"cwd":"/"});
-        let spec_any = Any { type_url: "types.containerd.io/opencontainers/runtime-spec/1/Process".to_string(), value: spec.to_string().into_bytes() };
+        let spec_any = Any {
+            type_url: "types.containerd.io/opencontainers/runtime-spec/1/Process".to_string(),
+            value: spec.to_string().into_bytes(),
+        };
         let mut tasks = TasksClient::new(self.channel.clone());
         let req = ExecProcessRequest {
-            container_id: container_id.to_string(), exec_id: exec_id.clone(),
-            stdin: ep.to_string_lossy().to_string(), stdout: eo.to_string_lossy().to_string(),
-            stderr: "".to_string(), terminal: false, spec: Some(spec_any), ..Default::default()
+            container_id: container_id.to_string(),
+            exec_id: exec_id.clone(),
+            stdin: ep.to_string_lossy().to_string(),
+            stdout: eo.to_string_lossy().to_string(),
+            stderr: "".to_string(),
+            terminal: false,
+            spec: Some(spec_any),
+            ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
         tasks.exec(req).await.map_err(grpc_err)?;
-        let req = StartRequest { container_id: container_id.to_string(), exec_id: exec_id.clone() };
+        let req = StartRequest {
+            container_id: container_id.to_string(),
+            exec_id: exec_id.clone(),
+        };
         let req = with_namespace!(req, &self.namespace);
         tasks.start(req).await.map_err(grpc_err)?;
         let epc = ep.clone();
@@ -777,8 +947,12 @@ impl ContainerdRuntime {
         let containers = self.list_containers().await?;
         let mut restored = 0;
         for c in containers {
-            if !c.status.contains("Up") { continue; }
-            if self.ensure_container_io(&c.id).await.is_ok() { restored += 1; }
+            if !c.status.contains("Up") {
+                continue;
+            }
+            if self.ensure_container_io(&c.id).await.is_ok() {
+                restored += 1;
+            }
         }
         info!("Console writer restoration: {} restored", restored);
         Ok(())
@@ -794,30 +968,43 @@ impl ContainerdRuntime {
                 if let Some(n) = lines {
                     let all: Vec<&str> = content.lines().collect();
                     let start = all.len().saturating_sub(n as usize);
-                    for l in &all[start..] { output.push_str(l); output.push('\n'); }
-                } else { output.push_str(&content); }
+                    for l in &all[start..] {
+                        output.push_str(l);
+                        output.push('\n');
+                    }
+                } else {
+                    output.push_str(&content);
+                }
             }
         }
         Ok(output)
     }
 
     pub async fn stream_logs<F>(&self, container_id: &str, mut callback: F) -> AgentResult<()>
-    where F: FnMut(String) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>,
+    where
+        F: FnMut(String) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>,
     {
         let base = PathBuf::from(CONSOLE_BASE_DIR).join(container_id);
         let mut positions = [0u64; 2];
         let paths = [base.join("stdout"), base.join("stderr")];
         loop {
-            let running = self.is_container_running(container_id).await.unwrap_or(false);
+            let running = self
+                .is_container_running(container_id)
+                .await
+                .unwrap_or(false);
             for i in 0..2 {
                 if let Ok(content) = tokio::fs::read_to_string(&paths[i]).await {
                     if (positions[i] as usize) < content.len() {
-                        for line in content[positions[i] as usize..].lines() { callback(line.to_string()).await; }
+                        for line in content[positions[i] as usize..].lines() {
+                            callback(line.to_string()).await;
+                        }
                         positions[i] = content.len() as u64;
                     }
                 }
             }
-            if !running { break; }
+            if !running {
+                break;
+            }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
         Ok(())
@@ -826,26 +1013,46 @@ impl ContainerdRuntime {
     pub async fn spawn_log_stream(&self, container_id: &str) -> AgentResult<LogStream> {
         info!("Starting log stream for container: {}", container_id);
         let base = PathBuf::from(CONSOLE_BASE_DIR).join(container_id);
-        let stdout = if base.join("stdout").exists() { Some(tokio::fs::File::open(base.join("stdout")).await?) } else { None };
-        let stderr = if base.join("stderr").exists() { Some(tokio::fs::File::open(base.join("stderr")).await?) } else { None };
-        Ok(LogStream { stdout, stderr, container_id: container_id.to_string() })
+        let stdout = if base.join("stdout").exists() {
+            Some(tokio::fs::File::open(base.join("stdout")).await?)
+        } else {
+            None
+        };
+        let stderr = if base.join("stderr").exists() {
+            Some(tokio::fs::File::open(base.join("stderr")).await?)
+        } else {
+            None
+        };
+        Ok(LogStream {
+            stdout,
+            stderr,
+            container_id: container_id.to_string(),
+        })
     }
 
     // -- Info & status --
 
     pub async fn list_containers(&self) -> AgentResult<Vec<ContainerInfo>> {
         let mut client = ContainersClient::new(self.channel.clone());
-        let req = ListContainersRequest { ..Default::default() };
+        let req = ListContainersRequest {
+            ..Default::default()
+        };
         let req = with_namespace!(req, &self.namespace);
         let resp = client.list(req).await.map_err(grpc_err)?;
         let mut result = Vec::new();
         for c in resp.into_inner().containers {
             let running = self.is_container_running(&c.id).await.unwrap_or(false);
             result.push(ContainerInfo {
-                id: c.id.clone(), names: c.id.clone(),
+                id: c.id.clone(),
+                names: c.id.clone(),
                 managed: c.labels.contains_key("catalyst.managed"),
-                status: if running { "Up".to_string() } else { "Exited".to_string() },
-                image: c.image.clone(), command: String::new(),
+                status: if running {
+                    "Up".to_string()
+                } else {
+                    "Exited".to_string()
+                },
+                image: c.image.clone(),
+                command: String::new(),
             });
         }
         Ok(result)
@@ -853,7 +1060,9 @@ impl ContainerdRuntime {
 
     pub async fn container_exists(&self, container_id: &str) -> bool {
         let mut client = ContainersClient::new(self.channel.clone());
-        let req = GetContainerRequest { id: container_id.to_string() };
+        let req = GetContainerRequest {
+            id: container_id.to_string(),
+        };
         let req = with_namespace!(req, &self.namespace);
         client.get(req).await.is_ok()
     }
@@ -861,11 +1070,16 @@ impl ContainerdRuntime {
     pub async fn is_container_running(&self, container_id: &str) -> AgentResult<bool> {
         let mut tasks = TasksClient::new(self.channel.clone());
         let req = containerd_client::services::v1::GetRequest {
-            container_id: container_id.to_string(), ..Default::default()
+            container_id: container_id.to_string(),
+            ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
         match tasks.get(req).await {
-            Ok(resp) => Ok(resp.into_inner().process.map(|p| p.status == 2).unwrap_or(false)),
+            Ok(resp) => Ok(resp
+                .into_inner()
+                .process
+                .map(|p| p.status == 2)
+                .unwrap_or(false)),
             Err(e) if e.code() == tonic::Code::NotFound => Ok(false),
             Err(e) => Err(grpc_err(e)),
         }
@@ -874,11 +1088,18 @@ impl ContainerdRuntime {
     pub async fn get_container_exit_code(&self, container_id: &str) -> AgentResult<Option<i32>> {
         let mut tasks = TasksClient::new(self.channel.clone());
         let req = containerd_client::services::v1::GetRequest {
-            container_id: container_id.to_string(), ..Default::default()
+            container_id: container_id.to_string(),
+            ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
         match tasks.get(req).await {
-            Ok(resp) => Ok(resp.into_inner().process.and_then(|p| if p.status == 3 { Some(p.exit_status as i32) } else { None })),
+            Ok(resp) => Ok(resp.into_inner().process.and_then(|p| {
+                if p.status == 3 {
+                    Some(p.exit_status as i32)
+                } else {
+                    None
+                }
+            })),
             Err(_) => Ok(None),
         }
     }
@@ -892,7 +1113,9 @@ impl ContainerdRuntime {
                     for ip in ips {
                         if let Some(addr) = ip.get("address").and_then(|v| v.as_str()) {
                             let a = addr.split('/').next().unwrap_or("");
-                            if !a.is_empty() { return Ok(a.to_string()); }
+                            if !a.is_empty() {
+                                return Ok(a.to_string());
+                            }
                         }
                     }
                 }
@@ -902,13 +1125,17 @@ impl ContainerdRuntime {
         if let Ok(entries) = fs::read_dir("/var/lib/cni/networks") {
             for entry in entries.flatten() {
                 let d = entry.path();
-                if !d.is_dir() { continue; }
+                if !d.is_dir() {
+                    continue;
+                }
                 if let Ok(files) = fs::read_dir(&d) {
                     for f in files.flatten() {
                         let n = f.file_name().to_string_lossy().to_string();
                         if n.parse::<Ipv4Addr>().is_ok() {
                             if let Ok(c) = fs::read_to_string(f.path()) {
-                                if c.trim().contains(container_id) { return Ok(n); }
+                                if c.trim().contains(container_id) {
+                                    return Ok(n);
+                                }
                             }
                         }
                     }
@@ -922,13 +1149,23 @@ impl ContainerdRuntime {
 
     pub async fn get_stats(&self, container_id: &str) -> AgentResult<ContainerStats> {
         let cg = find_container_cgroup(container_id).unwrap_or_default();
-        let cpu = if !cg.is_empty() { read_cgroup_cpu_percent(&cg).await.unwrap_or(0.0) } else { 0.0 };
-        let mem = if !cg.is_empty() { read_cgroup_memory(&cg).await.unwrap_or(0) } else { 0 };
+        let cpu = if !cg.is_empty() {
+            read_cgroup_cpu_percent(&cg).await.unwrap_or(0.0)
+        } else {
+            0.0
+        };
+        let mem = if !cg.is_empty() {
+            read_cgroup_memory(&cg).await.unwrap_or(0)
+        } else {
+            0
+        };
         Ok(ContainerStats {
-            container_id: container_id.to_string(), container_name: container_id.to_string(),
+            container_id: container_id.to_string(),
+            container_name: container_id.to_string(),
             cpu_percent: format!("{:.2}%", cpu),
             memory_usage: format!("{}MiB / 0MiB", mem / (1024 * 1024)),
-            net_io: "0B / 0B".to_string(), block_io: "0B / 0B".to_string(),
+            net_io: "0B / 0B".to_string(),
+            block_io: "0B / 0B".to_string(),
         })
     }
 
@@ -942,21 +1179,35 @@ impl ContainerdRuntime {
         File::create(&ep).ok();
 
         let spec = serde_json::json!({"args":command,"env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],"cwd":"/data"});
-        let spec_any = Any { type_url: "types.containerd.io/opencontainers/runtime-spec/1/Process".to_string(), value: spec.to_string().into_bytes() };
+        let spec_any = Any {
+            type_url: "types.containerd.io/opencontainers/runtime-spec/1/Process".to_string(),
+            value: spec.to_string().into_bytes(),
+        };
         let mut tasks = TasksClient::new(self.channel.clone());
         let req = ExecProcessRequest {
-            container_id: container_id.to_string(), exec_id: exec_id.clone(),
-            stdin: "".to_string(), stdout: op.to_string_lossy().to_string(),
-            stderr: ep.to_string_lossy().to_string(), terminal: false, spec: Some(spec_any), ..Default::default()
+            container_id: container_id.to_string(),
+            exec_id: exec_id.clone(),
+            stdin: "".to_string(),
+            stdout: op.to_string_lossy().to_string(),
+            stderr: ep.to_string_lossy().to_string(),
+            terminal: false,
+            spec: Some(spec_any),
+            ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
         tasks.exec(req).await.map_err(grpc_err)?;
 
-        let req = StartRequest { container_id: container_id.to_string(), exec_id: exec_id.clone() };
+        let req = StartRequest {
+            container_id: container_id.to_string(),
+            exec_id: exec_id.clone(),
+        };
         let req = with_namespace!(req, &self.namespace);
         tasks.start(req).await.map_err(grpc_err)?;
 
-        let req = WaitRequest { container_id: container_id.to_string(), exec_id };
+        let req = WaitRequest {
+            container_id: container_id.to_string(),
+            exec_id,
+        };
         let req = with_namespace!(req, &self.namespace);
         let _ = tokio::time::timeout(Duration::from_secs(30), tasks.wait(req)).await;
 
@@ -964,30 +1215,46 @@ impl ContainerdRuntime {
         let err = tokio::fs::read_to_string(&ep).await.unwrap_or_default();
         let _ = fs::remove_file(&op);
         let _ = fs::remove_file(&ep);
-        if !err.is_empty() && out.is_empty() { return Err(AgentError::ContainerError(format!("Exec failed: {}", err))); }
+        if !err.is_empty() && out.is_empty() {
+            return Err(AgentError::ContainerError(format!("Exec failed: {}", err)));
+        }
         Ok(out)
     }
 
     // -- Events --
 
-    pub async fn subscribe_to_container_events(&self, container_id: &str) -> AgentResult<EventStream> {
+    pub async fn subscribe_to_container_events(
+        &self,
+        container_id: &str,
+    ) -> AgentResult<EventStream> {
         let mut client = EventsClient::new(self.channel.clone());
-        let req = SubscribeRequest { filters: vec![
-            format!("topic==/tasks/exit,container=={}", container_id),
-            format!("topic==/tasks/start,container=={}", container_id),
-            format!("topic==/tasks/delete,container=={}", container_id),
-        ]};
+        let req = SubscribeRequest {
+            filters: vec![
+                format!("topic==/tasks/exit,container=={}", container_id),
+                format!("topic==/tasks/start,container=={}", container_id),
+                format!("topic==/tasks/delete,container=={}", container_id),
+            ],
+        };
         let req = with_namespace!(req, &self.namespace);
         let resp = client.subscribe(req).await.map_err(grpc_err)?;
-        Ok(EventStream { receiver: resp.into_inner() })
+        Ok(EventStream {
+            receiver: resp.into_inner(),
+        })
     }
 
     pub async fn subscribe_to_all_events(&self) -> AgentResult<EventStream> {
         let mut client = EventsClient::new(self.channel.clone());
-        let req = SubscribeRequest { filters: vec!["topic~=/tasks/".to_string(), "topic~=/containers/".to_string()] };
+        let req = SubscribeRequest {
+            filters: vec![
+                "topic~=/tasks/".to_string(),
+                "topic~=/containers/".to_string(),
+            ],
+        };
         let req = with_namespace!(req, &self.namespace);
         let resp = client.subscribe(req).await.map_err(grpc_err)?;
-        Ok(EventStream { receiver: resp.into_inner() })
+        Ok(EventStream {
+            receiver: resp.into_inner(),
+        })
     }
 
     // -- IP allocation --
@@ -995,30 +1262,54 @@ impl ContainerdRuntime {
     pub async fn clean_stale_ip_allocations(&self, network: &str) -> AgentResult<usize> {
         let dir = format!("/var/lib/cni/networks/{}", network);
         let entries = match fs::read_dir(&dir) {
-            Ok(e) => e, Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+            Ok(e) => e,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
             Err(e) => return Err(AgentError::IoError(e.to_string())),
         };
         let containers = self.list_containers().await?;
         let mut active_ips = HashSet::new();
         let mut running = 0;
-        for c in containers { if !c.status.contains("Up") { continue; } running += 1;
-            if let Ok(ip) = self.get_container_ip(&c.id).await { if !ip.is_empty() { active_ips.insert(ip); } }
+        for c in containers {
+            if !c.status.contains("Up") {
+                continue;
+            }
+            running += 1;
+            if let Ok(ip) = self.get_container_ip(&c.id).await {
+                if !ip.is_empty() {
+                    active_ips.insert(ip);
+                }
+            }
         }
-        if running > 0 && active_ips.is_empty() { return Ok(0); }
+        if running > 0 && active_ips.is_empty() {
+            return Ok(0);
+        }
         let mut removed = 0;
         for entry in entries {
             let entry = entry.map_err(|e| AgentError::IoError(e.to_string()))?;
             let path = entry.path();
-            let name = match entry.file_name().into_string() { Ok(v) => v, Err(_) => continue };
-            if name == "lock" || name.starts_with("last_reserved_ip") { continue; }
-            if name.parse::<Ipv4Addr>().is_err() { continue; }
+            let name = match entry.file_name().into_string() {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            if name == "lock" || name.starts_with("last_reserved_ip") {
+                continue;
+            }
+            if name.parse::<Ipv4Addr>().is_err() {
+                continue;
+            }
             if !active_ips.contains(&name) {
                 if let Ok(md) = fs::metadata(&path) {
                     if let Ok(m) = md.modified() {
-                        if let Ok(age) = SystemTime::now().duration_since(m) { if age < Duration::from_secs(60) { continue; } }
+                        if let Ok(age) = SystemTime::now().duration_since(m) {
+                            if age < Duration::from_secs(60) {
+                                continue;
+                            }
+                        }
                     }
                 }
-                if fs::remove_file(&path).is_ok() { removed += 1; }
+                if fs::remove_file(&path).is_ok() {
+                    removed += 1;
+                }
             }
         }
         Ok(removed)
@@ -1032,39 +1323,65 @@ impl ContainerdRuntime {
 
     async fn wait_for_exit(&self, container_id: &str) -> AgentResult<u32> {
         let mut tasks = TasksClient::new(self.channel.clone());
-        let req = WaitRequest { container_id: container_id.to_string(), ..Default::default() };
+        let req = WaitRequest {
+            container_id: container_id.to_string(),
+            ..Default::default()
+        };
         let req = with_namespace!(req, &self.namespace);
         let resp = tasks.wait(req).await.map_err(grpc_err)?;
         Ok(resp.into_inner().exit_status)
     }
 
     async fn ensure_container_io(&self, container_id: &str) -> AgentResult<bool> {
-        if self.container_io.lock().await.contains_key(container_id) { return Ok(true); }
+        if self.container_io.lock().await.contains_key(container_id) {
+            return Ok(true);
+        }
         let io_dir = PathBuf::from(CONSOLE_BASE_DIR).join(container_id);
         let stdin_path = io_dir.join("stdin");
-        if !stdin_path.exists() { return Ok(false); }
+        if !stdin_path.exists() {
+            return Ok(false);
+        }
         let writer = open_fifo_rdwr(&stdin_path)?;
-        self.container_io.lock().await.insert(container_id.to_string(), ContainerIo {
-            _stdin_fifo: stdin_path, _stdout_file: io_dir.join("stdout"),
-            _stderr_file: io_dir.join("stderr"), stdin_writer: Some(writer),
-        });
+        self.container_io.lock().await.insert(
+            container_id.to_string(),
+            ContainerIo {
+                _stdin_fifo: stdin_path,
+                _stdout_file: io_dir.join("stdout"),
+                _stderr_file: io_dir.join("stderr"),
+                stdin_writer: Some(writer),
+            },
+        );
         Ok(true)
     }
 
     async fn ensure_image(&self, image: &str) -> AgentResult<()> {
         let qualified = Self::qualify_image_ref(image);
         let mut client = ImagesClient::new(self.channel.clone());
-        let req = GetImageRequest { name: qualified.clone() };
+        let req = GetImageRequest {
+            name: qualified.clone(),
+        };
         let req = with_namespace!(req, &self.namespace);
         match client.get(req).await {
             Ok(_) => return Ok(()),
-            Err(e) if e.code() == tonic::Code::NotFound => info!("Image {} not found, pulling...", qualified),
+            Err(e) if e.code() == tonic::Code::NotFound => {
+                info!("Image {} not found, pulling...", qualified)
+            }
             Err(e) => return Err(grpc_err(e)),
         }
-        let output = Command::new("ctr").arg("-n").arg(&self.namespace).arg("images").arg("pull").arg(&qualified)
-            .output().await.map_err(|e| AgentError::ContainerError(format!("pull: {}", e)))?;
+        let output = Command::new("ctr")
+            .arg("-n")
+            .arg(&self.namespace)
+            .arg("images")
+            .arg("pull")
+            .arg(&qualified)
+            .output()
+            .await
+            .map_err(|e| AgentError::ContainerError(format!("pull: {}", e)))?;
         if !output.status.success() {
-            return Err(AgentError::ContainerError(format!("Image pull failed: {}", String::from_utf8_lossy(&output.stderr))));
+            return Err(AgentError::ContainerError(format!(
+                "Image pull failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )));
         }
         info!("Image {} pulled", qualified);
         Ok(())
@@ -1103,9 +1420,15 @@ impl ContainerdRuntime {
         let config: serde_json::Value = serde_json::from_slice(&config_bytes)
             .map_err(|e| AgentError::ContainerError(format!("Bad config JSON: {}", e)))?;
 
-        Ok(config.get("config").and_then(|c| c.get("Env"))
+        Ok(config
+            .get("config")
+            .and_then(|c| c.get("Env"))
             .and_then(|v| v.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default())
     }
 
@@ -1133,7 +1456,8 @@ impl ContainerdRuntime {
                 .iter()
                 .find(|m| {
                     let p = m.get("platform");
-                    p.and_then(|p| p.get("architecture")).and_then(|v| v.as_str())
+                    p.and_then(|p| p.get("architecture"))
+                        .and_then(|v| v.as_str())
                         == Some("amd64")
                         && p.and_then(|p| p.get("os")).and_then(|v| v.as_str()) == Some("linux")
                 })
@@ -1173,12 +1497,17 @@ impl ContainerdRuntime {
             .info
             .map(|info| info.labels)
             .unwrap_or_default();
-        Ok(labels.get("containerd.io/gc.ref.snapshot.overlayfs").cloned())
+        Ok(labels
+            .get("containerd.io/gc.ref.snapshot.overlayfs")
+            .cloned())
     }
 
     async fn read_content_blob(&self, digest: &str) -> AgentResult<Vec<u8>> {
         let mut content = ContentClient::new(self.channel.clone());
-        let req = ReadContentRequest { digest: digest.to_string(), ..Default::default() };
+        let req = ReadContentRequest {
+            digest: digest.to_string(),
+            ..Default::default()
+        };
         let req = with_namespace!(req, &self.namespace);
         let mut stream = content.read(req).await.map_err(grpc_err)?.into_inner();
         let mut data = Vec::new();
@@ -1189,17 +1518,29 @@ impl ContainerdRuntime {
     }
 
     async fn prepare_snapshot(&self, image: &str, key: &str) -> AgentResult<()> {
-        let _ = Command::new("ctr").arg("-n").arg(&self.namespace)
-            .arg("images").arg("unpack").arg("--snapshotter").arg("overlayfs").arg(image)
-            .output().await;
+        let _ = Command::new("ctr")
+            .arg("-n")
+            .arg(&self.namespace)
+            .arg("images")
+            .arg("unpack")
+            .arg("--snapshotter")
+            .arg("overlayfs")
+            .arg(image)
+            .output()
+            .await;
 
         let mut snaps = SnapshotsClient::new(self.channel.clone());
         // Try using image ref as parent first (works on some containerd setups).
         let req = PrepareSnapshotRequest {
-            snapshotter: "overlayfs".to_string(), key: key.to_string(), parent: image.to_string(), ..Default::default()
+            snapshotter: "overlayfs".to_string(),
+            key: key.to_string(),
+            parent: image.to_string(),
+            ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
-        if snaps.prepare(req).await.is_ok() { return Ok(()); }
+        if snaps.prepare(req).await.is_ok() {
+            return Ok(());
+        }
 
         // Resolve the exact unpacked snapshot parent for this image from content labels.
         if let Some(parent) = self.resolve_snapshot_parent_key(image).await? {
@@ -1213,22 +1554,48 @@ impl ContainerdRuntime {
             if snaps.prepare(req).await.is_ok() {
                 return Ok(());
             }
-            warn!("prepare snapshot with resolved parent {} failed for image {}", parent, image);
+            warn!(
+                "prepare snapshot with resolved parent {} failed for image {}",
+                parent, image
+            );
         } else {
-            warn!("No overlayfs snapshot parent label found for image {}", image);
+            warn!(
+                "No overlayfs snapshot parent label found for image {}",
+                image
+            );
         }
 
-        Err(AgentError::ContainerError(format!("Failed to prepare snapshot for {}", image)))
+        Err(AgentError::ContainerError(format!(
+            "Failed to prepare snapshot for {}",
+            image
+        )))
     }
 
-    async fn get_snapshot_mounts(&self, key: &str) -> AgentResult<Vec<containerd_client::types::Mount>> {
+    async fn get_snapshot_mounts(
+        &self,
+        key: &str,
+    ) -> AgentResult<Vec<containerd_client::types::Mount>> {
         let mut snaps = SnapshotsClient::new(self.channel.clone());
-        let req = MountsRequest { snapshotter: "overlayfs".to_string(), key: key.to_string() };
+        let req = MountsRequest {
+            snapshotter: "overlayfs".to_string(),
+            key: key.to_string(),
+        };
         let req = with_namespace!(req, &self.namespace);
-        Ok(snaps.mounts(req).await.map_err(grpc_err)?.into_inner().mounts)
+        Ok(snaps
+            .mounts(req)
+            .await
+            .map_err(grpc_err)?
+            .into_inner()
+            .mounts)
     }
 
-    fn build_oci_spec(&self, config: &ContainerConfig<'_>, io_dir: &Path, use_host_network: bool, image_env: &[String]) -> AgentResult<serde_json::Value> {
+    fn build_oci_spec(
+        &self,
+        config: &ContainerConfig<'_>,
+        io_dir: &Path,
+        use_host_network: bool,
+        image_env: &[String],
+    ) -> AgentResult<serde_json::Value> {
         // Start with image env as base, then overlay our defaults and config env.
         // This preserves image-specific PATH, JAVA_HOME, etc.
         let mut env_map: HashMap<String, String> = HashMap::new();
@@ -1238,7 +1605,9 @@ impl ContainerdRuntime {
             }
         }
         // Template/config env takes highest priority
-        for (k, v) in config.env { env_map.insert(k.to_string(), v.to_string()); }
+        for (k, v) in config.env {
+            env_map.insert(k.to_string(), v.to_string());
+        }
         // Ensure PATH is usable for JVM-based images even if image env probing fails
         // or template/server env accidentally overrides PATH.
         // The Pterodactyl Hytale image provides java at /opt/java/openjdk/bin/java.
@@ -1247,7 +1616,10 @@ impl ContainerdRuntime {
         let path_value = env_map.get("PATH").map(|v| v.trim()).unwrap_or("");
         if path_value.is_empty() {
             env_map.insert("PATH".to_string(), DEFAULT_PATH.to_string());
-        } else if !path_value.split(':').any(|segment| segment == "/opt/java/openjdk/bin") {
+        } else if !path_value
+            .split(':')
+            .any(|segment| segment == "/opt/java/openjdk/bin")
+        {
             env_map.insert(
                 "PATH".to_string(),
                 format!("/opt/java/openjdk/bin:{}", path_value),
@@ -1256,7 +1628,10 @@ impl ContainerdRuntime {
         env_map.insert("TERM".to_string(), "xterm".to_string());
         // Runtime container runs as 1000:1000; set HOME to the data dir
         env_map.insert("HOME".to_string(), "/data".to_string());
-        let env_list: Vec<String> = env_map.into_iter().map(|(k, v)| format!("{}={}", k, v)).collect();
+        let env_list: Vec<String> = env_map
+            .into_iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect();
 
         let args = if !config.startup_command.is_empty() {
             let escaped_startup = shell_escape_value(config.startup_command);
@@ -1301,11 +1676,27 @@ impl ContainerdRuntime {
         }
         mounts.push(serde_json::json!({"destination":"/etc/resolv.conf","type":"bind","source":resolv_path.to_string_lossy().to_string(),"options":["rbind","rw"]}));
 
-        for (h, c) in [("/etc/machine-id","/etc/machine-id"),("/var/lib/dbus/machine-id","/var/lib/dbus/machine-id"),("/sys/class/dmi/id/product_uuid","/sys/class/dmi/id/product_uuid")] {
-            if Path::new(h).exists() { mounts.push(serde_json::json!({"destination":c,"type":"bind","source":h,"options":["rbind","ro"]})); }
+        for (h, c) in [
+            ("/etc/machine-id", "/etc/machine-id"),
+            ("/var/lib/dbus/machine-id", "/var/lib/dbus/machine-id"),
+            (
+                "/sys/class/dmi/id/product_uuid",
+                "/sys/class/dmi/id/product_uuid",
+            ),
+        ] {
+            if Path::new(h).exists() {
+                mounts.push(serde_json::json!({"destination":c,"type":"bind","source":h,"options":["rbind","ro"]}));
+            }
         }
-        let mut ns = vec![serde_json::json!({"type":"pid"}),serde_json::json!({"type":"ipc"}),serde_json::json!({"type":"uts"}),serde_json::json!({"type":"mount"})];
-        if !use_host_network { ns.push(serde_json::json!({"type":"network"})); }
+        let mut ns = vec![
+            serde_json::json!({"type":"pid"}),
+            serde_json::json!({"type":"ipc"}),
+            serde_json::json!({"type":"uts"}),
+            serde_json::json!({"type":"mount"}),
+        ];
+        if !use_host_network {
+            ns.push(serde_json::json!({"type":"network"}));
+        }
 
         Ok(serde_json::json!({
             "ociVersion":"1.1.0",
@@ -1323,9 +1714,19 @@ impl ContainerdRuntime {
         }))
     }
 
-    async fn setup_cni_network(&self, container_id: &str, pid: u32, network_mode: Option<&str>, network_ip: Option<&str>, primary_port: u16, port_bindings: &HashMap<u16, u16>) -> AgentResult<()> {
+    async fn setup_cni_network(
+        &self,
+        container_id: &str,
+        pid: u32,
+        network_mode: Option<&str>,
+        network_ip: Option<&str>,
+        primary_port: u16,
+        port_bindings: &HashMap<u16, u16>,
+    ) -> AgentResult<()> {
         let network = network_mode.unwrap_or("bridge");
-        if network == "host" { return Ok(()); }
+        if network == "host" {
+            return Ok(());
+        }
         let netns = self.resolve_task_netns(container_id, pid).await?;
 
         // Build DNS configuration from configured DNS servers
@@ -1377,12 +1778,18 @@ impl ContainerdRuntime {
                 // This matches the structure used by NetworkManager with rangeStart/rangeEnd
                 let (iface, subnet, gateway) = detect_host_network().unwrap_or_else(|| {
                     warn!("Could not detect host network, falling back to eth0/192.168.1.0");
-                    ("eth0".to_string(), "192.168.1.0/24".to_string(), "192.168.1.1".to_string())
+                    (
+                        "eth0".to_string(),
+                        "192.168.1.0/24".to_string(),
+                        "192.168.1.1".to_string(),
+                    )
                 });
                 // Calculate rangeStart/rangeEnd from subnet (same logic as NetworkManager)
                 let (range_start, range_end) = calculate_ip_range_from_subnet(&subnet);
-                info!("macvlan network '{}': master={}, subnet={}, gateway={}, range={}-{}",
-                      network, iface, subnet, gateway, range_start, range_end);
+                info!(
+                    "macvlan network '{}': master={}, subnet={}, gateway={}, range={}-{}",
+                    network, iface, subnet, gateway, range_start, range_end
+                );
                 serde_json::json!({
                     "cniVersion": "1.0.0",
                     "name": network,
@@ -1407,10 +1814,15 @@ impl ContainerdRuntime {
         if let Some(ip) = network_ip {
             if let Some(ipam) = cfg.get_mut("ipam") {
                 // Determine prefix length from the subnet in config
-                let prefix = ipam.get("ranges").and_then(|r| r.get(0)).and_then(|r| r.get(0))
-                    .and_then(|r| r.get("subnet")).and_then(|s| s.as_str())
+                let prefix = ipam
+                    .get("ranges")
+                    .and_then(|r| r.get(0))
+                    .and_then(|r| r.get(0))
+                    .and_then(|r| r.get("subnet"))
+                    .and_then(|s| s.as_str())
                     .or_else(|| ipam.get("subnet").and_then(|s| s.as_str()))
-                    .and_then(|s| s.split('/').nth(1)).unwrap_or("24");
+                    .and_then(|s| s.split('/').nth(1))
+                    .unwrap_or("24");
                 ipam["addresses"] = serde_json::json!([{"address":format!("{}/{}", ip, prefix)}]);
             } else {
                 warn!(
@@ -1421,11 +1833,26 @@ impl ContainerdRuntime {
         }
         // Store CNI config for proper teardown
         let cfg_path = format!("/var/lib/cni/results/catalyst-{}-config", container_id);
-        if let Ok(j) = serde_json::to_string(&cfg) { let _ = fs::write(&cfg_path, &j); }
-        let result = self.exec_cni_plugin(&cfg, "ADD", container_id, &netns, "eth0").await?;
+        if let Ok(j) = serde_json::to_string(&cfg) {
+            let _ = fs::write(&cfg_path, &j);
+        }
+        let result = self
+            .exec_cni_plugin(&cfg, "ADD", container_id, &netns, "eth0")
+            .await?;
         let rp = format!("/var/lib/cni/results/catalyst-{}", container_id);
-        if let Ok(j) = serde_json::to_string_pretty(&result) { let _ = fs::write(&rp, &j); }
-        let cip = result.get("ips").and_then(|v|v.as_array()).and_then(|a|a.first()).and_then(|ip|ip.get("address")).and_then(|v|v.as_str()).unwrap_or("").split('/').next().unwrap_or("");
+        if let Ok(j) = serde_json::to_string_pretty(&result) {
+            let _ = fs::write(&rp, &j);
+        }
+        let cip = result
+            .get("ips")
+            .and_then(|v| v.as_array())
+            .and_then(|a| a.first())
+            .and_then(|ip| ip.get("address"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .split('/')
+            .next()
+            .unwrap_or("");
         if !cip.is_empty() {
             let mut forwards: Vec<PortForward> = Vec::new();
             if !port_bindings.is_empty() {
@@ -1437,7 +1864,8 @@ impl ContainerdRuntime {
                     });
                 }
             } else if primary_port > 0 {
-                self.setup_port_forward(primary_port, primary_port, cip).await?;
+                self.setup_port_forward(primary_port, primary_port, cip)
+                    .await?;
                 forwards.push(PortForward {
                     host_port: primary_port,
                     container_port: primary_port,
@@ -1471,7 +1899,16 @@ impl ContainerdRuntime {
     async fn ensure_bridge_forward_rules(&self) {
         // Check if rules already exist to avoid duplicates
         let check_output = Command::new("iptables")
-            .args(["-C", "FORWARD", "-i", "catalyst0", "-o", "enp34s0", "-j", "ACCEPT"])
+            .args([
+                "-C",
+                "FORWARD",
+                "-i",
+                "catalyst0",
+                "-o",
+                "enp34s0",
+                "-j",
+                "ACCEPT",
+            ])
             .output()
             .await;
 
@@ -1479,29 +1916,63 @@ impl ContainerdRuntime {
             if !output.status.success() {
                 // Rule doesn't exist, add it
                 let result = Command::new("iptables")
-                    .args(["-I", "FORWARD", "1", "-i", "catalyst0", "-o", "enp34s0", "-j", "ACCEPT"])
+                    .args([
+                        "-I",
+                        "FORWARD",
+                        "1",
+                        "-i",
+                        "catalyst0",
+                        "-o",
+                        "enp34s0",
+                        "-j",
+                        "ACCEPT",
+                    ])
                     .output()
                     .await;
                 match result {
-                    Ok(o) if o.status.success() => info!("Added FORWARD rule: catalyst0 -> enp34s0"),
-                    Ok(o) => warn!("Failed to add FORWARD rule: {}", String::from_utf8_lossy(&o.stderr)),
+                    Ok(o) if o.status.success() => {
+                        info!("Added FORWARD rule: catalyst0 -> enp34s0")
+                    }
+                    Ok(o) => warn!(
+                        "Failed to add FORWARD rule: {}",
+                        String::from_utf8_lossy(&o.stderr)
+                    ),
                     Err(e) => warn!("Failed to execute iptables: {}", e),
                 }
 
                 let result = Command::new("iptables")
-                    .args(["-I", "FORWARD", "2", "-i", "enp34s0", "-o", "catalyst0", "-j", "ACCEPT"])
+                    .args([
+                        "-I",
+                        "FORWARD",
+                        "2",
+                        "-i",
+                        "enp34s0",
+                        "-o",
+                        "catalyst0",
+                        "-j",
+                        "ACCEPT",
+                    ])
                     .output()
                     .await;
                 match result {
-                    Ok(o) if o.status.success() => info!("Added FORWARD rule: enp34s0 -> catalyst0 (allow new connections)"),
-                    Ok(o) => warn!("Failed to add FORWARD rule: {}", String::from_utf8_lossy(&o.stderr)),
+                    Ok(o) if o.status.success() => {
+                        info!("Added FORWARD rule: enp34s0 -> catalyst0 (allow new connections)")
+                    }
+                    Ok(o) => warn!(
+                        "Failed to add FORWARD rule: {}",
+                        String::from_utf8_lossy(&o.stderr)
+                    ),
                     Err(e) => warn!("Failed to execute iptables: {}", e),
                 }
             }
         }
     }
 
-    async fn resolve_task_netns(&self, container_id: &str, initial_pid: u32) -> AgentResult<String> {
+    async fn resolve_task_netns(
+        &self,
+        container_id: &str,
+        initial_pid: u32,
+    ) -> AgentResult<String> {
         let mut pid = initial_pid;
         let mut last_get_err: Option<String> = None;
 
@@ -1539,7 +2010,14 @@ impl ContainerdRuntime {
         )))
     }
 
-    async fn exec_cni_plugin(&self, config: &serde_json::Value, command: &str, cid: &str, netns: &str, ifname: &str) -> AgentResult<serde_json::Value> {
+    async fn exec_cni_plugin(
+        &self,
+        config: &serde_json::Value,
+        command: &str,
+        cid: &str,
+        netns: &str,
+        ifname: &str,
+    ) -> AgentResult<serde_json::Value> {
         let ptype = config["type"].as_str().unwrap_or("bridge");
         let cni_bin_dir = discover_cni_bin_dir();
         let ppath = format!("{}/{}", cni_bin_dir, ptype);
@@ -1549,12 +2027,24 @@ impl ContainerdRuntime {
                 ppath, CNI_BIN_DIRS
             )));
         }
-        let cfg = serde_json::to_string(config).map_err(|e| AgentError::ContainerError(e.to_string()))?;
+        let cfg =
+            serde_json::to_string(config).map_err(|e| AgentError::ContainerError(e.to_string()))?;
         let mut child = Command::new(&ppath)
-            .env("CNI_COMMAND",command).env("CNI_CONTAINERID",cid).env("CNI_NETNS",netns).env("CNI_IFNAME",ifname).env("CNI_PATH",cni_bin_dir)
-            .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
-            .spawn().map_err(|e| AgentError::ContainerError(format!("CNI: {}", e)))?;
-        if let Some(mut stdin) = child.stdin.take() { use tokio::io::AsyncWriteExt; stdin.write_all(cfg.as_bytes()).await?; drop(stdin); }
+            .env("CNI_COMMAND", command)
+            .env("CNI_CONTAINERID", cid)
+            .env("CNI_NETNS", netns)
+            .env("CNI_IFNAME", ifname)
+            .env("CNI_PATH", cni_bin_dir)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| AgentError::ContainerError(format!("CNI: {}", e)))?;
+        if let Some(mut stdin) = child.stdin.take() {
+            use tokio::io::AsyncWriteExt;
+            stdin.write_all(cfg.as_bytes()).await?;
+            drop(stdin);
+        }
         let out = child.wait_with_output().await?;
         if !out.status.success() {
             let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
@@ -1565,13 +2055,7 @@ impl ContainerdRuntime {
                 .unwrap_or_default();
             return Err(AgentError::ContainerError(format!(
                 "CNI {} failed (plugin={}, netns={}, status={}): msg='{}' stderr='{}' stdout='{}'",
-                command,
-                ptype,
-                netns,
-                out.status,
-                plugin_msg,
-                stderr,
-                stdout
+                command, ptype, netns, out.status, plugin_msg, stderr, stdout
             )));
         }
         Ok(serde_json::from_slice(&out.stdout).unwrap_or(serde_json::json!({})))
@@ -1584,20 +2068,76 @@ impl ContainerdRuntime {
         // Set up forwarding for both TCP and UDP (many game servers use UDP)
         for proto in ["tcp", "udp"] {
             for args in [
-                vec!["-t","nat","-A","PREROUTING","-p",proto,"--dport",&hps,"-j","DNAT","--to-destination",&dest],
-                vec!["-t","nat","-A","OUTPUT","-p",proto,"--dport",&hps,"-j","DNAT","--to-destination",&dest],
+                vec![
+                    "-t",
+                    "nat",
+                    "-A",
+                    "PREROUTING",
+                    "-p",
+                    proto,
+                    "--dport",
+                    &hps,
+                    "-j",
+                    "DNAT",
+                    "--to-destination",
+                    &dest,
+                ],
+                vec![
+                    "-t",
+                    "nat",
+                    "-A",
+                    "OUTPUT",
+                    "-p",
+                    proto,
+                    "--dport",
+                    &hps,
+                    "-j",
+                    "DNAT",
+                    "--to-destination",
+                    &dest,
+                ],
             ] {
                 let o = Command::new("iptables").args(&args).output().await?;
-                if !o.status.success() { warn!("iptables: {}", String::from_utf8_lossy(&o.stderr)); }
+                if !o.status.success() {
+                    warn!("iptables: {}", String::from_utf8_lossy(&o.stderr));
+                }
             }
         }
         // MASQUERADE rule for outgoing traffic (needed for NAT)
         for args in [
-            vec!["-t","nat","-A","POSTROUTING","-p","tcp","-d",cip,"--dport",&cps,"-j","MASQUERADE"],
-            vec!["-t","nat","-A","POSTROUTING","-p","udp","-d",cip,"--dport",&cps,"-j","MASQUERADE"],
+            vec![
+                "-t",
+                "nat",
+                "-A",
+                "POSTROUTING",
+                "-p",
+                "tcp",
+                "-d",
+                cip,
+                "--dport",
+                &cps,
+                "-j",
+                "MASQUERADE",
+            ],
+            vec![
+                "-t",
+                "nat",
+                "-A",
+                "POSTROUTING",
+                "-p",
+                "udp",
+                "-d",
+                cip,
+                "--dport",
+                &cps,
+                "-j",
+                "MASQUERADE",
+            ],
         ] {
             let o = Command::new("iptables").args(&args).output().await?;
-            if !o.status.success() { warn!("iptables: {}", String::from_utf8_lossy(&o.stderr)); }
+            if !o.status.success() {
+                warn!("iptables: {}", String::from_utf8_lossy(&o.stderr));
+            }
         }
         Ok(())
     }
@@ -1647,18 +2187,70 @@ impl ContainerdRuntime {
         // Teardown both TCP and UDP rules
         for proto in ["tcp", "udp"] {
             for args in [
-                    vec!["-t","nat","-D","PREROUTING","-p",proto,"--dport",&hps,"-j","DNAT","--to-destination",&dest],
-                    vec!["-t","nat","-D","OUTPUT","-p",proto,"--dport",&hps,"-j","DNAT","--to-destination",&dest],
-                ] {
-                    let o = Command::new("iptables").args(&args).output().await?;
-                    if !o.status.success() {
-                        warn!("iptables: {}", String::from_utf8_lossy(&o.stderr));
-                    }
+                vec![
+                    "-t",
+                    "nat",
+                    "-D",
+                    "PREROUTING",
+                    "-p",
+                    proto,
+                    "--dport",
+                    &hps,
+                    "-j",
+                    "DNAT",
+                    "--to-destination",
+                    &dest,
+                ],
+                vec![
+                    "-t",
+                    "nat",
+                    "-D",
+                    "OUTPUT",
+                    "-p",
+                    proto,
+                    "--dport",
+                    &hps,
+                    "-j",
+                    "DNAT",
+                    "--to-destination",
+                    &dest,
+                ],
+            ] {
+                let o = Command::new("iptables").args(&args).output().await?;
+                if !o.status.success() {
+                    warn!("iptables: {}", String::from_utf8_lossy(&o.stderr));
                 }
+            }
         }
         for args in [
-            vec!["-t","nat","-D","POSTROUTING","-p","tcp","-d",cip,"--dport",&cps,"-j","MASQUERADE"],
-            vec!["-t","nat","-D","POSTROUTING","-p","udp","-d",cip,"--dport",&cps,"-j","MASQUERADE"],
+            vec![
+                "-t",
+                "nat",
+                "-D",
+                "POSTROUTING",
+                "-p",
+                "tcp",
+                "-d",
+                cip,
+                "--dport",
+                &cps,
+                "-j",
+                "MASQUERADE",
+            ],
+            vec![
+                "-t",
+                "nat",
+                "-D",
+                "POSTROUTING",
+                "-p",
+                "udp",
+                "-d",
+                cip,
+                "--dport",
+                &cps,
+                "-j",
+                "MASQUERADE",
+            ],
         ] {
             let o = Command::new("iptables").args(&args).output().await?;
             if !o.status.success() {
@@ -1671,20 +2263,33 @@ impl ContainerdRuntime {
     async fn teardown_cni_network(&self, container_id: &str) -> AgentResult<()> {
         let _ = self.teardown_port_forward(container_id).await;
         let rp = format!("/var/lib/cni/results/catalyst-{}", container_id);
-        if !Path::new(&rp).exists() { return Ok(()); }
+        if !Path::new(&rp).exists() {
+            return Ok(());
+        }
         // Load stored CNI config for proper teardown (bridge vs macvlan)
         let cfg_path = format!("/var/lib/cni/results/catalyst-{}-config", container_id);
         let cfg = fs::read_to_string(&cfg_path).ok()
             .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
             .unwrap_or_else(|| serde_json::json!({"cniVersion":"1.0.0","name":"catalyst","type":"bridge","bridge":"catalyst0","ipam":{"type":"host-local","dataDir":"/var/lib/cni/networks"}}));
         let mut tasks = TasksClient::new(self.channel.clone());
-        let req = containerd_client::services::v1::GetRequest { container_id: container_id.to_string(), ..Default::default() };
+        let req = containerd_client::services::v1::GetRequest {
+            container_id: container_id.to_string(),
+            ..Default::default()
+        };
         let req = with_namespace!(req, &self.namespace);
         let netns = match tasks.get(req).await {
-            Ok(r) => r.into_inner().process.map(|p| format!("/proc/{}/ns/net", p.pid)).unwrap_or_default(),
+            Ok(r) => r
+                .into_inner()
+                .process
+                .map(|p| format!("/proc/{}/ns/net", p.pid))
+                .unwrap_or_default(),
             Err(_) => String::new(),
         };
-        if !netns.is_empty() { let _ = self.exec_cni_plugin(&cfg, "DEL", container_id, &netns, "eth0").await; }
+        if !netns.is_empty() {
+            let _ = self
+                .exec_cni_plugin(&cfg, "DEL", container_id, &netns, "eth0")
+                .await;
+        }
         let _ = fs::remove_file(&rp);
         let _ = fs::remove_file(&cfg_path);
         Ok(())
@@ -1764,7 +2369,8 @@ fn detect_host_network() -> Option<(String, String, String)> {
     // Parse `ip -4 route show default` → "default via <gw> dev <iface> ..."
     let output = std::process::Command::new("ip")
         .args(["-4", "route", "show", "default"])
-        .output().ok()?;
+        .output()
+        .ok()?;
     let route = String::from_utf8_lossy(&output.stdout);
     let parts: Vec<&str> = route.split_whitespace().collect();
     let gw_idx = parts.iter().position(|&p| p == "via")?;
@@ -1775,15 +2381,27 @@ fn detect_host_network() -> Option<(String, String, String)> {
     // Parse interface address → "inet <ip>/<prefix> ..."
     let output = std::process::Command::new("ip")
         .args(["-4", "-o", "addr", "show", &iface])
-        .output().ok()?;
+        .output()
+        .ok()?;
     let addr_line = String::from_utf8_lossy(&output.stdout);
-    let cidr = addr_line.split_whitespace()
-        .find(|s| s.contains('/') && s.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false))?
+    let cidr = addr_line
+        .split_whitespace()
+        .find(|s| {
+            s.contains('/')
+                && s.chars()
+                    .next()
+                    .map(|c| c.is_ascii_digit())
+                    .unwrap_or(false)
+        })?
         .to_string();
     let (ip_str, prefix_str) = cidr.split_once('/')?;
     let ip: Ipv4Addr = ip_str.parse().ok()?;
     let prefix: u32 = prefix_str.parse().ok()?;
-    let mask = if prefix == 0 { 0u32 } else { !0u32 << (32 - prefix) };
+    let mask = if prefix == 0 {
+        0u32
+    } else {
+        !0u32 << (32 - prefix)
+    };
     let net_addr = Ipv4Addr::from(u32::from(ip) & mask);
     let subnet = format!("{}/{}", net_addr, prefix);
 
@@ -1804,37 +2422,49 @@ fn calculate_ip_range_from_subnet(cidr: &str) -> (String, String) {
     let ip_parts: Vec<&str> = base_ip.split('.').collect();
 
     if ip_parts.len() != 4 {
-        warn!("Invalid IP address format '{}', using default range", base_ip);
+        warn!(
+            "Invalid IP address format '{}', using default range",
+            base_ip
+        );
         return ("10.0.0.10".to_string(), "10.0.0.250".to_string());
     }
 
     // Use .10 to .250 as the usable range (matching NetworkManager's cidr_usable_range)
     (
         format!("{}.{}.{}.10", ip_parts[0], ip_parts[1], ip_parts[2]),
-        format!("{}.{}.{}.250", ip_parts[0], ip_parts[1], ip_parts[2])
+        format!("{}.{}.{}.250", ip_parts[0], ip_parts[1], ip_parts[2]),
     )
 }
 
 fn create_fifo(path: &Path) -> std::io::Result<()> {
     match mkfifo(path, Mode::from_bits_truncate(0o600)) {
-        Ok(()) => Ok(()), Err(Errno::EEXIST) => Ok(()),
+        Ok(()) => Ok(()),
+        Err(Errno::EEXIST) => Ok(()),
         Err(err) => Err(std::io::Error::other(err)),
     }
 }
 
 fn open_fifo_rdwr(path: &Path) -> AgentResult<File> {
-    let file = std::fs::OpenOptions::new().read(true).write(true)
-        .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC).open(path)
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC)
+        .open(path)
         .map_err(|e| AgentError::ContainerError(format!("open FIFO: {}", e)))?;
     if let Ok(flags) = fcntl(&file, FcntlArg::F_GETFL) {
-        let mut of = OFlag::from_bits_truncate(flags); of.remove(OFlag::O_NONBLOCK);
+        let mut of = OFlag::from_bits_truncate(flags);
+        of.remove(OFlag::O_NONBLOCK);
         let _ = fcntl(&file, FcntlArg::F_SETFL(of));
     }
     Ok(file)
 }
 
 fn set_dir_perms(path: &Path, mode: u32) {
-    if let Ok(md) = fs::metadata(path) { let mut p = md.permissions(); p.set_mode(mode); fs::set_permissions(path, p).ok(); }
+    if let Ok(md) = fs::metadata(path) {
+        let mut p = md.permissions();
+        p.set_mode(mode);
+        fs::set_permissions(path, p).ok();
+    }
 }
 
 fn shell_escape_value(value: &str) -> String {
@@ -1852,11 +2482,17 @@ fn parse_signal(signal: &str) -> u32 {
 }
 
 fn grpc_err(e: tonic::Status) -> AgentError {
-    AgentError::ContainerError(format!("containerd gRPC error ({}): {}", e.code(), e.message()))
+    AgentError::ContainerError(format!(
+        "containerd gRPC error ({}): {}",
+        e.code(),
+        e.message()
+    ))
 }
 
 fn is_not_found(e: &tonic::Status) -> bool {
-    e.message().contains("not found") || e.message().contains("process already finished") || e.code() == tonic::Code::NotFound
+    e.message().contains("not found")
+        || e.message().contains("process already finished")
+        || e.code() == tonic::Code::NotFound
 }
 
 fn base_mounts(data_dir: &str) -> Vec<serde_json::Value> {
@@ -1882,15 +2518,24 @@ fn masked_paths() -> Vec<&'static str> {
         "/proc/sched_debug",
         "/sys/firmware",
         // Additional security-sensitive paths
-        "/proc/kallsyms",      // Kernel symbols - useful for exploit development
-        "/proc/self/mem",      // Memory manipulation vector
-        "/sys/kernel",         // Kernel parameters and addresses
-        "/sys/class",          // Hardware enumeration for fingerprinting
-        "/proc/slabinfo",      // Kernel slab allocator info
-        "/proc/modules",       // Loaded kernel modules
+        "/proc/kallsyms", // Kernel symbols - useful for exploit development
+        "/proc/self/mem", // Memory manipulation vector
+        "/sys/kernel",    // Kernel parameters and addresses
+        "/sys/class",     // Hardware enumeration for fingerprinting
+        "/proc/slabinfo", // Kernel slab allocator info
+        "/proc/modules",  // Loaded kernel modules
     ]
 }
-fn readonly_paths() -> Vec<&'static str> { vec!["/proc/asound","/proc/bus","/proc/fs","/proc/irq","/proc/sys","/proc/sysrq-trigger"] }
+fn readonly_paths() -> Vec<&'static str> {
+    vec![
+        "/proc/asound",
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger",
+    ]
+}
 
 fn seccomp_arches() -> Vec<&'static str> {
     match std::env::consts::ARCH {
@@ -1945,24 +2590,47 @@ fn default_seccomp_profile() -> serde_json::Value {
     })
 }
 
-fn find_container_cgroup(container_id: &str) -> Option<String> { find_cgroup_recursive("/sys/fs/cgroup", container_id) }
+fn find_container_cgroup(container_id: &str) -> Option<String> {
+    find_cgroup_recursive("/sys/fs/cgroup", container_id)
+}
 fn find_cgroup_recursive(dir: &str, cid: &str) -> Option<String> {
     for entry in fs::read_dir(dir).ok()?.flatten() {
-        let p = entry.path(); let n = entry.file_name().to_string_lossy().to_string();
-        if n.contains(cid) && p.is_dir() { return Some(p.to_string_lossy().to_string()); }
-        if p.is_dir() && !n.starts_with('.') { if let Some(f) = find_cgroup_recursive(&p.to_string_lossy(), cid) { return Some(f); } }
+        let p = entry.path();
+        let n = entry.file_name().to_string_lossy().to_string();
+        if n.contains(cid) && p.is_dir() {
+            return Some(p.to_string_lossy().to_string());
+        }
+        if p.is_dir() && !n.starts_with('.') {
+            if let Some(f) = find_cgroup_recursive(&p.to_string_lossy(), cid) {
+                return Some(f);
+            }
+        }
     }
     None
 }
 
 async fn read_cgroup_cpu_percent(path: &str) -> Option<f64> {
-    let content = tokio::fs::read_to_string(format!("{}/cpu.stat", path)).await.ok()?;
+    let content = tokio::fs::read_to_string(format!("{}/cpu.stat", path))
+        .await
+        .ok()?;
     for line in content.lines() {
-        if line.starts_with("usage_usec") { return line.split_whitespace().nth(1)?.parse::<u64>().ok().map(|u| u as f64 / 1_000_000.0); }
+        if line.starts_with("usage_usec") {
+            return line
+                .split_whitespace()
+                .nth(1)?
+                .parse::<u64>()
+                .ok()
+                .map(|u| u as f64 / 1_000_000.0);
+        }
     }
     Some(0.0)
 }
 
 async fn read_cgroup_memory(path: &str) -> Option<u64> {
-    tokio::fs::read_to_string(format!("{}/memory.current", path)).await.ok()?.trim().parse().ok()
+    tokio::fs::read_to_string(format!("{}/memory.current", path))
+        .await
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
 }

@@ -17,8 +17,11 @@ use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{debug, error, info, warn};
 
-use crate::{AgentConfig, AgentError, AgentResult, ContainerdRuntime, FileManager, NetworkManager, StorageManager};
 use crate::config::CniNetworkConfig;
+use crate::{
+    AgentConfig, AgentError, AgentResult, ContainerdRuntime, FileManager, NetworkManager,
+    StorageManager,
+};
 
 type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
@@ -44,10 +47,7 @@ fn normalize_startup_for_sh(command: &str) -> String {
         Regex::new(r"\(\(\s*([^()]*)\s*\)\)").expect("valid arithmetic condition regex")
     });
     re.replace_all(command, |caps: &regex::Captures<'_>| {
-        let expr = caps
-            .get(1)
-            .map(|m| m.as_str().trim())
-            .unwrap_or("");
+        let expr = caps.get(1).map(|m| m.as_str().trim()).unwrap_or("");
         if expr.is_empty() {
             "[ 0 -ne 0 ]".to_string()
         } else {
@@ -66,7 +66,10 @@ fn validate_safe_path_segment(value: &str, label: &str) -> AgentResult<()> {
         )));
     }
     if trimmed.contains('\\') {
-        return Err(AgentError::InvalidRequest(format!("Invalid {}: contains \\\\", label)));
+        return Err(AgentError::InvalidRequest(format!(
+            "Invalid {}: contains \\\\",
+            label
+        )));
     }
     let mut components = Path::new(trimmed).components();
     match (components.next(), components.next()) {
@@ -253,9 +256,8 @@ impl WebSocketHandler {
         let (auth_token, token_type) = self.select_agent_auth_token()?;
 
         // Enforce secure transport for non-local backends.
-        let mut parsed_url = Url::parse(&self.config.server.backend_url).map_err(|e| {
-            AgentError::ConfigError(format!("Invalid server.backend_url: {}", e))
-        })?;
+        let mut parsed_url = Url::parse(&self.config.server.backend_url)
+            .map_err(|e| AgentError::ConfigError(format!("Invalid server.backend_url: {}", e)))?;
         match parsed_url.scheme() {
             "wss" => {}
             "ws" => {}
@@ -561,10 +563,14 @@ impl WebSocketHandler {
                 }
                 self.start_server(server_id, container_id).await?
             }
-            "stop" => self.stop_server(server_id, container_id, &stop_policy).await?,
+            "stop" => {
+                self.stop_server(server_id, container_id, &stop_policy)
+                    .await?
+            }
             "kill" => self.kill_server(server_id, container_id).await?,
             "restart" => {
-                self.stop_server(server_id, container_id, &stop_policy).await?;
+                self.stop_server(server_id, container_id, &stop_policy)
+                    .await?;
                 tokio::time::sleep(Duration::from_secs(2)).await;
                 let container_id = self.resolve_container_id(server_id, server_uuid).await;
                 self.start_server(server_id, container_id).await?;
@@ -697,7 +703,11 @@ impl WebSocketHandler {
             .unwrap_or_default()
     }
 
-    async fn cleanup_all_server_containers(&self, server_id: &str, server_uuid: &str) -> AgentResult<()> {
+    async fn cleanup_all_server_containers(
+        &self,
+        server_id: &str,
+        server_uuid: &str,
+    ) -> AgentResult<()> {
         let mut cleaned = 0;
 
         for container_name in &[server_id, server_uuid] {
@@ -718,10 +728,7 @@ impl WebSocketHandler {
                             "Failed to stop container {}: {}, attempting kill",
                             container_name, e
                         );
-                        let _ = self
-                            .runtime
-                            .kill_container(container_name, "SIGKILL")
-                            .await;
+                        let _ = self.runtime.kill_container(container_name, "SIGKILL").await;
                     }
                 }
                 if self.runtime.container_exists(container_name).await {
@@ -739,7 +746,10 @@ impl WebSocketHandler {
             self.emit_console_output(
                 server_id,
                 "system",
-                &format!("[Catalyst] Cleaned up {} container(s) during error state cleanup.\n", cleaned),
+                &format!(
+                    "[Catalyst] Cleaned up {} container(s) during error state cleanup.\n",
+                    cleaned
+                ),
             )
             .await?;
         }
@@ -895,7 +905,8 @@ impl WebSocketHandler {
 
         info!("Installing server: {} (UUID: {})", server_id, server_uuid);
 
-        self.cleanup_all_server_containers(server_id, server_uuid).await?;
+        self.cleanup_all_server_containers(server_id, server_uuid)
+            .await?;
 
         // Derive host mount path on-agent (defense in depth). Do not trust control-plane host paths.
         validate_safe_path_segment(server_uuid, "serverUuid")?;
@@ -971,7 +982,9 @@ impl WebSocketHandler {
             .runtime
             .spawn_installer_container(install_image, &final_script, &env_map, &host_server_dir)
             .await
-            .map_err(|e| AgentError::IoError(format!("Failed to spawn installer container: {}", e)))?;
+            .map_err(|e| {
+                AgentError::IoError(format!("Failed to spawn installer container: {}", e))
+            })?;
 
         // Tail stdout/stderr files from the installer container
         let mut stdout_pos = 0u64;
@@ -986,7 +999,8 @@ impl WebSocketHandler {
                     for line in content[stdout_pos as usize..].lines() {
                         let payload = format!("{}\n", line);
                         stdout_buffer.push_str(&payload);
-                        self.emit_console_output(server_id, "stdout", &payload).await?;
+                        self.emit_console_output(server_id, "stdout", &payload)
+                            .await?;
                     }
                     stdout_pos = content.len() as u64;
                 }
@@ -997,7 +1011,8 @@ impl WebSocketHandler {
                     for line in content[stderr_pos as usize..].lines() {
                         let payload = format!("{}\n", line);
                         stderr_buffer.push_str(&payload);
-                        self.emit_console_output(server_id, "stderr", &payload).await?;
+                        self.emit_console_output(server_id, "stderr", &payload)
+                            .await?;
                     }
                     stderr_pos = content.len() as u64;
                 }
@@ -1011,7 +1026,8 @@ impl WebSocketHandler {
                             for line in content[stdout_pos as usize..].lines() {
                                 let payload = format!("{}\n", line);
                                 stdout_buffer.push_str(&payload);
-                                self.emit_console_output(server_id, "stdout", &payload).await?;
+                                self.emit_console_output(server_id, "stdout", &payload)
+                                    .await?;
                             }
                         }
                     }
@@ -1020,7 +1036,8 @@ impl WebSocketHandler {
                             for line in content[stderr_pos as usize..].lines() {
                                 let payload = format!("{}\n", line);
                                 stderr_buffer.push_str(&payload);
-                                self.emit_console_output(server_id, "stderr", &payload).await?;
+                                self.emit_console_output(server_id, "stderr", &payload)
+                                    .await?;
                             }
                         }
                     }
@@ -1037,8 +1054,14 @@ impl WebSocketHandler {
                         };
                         self.emit_console_output(server_id, "stderr", &format!("{}\n", reason))
                             .await?;
-                        self.emit_server_state_update(server_id, "error", Some(reason.clone()), None, None)
-                            .await?;
+                        self.emit_server_state_update(
+                            server_id,
+                            "error",
+                            Some(reason.clone()),
+                            None,
+                            None,
+                        )
+                        .await?;
                         return Err(AgentError::InstallationError(format!(
                             "Install script failed: {}",
                             reason
@@ -1086,7 +1109,8 @@ impl WebSocketHandler {
                 streams.retain(|key| {
                     // Keep only streams that don't belong to this server
                     // or keep the exact stream we're about to create (prevents duplicates)
-                    !key.starts_with(&format!("{}:", server_id)) || *key == format!("{}:{}", server_id, container_id)
+                    !key.starts_with(&format!("{}:", server_id))
+                        || *key == format!("{}:{}", server_id, container_id)
                 });
             }
 
@@ -1129,14 +1153,19 @@ impl WebSocketHandler {
 
         // Tail the stdout/stderr files
         loop {
-            let running = self.runtime.is_container_running(container_id).await.unwrap_or(false);
+            let running = self
+                .runtime
+                .is_container_running(container_id)
+                .await
+                .unwrap_or(false);
             let mut had_data = false;
 
             if let Ok(content) = tokio::fs::read_to_string(&stdout_path).await {
                 if (stdout_pos as usize) < content.len() {
                     for line in content[stdout_pos as usize..].lines() {
                         let payload = format!("{}\n", line);
-                        self.emit_console_output(server_id, "stdout", &payload).await?;
+                        self.emit_console_output(server_id, "stdout", &payload)
+                            .await?;
                     }
                     stdout_pos = content.len() as u64;
                     had_data = true;
@@ -1146,7 +1175,8 @@ impl WebSocketHandler {
                 if (stderr_pos as usize) < content.len() {
                     for line in content[stderr_pos as usize..].lines() {
                         let payload = format!("{}\n", line);
-                        self.emit_console_output(server_id, "stderr", &payload).await?;
+                        self.emit_console_output(server_id, "stderr", &payload)
+                            .await?;
                     }
                     stderr_pos = content.len() as u64;
                     had_data = true;
@@ -1159,14 +1189,16 @@ impl WebSocketHandler {
                 if let Ok(content) = tokio::fs::read_to_string(&stdout_path).await {
                     if (stdout_pos as usize) < content.len() {
                         for line in content[stdout_pos as usize..].lines() {
-                            self.emit_console_output(server_id, "stdout", &format!("{}\n", line)).await?;
+                            self.emit_console_output(server_id, "stdout", &format!("{}\n", line))
+                                .await?;
                         }
                     }
                 }
                 if let Ok(content) = tokio::fs::read_to_string(&stderr_path).await {
                     if (stderr_pos as usize) < content.len() {
                         for line in content[stderr_pos as usize..].lines() {
-                            self.emit_console_output(server_id, "stderr", &format!("{}\n", line)).await?;
+                            self.emit_console_output(server_id, "stderr", &format!("{}\n", line))
+                                .await?;
                         }
                     }
                 }
@@ -1345,7 +1377,8 @@ impl WebSocketHandler {
                 }
             }
 
-            self.cleanup_all_server_containers(server_id, server_uuid).await?;
+            self.cleanup_all_server_containers(server_id, server_uuid)
+                .await?;
 
             // Create and start container
             self.runtime
@@ -1485,7 +1518,10 @@ impl WebSocketHandler {
         stop_policy: &StopPolicy,
     ) -> AgentResult<()> {
         if container_id.is_empty() {
-            info!("No container found for server {}, marking as stopped", server_id);
+            info!(
+                "No container found for server {}, marking as stopped",
+                server_id
+            );
             self.stop_monitor_task(server_id).await;
             self.emit_server_state_update(server_id, "stopped", None, None, None)
                 .await?;
@@ -1587,7 +1623,10 @@ impl WebSocketHandler {
 
     async fn kill_server(&self, server_id: &str, container_id: String) -> AgentResult<()> {
         if container_id.is_empty() {
-            info!("No container found for server {}, marking as killed", server_id);
+            info!(
+                "No container found for server {}, marking as killed",
+                server_id
+            );
             self.stop_monitor_task(server_id).await;
             self.emit_server_state_update(
                 server_id,
@@ -1599,7 +1638,10 @@ impl WebSocketHandler {
             .await?;
             return Ok(());
         }
-        info!("Force killing server: {} (container {})", server_id, container_id);
+        info!(
+            "Force killing server: {} (container {})",
+            server_id, container_id
+        );
 
         // Stop monitoring first - we don't want monitor interfering
         self.stop_monitor_task(server_id).await;
@@ -1614,14 +1656,20 @@ impl WebSocketHandler {
 
         // Force kill the container - this method never fails and always attempts cleanup
         if let Err(e) = self.runtime.force_kill_container(&container_id).await {
-            warn!("Force kill had issues for {}: {}, continuing with cleanup", container_id, e);
+            warn!(
+                "Force kill had issues for {}: {}, continuing with cleanup",
+                container_id, e
+            );
         }
 
         // Always attempt to remove the container regardless of what happened above
         // remove_container also sends SIGKILL, so this is a safety net
         if self.runtime.container_exists(&container_id).await {
             if let Err(e) = self.runtime.remove_container(&container_id).await {
-                warn!("Failed to remove container {}: {}, server state still updated", container_id, e);
+                warn!(
+                    "Failed to remove container {}: {}, server state still updated",
+                    container_id, e
+                );
             }
         }
 
@@ -1711,9 +1759,7 @@ impl WebSocketHandler {
 
         // Use server_uuid for storage path (same as backup/restore operations)
         // Fall back to server_id if serverUuid is not provided
-        let server_uuid = msg["serverUuid"]
-            .as_str()
-            .unwrap_or(server_id);
+        let server_uuid = msg["serverUuid"].as_str().unwrap_or(server_id);
 
         let path = msg["path"]
             .as_str()
@@ -2276,9 +2322,7 @@ impl WebSocketHandler {
             }
         };
 
-        let next_total = session
-            .bytes_written
-            .saturating_add(chunk.len() as u64);
+        let next_total = session.bytes_written.saturating_add(chunk.len() as u64);
         if next_total > MAX_BACKUP_UPLOAD_BYTES {
             let path = session.path.clone();
             drop(session.file);
@@ -2768,7 +2812,9 @@ impl WebSocketHandler {
         let mut running_containers = HashSet::new();
         let mut found_uuids = Vec::new();
         for container in &containers {
-            if !container.managed { continue; }
+            if !container.managed {
+                continue;
+            }
             let container_name = normalize_container_name(&container.names);
             if container_name.is_empty() {
                 continue;
@@ -2781,7 +2827,9 @@ impl WebSocketHandler {
 
         // Report state for all known containers
         for container in containers {
-            if !container.managed { continue; }
+            if !container.managed {
+                continue;
+            }
             let server_uuid = normalize_container_name(&container.names);
             if server_uuid.is_empty() {
                 continue;
@@ -3127,7 +3175,9 @@ fn extract_container_id_from_event(event: &prost_types::Any) -> Option<String> {
         i += 1;
         if wire_type == 2 {
             // Length-delimited field
-            if i >= data.len() { break; }
+            if i >= data.len() {
+                break;
+            }
             let len = data[i] as usize;
             i += 1;
             if field_number == 1 && i + len <= data.len() {
@@ -3138,7 +3188,9 @@ fn extract_container_id_from_event(event: &prost_types::Any) -> Option<String> {
             i += len;
         } else if wire_type == 0 {
             // Varint
-            while i < data.len() && data[i] & 0x80 != 0 { i += 1; }
+            while i < data.len() && data[i] & 0x80 != 0 {
+                i += 1;
+            }
             i += 1;
         } else {
             break;

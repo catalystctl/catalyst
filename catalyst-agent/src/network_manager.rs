@@ -94,9 +94,7 @@ impl NetworkManager {
     }
 
     /// Create a new CNI network configuration
-    pub fn create_network(
-        network: &CniNetworkConfig,
-    ) -> Result<(), AgentError> {
+    pub fn create_network(network: &CniNetworkConfig) -> Result<(), AgentError> {
         Self::validate_network_name(&network.name)?;
         let cni_config_path = format!("{}/{}.conflist", CNI_DIR, network.name);
 
@@ -152,19 +150,26 @@ impl NetworkManager {
         fs::write(&cni_config_path, cni_config)
             .map_err(|e| AgentError::IoError(format!("Failed to write CNI config: {}", e)))?;
 
-        info!("✓ Created CNI network '{}' at {}", network.name, cni_config_path);
+        info!(
+            "✓ Created CNI network '{}' at {}",
+            network.name, cni_config_path
+        );
 
         // Update config.toml to persist the network
-        Self::persist_to_config(network, &interface, &cidr, &gateway, &range_start, &range_end)?;
+        Self::persist_to_config(
+            network,
+            &interface,
+            &cidr,
+            &gateway,
+            &range_start,
+            &range_end,
+        )?;
 
         Ok(())
     }
 
     /// Update an existing CNI network configuration
-    pub fn update_network(
-        old_name: &str,
-        network: &CniNetworkConfig,
-    ) -> Result<(), AgentError> {
+    pub fn update_network(old_name: &str, network: &CniNetworkConfig) -> Result<(), AgentError> {
         Self::validate_network_name(old_name)?;
         Self::validate_network_name(&network.name)?;
         let old_cni_path = format!("{}/{}.conflist", CNI_DIR, old_name);
@@ -179,8 +184,9 @@ impl NetworkManager {
 
         // If name changed, delete old config
         if old_name != network.name {
-            fs::remove_file(&old_cni_path)
-                .map_err(|e| AgentError::IoError(format!("Failed to remove old CNI config: {}", e)))?;
+            fs::remove_file(&old_cni_path).map_err(|e| {
+                AgentError::IoError(format!("Failed to remove old CNI config: {}", e))
+            })?;
             info!("✓ Removed old CNI network '{}'", old_name);
         }
 
@@ -231,10 +237,21 @@ impl NetworkManager {
         fs::write(&cni_config_path, cni_config)
             .map_err(|e| AgentError::IoError(format!("Failed to write CNI config: {}", e)))?;
 
-        info!("✓ Updated CNI network '{}' at {}", network.name, cni_config_path);
+        info!(
+            "✓ Updated CNI network '{}' at {}",
+            network.name, cni_config_path
+        );
 
         // Update config.toml
-        Self::update_config(old_name, network, &interface, &cidr, &gateway, &range_start, &range_end)?;
+        Self::update_config(
+            old_name,
+            network,
+            &interface,
+            &cidr,
+            &gateway,
+            &range_start,
+            &range_end,
+        )?;
 
         Ok(())
     }
@@ -323,7 +340,10 @@ impl NetworkManager {
                 .and_then(TomlValue::as_str)
                 == Some(network.name.as_str())
         }) {
-            info!("✓ Network '{}' already present in {}", network.name, CONFIG_PATH);
+            info!(
+                "✓ Network '{}' already present in {}",
+                network.name, CONFIG_PATH
+            );
             return Ok(());
         }
 
@@ -356,7 +376,9 @@ impl NetworkManager {
 
         let mut updated = false;
         for value in networks.iter_mut() {
-            let Some(table) = value.as_table_mut() else { continue };
+            let Some(table) = value.as_table_mut() else {
+                continue;
+            };
             let Some(existing_name) = table
                 .get("name")
                 .and_then(TomlValue::as_str)
@@ -439,9 +461,9 @@ impl NetworkManager {
         if !value.is_table() {
             *value = TomlValue::Table(toml::value::Table::new());
         }
-        let root = value
-            .as_table_mut()
-            .ok_or_else(|| AgentError::IoError("Invalid config TOML: expected table".to_string()))?;
+        let root = value.as_table_mut().ok_or_else(|| {
+            AgentError::IoError("Invalid config TOML: expected table".to_string())
+        })?;
 
         let networking = root
             .entry("networking")
@@ -460,7 +482,9 @@ impl NetworkManager {
             *networks = TomlValue::Array(Vec::new());
         }
         networks.as_array_mut().ok_or_else(|| {
-            AgentError::IoError("Invalid config TOML: networking.networks must be an array".to_string())
+            AgentError::IoError(
+                "Invalid config TOML: networking.networks must be an array".to_string(),
+            )
         })
     }
 
@@ -516,7 +540,10 @@ impl NetworkManager {
                 })
                 .unwrap_or_default();
             let interface = Self::normalize_interface_name(&interface);
-            if !interface.is_empty() && interface != "lo" && Self::validate_interface_name(&interface).is_ok() {
+            if !interface.is_empty()
+                && interface != "lo"
+                && Self::validate_interface_name(&interface).is_ok()
+            {
                 return Ok(interface);
             }
         }
@@ -542,7 +569,10 @@ impl NetworkManager {
                 })
                 .unwrap_or_default();
             let interface = Self::normalize_interface_name(&interface);
-            if !interface.is_empty() && interface != "lo" && Self::validate_interface_name(&interface).is_ok() {
+            if !interface.is_empty()
+                && interface != "lo"
+                && Self::validate_interface_name(&interface).is_ok()
+            {
                 return Ok(interface);
             }
         }
@@ -604,7 +634,10 @@ impl NetworkManager {
         }
 
         let _third_octet = ip_parts[2];
-        Ok((format!("{}.{}.10", ip_parts[0], ip_parts[1]), format!("{}.{}.250", ip_parts[0], ip_parts[1])))
+        Ok((
+            format!("{}.{}.10", ip_parts[0], ip_parts[1]),
+            format!("{}.{}.250", ip_parts[0], ip_parts[1]),
+        ))
     }
 
     /// Detect default gateway
@@ -715,7 +748,9 @@ impl NetworkManager {
         if range_size < 10 {
             warn!(
                 "IP range {}-{} is very small ({} addresses). Consider using a larger range.",
-                range_start, range_end, range_size + 1
+                range_start,
+                range_end,
+                range_size + 1
             );
         }
 
@@ -726,7 +761,10 @@ impl NetworkManager {
     fn parse_ipv4(ip: &str) -> Result<u32, AgentError> {
         let parts: Vec<&str> = ip.split('.').collect();
         if parts.len() != 4 {
-            return Err(AgentError::InternalError(format!("Invalid IP address: '{}'", ip)));
+            return Err(AgentError::InternalError(format!(
+                "Invalid IP address: '{}'",
+                ip
+            )));
         }
 
         let mut result: u32 = 0;

@@ -333,8 +333,8 @@ impl SystemSetup {
     }
 
     fn sha256_file(path: &str) -> Result<String, AgentError> {
-        let mut file =
-            fs::File::open(path).map_err(|e| AgentError::IoError(format!("Open {}: {}", path, e)))?;
+        let mut file = fs::File::open(path)
+            .map_err(|e| AgentError::IoError(format!("Open {}: {}", path, e)))?;
         let mut hasher = Sha256::new();
         let mut buffer = [0u8; 8192];
         loop {
@@ -364,8 +364,12 @@ impl SystemSetup {
         // ensure_cni_plugins().
         match (version, arch) {
             // Values are from the upstream GitHub release artifacts.
-            ("v1.9.0", "amd64") => Some("58c037b23b0792b91c1a464f3c5d6d2d124ea74df761911c2c5ec8c714e5432d"),
-            ("v1.9.0", "arm64") => Some("259604308a06b35957f5203771358fbb9e89d09579b65b3e50551ffefc536d63"),
+            ("v1.9.0", "amd64") => {
+                Some("58c037b23b0792b91c1a464f3c5d6d2d124ea74df761911c2c5ec8c714e5432d")
+            }
+            ("v1.9.0", "arm64") => {
+                Some("259604308a06b35957f5203771358fbb9e89d09579b65b3e50551ffefc536d63")
+            }
             _ => None,
         }
     }

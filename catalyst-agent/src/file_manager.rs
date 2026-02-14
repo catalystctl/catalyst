@@ -484,7 +484,8 @@ impl FileManager {
         // Security: Validate that no symlinks were extracted that escape the target directory.
         // This prevents archive symlink attacks where a malicious archive contains symlinks
         // pointing outside the server directory (e.g., to /etc/cron.d).
-        self.validate_extracted_symlinks(&target_full, &server_id).await?;
+        self.validate_extracted_symlinks(&target_full, &server_id)
+            .await?;
 
         info!(
             "Archive decompressed: {:?} -> {:?}",
@@ -501,9 +502,9 @@ impl FileManager {
         server_id: &str,
     ) -> AgentResult<()> {
         let server_base = self.data_dir.join(server_id);
-        let canonical_base = server_base
-            .canonicalize()
-            .map_err(|e| AgentError::FileSystemError(format!("Cannot resolve server dir: {}", e)))?;
+        let canonical_base = server_base.canonicalize().map_err(|e| {
+            AgentError::FileSystemError(format!("Cannot resolve server dir: {}", e))
+        })?;
 
         // Walk the extracted directory looking for symlinks
         let mut dangerous_symlinks = Vec::new();
@@ -569,22 +570,31 @@ impl FileManager {
                             if let Ok(canon_target) = resolved.canonicalize() {
                                 // Check if the resolved target is outside the server base
                                 if !canon_target.starts_with(canonical_base) {
-                                    dangerous_symlinks
-                                        .push(format!("{} -> {}", path.display(), target.display()));
+                                    dangerous_symlinks.push(format!(
+                                        "{} -> {}",
+                                        path.display(),
+                                        target.display()
+                                    ));
                                 }
                             } else if resolved.is_absolute() {
                                 // Absolute symlink to non-existent path - still dangerous
                                 if !resolved.starts_with(canonical_base) {
-                                    dangerous_symlinks
-                                        .push(format!("{} -> {}", path.display(), target.display()));
+                                    dangerous_symlinks.push(format!(
+                                        "{} -> {}",
+                                        path.display(),
+                                        target.display()
+                                    ));
                                 }
                             } else {
                                 // Relative symlink - resolve against base and check
                                 let full_resolved = canonical_base.join(&target);
                                 if let Ok(canon) = full_resolved.canonicalize() {
                                     if !canon.starts_with(canonical_base) {
-                                        dangerous_symlinks
-                                            .push(format!("{} -> {}", path.display(), target.display()));
+                                        dangerous_symlinks.push(format!(
+                                            "{} -> {}",
+                                            path.display(),
+                                            target.display()
+                                        ));
                                     }
                                 }
                             }
@@ -596,8 +606,12 @@ impl FileManager {
                 }
                 Ok(ft) if ft.is_dir() => {
                     // Recurse into subdirectories
-                    Box::pin(self.check_symlinks_recursive(&path, canonical_base, dangerous_symlinks))
-                        .await?;
+                    Box::pin(self.check_symlinks_recursive(
+                        &path,
+                        canonical_base,
+                        dangerous_symlinks,
+                    ))
+                    .await?;
                 }
                 _ => {}
             }

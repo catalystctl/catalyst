@@ -1,12 +1,12 @@
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{RwLock, Semaphore};
 use tokio::io::AsyncWriteExt;
+use tokio::sync::{RwLock, Semaphore};
 
 use futures::StreamExt;
-use reqwest::Client;
 use reqwest::header::LOCATION;
+use reqwest::Client;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -175,10 +175,7 @@ async fn poll_worker(
                 if !resp.status().is_success() {
                     let status = resp.status();
                     let body = resp.text().await.unwrap_or_default();
-                    warn!(
-                        worker_id,
-                        "Poll returned {}: {}", status, body
-                    );
+                    warn!(worker_id, "Poll returned {}: {}", status, body);
                     tokio::time::sleep(retry_delay).await;
                     continue;
                 }
@@ -270,11 +267,7 @@ async fn process_request(
 
 // --- Operation Handlers ---
 
-async fn handle_list(
-    ctx: &TunnelCtx<'_>,
-    fm: &FileManager,
-    req: &TunnelRequest,
-) {
+async fn handle_list(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest) {
     match fm.list_dir(&req.server_uuid, &req.path).await {
         Ok(entries) => {
             // Convert to format expected by frontend
@@ -299,11 +292,7 @@ async fn handle_list(
     }
 }
 
-async fn handle_download(
-    ctx: &TunnelCtx<'_>,
-    fm: &FileManager,
-    req: &TunnelRequest,
-) {
+async fn handle_download(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest) {
     match fm.read_file(&req.server_uuid, &req.path).await {
         Ok(data) => {
             send_stream_response(ctx, true, None, data).await;
@@ -314,42 +303,52 @@ async fn handle_download(
     }
 }
 
-async fn handle_upload(
-    ctx: &TunnelCtx<'_>,
-    fm: &FileManager,
-    req: &TunnelRequest,
-) {
+async fn handle_upload(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest) {
     // Fetch upload data from backend
     let upload_url = format!(
         "{}/api/internal/file-tunnel/upload/{}",
         ctx.base_url, req.request_id
     );
-    match ctx.client
+    match ctx
+        .client
         .get(&upload_url)
         .header("X-Node-Id", ctx.node_id)
         .header("X-Node-Api-Key", ctx.api_key)
         .send()
         .await
     {
-        Ok(resp) if resp.status().is_success() => {
-            match resp.bytes().await {
-                Ok(data) => {
-                    match fm.write_file_bytes(&req.server_uuid, &req.path, &data).await {
-                        Ok(()) => {
-                            send_json_response(ctx, true, None, None).await;
-                        }
-                        Err(e) => {
-                            send_json_response(ctx, false, None, Some(e.to_string())).await;
-                        }
+        Ok(resp) if resp.status().is_success() => match resp.bytes().await {
+            Ok(data) => {
+                match fm
+                    .write_file_bytes(&req.server_uuid, &req.path, &data)
+                    .await
+                {
+                    Ok(()) => {
+                        send_json_response(ctx, true, None, None).await;
+                    }
+                    Err(e) => {
+                        send_json_response(ctx, false, None, Some(e.to_string())).await;
                     }
                 }
-                Err(e) => {
-                    send_json_response(ctx, false, None, Some(format!("Failed to read upload data: {}", e))).await;
-                }
             }
-        }
+            Err(e) => {
+                send_json_response(
+                    ctx,
+                    false,
+                    None,
+                    Some(format!("Failed to read upload data: {}", e)),
+                )
+                .await;
+            }
+        },
         Ok(resp) => {
-            send_json_response(ctx, false, None, Some(format!("Failed to fetch upload: {}", resp.status()))).await;
+            send_json_response(
+                ctx,
+                false,
+                None,
+                Some(format!("Failed to fetch upload: {}", resp.status())),
+            )
+            .await;
         }
         Err(e) => {
             send_json_response(ctx, false, None, Some(format!("Upload fetch error: {}", e))).await;
@@ -357,11 +356,7 @@ async fn handle_upload(
     }
 }
 
-async fn handle_write(
-    ctx: &TunnelCtx<'_>,
-    fm: &FileManager,
-    req: &TunnelRequest,
-) {
+async fn handle_write(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest) {
     let content = req
         .data
         .as_ref()
@@ -379,11 +374,7 @@ async fn handle_write(
     }
 }
 
-async fn handle_create(
-    ctx: &TunnelCtx<'_>,
-    fm: &FileManager,
-    req: &TunnelRequest,
-) {
+async fn handle_create(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest) {
     let is_directory = req
         .data
         .as_ref()
@@ -397,7 +388,10 @@ async fn handle_create(
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
-    match fm.create_entry(&req.server_uuid, &req.path, is_directory, content).await {
+    match fm
+        .create_entry(&req.server_uuid, &req.path, is_directory, content)
+        .await
+    {
         Ok(()) => {
             send_json_response(ctx, true, None, None).await;
         }
@@ -407,11 +401,7 @@ async fn handle_create(
     }
 }
 
-async fn handle_delete(
-    ctx: &TunnelCtx<'_>,
-    fm: &FileManager,
-    req: &TunnelRequest,
-) {
+async fn handle_delete(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest) {
     match fm.delete_file(&req.server_uuid, &req.path).await {
         Ok(()) => {
             send_json_response(ctx, true, None, None).await;
@@ -422,12 +412,13 @@ async fn handle_delete(
     }
 }
 
-async fn handle_rename(
-    ctx: &TunnelCtx<'_>,
-    fm: &FileManager,
-    req: &TunnelRequest,
-) {
-    let to = match req.data.as_ref().and_then(|d| d.get("to")).and_then(|v| v.as_str()) {
+async fn handle_rename(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest) {
+    let to = match req
+        .data
+        .as_ref()
+        .and_then(|d| d.get("to"))
+        .and_then(|v| v.as_str())
+    {
         Some(to) => to,
         None => {
             send_json_response(ctx, false, None, Some("Missing 'to' path".to_string())).await;
@@ -445,12 +436,13 @@ async fn handle_rename(
     }
 }
 
-async fn handle_permissions(
-    ctx: &TunnelCtx<'_>,
-    fm: &FileManager,
-    req: &TunnelRequest,
-) {
-    let mode = match req.data.as_ref().and_then(|d| d.get("mode")).and_then(|v| v.as_u64()) {
+async fn handle_permissions(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest) {
+    let mode = match req
+        .data
+        .as_ref()
+        .and_then(|d| d.get("mode"))
+        .and_then(|v| v.as_u64())
+    {
         Some(m) => m as u32,
         None => {
             send_json_response(ctx, false, None, Some("Missing mode".to_string())).await;
@@ -468,11 +460,7 @@ async fn handle_permissions(
     }
 }
 
-async fn handle_compress(
-    ctx: &TunnelCtx<'_>,
-    fm: &FileManager,
-    req: &TunnelRequest,
-) {
+async fn handle_compress(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest) {
     let paths: Vec<String> = req
         .data
         .as_ref()
@@ -495,11 +483,7 @@ async fn handle_compress(
     }
 }
 
-async fn handle_decompress(
-    ctx: &TunnelCtx<'_>,
-    fm: &FileManager,
-    req: &TunnelRequest,
-) {
+async fn handle_decompress(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest) {
     let target = match req
         .data
         .as_ref()
@@ -523,11 +507,7 @@ async fn handle_decompress(
     }
 }
 
-async fn handle_archive_contents(
-    ctx: &TunnelCtx<'_>,
-    fm: &FileManager,
-    req: &TunnelRequest,
-) {
+async fn handle_archive_contents(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest) {
     match fm.list_archive_contents(&req.server_uuid, &req.path).await {
         Ok(entries) => {
             let data: Vec<Value> = entries
@@ -627,12 +607,13 @@ async fn validate_install_url(url: &Url) -> Result<(), String> {
     Ok(())
 }
 
-async fn handle_install_url(
-    ctx: &TunnelCtx<'_>,
-    fm: &FileManager,
-    req: &TunnelRequest,
-) {
-    let url = match req.data.as_ref().and_then(|d| d.get("url")).and_then(|v| v.as_str()) {
+async fn handle_install_url(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest) {
+    let url = match req
+        .data
+        .as_ref()
+        .and_then(|d| d.get("url"))
+        .and_then(|v| v.as_str())
+    {
         Some(u) => u,
         None => {
             send_json_response(ctx, false, None, Some("Missing 'url' in data".to_string())).await;
@@ -655,7 +636,10 @@ async fn handle_install_url(
     };
 
     // Resolve and ensure parent directory exists
-    let target_path = match fm.resolve_and_ensure_parent(&req.server_uuid, &req.path).await {
+    let target_path = match fm
+        .resolve_and_ensure_parent(&req.server_uuid, &req.path)
+        .await
+    {
         Ok(p) => p,
         Err(e) => {
             send_json_response(ctx, false, None, Some(e.to_string())).await;
@@ -691,8 +675,7 @@ async fn handle_install_url(
         let response = match dl_client.get(current_url.clone()).send().await {
             Ok(r) => r,
             Err(e) => {
-                send_json_response(ctx, false, None, Some(format!("Download failed: {}", e)))
-                    .await;
+                send_json_response(ctx, false, None, Some(format!("Download failed: {}", e))).await;
                 return;
             }
         };
@@ -817,13 +800,7 @@ async fn handle_install_url(
         return;
     }
 
-    send_json_response(
-        ctx,
-        false,
-        None,
-        Some("Too many redirects".to_string()),
-    )
-    .await;
+    send_json_response(ctx, false, None, Some("Too many redirects".to_string())).await;
 }
 
 // --- Response Helpers ---
@@ -854,7 +831,8 @@ async fn send_json_response(
         content_type: None,
     };
 
-    if let Err(e) = ctx.client
+    if let Err(e) = ctx
+        .client
         .post(&url)
         .header("X-Node-Id", ctx.node_id)
         .header("X-Node-Api-Key", ctx.api_key)
@@ -862,7 +840,10 @@ async fn send_json_response(
         .send()
         .await
     {
-        error!(request_id = ctx.request_id, "Failed to send JSON response: {}", e);
+        error!(
+            request_id = ctx.request_id,
+            "Failed to send JSON response: {}", e
+        );
     }
 }
 
@@ -877,7 +858,8 @@ async fn send_stream_response(
         ctx.base_url, ctx.request_id
     );
 
-    let mut req = ctx.client
+    let mut req = ctx
+        .client
         .post(&url)
         .header("X-Node-Id", ctx.node_id)
         .header("X-Node-Api-Key", ctx.api_key)
@@ -889,7 +871,10 @@ async fn send_stream_response(
     }
 
     if let Err(e) = req.body(body).send().await {
-        error!(request_id = ctx.request_id, "Failed to send stream response: {}", e);
+        error!(
+            request_id = ctx.request_id,
+            "Failed to send stream response: {}", e
+        );
     }
 }
 
