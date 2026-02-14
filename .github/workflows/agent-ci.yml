@@ -34,21 +34,25 @@ jobs:
         run: cargo check --manifest-path catalyst-agent/Cargo.toml
         env:
           PROTOC: /usr/bin/protoc
+          PROTOC_OPTS: --experimental_allow_proto3_optional
 
       - name: Run cargo fmt check
         run: cargo fmt --manifest-path catalyst-agent/Cargo.toml -- --check
         env:
           PROTOC: /usr/bin/protoc
+          PROTOC_OPTS: --experimental_allow_proto3_optional
 
       - name: Run cargo clippy
         run: cargo clippy --manifest-path catalyst-agent/Cargo.toml -- -D warnings
         env:
           PROTOC: /usr/bin/protoc
+          PROTOC_OPTS: --experimental_allow_proto3_optional
 
       - name: Run tests
         run: cargo test --manifest-path catalyst-agent/Cargo.toml
         env:
           PROTOC: /usr/bin/protoc
+          PROTOC_OPTS: --experimental_allow_proto3_optional
 
   build:
     needs: test
@@ -86,6 +90,7 @@ jobs:
           cargo build --release --target ${{ matrix.target }}
         env:
           PROTOC: /usr/bin/protoc
+          PROTOC_OPTS: --experimental_allow_proto3_optional
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
