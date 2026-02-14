@@ -46,7 +46,8 @@ impl CatalystAgent {
             config.networking.dns_servers.clone(),
         ).await?);
 
-        let file_manager = Arc::new(FileManager::new(config.server.data_dir.join("servers")));
+        // FileManager uses the same base data_dir as storage - servers are stored at {data_dir}/{server_uuid}
+        let file_manager = Arc::new(FileManager::new(config.server.data_dir.clone()));
         let storage_manager = Arc::new(StorageManager::new(config.server.data_dir.clone()));
         let backend_connected = Arc::new(RwLock::new(false));
         let file_tunnel = Arc::new(FileTunnelClient::new(

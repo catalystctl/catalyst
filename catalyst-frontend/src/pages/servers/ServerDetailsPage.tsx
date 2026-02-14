@@ -1697,10 +1697,9 @@ function ServerDetailsPage() {
   }
 
   const nodeLabel = server.node?.name ?? server.nodeName ?? server.nodeId;
-  const isBridge = server.networkMode === 'bridge';
-  const nodeIp = isBridge
-    ? (server.node?.publicAddress ?? server.node?.hostname ?? 'n/a')
-    : (server.connection?.host ?? server.primaryIp ?? 'n/a');
+  // For all network modes, prefer the assigned IP (from allocation or IPAM)
+  // Fall back to node's public address only if no specific IP is assigned
+  const nodeIp = server.connection?.host ?? server.primaryIp ?? server.node?.publicAddress ?? server.node?.hostname ?? 'n/a';
   const nodePort = server.primaryPort ?? 'n/a';
   const diskLimitMb = server.allocatedDiskMb ?? 0;
   const liveDiskUsageMb = liveMetrics?.diskUsageMb;

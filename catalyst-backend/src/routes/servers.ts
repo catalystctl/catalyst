@@ -215,6 +215,47 @@ const resolvePrimaryHostPort = (server: any) => {
   return bindings[primaryPort] ?? primaryPort;
 };
 
+/**
+ * Syncs port-related environment variables with the primaryPort.
+ * This ensures that the server listens on the same port that is used for port forwarding.
+ * Common port variable names: SERVER_PORT, PORT, GAME_PORT, QUERY_PORT (for secondary ports)
+ */
+const syncPortEnvironmentVariables = (
+  environment: Record<string, string>,
+  primaryPort: number,
+  portBindings?: Record<number, number>
+): Record<string, string> => {
+  const syncedEnv = { ...environment };
+
+  // List of common primary port environment variable names
+  const primaryPortVarNames = ["SERVER_PORT", "PORT", "GAME_PORT"];
+
+  // Sync primary port variables if they exist in the environment
+  for (const varName of primaryPortVarNames) {
+    if (syncedEnv[varName] !== undefined) {
+      syncedEnv[varName] = String(primaryPort);
+    }
+  }
+
+  // Handle QUERY_PORT specially - if it's the primary port + 1, update it accordingly
+  if (syncedEnv.QUERY_PORT !== undefined && portBindings) {
+    // Find if there's a secondary port binding that's primary + 1
+    const queryBinding = Object.entries(portBindings).find(
+      ([containerPort, hostPort]) => {
+        const cp = Number(containerPort);
+        const hp = Number(hostPort);
+        // Check if this is a query port (typically game port + 1)
+        return cp === primaryPort + 1 || hp === primaryPort + 1;
+      }
+    );
+    if (queryBinding) {
+      syncedEnv.QUERY_PORT = queryBinding[0]; // Use container port
+    }
+  }
+
+  return syncedEnv;
+};
+
 const resolveHostNetworkIp = (server: any, fallbackNode?: { publicAddress?: string }) => {
   if (server?.networkMode !== "host") {
     return null;
@@ -1711,6 +1752,7 @@ export async function serverRoutes(app: FastifyInstance) {
         primaryPort,
         primaryIp,
         portBindings,
+        allocationId,
       } = request.body as {
         name?: string;
         description?: string;
@@ -1724,9 +1766,11 @@ export async function serverRoutes(app: FastifyInstance) {
         primaryPort?: number;
         primaryIp?: string | null;
         portBindings?: Record<number, number>;
+        allocationId?: string;
       };
 
       const hasPrimaryIpUpdate = primaryIp !== undefined;
+      const hasAllocationUpdate = allocationId !== undefined;
       const normalizedPrimaryIp = typeof primaryIp === "string" ? primaryIp.trim() : null;
 
       // Can only update resources if server is stopped
@@ -1736,7 +1780,8 @@ export async function serverRoutes(app: FastifyInstance) {
           allocatedDiskMb !== undefined ||
           primaryPort !== undefined ||
           portBindings !== undefined ||
-          hasPrimaryIpUpdate) &&
+          hasPrimaryIpUpdate ||
+          hasAllocationUpdate) &&
         server.status !== "stopped"
       ) {
         return reply.status(409).send({
@@ -1819,7 +1864,7 @@ export async function serverRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "databaseAllocation must be 0 or more" });
       }
 
-      const nextPrimaryPort = primaryPort ?? server.primaryPort;
+      let nextPrimaryPort = primaryPort ?? server.primaryPort;
       if (!parsePortValue(nextPrimaryPort)) {
         return reply.status(400).send({ error: "Invalid primary port" });
       }
@@ -1890,6 +1935,27 @@ export async function serverRoutes(app: FastifyInstance) {
         });
       }
 
+      // Validate allocationId if provided
+      let newAllocation: { id: string; ip: string; port: number } | null = null;
+      if (hasAllocationUpdate && allocationId) {
+        // Allocations only work for bridge or host networking
+        if (shouldUseIpam(server.networkMode ?? undefined)) {
+          return reply.status(400).send({
+            error: "Allocation IDs are only valid for bridge/host networking",
+          });
+        }
+        const allocation = await prisma.nodeAllocation.findUnique({
+          where: { id: allocationId },
+        });
+        if (!allocation || allocation.nodeId !== server.nodeId) {
+          return reply.status(404).send({ error: "Allocation not found" });
+        }
+        if (allocation.serverId && allocation.serverId !== serverId) {
+          return reply.status(409).send({ error: "Allocation is already assigned to another server" });
+        }
+        newAllocation = { id: allocation.id, ip: allocation.ip, port: allocation.port };
+      }
+
       const updated = await prisma.$transaction(async (tx) => {
         let nextPrimaryIp = server.primaryIp ?? null;
         let nextEnvironment = (environment || server.environment) as Record<string, string>;
@@ -1934,6 +2000,31 @@ export async function serverRoutes(app: FastifyInstance) {
           nextEnvironment = {
             ...((environment || server.environment || {}) as Record<string, any>),
             CATALYST_NETWORK_IP: hostNetworkIp,
+          };
+        }
+
+        // Handle allocation update for bridge/host networking
+        if (newAllocation) {
+          // Release old allocation if it exists
+          const oldAllocation = await tx.nodeAllocation.findFirst({
+            where: { serverId },
+          });
+          if (oldAllocation && oldAllocation.id !== newAllocation.id) {
+            await tx.nodeAllocation.update({
+              where: { id: oldAllocation.id },
+              data: { serverId: null },
+            });
+          }
+          // Assign new allocation
+          await tx.nodeAllocation.update({
+            where: { id: newAllocation.id },
+            data: { serverId },
+          });
+          nextPrimaryIp = newAllocation.ip;
+          nextPrimaryPort = newAllocation.port;
+          nextEnvironment = {
+            ...((environment || server.environment || {}) as Record<string, any>),
+            CATALYST_NETWORK_IP: newAllocation.ip,
           };
         }
 
@@ -5201,17 +5292,25 @@ export async function serverRoutes(app: FastifyInstance) {
       }
       const runtimeTemplate = patchTemplateForRuntime(server.template);
 
+      // Sync port environment variables with primaryPort
+      const portBindings = parseStoredPortBindings(server.portBindings);
+      const syncedEnvironment = syncPortEnvironmentVariables(
+        environment,
+        server.primaryPort,
+        portBindings
+      );
+
       const success = await gateway.sendToAgent(server.nodeId, {
         type: "install_server",
         serverId: server.id,
         serverUuid: server.uuid,
         template: runtimeTemplate,
-        environment: environment,
+        environment: syncedEnvironment,
         allocatedMemoryMb: server.allocatedMemoryMb,
         allocatedCpuCores: server.allocatedCpuCores,
         allocatedDiskMb: server.allocatedDiskMb,
         primaryPort: server.primaryPort,
-        portBindings: parseStoredPortBindings(server.portBindings),
+        portBindings: portBindings,
       });
 
       if (!success) {
@@ -5330,17 +5429,25 @@ export async function serverRoutes(app: FastifyInstance) {
         runtimeTemplate.startup = server.startupCommand;
       }
 
+      // Sync port environment variables with primaryPort
+      const portBindings = parseStoredPortBindings(server.portBindings);
+      const syncedEnvironment = syncPortEnvironmentVariables(
+        environment,
+        server.primaryPort,
+        portBindings
+      );
+
       const success = await gateway.sendToAgent(server.nodeId, {
         type: "start_server",
         serverId: server.id,
         serverUuid: server.uuid,
         template: runtimeTemplate,
-        environment: environment,
+        environment: syncedEnvironment,
         allocatedMemoryMb: server.allocatedMemoryMb,
         allocatedCpuCores: server.allocatedCpuCores,
         allocatedDiskMb: server.allocatedDiskMb,
         primaryPort: server.primaryPort,
-        portBindings: parseStoredPortBindings(server.portBindings),
+        portBindings: portBindings,
         networkMode: server.networkMode,
       });
 
@@ -5623,17 +5730,25 @@ export async function serverRoutes(app: FastifyInstance) {
         }
       }
 
+      // Sync port environment variables with primaryPort
+      const portBindings = parseStoredPortBindings(server.portBindings);
+      const syncedEnvironment = syncPortEnvironmentVariables(
+        environment,
+        server.primaryPort,
+        portBindings
+      );
+
       const success = await gateway.sendToAgent(server.nodeId, {
         type: "restart_server",
         serverId: server.id,
         serverUuid: server.uuid,
         template: runtimeTemplate,
-        environment: environment,
+        environment: syncedEnvironment,
         allocatedMemoryMb: server.allocatedMemoryMb,
         allocatedCpuCores: server.allocatedCpuCores,
         allocatedDiskMb: server.allocatedDiskMb,
         primaryPort: server.primaryPort,
-        portBindings: parseStoredPortBindings(server.portBindings),
+        portBindings: portBindings,
         networkMode: server.networkMode,
       });
 

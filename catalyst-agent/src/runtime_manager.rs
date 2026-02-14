@@ -313,6 +313,38 @@ impl ContainerdRuntime {
                     config.container_id, e
                 )));
             }
+
+            // CNI plugins may overwrite /etc/resolv.conf in the container's namespace.
+            // Write our configured DNS directly into the container's /etc/resolv.conf.
+            let mut resolv_content = String::new();
+            for dns in &self.dns_servers {
+                resolv_content.push_str(&format!("nameserver {}\n", dns));
+            }
+            resolv_content.push_str("options attempts:3 timeout:2\n");
+
+            // Use nsenter to write into the container's mount namespace
+            let resolv_dest = "/etc/resolv.conf";
+            let nsenter_output = Command::new("nsenter")
+                .args(["-t", &pid.to_string(), "-m", "--", "sh", "-c"])
+                .arg(format!("echo '{}' > {}", resolv_content.trim(), resolv_dest))
+                .output()
+                .await;
+
+            match nsenter_output {
+                Ok(output) if output.status.success() => {
+                    info!("Updated resolv.conf in container {} with DNS: {:?}", config.container_id, self.dns_servers);
+                }
+                Ok(output) => {
+                    warn!(
+                        "Failed to update resolv.conf in container {}: {}",
+                        config.container_id,
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                }
+                Err(e) => {
+                    warn!("Failed to run nsenter for resolv.conf update in {}: {}", config.container_id, e);
+                }
+            }
         }
 
         // Start task
@@ -1241,20 +1273,81 @@ impl ContainerdRuntime {
         let network = network_mode.unwrap_or("bridge");
         if network == "host" { return Ok(()); }
         let netns = self.resolve_task_netns(container_id, pid).await?;
+
+        // Build DNS configuration from configured DNS servers
+        let dns_config = if !self.dns_servers.is_empty() {
+            serde_json::json!({
+                "nameservers": self.dns_servers,
+                "options": ["attempts:3", "timeout:2"]
+            })
+        } else {
+            serde_json::json!({
+                "nameservers": ["1.1.1.1", "8.8.8.8"],
+                "options": ["attempts:3", "timeout:2"]
+            })
+        };
+
         let mut cfg = if network == "bridge" || network == "default" {
-            serde_json::json!({"cniVersion":"0.4.0","name":"catalyst","type":"bridge","bridge":"catalyst0","isGateway":true,"ipMasq":true,"ipam":{"type":"host-local","ranges":[[{"subnet":"10.42.0.0/16"}]],"routes":[{"dst":"0.0.0.0/0"}],"dataDir":"/var/lib/cni/networks"}})
+            // Bridge network uses NAT with private subnet 10.42.0.0/16
+            // This matches the macvlan config structure with rangeStart/rangeEnd/gateway
+            serde_json::json!({
+                "cniVersion": "1.0.0",
+                "name": "catalyst",
+                "type": "bridge",
+                "bridge": "catalyst0",
+                "isGateway": true,
+                "ipMasq": true,
+                "dns": dns_config,
+                "ipam": {
+                    "type": "host-local",
+                    "ranges": [[{
+                        "subnet": "10.42.0.0/16",
+                        "rangeStart": "10.42.0.10",
+                        "rangeEnd": "10.42.255.250",
+                        "gateway": "10.42.0.1"
+                    }]],
+                    "routes": [{"dst": "0.0.0.0/0"}],
+                    "dataDir": "/var/lib/cni/networks"
+                }
+            })
         } else {
             // For custom networks, prefer explicit CNI config written by NetworkManager.
-            if let Some(cfg) = load_named_cni_plugin_config(network) {
+            if let Some(mut cfg) = load_named_cni_plugin_config(network) {
+                // Add DNS config if not present
+                if cfg.get("dns").is_none() {
+                    cfg["dns"] = dns_config.clone();
+                }
                 cfg
             } else {
                 // Fallback: synthesize a macvlan config from detected host network.
+                // This matches the structure used by NetworkManager with rangeStart/rangeEnd
                 let (iface, subnet, gateway) = detect_host_network().unwrap_or_else(|| {
                     warn!("Could not detect host network, falling back to eth0/192.168.1.0");
                     ("eth0".to_string(), "192.168.1.0/24".to_string(), "192.168.1.1".to_string())
                 });
-                info!("macvlan network '{}': master={}, subnet={}, gateway={}", network, iface, subnet, gateway);
-                serde_json::json!({"cniVersion":"0.4.0","name":network,"type":"macvlan","master":iface,"mode":"bridge","ipam":{"type":"host-local","ranges":[[{"subnet":subnet,"gateway":gateway}]],"routes":[{"dst":"0.0.0.0/0"}],"dataDir":"/var/lib/cni/networks"}})
+                // Calculate rangeStart/rangeEnd from subnet (same logic as NetworkManager)
+                let (range_start, range_end) = calculate_ip_range_from_subnet(&subnet);
+                info!("macvlan network '{}': master={}, subnet={}, gateway={}, range={}-{}",
+                      network, iface, subnet, gateway, range_start, range_end);
+                serde_json::json!({
+                    "cniVersion": "1.0.0",
+                    "name": network,
+                    "type": "macvlan",
+                    "master": iface,
+                    "mode": "bridge",
+                    "dns": dns_config,
+                    "ipam": {
+                        "type": "host-local",
+                        "ranges": [[{
+                            "subnet": subnet,
+                            "rangeStart": range_start,
+                            "rangeEnd": range_end,
+                            "gateway": gateway
+                        }]],
+                        "routes": [{"dst": "0.0.0.0/0"}],
+                        "dataDir": "/var/lib/cni/networks"
+                    }
+                })
             }
         };
         if let Some(ip) = network_ip {
@@ -1311,7 +1404,47 @@ impl ContainerdRuntime {
                 }
             }
         }
+
+        // For bridge network, ensure FORWARD rules allow traffic to external
+        if network == "bridge" || network == "default" {
+            self.ensure_bridge_forward_rules().await;
+        }
+
         Ok(())
+    }
+
+    /// Ensure iptables FORWARD rules allow traffic from bridge to external
+    async fn ensure_bridge_forward_rules(&self) {
+        // Check if rules already exist to avoid duplicates
+        let check_output = Command::new("iptables")
+            .args(["-C", "FORWARD", "-i", "catalyst0", "-o", "enp34s0", "-j", "ACCEPT"])
+            .output()
+            .await;
+
+        if let Ok(output) = check_output {
+            if !output.status.success() {
+                // Rule doesn't exist, add it
+                let result = Command::new("iptables")
+                    .args(["-I", "FORWARD", "1", "-i", "catalyst0", "-o", "enp34s0", "-j", "ACCEPT"])
+                    .output()
+                    .await;
+                match result {
+                    Ok(o) if o.status.success() => info!("Added FORWARD rule: catalyst0 -> enp34s0"),
+                    Ok(o) => warn!("Failed to add FORWARD rule: {}", String::from_utf8_lossy(&o.stderr)),
+                    Err(e) => warn!("Failed to execute iptables: {}", e),
+                }
+
+                let result = Command::new("iptables")
+                    .args(["-I", "FORWARD", "2", "-i", "enp34s0", "-o", "catalyst0", "-j", "ACCEPT"])
+                    .output()
+                    .await;
+                match result {
+                    Ok(o) if o.status.success() => info!("Added FORWARD rule: enp34s0 -> catalyst0 (allow new connections)"),
+                    Ok(o) => warn!("Failed to add FORWARD rule: {}", String::from_utf8_lossy(&o.stderr)),
+                    Err(e) => warn!("Failed to execute iptables: {}", e),
+                }
+            }
+        }
     }
 
     async fn resolve_task_netns(&self, container_id: &str, initial_pid: u32) -> AgentResult<String> {
@@ -1394,10 +1527,20 @@ impl ContainerdRuntime {
         let dest = format!("{}:{}", cip, cp);
         let hps = hp.to_string();
         let cps = cp.to_string();
+        // Set up forwarding for both TCP and UDP (many game servers use UDP)
+        for proto in ["tcp", "udp"] {
+            for args in [
+                vec!["-t","nat","-A","PREROUTING","-p",proto,"--dport",&hps,"-j","DNAT","--to-destination",&dest],
+                vec!["-t","nat","-A","OUTPUT","-p",proto,"--dport",&hps,"-j","DNAT","--to-destination",&dest],
+            ] {
+                let o = Command::new("iptables").args(&args).output().await?;
+                if !o.status.success() { warn!("iptables: {}", String::from_utf8_lossy(&o.stderr)); }
+            }
+        }
+        // MASQUERADE rule for outgoing traffic (needed for NAT)
         for args in [
-            vec!["-t","nat","-A","PREROUTING","-p","tcp","--dport",&hps,"-j","DNAT","--to-destination",&dest],
-            vec!["-t","nat","-A","OUTPUT","-p","tcp","--dport",&hps,"-j","DNAT","--to-destination",&dest],
             vec!["-t","nat","-A","POSTROUTING","-p","tcp","-d",cip,"--dport",&cps,"-j","MASQUERADE"],
+            vec!["-t","nat","-A","POSTROUTING","-p","udp","-d",cip,"--dport",&cps,"-j","MASQUERADE"],
         ] {
             let o = Command::new("iptables").args(&args).output().await?;
             if !o.status.success() { warn!("iptables: {}", String::from_utf8_lossy(&o.stderr)); }
@@ -1447,10 +1590,21 @@ impl ContainerdRuntime {
         let dest = format!("{}:{}", cip, cp);
         let hps = hp.to_string();
         let cps = cp.to_string();
+        // Teardown both TCP and UDP rules
+        for proto in ["tcp", "udp"] {
+            for args in [
+                    vec!["-t","nat","-D","PREROUTING","-p",proto,"--dport",&hps,"-j","DNAT","--to-destination",&dest],
+                    vec!["-t","nat","-D","OUTPUT","-p",proto,"--dport",&hps,"-j","DNAT","--to-destination",&dest],
+                ] {
+                    let o = Command::new("iptables").args(&args).output().await?;
+                    if !o.status.success() {
+                        warn!("iptables: {}", String::from_utf8_lossy(&o.stderr));
+                    }
+                }
+        }
         for args in [
-            vec!["-t","nat","-D","PREROUTING","-p","tcp","--dport",&hps,"-j","DNAT","--to-destination",&dest],
-            vec!["-t","nat","-D","OUTPUT","-p","tcp","--dport",&hps,"-j","DNAT","--to-destination",&dest],
             vec!["-t","nat","-D","POSTROUTING","-p","tcp","-d",cip,"--dport",&cps,"-j","MASQUERADE"],
+            vec!["-t","nat","-D","POSTROUTING","-p","udp","-d",cip,"--dport",&cps,"-j","MASQUERADE"],
         ] {
             let o = Command::new("iptables").args(&args).output().await?;
             if !o.status.success() {
@@ -1468,7 +1622,7 @@ impl ContainerdRuntime {
         let cfg_path = format!("/var/lib/cni/results/catalyst-{}-config", container_id);
         let cfg = fs::read_to_string(&cfg_path).ok()
             .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
-            .unwrap_or_else(|| serde_json::json!({"cniVersion":"0.4.0","name":"catalyst","type":"bridge","bridge":"catalyst0","ipam":{"type":"host-local","dataDir":"/var/lib/cni/networks"}}));
+            .unwrap_or_else(|| serde_json::json!({"cniVersion":"1.0.0","name":"catalyst","type":"bridge","bridge":"catalyst0","ipam":{"type":"host-local","dataDir":"/var/lib/cni/networks"}}));
         let mut tasks = TasksClient::new(self.channel.clone());
         let req = containerd_client::services::v1::GetRequest { container_id: container_id.to_string(), ..Default::default() };
         let req = with_namespace!(req, &self.namespace);
@@ -1580,6 +1734,31 @@ fn detect_host_network() -> Option<(String, String, String)> {
     let subnet = format!("{}/{}", net_addr, prefix);
 
     Some((iface, subnet, gateway))
+}
+
+/// Calculate usable IP range from a subnet CIDR (e.g., "192.168.1.0/24" -> ("192.168.1.10", "192.168.1.250"))
+/// This matches the logic used by NetworkManager's cidr_usable_range function.
+fn calculate_ip_range_from_subnet(cidr: &str) -> (String, String) {
+    let parts: Vec<&str> = cidr.split('/').collect();
+    if parts.len() != 2 {
+        // Fallback to a reasonable default
+        warn!("Invalid CIDR format '{}', using default range", cidr);
+        return ("10.0.0.10".to_string(), "10.0.0.250".to_string());
+    }
+
+    let base_ip = parts[0];
+    let ip_parts: Vec<&str> = base_ip.split('.').collect();
+
+    if ip_parts.len() != 4 {
+        warn!("Invalid IP address format '{}', using default range", base_ip);
+        return ("10.0.0.10".to_string(), "10.0.0.250".to_string());
+    }
+
+    // Use .10 to .250 as the usable range (matching NetworkManager's cidr_usable_range)
+    (
+        format!("{}.{}.{}.10", ip_parts[0], ip_parts[1], ip_parts[2]),
+        format!("{}.{}.{}.250", ip_parts[0], ip_parts[1], ip_parts[2])
+    )
 }
 
 fn create_fifo(path: &Path) -> std::io::Result<()> {

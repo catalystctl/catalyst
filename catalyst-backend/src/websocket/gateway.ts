@@ -31,6 +31,46 @@ const resolveConsoleOutputByteLimit = (value?: number | null) => {
   return Math.min(MAX_CONSOLE_OUTPUT_BYTE_LIMIT, Math.max(MIN_CONSOLE_OUTPUT_BYTE_LIMIT, raw));
 };
 
+/**
+ * Syncs port-related environment variables with the primaryPort.
+ * This ensures that the server listens on the same port that is used for port forwarding.
+ */
+const syncPortEnvironmentVariables = (
+  environment: Record<string, string>,
+  primaryPort: number,
+  portBindings?: Record<string, unknown>
+): Record<string, string> => {
+  const syncedEnv = { ...environment };
+
+  // List of common primary port environment variable names
+  const primaryPortVarNames = ["SERVER_PORT", "PORT", "GAME_PORT"];
+
+  // Sync primary port variables if they exist in the environment
+  for (const varName of primaryPortVarNames) {
+    if (syncedEnv[varName] !== undefined) {
+      syncedEnv[varName] = String(primaryPort);
+    }
+  }
+
+  // Handle QUERY_PORT specially - if it's the primary port + 1, update it accordingly
+  if (syncedEnv.QUERY_PORT !== undefined && portBindings) {
+    // Find if there's a secondary port binding that's primary + 1
+    const queryBinding = Object.entries(portBindings).find(
+      ([containerPort, hostPort]) => {
+        const cp = Number(containerPort);
+        const hp = Number(hostPort);
+        // Check if this is a query port (typically game port + 1)
+        return cp === primaryPort + 1 || hp === primaryPort + 1;
+      }
+    );
+    if (queryBinding) {
+      syncedEnv.QUERY_PORT = queryBinding[0]; // Use container port
+    }
+  }
+
+  return syncedEnv;
+};
+
 interface ConnectedAgent {
   nodeId: string;
   socket: any;
@@ -1028,20 +1068,29 @@ export class WebSocketGateway {
               );
             }
           }
+
+          // Sync port environment variables with primaryPort
+          const portBindings =
+            message.portBindings && typeof message.portBindings === "object"
+              ? message.portBindings
+              : server.portBindings;
+          const syncedEnvironment = syncPortEnvironmentVariables(
+            environment,
+            server.primaryPort,
+            portBindings as Record<string, unknown> | undefined
+          );
+
           const restartSent = await this.sendToAgent(server.nodeId, {
             type: "start_server",
             serverId: server.id,
             serverUuid: server.uuid,
             template: server.template,
-            environment,
+            environment: syncedEnvironment,
             allocatedMemoryMb: server.allocatedMemoryMb,
             allocatedCpuCores: server.allocatedCpuCores,
             allocatedDiskMb: server.allocatedDiskMb,
             primaryPort: server.primaryPort,
-            portBindings:
-              message.portBindings && typeof message.portBindings === "object"
-                ? message.portBindings
-                : server.portBindings,
+            portBindings,
             networkMode: server.networkMode,
           });
           if (!restartSent) {

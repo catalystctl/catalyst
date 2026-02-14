@@ -1287,6 +1287,15 @@ impl WebSocketHandler {
             env_map.insert("MEMORY".to_string(), memory_mb.to_string());
             env_map.insert("PORT".to_string(), primary_port.to_string());
 
+            // Sync port-related environment variables with primary_port
+            // This ensures the server listens on the same port used for port forwarding
+            if env_map.contains_key("SERVER_PORT") {
+                env_map.insert("SERVER_PORT".to_string(), primary_port.to_string());
+            }
+            if env_map.contains_key("GAME_PORT") {
+                env_map.insert("GAME_PORT".to_string(), primary_port.to_string());
+            }
+
             if !env_map.contains_key("MEMORY_XMS") {
                 let memory_value = env_map
                     .get("MEMORY")
@@ -1691,6 +1700,12 @@ impl WebSocketHandler {
             .as_str()
             .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
 
+        // Use server_uuid for storage path (same as backup/restore operations)
+        // Fall back to server_id if serverUuid is not provided
+        let server_uuid = msg["serverUuid"]
+            .as_str()
+            .unwrap_or(server_id);
+
         let path = msg["path"]
             .as_str()
             .ok_or_else(|| AgentError::InvalidRequest("Missing path".to_string()))?;
@@ -1699,7 +1714,7 @@ impl WebSocketHandler {
         let result = match op_type {
             "read" => self
                 .file_manager
-                .read_file(server_id, path)
+                .read_file(server_uuid, path)
                 .await
                 .map(|data| {
                     Some(json!({ "data": base64::engine::general_purpose::STANDARD.encode(data) }))
@@ -1709,13 +1724,13 @@ impl WebSocketHandler {
                     .as_str()
                     .ok_or_else(|| AgentError::InvalidRequest("Missing data".to_string()))?;
                 self.file_manager
-                    .write_file(server_id, path, data)
+                    .write_file(server_uuid, path, data)
                     .await
                     .map(|_| None)
             }
             "delete" => self
                 .file_manager
-                .delete_file(server_id, path)
+                .delete_file(server_uuid, path)
                 .await
                 .map(|_| None),
             "rename" => {
@@ -1723,13 +1738,13 @@ impl WebSocketHandler {
                     .as_str()
                     .ok_or_else(|| AgentError::InvalidRequest("Missing 'to' path".to_string()))?;
                 self.file_manager
-                    .rename_file(server_id, path, to)
+                    .rename_file(server_uuid, path, to)
                     .await
                     .map(|_| None)
             }
             "list" => self
                 .file_manager
-                .list_dir(server_id, path)
+                .list_dir(server_uuid, path)
                 .await
                 .map(|entries| Some(json!({ "entries": entries }))),
             _ => {
