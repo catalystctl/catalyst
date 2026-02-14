@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Template, TemplateImageOption, TemplateVariable } from '../../types/template';
 import { templatesApi } from '../../services/api/templates';
 import { notifyError, notifySuccess } from '../../utils/notify';
-import { normalizeTemplateImport, validateConvertedTemplate } from '../../utils/pterodactylImport';
+import { normalizeTemplateImport, parseEggContent } from '../../utils/pterodactylImport';
 
 type VariableDraft = {
   name: string;
@@ -195,10 +195,15 @@ function TemplateEditModal({ template }: { template: Template }) {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const parsed = JSON.parse(String(reader.result || ''));
+        const content = String(reader.result || '');
+        const parsed = parseEggContent(content);
+        if (!parsed) {
+          setImportError('Failed to parse file (must be JSON or YAML)');
+          return;
+        }
         applyTemplateImport(parsed);
       } catch (error) {
-        setImportError('Failed to parse JSON file');
+        setImportError('Failed to parse file (must be JSON or YAML)');
       }
     };
     reader.onerror = () => {
@@ -310,7 +315,7 @@ function TemplateEditModal({ template }: { template: Template }) {
                   className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
                   onClick={() => importFileRef.current?.click()}
                 >
-                  Import JSON
+                  Import
                 </button>
                 <button
                   className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-500 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
@@ -321,7 +326,7 @@ function TemplateEditModal({ template }: { template: Template }) {
                 <input
                   ref={importFileRef}
                   type="file"
-                  accept="application/json,.json"
+                  accept="application/json,.json,application/x-yaml,.yaml,.yml"
                   onChange={handleImportFile}
                   className="hidden"
                 />

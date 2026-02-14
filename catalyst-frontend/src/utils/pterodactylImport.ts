@@ -34,7 +34,7 @@ interface PtdlStartupConfig {
 }
 
 interface PtdlEgg {
-  meta?: { version?: string };
+  meta?: { version?: string; update_url?: string }; // update_url is Pelican-specific
   name?: string;
   author?: string;
   description?: string;
@@ -57,6 +57,9 @@ interface PtdlEgg {
   variables?: PtdlVariable[];
   features?: string[];
   tags?: string[]; // Pelican-specific
+  // Pelican-specific fields that may be at root level
+  update_url?: string;
+  export_files?: string[]; // Files to export from container
 }
 
 /** Signal type mapping for stop commands */
@@ -76,12 +79,12 @@ const PTDL_BUILTIN_VARIABLES = [
   { name: 'TZ', description: 'Server timezone', default: 'UTC' },
 ];
 
-/** Returns true if the JSON object looks like a Pterodactyl egg. */
+/** Returns true if the JSON object looks like a Pterodactyl or Pelican egg. */
 export function isPterodactylEgg(data: unknown): data is PtdlEgg {
   if (!data || typeof data !== 'object') return false;
   const obj = data as Record<string, unknown>;
 
-  // Check for PTDL meta version tag
+  // Check for PTDL meta version tag (Pterodactyl)
   if (
     obj.meta &&
     typeof obj.meta === 'object' &&
@@ -92,7 +95,8 @@ export function isPterodactylEgg(data: unknown): data is PtdlEgg {
     return true;
   }
 
-  // Check for Pelican format (may have different meta structure)
+  // Check for Pelican format (may have different meta structure or no meta at all)
+  // Pelican eggs often have: docker_images, startup, variables, tags, update_url
   if (
     obj.meta &&
     typeof obj.meta === 'object' &&
@@ -100,22 +104,40 @@ export function isPterodactylEgg(data: unknown): data is PtdlEgg {
     typeof (obj.meta as Record<string, unknown>).version === 'string'
   ) {
     // Could be Pelican - check for other egg fields
-    if (obj.docker_images || obj.startup || obj.variables) {
+    if (obj.docker_images || obj.startup || obj.variables || obj.tags) {
       return true;
     }
+  }
+
+  // Pelican-specific: check for update_url field
+  if (obj.update_url && typeof obj.update_url === 'string') {
+    return true;
+  }
+
+  // Pelican-specific: check for tags array
+  if (Array.isArray(obj.tags) && (obj.docker_images || obj.startup || obj.variables)) {
+    return true;
   }
 
   // Fallback: presence of docker_images + variables with env_variable fields
   if (obj.docker_images && typeof obj.docker_images === 'object' && Array.isArray(obj.variables)) {
     const vars = obj.variables as Record<string, unknown>[];
-    return vars.length > 0 && vars.some((v) => 'env_variable' in v);
+    return vars.length > 0 && vars.some((v) => 'env_variable' in v || ('name' in v && 'default_value' in v));
   }
 
-  // Also check for Pelican-style with just variables
+  // Also check for Pelican-style with just variables (may have name as env variable)
   if (Array.isArray(obj.variables)) {
     const vars = obj.variables as Record<string, unknown>[];
-    if (vars.length > 0 && vars.some((v) => 'env_variable' in v || 'name' in v)) {
-      return true;
+    // Pelican variables have name, description, env_variable, default_value, rules
+    if (vars.length > 0 && vars.some((v) =>
+      ('env_variable' in v) ||
+      ('name' in v && 'default_value' in v) ||
+      ('name' in v && 'default' in v)
+    )) {
+      // Make sure we also have docker_images or startup to confirm it's an egg
+      if (obj.docker_images || obj.startup || obj.config || obj.scripts) {
+        return true;
+      }
     }
   }
 
@@ -141,13 +163,18 @@ export function isYamlContent(content: string): boolean {
     return false;
   }
 
-  // Check for YAML-specific patterns
+  // Check for YAML-specific patterns (key: value)
   if (/^[\w-]+:\s/m.test(trimmed)) {
     return true;
   }
 
   // Check for YAML document start
   if (trimmed.startsWith('---')) {
+    return true;
+  }
+
+  // Check for common Pelican egg fields
+  if (/^(name|meta|docker_images|startup|variables|scripts|config|tags):/m.test(trimmed)) {
     return true;
   }
 
@@ -244,6 +271,44 @@ function convertInstallScript(script: string): string {
   cleaned = cleaned.replace(/\[\s+(\$?\w+)\s+==\s+/g, '[ $1 = ');
   cleaned = cleaned.replace(/\[\s+"([^"]+)"\s+==\s+/g, '[ "$1" = ');
 
+  // Add pre-flight package installation if not already present in the script
+  // This ensures common utilities are available for install scripts
+  const hasAptUpdate = /apt(-get)?\s+update/i.test(cleaned);
+  const commonPackages = ['curl', 'wget', 'jq', 'unzip', 'tar', 'ca-certificates'];
+  const missingPackages = commonPackages.filter(pkg => !cleaned.includes(pkg));
+
+  // Only add pre-flight if there are missing packages and no apt update in the script
+  if (missingPackages.length > 0 && !hasAptUpdate) {
+    const preflight = `# Catalyst pre-flight: ensure common utilities are available
+if command -v apt-get >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq
+    apt-get install -y -qq ${missingPackages.join(' ')} 2>/dev/null || true
+fi
+
+`;
+    // Insert after shebang if present, otherwise at the beginning
+    const shebangMatch = cleaned.match(/^(#!.*\n)/);
+    if (shebangMatch) {
+      cleaned = shebangMatch[1] + preflight + cleaned.slice(shebangMatch[1].length);
+    } else {
+      cleaned = preflight + cleaned;
+    }
+  }
+
+  // Add error handling for common patterns that might fail
+  // Add set -e for better error detection if not already present
+  if (!cleaned.includes('set -e') && !cleaned.includes('set -E')) {
+    const shebangMatch = cleaned.match(/^(#!.*\n)/);
+    if (shebangMatch) {
+      // Add after shebang and any pre-flight
+      const afterShebang = cleaned.slice(shebangMatch[1].length);
+      if (!afterShebang.startsWith('# Catalyst pre-flight')) {
+        cleaned = shebangMatch[1] + 'set -e\n\n' + afterShebang;
+      }
+    }
+  }
+
   return cleaned;
 }
 
@@ -334,7 +399,7 @@ function addBuiltinVariables(
   return result;
 }
 
-/** Convert a Pterodactyl egg to a Catalyst-compatible template object. */
+/** Convert a Pterodactyl/Pelican egg to a Catalyst-compatible template object. */
 export function convertPterodactylEgg(egg: PtdlEgg): Record<string, unknown> {
   // Extract docker images
   const dockerImages = egg.docker_images ?? {};
@@ -350,14 +415,22 @@ export function convertPterodactylEgg(egg: PtdlEgg): Record<string, unknown> {
         }))
       : [];
 
-  // Convert variables
+  // Convert variables - handle both Pterodactyl and Pelican formats
   let variables = (egg.variables ?? []).map((v) => {
     const rules = convertRules(v.rules ?? '');
     const isRequired = (v.rules ?? '').includes('required');
+
+    // Pelican may use env_variable directly, or fall back to name as the env variable
+    // In Pelican, 'name' is often the display name and 'env_variable' is the actual env var
+    // But some eggs only have 'name' which serves as both
+    const envVarName = v.env_variable || v.name || '';
+    const displayName = v.description || v.name || envVarName;
+    const defaultValue = v.default_value ?? '';
+
     return {
-      name: v.env_variable,
-      description: v.description || v.name,
-      default: v.default_value ?? '',
+      name: envVarName,
+      description: displayName,
+      default: defaultValue,
       required: isRequired,
       input: inferInputType(v.rules ?? '') as 'text' | 'number' | 'select' | 'checkbox',
       ...(rules.length ? { rules } : {}),
@@ -462,11 +535,25 @@ export function convertPterodactylEgg(egg: PtdlEgg): Record<string, unknown> {
     features.tags = egg.tags;
   }
 
+  // Add export files if available (Pelican-specific)
+  if (egg.export_files && egg.export_files.length > 0) {
+    features.exportFiles = egg.export_files;
+  }
+
+  // Add update URL if available (Pelican-specific)
+  const updateUrl = egg.update_url || egg.meta?.update_url;
+  if (updateUrl) {
+    features.updateUrl = updateUrl;
+  }
+
+  // Detect if this is a Pelican egg based on features
+  const isPelican = !!(egg.tags?.length || egg.update_url || egg.meta?.update_url || egg.export_files?.length);
+
   return {
     id,
     name: egg.name ?? 'Imported Egg',
     description: egg.description ?? '',
-    author: egg.author ?? 'Imported from Pterodactyl',
+    author: egg.author ?? (isPelican ? 'Imported from Pelican' : 'Imported from Pterodactyl'),
     version: '1.0.0',
     image: primaryImage,
     ...(images.length ? { images } : {}),

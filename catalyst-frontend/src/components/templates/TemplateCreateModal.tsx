@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { TemplateImageOption, TemplateVariable } from '../../types/template';
 import { templatesApi } from '../../services/api/templates';
 import { notifyError, notifySuccess } from '../../utils/notify';
-import { normalizeTemplateImport, validateConvertedTemplate } from '../../utils/pterodactylImport';
+import { normalizeTemplateImport, parseEggContent } from '../../utils/pterodactylImport';
 
 type VariableDraft = {
   name: string;
@@ -293,10 +293,15 @@ function TemplateCreateModal() {
       const reader = new FileReader();
       reader.onload = () => {
         try {
-          const parsed = JSON.parse(String(reader.result || ''));
+          const content = String(reader.result || '');
+          const parsed = parseEggContent(content);
+          if (!parsed) {
+            setImportError('Failed to parse file (must be JSON or YAML)');
+            return;
+          }
           applyTemplateImport(parsed);
         } catch (error) {
-          setImportError('Failed to parse JSON file');
+          setImportError('Failed to parse file (must be JSON or YAML)');
         }
       };
       reader.onerror = () => {
@@ -312,7 +317,8 @@ function TemplateCreateModal() {
       files.map(async (file) => {
         try {
           const text = await file.text();
-          const parsed = JSON.parse(text);
+          const parsed = parseEggContent(text);
+          if (!parsed) return { ok: false };
           const payload = buildTemplatePayload(parsed);
           await templatesApi.create(payload);
           return { ok: true };
@@ -381,12 +387,12 @@ function TemplateCreateModal() {
           className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
           onClick={() => importFileRef.current?.click()}
         >
-          Import JSON
+          Import
         </button>
         <input
           ref={importFileRef}
           type="file"
-          accept="application/json,.json"
+          accept="application/json,.json,application/x-yaml,.yaml,.yml"
           onChange={handleImportFile}
           multiple
           className="hidden"
@@ -458,11 +464,11 @@ function TemplateCreateModal() {
                   />
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400">Import JSON (optional)</span>
+                  <span className="text-slate-500 dark:text-slate-400">Import template (optional)</span>
                   <input
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 transition-all duration-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-600 hover:file:bg-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:file:bg-slate-800 dark:file:text-slate-600 dark:text-slate-200 dark:hover:file:bg-slate-700"
                     type="file"
-                    accept="application/json,.json"
+                    accept="application/json,.json,application/x-yaml,.yaml,.yml"
                     onChange={handleImportFile}
                   />
                   {importError ? <p className="text-xs text-rose-400">{importError}</p> : null}
