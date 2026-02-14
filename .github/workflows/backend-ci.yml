@@ -30,13 +30,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-          cache: 'bun'
-          cache-dependency-path: 'catalyst-backend/bun.lock'
 
       - name: Install dependencies
         working-directory: catalyst-backend

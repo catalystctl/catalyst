@@ -3,7 +3,6 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { auth } from "../auth";
 import { fromNodeHeaders } from "better-auth/node";
 import { logAuthAttempt } from "../middleware/audit";
-import { getSecuritySettings } from "../services/mailer";
 import { serialize } from '../utils/serialize';
 
 // Helper to forward response headers (set-auth-token, set-cookie) from better-auth to Fastify reply
@@ -41,63 +40,6 @@ export async function authRoutes(app: FastifyInstance) {
   // Helper to get the request headers in the format better-auth expects
   const getHeaders = (request: FastifyRequest) =>
     fromNodeHeaders(request.headers as Record<string, string | string[] | undefined>);
-
-  // ── Lockout helpers ──────────────────────────────────────────────────
-  async function checkLockout(email: string, ip: string) {
-    const settings = await getSecuritySettings();
-    if (settings.lockoutMaxAttempts <= 0 || settings.lockoutWindowMinutes <= 0 || settings.lockoutDurationMinutes <= 0) {
-      throw Object.assign(new Error("Security settings invalid"), { statusCode: 500 });
-    }
-    const windowMs = settings.lockoutWindowMinutes * 60 * 1000;
-    const now = new Date();
-    const lockout = await prisma.authLockout.findUnique({
-      where: { email_ipAddress: { email, ipAddress: ip } },
-    });
-    if (lockout?.lockedUntil && lockout.lockedUntil > now) {
-      throw Object.assign(new Error("Account temporarily locked"), { statusCode: 429 });
-    }
-    // Reset window if expired
-    if (lockout && lockout.firstFailedAt && now.getTime() - lockout.firstFailedAt.getTime() > windowMs) {
-      await prisma.authLockout.update({
-        where: { id: lockout.id },
-        data: { failureCount: 1, firstFailedAt: now, lastFailedAt: now, lockedUntil: null },
-      });
-    }
-    return settings;
-  }
-
-  async function clearLockout(email: string, ip: string) {
-    await prisma.authLockout.deleteMany({ where: { email, ipAddress: ip } });
-  }
-
-  async function recordFailure(email: string, ip: string, userAgent: string | undefined, settings: any) {
-    const now = new Date();
-    const windowMs = settings.lockoutWindowMinutes * 60 * 1000;
-    const updated = await prisma.authLockout.upsert({
-      where: { email_ipAddress: { email, ipAddress: ip } },
-      create: {
-        email, ipAddress: ip, userAgent,
-        failureCount: 1, firstFailedAt: now, lastFailedAt: now, lockedUntil: null,
-      },
-      update: { failureCount: { increment: 1 }, lastFailedAt: now },
-    });
-    // Reset window if expired
-    if (updated.firstFailedAt && now.getTime() - updated.firstFailedAt.getTime() > windowMs) {
-      await prisma.authLockout.update({
-        where: { id: updated.id },
-        data: { failureCount: 1, firstFailedAt: now, lastFailedAt: now, lockedUntil: null },
-      });
-      return false;
-    }
-    if (updated.failureCount >= settings.lockoutMaxAttempts) {
-      await prisma.authLockout.update({
-        where: { id: updated.id },
-        data: { lockedUntil: new Date(now.getTime() + settings.lockoutDurationMinutes * 60 * 1000) },
-      });
-      return true; // locked
-    }
-    return false;
-  }
 
   // ── Register ─────────────────────────────────────────────────────────
   app.post(
@@ -160,13 +102,6 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       const normalizedEmail = email.trim().toLowerCase();
-      let settings: any;
-      try {
-        settings = await checkLockout(normalizedEmail, request.ip);
-      } catch (err: any) {
-        await logAuthAttempt(normalizedEmail, false, request.ip, request.headers['user-agent']);
-        return reply.status(err.statusCode || 500).send({ error: err.message });
-      }
 
       // Resolve the actual email (case-insensitive lookup)
       const userRecord = await prisma.user.findFirst({
@@ -175,7 +110,6 @@ export async function authRoutes(app: FastifyInstance) {
 
       if (!userRecord) {
         await logAuthAttempt(normalizedEmail, false, request.ip, request.headers["user-agent"]);
-        await recordFailure(normalizedEmail, request.ip, request.headers["user-agent"], settings);
         return reply.status(401).send({ error: "Invalid credentials" });
       }
 
@@ -195,7 +129,6 @@ export async function authRoutes(app: FastifyInstance) {
         // 2FA redirect
         if (data?.twoFactorRedirect) {
           await logAuthAttempt(normalizedEmail, true, request.ip, request.headers["user-agent"]);
-          await clearLockout(normalizedEmail, request.ip);
           const tokenHeader = forwardAuthHeaders(response, reply);
           return reply.status(202).send({
             success: false,
@@ -213,7 +146,6 @@ export async function authRoutes(app: FastifyInstance) {
         }
 
         await logAuthAttempt(normalizedEmail, true, request.ip, request.headers["user-agent"]);
-        await clearLockout(normalizedEmail, request.ip);
 
         const tokenHeader = forwardAuthHeaders(response, reply);
         const permissions = await loadUserPermissions(user.id);
@@ -230,10 +162,6 @@ export async function authRoutes(app: FastifyInstance) {
         });
       } catch (err: any) {
         await logAuthAttempt(normalizedEmail, false, request.ip, request.headers["user-agent"]);
-        const locked = await recordFailure(normalizedEmail, request.ip, request.headers["user-agent"], settings);
-        if (locked) {
-          return reply.status(429).send({ error: "Account temporarily locked" });
-        }
         return reply.status(401).send({ error: "Invalid credentials" });
       }
     }

@@ -57,7 +57,7 @@ const app = Fastify({
 });
 
 // Parse application/octet-stream as raw Buffer (used by file tunnel stream responses)
-app.addContentTypeParser("application/octet-stream", function (_request, payload, done) {
+app.addContentTypeParser("application/octet-stream", (_request, payload, done) => {
   const chunks: Buffer[] = [];
   payload.on("data", (chunk: Buffer) => chunks.push(chunk));
   payload.on("end", () => done(null, Buffer.concat(chunks)));

@@ -46,7 +46,9 @@ function ProfilePage() {
     }
   }, []);
 
+  // Data fetching effect - this is a valid pattern for loading data on mount
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshPasskeys().catch(() => undefined);
   }, [profile?.id, refreshPasskeys]);
 

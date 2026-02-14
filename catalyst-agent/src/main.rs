@@ -40,11 +40,14 @@ impl CatalystAgent {
         info!("Initializing Catalyst Agent");
 
         let config = Arc::new(config);
-        let runtime = Arc::new(ContainerdRuntime::new(
-            config.containerd.socket_path.clone(),
-            config.containerd.namespace.clone(),
-            config.networking.dns_servers.clone(),
-        ).await?);
+        let runtime = Arc::new(
+            ContainerdRuntime::new(
+                config.containerd.socket_path.clone(),
+                config.containerd.namespace.clone(),
+                config.networking.dns_servers.clone(),
+            )
+            .await?,
+        );
 
         // FileManager uses the same base data_dir as storage - servers are stored at {data_dir}/{server_uuid}
         let file_manager = Arc::new(FileManager::new(config.server.data_dir.clone()));

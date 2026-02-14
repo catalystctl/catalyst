@@ -168,8 +168,8 @@ function normalizePath(serverPath: string, realServerPath: string, requestedPath
   // Lexical check first - catches obvious traversal attempts
   // Must check exact match or path + separator to prevent prefix attacks
   const lexicalOk = normalized === serverPath ||
-                    normalized.startsWith(serverPath + '/') ||
-                    normalized.startsWith(serverPath + '\\');
+                    normalized.startsWith(`${serverPath  }/`) ||
+                    normalized.startsWith(`${serverPath  }\\`);
   if (!lexicalOk) {
     throw new Error('Path traversal attempt detected');
   }
@@ -187,8 +187,8 @@ function normalizePath(serverPath: string, realServerPath: string, requestedPath
       const realParent = realpathSync(parentDir);
       // Ensure parent is still within bounds (exact match or path + separator)
       const parentOk = realParent === realServerPath ||
-                       realParent.startsWith(realServerPath + '/') ||
-                       realParent.startsWith(realServerPath + '\\');
+                       realParent.startsWith(`${realServerPath  }/`) ||
+                       realParent.startsWith(`${realServerPath  }\\`);
       if (!parentOk) {
         throw new Error('Path traversal attempt detected via parent directory');
       }
@@ -205,8 +205,8 @@ function normalizePath(serverPath: string, realServerPath: string, requestedPath
   // This catches symlink escape attacks where a symlink inside the server dir
   // points outside (e.g., ln -s / /data/escape) or to similar-named directories
   const realPathOk = realPath === realServerPath ||
-                     realPath.startsWith(realServerPath + '/') ||
-                     realPath.startsWith(realServerPath + '\\');
+                     realPath.startsWith(`${realServerPath  }/`) ||
+                     realPath.startsWith(`${realServerPath  }\\`);
   if (!realPathOk) {
     throw new Error('Path traversal attempt detected via symbolic link');
   }
@@ -504,8 +504,8 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
                 try {
                   const realTargetPath = realpathSync(entryPath);
                   const targetOk = realTargetPath === session.realServerPath ||
-                                  realTargetPath.startsWith(session.realServerPath + '/') ||
-                                  realTargetPath.startsWith(session.realServerPath + '\\');
+                                  realTargetPath.startsWith(`${session.realServerPath  }/`) ||
+                                  realTargetPath.startsWith(`${session.realServerPath  }\\`);
                   if (!targetOk) {
                     // Skip symlinks that point outside the server directory
                     // Don't include them in the directory listing at all

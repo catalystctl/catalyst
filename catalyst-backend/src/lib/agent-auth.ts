@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import { auth } from "../auth";
+import { createHash } from "crypto";
 
 function parseApiKeyMetadata(rawMetadata: unknown): Record<string, unknown> | null {
   if (rawMetadata && typeof rawMetadata === "object" && !Array.isArray(rawMetadata)) {
@@ -21,7 +21,44 @@ function parseApiKeyMetadata(rawMetadata: unknown): Record<string, unknown> | nu
 }
 
 /**
+ * Hash an API key the same way Better Auth does: SHA-256 → base64url (no padding).
+ */
+function hashApiKey(key: string): string {
+  const hash = createHash("sha256").update(key).digest();
+  return hash.toString("base64url");
+}
+
+// In-memory cache for verified agent API keys: "nodeId:hashedKey" → expiry timestamp
+const verifiedKeyCache = new Map<string, number>();
+const CACHE_TTL_MS = 30_000; // 30 seconds
+
+function getCachedVerification(nodeId: string, hashedKey: string): boolean | null {
+  const cacheKey = `${nodeId}:${hashedKey}`;
+  const expiry = verifiedKeyCache.get(cacheKey);
+  if (expiry === undefined) return null;
+  if (Date.now() > expiry) {
+    verifiedKeyCache.delete(cacheKey);
+    return null;
+  }
+  return true;
+}
+
+function setCachedVerification(nodeId: string, hashedKey: string): void {
+  const cacheKey = `${nodeId}:${hashedKey}`;
+  verifiedKeyCache.set(cacheKey, Date.now() + CACHE_TTL_MS);
+  // Periodically prune stale entries
+  if (verifiedKeyCache.size > 1000) {
+    const now = Date.now();
+    for (const [k, v] of verifiedKeyCache) {
+      if (now > v) verifiedKeyCache.delete(k);
+    }
+  }
+}
+
+/**
  * Validates that an API key is active and assigned to the given node.
+ * Bypasses Better Auth's verifyApiKey (which has its own rate limit) by
+ * hashing the key and looking it up directly in the database.
  */
 export async function verifyAgentApiKey(
   prisma: PrismaClient,
@@ -33,18 +70,15 @@ export async function verifyAgentApiKey(
   }
 
   try {
-    const verification = await auth.api.verifyApiKey({
-      body: { key: apiKey },
-    } as any);
-    const verificationData = (verification as any)?.response ?? verification;
-    const verifiedKeyId = verificationData?.key?.id;
+    const hashedKey = hashApiKey(apiKey);
 
-    if (!verificationData?.valid || typeof verifiedKeyId !== "string") {
-      return false;
-    }
+    // Check in-memory cache first
+    const cached = getCachedVerification(nodeId, hashedKey);
+    if (cached === true) return true;
 
+    // Direct DB lookup by hashed key (same hash Better Auth uses)
     const apiKeyRecord = await prisma.apikey.findUnique({
-      where: { id: verifiedKeyId },
+      where: { key: hashedKey },
       select: {
         enabled: true,
         expiresAt: true,
@@ -66,7 +100,13 @@ export async function verifyAgentApiKey(
       return false;
     }
 
-    return typeof metadata.nodeId === "string" && metadata.nodeId === nodeId;
+    if (typeof metadata.nodeId !== "string" || metadata.nodeId !== nodeId) {
+      return false;
+    }
+
+    // Cache successful verification
+    setCachedVerification(nodeId, hashedKey);
+    return true;
   } catch {
     return false;
   }

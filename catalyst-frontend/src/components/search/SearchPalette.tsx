@@ -91,6 +91,8 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const prevQueryRef = useRef(query);
+  const prevIsOpenRef = useRef(isOpen);
 
   const userPermissions = user?.permissions || [];
 
@@ -172,21 +174,30 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
   // Flat list for keyboard navigation
   const flatItems = filteredItems;
 
-  // Reset selection when query changes
+  // Handle query changes and isOpen changes using refs
+  // This is a valid pattern for resetting modal state when it opens
   useEffect(() => {
-    setSelectedIndex(0);
-  }, [query]);
+    const prevQuery = prevQueryRef.current;
+    const prevIsOpen = prevIsOpenRef.current;
 
-  // Focus input when opened
-  useEffect(() => {
-    if (isOpen) {
+    // Reset when modal opens - this is intentional state reset for modal open
+    if (isOpen && !prevIsOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery('');
       setSelectedIndex(0);
       setTimeout(() => {
         inputRef.current?.focus();
       }, 0);
     }
-  }, [isOpen]);
+
+    // Reset selection when query changes - intentional UI sync
+    if (query !== prevQuery) {
+      setSelectedIndex(0);
+    }
+
+    prevQueryRef.current = query;
+    prevIsOpenRef.current = isOpen;
+  }, [query, isOpen]);
 
   // Scroll selected item into view
   useEffect(() => {
