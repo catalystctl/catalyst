@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Play, Square, RotateCw, Ban, CheckCircle, Trash2 } from 'lucide-react';
@@ -108,9 +108,17 @@ function AdminServersPage() {
   const filteredIds = useMemo(() => filteredServers.map((server) => server.id), [filteredServers]);
   const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
 
-  useEffect(() => {
-    setSelectedIds((prev) => prev.filter((id) => servers.some((server) => server.id === id)));
-  }, [servers]);
+  // Sync server IDs and clean up selected IDs when servers change
+  const currentServerIds = useMemo(() => new Set(servers.map((s) => s.id)), [servers]);
+  const validSelectedIds = useMemo(
+    () => selectedIds.filter((id) => currentServerIds.has(id)),
+    [selectedIds, currentServerIds]
+  );
+
+  // Update selectedIds if it differs from valid selection (servers changed)
+  if (validSelectedIds.length !== selectedIds.length) {
+    setSelectedIds(validSelectedIds);
+  }
 
   const bulkActionMutation = useMutation({
     mutationFn: (payload: { serverIds: string[]; action: AdminServerAction; reason?: string }) =>

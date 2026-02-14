@@ -44,6 +44,7 @@
     "date-fns": "^4.1.0",
     "framer-motion": "^12.32.0",
     "js-yaml": "^4.1.1",
+    "latest": "^0.2.0",
     "lucide-react": "^0.563.0",
     "monaco-editor": "^0.55.1",
     "react": "^18.3.1",

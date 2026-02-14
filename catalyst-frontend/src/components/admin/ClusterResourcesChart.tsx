@@ -12,10 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Cpu, MemoryStick, Network, Waves, ArrowUpRight } from 'lucide-react';
-import type { ClusterMetrics, NodeMetricData } from '@/hooks/useClusterMetrics';
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { Cpu, MemoryStick, Network, Waves } from 'lucide-react';
+import type { ClusterMetrics } from '@/hooks/useClusterMetrics';
+import { useState, useReducer, useEffect, useRef } from 'react';
 
 interface ClusterResourcesChartProps {
   data: ClusterMetrics | undefined;
@@ -39,49 +38,75 @@ interface HistoryPoint {
   [key: string]: string | number;
 }
 
+type HistoryAction =
+  | { type: 'APPEND'; point: HistoryPoint; maxPoints: number }
+  | { type: 'RESET'; point?: HistoryPoint };
+
+function historyReducer(state: HistoryPoint[], action: HistoryAction): HistoryPoint[] {
+  switch (action.type) {
+    case 'APPEND': {
+      const updated = [...state, action.point];
+      return updated.length > action.maxPoints ? updated.slice(-action.maxPoints) : updated;
+    }
+    case 'RESET':
+      return action.point ? [action.point] : [];
+    default:
+      return state;
+  }
+}
+
+function createHistoryPoint(data: ClusterMetrics, metric: 'cpu' | 'memory' | 'network'): HistoryPoint {
+  const now = Date.now();
+  const timeLabel = new Date().toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+
+  const newPoint: HistoryPoint = {
+    time: timeLabel,
+    timestamp: now,
+  };
+
+  data.nodes.forEach((node) => {
+    const key = node.nodeName.replace(/\s+/g, '_');
+    if (metric === 'cpu') {
+      newPoint[key] = node.isOnline ? node.cpu : 0;
+    } else if (metric === 'memory') {
+      newPoint[key] = node.isOnline ? node.memory : 0;
+    } else {
+      newPoint[key] = node.isOnline ? Math.round(node.networkRx + node.networkTx) : 0;
+    }
+  });
+
+  return newPoint;
+}
+
 export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChartProps) {
   const [metric, setMetric] = useState<'cpu' | 'memory' | 'network'>('cpu');
-  const [history, setHistory] = useState<HistoryPoint[]>([]);
+  const [history, dispatch] = useReducer(historyReducer, []);
+  const prevMetricRef = useRef<'cpu' | 'memory' | 'network' | null>(null);
   const maxPoints = 30;
 
+  // Single effect to handle both metric changes and data updates
   useEffect(() => {
     if (!data?.nodes) return;
 
-    const now = Date.now();
-    const timeLabel = new Date().toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
+    const prevMetric = prevMetricRef.current;
 
-    setHistory((prev) => {
-      const newPoint: HistoryPoint = {
-        time: timeLabel,
-        timestamp: now,
-      };
+    if (prevMetric !== null && prevMetric !== metric) {
+      // Metric changed - reset history with new point
+      const newPoint = createHistoryPoint(data, metric);
+      dispatch({ type: 'RESET', point: newPoint });
+    } else {
+      // Normal data update - append to history
+      const newPoint = createHistoryPoint(data, metric);
+      dispatch({ type: 'APPEND', point: newPoint, maxPoints });
+    }
 
-      data.nodes.forEach((node) => {
-        const key = node.nodeName.replace(/\s+/g, '_');
-        if (metric === 'cpu') {
-          newPoint[key] = node.isOnline ? node.cpu : 0;
-        } else if (metric === 'memory') {
-          newPoint[key] = node.isOnline ? node.memory : 0;
-        } else {
-          newPoint[key] = node.isOnline ? Math.round(node.networkRx + node.networkTx) : 0;
-        }
-      });
-
-      const updated = [...prev, newPoint];
-      if (updated.length > maxPoints) {
-        return updated.slice(-maxPoints);
-      }
-      return updated;
-    });
-  }, [data, metric]);
-
-  useEffect(() => {
-    setHistory([]);
-  }, [metric]);
+    // Update ref for next comparison
+    prevMetricRef.current = metric;
+  }, [data, metric, maxPoints]);
 
   if (isLoading || !data) {
     return (
@@ -130,7 +155,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
     }
   };
 
-  const getYDomain = () => {
+  const getYDomain = (): [number, number | 'auto'] => {
     if (metric === 'cpu' || metric === 'memory') return [0, 100];
     return [0, 'auto'];
   };
