@@ -611,8 +611,62 @@ impl ContainerdRuntime {
         Ok(())
     }
 
+    /// Force kill a container with SIGKILL (signal 9).
+    /// This method is designed to NEVER fail - it will always attempt cleanup
+    /// and is meant for stuck/unresponsive containers.
     pub async fn force_kill_container(&self, container_id: &str) -> AgentResult<()> {
-        self.kill_container(container_id, "SIGKILL").await
+        info!("Force killing container: {} with SIGKILL (signal 9)", container_id);
+        let mut tasks = TasksClient::new(self.channel.clone());
+
+        // Send SIGKILL (signal 9) directly - no parsing, always use numeric value
+        let kill_req = TaskKillRequest {
+            container_id: container_id.to_string(),
+            signal: 9, // SIGKILL - cannot be caught, blocked, or ignored
+            all: true,  // Kill all processes in the container
+            ..Default::default()
+        };
+        let kill_req = with_namespace!(kill_req, &self.namespace);
+
+        // Attempt the kill - ignore errors since we want to proceed with cleanup anyway
+        match tasks.kill(kill_req).await {
+            Ok(_) => {
+                info!("SIGKILL sent to container {}", container_id);
+            }
+            Err(e) => {
+                if is_not_found(&e) {
+                    info!("Container {} not found, already gone", container_id);
+                    return Ok(());
+                }
+                warn!("SIGKILL request failed for {}: {}, proceeding with cleanup", container_id, e);
+            }
+        }
+
+        // Wait briefly for exit, but don't block forever
+        // SIGKILL should terminate immediately, but we give it 3 seconds max
+        let exit_result = tokio::time::timeout(
+            Duration::from_secs(3),
+            self.wait_for_exit(container_id)
+        ).await;
+
+        match exit_result {
+            Ok(_) => info!("Container {} exited after SIGKILL", container_id),
+            Err(_) => warn!("Container {} did not exit within 3s after SIGKILL, forcing cleanup", container_id),
+        }
+
+        // Always attempt to delete the task regardless of what happened above
+        let delete_req = DeleteTaskRequest {
+            container_id: container_id.to_string(),
+        };
+        let delete_req = with_namespace!(delete_req, &self.namespace);
+        if let Err(e) = tasks.delete(delete_req).await {
+            if !is_not_found(&e) {
+                warn!("Failed to delete task for {}: {}", container_id, e);
+            }
+        } else {
+            info!("Task deleted for container {}", container_id);
+        }
+
+        Ok(())
     }
 
     pub async fn remove_container(&self, container_id: &str) -> AgentResult<()> {

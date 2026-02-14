@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Template, TemplateImageOption, TemplateVariable } from '../../types/template';
 import { templatesApi } from '../../services/api/templates';
 import { notifyError, notifySuccess } from '../../utils/notify';
-import { normalizeTemplateImport } from '../../utils/pterodactylImport';
+import { normalizeTemplateImport, validateConvertedTemplate } from '../../utils/pterodactylImport';
 
 type VariableDraft = {
   name: string;
@@ -21,7 +21,7 @@ const createVariableDraft = (variable?: TemplateVariable): VariableDraft => ({
   defaultValue: variable?.default ?? '',
   required: Boolean(variable?.required),
   input: variable?.input ?? 'text',
-  rules: variable?.rules?.join(', ') ?? '',
+  rules: variable?.rules?.join('; ') ?? '',
 });
 
 function TemplateEditModal({ template }: { template: Template }) {
@@ -88,7 +88,7 @@ function TemplateEditModal({ template }: { template: Template }) {
         required: variable.required,
         input: variable.input,
         rules: variable.rules
-          .split(',')
+          .split(';')
           .map((rule) => rule.trim())
           .filter(Boolean),
       }));
@@ -182,7 +182,7 @@ function TemplateEditModal({ template }: { template: Template }) {
           defaultValue: String(variable?.default ?? ''),
           required: Boolean(variable?.required),
           input: variable?.input ?? 'text',
-          rules: Array.isArray(variable?.rules) ? variable.rules.join(', ') : '',
+          rules: Array.isArray(variable?.rules) ? variable.rules.join('; ') : '',
         }))
       : [];
     setVariables(importedVariables.length ? importedVariables : [createVariableDraft()]);
@@ -252,17 +252,37 @@ function TemplateEditModal({ template }: { template: Template }) {
     },
   });
 
+  // Signal-based stops don't require a stop command
+  const usingSignalStop = sendSignalTo === 'SIGINT' || sendSignalTo === 'SIGKILL';
+
   const disableSubmit =
     !name ||
     !author ||
     !version ||
     !image ||
     !startup ||
-    !stopCommand ||
+    (!stopCommand.trim() && !usingSignalStop) ||
     !parsedPorts.length ||
     !Number(allocatedMemoryMb) ||
     !Number(allocatedCpuCores) ||
     mutation.isPending;
+
+  // Compute missing required fields for display
+  const missingFields: string[] = useMemo(() => {
+    const isSignalStop = sendSignalTo === 'SIGINT' || sendSignalTo === 'SIGKILL';
+    const missing: string[] = [];
+    if (!name) missing.push('Name');
+    if (!author) missing.push('Author');
+    if (!version) missing.push('Version');
+    if (!image) missing.push('Container image');
+    if (!startup) missing.push('Startup command');
+    // Stop command is only required when NOT using signal-based stop
+    if (!stopCommand.trim() && !isSignalStop) missing.push('Stop command');
+    if (!parsedPorts.length) missing.push('Valid ports');
+    if (!Number(allocatedMemoryMb)) missing.push('Allocated memory');
+    if (!Number(allocatedCpuCores)) missing.push('Allocated CPU cores');
+    return missing;
+  }, [name, author, version, image, startup, stopCommand, sendSignalTo, parsedPorts.length, allocatedMemoryMb, allocatedCpuCores]);
 
   return (
     <div>
@@ -713,7 +733,7 @@ function TemplateEditModal({ template }: { template: Template }) {
                       </label>
                       <label className="block space-y-1 md:col-span-2">
                         <span className="text-slate-500 dark:text-slate-400">
-                          Rules (comma separated)
+                          Rules (semicolon separated)
                         </span>
                         <input
                           className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
@@ -725,7 +745,7 @@ function TemplateEditModal({ template }: { template: Template }) {
                               ),
                             )
                           }
-                          placeholder="between:512,16384"
+                          placeholder="between:512,16384; in:val1,val2"
                         />
                       </label>
                     </div>
@@ -788,9 +808,20 @@ function TemplateEditModal({ template }: { template: Template }) {
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-4 text-xs dark:border-slate-800">
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                Changes apply immediately after save.
-              </span>
+              <div className="space-y-1">
+                {missingFields.length > 0 ? (
+                  <div className="text-xs">
+                    <span className="text-slate-500 dark:text-slate-400">Missing required fields: </span>
+                    <span className="text-amber-600 dark:text-amber-400 font-medium">
+                      {missingFields.join(', ')}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    Changes apply immediately after save.
+                  </span>
+                )}
+              </div>
               <div className="flex gap-2">
                 <button
                   className="rounded-full border border-slate-200 px-4 py-2 font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"

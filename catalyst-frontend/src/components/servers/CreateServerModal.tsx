@@ -270,6 +270,7 @@ function CreateServerModal() {
       }
     },
     onError: (error: any) => {
+      console.error('Server creation error:', error?.response?.data || error);
       const message = error?.response?.data?.error || 'Failed to create server';
       notifyError(message);
     },

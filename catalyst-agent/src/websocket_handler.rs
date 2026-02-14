@@ -1587,7 +1587,7 @@ impl WebSocketHandler {
 
     async fn kill_server(&self, server_id: &str, container_id: String) -> AgentResult<()> {
         if container_id.is_empty() {
-            info!("No container found for server {}, marking as crashed", server_id);
+            info!("No container found for server {}, marking as killed", server_id);
             self.stop_monitor_task(server_id).await;
             self.emit_server_state_update(
                 server_id,
@@ -1599,8 +1599,9 @@ impl WebSocketHandler {
             .await?;
             return Ok(());
         }
-        info!("Killing server: {} (container {})", server_id, container_id);
+        info!("Force killing server: {} (container {})", server_id, container_id);
 
+        // Stop monitoring first - we don't want monitor interfering
         self.stop_monitor_task(server_id).await;
 
         let _ = self
@@ -1611,18 +1612,26 @@ impl WebSocketHandler {
             )
             .await;
 
-        self.runtime.force_kill_container(&container_id).await?;
-
-        if self.runtime.container_exists(&container_id).await {
-            self.runtime.remove_container(&container_id).await?;
+        // Force kill the container - this method never fails and always attempts cleanup
+        if let Err(e) = self.runtime.force_kill_container(&container_id).await {
+            warn!("Force kill had issues for {}: {}, continuing with cleanup", container_id, e);
         }
 
+        // Always attempt to remove the container regardless of what happened above
+        // remove_container also sends SIGKILL, so this is a safety net
+        if self.runtime.container_exists(&container_id).await {
+            if let Err(e) = self.runtime.remove_container(&container_id).await {
+                warn!("Failed to remove container {}: {}, server state still updated", container_id, e);
+            }
+        }
+
+        // Always update state to crashed - this must happen no matter what
         self.emit_server_state_update(
             server_id,
             "crashed",
             Some("Killed by agent".to_string()),
             None,
-            Some(137),
+            Some(137), // 128 + 9 (SIGKILL exit code)
         )
         .await?;
 
