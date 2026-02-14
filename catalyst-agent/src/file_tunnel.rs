@@ -142,6 +142,7 @@ impl FileTunnelClient {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn poll_worker(
     worker_id: usize,
     client: Client,

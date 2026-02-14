@@ -1,0 +1,35 @@
+# Pre-commit configuration for Catalyst
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Rust formatting and linting
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: bash -c 'cd catalyst-agent && cargo fmt --check'
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: bash -c 'cd catalyst-agent && cargo clippy -- -D warnings'
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^catalyst-backend/node_modules/
+      - id: end-of-file-fixer
+        exclude: ^catalyst-backend/node_modules/
+      - id: check-yaml
+        exclude: ^catalyst-backend/node_modules/
+      - id: check-added-large-files
+        exclude: ^catalyst-backend/node_modules/
+      - id: check-merge-conflict

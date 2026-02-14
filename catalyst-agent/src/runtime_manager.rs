@@ -914,7 +914,6 @@ impl ContainerdRuntime {
             stderr: "".to_string(),
             terminal: false,
             spec: Some(spec_any),
-            ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
         tasks.exec(req).await.map_err(grpc_err)?;
@@ -1192,7 +1191,6 @@ impl ContainerdRuntime {
             stderr: ep.to_string_lossy().to_string(),
             terminal: false,
             spec: Some(spec_any),
-            ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
         tasks.exec(req).await.map_err(grpc_err)?;

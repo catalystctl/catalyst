@@ -484,7 +484,7 @@ impl FileManager {
         // Security: Validate that no symlinks were extracted that escape the target directory.
         // This prevents archive symlink attacks where a malicious archive contains symlinks
         // pointing outside the server directory (e.g., to /etc/cron.d).
-        self.validate_extracted_symlinks(&target_full, &server_id)
+        self.validate_extracted_symlinks(&target_full, server_id)
             .await?;
 
         info!(
