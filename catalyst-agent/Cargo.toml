@@ -10,8 +10,8 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml = "0.9"
-tokio-tungstenite = "0.28"
+    toml = "1.1"
+    tokio-tungstenite = "0.29"
 futures = "0.3"
 async-trait = "0.1"
 tracing = "0.1"
@@ -25,17 +25,17 @@ parking_lot = "0.12"
 dashmap = "6.1"
 lazy_static = "1.4"
 regex = "1.10"
-sha2 = "0.10"
+sha2 = "0.11"
 base64 = "0.22"
 sysinfo = "0.38"
 nix = { version = "0.31", features = ["fs"] }
 libc = "0.2"
-reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls-native-roots"], default-features = false }
+reqwest = { version = "0.13", features = ["json", "stream", "rustls-native-certs"], default-features = false }
 tokio-stream = "0.1"
 containerd-client = "0.8"
-tonic = "0.12"
-prost = "0.13"
-prost-types = "0.13"
+    tonic = "0.12"
+    prost = "0.13"
+    prost-types = "0.13"
 
 [profile.release]
 opt-level = 3

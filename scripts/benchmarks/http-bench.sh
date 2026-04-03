@@ -6,7 +6,7 @@ set -euo pipefail
 # Requirements:
 # - backend running (default http://localhost:3000)
 # - jq installed
-# - network access to download autocannon via npx (or cached)
+# - network access to download autocannon via bunx (or cached)
 #
 # Usage:
 #   BASE_URL=http://localhost:3000 \

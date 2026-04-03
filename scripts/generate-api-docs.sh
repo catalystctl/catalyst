@@ -17,12 +17,12 @@ API_MD="$DOCS_DIR/API.md"
 
 curl -sS "$OPENAPI_URL" -o "$OPENAPI_JSON"
 
-if ! command -v node >/dev/null 2>&1; then
-  echo "node is required to render Markdown" >&2
+if ! command -v bun >/dev/null 2>&1; then
+  echo "bun is required to render Markdown" >&2
   exit 1
 fi
 
-DOCS_DIR="$DOCS_DIR" node <<'NODE'
+DOCS_DIR="$DOCS_DIR" bun <<'NODE'
 const fs = require('fs');
 const path = require('path');
 
