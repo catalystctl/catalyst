@@ -30,12 +30,12 @@ base64 = "0.22"
 sysinfo = "0.38"
 nix = { version = "0.31", features = ["fs"] }
 libc = "0.2"
-reqwest = { version = "0.13", features = ["json", "stream", "rustls-tls-native-roots"], default-features = false }
+reqwest = { version = "0.13", features = ["json", "stream", "rustls-native-certs"], default-features = false }
 tokio-stream = "0.1"
 containerd-client = "0.8"
-    tonic = "0.14"
-    prost = "0.14"
-    prost-types = "0.14"
+    tonic = "0.12"
+    prost = "0.13"
+    prost-types = "0.13"
 
 [profile.release]
 opt-level = 3
