@@ -44,7 +44,7 @@ body=$(parse_response "$response")
 LOCATION_ID=$(echo "$body" | jq -r '.data[0].locationId // empty')
 
 if [ -z "$LOCATION_ID" ]; then
-    log_error "No location found in database. Please run: npm run db:seed"
+    log_error "No location found in database. Please run: bun run db:seed"
     exit 1
 fi
 log_success "Using location: $LOCATION_ID"
