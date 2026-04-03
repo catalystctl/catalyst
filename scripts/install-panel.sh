@@ -969,7 +969,7 @@ build_backend() {
   log "Installing backend dependencies and building..."
   (
     cd "${APP_ROOT}/catalyst-backend"
-    npm ci --include=dev --no-audit --no-fund || bun install --include=dev --no-audit --no-fund
+    bun install --include=dev --no-audit --no-fund || npm ci --include=dev --no-audit --no-fund
     set -a
     # shellcheck disable=SC1090
     . "$ENV_FILE"
@@ -979,7 +979,7 @@ build_backend() {
     CATALYST_ADMIN_USERNAME="$ADMIN_USERNAME" \
     CATALYST_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
     CATALYST_ADMIN_NAME="$ADMIN_USERNAME" \
-      bunx tsx scripts/bootstrap-production.ts
+      bun scripts/bootstrap-production.ts
     bun run build
   )
 }
@@ -988,7 +988,7 @@ build_frontend() {
   log "Installing frontend dependencies and building..."
   (
     cd "${APP_ROOT}/catalyst-frontend"
-    npm ci --include=dev --no-audit --no-fund || bun install --include=dev --no-audit --no-fund
+    bun install --include=dev --no-audit --no-fund || npm ci --include=dev --no-audit --no-fund
     bun run build
   )
 

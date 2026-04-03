@@ -44,8 +44,8 @@ echo "Fetching server list from database..."
 
 server_list="$(
   cd "$BACKEND_DIR"
-  node <<'NODE'
-const { PrismaClient } = require("@prisma/client");
+  bun <<'NODE'
+import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 (async () => {
   const servers = await prisma.server.findMany({
