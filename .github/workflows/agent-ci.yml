@@ -84,7 +84,7 @@ jobs:
           cargo build --release --target ${{ matrix.target }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: catalyst-agent-${{ matrix.target }}
           path: catalyst-agent/target/${{ matrix.target }}/release/catalyst-agent
