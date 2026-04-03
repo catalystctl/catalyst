@@ -1931,7 +1931,7 @@ impl WebSocketHandler {
             }
             hasher.update(&buffer[..read]);
         }
-        let checksum = format!("{:x}", hasher.finalize());
+        let checksum = hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect::<String>();
 
         let event = json!({
             "type": "backup_complete",

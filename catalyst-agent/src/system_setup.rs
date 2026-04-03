@@ -346,7 +346,7 @@ impl SystemSetup {
             }
             hasher.update(&buffer[..read]);
         }
-        Ok(format!("{:x}", hasher.finalize()))
+        Ok(hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect::<String>())
     }
 
     fn extract_sha256_hex(text: &str) -> Option<String> {
