@@ -44,6 +44,7 @@
     "date-fns": "^4.1.0",
     "framer-motion": "^12.32.0",
     "js-yaml": "^4.1.1",
+    "lucide-react": "^1.7.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-hook-form": "^7.71.1",
