@@ -91,8 +91,8 @@ fi
 echo "Deleting server records from database..."
 (
   cd "$BACKEND_DIR"
-  node <<'NODE'
-const { PrismaClient } = require("@prisma/client");
+  bun <<'NODE'
+import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 (async () => {
   const result = await prisma.server.deleteMany();
