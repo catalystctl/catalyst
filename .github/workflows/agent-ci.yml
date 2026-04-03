@@ -16,7 +16,7 @@ jobs:
       image: rust:1.75-bullseye
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
       - name: Install protoc
         run: |
@@ -56,7 +56,7 @@ jobs:
         target: [x86_64-unknown-linux-gnu, x86_64-unknown-linux-musl]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
       - name: Install protoc
         run: |
