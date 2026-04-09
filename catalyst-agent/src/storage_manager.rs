@@ -216,7 +216,7 @@ impl StorageManager {
             .ok_or_else(|| AgentError::FileSystemError("Invalid mount path".to_string()))?
             .to_string();
         spawn_blocking(move || {
-            run("mount", &["-o", "loop", &image, &mount])?;
+            run("mount", &["-o", "loop,noexec,nodev,nosuid", &image, &mount])?;
             Ok::<(), AgentError>(())
         })
         .await

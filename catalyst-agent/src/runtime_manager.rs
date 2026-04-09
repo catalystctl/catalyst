@@ -49,6 +49,68 @@ const SPEC_TYPE_URL: &str = "types.containerd.io/opencontainers/runtime-spec/1/S
 const CONSOLE_BASE_DIR: &str = "/tmp/catalyst-console";
 const PORT_FWD_STATE_DIR: &str = "/var/lib/cni/results";
 
+/// Device access profiles for container security
+/// Each profile defines which devices the container can access
+#[derive(Debug, Clone)]
+pub struct DeviceProfile {
+    pub devices: Vec<serde_json::Value>,
+}
+
+impl DeviceProfile {
+    /// Minimal profile - only null device
+    pub fn minimal() -> Self {
+        Self {
+            devices: vec![
+                serde_json::json!({"allow": false, "access": "rwm"}),
+                serde_json::json!({"allow": true, "type": "c", "major": 1, "minor": 3, "access": "r"}),
+            ],
+        }
+    }
+
+    /// Standard profile - common devices for most game servers
+    pub fn standard() -> Self {
+        Self {
+            devices: vec![
+                serde_json::json!({"allow": false, "access": "rwm"}),
+                serde_json::json!({"allow": true, "type": "c", "major": 1, "minor": 3, "access": "rwm"}),
+                serde_json::json!({"allow": true, "type": "c", "major": 1, "minor": 5, "access": "rwm"}),
+                serde_json::json!({"allow": true, "type": "c", "major": 1, "minor": 8, "access": "rwm"}),
+                serde_json::json!({"allow": true, "type": "c", "major": 1, "minor": 9, "access": "rwm"}),
+                serde_json::json!({"allow": true, "type": "c", "major": 5, "minor": 0, "access": "rwm"}),
+                serde_json::json!({"allow": true, "type": "c", "major": 5, "minor": 1, "access": "rwm"}),
+            ],
+        }
+    }
+
+    /// GPU profile - includes GPU device access
+    pub fn gpu() -> Self {
+        let mut standard = Self::standard();
+        // Add NVIDIA GPU devices (typically /dev/nvidia*)
+        standard.devices.push(serde_json::json!({"allow": true, "type": "c", "major": 195, "access": "rwm"}));
+        standard.devices.push(serde_json::json!({"allow": true, "type": "c", "major": 506, "access": "rwm"}));
+        standard
+    }
+
+    /// Extended profile - for servers that need more device access
+    pub fn extended() -> Self {
+        let mut standard = Self::standard();
+        // Add additional common devices
+        standard.devices.push(serde_json::json!({"allow": true, "type": "c", "major": 10, "minor": 200, "access": "rwm"})); // NVIDIA control device
+        standard.devices.push(serde_json::json!({"allow": true, "type": "c", "major": 10, "minor": 222, "access": "rwm"})); // NVIDIA device
+        standard
+    }
+
+    /// Get device profile by name
+    pub fn from_name(name: &str) -> Self {
+        match name.to_lowercase().as_str() {
+            "minimal" => Self::minimal(),
+            "gpu" => Self::gpu(),
+            "extended" => Self::extended(),
+            _ => Self::standard(), // Default to standard
+        }
+    }
+}
+
 // CNI plugin directories to search, in order of preference
 // Fedora/RHEL install to /usr/libexec/cni, others typically use /opt/cni/bin
 const CNI_BIN_DIRS: &[&str] = &["/opt/cni/bin", "/usr/libexec/cni"];
@@ -248,7 +310,8 @@ impl ContainerdRuntime {
         fs::create_dir_all(&io_dir).map_err(|e| {
             AgentError::ContainerError(format!("Failed to create I/O directory: {}", e))
         })?;
-        set_dir_perms(&io_dir, 0o755);
+        // Restrict I/O directory to root-only to prevent cross-container reading
+        set_dir_perms(&io_dir, 0o700);
 
         let stdin_path = io_dir.join("stdin");
         let stdout_path = io_dir.join("stdout");
@@ -447,6 +510,8 @@ impl ContainerdRuntime {
         let io_dir = PathBuf::from(CONSOLE_BASE_DIR).join(&container_id);
         fs::create_dir_all(&io_dir)
             .map_err(|e| AgentError::ContainerError(format!("mkdir: {}", e)))?;
+        // Restrict I/O directory to root-only
+        set_dir_perms(&io_dir, 0o700);
         let stdin_path = io_dir.join("stdin");
         let stdout_path = io_dir.join("stdout");
         let stderr_path = io_dir.join("stderr");
@@ -1153,16 +1218,27 @@ impl ContainerdRuntime {
         } else {
             0.0
         };
-        let mem = if !cg.is_empty() {
-            read_cgroup_memory(&cg).await.unwrap_or(0)
+        let (mem, mem_limit) = if !cg.is_empty() {
+            let current = read_cgroup_memory(&cg).await.unwrap_or(0);
+            let limit = read_cgroup_memory_limit(&cg).await.unwrap_or(0);
+            (current, limit)
         } else {
-            0
+            (0, 0)
+        };
+        let memory_display = if mem_limit > 0 {
+            format!(
+                "{}MiB / {}MiB",
+                mem / (1024 * 1024),
+                mem_limit / (1024 * 1024)
+            )
+        } else {
+            format!("{}MiB / 0MiB", mem / (1024 * 1024))
         };
         Ok(ContainerStats {
             container_id: container_id.to_string(),
             container_name: container_id.to_string(),
             cpu_percent: format!("{:.2}%", cpu),
-            memory_usage: format!("{}MiB / 0MiB", mem / (1024 * 1024)),
+            memory_usage: memory_display,
             net_io: "0B / 0B".to_string(),
             block_io: "0B / 0B".to_string(),
         })
@@ -1633,11 +1709,19 @@ impl ContainerdRuntime {
 
         let args = if !config.startup_command.is_empty() {
             let escaped_startup = shell_escape_value(config.startup_command);
+            // Some templates (e.g. Hytale) use bash-specific process substitution or
+            // other features that dash/sh cannot handle.  Detect those and use bash
+            // instead of /bin/sh so the command works on all distros.
+            let shell = if crate::websocket_handler::requires_bash(config.startup_command) {
+                "/bin/bash"
+            } else {
+                "/bin/sh"
+            };
             let wrapped_command = format!(
-                "export PATH=\"/opt/java/openjdk/bin:${{PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}}\"; exec /bin/sh -c {}",
-                escaped_startup
+                "export PATH=\"/opt/java/openjdk/bin:${{PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}}\"; exec {} -c {}",
+                shell, escaped_startup
             );
-            vec!["/bin/sh".to_string(), "-c".to_string(), wrapped_command]
+            vec![shell.to_string(), "-c".to_string(), wrapped_command]
         } else {
             vec!["/bin/sh".to_string()]
         };
@@ -1648,7 +1732,12 @@ impl ContainerdRuntime {
         // Runtime containers run as non-root (1000:1000) and need minimal capabilities.
         let caps = ["CAP_NET_BIND_SERVICE"];
         let mut mounts = base_mounts(config.data_dir);
-        mounts.push(serde_json::json!({"destination":io_dir.to_string_lossy().to_string(),"type":"bind","source":io_dir.to_string_lossy().to_string(),"options":["rbind","rw"]}));
+        // Mount only stdin as rw; stdout/stderr are log sinks that the container
+        // process should not write to directly.  This reduces the blast radius of
+        // an RCE inside the game server.
+        mounts.push(serde_json::json!({"destination":io_dir.join("stdin").to_string_lossy(),"type":"bind","source":io_dir.join("stdin").to_string_lossy(),"options":["rbind","rw"]}));
+        mounts.push(serde_json::json!({"destination":io_dir.join("stdout").to_string_lossy(),"type":"bind","source":io_dir.join("stdout").to_string_lossy(),"options":["rbind","ro"]}));
+        mounts.push(serde_json::json!({"destination":io_dir.join("stderr").to_string_lossy(),"type":"bind","source":io_dir.join("stderr").to_string_lossy(),"options":["rbind","ro"]}));
 
         // Generate /etc/hosts so the container hostname resolves (Java getLocalHost() etc.)
         let hosts_path = io_dir.join("hosts");
@@ -1674,18 +1763,16 @@ impl ContainerdRuntime {
         }
         mounts.push(serde_json::json!({"destination":"/etc/resolv.conf","type":"bind","source":resolv_path.to_string_lossy().to_string(),"options":["rbind","rw"]}));
 
-        for (h, c) in [
-            ("/etc/machine-id", "/etc/machine-id"),
-            ("/var/lib/dbus/machine-id", "/var/lib/dbus/machine-id"),
-            (
-                "/sys/class/dmi/id/product_uuid",
-                "/sys/class/dmi/id/product_uuid",
-            ),
-        ] {
-            if Path::new(h).exists() {
-                mounts.push(serde_json::json!({"destination":c,"type":"bind","source":h,"options":["rbind","ro"]}));
-            }
+        // Generate a per-container /etc/machine-id so that containers cannot
+        // fingerprint the host or correlate with other servers on the same node.
+        // Java's SecureRandom and other tools may use this for seeding.
+        let machine_id_path = io_dir.join("machine-id");
+        if !machine_id_path.exists() {
+            let unique_id = format!("{:032x}", uuid::Uuid::new_v4().as_u128());
+            fs::write(&machine_id_path, &unique_id).ok();
         }
+        mounts.push(serde_json::json!({"destination":"/etc/machine-id","type":"bind","source":machine_id_path.to_string_lossy(),"options":["rbind","ro"]}));
+        mounts.push(serde_json::json!({"destination":"/var/lib/dbus/machine-id","type":"bind","source":machine_id_path.to_string_lossy(),"options":["rbind","ro"]}));
         let mut ns = vec![
             serde_json::json!({"type":"pid"}),
             serde_json::json!({"type":"ipc"}),
@@ -1696,6 +1783,8 @@ impl ContainerdRuntime {
             ns.push(serde_json::json!({"type":"network"}));
         }
 
+        let devices = DeviceProfile::standard().devices;
+
         Ok(serde_json::json!({
             "ociVersion":"1.1.0",
             "process":{"terminal":false,"user":{"uid":1000,"gid":1000},"args":args,"env":env_list,"cwd":"/data",
@@ -1703,10 +1792,7 @@ impl ContainerdRuntime {
                 "noNewPrivileges":true,"rlimits":[{"type":"RLIMIT_NOFILE","hard":65536u64,"soft":65536u64}]},
             "root":{"path":"rootfs","readonly":false},"hostname":config.container_id,"mounts":mounts,
             "linux":{"cgroupsPath":cgroup_path,"resources":{"memory":{"limit":mem_limit},"cpu":{"quota":cpu_quota,"period":100000u64},
-                "devices":[{"allow":false,"access":"rwm"},{"allow":true,"type":"c","major":1,"minor":3,"access":"rwm"},
-                    {"allow":true,"type":"c","major":1,"minor":5,"access":"rwm"},{"allow":true,"type":"c","major":1,"minor":8,"access":"rwm"},
-                    {"allow":true,"type":"c","major":1,"minor":9,"access":"rwm"},{"allow":true,"type":"c","major":5,"minor":0,"access":"rwm"},
-                    {"allow":true,"type":"c","major":5,"minor":1,"access":"rwm"}]},
+                "devices":devices},
                 "namespaces":ns,"maskedPaths":masked_paths(),"readonlyPaths":readonly_paths(),
                 "seccomp": default_seccomp_profile()}
         }))
@@ -1893,19 +1979,23 @@ impl ContainerdRuntime {
         Ok(())
     }
 
-    /// Ensure iptables FORWARD rules allow traffic from bridge to external
+    /// Ensure iptables FORWARD rules allow traffic from bridge to external.
+    /// Detects the default route interface dynamically instead of hardcoding it.
     async fn ensure_bridge_forward_rules(&self) {
+        // Detect the host's default route interface
+        let external_iface = detect_default_route_interface().unwrap_or_else(|| {
+            warn!("Could not detect default route interface; bridge FORWARD rules may not work");
+            String::new()
+        });
+        if external_iface.is_empty() {
+            return;
+        }
+        let iface = external_iface.as_str();
+
         // Check if rules already exist to avoid duplicates
         let check_output = Command::new("iptables")
             .args([
-                "-C",
-                "FORWARD",
-                "-i",
-                "catalyst0",
-                "-o",
-                "enp34s0",
-                "-j",
-                "ACCEPT",
+                "-C", "FORWARD", "-i", "catalyst0", "-o", iface, "-j", "ACCEPT",
             ])
             .output()
             .await;
@@ -1915,21 +2005,14 @@ impl ContainerdRuntime {
                 // Rule doesn't exist, add it
                 let result = Command::new("iptables")
                     .args([
-                        "-I",
-                        "FORWARD",
-                        "1",
-                        "-i",
-                        "catalyst0",
-                        "-o",
-                        "enp34s0",
-                        "-j",
-                        "ACCEPT",
+                        "-I", "FORWARD", "1",
+                        "-i", "catalyst0", "-o", iface, "-j", "ACCEPT",
                     ])
                     .output()
                     .await;
                 match result {
                     Ok(o) if o.status.success() => {
-                        info!("Added FORWARD rule: catalyst0 -> enp34s0")
+                        info!("Added FORWARD rule: catalyst0 -> {}", iface)
                     }
                     Ok(o) => warn!(
                         "Failed to add FORWARD rule: {}",
@@ -1940,21 +2023,14 @@ impl ContainerdRuntime {
 
                 let result = Command::new("iptables")
                     .args([
-                        "-I",
-                        "FORWARD",
-                        "2",
-                        "-i",
-                        "enp34s0",
-                        "-o",
-                        "catalyst0",
-                        "-j",
-                        "ACCEPT",
+                        "-I", "FORWARD", "2",
+                        "-i", iface, "-o", "catalyst0", "-j", "ACCEPT",
                     ])
                     .output()
                     .await;
                 match result {
                     Ok(o) if o.status.success() => {
-                        info!("Added FORWARD rule: enp34s0 -> catalyst0 (allow new connections)")
+                        info!("Added FORWARD rule: {} -> catalyst0 (allow new connections)", iface)
                     }
                     Ok(o) => warn!(
                         "Failed to add FORWARD rule: {}",
@@ -2363,6 +2439,26 @@ fn load_named_cni_plugin_config(network: &str) -> Option<serde_json::Value> {
 }
 
 /// Auto-detect the host's default network interface, subnet, and gateway.
+/// Detect the host's default route interface (e.g. "eth0", "ens192").
+/// Returns None if no default route can be found.
+fn detect_default_route_interface() -> Option<String> {
+    let output = std::process::Command::new("ip")
+        .args(["-4", "route", "show", "default"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let route = String::from_utf8_lossy(&output.stdout);
+    let parts: Vec<&str> = route.split_whitespace().collect();
+    let idx = parts.iter().position(|&p| p == "dev")?;
+    let iface = parts.get(idx + 1)?.to_string();
+    if iface.is_empty() || iface == "lo" {
+        return None;
+    }
+    Some(iface)
+}
+
 fn detect_host_network() -> Option<(String, String, String)> {
     // Parse `ip -4 route show default` → "default via <gw> dev <iface> ..."
     let output = std::process::Command::new("ip")
@@ -2631,4 +2727,18 @@ async fn read_cgroup_memory(path: &str) -> Option<u64> {
         .trim()
         .parse()
         .ok()
+}
+
+/// Read the memory limit for a cgroup v2 hierarchy.
+/// Returns the value from memory.max (in bytes).  The special value "max"
+/// means unlimited and is reported as 0.
+async fn read_cgroup_memory_limit(path: &str) -> Option<u64> {
+    let content = tokio::fs::read_to_string(format!("{}/memory.max", path))
+        .await
+        .ok()?;
+    let trimmed = content.trim();
+    if trimmed == "max" || trimmed.is_empty() {
+        return Some(0);
+    }
+    trimmed.parse().ok()
 }
