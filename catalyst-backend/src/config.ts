@@ -9,7 +9,7 @@ export const config = {
     corsOrigin: process.env.CORS_ORIGIN || "http://localhost:3000",
   },
   database: {
-    url: process.env.DATABASE_URL || "postgresql://user:password@localhost:5432/aero",
+    url: process.env.DATABASE_URL || "postgresql://catalyst:catalyst_dev_password@localhost:5432/catalyst_db",
   },
   backend: {
     externalAddress: process.env.BACKEND_EXTERNAL_ADDRESS || "http://localhost:3000",

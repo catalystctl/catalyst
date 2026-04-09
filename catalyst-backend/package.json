@@ -4,6 +4,10 @@
   "description": "Catalyst - Production-Grade Game Server Management System Backend",
   "main": "dist/index.js",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0",
+    "bun": ">=1.0.0"
+  },
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "build": "tsc",

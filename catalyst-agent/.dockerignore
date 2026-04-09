@@ -1,0 +1,10 @@
+target/
+.git/
+*.md
+tests/
+docs/
+scripts/
+*.example
+.env*
+config.toml
+config-e2e.toml

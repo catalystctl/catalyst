@@ -1040,7 +1040,7 @@ export class WebSocketGateway {
             where: { id: server.id },
             data: { status: ServerState.STARTING },
           });
-          const serverDir = process.env.SERVER_DATA_PATH || "/tmp/catalyst-servers";
+          const serverDir = process.env.SERVER_DATA_DIR || "/var/lib/catalyst/servers";
           const fullServerDir = `${serverDir}/${server.uuid}`;
           const templateVariables = (server.template.variables as any[]) || [];
           const templateDefaults = templateVariables.reduce((acc, variable) => {

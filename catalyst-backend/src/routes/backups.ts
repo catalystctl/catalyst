@@ -22,7 +22,7 @@ export async function backupRoutes(app: FastifyInstance) {
   const TRANSFER_DIR = process.env.BACKUP_TRANSFER_DIR || "/tmp/catalyst-backup-transfer";
 
   const buildServerDir = (serverUuid: string) => {
-    const serverDir = process.env.SERVER_DATA_PATH || "/tmp/catalyst-servers";
+    const serverDir = process.env.SERVER_DATA_DIR || "/var/lib/catalyst/servers";
     return `${serverDir}/${serverUuid}`;
   };
 

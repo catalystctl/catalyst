@@ -114,7 +114,7 @@ taskScheduler.setTaskExecutor({
       logger.warn({ taskId: task.id, serverId: server.id }, "Scheduled task blocked: server suspended");
       return;
     }
-    const serverDir = process.env.SERVER_DATA_PATH || "/tmp/catalyst-servers";
+    const serverDir = process.env.SERVER_DATA_DIR || "/var/lib/catalyst/servers";
     const fullServerDir = `${serverDir}/${server.uuid}`;
     const environment: Record<string, string> = {
       ...(server.environment as Record<string, string>),

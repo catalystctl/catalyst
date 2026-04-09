@@ -143,15 +143,17 @@ async function main() {
   console.log("✓ Admin user created (admin@example.com / admin123)");
 
   // Create node
+  const nodePublicAddress = process.env.SEED_NODE_PUBLIC_ADDRESS || "127.0.0.1";
+  const nodeHostname = process.env.SEED_NODE_HOSTNAME || "localhost";
   const node = await prisma.node.upsert({
-    where: { name: "production-1" },
+    where: { name: "development-1" },
     update: {},
     create: {
-      name: "production-1",
-      description: "Production game server node",
+      name: "development-1",
+      description: "Local development node",
       locationId: location.id,
-      hostname: "node1.example.com",
-      publicAddress: "192.168.1.100",
+      hostname: nodeHostname,
+      publicAddress: nodePublicAddress,
       secret: "dev-secret-key-12345",
       maxMemoryMb: 32000,
       maxCpuCores: 16,
@@ -192,9 +194,14 @@ async function main() {
   
   try {
     fs.writeFileSync(agentConfigPath, agentConfigContent, "utf-8");
-    console.log("✓ Agent config.toml generated with all required variables");
+    console.log("✓ Agent config.toml generated:", agentConfigPath);
   } catch (error) {
     console.error("✗ Failed to write agent config.toml:", error);
+    console.error("  Expected path:", agentConfigPath);
+    console.error("  Copy the output below and save it manually to catalyst-agent/config.toml");
+    console.log("\n--- config.toml ---");
+    console.log(agentConfigContent);
+    console.log("--- end ---\n");
   }
 
   // Create admin role
@@ -529,7 +536,7 @@ echo '[Catalyst] Node.js bot installation complete.'
 
   console.log("\nSeeding complete!");
   console.log("Default user: admin@example.com / admin123");
-  console.log("Production node ready at: node1.example.com");
+  console.log("Development node ready at:", node.publicAddress);
   console.log("Agent config.toml generated with all required variables:");
   console.log("  - node_id:", node.id);
   console.log("  - api_key:", apiKey || "(not created)");

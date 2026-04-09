@@ -16,26 +16,26 @@ fi
 
 # Install dependencies
 echo "Installing dependencies..."
-npm install
+bun install
 
 # Generate Prisma Client
 echo "Generating Prisma Client..."
-npm run build
+bun run db:generate
 
-# Run migrations
-echo "Running database migrations..."
-npm run db:push
+# Push schema to database
+echo "Pushing database schema..."
+bun run db:push
 
 # Seed database
 echo "Seeding database..."
-npm run db:seed
+bun run db:seed
 
 echo ""
 echo "✓ Backend setup complete!"
 echo ""
 echo "Start the development server:"
-echo "  npm run dev"
+echo "  bun run dev"
 echo ""
 echo "View database:"
-echo "  npm run db:studio"
+echo "  bun run db:studio"
 echo ""

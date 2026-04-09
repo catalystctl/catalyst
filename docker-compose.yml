@@ -3,17 +3,17 @@ version: '3.8'
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: aero-postgres
+    container_name: catalyst-postgres
     environment:
-      POSTGRES_USER: aero
-      POSTGRES_PASSWORD: aero_dev_password
-      POSTGRES_DB: aero_db
+      POSTGRES_USER: catalyst
+      POSTGRES_PASSWORD: catalyst_dev_password
+      POSTGRES_DB: catalyst_db
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - aero-postgres-data:/var/lib/postgresql/data
+      - catalyst-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aero"]
+      test: ["CMD-SHELL", "pg_isready -U catalyst"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,5 +30,5 @@ services:
       retries: 5
 
 volumes:
-  aero-postgres-data:
+  catalyst-postgres-data:
     driver: local

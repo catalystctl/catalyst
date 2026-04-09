@@ -19,14 +19,17 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: test_db
+          POSTGRES_USER: catalyst
+          POSTGRES_PASSWORD: catalyst_dev_password
+          POSTGRES_DB: catalyst_db
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://catalyst:catalyst_dev_password@postgres:5432/catalyst_db
 
     steps:
       - uses: actions/checkout@v6

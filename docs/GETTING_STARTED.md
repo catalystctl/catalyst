@@ -51,11 +51,11 @@ cd catalyst
 ### Step 2: Start Database Services
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 This starts:
-- **PostgreSQL** on port 5432
+- **PostgreSQL** on port 5432 (user: `catalyst`, db: `catalyst_db`)
 - **Redis** on port 6379
 
 Verify services:
@@ -168,9 +168,9 @@ sudo -u postgres psql
 ```
 
 ```sql
-CREATE DATABASE catalyst_prod;
+CREATE DATABASE catalyst_db;
 CREATE USER catalyst_user WITH PASSWORD 'secure_password';
-GRANT ALL PRIVILEGES ON DATABASE catalyst_prod TO catalyst_user;
+GRANT ALL PRIVILEGES ON DATABASE catalyst_db TO catalyst_user;
 \q
 ```
 
@@ -183,7 +183,7 @@ nano .env
 
 **Key settings to update:**
 ```env
-DATABASE_URL="postgresql://catalyst_user:secure_password@localhost/catalyst_prod"
+DATABASE_URL="postgresql://catalyst_user:secure_password@localhost/catalyst_db"
 PORT=3000
 CORS_ORIGIN="https://your-frontend-domain.com"
 BACKEND_EXTERNAL_ADDRESS="https://your-backend-domain.com"
@@ -292,9 +292,10 @@ On first run, agent will:
 
 Configure agent via `/opt/catalyst-agent/config.toml`:
 ```toml
-backend_ws_url = "wss://your-backend-domain.com/ws"
+backend_url = "wss://your-backend-domain.com/ws"
 node_id = "your-node-id"
-node_secret = "your-node-secret"
+api_key = "your-api-key"
+hostname = "your-node-hostname"
 ```
 
 ### Step 8: Deploy Frontend (Optional)
