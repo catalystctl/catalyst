@@ -155,6 +155,9 @@ const collectUsedHostPortsByIp = (
   excludeId?: string
 ) => {
   const used = new Map<string, Set<number>>();
+  // Track network modes that use shared IP pools so we can catch conflicts
+  // even when primaryIp is null but servers share the same network.
+  const networkModePorts = new Map<string, Set<number>>();
   for (const server of servers) {
     if (excludeId && server.id === excludeId) {
       continue;
@@ -165,7 +168,6 @@ const collectUsedHostPortsByIp = (
     if (server.networkMode === "host") {
       continue;
     }
-    const hostKey = server.primaryIp || WILDCARD_HOST;
     const bindings = parseStoredPortBindings(server.portBindings);
     const hostPorts = Object.values(bindings);
     const ports =
@@ -177,10 +179,30 @@ const collectUsedHostPortsByIp = (
     if (ports.length === 0) {
       continue;
     }
+    // Always record by explicit IP or wildcard
+    const hostKey = server.primaryIp || WILDCARD_HOST;
     const bucket = used.get(hostKey) ?? new Set<number>();
     ports.forEach((port) => bucket.add(port));
     used.set(hostKey, bucket);
+    // Also record by network mode for shared-network conflict detection.
+    // When multiple servers use the same custom network without explicit IPs,
+    // they share the same CNI IP pool and ports can collide.
+    if (!server.primaryIp && server.networkMode) {
+      const netKey = `network:${server.networkMode}`;
+      const netBucket = networkModePorts.get(netKey) ?? new Set<number>();
+      ports.forEach((port) => netBucket.add(port));
+      networkModePorts.set(netKey, netBucket);
+    }
   }
+  // Merge network-mode buckets into the wildcard bucket so that
+  // findPortConflict will detect cross-network collisions.
+  const wildcard = used.get(WILDCARD_HOST) ?? new Set<number>();
+  for (const ports of networkModePorts.values()) {
+    for (const port of ports) {
+      wildcard.add(port);
+    }
+  }
+  used.set(WILDCARD_HOST, wildcard);
   return used;
 };
 
@@ -348,13 +370,22 @@ export async function serverRoutes(app: FastifyInstance) {
     };
   };
 
-  const normalizeRequestPath = (value?: string) => {
-    if (!value) return "/";
-    const cleaned = value.replace(/\\/g, "/").trim();
-    if (!cleaned || cleaned === ".") return "/";
-    const parts = cleaned.split("/").filter(Boolean);
-    return `/${parts.join("/")}`;
-  };
+  // Import hardened path validation
+  const {
+    validateAndNormalizePath,
+    validateAndNormalizePaths,
+    normalizeRequestPath,
+    validateServerId,
+    setSecurityLogger,
+  } = await import("../lib/path-validation");
+
+  // Set up security logger
+  setSecurityLogger((event) => {
+    app.log.warn({
+      ...event,
+      type: 'security_event',
+    });
+  });
 
   // File tunnel service for proxying file operations to agents
   const fileTunnel = (app as any).fileTunnel as import("../services/file-tunnel").FileTunnelService;
@@ -2167,7 +2198,7 @@ export async function serverRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
-      const normalizedPath = normalizeRequestPath(requestedPath);
+      const normalizedPath = validateAndNormalizePath(requestedPath, server.uuid, userId);
 
       try {
         const result = await tunnelFileOp(server.nodeId, "list", server.uuid, normalizedPath);
@@ -3568,7 +3599,7 @@ export async function serverRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
-      const normalizedPath = normalizeRequestPath(requestedPath);
+      const normalizedPath = validateAndNormalizePath(requestedPath, server.uuid, userId);
 
       try {
         const result = await tunnelFileOp(server.nodeId, "download", server.uuid, normalizedPath);
@@ -3714,7 +3745,7 @@ export async function serverRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
-      const normalizedPath = normalizeRequestPath(requestedPath);
+      const normalizedPath = validateAndNormalizePath(requestedPath, server.uuid, userId);
       if (normalizedPath === "/") {
         return reply.status(400).send({ error: "Invalid path" });
       }
@@ -4115,7 +4146,7 @@ export async function serverRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
-      const normalizedPath = normalizeRequestPath(requestedPath);
+      const normalizedPath = validateAndNormalizePath(requestedPath, server.uuid, userId);
       if (normalizedPath === "/") {
         return reply.status(400).send({ error: "Invalid path" });
       }
@@ -4200,7 +4231,7 @@ export async function serverRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
-      const normalizedPath = normalizeRequestPath(requestedPath);
+      const normalizedPath = validateAndNormalizePath(requestedPath, server.uuid, userId);
       if (normalizedPath === "/") {
         return reply.status(400).send({ error: "Invalid path" });
       }

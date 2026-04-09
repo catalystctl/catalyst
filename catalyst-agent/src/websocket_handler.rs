@@ -39,6 +39,28 @@ fn shell_escape_value(value: &str) -> String {
     format!("'{}'", escaped)
 }
 
+/// Detect whether a startup command requires bash rather than plain /bin/sh.
+/// Returns true when the command uses bash-specific features that dash/sh cannot handle.
+pub fn requires_bash(command: &str) -> bool {
+    // Process substitution: $( <(...) )
+    if command.contains("<(") || command.contains(">(") {
+        return true;
+    }
+    // [[ double-bracket test ]]
+    if command.contains("[[") {
+        return true;
+    }
+    // Array syntax: var=( ... ) or ${arr[@]}
+    static ARRAY_RE: OnceLock<Regex> = OnceLock::new();
+    let re = ARRAY_RE.get_or_init(|| {
+        Regex::new(r"\w+=\(|\$\{\w+\[@]\}").expect("valid array regex")
+    });
+    if re.is_match(command) {
+        return true;
+    }
+    false
+}
+
 /// Normalize common bash arithmetic condition syntax so startup commands run under /bin/sh.
 /// Example: `((1))` -> `[ $((1)) -ne 0 ]`
 fn normalize_startup_for_sh(command: &str) -> String {
@@ -2001,6 +2023,8 @@ impl WebSocketHandler {
 
         let restore_result = tokio::process::Command::new("tar")
             .arg("-xzf")
+            .arg("--no-same-owner")
+            .arg("--no-same-permissions")
             .arg(&backup_file)
             .arg("-C")
             .arg(&server_dir)
@@ -2010,9 +2034,31 @@ impl WebSocketHandler {
 
         if !restore_result.status.success() {
             let stderr = String::from_utf8_lossy(&restore_result.stderr);
+            // Clean up partial extraction on failure
+            let _ = tokio::fs::remove_dir_all(&server_dir).await;
             return Err(AgentError::IoError(format!(
                 "Backup restore failed: {}",
                 stderr
+            )));
+        }
+
+        // Security: validate that no symlinks in the restored archive escape the
+        // server directory.  This prevents a malicious backup from planting symlinks
+        // that point to host paths like /etc/shadow or /var/lib/catalyst.
+        let canonical_base = std::fs::canonicalize(&server_dir)
+            .map_err(|e| AgentError::FileSystemError(format!("Cannot resolve server dir: {}", e)))?;
+        let mut dangerous_symlinks = Vec::new();
+        self.check_restore_symlinks(&server_dir, &canonical_base, &mut dangerous_symlinks)
+            .await?;
+        if !dangerous_symlinks.is_empty() {
+            for symlink in &dangerous_symlinks {
+                warn!("Dangerous symlink in restored backup: {}", symlink);
+            }
+            let _ = tokio::fs::remove_dir_all(&server_dir).await;
+            return Err(AgentError::SecurityViolation(format!(
+                "Backup contains {} symlink(s) that escape the server directory. \
+                 Restore aborted and directory cleaned up for security.",
+                dangerous_symlinks.len()
             )));
         }
 
@@ -2027,6 +2073,63 @@ impl WebSocketHandler {
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
+        Ok(())
+    }
+
+    /// Recursively check restored files for symlinks that escape the server directory.
+    async fn check_restore_symlinks(
+        &self,
+        dir: &std::path::Path,
+        canonical_base: &std::path::Path,
+        dangerous: &mut Vec<String>,
+    ) -> AgentResult<()> {
+        let mut entries = tokio::fs::read_dir(dir).await.map_err(|e| {
+            AgentError::FileSystemError(format!("Cannot read dir: {}", e))
+        })?;
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("Error reading entry: {}", e)))?
+        {
+            let path = entry.path();
+            match entry.file_type().await {
+                Ok(ft) if ft.is_symlink() => {
+                    match std::fs::read_link(&path) {
+                        Ok(target) => {
+                            let parent = path.parent().unwrap_or(dir);
+                            let resolved = parent.join(&target);
+                            if let Ok(canon) = resolved.canonicalize() {
+                                if !canon.starts_with(canonical_base) {
+                                    dangerous.push(format!(
+                                        "{} -> {}",
+                                        path.display(),
+                                        target.display()
+                                    ));
+                                }
+                            } else if resolved.is_absolute() {
+                                if !resolved.starts_with(canonical_base) {
+                                    dangerous.push(format!(
+                                        "{} -> {}",
+                                        path.display(),
+                                        target.display()
+                                    ));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            debug!("Cannot read symlink {:?}: {}", path, e);
+                        }
+                    }
+                }
+                Ok(ft) if ft.is_dir() => {
+                    Box::pin(self.check_restore_symlinks(
+                        &path, canonical_base, dangerous,
+                    ))
+                    .await?;
+                }
+                _ => {}
+            }
+        }
         Ok(())
     }
 
@@ -2435,7 +2538,7 @@ impl WebSocketHandler {
     }
 
     fn backup_base_dir(&self, server_uuid: &str) -> PathBuf {
-        PathBuf::from("/var/lib/catalyst/backups").join(server_uuid)
+        self.config.server.data_dir.join("backups").join(server_uuid)
     }
 
     async fn resolve_backup_path(
