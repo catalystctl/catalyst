@@ -330,7 +330,7 @@ export async function serverRoutes(app: FastifyInstance) {
   const __dirname = path.dirname(__filename);
   // Using shared prisma instance from db.ts
   const execFileAsync = promisify(execFile);
-  const serverDataRoot = process.env.SERVER_DATA_PATH || "/var/lib/catalyst/servers";
+  const serverDataRoot = process.env.SERVER_DATA_DIR || "/var/lib/catalyst/servers";
   let fileRateLimitMax = 30;
   let maxBufferBytes = 50 * 1024 * 1024;
   const modManagerProviders = new Map<string, string>(

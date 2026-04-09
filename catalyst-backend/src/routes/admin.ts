@@ -813,7 +813,7 @@ export async function adminRoutes(app: FastifyInstance) {
               if (!gateway) {
                 return { serverId: server.id, status: 'failed', error: 'WebSocket gateway not available' };
               }
-              const serverDir = process.env.SERVER_DATA_PATH || '/tmp/catalyst-servers';
+              const serverDir = process.env.SERVER_DATA_DIR || '/var/lib/catalyst/servers';
               const fullServerDir = `${serverDir}/${server.uuid}`;
               const templateVariables = (server.template?.variables as any[]) || [];
               const templateDefaults = templateVariables.reduce((acc, variable) => {
@@ -970,7 +970,7 @@ export async function adminRoutes(app: FastifyInstance) {
                   data: { status: 'stopping' },
                 });
               }
-              const serverDir = process.env.SERVER_DATA_PATH || '/tmp/catalyst-servers';
+              const serverDir = process.env.SERVER_DATA_DIR || '/var/lib/catalyst/servers';
               const fullServerDir = `${serverDir}/${server.uuid}`;
               const environment: Record<string, string> = {
                 ...(server.environment as Record<string, string>),

@@ -34,7 +34,7 @@ curl -fsSL https://bun.sh/install | bash
 
 ```bash
 # Start database services
-docker-compose up -d
+docker compose up -d
 
 # Backend (port 3000)
 cd catalyst-backend && bun install && bun run db:push && bun run dev
@@ -259,7 +259,7 @@ We welcome contributions! Please see [AGENTS.md](AGENTS.md) for repository guide
 
 ## License
 
-MIT © 2025 Catalyst Contributors
+GPLv3 © 2025 Catalyst Contributors
 
 ---
 

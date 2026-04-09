@@ -14,7 +14,7 @@ const { Server: SSHServer, utils } = ssh2;
 type SFTPStream = ssh2.SFTPStream;
 
 const SFTP_PORT = parseInt(process.env.SFTP_PORT || '2022');
-const SERVER_FILES_ROOT = process.env.SERVER_FILES_ROOT || '/var/lib/catalyst/servers';
+const SERVER_FILES_ROOT = process.env.SERVER_DATA_DIR || '/var/lib/catalyst/servers';
 
 // Generate or load host key
 const HOST_KEY_PATH = process.env.SFTP_HOST_KEY || './sftp_host_key';
