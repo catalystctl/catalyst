@@ -16,14 +16,14 @@ jobs:
       - name: Send Discord webhook
         run: |
           if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            COMMIT_COUNT=$(jq '.commits | length' <<< "$GITHUB_EVENT_PATH")
+            COMMIT_COUNT=$(jq '.commits | length' < "$GITHUB_EVENT_PATH")
 
             # Build commit list (max 5 shown)
             COMMITS=$(jq -r '
               .commits[-5:][] |
               "• [`" + (.id[0:7]) + "`](<" + $ENV.GITHUB_SERVER_URL + "/" + $ENV.GITHUB_REPOSITORY + "/commit/" + .id + ">) " +
               (.message | split("\n")[0])
-            ' <<< "$GITHUB_EVENT_PATH")
+            ' < "$GITHUB_EVENT_PATH")
 
             DESCRIPTION="$COMMITS"
             if [ "$COMMIT_COUNT" -gt 5 ]; then
@@ -34,13 +34,13 @@ jobs:
             EMBED_COLOR=5814783
 
           elif [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            ACTION=$(jq -r '.action' <<< "$GITHUB_EVENT_PATH")
-            PR_NUM=$(jq -r '.pull_request.number' <<< "$GITHUB_EVENT_PATH")
-            PR_TITLE=$(jq -r '.pull_request.title' <<< "$GITHUB_EVENT_PATH")
-            PR_URL=$(jq -r '.pull_request.html_url' <<< "$GITHUB_EVENT_PATH")
-            PR_AUTHOR=$(jq -r '.pull_request.user.login' <<< "$GITHUB_EVENT_PATH")
-            PR_STATE=$(jq -r '.pull_request.state' <<< "$GITHUB_EVENT_PATH")
-            PR_MERGED=$(jq -r '.pull_request.merged' <<< "$GITHUB_EVENT_PATH")
+            ACTION=$(jq -r '.action' < "$GITHUB_EVENT_PATH")
+            PR_NUM=$(jq -r '.pull_request.number' < "$GITHUB_EVENT_PATH")
+            PR_TITLE=$(jq -r '.pull_request.title' < "$GITHUB_EVENT_PATH")
+            PR_URL=$(jq -r '.pull_request.html_url' < "$GITHUB_EVENT_PATH")
+            PR_AUTHOR=$(jq -r '.pull_request.user.login' < "$GITHUB_EVENT_PATH")
+            PR_STATE=$(jq -r '.pull_request.state' < "$GITHUB_EVENT_PATH")
+            PR_MERGED=$(jq -r '.pull_request.merged' < "$GITHUB_EVENT_PATH")
 
             EMBED_TITLE="PR #$PR_NUM $ACTION: $PR_TITLE"
             DESCRIPTION="by \`$PR_AUTHOR\` — $PR_STATE"
