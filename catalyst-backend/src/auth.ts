@@ -23,7 +23,20 @@ export const auth = betterAuth({
     additionalFields: {
       ipAddress: { type: "string", required: false },
       userAgent: { type: "string", required: false },
+      csrfToken: { type: "string", required: false },
     },
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60 * 1000, // 5 minutes
+    },
+    cookie: {
+      attributes: {
+        sameSite: 'Strict',
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        path: '/',
+      }
+    }
   },
   trustedOrigins: [
     baseUrl,
