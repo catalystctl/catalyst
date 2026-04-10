@@ -5,259 +5,170 @@ Complete guide to setting up Catalyst for different use cases.
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
-- [Local Development Setup](#local-development-setup)
-- [Production Deployment](#production-deployment)
+- [Deploy with Docker Compose](#deploy-with-docker-compose)
+- [Configuration](#configuration)
+- [First-Time Setup](#first-time-setup)
+- [Exposing to the Internet](#exposing-to-the-internet)
+- [Deploying Node Agents](#deploying-node-agents)
 - [API Integration](#api-integration)
+- [Local Development (Contributors)](#local-development-contributors)
 - [Troubleshooting](#troubleshooting)
-- [Next Steps](#next-steps)
 
 ---
 
 ## Prerequisites
 
-### For Local Development
+- **Docker** (or **Podman**) with Compose support
+- **Git**
 
-- **Docker & Docker Compose** - For PostgreSQL and Redis
-- **Node.js 20+** - For backend and frontend
-- **npm or yarn** - Package manager
-- **Git** - For cloning repository
+That's it. The panel, backend, PostgreSQL, and Redis all run in containers.
 
-### For Production Deployment
-
-- **Linux server** (Ubuntu 22.04+ or Debian 12+ recommended)
-- **PostgreSQL 14+** - Database
-- **Node.js 20+** - Backend runtime
-- **Rust 1.70+** - Agent compilation (if building from source)
-- **containerd** - Container runtime (agent auto-installs if missing)
-- **SSL certificate** - For production TLS
-
-### For API Integration
-
-- **API key** - Generated from Catalyst admin panel
-- **HTTP client** - curl, Postman, or programming language
-- **Network access** - To Catalyst backend API
+> **Podman users:** replace every `docker compose` command with `podman compose`.
 
 ---
 
-## Local Development Setup
+## Deploy with Docker Compose
 
-### Step 1: Clone and Prepare
+### Step 1: Clone
 
 ```bash
 git clone https://github.com/your-repo/catalyst.git
 cd catalyst
 ```
 
-### Step 2: Start Database Services
+### Step 2: Configure
 
 ```bash
-docker compose up -d
-```
-
-This starts:
-- **PostgreSQL** on port 5432 (user: `catalyst`, db: `catalyst_db`)
-- **Redis** on port 6379
-
-Verify services:
-```bash
-docker ps
-```
-
-### Step 3: Backend Setup
-
-```bash
-cd catalyst-backend
-
-# Install dependencies
-bun install
-
-# Configure environment
 cp .env.example .env
-# Edit .env with your settings
-
-# Initialize database
-bun run db:push
-bun run db:seed
-
-# Start development server
-bun run dev
 ```
 
-Backend will start on **http://localhost:3000**
+Edit `.env` and set at minimum:
 
-### Step 4: Frontend Setup
+```env
+# Generate with: openssl rand -base64 32
+BETTER_AUTH_SECRET=<generated-secret>
 
-Open a new terminal:
-
-```bash
-cd catalyst-frontend
-
-# Install dependencies
-bun install
-
-# Configure environment
-cp .env.example .env
-# Edit .env with API URL (usually http://localhost:3000)
-
-# Start development server
-bun run dev
+# Any strong password for PostgreSQL
+POSTGRES_PASSWORD=<strong-password>
 ```
 
-Frontend will start on **http://localhost:5173**
+### Step 3: Start
 
-### Step 5: Access the Panel
-
-1. Open **http://localhost:5173** in your browser
-2. Register or login with default credentials (see `.env` or seed data)
-3. Create your first node and server!
-
-### Development Commands
-
-**Backend:**
 ```bash
-bun run dev          # Start dev server with watch mode
-bun run build        # Compile TypeScript
-npm start            # Start production server
-bun run lint         # Run ESLint
-bun run db:studio    # Open Prisma Studio GUI
+docker compose up -d --build
 ```
 
-**Frontend:**
+Or use the helper script:
+
 ```bash
-bun run dev          # Start dev server
-bun run build        # Build production bundle
-bun run preview      # Preview production build
-bun run lint         # Run ESLint
-bun run test         # Run Vitest tests
+./dev.sh
 ```
 
-**Testing:**
+### Step 4: Access
+
+- **Panel:** http://localhost (port 80 by default)
+- **API:** http://localhost:3000/api
+- **Swagger Docs:** http://localhost:3000/docs
+- **SFTP:** localhost:2022
+
+---
+
+## Configuration
+
+All configuration is in the root `.env` file. See [`.env.example`](../.env.example) for the complete list.
+
+### Key Variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `BETTER_AUTH_SECRET` | ✅ | — | Session encryption key |
+| `POSTGRES_PASSWORD` | ✅ | — | PostgreSQL password |
+| `CORS_ORIGIN` | | `http://localhost` | Allowed CORS origins (comma-separated) |
+| `BACKEND_EXTERNAL_ADDRESS` | | `http://localhost` | Public backend URL |
+| `FRONTEND_PORT` | | `80` | Port for the panel |
+| `BACKEND_PORT` | | `127.0.0.1:3000` | Port for the API (localhost only) |
+| `SFTP_PORT` | | `127.0.0.1:2022` | Port for SFTP file access |
+| `REDIS_URL` | | `redis://redis:6379` | Redis connection URL |
+| `SFTP_ENABLED` | | `true` | Enable/disable SFTP |
+| `BACKUP_STORAGE_MODE` | | `local` | `local`, `s3`, or `sftp` |
+
+### Port Mapping
+
+| Service | Container Port | Default Host Binding | Description |
+|---|---|---|---|
+| Frontend (Nginx) | 80 | `0.0.0.0:80` | Panel UI |
+| Backend API | 3000 | `127.0.0.1:3000` | REST API + WebSocket |
+| SFTP | 2022 | `127.0.0.1:2022` | File access |
+| PostgreSQL | 5432 | `127.0.0.1:5432` | Database (internal) |
+| Redis | 6379 | `127.0.0.1:6379` | Cache (internal) |
+
+> PostgreSQL and Redis are bound to localhost only for security. Only expose them externally if you know what you're doing.
+
+---
+
+## First-Time Setup
+
+After containers are running, seed the database with initial data:
+
 ```bash
-./test-backend.sh              # Quick API smoke test
-./test-api-integration.sh      # Extended API tests
-cd tests && ./run-all-tests.sh # Full E2E suite
+docker compose exec backend bun run db:seed
+```
+
+### Useful Commands
+
+```bash
+# View logs
+docker compose logs -f
+docker compose logs -f backend
+
+# Open Prisma Studio (database GUI)
+docker compose exec backend bun run db:studio
+
+# Reset everything (deletes all data)
+docker compose down -v
+docker compose up -d --build
+docker compose exec backend bun run db:seed
+
+# Rebuild after code changes
+docker compose up -d --build
+
+# Run a one-off command in the backend
+docker compose exec backend bun run db:push
 ```
 
 ---
 
-## Production Deployment
+## Exposing to the Internet
 
-### Step 1: Prepare Backend Server
+For production, place a reverse proxy in front of the frontend container:
 
-```bash
-# Install Node.js 20+
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# Clone repository
-git clone https://github.com/your-repo/catalyst.git
-cd catalyst/catalyst-backend
-
-# Install production dependencies
-bun install --frozen-lockfile --only=production
-```
-
-### Step 2: Configure PostgreSQL
+### Caddy (automatic HTTPS)
 
 ```bash
-# Install PostgreSQL
-sudo apt-get install -y postgresql postgresql-contrib
-
-# Create database and user
-sudo -u postgres psql
+caddy reverse-proxy --from panel.example.com --to localhost:80
 ```
 
-```sql
-CREATE DATABASE catalyst_db;
-CREATE USER catalyst_user WITH PASSWORD 'secure_password';
-GRANT ALL PRIVILEGES ON DATABASE catalyst_db TO catalyst_user;
-\q
-```
-
-### Step 3: Configure Backend
-
-```bash
-cp .env.example .env
-nano .env
-```
-
-**Key settings to update:**
-```env
-DATABASE_URL="postgresql://catalyst_user:secure_password@localhost/catalyst_db"
-PORT=3000
-CORS_ORIGIN="https://your-frontend-domain.com"
-BACKEND_EXTERNAL_ADDRESS="https://your-backend-domain.com"
-FRONTEND_URL="https://your-frontend-domain.com"
-JWT_SECRET="your-super-secret-jwt-key-32-chars-min"
-BETTER_AUTH_SECRET="your-super-secret-auth-key-32-chars-min"
-NODE_ENV=production
-```
-
-### Step 4: Initialize Database
-
-```bash
-bun run db:push
-bun run db:seed
-```
-
-### Step 5: Build and Start Backend
-
-```bash
-# Build for production
-bun run build
-
-# Start with PM2 (recommended)
-bun install -g pm2
-pm2 start dist/index.js --name catalyst-backend
-pm2 save
-pm2 startup
-```
-
-Or use systemd:
-```bash
-sudo nano /etc/systemd/system/catalyst-backend.service
-```
-
-```ini
-[Unit]
-Description=Catalyst Backend
-After=network.target
-
-[Service]
-Type=simple
-User=catalyst
-WorkingDirectory=/opt/catalyst/catalyst-backend
-ExecStart=/usr/bin/node dist/index.js
-Restart=always
-Environment=NODE_ENV=production
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl enable catalyst-backend
-sudo systemctl start catalyst-backend
-```
-
-### Step 6: Setup Reverse Proxy (Nginx)
-
-```bash
-sudo apt-get install -y nginx certbot python3-certbot-nginx
-```
+### Nginx
 
 ```nginx
 server {
     listen 80;
-    server_name your-backend-domain.com;
+    server_name panel.example.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name panel.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/panel.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/panel.example.com/privkey.pem;
+
+    client_max_body_size 100m;
 
     location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
+        proxy_pass http://127.0.0.1:80;
         proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -265,50 +176,39 @@ server {
 }
 ```
 
-Enable SSL:
-```bash
-sudo certbot --nginx -d your-backend-domain.com
-```
-
-### Step 7: Deploy Node Agent
-
-On each game server node:
+### Cloudflare Tunnel (no open ports)
 
 ```bash
-# Copy agent binary
-scp catalyst-agent/target/release/catalyst-agent user@node:/usr/local/bin/
-
-# SSH to node
-ssh user@node
-
-# Run agent (auto-configures dependencies)
-sudo /usr/local/bin/catalyst-agent
+cloudflared tunnel --hostname panel.example.com --url http://localhost:80
 ```
 
-On first run, agent will:
-- ✅ Detect system and install containerd/nerdctl
-- ✅ Configure CNI networking (macvlan)
-- ✅ Connect to backend via WebSocket
+### Update `.env` for your domain
 
-Configure agent via `/opt/catalyst-agent/config.toml`:
-```toml
-backend_url = "wss://your-backend-domain.com/ws"
-node_id = "your-node-id"
-api_key = "your-api-key"
-hostname = "your-node-hostname"
+```env
+CORS_ORIGIN=https://panel.example.com
+BACKEND_EXTERNAL_ADDRESS=https://panel.example.com
+FRONTEND_URL=https://panel.example.com
+BETTER_AUTH_URL=https://panel.example.com
+PASSKEY_RP_ID=panel.example.com
 ```
 
-### Step 8: Deploy Frontend (Optional)
+Then restart: `docker compose up -d`
 
-If hosting frontend separately:
+---
+
+## Deploying Node Agents
+
+The agent runs on game server nodes (separate machines from the panel). See the [Admin Guide](ADMIN_GUIDE.md) for full node deployment instructions.
+
+Quick overview:
 
 ```bash
-cd catalyst-frontend
-bun install --frozen-lockfile
-bun run build
-```
+# Copy agent binary to node
+scp catalyst-agent user@node:/usr/local/bin/
 
-Copy `dist/` to your web server and configure Nginx to serve it.
+# Run agent (auto-configures containerd, CNI on first run)
+sudo /usr/local/bin/catalyst-agent /opt/catalyst-agent/config.toml
+```
 
 ---
 
@@ -316,32 +216,14 @@ Copy `dist/` to your web server and configure Nginx to serve it.
 
 ### Step 1: Create API Key
 
-Login to Catalyst admin panel → **Admin → API Keys → Create**
+Login to Catalyst → **Admin → API Keys → Create**
 
-Or create via API:
-
-```bash
-curl -X POST http://localhost:3000/api/admin/api-keys \
-  -H "Content-Type: application/json" \
-  -H "Cookie: your-admin-session" \
-  -d '{
-    "name": "Billing Integration",
-    "rateLimitEnabled": true,
-    "rateLimitMax": 1000,
-    "rateLimitTimeWindow": 60000
-  }' | jq -r '.data.key'
-```
-
-**Save the key!** It's only shown once.
-
-### Step 2: Use API Key
-
-All API requests use the `x-api-key` header:
+### Step 2: Use the API
 
 ```bash
 export API_KEY="catalyst_xxx_yyy_zzz"
 
-# List all servers
+# List servers
 curl -H "x-api-key: $API_KEY" http://localhost:3000/api/servers
 
 # Create a server
@@ -349,7 +231,7 @@ curl -X POST http://localhost:3000/api/servers \
   -H "Content-Type: application/json" \
   -H "x-api-key: $API_KEY" \
   -d '{
-    "name": "Customer Server",
+    "name": "My Server",
     "templateId": "template-id",
     "nodeId": "node-id",
     "ownerId": "user-id",
@@ -357,180 +239,93 @@ curl -X POST http://localhost:3000/api/servers \
   }'
 ```
 
-### Step 3: Common Automation Tasks
+👉 [Complete API guide](README.md)
+👉 [Billing integration examples](automation-api-guide.md)
 
-**Provision server on order:**
-```javascript
-const response = await fetch('http://localhost:3000/api/servers', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'x-api-key': API_KEY
-  },
-  body: JSON.stringify({
-    name: customerName + ' Server',
-    templateId: gameTemplate,
-    nodeId: optimalNode,
-    ownerId: customerId,
-    allocatedMemoryMb: package.memory
-  })
-});
-const server = await response.json();
+---
+
+## Local Development (Contributors)
+
+For contributing to Catalyst source code, you can run backend and frontend outside Docker:
+
+```bash
+# Start only the databases
+docker compose up -d postgres redis
+
+# Install workspace dependencies
+bun install
+
+# Backend (port 3000)
+cd catalyst-backend
+cp .env.example .env   # edit DATABASE_URL to use localhost:5432
+bun run db:generate
+bun run db:push
+bun run dev
+
+# Frontend (port 5173)
+cd catalyst-frontend
+bun run dev
 ```
-
-**Suspend for non-payment:**
-```javascript
-await fetch(`http://localhost:3000/api/servers/${serverId}/suspend`, {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'x-api-key': API_KEY
-  },
-  body: JSON.stringify({
-    reason: 'Payment overdue - Invoice #' + invoiceId,
-    stopServer: true
-  })
-});
-```
-
-👉 [Complete API guide](docs/README.md)
-
-👉 [Billing integration examples](docs/automation-api-guide.md)
 
 ---
 
 ## Troubleshooting
 
-### Backend Won't Start
+### Containers won't start
 
-**Problem:** `EADDRINUSE` error
 ```bash
-# Check what's using port 3000
+# Check logs
+docker compose logs
+
+# Check if ports are already in use
+sudo lsof -i :80
 sudo lsof -i :3000
-
-# Kill the process
-sudo kill -9 <PID>
 ```
 
-**Problem:** Database connection failed
+### Database connection errors
+
 ```bash
-# Verify PostgreSQL is running
-sudo systemctl status postgresql
+# Verify PostgreSQL is healthy
+docker compose ps
+docker compose logs postgres
 
-# Test connection
-psql -U catalyst_user -d catalyst_prod -h localhost
-
-# Check DATABASE_URL in .env
+# Reset database
+docker compose down -v
+docker compose up -d
+docker compose exec backend bun run db:push
+docker compose exec backend bun run db:seed
 ```
 
-### Frontend Won't Connect to Backend
+### Frontend can't reach backend (CORS errors)
 
-**Problem:** CORS errors
-- Check `CORS_ORIGIN` in backend `.env` matches frontend URL
-- Ensure frontend `VITE_API_URL` points to correct backend address
+- Check `CORS_ORIGIN` in `.env` matches the URL you're accessing the panel from
+- If accessing via IP, add `http://<your-ip>` to `CORS_ORIGIN`
 
-**Problem:** WebSocket connection failed
-- Check WebSocket URL in `VITE_WS_URL`
-- Verify backend WebSocket gateway is running
-- Check firewall rules for WebSocket port
+### Agent can't connect to backend
 
-### Agent Won't Connect
-
-**Problem:** Agent can't reach backend
 ```bash
-# Test WebSocket connection from node
-curl -I https://your-backend-domain.com/ws
+# Test WebSocket from the node
+curl -I http://your-backend:3000/ws
 
-# Check firewall allows outbound connections
-sudo ufw status
+# Check firewall allows outbound to backend port
 ```
 
-**Problem:** containerd not installed
-```bash
-# Agent auto-installs on first run
-# Or install manually:
-sudo apt-get install -y containerd
-
-# Verify
-sudo nerdctl version
-```
-
-### Database Issues
-
-**Problem:** Migration failed
-```bash
-# Reset database (CAUTION: deletes all data!)
-bun run db:push -- --force-reset
-bun run db:seed
-```
-
-**Problem:** Prisma client outdated
-```bash
-bun run db:generate
-```
-
-### Common Error Messages
+### Common Errors
 
 | Error | Cause | Solution |
 |-------|-------|----------|
-| `ECONNREFUSED` | Service not running | Start backend/database |
-| `Unauthorized` | Invalid credentials | Check API key/JWT token |
-| `Rate limit exceeded` | Too many requests | Wait or increase rate limit |
-| `Permission denied` | Missing RBAC permission | Grant permission to user |
-| `Container not found` | Server not installed | Start server first |
+| `POSTGRES_PASSWORD is required` | Missing `.env` variable | Set in `.env` |
+| `BETTER_AUTH_SECRET is required` | Missing `.env` variable | Set in `.env` |
+| CORS errors | Mismatched origin | Update `CORS_ORIGIN` in `.env` |
+| 502 from Nginx | Backend not ready | Wait for healthcheck, check `docker compose logs backend` |
+| `ECONNREFUSED` | Service down | `docker compose restart <service>` |
 
 ---
 
 ## Next Steps
 
-### For Server Hosts
-
-1. **Deploy to production** - Follow the production deployment guide
-2. **Configure nodes** - Add multiple nodes for scalability
-3. **Set up backups** - Configure backup storage (local or S3)
-4. **Configure alerts** - Set up monitoring and notifications
-5. **Review security** - Enable TLS, rotate secrets, audit permissions
-
-👉 [Admin Guide](docs/ADMIN_GUIDE.md)
-
-### For Game Communities
-
-1. **Deploy locally** - Try the quick start to explore features
-2. **Create templates** - Set up game server templates
-3. **Invite collaborators** - Share server access with team
-4. **Automate tasks** - Schedule backups and restarts
-
-👉 [User Guide](docs/USER_GUIDE.md)
-
-### For Developers
-
-1. **Explore the API** - Check out the complete API reference
-2. **Build a plugin** - Extend Catalyst with custom functionality
-3. **Integrate billing** - Automate server provisioning
-
-👉 [API Reference](docs/README.md)
-
-👉 [Plugin System](docs/PLUGIN_SYSTEM.md)
-
----
-
-## Additional Resources
-
-- **[Architecture Overview](docs/ARCHITECTURE.md)** - Deep dive into system design
-- **[Features List](docs/FEATURES.md)** - Complete feature catalog
-- **[Security Guide](docs/SECURITY.md)** - Security best practices
-- **[Testing Guide](tests/README.md)** - Running and writing tests
-- **[AGENTS.md](AGENTS.md)** - Repository conventions and guidelines
-
----
-
-## Getting Help
-
-- 📖 **Documentation** - [docs/](docs/)
-- 🐛 **Issues** - [GitHub Issues](https://github.com/your-repo/issues)
-- 💬 **Community** - [Discord](https://discord.gg/your-server)
-- 📧 **Support** - [support@catalyst.dev](mailto:support@catalyst.dev)
-
----
-
-**Ready to get started?** Choose your path above and deploy Catalyst today! 🚀
+- **[Admin Guide](ADMIN_GUIDE.md)** — Deploy nodes, configure networking, backups
+- **[User Guide](USER_GUIDE.md)** — Manage servers, files, console
+- **[API Reference](README.md)** — Full REST API docs
+- **[Plugin System](PLUGIN_SYSTEM.md)** — Extend Catalyst
+- **[Architecture](ARCHITECTURE.md)** — System design deep dive

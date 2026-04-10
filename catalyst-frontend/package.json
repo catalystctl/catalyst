@@ -19,7 +19,6 @@
     "test:screenshots:headed": "playwright test screenshot-crawl --headed"
   },
   "dependencies": {
-    "catalyst-shared": "workspace:*",
     "@better-auth/passkey": "^1.4.18",
     "@hookform/resolvers": "^5.2.2",
     "@monaco-editor/react": "^4.7.0",

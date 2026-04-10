@@ -23,6 +23,12 @@ node_modules/
 # Bun
 bun.lockb
 
+# Root environment (docker compose config)
+.env
+
+# Docker
+.docker/
+
 # IDE and OS
 .vscode/
 .idea/
