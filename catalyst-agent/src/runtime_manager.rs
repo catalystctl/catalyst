@@ -6,7 +6,7 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use containerd_client::services::v1::container::Runtime;
 use containerd_client::services::v1::containers_client::ContainersClient;
@@ -48,6 +48,151 @@ const RUNTIME_NAME: &str = "io.containerd.runc.v2";
 const SPEC_TYPE_URL: &str = "types.containerd.io/opencontainers/runtime-spec/1/Spec";
 const CONSOLE_BASE_DIR: &str = "/tmp/catalyst-console";
 const PORT_FWD_STATE_DIR: &str = "/var/lib/cni/results";
+const MAX_LOG_SIZE: u64 = 50 * 1024 * 1024; // 50MB per file
+const LOG_BACKUP_COUNT: usize = 3;
+
+/// Tracks CPU usage samples per container to compute real percentage over time
+pub struct CpuTracker {
+    samples: Mutex<HashMap<String, (u64, Instant)>>,
+}
+
+impl CpuTracker {
+    pub fn new() -> Self {
+        Self {
+            samples: Mutex::new(HashMap::new()),
+        }
+    }
+
+    pub async fn get_percent(&self, container_id: &str, cgroup_path: &str) -> f64 {
+        let usage_usec = match read_cgroup_cpu_usage(cgroup_path).await {
+            Some(u) => u,
+            None => return 0.0,
+        };
+        let now = Instant::now();
+        let mut samples = self.samples.lock().await;
+        let percent = match samples.get(container_id) {
+            Some((prev_usage, prev_time)) => {
+                let elapsed = now.duration_since(*prev_time).as_micros() as f64;
+                let delta = (usage_usec.saturating_sub(*prev_usage)) as f64;
+                if elapsed > 0.0 {
+                    (delta / elapsed) * 100.0
+                } else {
+                    0.0
+                }
+            }
+            None => 0.0,
+        };
+        samples.insert(container_id.to_string(), (usage_usec, now));
+        let max_cpus = num_cpus::get() as f64;
+        percent.clamp(0.0, 100.0 * max_cpus)
+    }
+}
+
+/// Format bytes into a human-readable string
+fn format_bytes(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = 1024 * KB;
+    const GB: u64 = 1024 * MB;
+    match bytes {
+        0..=KB => format!("{}B", bytes),
+        b @ 1..=MB => format!("{:.1}KB", b as f64 / KB as f64),
+        b @ 1..=GB => format!("{:.1}MB", b as f64 / MB as f64),
+        b => format!("{:.1}GB", b as f64 / GB as f64),
+    }
+}
+
+/// Read PIDs from a cgroup's cgroup.procs
+async fn get_container_pids(cgroup_path: &str) -> Option<Vec<u32>> {
+    let content = tokio::fs::read_to_string(format!("{}/cgroup.procs", cgroup_path))
+        .await
+        .ok()?;
+    let pids: Vec<u32> = content
+        .lines()
+        .filter_map(|l| l.trim().parse().ok())
+        .collect();
+    if pids.is_empty() { None } else { Some(pids) }
+}
+
+/// Read network I/O stats for a container via /proc/{pid}/net/dev
+async fn read_network_io(cgroup_path: &str) -> Option<String> {
+    let pids = get_container_pids(cgroup_path).await?;
+    let content = tokio::fs::read_to_string(format!("/proc/{}/net/dev", pids[0]))
+        .await
+        .ok()?;
+    let mut total_rx: u64 = 0;
+    let mut total_tx: u64 = 0;
+    for line in content.lines().skip(2) {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 10 {
+            if let Ok(rx) = parts[1].parse::<u64>() {
+                total_rx += rx;
+            }
+            if let Ok(tx) = parts[9].parse::<u64>() {
+                total_tx += tx;
+            }
+        }
+    }
+    Some(format!(
+        "↓ {} / ↑ {}",
+        format_bytes(total_rx),
+        format_bytes(total_tx)
+    ))
+}
+
+/// Read block I/O stats from cgroup v2 io.stat
+async fn read_block_io(cgroup_path: &str) -> Option<String> {
+    let content = tokio::fs::read_to_string(format!("{}/io.stat", cgroup_path))
+        .await
+        .ok()?;
+    let mut read_bytes: u64 = 0;
+    let mut write_bytes: u64 = 0;
+    for line in content.lines() {
+        if line.starts_with("8:") {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            for part in &parts {
+                if let Some(val) = part.strip_prefix("rbytes=") {
+                    read_bytes += val.parse::<u64>().unwrap_or(0);
+                }
+                if let Some(val) = part.strip_prefix("wbytes=") {
+                    write_bytes += val.parse::<u64>().unwrap_or(0);
+                }
+            }
+        }
+    }
+    Some(format!(
+        "↓ {} / ↑ {}",
+        format_bytes(read_bytes),
+        format_bytes(write_bytes)
+    ))
+}
+
+/// Rotate log files if they exceed MAX_LOG_SIZE
+pub async fn rotate_logs(container_id: &str) {
+    let io_dir = PathBuf::from(CONSOLE_BASE_DIR).join(container_id);
+    for log_name in &["stdout", "stderr"] {
+        let log_path = io_dir.join(log_name);
+        if let Ok(metadata) = tokio::fs::metadata(&log_path).await {
+            if metadata.len() > MAX_LOG_SIZE {
+                // Rotate: stdout -> stdout.1 -> stdout.2 -> stdout.3 (drop oldest)
+                for i in (1..=LOG_BACKUP_COUNT).rev() {
+                    let src = if i == 1 {
+                        log_path.clone()
+                    } else {
+                        io_dir.join(format!("{}.{}", log_name, i - 1))
+                    };
+                    let dst = io_dir.join(format!("{}.{}", log_name, i));
+                    let _ = tokio::fs::rename(&src, &dst).await;
+                }
+                // Create new empty log file
+                let _ = tokio::fs::File::create(&log_path).await;
+                info!(
+                    "Rotated log for container {}: {} (was {} bytes)",
+                    container_id, log_name, metadata.len()
+                );
+            }
+        }
+    }
+}
 
 /// Device access profiles for container security
 /// Each profile defines which devices the container can access
@@ -263,6 +408,7 @@ pub struct ContainerdRuntime {
     channel: tonic::transport::Channel,
     container_io: Arc<Mutex<HashMap<String, ContainerIo>>>,
     dns_servers: Vec<String>,
+    cpu_tracker: Arc<CpuTracker>,
 }
 
 impl ContainerdRuntime {
@@ -289,6 +435,7 @@ impl ContainerdRuntime {
             channel,
             container_io: Arc::new(Mutex::new(HashMap::new())),
             dns_servers,
+            cpu_tracker: Arc::new(CpuTracker::new()),
         })
     }
 
@@ -481,7 +628,7 @@ impl ContainerdRuntime {
                     config.port_bindings.values().copied().collect()
                 };
                 for p in ports {
-                    if let Err(e) = FirewallManager::allow_port(p, &ip).await {
+                    if let Err(e) = FirewallManager::allow_port(p, "tcp", &ip).await {
                         error!("Firewall config failed for port {}: {}", p, e);
                     }
                 }
@@ -1214,7 +1361,7 @@ impl ContainerdRuntime {
     pub async fn get_stats(&self, container_id: &str) -> AgentResult<ContainerStats> {
         let cg = find_container_cgroup(container_id).unwrap_or_default();
         let cpu = if !cg.is_empty() {
-            read_cgroup_cpu_percent(&cg).await.unwrap_or(0.0)
+            self.cpu_tracker.get_percent(container_id, &cg).await
         } else {
             0.0
         };
@@ -1234,13 +1381,23 @@ impl ContainerdRuntime {
         } else {
             format!("{}MiB / 0MiB", mem / (1024 * 1024))
         };
+        let net_io = if !cg.is_empty() {
+            read_network_io(&cg).await.unwrap_or_else(|| "0B / 0B".to_string())
+        } else {
+            "0B / 0B".to_string()
+        };
+        let block_io = if !cg.is_empty() {
+            read_block_io(&cg).await.unwrap_or_else(|| "0B / 0B".to_string())
+        } else {
+            "0B / 0B".to_string()
+        };
         Ok(ContainerStats {
             container_id: container_id.to_string(),
             container_name: container_id.to_string(),
             cpu_percent: format!("{:.2}%", cpu),
             memory_usage: memory_display,
-            net_io: "0B / 0B".to_string(),
-            block_io: "0B / 0B".to_string(),
+            net_io,
+            block_io,
         })
     }
 
@@ -2703,7 +2860,7 @@ fn find_cgroup_recursive(dir: &str, cid: &str) -> Option<String> {
     None
 }
 
-async fn read_cgroup_cpu_percent(path: &str) -> Option<f64> {
+async fn read_cgroup_cpu_usage(path: &str) -> Option<u64> {
     let content = tokio::fs::read_to_string(format!("{}/cpu.stat", path))
         .await
         .ok()?;
@@ -2713,11 +2870,10 @@ async fn read_cgroup_cpu_percent(path: &str) -> Option<f64> {
                 .split_whitespace()
                 .nth(1)?
                 .parse::<u64>()
-                .ok()
-                .map(|u| u as f64 / 1_000_000.0);
+                .ok();
         }
     }
-    Some(0.0)
+    Some(0)
 }
 
 async fn read_cgroup_memory(path: &str) -> Option<u64> {

@@ -33,6 +33,8 @@ export enum Permission {
   SERVER_SUSPEND = "server.suspend",
   SERVER_TRANSFER = "server.transfer",
   SERVER_SCHEDULE = "server.schedule",
+  SERVER_REINSTALL = "server.reinstall",
+  SERVER_REBUILD = "server.rebuild",
   // Node permissions
   NODE_READ = "node.read",
   NODE_CREATE = "node.create",

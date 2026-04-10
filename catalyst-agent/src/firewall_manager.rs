@@ -50,14 +50,14 @@ impl FirewallManager {
     }
 
     /// Allow a port through the detected firewall
-    pub async fn allow_port(port: u16, container_ip: &str) -> AgentResult<()> {
+    pub async fn allow_port(port: u16, protocol: &str, container_ip: &str) -> AgentResult<()> {
         Self::validate_container_ip(container_ip)?;
         let firewall_type = Self::detect_firewall();
 
         match firewall_type {
             FirewallType::Ufw => Self::allow_port_ufw(port).await,
-            FirewallType::Firewalld => Self::allow_port_firewalld(port).await,
-            FirewallType::Iptables => Self::allow_port_iptables(port, container_ip).await,
+            FirewallType::Firewalld => Self::allow_port_firewalld(port, protocol).await,
+            FirewallType::Iptables => Self::allow_port_iptables(port, protocol, container_ip).await,
             FirewallType::None => {
                 warn!("No firewall detected, skipping port configuration");
                 Ok(())
@@ -66,14 +66,14 @@ impl FirewallManager {
     }
 
     /// Remove port rules from the detected firewall
-    pub async fn remove_port(port: u16, container_ip: &str) -> AgentResult<()> {
+    pub async fn remove_port(port: u16, protocol: &str, container_ip: &str) -> AgentResult<()> {
         Self::validate_container_ip(container_ip)?;
         let firewall_type = Self::detect_firewall();
 
         match firewall_type {
             FirewallType::Ufw => Self::remove_port_ufw(port).await,
-            FirewallType::Firewalld => Self::remove_port_firewalld(port).await,
-            FirewallType::Iptables => Self::remove_port_iptables(port, container_ip).await,
+            FirewallType::Firewalld => Self::remove_port_firewalld(port, protocol).await,
+            FirewallType::Iptables => Self::remove_port_iptables(port, protocol, container_ip).await,
             FirewallType::None => Ok(()),
         }
     }
@@ -133,14 +133,14 @@ impl FirewallManager {
     }
 
     /// Configure firewalld to allow a port
-    async fn allow_port_firewalld(port: u16) -> AgentResult<()> {
-        info!("Configuring firewalld to allow port {}", port);
+    async fn allow_port_firewalld(port: u16, protocol: &str) -> AgentResult<()> {
+        info!("Configuring firewalld to allow port {}/{}", port, protocol);
 
         // Add permanent rule
         let output = Command::new("firewall-cmd")
             .arg("--permanent")
             .arg("--add-port")
-            .arg(format!("{}/tcp", port))
+            .arg(format!("{}/{}", port, protocol))
             .output()
             .map_err(|e| AgentError::FirewallError(format!("Failed to run firewall-cmd: {}", e)))?;
 
@@ -165,18 +165,18 @@ impl FirewallManager {
             )));
         }
 
-        info!("✓ firewalld configured to allow port {}", port);
+        info!("✓ firewalld configured to allow port {}/{}", port, protocol);
         Ok(())
     }
 
     /// Remove firewalld rule for a port
-    async fn remove_port_firewalld(port: u16) -> AgentResult<()> {
-        info!("Removing firewalld rule for port {}", port);
+    async fn remove_port_firewalld(port: u16, protocol: &str) -> AgentResult<()> {
+        info!("Removing firewalld rule for port {}/{}", port, protocol);
 
         let output = Command::new("firewall-cmd")
             .arg("--permanent")
             .arg("--remove-port")
-            .arg(format!("{}/tcp", port))
+            .arg(format!("{}/{}", port, protocol))
             .output()
             .map_err(|e| AgentError::FirewallError(format!("Failed to run firewall-cmd: {}", e)))?;
 
@@ -203,136 +203,140 @@ impl FirewallManager {
     }
 
     /// Configure iptables to allow a port (with container FORWARD rules)
-    async fn allow_port_iptables(port: u16, container_ip: &str) -> AgentResult<()> {
+    async fn allow_port_iptables(port: u16, protocol: &str, container_ip: &str) -> AgentResult<()> {
         info!(
-            "Configuring iptables to allow port {} for container {}",
-            port, container_ip
+            "Configuring iptables to allow port {}/{} for container {}",
+            port, protocol, container_ip
         );
 
-        // Add INPUT rule for the port
-        let output = Command::new("iptables")
-            .arg("-I")
-            .arg("INPUT")
-            .arg("-p")
-            .arg("tcp")
-            .arg("--dport")
-            .arg(port.to_string())
-            .arg("-j")
-            .arg("ACCEPT")
-            .output()
-            .map_err(|e| AgentError::FirewallError(format!("Failed to run iptables: {}", e)))?;
+        for proto in &["tcp", "udp"] {
+            // Add INPUT rule for the port
+            let output = Command::new("iptables")
+                .arg("-I")
+                .arg("INPUT")
+                .arg("-p")
+                .arg(proto)
+                .arg("--dport")
+                .arg(port.to_string())
+                .arg("-j")
+                .arg("ACCEPT")
+                .output()
+                .map_err(|e| AgentError::FirewallError(format!("Failed to run iptables: {}", e)))?;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            warn!("iptables INPUT rule may already exist: {}", stderr);
-        }
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                warn!("iptables INPUT {} rule may already exist: {}", proto, stderr);
+            }
 
-        // Add FORWARD rule for incoming traffic to container
-        let output = Command::new("iptables")
-            .arg("-I")
-            .arg("FORWARD")
-            .arg("-p")
-            .arg("tcp")
-            .arg("--dport")
-            .arg(port.to_string())
-            .arg("-d")
-            .arg(container_ip)
-            .arg("-j")
-            .arg("ACCEPT")
-            .output()
-            .map_err(|e| AgentError::FirewallError(format!("Failed to run iptables: {}", e)))?;
+            // Add FORWARD rule for incoming traffic to container
+            let output = Command::new("iptables")
+                .arg("-I")
+                .arg("FORWARD")
+                .arg("-p")
+                .arg(proto)
+                .arg("--dport")
+                .arg(port.to_string())
+                .arg("-d")
+                .arg(container_ip)
+                .arg("-j")
+                .arg("ACCEPT")
+                .output()
+                .map_err(|e| AgentError::FirewallError(format!("Failed to run iptables: {}", e)))?;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            warn!("iptables FORWARD rule may already exist: {}", stderr);
-        }
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                warn!("iptables FORWARD {} rule may already exist: {}", proto, stderr);
+            }
 
-        // Add FORWARD rule for outgoing traffic from container
-        let output = Command::new("iptables")
-            .arg("-I")
-            .arg("FORWARD")
-            .arg("-p")
-            .arg("tcp")
-            .arg("--sport")
-            .arg(port.to_string())
-            .arg("-s")
-            .arg(container_ip)
-            .arg("-j")
-            .arg("ACCEPT")
-            .output()
-            .map_err(|e| AgentError::FirewallError(format!("Failed to run iptables: {}", e)))?;
+            // Add FORWARD rule for outgoing traffic from container
+            let output = Command::new("iptables")
+                .arg("-I")
+                .arg("FORWARD")
+                .arg("-p")
+                .arg(proto)
+                .arg("--sport")
+                .arg(port.to_string())
+                .arg("-s")
+                .arg(container_ip)
+                .arg("-j")
+                .arg("ACCEPT")
+                .output()
+                .map_err(|e| AgentError::FirewallError(format!("Failed to run iptables: {}", e)))?;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            warn!("iptables FORWARD rule may already exist: {}", stderr);
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                warn!("iptables FORWARD {} rule may already exist: {}", proto, stderr);
+            }
         }
 
         info!(
-            "✓ iptables configured to allow port {} with container forwarding",
-            port
+            "✓ iptables configured to allow port {}/{} with container forwarding",
+            port, protocol
         );
         Ok(())
     }
 
     /// Remove iptables rules for a port
-    async fn remove_port_iptables(port: u16, container_ip: &str) -> AgentResult<()> {
+    async fn remove_port_iptables(port: u16, protocol: &str, container_ip: &str) -> AgentResult<()> {
         info!(
-            "Removing iptables rules for port {} and container {}",
-            port, container_ip
+            "Removing iptables rules for port {}/{} and container {}",
+            port, protocol, container_ip
         );
 
-        // Remove INPUT rule
-        let output = Command::new("iptables")
-            .arg("-D")
-            .arg("INPUT")
-            .arg("-p")
-            .arg("tcp")
-            .arg("--dport")
-            .arg(port.to_string())
-            .arg("-j")
-            .arg("ACCEPT")
-            .output()
-            .map_err(|e| AgentError::FirewallError(format!("Failed to run iptables: {}", e)))?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            warn!("iptables INPUT rule removal failed: {}", stderr);
-        }
+        for proto in &["tcp", "udp"] {
+            // Remove INPUT rule
+            let output = Command::new("iptables")
+                .arg("-D")
+                .arg("INPUT")
+                .arg("-p")
+                .arg(proto)
+                .arg("--dport")
+                .arg(port.to_string())
+                .arg("-j")
+                .arg("ACCEPT")
+                .output()
+                .map_err(|e| AgentError::FirewallError(format!("Failed to run iptables: {}", e)))?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                warn!("iptables INPUT {} rule removal failed: {}", proto, stderr);
+            }
 
-        // Remove FORWARD rules
-        let output = Command::new("iptables")
-            .arg("-D")
-            .arg("FORWARD")
-            .arg("-p")
-            .arg("tcp")
-            .arg("--dport")
-            .arg(port.to_string())
-            .arg("-d")
-            .arg(container_ip)
-            .arg("-j")
-            .arg("ACCEPT")
-            .output()
-            .map_err(|e| AgentError::FirewallError(format!("Failed to run iptables: {}", e)))?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            warn!("iptables FORWARD rule removal failed: {}", stderr);
-        }
+            // Remove FORWARD rules
+            let output = Command::new("iptables")
+                .arg("-D")
+                .arg("FORWARD")
+                .arg("-p")
+                .arg(proto)
+                .arg("--dport")
+                .arg(port.to_string())
+                .arg("-d")
+                .arg(container_ip)
+                .arg("-j")
+                .arg("ACCEPT")
+                .output()
+                .map_err(|e| AgentError::FirewallError(format!("Failed to run iptables: {}", e)))?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                warn!("iptables FORWARD {} rule removal failed: {}", proto, stderr);
+            }
 
-        let output = Command::new("iptables")
-            .arg("-D")
-            .arg("FORWARD")
-            .arg("-p")
-            .arg("tcp")
-            .arg("--sport")
-            .arg(port.to_string())
-            .arg("-s")
-            .arg(container_ip)
-            .arg("-j")
-            .arg("ACCEPT")
-            .output()
-            .map_err(|e| AgentError::FirewallError(format!("Failed to run iptables: {}", e)))?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            warn!("iptables FORWARD rule removal failed: {}", stderr);
+            let output = Command::new("iptables")
+                .arg("-D")
+                .arg("FORWARD")
+                .arg("-p")
+                .arg(proto)
+                .arg("--sport")
+                .arg(port.to_string())
+                .arg("-s")
+                .arg(container_ip)
+                .arg("-j")
+                .arg("ACCEPT")
+                .output()
+                .map_err(|e| AgentError::FirewallError(format!("Failed to run iptables: {}", e)))?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                warn!("iptables FORWARD {} rule removal failed: {}", proto, stderr);
+            }
         }
 
         Ok(())

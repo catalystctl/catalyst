@@ -55,6 +55,8 @@ const DEFAULT_PERMISSION_PRESETS = {
     "server.start",
     "server.stop",
     "server.install",
+    "server.reinstall",
+    "server.rebuild",
     "alert.read",
     "alert.create",
     "alert.update",
@@ -72,6 +74,8 @@ const DEFAULT_PERMISSION_PRESETS = {
     "server.start",
     "server.stop",
     "server.install",
+    "server.reinstall",
+    "server.rebuild",
     "server.transfer",
     "alert.read",
     "alert.create",
@@ -5363,6 +5367,278 @@ export async function serverRoutes(app: FastifyInstance) {
       });
 
       reply.send({ success: true, message: "Install command sent to agent" });
+    }
+  );
+
+  // Reinstall server (stops server, wipes data, runs install script)
+  app.post(
+    "/:serverId/reinstall",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId } = request.params as { serverId: string };
+      const userId = request.user.userId;
+
+      const server = await prisma.server.findUnique({
+        where: { id: serverId },
+        include: {
+          template: true,
+          node: true,
+        },
+      });
+
+      if (!server) {
+        return reply.status(404).send({ error: "Server not found" });
+      }
+
+      if (!ensureNotSuspended(server, reply)) {
+        return;
+      }
+
+      // Check permissions
+      if (server.ownerId !== userId && !(await isAdminUser(userId, "admin.read"))) {
+        const access = await prisma.serverAccess.findFirst({
+          where: {
+            userId,
+            serverId,
+            permissions: { has: "server.reinstall" },
+          },
+        });
+        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+        if (!access && !hasNodeAccessToServer) {
+          return reply.status(403).send({ error: "Forbidden" });
+        }
+      }
+
+      // Validate state transition
+      const currentState = server.status as ServerState;
+      if (!ServerStateMachine.canTransition(currentState, ServerState.INSTALLING)) {
+        return reply.status(409).send({
+          error: `Cannot reinstall server in ${server.status} state`,
+        });
+      }
+
+      // Check if node is online
+      if (!server.node.isOnline) {
+        return reply.status(503).send({ error: "Node is offline" });
+      }
+
+      // Send reinstall command to agent via WebSocket
+      const gateway = (app as any).wsGateway;
+      if (!gateway) {
+        return reply.status(500).send({ error: "WebSocket gateway not available" });
+      }
+
+      // Automatically add SERVER_DIR to environment
+      const serverDir = server.node.serverDataDir || "/var/lib/catalyst/servers";
+      const fullServerDir = `${serverDir}/${server.uuid}`;
+
+      const templateVariables = (server.template.variables as any[]) || [];
+      const templateDefaults = templateVariables.reduce((acc, variable) => {
+        if (variable?.name && variable?.default !== undefined) {
+          acc[variable.name] = String(variable.default);
+        }
+        return acc;
+      }, {} as Record<string, string>);
+
+      const environment = {
+        ...templateDefaults,
+        ...(server.environment as Record<string, string>),
+        SERVER_DIR: fullServerDir,
+      };
+      if (server.template?.image) {
+        const resolvedImage = resolveTemplateImage(server.template, environment);
+        environment.TEMPLATE_IMAGE = resolvedImage;
+      }
+      if (server.primaryIp && !environment.CATALYST_NETWORK_IP) {
+        environment.CATALYST_NETWORK_IP = server.primaryIp;
+      }
+      if (server.networkMode === "host" && !environment.CATALYST_NETWORK_IP) {
+        try {
+          environment.CATALYST_NETWORK_IP = normalizeHostIp(server.node.publicAddress) || "";
+        } catch (error: any) {
+          return reply.status(400).send({ error: error.message });
+        }
+      }
+      const runtimeTemplate = patchTemplateForRuntime(server.template);
+
+      // Sync port environment variables with primaryPort
+      const portBindings = parseStoredPortBindings(server.portBindings);
+      const syncedEnvironment = syncPortEnvironmentVariables(
+        environment,
+        server.primaryPort,
+        portBindings
+      );
+
+      const success = await gateway.sendToAgent(server.nodeId, {
+        type: "reinstall_server",
+        serverId: server.id,
+        serverUuid: server.uuid,
+        template: runtimeTemplate,
+        environment: syncedEnvironment,
+        allocatedMemoryMb: server.allocatedMemoryMb,
+        allocatedCpuCores: server.allocatedCpuCores,
+        allocatedDiskMb: server.allocatedDiskMb,
+        primaryPort: server.primaryPort,
+        portBindings: portBindings,
+      });
+
+      if (!success) {
+        return reply.status(503).send({ error: "Failed to send command to agent" });
+      }
+
+      // Update server status
+      await prisma.server.update({
+        where: { id: serverId },
+        data: { status: "installing" },
+      });
+
+      await prisma.serverLog.create({
+        data: {
+          serverId: serverId,
+          stream: "system",
+          data: "Reinstallation started (data wipe + install).",
+        },
+      });
+
+      reply.send({ success: true, message: "Reinstall command sent to agent" });
+    }
+  );
+
+  // Rebuild server (stops server, removes container, recreates from image, preserves data)
+  app.post(
+    "/:serverId/rebuild",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId } = request.params as { serverId: string };
+      const userId = request.user.userId;
+
+      const server = await prisma.server.findUnique({
+        where: { id: serverId },
+        include: {
+          template: true,
+          node: true,
+        },
+      });
+
+      if (!server) {
+        return reply.status(404).send({ error: "Server not found" });
+      }
+
+      if (!ensureNotSuspended(server, reply)) {
+        return;
+      }
+
+      // Check permissions
+      if (server.ownerId !== userId && !(await isAdminUser(userId, "admin.read"))) {
+        const access = await prisma.serverAccess.findFirst({
+          where: {
+            userId,
+            serverId,
+            permissions: { has: "server.rebuild" },
+          },
+        });
+        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+        if (!access && !hasNodeAccessToServer) {
+          return reply.status(403).send({ error: "Forbidden" });
+        }
+      }
+
+      // Rebuild can work from STOPPED, RUNNING, ERROR, CRASHED states
+      const currentState = server.status as ServerState;
+      const allowedStates: ServerState[] = [
+        ServerState.STOPPED,
+        ServerState.RUNNING,
+        ServerState.ERROR,
+        ServerState.CRASHED,
+      ];
+      if (!allowedStates.includes(currentState)) {
+        return reply.status(409).send({
+          error: `Cannot rebuild server in ${server.status} state`,
+        });
+      }
+
+      // Check if node is online
+      if (!server.node.isOnline) {
+        return reply.status(503).send({ error: "Node is offline" });
+      }
+
+      // Send rebuild command to agent via WebSocket
+      const gateway = (app as any).wsGateway;
+      if (!gateway) {
+        return reply.status(500).send({ error: "WebSocket gateway not available" });
+      }
+
+      // Automatically add SERVER_DIR to environment
+      const serverDir = server.node.serverDataDir || "/var/lib/catalyst/servers";
+      const fullServerDir = `${serverDir}/${server.uuid}`;
+
+      const templateVariables = (server.template.variables as any[]) || [];
+      const templateDefaults = templateVariables.reduce((acc, variable) => {
+        if (variable?.name && variable?.default !== undefined) {
+          acc[variable.name] = String(variable.default);
+        }
+        return acc;
+      }, {} as Record<string, string>);
+
+      const environment = {
+        ...templateDefaults,
+        ...(server.environment as Record<string, string>),
+        SERVER_DIR: fullServerDir,
+      };
+      if (server.template?.image) {
+        const resolvedImage = resolveTemplateImage(server.template, environment);
+        environment.TEMPLATE_IMAGE = resolvedImage;
+      }
+      if (server.primaryIp && !environment.CATALYST_NETWORK_IP) {
+        environment.CATALYST_NETWORK_IP = server.primaryIp;
+      }
+      if (server.networkMode === "host" && !environment.CATALYST_NETWORK_IP) {
+        try {
+          environment.CATALYST_NETWORK_IP = normalizeHostIp(server.node.publicAddress) || "";
+        } catch (error: any) {
+          return reply.status(400).send({ error: error.message });
+        }
+      }
+      const runtimeTemplate = patchTemplateForRuntime(server.template);
+      if (server.startupCommand) {
+        runtimeTemplate.startup = server.startupCommand;
+      }
+
+      // Sync port environment variables with primaryPort
+      const portBindings = parseStoredPortBindings(server.portBindings);
+      const syncedEnvironment = syncPortEnvironmentVariables(
+        environment,
+        server.primaryPort,
+        portBindings
+      );
+
+      const success = await gateway.sendToAgent(server.nodeId, {
+        type: "rebuild_server",
+        serverId: server.id,
+        serverUuid: server.uuid,
+        template: runtimeTemplate,
+        environment: syncedEnvironment,
+        allocatedMemoryMb: server.allocatedMemoryMb,
+        allocatedCpuCores: server.allocatedCpuCores,
+        allocatedDiskMb: server.allocatedDiskMb,
+        primaryPort: server.primaryPort,
+        portBindings: portBindings,
+        networkMode: server.networkMode,
+      });
+
+      if (!success) {
+        return reply.status(503).send({ error: "Failed to send command to agent" });
+      }
+
+      await prisma.serverLog.create({
+        data: {
+          serverId: serverId,
+          stream: "system",
+          data: "Rebuild started (container recreation).",
+        },
+      });
+
+      reply.send({ success: true, message: "Rebuild command sent to agent" });
     }
   );
 

@@ -20,7 +20,7 @@ use tracing::{debug, error, info, warn};
 use crate::config::CniNetworkConfig;
 use crate::{
     AgentConfig, AgentError, AgentResult, ContainerdRuntime, FileManager, NetworkManager,
-    StorageManager,
+    StorageManager, runtime_manager::rotate_logs,
 };
 
 type WsStream =
@@ -257,6 +257,22 @@ impl WebSocketHandler {
     }
 
     pub async fn connect_and_listen(&self) -> AgentResult<()> {
+        // Spawn periodic log rotation task (every 5 minutes)
+        {
+            let runtime = self.runtime.clone();
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(300)).await;
+                    // Rotate logs for all running containers
+                    if let Ok(containers) = runtime.list_containers().await {
+                        for c in &containers {
+                            rotate_logs(&c.id).await;
+                        }
+                    }
+                }
+            });
+        }
+
         loop {
             match self.establish_connection().await {
                 Ok(()) => {
@@ -484,6 +500,8 @@ impl WebSocketHandler {
         match msg["type"].as_str() {
             Some("server_control") => self.handle_server_control(&msg).await?,
             Some("install_server") => self.install_server(&msg).await?,
+            Some("reinstall_server") => self.reinstall_server(&msg).await?,
+            Some("rebuild_server") => self.rebuild_server(&msg).await?,
             Some("start_server") => {
                 self.start_server_with_details(&msg).await?;
             }
@@ -1119,11 +1137,121 @@ impl WebSocketHandler {
         Ok(())
     }
 
+    async fn reinstall_server(&self, msg: &Value) -> AgentResult<()> {
+        let server_uuid = msg["serverUuid"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
+
+        let server_id = msg["serverId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
+
+        info!("Reinstalling server: {} (UUID: {})", server_id, server_uuid);
+        self.emit_console_output(server_id, "system", "[Catalyst] Reinstalling server...\n")
+            .await?;
+
+        // Stop server if running
+        let container_id = self.resolve_container_id(server_id, server_uuid).await;
+        if !container_id.is_empty() {
+            if self
+                .runtime
+                .is_container_running(&container_id)
+                .await
+                .unwrap_or(false)
+            {
+                let stop_policy = StopPolicy::default();
+                let _ = self
+                    .stop_server(server_id, container_id.clone(), &stop_policy)
+                    .await;
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
+        }
+
+        // Cleanup all containers
+        self.cleanup_all_server_containers(server_id, server_uuid)
+            .await?;
+
+        // Wipe server data directory contents (keep the directory itself)
+        validate_safe_path_segment(server_uuid, "serverUuid")?;
+        let server_dir = self.config.server.data_dir.join(server_uuid);
+        if server_dir.exists() {
+            let mut entries = tokio::fs::read_dir(&server_dir)
+                .await
+                .map_err(|e| AgentError::IoError(format!("Failed to read server directory: {}", e)))?;
+            while let Some(entry) = entries.next_entry().await.map_err(|e| {
+                AgentError::IoError(format!("Failed to read directory entry: {}", e))
+            })? {
+                tokio::fs::remove_dir_all(entry.path()).await?;
+            }
+            self.emit_console_output(server_id, "system", "[Catalyst] Server data wiped.\n")
+                .await?;
+        }
+
+        // Run the install script (same as install_server)
+        self.install_server(msg).await
+    }
+
+    async fn rebuild_server(&self, msg: &Value) -> AgentResult<()> {
+        let server_uuid = msg["serverUuid"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
+
+        let server_id = msg["serverId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
+
+        info!("Rebuilding server: {} (UUID: {})", server_id, server_uuid);
+        self.emit_console_output(server_id, "system", "[Catalyst] Rebuilding server container...\n")
+            .await?;
+
+        // Stop server if running
+        let container_id = self.resolve_container_id(server_id, server_uuid).await;
+        if !container_id.is_empty() {
+            if self
+                .runtime
+                .is_container_running(&container_id)
+                .await
+                .unwrap_or(false)
+            {
+                let stop_policy = StopPolicy::default();
+                let _ = self
+                    .stop_server(server_id, container_id.clone(), &stop_policy)
+                    .await;
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
+        }
+
+        // Cleanup containers only (NOT data)
+        self.cleanup_all_server_containers(server_id, server_uuid)
+            .await?;
+
+        self.emit_console_output(
+            server_id,
+            "system",
+            "[Catalyst] Container removed. Recreating from image...\n",
+        )
+        .await?;
+
+        // Start the server (creates a fresh container, data on disk is preserved)
+        self.start_server_with_details(msg).await?;
+
+        self.emit_console_output(
+            server_id,
+            "system",
+            "[Catalyst] Server rebuilt successfully.\n",
+        )
+        .await?;
+        Ok(())
+    }
+
     fn spawn_log_stream(&self, server_id: &str, container_id: &str) {
         let handler = self.clone();
         let server_id = server_id.to_string();
         let container_id = container_id.to_string();
         tokio::spawn(async move {
+            // Rotate logs if they exceed the size limit
+            rotate_logs(&container_id).await;
+
             // First, clean up any stale streams for this server
             // This prevents issues when switching from installer to game server container
             {
