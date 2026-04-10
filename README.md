@@ -18,41 +18,87 @@ Catalyst is a complete platform built for enterprise game server hosts, game com
 
 ### 📦 Prerequisites
 
-- **Docker & Docker Compose** - For PostgreSQL and Redis
-- **Bun 1.0+** - Package manager and runtime
+- **Docker** (or **Podman**) with Compose support
 
-Install Bun on any Linux distribution:
-```bash
-# Universal installer (works on all distros)
-sudo ./scripts/install-bun.sh
+That's it. Everything runs in containers — no Node.js, Bun, or Rust install needed on the host.
 
-# Or install manually
-curl -fsSL https://bun.sh/install | bash
-```
-
-### 🚀 Try It Locally (Development)
+### 🚀 Deploy with Docker Compose
 
 ```bash
-# Start database services
-docker compose up -d
+git clone https://github.com/your-repo/catalyst.git
+cd catalyst
 
-# Backend (port 3000)
-cd catalyst-backend && bun install && bun run db:push && bun run dev
+# Create environment file
+cp .env.example .env
 
-# Frontend (port 5173)
-cd catalyst-frontend && bun install && bun run dev
+# Edit .env — set at minimum:
+#   BETTER_AUTH_SECRET  (generate: openssl rand -base64 32)
+#   POSTGRES_PASSWORD
+
+# Build and start everything
+docker compose up -d --build
 ```
 
-👉 [Full local setup guide](docs/GETTING_STARTED.md)
+Or use the helper script:
 
-### 🌐 Deploy to Staging/Test (Experimental)
+```bash
+./dev.sh
+```
 
-1. Deploy backend with PostgreSQL
-2. Install agent on nodes (auto-configures containerd/CNI)
-3. Create node in admin panel with deployment token
-4. Start managing servers!
+**That's it.** The panel is available at `http://localhost` (port 80 by default).
 
-👉 [Deployment guide for test environments](docs/ADMIN_GUIDE.md)
+**Podman users:** replace `docker compose` with `podman compose` — it works the same way.
+
+#### First-time setup
+
+After the containers are running, seed the database with initial data:
+
+```bash
+docker compose exec backend bun run db:seed
+```
+
+#### Useful commands
+
+| Command | Description |
+|---|---|
+| `docker compose up -d --build` | Build and start all services |
+| `docker compose logs -f` | Tail logs from all services |
+| `docker compose logs -f backend` | Tail backend logs only |
+| `docker compose exec backend bun run db:seed` | Seed the database |
+| `docker compose exec backend bun run db:studio` | Open Prisma Studio |
+| `docker compose down` | Stop all services |
+| `docker compose down -v` | Stop and delete all data volumes |
+
+### 🔧 Configuration
+
+All configuration lives in `.env` at the project root. See [`.env.example`](.env.example) for the full list.
+
+Key variables:
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `BETTER_AUTH_SECRET` | ✅ | — | Session encryption key (`openssl rand -base64 32`) |
+| `POSTGRES_PASSWORD` | ✅ | — | PostgreSQL password |
+| `CORS_ORIGIN` | | `http://localhost` | Allowed CORS origins |
+| `BACKEND_EXTERNAL_ADDRESS` | | `http://localhost` | Public backend URL |
+| `FRONTEND_PORT` | | `80` | Port to expose the panel on |
+| `BACKEND_PORT` | | `127.0.0.1:3000` | Port to expose the API on (localhost only) |
+| `SFTP_PORT` | | `127.0.0.1:2022` | Port for SFTP file access |
+
+### 🌐 Exposing to the Internet
+
+For production, put a reverse proxy (Caddy, Nginx, Cloudflare Tunnel) in front of port 80:
+
+```bash
+# Example: Caddy (automatic HTTPS)
+caddy reverse-proxy --from panel.example.com --to localhost:80
+```
+
+Set `CORS_ORIGIN=https://panel.example.com` and `BACKEND_EXTERNAL_ADDRESS=https://panel.example.com` in `.env`.
+
+### 🤖 Install Agent on Nodes
+
+The agent runs on game server nodes (separate from the panel). See the [Admin Guide](docs/ADMIN_GUIDE.md) for node deployment.
 
 ### 🔌 Integrate via API
 
@@ -65,57 +111,33 @@ curl -H "x-api-key: YOUR_KEY" http://localhost:3000/api/servers
 
 ---
 
-## Key Features
-
-### 🎮 Complete Server Lifecycle
-
-Create, start, stop, restart, and transfer servers with automatic crash detection and recovery. State machine ensures safe transitions.
-
-### 📊 Real-Time Monitoring
-
-Live console streaming via WebSockets (<10ms latency), resource metrics (CPU/RAM/disk), and customizable alerts with threshold monitoring.
-
-### 🔐 Enterprise Security
-
-RBAC with 20+ granular permissions, API key authentication with rate limiting, audit logging, TLS support, and encrypted backups.
-
-### 🔌 Powerful Plugin System
-
-Extend functionality with custom backend plugins, API routes, WebSocket handlers, and scheduled tasks. Hot-reload enabled.
-
-### 📁 File Management
-
-Web-based file editor, SFTP access (port 2022), upload/download with path validation, and automated backup/restore.
-
-### 🤖 API-First Design
-
-60+ REST endpoints with billing panel integration examples (WHMCS, Python, Node.js) for complete automation.
-
----
-
 ## Architecture
 
 ```
-┌──────────────┐     WebSocket      ┌──────────────┐
-│   React 18   │◄──────────────────►│  Fastify     │
-│  Frontend    │                    │  Backend     │
-│  (Vite)      │                    │  (TypeScript)│
-└──────────────┘                    └──────────────┘
-                                           │
-                          REST/WebSocket   │
-                                           ▼
-┌──────────────┐                    ┌──────────────┐
-│   Rust 1.70  │◄──────────────────►│  PostgreSQL  │
-│   Agent      │                    │  Database    │
-│  (Tokio)     │                    │              │
-└──────────────┘                    └──────────────┘
+                     ┌─────────────────────┐
+                     │   Docker Compose     │
+                     │                      │
+  :80 (panel)  ───► │  Nginx (Frontend)   │
+                     │    │  /api  /ws      │
+                     │    ▼                 │
+                     │  Fastify (Backend)   │──► :3000 (API)
+                     │    │                 │──► :2022 (SFTP)
+                     │    ▼                 │
+  :5432 (internal) ◄─│  PostgreSQL          │
+  :6379 (internal) ◄─│  Redis               │
+                     └─────────────────────┘
+
+  Game Nodes (separate machines):
+  ┌──────────────┐                    ┌──────────────┐
+  │  Rust Agent  │◄── WebSocket ─────►│  Backend API │
+  │  (containerd)│                    └──────────────┘
+  └──────────────┘
        │
-       │ containerd gRPC
        ▼
-┌──────────────┐
-│   Game       │
-│  Servers     │
-└──────────────┘
+  ┌──────────────┐
+  │  Game        │
+  │  Servers     │
+  └──────────────┘
 ```
 
 **Tech Stack:**
@@ -129,26 +151,41 @@ Web-based file editor, SFTP access (port 2022), upload/download with path valida
 
 ---
 
+## Key Features
+
+### 🎮 Complete Server Lifecycle
+
+Create, start, stop, restart, and transfer servers with automatic crash detection and recovery.
+
+### 📊 Real-Time Monitoring
+
+Live console streaming via WebSockets (<10ms latency), resource metrics, and customizable alerts.
+
+### 🔐 Enterprise Security
+
+RBAC with 20+ granular permissions, API key authentication with rate limiting, audit logging, TLS support.
+
+### 🔌 Powerful Plugin System
+
+Extend functionality with custom backend plugins, API routes, WebSocket handlers, and scheduled tasks.
+
+### 📁 File Management
+
+Web-based file editor, SFTP access, upload/download with path validation, and automated backup/restore.
+
+### 🤖 API-First Design
+
+60+ REST endpoints with billing panel integration examples (WHMCS, Python, Node.js).
+
+---
+
 ## What Makes Catalyst Different?
-
-### 🎯 Early Testing and Rapid Iteration
-
-- Core workflows are actively being validated in test environments
-- 60+ API endpoints are available but may change as feedback comes in
-- Security controls exist, but hardening and scale validation are still in progress
-
-### 🔧 Modern Architecture
 
 - **containerd** for superior performance (not Docker)
 - **WebSocket gateway** for real-time communication (<10ms latency)
 - **Plugin system** for infinite extensibility
 - **Rust agent** for memory safety and performance
-
-### 🤝 Developer-Friendly
-
-- TypeScript everywhere with shared types
-- API-first design with billing panel examples
-- Comprehensive documentation and E2E test suite
+- **Docker Compose** for one-command deployment
 
 ---
 
@@ -156,36 +193,12 @@ Web-based file editor, SFTP access (port 2022), upload/download with path valida
 
 | Guide | For You If... | Description |
 |-------|---------------|-------------|
-| **[Getting Started](docs/GETTING_STARTED.md)** | New to Catalyst | Complete setup guide for local & staging/testing |
+| **[Getting Started](docs/GETTING_STARTED.md)** | New to Catalyst | Setup guide for Docker Compose and beyond |
 | **[User Guide](docs/USER_GUIDE.md)** | Server Owner | Manage your servers, files, backups, console |
 | **[Admin Guide](docs/ADMIN_GUIDE.md)** | System Operator | Deploy nodes, configure networking, monitor health |
-| **[Customer Guide](docs/CUSTOMER_GUIDE.md)** | Tenant | Access and use your hosted services |
 | **[API Reference](docs/README.md)** | Developer | Complete REST API with integration examples |
 | **[Plugin System](docs/PLUGIN_SYSTEM.md)** | Plugin Dev | Extend Catalyst with custom functionality |
 | **[Features List](docs/FEATURES.md)** | All | Complete feature catalog and status |
-
----
-
-## Example Use Cases
-
-**🏢 Enterprise Game Server Host**
-
-- Manage 1,000+ servers across 50+ nodes
-- Automated backups, real-time alerts, and billing integration
-- Scale horizontally with ease
-- Fine-grained access control for teams
-
-**🎮 Game Community**
-
-- Self-host your game servers with full control
-- Invite collaborators with limited permissions
-- Schedule automated restarts and backups
-
-**💻 Billing Panel Provider**
-
-- Provision servers automatically via API
-- Suspend/unsuspend based on payment status
-- Full WHMCS integration with examples
 
 ---
 
@@ -199,55 +212,8 @@ Web-based file editor, SFTP access (port 2022), upload/download with path valida
 | REST API | ⚠️ 60+ endpoints (subject to change) |
 | Testing | ✅ E2E + Unit tests (ongoing) |
 | Frontend UI | 🚧 In active development |
+| Docker Compose | ✅ Primary deployment method |
 | v2 (Scaling, CLI, Mobile) | 🔮 Planned |
-
----
-
-## Configuration
-
-Backend `.env` (see `catalyst-backend/.env.example`):
-
-- `DATABASE_URL`, `PORT`, `CORS_ORIGIN`, `JWT_SECRET`, `BETTER_AUTH_*`
-- `BACKEND_EXTERNAL_ADDRESS`, `FRONTEND_URL`
-- Backup and suspension controls (see Admin Guide)
-
-Frontend `.env` (see `catalyst-frontend/.env.example`):
-
-- `VITE_API_URL`, `VITE_WS_URL`, `VITE_ENV`
-
----
-
-## Networking Modes
-
-- `bridge`: Node public IP with port mappings
-- `host`: Host network (no port mappings); host IP selected from node public IP
-- `mc-lan-static` / custom: macvlan with static IPAM pools
-
----
-
-## Security Notes
-
-- Enforce strong `JWT_SECRET` and `BETTER_AUTH_SECRET` for any internet-exposed deployment
-- Use TLS for HTTP/WebSocket for any non-local environment
-- Limit admin permissions via RBAC
-
----
-
-## Known Limitations
-
-- Transfers assume shared storage; no cross-node copy
-- Backups lack retention rules by default
-- Scheduler does not catch up missed runs
-- Secondary allocations are not implemented
-
----
-
-## Community & Support
-
-- 📖 **[Documentation](docs/)** - Complete guides and references
-- 🐛 **[Issues](https://github.com/your-repo/issues)** - Bug reports & features
-- 💬 **[Discord](https://discord.gg/your-server)** - Community chat
-- 📧 **[Email](mailto:support@catalyst.dev)** - Enterprise support
 
 ---
 
@@ -260,7 +226,3 @@ We welcome contributions! Please see [AGENTS.md](AGENTS.md) for repository guide
 ## License
 
 GPLv3 © 2025 Catalyst Contributors
-
----
-
-**Built for experimentation. Early testing and unstable.**

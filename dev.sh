@@ -1,97 +1,70 @@
 #!/bin/bash
-# Catalyst - Development bootstrap script
-# Sets up all components for local development (Bun monorepo)
+# Catalyst - Quick Start
+# Sets up and runs Catalyst via Docker Compose
 
 set -e
 
 echo "╔════════════════════════════════════════════════════════════╗"
-echo "║           Catalyst Development Setup                      ║"
+echo "║           Catalyst — Docker Compose Setup                 ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
 
-# Check prerequisites
-check_cmd() {
-    if ! command -v "$1" >/dev/null 2>&1; then
-        echo "✗ $1 is not installed"
-        return 1
-    fi
-    echo "✓ $1 found: $(command -v "$1")"
-}
-
-echo "Checking prerequisites..."
-check_cmd docker
-check_cmd docker-compose || check_cmd "docker compose"
-check_cmd bun
-echo ""
-
-# Start database services
-echo "Starting database services..."
-docker compose -f docker-compose.yml up -d 2>/dev/null || docker-compose up -d
-
-# Wait for postgres to be ready
-echo "Waiting for PostgreSQL..."
-for i in $(seq 1 30); do
-    if docker exec catalyst-postgres pg_isready -U catalyst >/dev/null 2>&1; then
-        echo "✓ PostgreSQL is ready"
-        break
-    fi
-    if [ "$i" -eq 30 ]; then
-        echo "✗ PostgreSQL did not become ready in time"
-        exit 1
-    fi
-    sleep 1
-done
-
-# Install all workspace dependencies
-echo ""
-echo "Installing workspace dependencies..."
-bun install
-echo "✓ Workspace install complete"
-
-# Backend env
-if [ ! -f catalyst-backend/.env ]; then
-    cp catalyst-backend/.env.example catalyst-backend/.env
-    echo "  Created catalyst-backend/.env from .env.example"
-fi
-
-# Frontend env
-if [ ! -f catalyst-frontend/.env ]; then
-    cp catalyst-frontend/.env.example catalyst-frontend/.env
-    echo "  Created catalyst-frontend/.env from .env.example"
-fi
-
-# Database setup
-echo ""
-echo "Setting up database..."
-bun run db:generate
-bun run db:push
-bun run db:seed
-echo "✓ Database setup complete"
-
-# Build agent (optional — only if Rust is available)
-if command -v cargo >/dev/null 2>&1; then
-    echo ""
-    echo "Building Catalyst Agent..."
-    cd catalyst-agent && cargo build && cd ..
-    echo "✓ Agent build complete"
+# Check for docker compose
+if command -v docker >/dev/null 2>&1; then
+    DOCKER_COMPOSE="docker compose"
+elif command -v podman >/dev/null 2>&1; then
+    DOCKER_COMPOSE="podman compose"
 else
-    echo ""
-    echo "⚠ Rust/cargo not found — skipping agent build"
+    echo "Error: docker or podman is required."
+    echo "  Install Docker: https://docs.docker.com/get-docker/"
+    echo "  Or Podman:     https://podman.io/getting-started"
+    exit 1
 fi
+
+# Create .env from example if it doesn't exist
+if [ ! -f .env ]; then
+    cp .env.example .env
+    echo "Created .env from .env.example"
+    echo ""
+    echo "⚠  Edit .env and set at minimum:"
+    echo "     BETTER_AUTH_SECRET  (openssl rand -base64 32)"
+    echo "     POSTGRES_PASSWORD"
+    echo ""
+    read -rp "Press Enter to continue once you've edited .env, or Ctrl+C to abort..."
+fi
+
+# Validate required vars
+source .env 2>/dev/null || true
+if [ -z "$BETTER_AUTH_SECRET" ] || [ "$BETTER_AUTH_SECRET" = "your-super-secret-better-auth-key" ]; then
+    echo "Error: BETTER_AUTH_SECRET is not set in .env"
+    echo "  Generate one: openssl rand -base64 32"
+    exit 1
+fi
+if [ -z "$POSTGRES_PASSWORD" ]; then
+    echo "Error: POSTGRES_PASSWORD is not set in .env"
+    exit 1
+fi
+
+echo "Starting Catalyst..."
+echo ""
+
+# Build and start all services
+$DOCKER_COMPOSE up -d --build
 
 echo ""
 echo "╔════════════════════════════════════════════════════════════╗"
-echo "║                  Setup Complete!                          ║"
+echo "║                  Catalyst is running!                     ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
-echo "Start everything with a single command:"
-echo "  bun run dev"
+echo "  Panel:    http://localhost${FRONTEND_PORT:+:$FRONTEND_PORT}"
+echo "  API:      http://localhost:3000/api"
+echo "  Docs:     http://localhost:3000/docs"
+echo "  SFTP:     localhost:2022"
 echo ""
-echo "Or start individual services:"
-echo "  bun run dev:infra      # Docker (Postgres + Redis)"
-echo "  bun run dev:agent      # Rust agent (requires cargo)"
-echo "  cd catalyst-backend && bun run dev"
-echo "  cd catalyst-frontend && bun run dev"
+echo "  First-time setup: seed the database with"
+echo "    docker compose exec backend bun run db:seed"
 echo ""
-echo "Open http://localhost:5173 in your browser."
+echo "  View logs:  docker compose logs -f"
+echo "  Stop:       docker compose down"
+echo "  Reset:      docker compose down -v"
 echo ""
