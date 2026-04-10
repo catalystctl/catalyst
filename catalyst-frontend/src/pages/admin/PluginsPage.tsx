@@ -144,10 +144,10 @@ function PluginSettingsModal({
                 </Dialog.Close>
                 <button
                   onClick={handleSave}
-                  disabled={updateMutation.isLoading}
+                  disabled={updateMutation.isPending}
                   className="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {updateMutation.isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                   Save Changes
                 </button>
               </div>

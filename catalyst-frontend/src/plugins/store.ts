@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { PluginManifest, LoadedPlugin } from './types';
+import type { LoadedPlugin } from './types';
 
 interface PluginStore {
   plugins: LoadedPlugin[];

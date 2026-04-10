@@ -194,7 +194,11 @@ export interface SecuritySettings {
   authRateLimitMax: number;
   fileRateLimitMax: number;
   consoleRateLimitMax: number;
+  consoleOutputLinesMax: number;
   consoleOutputByteLimitBytes: number;
+  agentMessageMax: number;
+  agentMetricsMax: number;
+  serverMetricsMax: number;
   lockoutMaxAttempts: number;
   lockoutWindowMinutes: number;
   lockoutDurationMinutes: number;

@@ -233,12 +233,6 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
   const unresolvedAlertIds = alerts.filter((alert) => !alert.resolved).map((alert) => alert.id);
   const canBulkResolve = unresolvedAlertIds.length > 0 && !bulkResolveMutation.isPending;
 
-  const formatSeverity = (severity: AlertSeverity) =>
-    severity === 'critical'
-      ? 'text-rose-600 dark:text-rose-300'
-      : severity === 'warning'
-        ? 'text-amber-600 dark:text-amber-300'
-        : 'text-emerald-600 dark:text-emerald-300';
   const formatSeverityBadge = (severity: AlertSeverity) =>
     severity === 'critical'
       ? 'border-rose-200 bg-rose-100/60 text-rose-600 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200'

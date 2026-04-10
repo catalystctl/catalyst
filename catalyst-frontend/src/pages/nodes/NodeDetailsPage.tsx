@@ -92,7 +92,7 @@ function NodeDetailsPage() {
     [user?.permissions],
   );
   const canAssignNodes = useMemo(
-    () => user?.permissions?.includes('node.assign') || user?.permissions?.includes('*') || user?.permissions?.includes('admin.write'),
+    () => !!(user?.permissions?.includes('node.assign') || user?.permissions?.includes('*') || user?.permissions?.includes('admin.write')),
     [user?.permissions],
   );
   const lastSeen = node?.lastSeenAt ? new Date(node.lastSeenAt).toLocaleString() : 'n/a';

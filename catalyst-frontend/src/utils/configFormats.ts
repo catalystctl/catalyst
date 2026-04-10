@@ -1,6 +1,9 @@
 export type ConfigPrimitive = string | number | boolean | null;
+export type ConfigPrimitive = string | number | boolean | null;
+export interface ConfigMap {
+  [key: string]: ConfigPrimitive | ConfigMap;
+}
 export type ConfigNode = ConfigPrimitive | ConfigMap;
-export type ConfigMap = Record<string, ConfigNode>;
 
 const trimQuotes = (value: string) => {
   const trimmed = value.trim();

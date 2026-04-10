@@ -27,13 +27,11 @@ function TwoFactorPage() {
   const from = state?.from?.pathname;
   const returnTo = state?.returnTo;
 
-  const rememberMe = state?.rememberMe;
   const onSubmit = async (values: TwoFactorSchema) => {
     try {
       await verifyTwoFactor({
         code: values.code,
         trustDevice: values.trustDevice,
-        rememberMe,
       });
       setTimeout(() => {
         navigate(from || '/servers');

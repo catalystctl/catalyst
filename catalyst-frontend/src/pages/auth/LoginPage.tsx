@@ -96,7 +96,7 @@ function LoginPage() {
         allowFallback ? { forcePasskeyFallback: true } : undefined,
       );
       setTimeout(() => navigate(from || '/servers'), 100);
-      setLastRememberMe(values.rememberMe);
+      lastRememberMe = values.rememberMe;
     } catch (err) {
       if ((err as any).code === 'PASSKEY_REQUIRED') {
         setAuthStep('passkey');

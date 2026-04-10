@@ -1661,7 +1661,7 @@ function ServerDetailsPage() {
         format: null,
         error: null,
         loaded: false,
-        viewMode: 'form',
+        viewMode: 'form' as const,
         rawContent: '',
       })),
     );
@@ -2480,7 +2480,6 @@ function ServerDetailsPage() {
             latest={metricsHistory?.latest ?? null}
             allocatedMemoryMb={server.allocatedMemoryMb ?? 0}
             timeRangeLabel={metricsTimeRange.label}
-            timeRangeHours={metricsTimeRange.hours}
           />
         </div>
       ) : null}
@@ -3992,7 +3991,7 @@ function ServerDetailsPage() {
                                           className="flex w-full items-center justify-between text-left"
                                           onClick={() =>
                                             setConfigFiles((current) =>
-                                              current.map((file, fileIdx) => {
+                                              current.map((file) => {
                                                 if (file.path !== configFile.path) return file;
                                                 return {
                                                   ...file,
@@ -4351,7 +4350,7 @@ function ServerDetailsPage() {
                   <select
                     className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
                     value={restartPolicy}
-                    onChange={(event) => setRestartPolicy(event.target.value)}
+                    onChange={(event) => setRestartPolicy(event.target.value as 'always' | 'on-failure' | 'never')}
                     disabled={isSuspended}
                   >
                     <option value="always">Always</option>

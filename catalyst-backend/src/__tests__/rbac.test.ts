@@ -503,7 +503,7 @@ describe('RBAC - Permission Categories and Presets', () => {
     const { PERMISSION_CATEGORIES } = await import('../lib/permissions');
     const validNodePermissions = [
       'node.read', 'node.create', 'node.update', 'node.delete',
-      'node.view_stats', 'node.manage_allocation'
+      'node.view_stats', 'node.manage_allocation', 'node.assign'
     ];
     const serverPermissions = [
       'server.read', 'server.create', 'server.start', 'server.stop',

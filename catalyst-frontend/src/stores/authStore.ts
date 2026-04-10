@@ -111,6 +111,7 @@ export const useAuthStore = create<AuthState>()(
           set({ isReady: true });
           // Always try to refresh - cookie-based auth doesn't need stored token
           void get().refresh();
+          return undefined;
         },
       logout: () => {
         localStorage.removeItem('catalyst-remember-me');
@@ -140,7 +141,6 @@ export const useAuthStore = create<AuthState>()(
           set({
             user,
             token: null,
-            rememberMe: Boolean(payload.rememberMe),
             isAuthenticated: true,
             isLoading: false,
             isReady: true,
