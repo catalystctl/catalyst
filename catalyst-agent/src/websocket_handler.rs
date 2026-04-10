@@ -4,12 +4,14 @@ use futures::{SinkExt, StreamExt};
 use regex::Regex;
 use reqwest::Url;
 use serde_json::{json, Value};
+use aes_gcm::aead::Aead;
+use aes_gcm::{AeadCore, Aes256Gcm, KeyInit, Nonce};
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::sync::OnceLock;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use sysinfo::{Disks, System};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::RwLock;
@@ -154,6 +156,111 @@ struct BackupUploadSession {
     last_activity: tokio::time::Instant,
 }
 
+/// Configuration for automatic container restart on crash.
+#[derive(Clone, Debug)]
+struct AutoRestartConfig {
+    enabled: bool,
+    delay_secs: u64,
+    max_restarts: u32,
+    window_secs: u64,
+}
+
+impl Default for AutoRestartConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            delay_secs: 10,
+            max_restarts: 5,
+            window_secs: 60,
+        }
+    }
+}
+
+/// Tracks restart attempts within a time window to prevent infinite loops.
+#[derive(Default)]
+struct RestartTracker {
+    timestamps: VecDeque<Instant>,
+}
+
+impl RestartTracker {
+    fn record_and_check(&mut self, max: u32, window: Duration) -> bool {
+        let now = Instant::now();
+        // Evict timestamps outside the window
+        while let Some(front) = self.timestamps.front() {
+            if now.duration_since(*front) > window {
+                self.timestamps.pop_front();
+            } else {
+                break;
+            }
+        }
+        if self.timestamps.len() as u32 >= max {
+            return false; // Rate-limited
+        }
+        self.timestamps.push_back(now);
+        true
+    }
+}
+
+const BACKUP_ENCRYPTION_MAGIC: &[u8] = b"CATALYST_ENC_V1:";
+
+fn parse_auto_restart_config(msg: &Value) -> AutoRestartConfig {
+    let mut config = AutoRestartConfig::default();
+    let Some(ar) = msg.get("autoRestart").and_then(Value::as_object) else {
+        return config;
+    };
+    config.enabled = ar.get("enabled").and_then(Value::as_bool).unwrap_or(false);
+    config.delay_secs = ar
+        .get("delay")
+        .and_then(Value::as_u64)
+        .unwrap_or(config.delay_secs);
+    config.max_restarts = ar
+        .get("maxRestarts")
+        .and_then(Value::as_u64)
+        .unwrap_or(config.max_restarts as u64) as u32;
+    config.window_secs = ar
+        .get("windowSecs")
+        .and_then(Value::as_u64)
+        .unwrap_or(config.window_secs);
+    config
+}
+
+fn encrypt_backup(data: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
+    if key.len() != 32 {
+        return Err("Encryption key must be 32 bytes for AES-256".to_string());
+    }
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|e| format!("Failed to create cipher: {}", e))?;
+    let nonce = Aes256Gcm::generate_nonce(&mut rand_08::thread_rng()); // 96-bit
+    let ciphertext = cipher
+        .encrypt(&nonce, data)
+        .map_err(|e| format!("Encryption failed: {}", e))?;
+    // Prepend magic header + nonce
+    let mut result = BACKUP_ENCRYPTION_MAGIC.to_vec();
+    result.extend_from_slice(&nonce);
+    result.extend_from_slice(&ciphertext);
+    Ok(result)
+}
+
+fn decrypt_backup(data: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
+    if key.len() != 32 {
+        return Err("Encryption key must be 32 bytes for AES-256".to_string());
+    }
+    if !data.starts_with(BACKUP_ENCRYPTION_MAGIC) {
+        return Err("Not an encrypted backup".to_string());
+    }
+    let payload = &data[BACKUP_ENCRYPTION_MAGIC.len()..];
+    if payload.len() < 12 {
+        return Err("Invalid encrypted backup: too short".to_string());
+    }
+    let nonce = Nonce::from_slice(&payload[..12]);
+    let ciphertext = &payload[12..];
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|e| format!("Failed to create cipher: {}", e))?;
+    cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|e| format!("Decryption failed: {}", e))
+}
+
 pub struct WebSocketHandler {
     config: Arc<AgentConfig>,
     runtime: Arc<ContainerdRuntime>,
@@ -164,6 +271,16 @@ pub struct WebSocketHandler {
     active_log_streams: Arc<RwLock<HashSet<String>>>,
     monitor_tasks: Arc<RwLock<HashMap<String, tokio::task::JoinHandle<()>>>>,
     active_uploads: Arc<RwLock<HashMap<String, BackupUploadSession>>>,
+    /// Auto-restart config per server_id, stored when start_server_with_details is called.
+    auto_restart_configs: Arc<RwLock<HashMap<String, AutoRestartConfig>>>,
+    /// Tracks restart attempt timestamps per server_id.
+    restart_trackers: Arc<RwLock<HashMap<String, RestartTracker>>>,
+    /// Stores the original start_server message JSON per server_id for auto-restart.
+    start_server_messages: Arc<RwLock<HashMap<String, Value>>>,
+    /// Maps server_id -> (container_id, primary_port) for health checking.
+    server_ports: Arc<RwLock<HashMap<String, (String, u16)>>>,
+    /// Tracks per-server health state to avoid duplicate unhealthy/healthy emissions.
+    server_health_state: Arc<RwLock<HashMap<String, bool>>>,
 }
 
 impl Clone for WebSocketHandler {
@@ -178,6 +295,11 @@ impl Clone for WebSocketHandler {
             active_log_streams: self.active_log_streams.clone(),
             monitor_tasks: self.monitor_tasks.clone(),
             active_uploads: self.active_uploads.clone(),
+            auto_restart_configs: self.auto_restart_configs.clone(),
+            restart_trackers: self.restart_trackers.clone(),
+            start_server_messages: self.start_server_messages.clone(),
+            server_ports: self.server_ports.clone(),
+            server_health_state: self.server_health_state.clone(),
         }
     }
 }
@@ -210,6 +332,11 @@ impl WebSocketHandler {
             active_log_streams: Arc::new(RwLock::new(HashSet::new())),
             monitor_tasks: Arc::new(RwLock::new(HashMap::new())),
             active_uploads: Arc::new(RwLock::new(HashMap::new())),
+            auto_restart_configs: Arc::new(RwLock::new(HashMap::new())),
+            restart_trackers: Arc::new(RwLock::new(HashMap::new())),
+            start_server_messages: Arc::new(RwLock::new(HashMap::new())),
+            server_ports: Arc::new(RwLock::new(HashMap::new())),
+            server_health_state: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -414,6 +541,12 @@ impl WebSocketHandler {
                 interval.tick().await;
                 handler_clone.cleanup_stale_uploads().await;
             }
+        }));
+
+        // Start TCP health checker for running game servers
+        let handler_clone = self.clone();
+        connection_tasks.push(tokio::spawn(async move {
+            handler_clone.spawn_health_checker().await;
         }));
 
         // Listen for messages
@@ -858,12 +991,11 @@ impl WebSocketHandler {
                                     Some(code) => format!("Container exited with code {}", code),
                                     None => "Container exited".to_string(),
                                 };
-                                let _ = monitor_handler
-                                    .emit_server_state_update(
+                                monitor_handler
+                                    .handle_container_exit(
                                         &monitor_server_id,
-                                        "crashed",
-                                        Some(reason),
-                                        None,
+                                        &monitor_container_id,
+                                        &reason,
                                         exit_code,
                                     )
                                     .await;
@@ -895,12 +1027,11 @@ impl WebSocketHandler {
                             Some(code) => format!("Container exited with code {}", code),
                             None => "Container exited".to_string(),
                         };
-                        let _ = monitor_handler
-                            .emit_server_state_update(
+                        monitor_handler
+                            .handle_container_exit(
                                 &monitor_server_id,
-                                "crashed",
-                                Some(reason),
-                                None,
+                                &monitor_container_id,
+                                &reason,
                                 exit_code,
                             )
                             .await;
@@ -914,6 +1045,213 @@ impl WebSocketHandler {
             tasks.insert(server_id, monitor);
             // Lock is held until end of scope, ensuring atomic operation
         });
+    }
+
+    /// Handle a container exit: emit crash state and optionally auto-restart.
+    async fn handle_container_exit(
+        &self,
+        server_id: &str,
+        _container_id: &str,
+        reason: &str,
+        exit_code: Option<i32>,
+    ) {
+        // Clean up port tracking for this server
+        self.server_ports.write().await.remove(server_id);
+        self.server_health_state.write().await.remove(server_id);
+
+        // Check if auto-restart is configured and allowed
+        let should_restart = {
+            let configs = self.auto_restart_configs.read().await;
+            if let Some(config) = configs.get(server_id) {
+                if !config.enabled {
+                    false
+                } else {
+                    let mut trackers = self.restart_trackers.write().await;
+                    let tracker = trackers.entry(server_id.to_string()).or_default();
+                    tracker.record_and_check(
+                        config.max_restarts,
+                        Duration::from_secs(config.window_secs),
+                    )
+                }
+            } else {
+                false
+            }
+        };
+
+        if should_restart {
+            let config = {
+                self.auto_restart_configs
+                    .read()
+                    .await
+                    .get(server_id)
+                    .cloned()
+                    .unwrap_or_default()
+            };
+            let _ = self
+                .emit_console_output(
+                    server_id,
+                    "system",
+                    &format!(
+                        "[Catalyst] Container exited ({}) — auto-restarting in {}s...\n",
+                        reason, config.delay_secs
+                    ),
+                )
+                .await;
+            tokio::time::sleep(Duration::from_secs(config.delay_secs)).await;
+
+            // Retrieve the stored start message and re-invoke start_server_with_details
+            let start_msg = {
+                self.start_server_messages
+                    .read()
+                    .await
+                    .get(server_id)
+                    .cloned()
+            };
+
+            if let Some(msg) = start_msg {
+                info!(
+                    "Auto-restarting server {} after crash (exit {:?})",
+                    server_id, exit_code
+                );
+                if let Err(e) = self.start_server_with_details(&msg).await {
+                    warn!("Auto-restart failed for {}: {}", server_id, e);
+                    let _ = self
+                        .emit_console_output(
+                            server_id,
+                            "system",
+                            &format!("[Catalyst] Auto-restart failed: {}\n", e),
+                        )
+                        .await;
+                    // Still emit crashed since auto-restart failed
+                    let _ = self
+                        .emit_server_state_update(
+                            server_id,
+                            "crashed",
+                            Some(reason.to_string()),
+                            None,
+                            exit_code,
+                        )
+                        .await;
+                }
+            } else {
+                // No stored start message — fall back to normal crash reporting
+                let _ = self
+                    .emit_server_state_update(
+                        server_id,
+                        "crashed",
+                        Some(reason.to_string()),
+                        None,
+                        exit_code,
+                    )
+                    .await;
+            }
+        } else {
+            // Check if we were rate-limited
+            let rate_limited = {
+                let configs = self.auto_restart_configs.read().await;
+                if let Some(config) = configs.get(server_id) {
+                    if config.enabled {
+                        let trackers = self.restart_trackers.read().await;
+                        if let Some(tracker) = trackers.get(server_id) {
+                            tracker.timestamps.len() as u32 >= config.max_restarts
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            };
+
+            if rate_limited {
+                let _ = self
+                    .emit_console_output(
+                        server_id,
+                        "system",
+                        "[Catalyst] Auto-restart skipped: rate limit reached (too many crashes in window).\n",
+                    )
+                    .await;
+            }
+
+            let _ = self
+                .emit_server_state_update(
+                    server_id,
+                    "crashed",
+                    Some(reason.to_string()),
+                    None,
+                    exit_code,
+                )
+                .await;
+        }
+    }
+
+    /// Periodically TCP-probe running game servers and report healthy/unhealthy status.
+    async fn spawn_health_checker(&self) {
+        let mut interval = tokio::time::interval(Duration::from_secs(30));
+        loop {
+            interval.tick().await;
+
+            // Snapshot the current server ports map
+            let entries: Vec<(String, String, u16)> = {
+                self.server_ports
+                    .read()
+                    .await
+                    .iter()
+                    .map(|(sid, (cid, port))| (sid.clone(), cid.clone(), *port))
+                    .collect()
+            };
+
+            for (server_id, container_id, port) in &entries {
+                // Verify the container is still running before probing
+                let is_running = self
+                    .runtime
+                    .is_container_running(container_id)
+                    .await
+                    .unwrap_or(false);
+                if !is_running {
+                    continue;
+                }
+
+                let ip = match self.runtime.get_container_ip(container_id).await {
+                    Ok(ip) if !ip.is_empty() => ip,
+                    _ => continue,
+                };
+
+                let addr = format!("{}:{}", ip, port);
+                let parsed: std::net::SocketAddr = match addr.parse() {
+                    Ok(a) => a,
+                    Err(_) => continue,
+                };
+                let healthy =
+                    tokio::task::spawn_blocking(move || {
+                        std::net::TcpStream::connect_timeout(
+                            &parsed,
+                            Duration::from_secs(3),
+                        )
+                    })
+                    .await
+                    .unwrap_or(Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "health check timed out",
+                    )))
+                    .is_ok();
+
+                // Only emit when state actually changes to avoid noise
+                let mut health_states = self.server_health_state.write().await;
+                let prev = health_states.get(server_id).copied();
+                if prev != Some(healthy) {
+                    health_states.insert(server_id.clone(), healthy);
+                    drop(health_states); // Release lock before sending
+                    let status = if healthy { "healthy" } else { "unhealthy" };
+                    info!("Health check for {}: {} (port {})", server_id, status, port);
+                    let _ = self
+                        .emit_server_state_update(server_id, status, None, None, None)
+                        .await;
+                }
+            }
+        }
     }
 
     async fn install_server(&self, msg: &Value) -> AgentResult<()> {
@@ -1579,6 +1917,21 @@ impl WebSocketHandler {
                 self.stop_log_streams_for_server(server_id).await;
                 self.spawn_log_stream(server_id, &container_id);
                 self.spawn_exit_monitor(server_id, &container_id);
+
+                // Store auto-restart config, start message, and port for this server
+                let ar_config = parse_auto_restart_config(msg);
+                self.auto_restart_configs
+                    .write()
+                    .await
+                    .insert(server_id.to_string(), ar_config);
+                self.start_server_messages
+                    .write()
+                    .await
+                    .insert(server_id.to_string(), msg.clone());
+                self.server_ports
+                    .write()
+                    .await
+                    .insert(server_id.to_string(), (container_id.clone(), primary_port));
             }
 
             // Emit state update
@@ -1673,6 +2026,11 @@ impl WebSocketHandler {
                 server_id
             );
             self.stop_monitor_task(server_id).await;
+            self.auto_restart_configs.write().await.remove(server_id);
+            self.restart_trackers.write().await.remove(server_id);
+            self.start_server_messages.write().await.remove(server_id);
+            self.server_ports.write().await.remove(server_id);
+            self.server_health_state.write().await.remove(server_id);
             self.emit_server_state_update(server_id, "stopped", None, None, None)
                 .await?;
             return Ok(());
@@ -1683,6 +2041,12 @@ impl WebSocketHandler {
         );
 
         self.stop_monitor_task(server_id).await;
+        // Clean up auto-restart state since the stop is intentional
+        self.auto_restart_configs.write().await.remove(server_id);
+        self.restart_trackers.write().await.remove(server_id);
+        self.start_server_messages.write().await.remove(server_id);
+        self.server_ports.write().await.remove(server_id);
+        self.server_health_state.write().await.remove(server_id);
 
         if self
             .runtime
@@ -2069,7 +2433,7 @@ impl WebSocketHandler {
         let metadata = tokio::fs::metadata(&backup_path)
             .await
             .map_err(|e| AgentError::IoError(format!("Failed to read backup metadata: {}", e)))?;
-        let size_mb = metadata.len() as f64 / (1024.0 * 1024.0);
+        let _size_mb = metadata.len() as f64 / (1024.0 * 1024.0);
 
         let mut file = tokio::fs::File::open(&backup_path).await?;
         let mut hasher = Sha256::new();
@@ -2083,14 +2447,41 @@ impl WebSocketHandler {
         }
         let checksum = hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect::<String>();
 
+        // Optionally encrypt the backup if an encryption key is provided
+        let encrypted = if let Some(enc_key_b64) = msg.get("encryptionKey").and_then(|v| v.as_str()) {
+            let key = base64::engine::general_purpose::STANDARD
+                .decode(enc_key_b64)
+                .map_err(|e| AgentError::InvalidRequest(format!("Invalid encryption key: {}", e)))?;
+            let raw = tokio::fs::read(&backup_path).await?;
+            match encrypt_backup(&raw, &key) {
+                Ok(encrypted_data) => {
+                    tokio::fs::write(&backup_path, &encrypted_data).await?;
+                    info!("Backup {} encrypted successfully", backup_name);
+                    true
+                }
+                Err(e) => {
+                    // Encryption failure should not destroy the unencrypted backup
+                    warn!("Backup encryption failed for {}: {}", backup_name, e);
+                    false
+                }
+            }
+        } else {
+            false
+        };
+
+        // Re-read metadata after possible encryption
+        let final_metadata = tokio::fs::metadata(&backup_path).await?;
+        let final_size_mb = final_metadata.len() as f64 / (1024.0 * 1024.0);
+
         let event = json!({
             "type": "backup_complete",
             "serverId": server_id,
             "backupName": backup_name,
             "backupPath": backup_path.to_string_lossy(),
-            "sizeMb": size_mb,
+            "sizeMb": final_size_mb,
             "checksum": checksum,
             "backupId": backup_id,
+            "encrypted": encrypted,
             "timestamp": chrono::Utc::now().timestamp_millis(),
         });
 
@@ -2149,11 +2540,32 @@ impl WebSocketHandler {
             server_dir.display()
         );
 
+        // Determine the actual file to extract from (may be decrypted to a temp file)
+        let actual_backup_file;
+        let cleanup_temp;
+        if let Some(enc_key_b64) = msg.get("encryptionKey").and_then(|v| v.as_str()) {
+            let key = base64::engine::general_purpose::STANDARD
+                .decode(enc_key_b64)
+                .map_err(|e| AgentError::InvalidRequest(format!("Invalid encryption key: {}", e)))?;
+            let raw = tokio::fs::read(&backup_file).await?;
+            let decrypted = decrypt_backup(&raw, &key).map_err(|e| {
+                AgentError::InvalidRequest(format!("Backup decryption failed: {}", e))
+            })?;
+            let tmp_path = backup_file.with_extension("tar.gz.decrypting");
+            tokio::fs::write(&tmp_path, &decrypted).await?;
+            info!("Backup decrypted successfully for restore");
+            actual_backup_file = tmp_path.clone();
+            cleanup_temp = Some(tmp_path);
+        } else {
+            actual_backup_file = backup_file.clone();
+            cleanup_temp = None;
+        }
+
         let restore_result = tokio::process::Command::new("tar")
             .arg("-xzf")
             .arg("--no-same-owner")
             .arg("--no-same-permissions")
-            .arg(&backup_file)
+            .arg(&actual_backup_file)
             .arg("-C")
             .arg(&server_dir)
             .output()
@@ -2164,10 +2576,19 @@ impl WebSocketHandler {
             let stderr = String::from_utf8_lossy(&restore_result.stderr);
             // Clean up partial extraction on failure
             let _ = tokio::fs::remove_dir_all(&server_dir).await;
+            // Clean up temp decrypted file
+            if let Some(ref tmp) = cleanup_temp {
+                let _ = tokio::fs::remove_file(tmp).await;
+            }
             return Err(AgentError::IoError(format!(
                 "Backup restore failed: {}",
                 stderr
             )));
+        }
+
+        // Clean up temp decrypted file after successful extraction
+        if let Some(ref tmp) = cleanup_temp {
+            let _ = tokio::fs::remove_file(tmp).await;
         }
 
         // Security: validate that no symlinks in the restored archive escape the
