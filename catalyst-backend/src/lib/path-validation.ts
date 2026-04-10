@@ -104,17 +104,17 @@ export function normalizeRequestPath(value?: string): string {
  * @throws Error if path validation fails
  */
 export function validateAndNormalizePath(
-  userPath: string,
+  userPath: string | undefined,
   serverId: string,
   userId?: string
 ): string {
-  // Validate server ID format
-  validateServerId(serverId);
+  // Default to root if no path provided
+  const resolvedPath = userPath || '/';
 
   const serverBase = path.join(SERVER_FILES_ROOT, serverId);
 
   // Normalize the requested path
-  const normalized = normalizeRequestPath(userPath);
+  const normalized = normalizeRequestPath(resolvedPath);
   const fullPath = path.join(serverBase, normalized);
 
   // Canonical validation (resolves symlinks)
@@ -150,7 +150,7 @@ export function validateAndNormalizePath(
 
     // Validate that canonical path is within server base
     if (!canonicalPath.startsWith(canonicalBase)) {
-      logSecurityEvent(userId, serverId, userPath, 'Canonical path is outside server directory');
+      logSecurityEvent(userId, serverId, resolvedPath, 'Canonical path is outside server directory');
       throw new Error('Path traversal attempt detected');
     }
 
@@ -160,7 +160,7 @@ export function validateAndNormalizePath(
       throw error;
     }
     // Log security event for other errors
-    logSecurityEvent(userId, serverId, userPath, error instanceof Error ? error.message : 'Path validation failed');
+    logSecurityEvent(userId, serverId, resolvedPath, error instanceof Error ? error.message : 'Path validation failed');
     throw new Error('Path validation failed');
   }
 }

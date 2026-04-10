@@ -7,6 +7,7 @@
  */
 
 import { prisma } from "../db";
+import { Prisma } from "@prisma/client";
 import { createHash, randomBytes } from "crypto";
 
 const DEFAULT_PREFIX = "catalyst";
@@ -68,8 +69,8 @@ export async function createApiKey(params: {
       userId,
       enabled: true,
       expiresAt,
-      permissions: permissions || null,
-      metadata: metadata || null,
+      ...(permissions ? { permissions: permissions as Prisma.InputJsonValue } : {}),
+      ...(metadata ? { metadata: metadata as Prisma.InputJsonValue } : {}),
       rateLimitEnabled,
       rateLimitTimeWindow,
       rateLimitMax,

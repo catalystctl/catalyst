@@ -10,7 +10,10 @@ if (!authSecret && process.env.NODE_ENV !== "test") {
   throw new Error("BETTER_AUTH_SECRET is required");
 }
 
-export const auth = betterAuth({
+// The passkey plugin pulls in @simplewebauthn/server internal types that TypeScript
+// cannot name when inferring the return type of betterAuth(). Using satisfies to
+// capture the full inferred type without requiring portable type names.
+const _auth = betterAuth({
   appName: "Catalyst",
   baseURL: baseUrl,
   secret: authSecret as string,
@@ -129,3 +132,4 @@ export const auth = betterAuth({
     }),
   ],
 });
+export const auth = _auth;

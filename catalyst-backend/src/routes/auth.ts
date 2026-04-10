@@ -71,7 +71,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!passwordValidation.success) {
         return reply.status(400).send({
           error: 'Password does not meet requirements',
-          details: passwordValidation.error.errors.map(err => ({
+          details: passwordValidation.error.issues.map(err => ({
             field: err.path.join('.'),
             message: err.message,
           })),
@@ -579,7 +579,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!passwordValidation.success) {
         return reply.status(400).send({
           error: 'Password does not meet requirements',
-          details: passwordValidation.error.errors.map(err => ({
+          details: passwordValidation.error.issues.map(err => ({
             field: err.path.join('.'),
             message: err.message,
           })),
