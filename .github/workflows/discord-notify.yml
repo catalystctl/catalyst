@@ -21,7 +21,7 @@ jobs:
             # Build commit list (max 5 shown)
             COMMITS=$(jq -r '
               .commits[-5:][] |
-              "• [`" + (.id[0:7]) + "`](<" + env.GITHUB_SERVER_URL + "/" + env.GITHUB_REPOSITORY + "/commit/" + .id + ">) " +
+              "• [`" + (.id[0:7]) + "`](<" + $ENV.GITHUB_SERVER_URL + "/" + $ENV.GITHUB_REPOSITORY + "/commit/" + .id + ">) " +
               (.message | split("\n")[0])
             ' <<< "$GITHUB_EVENT_PATH")
 
