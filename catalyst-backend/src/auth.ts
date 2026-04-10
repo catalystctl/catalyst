@@ -42,7 +42,7 @@ export const auth = betterAuth({
     baseUrl,
     process.env.FRONTEND_URL, 
     process.env.CORS_ORIGIN, 
-    "http://localhost:5173"
+    ...(process.env.NODE_ENV !== 'production' ? ["http://localhost:5173"] : []),
   ].filter((origin): origin is string => Boolean(origin)),
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   emailAndPassword: {
@@ -105,7 +105,7 @@ export const auth = betterAuth({
         baseUrl,
         process.env.FRONTEND_URL, 
         process.env.CORS_ORIGIN, 
-        "http://localhost:5173"
+        ...(process.env.NODE_ENV !== 'production' ? ["http://localhost:5173"] : []),
       ].filter((origin): origin is string => Boolean(origin)),
       rpID: process.env.PASSKEY_RP_ID || undefined,
       advanced: {

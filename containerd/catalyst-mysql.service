@@ -11,20 +11,23 @@ RestartSec=10s
 TimeoutStartSec=300
 TimeoutStopSec=30
 
-# Environment variables
+# Load secrets from env file (create /etc/catalyst/mysql.env with your credentials)
+EnvironmentFile=-/etc/catalyst/mysql.env
+
+# Environment variables (override in /etc/catalyst/mysql.env)
 Environment="CONTAINER_NAME=catalyst-mysql"
 Environment="MYSQL_IMAGE=docker.io/library/mysql:8.4"
 Environment="MYSQL_PORT=3306"
-Environment="MYSQL_ROOT_PASSWORD=catalyst_dev"
 Environment="MYSQL_DATABASE=catalyst_databases"
 Environment="DATA_DIR=/var/lib/catalyst/mysql"
 Environment="CTR_NAMESPACE=catalyst"
+Environment="SCRIPT_DIR=/opt/catalyst/containerd"
 
 # Pre-start: ensure directory exists
 ExecStartPre=-/usr/bin/mkdir -p /var/lib/catalyst/mysql
 
 # Main start command
-ExecStart=/root/catalyst3/containerd/mysql-wrapper-start.sh
+ExecStart=${SCRIPT_DIR}/mysql-wrapper-start.sh
 
 # Stop command
 ExecStop=/usr/bin/ctr -n catalyst task kill catalyst-mysql SIGTERM

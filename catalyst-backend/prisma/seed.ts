@@ -89,7 +89,17 @@ format = "json"
 }
 
 async function main() {
-  console.log("Seeding database...");
+  // Prevent running in production
+  if (process.env.NODE_ENV === 'production') {
+    console.error('ERROR: Seed script must not be run in production.');
+    console.error('It creates default admin credentials (admin@example.com / admin123).');
+    console.error('Set NODE_ENV=development or SEED_ALLOW_DEFAULT_ADMIN=true to override.');
+    process.exit(1);
+  }
+
+  console.log('Seeding database...');
+  console.log('⚠ WARNING: This creates a default admin user (admin@example.com / admin123).');
+  console.log('  Change this password immediately after first login.\n');
 
   // Create location
   const location = await prisma.location.upsert({

@@ -9,7 +9,7 @@ updates:
       time: "09:00"
     open-pull-requests-limit: 10
     reviewers:
-      - "karutoil"
+      - "catalystctl/maintainers"
     labels:
       - "dependencies"
       - "backend"
@@ -36,7 +36,7 @@ updates:
       time: "09:00"
     open-pull-requests-limit: 10
     reviewers:
-      - "karutoil"
+      - "catalystctl/maintainers"
     labels:
       - "dependencies"
       - "frontend"
@@ -63,7 +63,7 @@ updates:
       time: "09:00"
     open-pull-requests-limit: 10
     reviewers:
-      - "karutoil"
+      - "catalystctl/maintainers"
     labels:
       - "dependencies"
       - "agent"
@@ -81,7 +81,7 @@ updates:
       time: "09:00"
     open-pull-requests-limit: 5
     reviewers:
-      - "karutoil"
+      - "catalystctl/maintainers"
     labels:
       - "dependencies"
       - "github-actions"
@@ -99,7 +99,7 @@ updates:
       time: "09:00"
     open-pull-requests-limit: 5
     reviewers:
-      - "karutoil"
+      - "catalystctl/maintainers"
     labels:
       - "dependencies"
       - "docker"

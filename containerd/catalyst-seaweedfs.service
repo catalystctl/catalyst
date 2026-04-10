@@ -20,12 +20,13 @@ Environment="VOLUME_PORT=8080"
 Environment="FILER_PORT=8888"
 Environment="DATA_DIR=/var/lib/catalyst/seaweedfs"
 Environment="CTR_NAMESPACE=catalyst"
+Environment="SCRIPT_DIR=/opt/catalyst/containerd"
 
 # Pre-start: ensure directory exists
 ExecStartPre=-/usr/bin/mkdir -p /var/lib/catalyst/seaweedfs
 
 # Main start command
-ExecStart=/root/catalyst3/containerd/seaweedfs-wrapper-start.sh
+ExecStart=${SCRIPT_DIR}/seaweedfs-wrapper-start.sh
 
 # Stop command
 ExecStop=/usr/bin/ctr -n catalyst task kill catalyst-seaweedfs SIGTERM

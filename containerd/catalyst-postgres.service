@@ -11,22 +11,25 @@ RestartSec=5s
 TimeoutStartSec=300
 TimeoutStopSec=30
 
-# Environment variables
+# Load secrets from env file (create /etc/catalyst/postgres.env with your credentials)
+EnvironmentFile=-/etc/catalyst/postgres.env
+
+# Environment variables (override in /etc/catalyst/postgres.env)
 Environment="CONTAINER_NAME=catalyst-postgres"
 Environment="POSTGRES_IMAGE=docker.io/library/postgres:16-alpine"
 Environment="POSTGRES_PORT=5432"
 Environment="POSTGRES_USER=catalyst"
-Environment="POSTGRES_PASSWORD=catalyst_dev_password"
 Environment="POSTGRES_DB=catalyst_db"
 Environment="DATA_DIR=/var/lib/catalyst/postgres-data"
 Environment="CTR_NAMESPACE=catalyst-panel"
+Environment="SCRIPT_DIR=/opt/catalyst/containerd"
 
 # Pre-start: ensure directory exists and has correct permissions
 ExecStartPre=-/usr/bin/mkdir -p /var/lib/catalyst/postgres-data
 ExecStartPre=/usr/bin/chown -R 999:999 /var/lib/catalyst/postgres-data
 
 # Main start command - use the launcher script
-ExecStart=/root/catalyst3/containerd/postgres-wrapper-start.sh
+ExecStart=${SCRIPT_DIR}/postgres-wrapper-start.sh
 
 # Stop command - gracefully stop the container
 ExecStop=/usr/bin/ctr -n catalyst task kill catalyst-postgres SIGTERM
