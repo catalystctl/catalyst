@@ -29,6 +29,7 @@ sha2 = "0.11"
 base64 = "0.22"
 sysinfo = "0.38"
 nix = { version = "0.31", features = ["fs"] }
+num_cpus = "1"
 libc = "0.2"
 reqwest = { version = "0.13", features = ["json", "stream", "rustls-native-certs"], default-features = false }
 tokio-stream = "0.1"
