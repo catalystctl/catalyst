@@ -4,6 +4,19 @@ import { auth } from "../auth";
 import { fromNodeHeaders } from "better-auth/node";
 import { logAuthAttempt } from "../middleware/audit";
 import { serialize } from '../utils/serialize';
+import {
+  bruteForceProtection,
+  handleFailedLogin,
+  handleSuccessfulLogin,
+} from "../middleware/brute-force";
+import {
+  passwordSchema,
+  basicPasswordSchema,
+  validateRequestBody,
+  userRegistrationSchema,
+  userLoginSchema,
+  passwordChangeSchema,
+} from "../lib/validation";
 
 // Helper to forward response headers (set-auth-token, set-cookie) from better-auth to Fastify reply
 function forwardAuthHeaders(response: any, reply: FastifyReply) {
@@ -52,8 +65,17 @@ export async function authRoutes(app: FastifyInstance) {
       if (!email || !username || !password) {
         return reply.status(400).send({ error: "Missing required fields: email, username, password" });
       }
-      if (password.length < 8) {
-        return reply.status(400).send({ error: "Password must be at least 8 characters" });
+
+      // Validate password complexity
+      const passwordValidation = passwordSchema.safeParse(password);
+      if (!passwordValidation.success) {
+        return reply.status(400).send({
+          error: 'Password does not meet requirements',
+          details: passwordValidation.error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message,
+          })),
+        });
       }
 
       const existing = await prisma.user.findFirst({
@@ -114,6 +136,9 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       try {
+        // Check brute-force protection and account lockout
+        await bruteForceProtection(prisma, userRecord.email, request);
+
         const response = await auth.api.signInEmail({
           headers: getHeaders(request),
           body: {
@@ -145,6 +170,8 @@ export async function authRoutes(app: FastifyInstance) {
           throw new Error(data?.error?.message || data?.error || "Invalid credentials");
         }
 
+        // Handle successful login - reset failed attempts
+        await handleSuccessfulLogin(prisma, user.id);
         await logAuthAttempt(normalizedEmail, true, request.ip, request.headers["user-agent"]);
 
         const tokenHeader = forwardAuthHeaders(response, reply);
@@ -161,7 +188,15 @@ export async function authRoutes(app: FastifyInstance) {
           },
         });
       } catch (err: any) {
+        // Handle failed login - increment counter and apply lockout
+        await handleFailedLogin(prisma, request);
         await logAuthAttempt(normalizedEmail, false, request.ip, request.headers["user-agent"]);
+
+        // Check if error is from brute-force protection (account locked)
+        if (err.message && err.message.includes('Account locked')) {
+          return reply.status(423).send({ error: err.message });
+        }
+
         return reply.status(401).send({ error: "Invalid credentials" });
       }
     }
@@ -524,8 +559,17 @@ export async function authRoutes(app: FastifyInstance) {
       if (!token || !password) {
         return reply.status(400).send({ error: "Token and password are required" });
       }
-      if (password.length < 8) {
-        return reply.status(400).send({ error: "Password must be at least 8 characters" });
+
+      // Validate password complexity
+      const passwordValidation = passwordSchema.safeParse(password);
+      if (!passwordValidation.success) {
+        return reply.status(400).send({
+          error: 'Password does not meet requirements',
+          details: passwordValidation.error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message,
+          })),
+        });
       }
 
       try {

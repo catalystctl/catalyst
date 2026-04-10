@@ -26,6 +26,12 @@ model User {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
+  // Security fields for brute-force protection
+  failedLoginAttempts  Int       @default(0)
+  lockedUntil          DateTime?
+  lastFailedLogin      DateTime?
+  lastSuccessfulLogin  DateTime?
+
   accounts        account[]
   sessions        session[]
   twoFactor       twoFactor[]
