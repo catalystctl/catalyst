@@ -100,6 +100,20 @@ export async function authRoutes(app: FastifyInstance) {
       const tokenHeader = forwardAuthHeaders(response, reply);
       const permissions = await loadUserPermissions(user.id);
 
+      // Send welcome email (non-blocking)
+      try {
+        const { sendEmail } = await import('../services/mailer');
+        await sendEmail({
+          to: email,
+          subject: 'Welcome to Catalyst',
+          html: `<p>Welcome to Catalyst, ${username}!</p><p>Your account has been created successfully.</p><p>You can now log in and start managing your servers.</p>`,
+          text: `Welcome to Catalyst, ${username}! Your account has been created successfully.`,
+        });
+      } catch (emailErr) {
+        // Log but don't fail registration
+        console.error('Failed to send welcome email:', emailErr);
+      }
+
       reply.send({
         success: true,
         data: {

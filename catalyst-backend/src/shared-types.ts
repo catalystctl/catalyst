@@ -15,6 +15,7 @@ export enum ServerState {
   STOPPING = "stopping",
   CRASHED = "crashed",
   SUSPENDED = "suspended",
+  ARCHIVED = "archived",
   ERROR = "error",
 }
 

@@ -409,6 +409,22 @@ model DeploymentToken {
 }
 
 // ============================================================================
+// NESTS (EGG CATEGORIES)
+// ============================================================================
+
+model Nest {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  icon        String?
+  author      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  templates   ServerTemplate[]
+}
+
+// ============================================================================
 // TEMPLATES
 // ============================================================================
 
@@ -431,8 +447,10 @@ model ServerTemplate {
   allocatedMemoryMb Int
   allocatedCpuCores Int
   features          Json     @default("{}")
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  nest        Nest?     @relation(fields: [nestId], references: [id])
+  nestId      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   servers Server[]
 }

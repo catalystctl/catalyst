@@ -17,6 +17,7 @@ import { authRoutes } from "./routes/auth";
 import { nodeRoutes } from "./routes/nodes";
 import { serverRoutes } from "./routes/servers";
 import { templateRoutes } from "./routes/templates";
+import { nestRoutes } from "./routes/nests";
 import { metricsRoutes } from "./routes/metrics";
 import { backupRoutes } from "./routes/backups";
 import { RbacMiddleware } from "./middleware/rbac";
@@ -502,6 +503,7 @@ async function bootstrap() {
       prefix: "/api/servers",
     });
     await app.register(templateRoutes, { prefix: "/api/templates" });
+    await app.register(nestRoutes, { prefix: "/api/nests" });
     await app.register(metricsRoutes, { prefix: "/api" });
     await app.register(backupRoutes, { prefix: "/api/servers" });
     await app.register(adminRoutes, { prefix: "/api/admin" });

@@ -230,4 +230,101 @@ export async function templateRoutes(app: FastifyInstance) {
       reply.send({ success: true });
     }
   );
+
+  // Import Pterodactyl egg
+  app.post(
+    "/import-pterodactyl",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const has = await ensurePermission(prisma, request.user.userId, reply, "template.create");
+      if (!has) return;
+
+      const egg = request.body as Record<string, any>;
+      const { nestId } = request.body as { nestId?: string };
+
+      // Validate required fields
+      if (!egg?.name || typeof egg.name !== 'string') {
+        return reply.status(400).send({ error: "Missing required field: name" });
+      }
+      if (!egg?.startup || typeof egg.startup !== 'string') {
+        return reply.status(400).send({ error: "Missing required field: startup" });
+      }
+      if (!egg?.images || !Array.isArray(egg.images) || egg.images.length === 0) {
+        return reply.status(400).send({ error: "Missing required field: images (must be a non-empty array)" });
+      }
+
+      // Validate nestId if provided
+      if (nestId) {
+        const nest = await prisma.nest.findUnique({ where: { id: nestId } });
+        if (!nest) {
+          return reply.status(400).send({ error: "Nest not found" });
+        }
+      }
+
+      // Check for name conflict
+      const sanitizedName = egg.name.trim();
+      const existing = await prisma.serverTemplate.findUnique({
+        where: { name: sanitizedName },
+      });
+      if (existing) {
+        return reply.status(409).send({ error: `A template with the name '${sanitizedName}' already exists` });
+      }
+
+      // Map Pterodactyl variables to Catalyst format
+      const pteroVariables: any[] = Array.isArray(egg.variables) ? egg.variables : [];
+      const mappedVariables = pteroVariables.map((v: any) => ({
+        name: v.env_variable || v.name,
+        description: v.description || "",
+        default: v.default_value ?? "",
+        required: v.rules ? v.rules.includes("required") : false,
+        input: v.field_type === "select" ? "select" : v.field_type === "number" ? "number" : "text",
+        rules: v.rules ? v.rules.split("|").map((r: string) => r.trim()).filter(Boolean) : [],
+      }));
+
+      // Map images
+      const mappedImages = Array.isArray(egg.images)
+        ? egg.images.map((img: string, i: number) => ({
+            name: `image-${i}`,
+            image: img,
+          }))
+        : [];
+
+      // Build features from Pterodactyl egg data
+      const eggFeatures: Record<string, any> = {};
+      if (Array.isArray(egg.features)) {
+        eggFeatures.pterodactylFeatures = egg.features;
+      }
+      if (egg.config?.startup) {
+        eggFeatures.startupDetection = egg.config.startup;
+      }
+      if (egg.config?.logs) {
+        eggFeatures.logDetection = egg.config.logs;
+      }
+
+      const template = await prisma.serverTemplate.create({
+        data: {
+          name: sanitizedName,
+          description: egg.description || null,
+          author: egg.author || "Pterodactyl Import",
+          version: egg.meta?.version || "PTDL_v2",
+          image: egg.images[0],
+          images: mappedImages,
+          defaultImage: egg.images[0] || null,
+          installImage: egg.scripts?.installation?.container || null,
+          startup: egg.startup,
+          stopCommand: "minecraft:stop", // Pterodactyl default
+          sendSignalTo: "SIGTERM",
+          variables: mappedVariables,
+          installScript: egg.scripts?.installation?.script || null,
+          supportedPorts: [25565],
+          allocatedMemoryMb: 1024,
+          allocatedCpuCores: 1,
+          features: eggFeatures,
+          nestId: nestId || null,
+        },
+      });
+
+      reply.status(201).send({ success: true, data: template });
+    }
+  );
 }
