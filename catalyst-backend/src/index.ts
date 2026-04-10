@@ -32,6 +32,7 @@ import { apiKeyRoutes } from "./routes/api-keys";
 import { AlertService } from "./services/alert-service";
 import { getSecuritySettings } from "./services/mailer";
 import { startAuditRetention } from "./services/audit-retention";
+import { startStatRetention } from "./services/stat-retention";
 import { auth } from "./auth";
 import { fromNodeHeaders } from "better-auth/node";
 import { normalizeHostIp } from "./utils/ipam";
@@ -711,6 +712,9 @@ async function bootstrap() {
 
     auditRetentionInterval = startAuditRetention(prisma, logger);
     logger.info('Audit retention job scheduled');
+
+    startStatRetention(prisma, logger);
+    logger.info('Stat retention job scheduled');
   } catch (err) {
     logger.error(err, "Failed to start server");
     process.exit(1);

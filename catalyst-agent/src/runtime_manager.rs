@@ -903,9 +903,23 @@ impl ContainerdRuntime {
             Ok(Ok(_)) | Ok(Err(_)) => {}
             Err(_) => {
                 warn!(
-                    "Container {} did not stop in {}s after {}, sending SIGKILL",
+                    "Container {} did not stop in {}s after {}, sending SIGSTOP to freeze, then SIGKILL",
                     container_id, timeout_secs, signal
                 );
+                // Send SIGSTOP (signal 19) to freeze the process before SIGKILL.
+                // This prevents the process from spawning children or writing data
+                // during the final kill phase.
+                let stop_req = TaskKillRequest {
+                    container_id: container_id.to_string(),
+                    signal: 19, // SIGSTOP
+                    all: true,
+                    ..Default::default()
+                };
+                let stop_req = with_namespace!(stop_req, &self.namespace);
+                let _ = tasks.kill(stop_req).await;
+                // Brief pause to let SIGSTOP take effect
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                // Now send SIGKILL to terminate the frozen process
                 let req = TaskKillRequest {
                     container_id: container_id.to_string(),
                     signal: 9,

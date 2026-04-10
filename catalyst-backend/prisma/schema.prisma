@@ -524,6 +524,7 @@ model Server {
   ipAllocation   IpAllocation?
   allocations    NodeAllocation[]
   installedMods  InstalledMod[]
+  stats          ServerStat[]
 }
 
 // ============================================================================
@@ -651,6 +652,28 @@ model AuditLog {
   timestamp  DateTime @default(now())
 
   @@index([userId, timestamp])
+}
+
+// ============================================================================
+// SERVER STATS (HISTORICAL RESOURCE DATA)
+// ============================================================================
+
+model ServerStat {
+  id          String   @id @default(cuid())
+  serverId    String
+  cpuPercent  Float
+  memoryUsed  Int      // bytes
+  memoryLimit Int      // bytes
+  diskUsed    Int?
+  netRx       Float?   // bytes
+  netTx       Float?   // bytes
+  blockRead   Float?   // bytes
+  blockWrite  Float?   // bytes
+  createdAt   DateTime @default(now())
+
+  server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, createdAt(sort: Desc)])
 }
 
 // ============================================================================
