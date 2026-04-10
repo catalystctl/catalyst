@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import type { ZodIssue } from 'zod';
 
 /**
  * Password complexity requirements
@@ -66,8 +67,8 @@ export const serverCreateSchema = z.object({
   templateId: z.string().cuid('Invalid template ID'),
   nodeId: z.string().min(1, 'Node ID is required'),
   locationId: z.string().min(1, 'Location ID is required'),
-  environment: z.record(z.string().min(1).max(4096)).optional().default({}),
-  portBindings: z.record(z.number().int().min(1).max(65535)).optional().default({}),
+  environment: z.record(z.string(), z.string().min(1).max(4096)).optional().default({}),
+  portBindings: z.record(z.string(), z.number().int().min(1).max(65535)).optional().default({}),
   allocatedMemoryMb: z.number().int().min(512).max(131072),
   allocatedCpuCores: z.number().int().min(1).max(128),
   allocatedDiskMb: z.number().int().min(1024).max(1048576),
@@ -80,8 +81,8 @@ export const serverCreateSchema = z.object({
 export const serverUpdateSchema = z.object({
   name: serverNameSchema.optional(),
   description: z.string().max(500).optional(),
-  environment: z.record(z.string().min(1).max(4096)).optional(),
-  portBindings: z.record(z.number().int().min(1).max(65535)).optional(),
+  environment: z.record(z.string(), z.string().min(1).max(4096)).optional(),
+  portBindings: z.record(z.string(), z.number().int().min(1).max(65535)).optional(),
   allocatedMemoryMb: z.number().int().min(512).max(131072).optional(),
   allocatedCpuCores: z.number().int().min(1).max(128).optional(),
   allocatedDiskMb: z.number().int().min(1024).max(1048576).optional(),
@@ -177,15 +178,12 @@ export const validateRequestBody = <T extends z.ZodSchema>(
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           error: 'Invalid request body',
-          details: error.errors.map(err => ({
-            field: err.path.join('.'),
-            message: err.message,
-          })),
+          details: formatZodIssues(error.issues),
         });
       }
       return reply.status(400).send({
         error: 'Invalid request body',
-        details: error.message,
+        details: (error instanceof Error ? error.message : String(error)),
       });
     }
   };
@@ -204,15 +202,12 @@ export const validateRequestQuery = <T extends z.ZodSchema>(
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           error: 'Invalid request query',
-          details: error.errors.map(err => ({
-            field: err.path.join('.'),
-            message: err.message,
-          })),
+          details: formatZodIssues(error.issues),
         });
       }
       return reply.status(400).send({
         error: 'Invalid request query',
-        details: error.message,
+        details: (error instanceof Error ? error.message : String(error)),
       });
     }
   };
@@ -231,19 +226,30 @@ export const validateRequestParams = <T extends z.ZodSchema>(
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           error: 'Invalid request parameters',
-          details: error.errors.map(err => ({
-            field: err.path.join('.'),
-            message: err.message,
-          })),
+          details: formatZodIssues(error.issues),
         });
       }
       return reply.status(400).send({
         error: 'Invalid request parameters',
-        details: error.message,
+        details: (error instanceof Error ? error.message : String(error)),
       });
     }
   };
 };
+
+/**
+ * Sanitize user input to prevent XSS
+ * Removes HTML tags and special characters
+ */
+/**
+ * Format Zod v4 issues into a serializable array for API responses
+ */
+function formatZodIssues(issues: ZodIssue[]) {
+  return issues.map(issue => ({
+    field: issue.path.join('.'),
+    message: issue.message,
+  }));
+}
 
 /**
  * Sanitize user input to prevent XSS
