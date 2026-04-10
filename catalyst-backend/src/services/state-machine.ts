@@ -17,7 +17,7 @@ export class ServerStateMachine {
   private static readonly TRANSITIONS: Map<ServerState, ServerState[]> = new Map([
     [
       ServerState.STOPPED,
-      [ServerState.INSTALLING, ServerState.STARTING, ServerState.ERROR, ServerState.SUSPENDED],
+      [ServerState.INSTALLING, ServerState.STARTING, ServerState.ERROR, ServerState.SUSPENDED, ServerState.ARCHIVED],
     ],
     [ServerState.INSTALLING, [ServerState.STOPPED, ServerState.ERROR]],
     [
@@ -31,6 +31,7 @@ export class ServerStateMachine {
     [ServerState.STOPPING, [ServerState.STOPPED, ServerState.ERROR]],
     [ServerState.CRASHED, [ServerState.STARTING, ServerState.STOPPED, ServerState.INSTALLING]],
     [ServerState.SUSPENDED, [ServerState.STOPPED, ServerState.STARTING, ServerState.ERROR]],
+    [ServerState.ARCHIVED, [ServerState.STOPPED, ServerState.ERROR]],
     [ServerState.ERROR, [ServerState.STOPPED, ServerState.INSTALLING, ServerState.STARTING, ServerState.STOPPING]],
   ]);
 

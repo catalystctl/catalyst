@@ -7009,4 +7009,119 @@ export async function serverRoutes(app: FastifyInstance) {
       return reply.send({ success: true, data: updated });
     }
   );
+
+  // Archive server
+  app.post(
+    "/:serverId/archive",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId } = request.params as { serverId: string };
+      const userId = request.user.userId;
+
+      if (!(await ensureSuspendPermission(userId, reply, "Admin access required"))) {
+        return;
+      }
+
+      const server = await prisma.server.findUnique({
+        where: { id: serverId },
+        include: { node: true },
+      });
+
+      if (!server) {
+        return reply.status(404).send({ error: "Server not found" });
+      }
+
+      if (server.status === "archived") {
+        return reply.status(409).send({ error: "Server is already archived" });
+      }
+
+      // Only allow archiving from stopped state (stop if running first)
+      if (server.status === "running" || server.status === "starting") {
+        const gateway = (app as any).wsGateway;
+        if (gateway && server.node?.isOnline) {
+          await gateway.sendToAgent(server.nodeId, {
+            type: "stop_server",
+            serverId: server.id,
+            serverUuid: server.uuid,
+          });
+        }
+      }
+
+      const updated = await prisma.server.update({
+        where: { id: serverId },
+        data: { status: "archived" },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: "server.archive",
+          resource: "server",
+          resourceId: serverId,
+          details: {},
+        },
+      });
+
+      await prisma.serverLog.create({
+        data: {
+          serverId,
+          stream: "system",
+          data: "Server archived",
+        },
+      });
+
+      return reply.send({ success: true, data: updated });
+    }
+  );
+
+  // Restore server from archive
+  app.post(
+    "/:serverId/restore",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId } = request.params as { serverId: string };
+      const userId = request.user.userId;
+
+      if (!(await ensureSuspendPermission(userId, reply, "Admin access required"))) {
+        return;
+      }
+
+      const server = await prisma.server.findUnique({
+        where: { id: serverId },
+      });
+
+      if (!server) {
+        return reply.status(404).send({ error: "Server not found" });
+      }
+
+      if (server.status !== "archived") {
+        return reply.status(409).send({ error: "Server is not archived" });
+      }
+
+      const updated = await prisma.server.update({
+        where: { id: serverId },
+        data: { status: "stopped" },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: "server.restore",
+          resource: "server",
+          resourceId: serverId,
+          details: {},
+        },
+      });
+
+      await prisma.serverLog.create({
+        data: {
+          serverId,
+          stream: "system",
+          data: "Server restored from archive",
+        },
+      });
+
+      return reply.send({ success: true, data: updated });
+    }
+  );
 }

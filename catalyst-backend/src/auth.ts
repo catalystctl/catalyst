@@ -56,6 +56,16 @@ export const auth = betterAuth({
       };
       await sendEmail({ to: user.email, ...content });
     },
+    sendVerificationEmail: async ({ user, url }) => {
+      const { sendEmail } = await import("./services/mailer");
+      await sendEmail({
+        to: user.email,
+        subject: "Verify your Catalyst email",
+        html: `<p>Hello ${user.name},</p><p>Please verify your email address by clicking the link below:</p><p><a href="${url}">${url}</a></p>`,
+        text: `Verify your email: ${url}`,
+      });
+    },
+    autoSignIn: false,
   },
   plugins: [
     bearer({
