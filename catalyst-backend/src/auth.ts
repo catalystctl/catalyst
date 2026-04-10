@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { admin, bearer, twoFactor, jwt as jwtPlugin, genericOAuth, createAccessControl, apiKey } from "better-auth/plugins";
+import { admin, bearer, twoFactor, jwt as jwtPlugin, genericOAuth, createAccessControl } from "better-auth/plugins";
 import { passkey } from "@better-auth/passkey";
 import { prisma } from "./db";
 
@@ -76,17 +76,6 @@ export const auth = betterAuth({
       skipVerificationOnEnable: true,
     }),
     jwtPlugin(),
-    apiKey({
-      defaultPrefix: "catalyst_",
-      enableSessionForAPIKeys: true, // Auto-create session from API key
-      apiKeyHeaders: ["x-api-key", "authorization"], // Support both headers
-      enableMetadata: true, // Allow storing nodeId in metadata
-      rateLimit: {
-        enabled: true,
-        maxRequests: 100,
-        timeWindow: 60000, // 1 minute
-      },
-    }),
     admin({
       roles: (() => {
         const base = createAccessControl({

@@ -175,19 +175,17 @@ async function main() {
   // Create API key for the agent
   let apiKey = "";
   try {
-    const apiKeyResponse = await auth.api.createApiKey({
-      body: {
-        name: `agent-${node.id.slice(0, 8)}`,
-        userId: user.id,
-        prefix: "catalyst",
-        // No expiresIn = never expires
-        metadata: {
-          nodeId: node.id,
-          purpose: "agent",
-        },
+    const { createApiKey } = await import("../src/services/api-key-service");
+    const apiKeyResponse = await createApiKey({
+      name: `agent-${node.id.slice(0, 8)}`,
+      userId: user.id,
+      prefix: "catalyst",
+      metadata: {
+        nodeId: node.id,
+        purpose: "agent",
       },
-    } as any);
-    apiKey = (apiKeyResponse as any)?.key ?? "";
+    });
+    apiKey = apiKeyResponse.key;
     if (!apiKey) {
       console.warn("⚠ Failed to create agent API key");
     } else {

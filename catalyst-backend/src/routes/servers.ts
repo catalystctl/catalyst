@@ -1758,7 +1758,7 @@ export async function serverRoutes(app: FastifyInstance) {
 
   // Get historical stats for a server
   app.get(
-    "/:serverId/stats",
+    "/:serverId/stats/history",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };

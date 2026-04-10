@@ -8,6 +8,7 @@ import { Prisma } from "@prisma/client";
 import { auth } from "../auth";
 import { serialize } from '../utils/serialize';
 import { verifyAgentApiKey } from "../lib/agent-auth";
+import { createApiKey, deleteApiKey } from "../services/api-key-service";
 
 import {
   hasPermission,
@@ -309,19 +310,16 @@ export async function nodeRoutes(app: FastifyInstance) {
       const deployUrl = `${process.env.BACKEND_URL || "http://localhost:3000"}/api/deploy/${token}`;
       let apiKey = "";
       try {
-        const apiKeyResponse = await auth.api.createApiKey({
-          body: {
-            name: `agent-${nodeId.slice(0, 8)}`,
-            userId: request.user.userId,
-            prefix: "catalyst",
-            // No expiresIn = never expires
-            metadata: {
-              nodeId,
-              purpose: "agent",
-            },
+        const apiKeyResponse = await createApiKey({
+          name: `agent-${nodeId.slice(0, 8)}`,
+          userId: request.user.userId,
+          prefix: "catalyst",
+          metadata: {
+            nodeId,
+            purpose: "agent",
           },
-        } as any);
-        apiKey = (apiKeyResponse as any)?.key ?? "";
+        });
+        apiKey = apiKeyResponse.key;
         if (!apiKey) {
           request.log.error({ nodeId }, "Failed to create agent API key for deployment");
           return reply.status(500).send({ error: "Failed to create agent API key" });
@@ -433,9 +431,7 @@ export async function nodeRoutes(app: FastifyInstance) {
       // If regenerating, delete the old key first
       if (existingKey && regenerate) {
         try {
-          await auth.api.deleteApiKey({
-            body: { keyId: existingKey.id },
-          } as any);
+          await deleteApiKey(existingKey.id);
           request.log.info({ keyId: existingKey.id, nodeId }, "Deleted old API key for regeneration");
         } catch (error) {
           request.log.error({ error, keyId: existingKey.id }, "Failed to delete old API key");
@@ -444,19 +440,17 @@ export async function nodeRoutes(app: FastifyInstance) {
       }
 
       try {
-        const apiKeyResponse = await auth.api.createApiKey({
-          body: {
-            name: `agent-${nodeId.slice(0, 8)}`,
-            userId: request.user.userId,
-            prefix: "catalyst",
-            metadata: {
-              nodeId,
-              purpose: "agent",
-            },
+        const apiKeyResponse = await createApiKey({
+          name: `agent-${nodeId.slice(0, 8)}`,
+          userId: request.user.userId,
+          prefix: "catalyst",
+          metadata: {
+            nodeId,
+            purpose: "agent",
           },
-        } as any);
+        });
         request.log.info({ apiKeyResponse }, "API key creation response");
-        const apiKey = (apiKeyResponse as any)?.key ?? null;
+        const apiKey = apiKeyResponse.key;
         if (!apiKey) {
           return reply.status(500).send({ error: "Failed to create API key" });
         }
