@@ -10,9 +10,10 @@
     "catalyst-plugins/*"
   ],
   "scripts": {
-    "dev": "bun run dev:infra && bun --filter='*' --parallel run dev & bun run dev:agent",
-    "dev:infra": "docker compose up -d",
+    "dev": "bun run dev:infra && bun --filter='catalyst-backend' --filter='catalyst-frontend' --parallel run dev",
+    "dev:infra": "podman-compose up -d postgres redis || true",
     "dev:agent": "cd catalyst-agent && cargo run -- ./config.toml",
+    "dev:all": "bun run dev:infra && bun --filter='catalyst-backend' --filter='catalyst-frontend' --parallel run dev & bun run dev:agent",
     "build": "bun run build:shared && bun run build:backend && bun run build:frontend",
     "build:backend": "bun --filter=catalyst-backend run build",
     "build:frontend": "bun --filter=catalyst-frontend run build",
