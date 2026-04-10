@@ -1,13 +1,118 @@
 use std::fs;
-use std::io::Read;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
 use std::process::Command;
+use std::sync::Mutex;
 use tracing::{error, info, warn};
 
 use sha2::{Digest, Sha256};
 
 use crate::config::CniNetworkConfig;
 use crate::{AgentConfig, AgentError};
+
+// ---------------------------------------------------------------------------
+// Sudo helper – prompts for password once, then reuses it for all install
+// commands that need elevated privileges.
+// ---------------------------------------------------------------------------
+
+static SUDO_PASSWORD: Mutex<Option<String>> = Mutex::new(None);
+
+/// Check whether the current process is running as root (effective UID 0).
+fn is_root() -> bool {
+    // SAFETY: geteuid() is a simple syscall that always succeeds.
+    unsafe { libc::geteuid() == 0 }
+}
+
+/// Prompt the user for their sudo password via `/dev/tty` (so it works even
+/// when stdin is redirected).  The password is stored in a global mutex so
+/// subsequent calls reuse it.
+fn ensure_sudo_password() -> Result<(), AgentError> {
+    if is_root() {
+        return Ok(());
+    }
+
+    // Fast path – already cached.
+    {
+        let guard = SUDO_PASSWORD.lock().unwrap();
+        if guard.is_some() {
+            return Ok(());
+        }
+    }
+
+    // Open /dev/tty directly so we can prompt even if stdin is a pipe.
+    let mut tty = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/tty")
+        .map_err(|e| {
+            AgentError::PermissionDenied(format!(
+                "Cannot open /dev/tty for sudo prompt: {}. \
+                 Please either run the agent as root or ensure a TTY is available.",
+                e
+            ))
+        })?;
+
+    // First, probe whether the user has passwordless sudo.
+    let probe = Command::new("sudo")
+        .args(["-n", "true"])
+        .status();
+    if let Ok(status) = probe {
+        if status.success() {
+            // Passwordless sudo works – cache an empty marker.
+            let mut guard = SUDO_PASSWORD.lock().unwrap();
+            *guard = Some(String::new());
+            return Ok(());
+        }
+    }
+
+    let _ = tty.write_all(b"[catalyst-agent] sudo password: ");
+    let _ = tty.flush();
+
+    let mut password = String::new();
+    let mut reader = BufReader::new(&tty);
+    if reader.read_line(&mut password).is_err() {
+        return Err(AgentError::PermissionDenied(
+            "Failed to read sudo password".to_string(),
+        ));
+    }
+    // Trim trailing newline/CR but keep everything else.
+    let password = password.trim_end_matches('\n').trim_end_matches('\r').to_string();
+
+    // Verify the password actually works.
+    let mut verify = Command::new("sudo")
+        .args(["-S", "-p", "", "true"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| {
+            AgentError::PermissionDenied(format!("Failed to invoke sudo: {}", e))
+        })?;
+    if let Some(mut stdin) = verify.stdin.take() {
+        let _ = writeln!(stdin, "{}", password);
+    }
+    match verify.wait() {
+        Ok(status) if status.success() => {
+            let mut guard = SUDO_PASSWORD.lock().unwrap();
+            *guard = Some(password);
+            Ok(())
+        }
+        _ => Err(AgentError::PermissionDenied(
+            "sudo authentication failed – wrong password or insufficient privileges".to_string(),
+        )),
+    }
+}
+
+/// Return the cached sudo password, calling `ensure_sudo_password` first if
+/// needed.  Returns `None` when running as root (no sudo required).
+fn get_sudo_password() -> Result<Option<String>, AgentError> {
+    if is_root() {
+        return Ok(None);
+    }
+    ensure_sudo_password()?;
+    let guard = SUDO_PASSWORD.lock().unwrap();
+    Ok(guard.clone())
+}
 
 pub struct SystemSetup;
 
@@ -773,23 +878,36 @@ impl SystemSetup {
     }
 
     /// Helper to run a command and check for errors
-    fn run_command(cmd: &str, args: &[&str], stdin: Option<&str>) -> Result<(), AgentError> {
-        let mut command = Command::new(cmd);
-        command.args(args);
-        if stdin.is_some() {
-            command.stdin(std::process::Stdio::piped());
-        }
+    /// Run a command that may need elevated privileges.
+    /// Automatically prefixes with `sudo -S` when not root.
+    fn run_command(cmd: &str, args: &[&str], _stdin: Option<&str>) -> Result<(), AgentError> {
+        let sudo_pw = get_sudo_password()?;
+
+        let mut command = if sudo_pw.is_some() {
+            let mut c = Command::new("sudo");
+            c.args(["-S", "-p", ""]);
+            c.arg(cmd);
+            c.args(args);
+            c
+        } else {
+            let mut c = Command::new(cmd);
+            c.args(args);
+            c
+        };
+
+        command.stdin(std::process::Stdio::piped());
+
         let mut child = command
             .spawn()
             .map_err(|e| AgentError::IoError(format!("Failed to run {}: {}", cmd, e)))?;
-        if let Some(input) = stdin {
+
+        // Feed the sudo password via stdin before waiting.
+        if let Some(ref pw) = sudo_pw {
             if let Some(mut handle) = child.stdin.take() {
-                use std::io::Write;
-                handle.write_all(input.as_bytes()).map_err(|e| {
-                    AgentError::IoError(format!("Failed to write to {}: {}", cmd, e))
-                })?;
+                let _ = writeln!(handle, "{}", pw);
             }
         }
+
         let output = child
             .wait_with_output()
             .map_err(|e| AgentError::IoError(format!("Failed to run {}: {}", cmd, e)))?;
@@ -804,9 +922,33 @@ impl SystemSetup {
     }
 
     fn run_command_allow_failure(cmd: &str, args: &[&str]) -> bool {
-        match Command::new(cmd).args(args).status() {
-            Ok(status) => status.success(),
-            Err(_) => false,
+        let sudo_pw = get_sudo_password().ok().flatten();
+
+        let mut command = if sudo_pw.is_some() {
+            let mut c = Command::new("sudo");
+            c.args(["-S", "-p", ""]);
+            c.arg(cmd);
+            c.args(args);
+            c
+        } else {
+            let mut c = Command::new(cmd);
+            c.args(args);
+            c
+        };
+
+        command.stdin(std::process::Stdio::piped());
+
+        let mut child = match command.spawn() {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
+
+        if let Some(ref pw) = sudo_pw {
+            if let Some(mut handle) = child.stdin.take() {
+                let _ = writeln!(handle, "{}", pw);
+            }
         }
+
+        child.wait().map(|s| s.success()).unwrap_or(false)
     }
 }
