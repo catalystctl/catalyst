@@ -30,7 +30,7 @@ jobs:
               DESCRIPTION="$DESCRIPTION"$'\n'"… and $((COMMIT_COUNT - 5)) more"
             fi
 
-            EMBED_TITLE="Push to `$(echo "$GITHUB_REF" | sed 's|refs/heads/||')` — $COMMIT_COUNT commit(s)"
+            EMBED_TITLE="Push to \`$(echo "$GITHUB_REF" | sed 's|refs/heads/||')\` — $COMMIT_COUNT commit(s)"
             EMBED_COLOR=5814783
 
           elif [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
