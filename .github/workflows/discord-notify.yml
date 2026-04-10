@@ -1,0 +1,83 @@
+name: Discord Notify
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+    types: [opened, closed]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    env:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+    steps:
+      - name: Send Discord webhook
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            COMMIT_COUNT=$(jq '.commits | length' <<< "$GITHUB_EVENT_PATH")
+
+            # Build commit list (max 5 shown)
+            COMMITS=$(jq -r '
+              .commits[-5:][] |
+              "• [`" + (.id[0:7]) + "`](<" + env.GITHUB_SERVER_URL + "/" + env.GITHUB_REPOSITORY + "/commit/" + .id + ">) " +
+              (.message | split("\n")[0])
+            ' <<< "$GITHUB_EVENT_PATH")
+
+            DESCRIPTION="$COMMITS"
+            if [ "$COMMIT_COUNT" -gt 5 ]; then
+              DESCRIPTION="$DESCRIPTION"$'\n'"… and $((COMMIT_COUNT - 5)) more"
+            fi
+
+            EMBED_TITLE="Push to `$(echo "$GITHUB_REF" | sed 's|refs/heads/||')` — $COMMIT_COUNT commit(s)"
+            EMBED_COLOR=5814783
+
+          elif [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            ACTION=$(jq -r '.action' <<< "$GITHUB_EVENT_PATH")
+            PR_NUM=$(jq -r '.pull_request.number' <<< "$GITHUB_EVENT_PATH")
+            PR_TITLE=$(jq -r '.pull_request.title' <<< "$GITHUB_EVENT_PATH")
+            PR_URL=$(jq -r '.pull_request.html_url' <<< "$GITHUB_EVENT_PATH")
+            PR_AUTHOR=$(jq -r '.pull_request.user.login' <<< "$GITHUB_EVENT_PATH")
+            PR_STATE=$(jq -r '.pull_request.state' <<< "$GITHUB_EVENT_PATH")
+            PR_MERGED=$(jq -r '.pull_request.merged' <<< "$GITHUB_EVENT_PATH")
+
+            EMBED_TITLE="PR #$PR_NUM $ACTION: $PR_TITLE"
+            DESCRIPTION="by \`$PR_AUTHOR\` — $PR_STATE"
+            EMBED_URL="$PR_URL"
+
+            if [ "$ACTION" = "closed" ]; then
+              if [ "$PR_MERGED" = "true" ]; then
+                EMBED_COLOR=5763719  # green = merged
+              else
+                EMBED_COLOR=15158332  # red = closed without merge
+              fi
+            else
+              EMBED_COLOR=5814783  # blurple = opened
+            fi
+          fi
+
+          ACTOR_AVATAR="https://github.com/$GITHUB_ACTOR.png"
+
+          jq -n \
+            --arg username "GitHub" \
+            --arg avatar_url "$ACTOR_AVATAR" \
+            --arg title "$EMBED_TITLE" \
+            --arg description "$DESCRIPTION" \
+            --arg url "${EMBED_URL:-}" \
+            --argjson color "${EMBED_COLOR:-5814783}" \
+            --arg repo "$GITHUB_REPOSITORY" \
+            '{
+              username: $username,
+              avatar_url: $avatar_url,
+              embeds: [{
+                title: $title,
+                description: $description,
+                url: (if $url != "" then $url else null end),
+                color: $color,
+                footer: { text: $repo },
+                timestamp: now | todateiso8601
+              }]
+            }' | curl -sf -H "Content-Type: application/json" -X POST "$DISCORD_WEBHOOK_URL" -d @-
+
+        if: env.DISCORD_WEBHOOK_URL != ''
