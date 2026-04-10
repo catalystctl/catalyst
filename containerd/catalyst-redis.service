@@ -17,12 +17,13 @@ Environment="REDIS_IMAGE=docker.io/library/redis:7-alpine"
 Environment="REDIS_PORT=6379"
 Environment="DATA_DIR=/var/lib/catalyst/redis-data"
 Environment="CTR_NAMESPACE=catalyst"
+Environment="SCRIPT_DIR=/opt/catalyst/containerd"
 
 # Pre-start: ensure directory exists
 ExecStartPre=-/usr/bin/mkdir -p /var/lib/catalyst/redis-data
 
 # Main start command
-ExecStart=/root/catalyst3/containerd/redis-wrapper-start.sh
+ExecStart=${SCRIPT_DIR}/redis-wrapper-start.sh
 
 # Stop command
 ExecStop=/usr/bin/ctr -n catalyst task kill catalyst-redis SIGTERM

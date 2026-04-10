@@ -1,0 +1,2 @@
+import { DBAdapter as DBAdapter$1, DBAdapterInstance, DBAdapterSchemaCreation, DBTransactionAdapter, JoinConfig, JoinOption, Where as Where$1 } from "@better-auth/core/db/adapter";
+export { type DBAdapter$1 as DBAdapter, type DBAdapterInstance, type DBAdapterSchemaCreation, type DBTransactionAdapter, type JoinConfig, type JoinOption, type Where$1 as Where };

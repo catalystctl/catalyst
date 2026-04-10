@@ -749,7 +749,7 @@ function NodeAllocationsPage() {
                   type="text"
                   value={autoFillIp}
                   onChange={(e) => setAutoFillIp(e.target.value)}
-                  placeholder={node?.publicAddress || '192.168.1.78'}
+                  placeholder={node?.publicAddress || '0.0.0.0'}
                   className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
                 />
               </label>

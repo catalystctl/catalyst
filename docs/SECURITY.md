@@ -32,7 +32,7 @@ We take the security of Catalyst seriously. If you discover a security vulnerabi
 Instead, please report them via one of the following methods:
 
 1. **GitHub Security Advisories (Preferred)**
-   - Navigate to the [Security tab](https://github.com/karutoil/catalyst/security/advisories)
+   - Navigate to the [Security tab](https://github.com/catalystctl/catalyst/security/advisories)
    - Click "Report a vulnerability"
    - Fill out the advisory form with details
 
@@ -238,7 +238,7 @@ When vulnerabilities are disclosed, they will be listed here with:
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
 - [CWE Top 25](https://cwe.mitre.org/top25/)
 - [GitHub Security Best Practices](https://docs.github.com/en/code-security)
-- [Catalyst Documentation](https://github.com/karutoil/catalyst/blob/main/README.md)
+- [Catalyst Documentation](https://github.com/catalystctl/catalyst/blob/main/README.md)
 
 ## GPL Compliance
 
@@ -259,8 +259,8 @@ For security-related modifications:
 
 For security-related questions or concerns:
 
-- **Security Advisories**: https://github.com/karutoil/catalyst/security/advisories
-- **General Issues**: https://github.com/karutoil/catalyst/issues
+- **Security Advisories**: https://github.com/catalystctl/catalyst/security/advisories
+- **General Issues**: https://github.com/catalystctl/catalyst/issues
 
 ---
 

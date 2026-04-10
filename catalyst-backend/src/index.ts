@@ -349,11 +349,11 @@ async function bootstrap() {
 
     // Register plugins
     const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:5173', // Vite dev server
-      'http://127.0.0.1:3000',
-      'http://127.0.0.1:5173',
       ...(process.env.CORS_ORIGIN?.split(',').map(s => s.trim()) ?? []),
+      // Allow localhost origins only in development
+      ...(process.env.NODE_ENV !== 'production'
+        ? ['http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:3000', 'http://127.0.0.1:5173']
+        : []),
     ].filter(Boolean) as string[];
     const isAllowedOrigin = (origin?: string) =>
       Boolean(origin && allowedOrigins.includes(origin));

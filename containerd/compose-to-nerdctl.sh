@@ -4,12 +4,12 @@ set -euo pipefail
 # Compose-to-nerdctl helper
 # Starts Postgres and Redis under containerd (via nerdctl).
 
-POSTGRES_CONTAINER=${POSTGRES_CONTAINER:-aero-postgres}
+POSTGRES_CONTAINER=${POSTGRES_CONTAINER:-catalyst-postgres}
 POSTGRES_IMAGE=${POSTGRES_IMAGE:-postgres:16-alpine}
 POSTGRES_PORT=${POSTGRES_PORT:-5432}
-POSTGRES_USER=${POSTGRES_USER:-aero}
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-aero_dev_password}
-POSTGRES_DB=${POSTGRES_DB:-aero_db}
+POSTGRES_USER=${POSTGRES_USER:-catalyst}
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+POSTGRES_DB=${POSTGRES_DB:-catalyst_db}
 POSTGRES_DATA_DIR=${POSTGRES_DATA_DIR:-/var/lib/catalyst/postgres-data}
 
 REDIS_CONTAINER=${REDIS_CONTAINER:-catalyst-redis}

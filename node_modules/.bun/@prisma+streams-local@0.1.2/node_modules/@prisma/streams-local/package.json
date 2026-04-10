@@ -1,0 +1,47 @@
+{
+  "name": "@prisma/streams-local",
+  "version": "0.1.2",
+  "description": "Node and Bun local Prisma Streams runtime for trusted development workflows.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prisma/streams.git"
+  },
+  "bugs": {
+    "url": "https://github.com/prisma/streams/issues"
+  },
+  "homepage": "https://github.com/prisma/streams/tree/main/docs",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "bun": ">=1.3.6",
+    "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "ajv": "^8.12.0",
+    "better-result": "^2.7.0",
+    "env-paths": "^3.0.0",
+    "proper-lockfile": "^4.1.2"
+  },
+  "files": [
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
+    "dist/"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/types/local/index.d.ts",
+      "default": "./dist/local/index.js"
+    },
+    "./internal/daemon": {
+      "types": "./dist/types/local/daemon.d.ts",
+      "default": "./dist/local/daemon.js"
+    },
+    "./package.json": "./package.json"
+  }
+}

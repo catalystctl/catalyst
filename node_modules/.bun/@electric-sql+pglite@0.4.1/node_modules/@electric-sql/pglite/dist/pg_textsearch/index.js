@@ -1,0 +1,2 @@
+import{j as e}from"../chunk-QY3QWFKW.js";e();var s=async(n,t)=>({emscriptenOpts:t,bundlePath:new URL("../pg_textsearch.tar.gz",import.meta.url)}),i={name:"pg_textsearch",setup:s};export{i as pg_textsearch};
+//# sourceMappingURL=index.js.map

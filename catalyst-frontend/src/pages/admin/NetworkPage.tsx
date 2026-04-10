@@ -378,7 +378,7 @@ function NetworkPage() {
                     className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     value={autoFillIp}
                     onChange={(e) => setAutoFillIp(e.target.value)}
-                    placeholder={selectedNode?.publicAddress || '192.168.1.78'}
+                    placeholder={selectedNode?.publicAddress || '0.0.0.0'}
                   />
                   <Button variant="outline" size="sm" onClick={handleAutoFill} disabled={!autoFillIp.trim()}>
                     Fill

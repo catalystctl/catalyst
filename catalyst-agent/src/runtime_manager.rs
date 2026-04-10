@@ -1861,11 +1861,11 @@ impl ContainerdRuntime {
                 // Fallback: synthesize a macvlan config from detected host network.
                 // This matches the structure used by NetworkManager with rangeStart/rangeEnd
                 let (iface, subnet, gateway) = detect_host_network().unwrap_or_else(|| {
-                    warn!("Could not detect host network, falling back to eth0/192.168.1.0");
+                    warn!("Could not detect host network, falling back to eth0/10.0.0.0");
                     (
                         "eth0".to_string(),
-                        "192.168.1.0/24".to_string(),
-                        "192.168.1.1".to_string(),
+                        "10.0.0.0/24".to_string(),
+                        "10.0.0.1".to_string(),
                     )
                 });
                 // Calculate rangeStart/rangeEnd from subnet (same logic as NetworkManager)

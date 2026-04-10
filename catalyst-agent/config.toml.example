@@ -4,13 +4,13 @@
 
 [server]
 # Backend WebSocket URL (ws:// for development, wss:// for production)
-backend_url = "ws://192.168.1.78:3000/ws"
+backend_url = "ws://localhost:3000/ws"
 
 # Unique node identifier (UUID from database)
-node_id = "cmliig9g10001pii5zrm8qe4d"
+node_id = "your-node-uuid-here"
 
 # Agent API key (required for node authentication)
-api_key = "catalystUHLBsUeYMufEnratGlomqAzxQEoRvcxSAfuYiLxjJPznjdSOtFNFuczLwKqcTuir"
+api_key = "your-api-key-here"
 
 # Hostname of this server
 hostname = "node1.example.com"

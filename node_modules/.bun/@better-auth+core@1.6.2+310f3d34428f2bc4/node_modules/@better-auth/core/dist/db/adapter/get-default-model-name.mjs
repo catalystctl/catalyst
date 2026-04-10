@@ -1,0 +1,30 @@
+import { BetterAuthError } from "../../error/index.mjs";
+//#region src/db/adapter/get-default-model-name.ts
+const initGetDefaultModelName = ({ usePlural, schema }) => {
+	/**
+	* This function helps us get the default model name from the schema defined by devs.
+	* Often times, the user will be using the `modelName` which could had been customized by the users.
+	* This function helps us get the actual model name useful to match against the schema. (eg: schema[model])
+	*
+	* If it's still unclear what this does:
+	*
+	* 1. User can define a custom modelName.
+	* 2. When using a custom modelName, doing something like `schema[model]` will not work.
+	* 3. Using this function helps us get the actual model name based on the user's defined custom modelName.
+	*/
+	const getDefaultModelName = (model) => {
+		if (usePlural && model.charAt(model.length - 1) === "s") {
+			const pluralessModel = model.slice(0, -1);
+			let m = schema[pluralessModel] ? pluralessModel : void 0;
+			if (!m) m = Object.entries(schema).find(([_, f]) => f.modelName === pluralessModel)?.[0];
+			if (m) return m;
+		}
+		let m = schema[model] ? model : void 0;
+		if (!m) m = Object.entries(schema).find(([_, f]) => f.modelName === model)?.[0];
+		if (!m) throw new BetterAuthError(`Model "${model}" not found in schema`);
+		return m;
+	};
+	return getDefaultModelName;
+};
+//#endregion
+export { initGetDefaultModelName };
