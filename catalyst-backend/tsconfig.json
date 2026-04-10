@@ -18,6 +18,7 @@
     "baseUrl": ".",
     "ignoreDeprecations": "6.0",
     "paths": {
+      "catalyst-shared": ["../catalyst-shared/types.ts"],
       "catalyst-shared/*": ["../catalyst-shared/*"]
     },
     "noImplicitAny": false
