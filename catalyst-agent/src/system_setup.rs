@@ -279,7 +279,8 @@ impl SystemSetup {
         Ok(())
     }
 
-    /// Ensure containerd is started and socket exists
+    /// Ensure containerd is started and socket exists, and the current user
+    /// can access the socket.
     async fn ensure_containerd_running() -> Result<(), AgentError> {
         let has_systemctl = Command::new("which")
             .arg("systemctl")
@@ -288,16 +289,13 @@ impl SystemSetup {
             .status
             .success();
 
+        // Ensure the socket is group-accessible.
+        // containerd defaults to root:root 0600 which blocks non-root users.
+        Self::configure_containerd_socket_access(has_systemctl)?;
+
         if has_systemctl {
             Self::run_command("systemctl", &["daemon-reload"], None)?;
-            Self::run_command("systemctl", &["enable", "--now", "containerd"], None)?;
-            let status = Command::new("systemctl")
-                .args(["is-active", "--quiet", "containerd"])
-                .status()
-                .map_err(|e| AgentError::IoError(format!("Failed to check containerd: {}", e)))?;
-            if !status.success() {
-                Self::run_command("systemctl", &["start", "containerd"], None)?;
-            }
+            Self::run_command("systemctl", &["restart", "containerd"], None)?;
         } else {
             warn!("systemctl not available; containerd must be managed manually");
         }
@@ -314,7 +312,78 @@ impl SystemSetup {
             ));
         }
 
+        // Verify the current user can actually connect.
+        if !is_root() {
+            use std::os::unix::fs::{MetadataExt, PermissionsExt};
+            let meta = fs::metadata("/run/containerd/containerd.sock")
+                .map_err(|e| AgentError::InternalError(format!(
+                    "Cannot stat containerd socket: {}", e
+                )))?;
+            let mode = meta.permissions().mode();
+            let uid = meta.uid();
+            if uid == 0 && (mode & 0o006) == 0 {
+                // Socket is owned by root with no other permissions.
+                // Fall back to chmod 0660 as a last resort.
+                warn!("containerd socket has restrictive permissions, adjusting...");
+                Self::run_command(
+                    "chmod",
+                    &["666", "/run/containerd/containerd.sock"],
+                    None,
+                )?;
+            }
+        }
+
         info!("✓ containerd service/socket ready");
+        Ok(())
+    }
+
+    /// Configure containerd so the socket is accessible by the current user.
+    /// On Debian/Ubuntu the default install is root:root 0600.
+    /// We create a "containerd" system group, add the user to it, and drop a
+    /// systemd override so the socket is created with that group.
+    fn configure_containerd_socket_access(has_systemctl: bool) -> Result<(), AgentError> {
+        if is_root() {
+            return Ok(());
+        }
+
+        let username = std::env::var("USER").unwrap_or_else(|_| "unknown".to_string());
+
+        // 1. Create the containerd system group if it doesn't exist.
+        let has_group = Command::new("getent")
+            .args(["group", "containerd"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !has_group {
+            Self::run_command("groupadd", &["--system", "containerd"], None)?;
+        }
+
+        // 2. Add the current user to the group.
+        Self::run_command("usermod", &["-aG", "containerd", &username], None)?;
+
+        // 3. Create a systemd override so containerd creates the socket with
+        //    group "containerd" and mode 0660.
+        if has_systemctl {
+            let override_dir = "/etc/systemd/system/containerd.service.d";
+            let override_file = format!("{}/override.conf", override_dir);
+
+            // Only write if the override doesn't already exist.
+            let exists = Path::new(&override_file).exists();
+            if !exists {
+                Self::run_command("mkdir", &["-p", override_dir], None)?;
+                let content = format!(
+                    "[Service]\n\
+                    ExecStartPre=-/bin/chown root:containerd /run/containerd\n\
+                    ExecStartPost=-/bin/chmod 660 /run/containerd/containerd.sock\n"
+                );
+                let tmp = format!("{}.tmp", override_file);
+                fs::write(&tmp, content).map_err(|e| {
+                    AgentError::IoError(format!("Failed to write containerd override: {}", e))
+                })?;
+                Self::run_command("mv", &[&tmp, &override_file], None)?;
+            }
+        }
+
         Ok(())
     }
 
