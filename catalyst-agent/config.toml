@@ -7,13 +7,13 @@
 backend_url = "ws://localhost:3000/ws"
 
 # Unique node identifier (UUID from database)
-node_id = "cmliuuhmw0001q4i59yami544"
+node_id = "cmntddu120001k3i53532eric"
 
 # Agent API key (required for node authentication)
-api_key = "catalystlElHfRXPsegNkCwFyQsdzlsJhyyLtYjrqRHECjgrMTDaYPCDNQmeSKPFhCEfBFMv"
+api_key = "catalyst_CdHVL-o75HC8eygnM8EIqZqHRc5OOZacVVj-TcTDLSs"
 
 # Hostname of this server
-hostname = "node1.example.com"
+hostname = "localhost"
 
 # Data directory for container volumes
 data_dir = "/var/lib/catalyst"
@@ -47,11 +47,6 @@ namespace = "catalyst"
 # gateway = "98.168.52.1"
 # range_start = "98.168.52.50"
 # range_end = "98.168.52.200"
-
-# DNS servers for containers. Defaults to Cloudflare (1.1.1.1) and Google (8.8.8.8).
-# This is important for systems like Fedora that use systemd-resolved (127.0.0.53)
-# which doesn't work inside containers.
-# dns_servers = ["1.1.1.1", "8.8.8.8"]
 
 [logging]
 # Log level: trace, debug, info, warn, error

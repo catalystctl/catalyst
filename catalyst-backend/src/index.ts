@@ -28,6 +28,7 @@ import { taskRoutes } from "./routes/tasks";
 import { TaskScheduler } from "./services/task-scheduler";
 import { alertRoutes } from "./routes/alerts";
 import { dashboardRoutes } from "./routes/dashboard";
+import { verifyApiKey as verifyApiKeyService, createApiKey as createApiKeyService, deleteApiKey as deleteApiKeyService } from "./services/api-key-service";
 import { apiKeyRoutes } from "./routes/api-keys";
 import { AlertService } from "./services/alert-service";
 import { getSecuritySettings } from "./services/mailer";
@@ -226,25 +227,19 @@ const authenticate = async (request: any, reply: any) => {
     // Check if it's an API key (starts with prefix)
     if (token.startsWith("catalyst")) {
       try {
-        // Use better-auth's built-in API key verification
-        const verification = await auth.api.verifyApiKey({
-          body: {
-            key: token,
-          },
-        } as any);
-        const verificationData = (verification as any)?.response ?? verification;
+        const verification = await verifyApiKeyService(token);
 
-        if (!verificationData?.valid || !verificationData?.key || !verificationData?.user) {
+        if (!verification?.valid || !verification?.key || !verification?.user) {
           reply.status(401).send({ error: "Invalid API key" });
           return;
         }
 
         // Attach user info from verification
         request.user = {
-          userId: verificationData.user.id,
-          email: verificationData.user.email,
-          username: verificationData.user.username,
-          apiKeyId: verificationData.key.id,
+          userId: verification.user.id,
+          email: verification.user.email,
+          username: verification.user.username,
+          apiKeyId: verification.key.id,
         };
         return; // API key auth successful
       } catch (error: any) {

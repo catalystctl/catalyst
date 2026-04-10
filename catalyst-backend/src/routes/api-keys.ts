@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db";
 import { Permission } from "../shared-types";
 import { auth } from "../auth";
+import { createApiKey } from "../services/api-key-service";
 import { serialize } from '../utils/serialize';
 
 const createApiKeySchema = z.object({
@@ -58,23 +59,21 @@ export async function apiKeyRoutes(app: FastifyInstance) {
       const body = createApiKeySchema.parse(request.body);
       const userId = (request as any).user.id;
 
-      // Call better-auth API to create key
-      const response = await auth.api.createApiKey({
-        body: {
-          name: body.name,
-          userId,
-          expiresIn: body.expiresIn, // Will be undefined for never expires
-          prefix: "catalyst",
-          permissions: body.permissions as Record<string, string[]> | undefined,
-          metadata: body.metadata,
-          rateLimitEnabled: true,
-          rateLimitMax: body.rateLimitMax,
-          rateLimitTimeWindow: body.rateLimitTimeWindow,
-        },
-      } as any);
+      // Create API key using standalone service
+      const response = await createApiKey({
+        name: body.name,
+        userId,
+        expiresIn: body.expiresIn,
+        prefix: "catalyst",
+        permissions: body.permissions as Record<string, string[]> | undefined,
+        metadata: body.metadata as Record<string, unknown> | undefined,
+        rateLimitEnabled: true,
+        rateLimitMax: body.rateLimitMax,
+        rateLimitTimeWindow: body.rateLimitTimeWindow,
+      });
 
-      // Extract data from response - better-auth returns the data directly
-      const apiKeyData = response as any;
+      // Extract data from response
+      const apiKeyData = response;
 
       // Audit log
       await prisma.auditLog.create({
