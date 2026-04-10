@@ -6,4 +6,8 @@ vite.config.ts.timestamp
 coverage
 dist
 .env
+.env.local
+.env.production
+.env.production.local
+.env.development.local
 .playwright
