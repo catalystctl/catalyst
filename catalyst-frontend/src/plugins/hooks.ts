@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { usePluginStore } from './store';
-import type { PluginTabConfig, PluginRouteConfig, LoadedPlugin } from './types';
+import type { PluginTabConfig, PluginRouteConfig } from './types';
 
 /**
  * Get all loaded plugins

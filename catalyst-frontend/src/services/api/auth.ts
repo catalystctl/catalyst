@@ -21,12 +21,14 @@ export const authApi = {
         {
           email: values.email,
           password: values.password,
-          allowPasskeyFallback: forceFallback || Boolean(values.allowPasskeyFallback),
+          callbackURL: window.location.origin,
         },
         {
-          headers: forceFallback || values.allowPasskeyFallback
-            ? { 'X-Allow-Passkey-Fallback': 'true' }
-            : undefined,
+          fetchOptions: {
+            headers: forceFallback || values.allowPasskeyFallback
+              ? { 'X-Allow-Passkey-Fallback': 'true' }
+              : undefined,
+          },
           onSuccess(context) {
             token = context.response?.headers?.get?.('set-auth-token') || '';
           },

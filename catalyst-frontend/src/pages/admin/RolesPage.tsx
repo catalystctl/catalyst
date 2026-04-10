@@ -426,7 +426,6 @@ function RolesPage() {
 
   // Check if form is valid
   const canSubmit = name.trim().length > 0 && selectedPermissions.size > 0;
-  const canSubmitEdit = name.trim().length > 0 && selectedPermissions.size > 0;
 
   return (
     <div className="space-y-6">

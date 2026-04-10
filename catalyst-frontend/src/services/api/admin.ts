@@ -14,7 +14,6 @@ import type {
   ModManagerSettings,
   SmtpSettings,
   SecuritySettings,
-  AuthLockout,
   AuthLockoutsResponse,
   Role,
   RolePreset,

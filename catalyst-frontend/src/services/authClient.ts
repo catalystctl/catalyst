@@ -21,8 +21,9 @@ export const authClient = createAuthClient({
     usernameClient(),
     inferAdditionalFields({
       user: {
-        fields: {
-          username: { type: 'string', required: true },
+        username: {
+          type: 'string',
+          required: true,
         },
       },
     }),
