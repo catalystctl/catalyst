@@ -18,6 +18,10 @@ tests/lib/node_modules/
 # Build artifacts
 *.tgz
 *.tar.gz
+node_modules/
+
+# Bun
+bun.lockb
 
 # IDE and OS
 .vscode/

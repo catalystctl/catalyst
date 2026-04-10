@@ -1,6 +1,6 @@
 #!/bin/bash
 # Catalyst - Development bootstrap script
-# Sets up all components for local development
+# Sets up all components for local development (Bun monorepo)
 
 set -e
 
@@ -21,7 +21,7 @@ check_cmd() {
 echo "Checking prerequisites..."
 check_cmd docker
 check_cmd docker-compose || check_cmd "docker compose"
-check_cmd bun || check_cmd npm
+check_cmd bun
 echo ""
 
 # Start database services
@@ -42,54 +42,56 @@ for i in $(seq 1 30); do
     sleep 1
 done
 
-# Backend setup
+# Install all workspace dependencies
 echo ""
-echo "Setting up backend..."
-cd catalyst-backend
-if [ ! -f .env ]; then
-    cp .env.example .env
-    echo "  Created .env from .env.example"
+echo "Installing workspace dependencies..."
+bun install
+echo "✓ Workspace install complete"
+
+# Backend env
+if [ ! -f catalyst-backend/.env ]; then
+    cp catalyst-backend/.env.example catalyst-backend/.env
+    echo "  Created catalyst-backend/.env from .env.example"
 fi
 
-if command -v bun >/dev/null 2>&1; then
-    bun install
-    bun run db:generate
-    bun run db:push
-    bun run db:seed
-else
-    npm install
-    npx prisma generate
-    npm run db:push
-    npm run db:seed
+# Frontend env
+if [ ! -f catalyst-frontend/.env ]; then
+    cp catalyst-frontend/.env.example catalyst-frontend/.env
+    echo "  Created catalyst-frontend/.env from .env.example"
 fi
-cd ..
-echo "✓ Backend setup complete"
 
-# Frontend setup
+# Database setup
 echo ""
-echo "Setting up frontend..."
-cd catalyst-frontend
-if [ ! -f .env ]; then
-    cp .env.example .env
-    echo "  Created .env from .env.example"
-fi
+echo "Setting up database..."
+bun run db:generate
+bun run db:push
+bun run db:seed
+echo "✓ Database setup complete"
 
-if command -v bun >/dev/null 2>&1; then
-    bun install
+# Build agent (optional — only if Rust is available)
+if command -v cargo >/dev/null 2>&1; then
+    echo ""
+    echo "Building Catalyst Agent..."
+    cd catalyst-agent && cargo build && cd ..
+    echo "✓ Agent build complete"
 else
-    npm install
+    echo ""
+    echo "⚠ Rust/cargo not found — skipping agent build"
 fi
-cd ..
-echo "✓ Frontend setup complete"
 
 echo ""
 echo "╔════════════════════════════════════════════════════════════╗"
 echo "║                  Setup Complete!                          ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
-echo "Start development servers:"
-echo "  Backend:  cd catalyst-backend && bun run dev"
-echo "  Frontend: cd catalyst-frontend && bun run dev"
+echo "Start everything with a single command:"
+echo "  bun run dev"
+echo ""
+echo "Or start individual services:"
+echo "  bun run dev:infra      # Docker (Postgres + Redis)"
+echo "  bun run dev:agent      # Rust agent (requires cargo)"
+echo "  cd catalyst-backend && bun run dev"
+echo "  cd catalyst-frontend && bun run dev"
 echo ""
 echo "Open http://localhost:5173 in your browser."
 echo ""

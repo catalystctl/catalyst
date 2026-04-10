@@ -1,0 +1,32 @@
+{
+  "name": "catalyst",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "catalyst-backend",
+    "catalyst-frontend",
+    "catalyst-shared",
+    "catalyst-plugins/*"
+  ],
+  "scripts": {
+    "dev": "bun run dev:infra && bun --filter='*' --parallel run dev & bun run dev:agent",
+    "dev:infra": "docker compose up -d",
+    "dev:agent": "cd catalyst-agent && cargo run -- ./config.toml",
+    "build": "bun run build:shared && bun run build:backend && bun run build:frontend",
+    "build:backend": "bun --filter=catalyst-backend run build",
+    "build:frontend": "bun --filter=catalyst-frontend run build",
+    "build:agent": "cd catalyst-agent && cargo build --release",
+    "build:shared": "echo 'catalyst-shared is types-only, nothing to build'",
+    "install:agent": "cd catalyst-agent && ./setup-dev.sh",
+    "db:generate": "bun --filter=catalyst-backend run db:generate",
+    "db:push": "bun --filter=catalyst-backend run db:push",
+    "db:migrate": "bun --filter=catalyst-backend run db:migrate",
+    "db:seed": "bun --filter=catalyst-backend run db:seed",
+    "db:studio": "bun --filter=catalyst-backend run db:studio",
+    "lint": "bun --filter='*' run lint",
+    "test": "bun --filter='*' run test",
+    "test:e2e": "bun --filter=catalyst-frontend run test:e2e",
+    "clean": "rm -rf catalyst-backend/dist catalyst-backend/node_modules catalyst-frontend/dist catalyst-frontend/node_modules catalyst-shared/node_modules node_modules"
+  }
+}
