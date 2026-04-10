@@ -751,6 +751,23 @@ export class WebSocketGateway {
           },
         });
 
+        // Persist to historical ServerStat table (fire-and-forget)
+        this.prisma.serverStat.create({
+          data: {
+            serverId: server.id,
+            cpuPercent: Number.isFinite(cpuPercent) ? Math.min(Math.max(cpuPercent, 0), 100) : 0,
+            memoryUsed: Math.round((Number.isFinite(memoryUsageMb) ? Math.max(memoryUsageMb, 0) : 0) * 1024 * 1024),
+            memoryLimit: server.allocatedMemoryMb * 1024 * 1024,
+            diskUsed: Number.isFinite(diskUsageMb) ? Math.round(diskUsageMb * 1024 * 1024) : null,
+            netRx: Number(networkRxBytes) || null,
+            netTx: Number(networkTxBytes) || null,
+            blockRead: Number.isFinite(diskIoMb) ? Math.round(diskIoMb * 1024 * 1024) : null,
+            blockWrite: null,
+          },
+        }).catch((err) => {
+          this.logger.warn({ err, serverId: server.id }, 'Failed to persist ServerStat');
+        });
+
         await this.routeToClients(server.id, {
           type: "resource_stats",
           serverId: server.id,
