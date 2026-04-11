@@ -8,6 +8,7 @@ import type { LoginSchema } from '../../validators/auth';
 import { loginSchema } from '../../validators/auth';
 import { authClient } from '../../services/authClient';
 import { notifyError } from '../../utils/notify';
+import { useThemeStore } from '../../stores/themeStore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -182,6 +183,10 @@ function LoginPage() {
     }
   };
 
+  const authProviders = useThemeStore((s) => s.themeSettings?.authProviders);
+  const showWhmcs = authProviders?.whmcs ?? false;
+  const showPaymenter = authProviders?.paymenter ?? false;
+
   const handleTotpSubmit = async () => {
     if (!totpCode) {
       setTotpError('Enter a verification code');
@@ -297,18 +302,24 @@ function LoginPage() {
             </Button>
           </div>
 
-          <div className="mt-6 space-y-2">
-            <Button variant="outline" className="w-full" onClick={() => handleProvider('whmcs')}>
-              Continue with WHMCS
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => handleProvider('paymenter')}
-            >
-              Continue with Paymenter
-            </Button>
-          </div>
+          {(showWhmcs || showPaymenter) && (
+            <div className="mt-6 space-y-2">
+              {showWhmcs && (
+                <Button variant="outline" className="w-full" onClick={() => handleProvider('whmcs')}>
+                  Continue with WHMCS
+                </Button>
+              )}
+              {showPaymenter && (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => handleProvider('paymenter')}
+                >
+                  Continue with Paymenter
+                </Button>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
