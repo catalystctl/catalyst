@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { useThemeStore } from '../stores/themeStore';
 
 function ProfilePage() {
   const queryClient = useQueryClient();
@@ -52,7 +53,12 @@ function ProfilePage() {
     refreshPasskeys().catch(() => undefined);
   }, [profile?.id, refreshPasskeys]);
 
-  const availableProviders = useMemo(() => ['whmcs', 'paymenter'], []);
+  const authProviders = useThemeStore((s) => s.themeSettings?.authProviders);
+  const availableProviders = useMemo(
+    () =>
+      (['whmcs', 'paymenter'] as const).filter((p) => authProviders?.[p]),
+    [authProviders],
+  );
 
   const changePasswordMutation = useMutation({
     mutationFn: () =>
@@ -402,6 +408,7 @@ function ProfilePage() {
             </CardContent>
           </Card>
 
+          {availableProviders.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle>SSO accounts</CardTitle>
@@ -443,6 +450,7 @@ function ProfilePage() {
               </div>
             </CardContent>
           </Card>
+          )}
         </div>
       </div>
 

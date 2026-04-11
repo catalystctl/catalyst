@@ -9,6 +9,10 @@ export interface PublicThemeSettings {
   primaryColor: string;
   secondaryColor: string;
   accentColor: string;
+  authProviders?: {
+    whmcs: boolean;
+    paymenter: boolean;
+  };
 }
 
 export interface ThemeSettings extends PublicThemeSettings {

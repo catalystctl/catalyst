@@ -674,6 +674,12 @@ async function bootstrap() {
           primaryColor: settings.primaryColor,
           secondaryColor: settings.secondaryColor,
           accentColor: settings.accentColor,
+          // Expose which OAuth/SSO providers are configured so the frontend
+          // can hide login buttons and profile linking UI when not set up.
+          authProviders: {
+            whmcs: !!(process.env.WHMCS_OIDC_CLIENT_ID && process.env.WHMCS_OIDC_CLIENT_SECRET && process.env.WHMCS_OIDC_DISCOVERY_URL),
+            paymenter: !!(process.env.PAYMENTER_OIDC_CLIENT_ID && process.env.PAYMENTER_OIDC_CLIENT_SECRET && process.env.PAYMENTER_OIDC_DISCOVERY_URL),
+          },
         },
       });
     });
