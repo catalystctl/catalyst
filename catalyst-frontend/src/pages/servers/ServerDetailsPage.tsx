@@ -308,6 +308,19 @@ function ServerDetailsPage() {
     () => user?.permissions?.includes('*') || user?.permissions?.includes('admin.write'),
     [user?.permissions],
   );
+
+  // Helper: check if user has a specific permission on this server.
+  // Uses effectivePermissions from server data (owner gets all).
+  // Falls back to checking global admin if server data not yet loaded.
+  const serverPerms = useMemo(() => new Set(server?.effectivePermissions ?? []), [server?.effectivePermissions]);
+  const hasServerPerm = useCallback(
+    (perm: string) => {
+      if (serverPerms.size === 0) return isAdmin; // not loaded yet — show optimistically
+      return serverPerms.has(perm);
+    },
+    [serverPerms, isAdmin],
+  );
+
   const queryClient = useQueryClient();
   const { data: permissionsData } = useQuery<ServerPermissionsResponse>({
     queryKey: ['server-permissions', serverId],
@@ -473,7 +486,7 @@ function ServerDetailsPage() {
     return key in tabLabels ? (key as keyof typeof tabLabels) : 'console';
   }, [tab]);
 
-  const canSend = isConnected && Boolean(serverId) && server?.status === 'running' && !isSuspended;
+  const canSend = isConnected && Boolean(serverId) && server?.status === 'running' && !isSuspended && hasServerPerm('console.write');
   const canManageDatabases =
     user?.permissions?.includes('*') ||
     user?.permissions?.includes('admin.read') ||
@@ -1731,7 +1744,7 @@ function ServerDetailsPage() {
               Node: {nodeLabel} (IP: {nodeIp}, Port: {nodePort})
             </div>
           </div>
-          <ServerControls serverId={server.id} status={server.status} />
+          <ServerControls serverId={server.id} status={server.status} permissions={server.effectivePermissions} />
         </div>
         {isSuspended ? (
           <div className="mt-4 rounded-lg border border-rose-200 bg-rose-100/60 px-4 py-3 text-xs text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
@@ -1749,7 +1762,12 @@ function ServerDetailsPage() {
       <div className="grid grid-cols-4 sm:grid-cols-none sm:flex sm:flex-wrap gap-1.5 p-2 sm:p-1.5 rounded-xl border border-slate-200 bg-white text-xs shadow-surface-light dark:shadow-surface-dark dark:border-slate-800 dark:bg-slate-900">
         {Object.entries(tabLabels)
           .filter(([key]) => {
-            if (key === 'admin') return canAdminWrite;
+            if (key === 'admin') return canAdminWrite || hasServerPerm('server.delete');
+            if (key === 'console') return hasServerPerm('console.read');
+            if (key === 'files') return hasServerPerm('file.read');
+            if (key === 'backups') return hasServerPerm('backup.read');
+            if (key === 'databases') return hasServerPerm('database.read');
+            if (key === 'schedules') return hasServerPerm('server.schedule');
             if (key === 'modManager') return Boolean(modManagerConfig);
             if (key === 'pluginManager') return Boolean(pluginManagerConfig);
             return true;
@@ -4426,7 +4444,7 @@ function ServerDetailsPage() {
                 <DeleteServerDialog
                   serverId={server.id}
                   serverName={server.name}
-                  disabled={isSuspended}
+                  disabled={isSuspended || !hasServerPerm('server.delete')}
                 />
               </div>
             </div>

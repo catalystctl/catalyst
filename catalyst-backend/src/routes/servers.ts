@@ -1110,6 +1110,67 @@ export async function serverRoutes(app: FastifyInstance) {
     return false;
   };
 
+  // Compute the effective permissions a user has on a specific server.
+  // Returns a string[] of permission identifiers (e.g. ['server.read', 'server.start', ...]).
+  const getEffectiveServerPermissions = async (
+    userId: string,
+    server: { ownerId: string; nodeId: string },
+    serverAccess?: Array<{ userId: string; permissions: string[] }>,
+  ): Promise<string[]> => {
+    // Owner gets all server-scoped permissions
+    if (server.ownerId === userId) {
+      return [
+        'server.read', 'server.start', 'server.stop', 'server.install',
+        'server.transfer', 'server.delete', 'server.schedule',
+        'console.read', 'console.write',
+        'file.read', 'file.write',
+        'backup.read', 'backup.create', 'backup.restore', 'backup.delete',
+        'database.read', 'database.create', 'database.rotate', 'database.delete',
+        'alert.read', 'alert.create', 'alert.update', 'alert.delete',
+      ];
+    }
+
+    // Admin / wildcard users get everything
+    const roles = await prisma.role.findMany({
+      where: { users: { some: { id: userId } } },
+      select: { permissions: true },
+    });
+    const rolePermissions = roles.flatMap((r) => r.permissions);
+    if (rolePermissions.includes('*')) {
+      return [
+        'server.read', 'server.start', 'server.stop', 'server.install',
+        'server.transfer', 'server.delete', 'server.schedule',
+        'console.read', 'console.write',
+        'file.read', 'file.write',
+        'backup.read', 'backup.create', 'backup.restore', 'backup.delete',
+        'database.read', 'database.create', 'database.rotate', 'database.delete',
+        'alert.read', 'alert.create', 'alert.update', 'alert.delete',
+      ];
+    }
+
+    // Node-assigned users get full access (same as owners on that node)
+    if (await hasNodeAccess(prisma, userId, server.nodeId)) {
+      return [
+        'server.read', 'server.start', 'server.stop', 'server.install',
+        'server.transfer', 'server.delete', 'server.schedule',
+        'console.read', 'console.write',
+        'file.read', 'file.write',
+        'backup.read', 'backup.create', 'backup.restore', 'backup.delete',
+        'database.read', 'database.create', 'database.rotate', 'database.delete',
+        'alert.read', 'alert.create', 'alert.update', 'alert.delete',
+      ];
+    }
+
+    // Explicit server access entry
+    const access = serverAccess?.find((a) => a.userId === userId);
+    if (access) {
+      return [...access.permissions];
+    }
+
+    // No access — but shouldn't reach here if canAccessServer was checked first.
+    return [];
+  };
+
   const isArchiveName = (value: string) => {
     const lowered = value.toLowerCase();
     return (
@@ -1691,6 +1752,7 @@ export async function serverRoutes(app: FastifyInstance) {
           template: true,
           node: true,
           location: true,
+          access: { select: { userId: true, permissions: true } },
         },
       });
       const latestMetrics = await prisma.serverMetrics.findMany({
@@ -1702,18 +1764,47 @@ export async function serverRoutes(app: FastifyInstance) {
         latestMetrics.map((metric) => [metric.serverId, metric])
       );
 
+      // Pre-compute user's effective permissions for each server.
+      // Owners get all permissions, node-assigned users get all,
+      // explicit access users get their stored permissions.
+      // For the list, we compute this from the already-loaded data.
+      const isUserAdmin = await isAdminUser(userId, "admin.write");
+      const allServerPermissions = [
+        'server.read', 'server.start', 'server.stop', 'server.install',
+        'server.transfer', 'server.delete', 'server.schedule',
+        'console.read', 'console.write',
+        'file.read', 'file.write',
+        'backup.read', 'backup.create', 'backup.restore', 'backup.delete',
+        'database.read', 'database.create', 'database.rotate', 'database.delete',
+        'alert.read', 'alert.create', 'alert.update', 'alert.delete',
+      ];
+
       reply.send(serialize({
         success: true,
         data: servers.map((server) => {
           const metrics = latestMetricsByServer.get(server.id) as any;
           const diskTotalMb =
             server.allocatedDiskMb && server.allocatedDiskMb > 0 ? server.allocatedDiskMb : null;
+          const { access, ...serverData } = server;
+
+          // Compute effective permissions
+          let effectivePermissions: string[];
+          if (isUserAdmin || server.ownerId === userId || accessibleResult.hasWildcard) {
+            effectivePermissions = allServerPermissions;
+          } else if (accessibleResult.nodeIds.includes(server.nodeId)) {
+            effectivePermissions = allServerPermissions;
+          } else {
+            const userAccess = (access as any[])?.find((a: any) => a.userId === userId);
+            effectivePermissions = userAccess?.permissions ?? ['server.read'];
+          }
+
           return {
-            ...withConnectionInfo(server),
+            ...withConnectionInfo(serverData as any),
             cpuPercent: metrics?.cpuPercent ?? null,
             memoryUsageMb: metrics?.memoryUsageMb ?? null,
             diskUsageMb: metrics?.diskUsageMb ?? null,
             diskTotalMb,
+            effectivePermissions,
           };
         }),
       }));
@@ -1752,7 +1843,14 @@ export async function serverRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
-      reply.send({ success: true, data: withConnectionInfo(server) });
+      const effectivePermissions = await getEffectiveServerPermissions(
+        userId,
+        { ownerId: server.ownerId, nodeId: server.nodeId },
+        server.access.map((a) => ({ userId: a.userId, permissions: a.permissions as string[] })),
+      );
+
+      const { access, ...serverData } = server;
+      reply.send({ success: true, data: { ...withConnectionInfo(serverData as any), effectivePermissions } });
     }
   );
 
@@ -4468,9 +4566,15 @@ export async function serverRoutes(app: FastifyInstance) {
         });
       }
 
-      // Check permission - owner, admin, or node-assigned user can delete
-      if (!(await canAccessServer(userId, server))) {
-        return reply.status(403).send({ error: "Forbidden" });
+      // Check permission - owner, admin, node-assigned, or server.delete permission
+      if (server.ownerId !== userId && !(await isAdminUser(userId, "admin.read"))) {
+        const access = await prisma.serverAccess.findFirst({
+          where: { serverId, userId, permissions: { has: "server.delete" } },
+        });
+        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+        if (!access && !hasNodeAccessToServer) {
+          return reply.status(403).send({ error: "Forbidden" });
+        }
       }
 
       const deletableStates = ["stopped", "error", "crashed", "installing"];
@@ -6076,22 +6180,18 @@ export async function serverRoutes(app: FastifyInstance) {
         return;
       }
 
-      // Check permissions
+      // Check permissions - restart requires both server.start and server.stop
       if (server.ownerId !== userId && !(await isAdminUser(userId, "admin.read"))) {
-        const access = await prisma.serverAccess.findFirst({
-          where: {
-            userId,
-            serverId,
-            permissions: { has: "server.stop" }, // Needs both start and stop
-          },
-        });
+        const [startAccess, stopAccess] = await Promise.all([
+          prisma.serverAccess.findFirst({
+            where: { userId, serverId, permissions: { has: "server.start" } },
+          }),
+          prisma.serverAccess.findFirst({
+            where: { userId, serverId, permissions: { has: "server.stop" } },
+          }),
+        ]);
         const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-        if (!access && !hasNodeAccessToServer) {
-          return reply.status(403).send({ error: "Forbidden" });
-        }
-        // Also need to check for server.start permission
-        const hasStartAccess = access?.permissions.includes("server.start");
-        if (!hasStartAccess && !hasNodeAccessToServer) {
+        if (!startAccess && !stopAccess && !hasNodeAccessToServer) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }

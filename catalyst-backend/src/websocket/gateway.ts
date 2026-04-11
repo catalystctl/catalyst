@@ -12,7 +12,7 @@ import {
   CatalystError,
   ErrorCodes,
 } from "../shared-types";
-import { hasPermission } from "../lib/permissions";
+import { hasPermission, hasNodeAccess } from "../lib/permissions";
 import { ServerStateMachine } from "../services/state-machine";
 import { normalizeHostIp } from "../utils/ipam";
 
@@ -1585,7 +1585,8 @@ export class WebSocketGateway {
         // Check if client is owner or has access
         const isOwner = server.ownerId === client.userId;
         const isAdmin = await this.userHasAdminRead(client.userId);
-        if (!isOwner && !access && !isAdmin) {
+        const nodeAccess = await hasNodeAccess(this.prisma, client.userId, server.nodeId);
+        if (!isOwner && !access && !isAdmin && !nodeAccess) {
           return client.socket.send(
             JSON.stringify({
               type: "error",
@@ -1612,7 +1613,7 @@ export class WebSocketGateway {
               : event.action === "restart" || event.action === "reboot" || event.action === "kill"
                 ? "server.start"
                 : "server.start";
-        if (!isOwner && !isAdmin && !access?.permissions?.includes(requiredPermission)) {
+        if (!isOwner && !isAdmin && !nodeAccess && !access?.permissions?.includes(requiredPermission)) {
           return client.socket.send(
             JSON.stringify({
               type: "error",
@@ -1668,7 +1669,8 @@ export class WebSocketGateway {
         const access = await this.prisma.serverAccess.findUnique({
           where: { userId_serverId: { userId: client.userId, serverId: server.id } },
         });
-        if (!access && server.ownerId !== client.userId && !isAdmin) {
+        const consoleNodeAccess = await hasNodeAccess(this.prisma, client.userId, server.nodeId);
+        if (!access && server.ownerId !== client.userId && !isAdmin && !consoleNodeAccess) {
           if (client.socket.readyState === 1) {
             client.socket.send(
               JSON.stringify({
@@ -1683,7 +1685,8 @@ export class WebSocketGateway {
         if (
           !access?.permissions?.includes("console.write") &&
           server.ownerId !== client.userId &&
-          !isAdmin
+          !isAdmin &&
+          !consoleNodeAccess
         ) {
           if (client.socket.readyState === 1) {
             client.socket.send(
