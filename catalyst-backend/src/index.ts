@@ -735,6 +735,18 @@ function generateDeploymentScript(
   return `#!/usr/bin/env bash
 set -euo pipefail
 
+# --- Auto-elevate to root if needed -----------------------------------------------
+if [ "\$EUID" -ne 0 ]; then
+    if command -v sudo >/dev/null 2>&1; then
+        echo "Not running as root — re-executing with sudo ..."
+        exec sudo -- "\$(command -v bash || command -v sh)" "\$0" "\$@"
+    else
+        echo "ERROR: This script must be run as root and sudo is not available." >&2
+        exit 1
+    fi
+fi
+# ---------------------------------------------------------------------------
+
 BACKEND_HTTP_URL="${backendUrl}"
 case "$BACKEND_HTTP_URL" in
   ws://*) BACKEND_HTTP_URL="http://\${BACKEND_HTTP_URL#ws://}" ;;
