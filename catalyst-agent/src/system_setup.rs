@@ -291,7 +291,9 @@ impl SystemSetup {
 
         // Ensure the socket is group-accessible.
         // containerd defaults to root:root 0600 which blocks non-root users.
-        Self::configure_containerd_socket_access(has_systemctl)?;
+        if let Err(e) = Self::configure_containerd_socket_access(has_systemctl) {
+            warn!("Containerd socket access configuration failed (will try chmod fallback): {}", e);
+        }
 
         if has_systemctl {
             Self::run_command("systemctl", &["daemon-reload"], None)?;
@@ -341,6 +343,9 @@ impl SystemSetup {
     /// On Debian/Ubuntu the default install is root:root 0600.
     /// We create a "containerd" system group, add the user to it, and drop a
     /// systemd override so the socket is created with that group.
+    /// Returns `Ok(())` on success, logs warnings on failure but does not
+    /// hard-fail so that the chmod fallback in `ensure_containerd_running`
+    /// can still run.
     fn configure_containerd_socket_access(has_systemctl: bool) -> Result<(), AgentError> {
         if is_root() {
             return Ok(());
@@ -355,11 +360,15 @@ impl SystemSetup {
             .map(|s| s.success())
             .unwrap_or(false);
         if !has_group {
-            Self::run_command("groupadd", &["--system", "containerd"], None)?;
+            if let Err(e) = Self::run_command("groupadd", &["--system", "containerd"], None) {
+                warn!("Could not create containerd group (non-fatal): {}", e);
+            }
         }
 
         // 2. Add the current user to the group.
-        Self::run_command("usermod", &["-aG", "containerd", &username], None)?;
+        if let Err(e) = Self::run_command("usermod", &["-aG", "containerd", &username], None) {
+            warn!("Could not add user to containerd group (non-fatal): {}", e);
+        }
 
         // 3. Create a systemd override so containerd creates the socket with
         //    group "containerd" and mode 0660.
@@ -370,17 +379,34 @@ impl SystemSetup {
             // Only write if the override doesn't already exist.
             let exists = Path::new(&override_file).exists();
             if !exists {
-                Self::run_command("mkdir", &["-p", override_dir], None)?;
+                // Create the directory via sudo (needs elevated privileges).
+                if let Err(e) = Self::run_command("mkdir", &["-p", override_dir], None) {
+                    warn!("Could not create containerd override dir (non-fatal): {}", e);
+                    return Ok(());
+                }
+
                 let content = format!(
                     "[Service]\n\
                     ExecStartPre=-/bin/chown root:containerd /run/containerd\n\
                     ExecStartPost=-/bin/chmod 660 /run/containerd/containerd.sock\n"
                 );
-                let tmp = format!("{}.tmp", override_file);
-                fs::write(&tmp, content).map_err(|e| {
+
+                // Write to a user-writable temp location, then sudo-copy to
+                // the protected systemd directory.
+                let tmp = "/tmp/catalyst-containerd-override.tmp";
+                if let Err(e) = fs::write(tmp, content).map_err(|e| {
                     AgentError::IoError(format!("Failed to write containerd override: {}", e))
-                })?;
-                Self::run_command("mv", &[&tmp, &override_file], None)?;
+                }) {
+                    warn!("Could not write containerd override temp file (non-fatal): {}", e);
+                    return Ok(());
+                }
+
+                if let Err(e) = Self::run_command("cp", &[tmp, &override_file], None) {
+                    warn!("Could not install containerd override (non-fatal): {}", e);
+                    let _ = fs::remove_file(tmp);
+                    return Ok(());
+                }
+                let _ = fs::remove_file(tmp);
             }
         }
 
