@@ -16,9 +16,16 @@ CNI_PLUGINS_VERSION="v1.4.1"
 log() { echo "[deploy-agent] $*"; }
 fail() { echo "[deploy-agent] ERROR: $*" >&2; exit 1; }
 
+# --- Auto-elevate to root if needed -----------------------------------------------
 if [ "$EUID" -ne 0 ]; then
-    fail "This script must be run as root."
+    if command -v sudo >/dev/null 2>&1; then
+        log "Not running as root — re-executing with sudo ..."
+        exec sudo -- "$(command -v bash || command -v sh)" "$0" "$@"
+    else
+        fail "This script must be run as root and sudo is not available."
+    fi
 fi
+# ---------------------------------------------------------------------------
 
 if [ -z "$NODE_API_KEY" ]; then
     cat <<'USAGE' >&2
