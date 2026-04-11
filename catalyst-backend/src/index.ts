@@ -514,14 +514,19 @@ async function bootstrap() {
     await app.register((app) => fileTunnelRoutes(app, prisma, logger, fileTunnel), { bodyLimit: 104857600 });
 
     // Agent binary download endpoint (public)
-    app.get("/api/agent/download", async (_request, reply) => {
-      // Use musl static binary for portability across Linux distributions
+    app.get("/api/agent/download", async (request, reply) => {
+      // Use musl static binary for portability across Linux distributions.
+      // Supports both x86_64 and aarch64 architectures.
+      const arch = (request.query as { arch?: string }).arch || "x86_64";
+      const normalizedArch = arch === "aarch64" || arch === "arm64" ? "aarch64" : "x86_64";
+      const target = `${normalizedArch}-unknown-linux-musl`;
+
       const agentPath = path.resolve(
         process.cwd(),
         "..",
         "catalyst-agent",
         "target",
-        "x86_64-unknown-linux-musl",
+        target,
         "release",
         "catalyst-agent"
       );
@@ -529,10 +534,10 @@ async function bootstrap() {
       if (!fs.existsSync(agentPath)) {
         // Attempt to build the agent automatically (only in development)
         if (process.env.NODE_ENV === "production") {
-          return reply.status(404).send({ error: "Agent binary not found. Please build with 'cargo build --release --target x86_64-unknown-linux-musl' in catalyst-agent/" });
+          return reply.status(404).send({ error: `Agent binary not found for ${target}. Please build with 'cargo build --release --target ${target}' in catalyst-agent/` });
         }
 
-        app.log.warn("Agent binary not found, attempting to build...");
+        app.log.warn(`Agent binary not found for ${target}, attempting to build...`);
 
         const agentDir = path.resolve(process.cwd(), "..", "catalyst-agent");
         if (!fs.existsSync(agentDir)) {
@@ -541,9 +546,9 @@ async function bootstrap() {
 
         try {
           const { execSync } = await import("child_process");
-          app.log.info("Building agent with 'cargo build --release --target x86_64-unknown-linux-musl'...");
+          app.log.info(`Building agent with 'cargo build --release --target ${target}'...`);
 
-          execSync("cargo build --release --target x86_64-unknown-linux-musl", {
+          execSync(`cargo build --release --target ${target}`, {
             cwd: agentDir,
             stdio: "inherit",
             timeout: 300000, // 5 minutes

@@ -23,8 +23,10 @@ interface AuthState {
   verifyTwoFactor: (payload: { code: string; trustDevice?: boolean }) => Promise<void>;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const useAuthStore = create<AuthState>()(
   persist(
+    // @ts-expect-error zustand v5 persist StateCreator type mismatch
     (set, get) => {
       const rememberMe = localStorage.getItem('catalyst-remember-me') === 'true';
       return {
@@ -157,7 +159,7 @@ export const useAuthStore = create<AuthState>()(
     },
     {
       name: 'catalyst-auth',
-      partialize: (state) => ({
+      partialize: (state: AuthState) => ({
         user: state.user,
         isAuthenticated: state.isAuthenticated,
         rememberMe: state.rememberMe,

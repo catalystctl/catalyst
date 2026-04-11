@@ -1,5 +1,4 @@
 export type ConfigPrimitive = string | number | boolean | null;
-export type ConfigPrimitive = string | number | boolean | null;
 export interface ConfigMap {
   [key: string]: ConfigPrimitive | ConfigMap;
 }

@@ -35,23 +35,8 @@ interface SearchItem {
   action?: () => void;
   category: string;
   keywords?: string[];
+  permissions?: string[];
 }
-
-const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
-  LayoutDashboard,
-  Server,
-  Users,
-  Shield,
-  Network,
-  FileText,
-  Bell,
-  Database,
-  Globe,
-  Settings,
-  Key,
-  Plug,
-  Palette,
-};
 
 const navigationItems: Omit<SearchItem, 'category'>[] = [
   { id: 'nav-dashboard', label: 'Dashboard', icon: LayoutDashboard, to: '/dashboard' },

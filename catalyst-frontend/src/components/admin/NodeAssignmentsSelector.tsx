@@ -77,7 +77,6 @@ export function NodeAssignmentsSelector({
 
   // Initialize selections from fetched data
   const assignmentsData = userId ? userAssignmentsData : roleAssignmentsData;
-  const assignments = assignmentsData?.data || [];
   const hasWildcardFromApi = assignmentsData?.hasWildcard || false;
 
   // Update wildcard state when API data changes
@@ -288,7 +287,7 @@ export function NodeAssignmentsSelector({
   const filteredNodes = useMemo(() =>
     nodes.filter(node =>
       node.name.toLowerCase().includes(search.toLowerCase()) ||
-      node.location?.name.toLowerCase().includes(search.toLowerCase())
+      (node as any).location?.name.toLowerCase().includes(search.toLowerCase())
     ), [nodes, search]
   );
 
@@ -486,7 +485,7 @@ export function NodeAssignmentsSelector({
                       />
                     )}
                     <span className="flex-1 font-medium text-slate-900 dark:text-slate-200">{node.name}</span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">{node.location?.name}</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">{(node as any).location?.name}</span>
                   </label>
                 );
               })

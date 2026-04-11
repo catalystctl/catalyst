@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { nodesApi } from '../../services/api/nodes';
-import type { NodeAssignment } from '../../services/api/nodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
 
 type Props = {

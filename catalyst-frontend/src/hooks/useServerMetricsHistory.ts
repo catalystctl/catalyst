@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { serversApi } from '../services/api/servers';
-import type { ServerMetricsResponse } from '../types/server';
 
 export interface MetricsTimeRange {
   hours: number;

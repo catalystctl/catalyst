@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
-import { ADMIN_PERMISSIONS } from './ProtectedRoute';
 
 // Map of routes to their required permissions
 const ADMIN_ROUTES: Array<{ path: string; permissions: string[] }> = [

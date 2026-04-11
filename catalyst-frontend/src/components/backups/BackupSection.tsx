@@ -169,7 +169,7 @@ function BackupSection({
               <select
                 className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
                 value={storageMode}
-                onChange={(event) => setStorageMode(event.target.value)}
+                onChange={(event) => setStorageMode(event.target.value as BackupStorageMode)}
                 disabled={isSuspended || !canWrite}
               >
                 {!localDisabled ? <option value="local">Local</option> : null}

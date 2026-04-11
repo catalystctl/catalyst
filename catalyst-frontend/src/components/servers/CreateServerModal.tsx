@@ -5,7 +5,6 @@ import { serversApi } from '../../services/api/servers';
 import { useTemplates } from '../../hooks/useTemplates';
 import { useNodes, useAccessibleNodes } from '../../hooks/useNodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
-import type { Template } from '../../types/template';
 import { nodesApi } from '../../services/api/nodes';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -61,7 +60,7 @@ function CreateServerModal() {
 
   // Determine which nodes to show - accessible nodes for non-admins, all nodes for admins or wildcard users
   const isAdmin = user?.permissions?.includes('*') || user?.permissions?.includes('admin.write');
-  const availableNodes = isAdmin || hasNodeWildcard ? nodes : accessibleNodes;
+  const availableNodes: Array<{ id: string; name: string; locationId?: string }> = isAdmin || hasNodeWildcard ? nodes : accessibleNodes;
 
   // Get selected template
   const selectedTemplate = useMemo(() => templates.find(t => t.id === templateId), [templates, templateId]);

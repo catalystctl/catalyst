@@ -356,8 +356,14 @@ prepare_directories() {
 # ---------------------------------------------------------------------------
 
 install_agent_binary() {
-    log "Downloading Catalyst Agent binary from ${BACKEND_HTTP_URL}/api/agent/download"
-    if curl -fsSL "${BACKEND_HTTP_URL}/api/agent/download" -o /opt/catalyst-agent/catalyst-agent; then
+    local agent_arch
+    case "$(uname -m)" in
+        x86_64|amd64) agent_arch="x86_64" ;;
+        aarch64|arm64) agent_arch="aarch64" ;;
+        *) fail "Unsupported architecture for agent binary: $(uname -m)" ;;
+    esac
+    log "Downloading Catalyst Agent binary (${agent_arch}) from ${BACKEND_HTTP_URL}/api/agent/download"
+    if curl -fsSL "${BACKEND_HTTP_URL}/api/agent/download?arch=${agent_arch}" -o /opt/catalyst-agent/catalyst-agent; then
         [ -s /opt/catalyst-agent/catalyst-agent ] || fail "Downloaded agent binary is empty."
         chmod 0755 /opt/catalyst-agent/catalyst-agent
         return 0

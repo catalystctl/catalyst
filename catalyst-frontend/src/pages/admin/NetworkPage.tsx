@@ -10,7 +10,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Network,
   Search,
   Plus,
   Trash2,
@@ -31,7 +30,7 @@ interface IpAllocation {
   createdAt: string;
 }
 
-interface IpPool {
+export interface IpPool {
   id: string;
   nodeId: string;
   nodeName: string;

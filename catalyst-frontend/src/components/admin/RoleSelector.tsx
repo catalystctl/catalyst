@@ -104,8 +104,7 @@ export default function RoleSelector({
               <RoleBadge
                 key={role.id}
                 role={role}
-                onRemove={(e) => {
-                  e.stopPropagation();
+                onRemove={() => {
                   removeRole(role.id);
                 }}
                 disabled={disabled}
