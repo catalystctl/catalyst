@@ -354,14 +354,33 @@ impl SystemSetup {
         let username = std::env::var("USER").unwrap_or_else(|_| "unknown".to_string());
 
         // 1. Create the containerd system group if it doesn't exist.
+        //    Note: Alpine's busybox groupadd does not support --system;
+        //    we try with the flag first, then retry without it.
         let has_group = Command::new("getent")
             .args(["group", "containerd"])
             .status()
             .map(|s| s.success())
             .unwrap_or(false);
         if !has_group {
-            if let Err(e) = Self::run_command("groupadd", &["--system", "containerd"], None) {
-                warn!("Could not create containerd group (non-fatal): {}", e);
+            // getent may not exist on Alpine (busybox); double-check by
+            // reading /etc/group directly.
+            let group_exists = fs::read_to_string("/etc/group")
+                .map(|contents| {
+                    contents.lines().any(|line| line.starts_with("containerd:"))
+                })
+                .unwrap_or(false);
+            if !group_exists {
+                let created = Self::run_command_allow_failure(
+                    "groupadd", &["--system", "containerd"],
+                );
+                if !created {
+                    // Retry without --system (Alpine busybox compat).
+                    let created_plain =
+                        Self::run_command_allow_failure("groupadd", &["containerd"]);
+                    if !created_plain {
+                        warn!("Could not create containerd group (non-fatal)");
+                    }
+                }
             }
         }
 
@@ -599,7 +618,7 @@ impl SystemSetup {
             ),
             "pacman" => Self::run_command_allow_failure(
                 "pacman",
-                &["-S", "--noconfirm", "containernetworking-plugins"],
+                &["-S", "--noconfirm", "cni-plugins"],
             ),
             "zypper" => Self::run_command_allow_failure(
                 "zypper",
@@ -688,8 +707,15 @@ impl SystemSetup {
 
     fn has_required_cni_plugins() -> bool {
         const REQUIRED: [&str; 4] = ["bridge", "host-local", "portmap", "macvlan"];
-        // Check multiple CNI plugin directories (Fedora uses /usr/libexec/cni)
-        const CNI_BIN_DIRS: [&str; 2] = ["/opt/cni/bin", "/usr/libexec/cni"];
+        // Check every CNI plugin directory used across distros:
+        //   /opt/cni/bin           — upstream tarball / Debian packages
+        //   /usr/libexec/cni       — Fedora / RHEL packages
+        //   /usr/lib/cni           — Arch / Alpine / openSUSE packages
+        const CNI_BIN_DIRS: [&str; 3] = [
+            "/opt/cni/bin",
+            "/usr/libexec/cni",
+            "/usr/lib/cni",
+        ];
 
         for dir in CNI_BIN_DIRS {
             let has_all = REQUIRED
