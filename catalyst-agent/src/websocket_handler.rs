@@ -22,7 +22,7 @@ use tracing::{debug, error, info, warn};
 use crate::config::CniNetworkConfig;
 use crate::{
     AgentConfig, AgentError, AgentResult, ContainerdRuntime, FileManager, NetworkManager,
-    StorageManager, runtime_manager::rotate_logs,
+    StorageManager, FirewallManager, runtime_manager::rotate_logs,
 };
 
 type WsStream =
@@ -667,6 +667,13 @@ impl WebSocketHandler {
                     .await?;
                 tokio::time::sleep(Duration::from_secs(2)).await;
                 self.start_server_with_details(&msg).await?;
+            }
+            Some("delete_server") => {
+                let server_uuid = msg["serverUuid"]
+                    .as_str()
+                    .unwrap_or("");
+                let server_id = msg["serverId"].as_str().unwrap_or(server_uuid);
+                self.delete_server(server_id, server_uuid).await?;
             }
             Some("console_input") => self.handle_console_input(&msg).await?,
             Some("file_operation") => self.handle_file_operation(&msg).await?,
@@ -1872,6 +1879,7 @@ impl WebSocketHandler {
             self.runtime
                 .create_container(crate::runtime_manager::ContainerConfig {
                     container_id: server_id,
+                    server_id,
                     image: docker_image,
                     startup_command: &final_startup_command,
                     env: &env_map,
@@ -2197,6 +2205,58 @@ impl WebSocketHandler {
         )
         .await?;
 
+        Ok(())
+    }
+
+    /// Handle server deletion — clean up container and firewall rules.
+    async fn delete_server(&self, server_id: &str, server_uuid: &str) -> AgentResult<()> {
+        info!("Deleting server: {} (uuid: {})", server_id, server_uuid);
+
+        // Stop monitoring
+        self.stop_monitor_task(server_id).await;
+
+        // Try both possible container names (server_id and server_uuid)
+        for container_name in &[server_id, server_uuid] {
+            if self.runtime.container_exists(container_name).await {
+                if self
+                    .runtime
+                    .is_container_running(container_name)
+                    .await
+                    .unwrap_or(false)
+                {
+                    if let Err(e) = self.runtime.stop_container(container_name, 5).await {
+                        warn!("Failed to stop container {} during delete: {}", container_name, e);
+                        let _ = self.runtime.kill_container(container_name, "SIGKILL").await;
+                    }
+                }
+                if let Err(e) = self.runtime.remove_container(container_name).await {
+                    warn!("Failed to remove container {} during delete: {}", container_name, e);
+                }
+            }
+        }
+
+        // Clean up firewall rules for this server (by both identifiers)
+        FirewallManager::remove_server_ports(server_id).await;
+        if !server_uuid.is_empty() && server_uuid != server_id {
+            FirewallManager::remove_server_ports(server_uuid).await;
+        }
+
+        // Clean up server data directory (container data, logs, console)
+        let data_dir = self.config.server.data_dir.clone();
+        for id in &[server_id, server_uuid] {
+            if !id.is_empty() {
+                let server_dir = std::path::Path::new(&data_dir).join(id);
+                if server_dir.exists() {
+                    if let Err(e) = tokio::fs::remove_dir_all(&server_dir).await {
+                        warn!("Failed to remove server data dir {}: {}", server_dir.display(), e);
+                    } else {
+                        info!("Removed server data directory: {}", server_dir.display());
+                    }
+                }
+            }
+        }
+
+        info!("Server {} deleted successfully", server_id);
         Ok(())
     }
 

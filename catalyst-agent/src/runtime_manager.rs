@@ -294,6 +294,7 @@ struct PortForward {
 /// Parameters for creating a container
 pub struct ContainerConfig<'a> {
     pub container_id: &'a str,
+    pub server_id: &'a str,
     pub image: &'a str,
     pub startup_command: &'a str,
     pub env: &'a HashMap<String, String>,
@@ -628,7 +629,7 @@ impl ContainerdRuntime {
                     config.port_bindings.values().copied().collect()
                 };
                 for p in ports {
-                    if let Err(e) = FirewallManager::allow_port(p, "tcp", &ip).await {
+                    if let Err(e) = FirewallManager::allow_port(p, "tcp", &ip, config.server_id).await {
                         error!("Firewall config failed for port {}: {}", p, e);
                     }
                 }
@@ -1033,6 +1034,10 @@ impl ContainerdRuntime {
 
     pub async fn remove_container(&self, container_id: &str) -> AgentResult<()> {
         info!("Removing container: {}", container_id);
+        // Clean up firewall rules for this server.
+        // The server_id may not be available in all call paths, but the
+        // container_id is typically the server_id or starts with it.
+        FirewallManager::remove_server_ports(container_id).await;
         let _ = self.teardown_cni_network(container_id).await;
         let mut tasks = TasksClient::new(self.channel.clone());
         let req = TaskKillRequest {
