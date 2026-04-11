@@ -8,6 +8,7 @@ import type { LoginSchema } from '../../validators/auth';
 import { loginSchema } from '../../validators/auth';
 import { authClient } from '../../services/authClient';
 import { notifyError } from '../../utils/notify';
+import { getErrorMessage } from '../../utils/errors';
 import { useThemeStore } from '../../stores/themeStore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -98,11 +99,12 @@ function LoginPage() {
       setTimeout(() => navigate(from || '/servers'), 100);
       setTimeout(() => navigate(from || '/servers'), 100);
     } catch (err) {
-      if ((err as any).code === 'PASSKEY_REQUIRED') {
+      const error = err as { code?: string };
+      if (error.code === 'PASSKEY_REQUIRED') {
         setAuthStep('passkey');
         return;
       }
-      if ((err as any).code === 'TWO_FACTOR_REQUIRED') {
+      if (error.code === 'TWO_FACTOR_REQUIRED') {
         setTotpError(null);
         setAuthStep('totp');
       }
@@ -128,8 +130,9 @@ function LoginPage() {
           },
         },
       });
-    } catch (err: any) {
-      if (err?.name === 'AbortError') {
+    } catch (err: unknown) {
+      const error = err as { name?: string };
+      if (error?.name === 'AbortError') {
         setAuthStep('passkey');
         return;
       }
@@ -200,10 +203,8 @@ function LoginPage() {
       setTotpCode('');
       setTotpTrustDevice(false);
       setTimeout(() => navigate(from || '/servers'), 100);
-    } catch (err: any) {
-      setTotpError(
-        err?.response?.data?.message || err?.message || 'Two-factor verification failed',
-      );
+    } catch (err: unknown) {
+      setTotpError(getErrorMessage(err, 'Two-factor verification failed'));
     } finally {
       setTotpSubmitting(false);
     }

@@ -79,32 +79,32 @@ function TemplateCreateModal() {
           .filter(Boolean),
         }));
 
-  const buildTemplatePayload = (raw: any) => {
-    const payload = normalizeTemplateImport(raw) as any;
+  const buildTemplatePayload = (raw: unknown) => {
+    const payload = normalizeTemplateImport(raw);
     const toNumber = (value: unknown, fallback: number) => {
       const parsed = Number(value);
       return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
     };
     const ports = Array.isArray(payload.supportedPorts)
-      ? payload.supportedPorts
-          .map((port: unknown) => Number(port))
-          .filter((value: number) => Number.isFinite(value) && value > 0)
+      ? (payload.supportedPorts as unknown[])
+          .map((port) => Number(port))
+          .filter((value) => Number.isFinite(value) && value > 0)
       : [];
     const variablesPayload = Array.isArray(payload.variables)
-      ? payload.variables
-          .map((variable: any) => ({
+      ? (payload.variables as Record<string, unknown>[])
+          .map((variable) => ({
             name: String(variable?.name ?? '').trim(),
             description: variable?.description ? String(variable.description) : undefined,
             default: String(variable?.default ?? ''),
             required: Boolean(variable?.required),
-            input: variable?.input ?? 'text',
-            rules: Array.isArray(variable?.rules) ? variable.rules : undefined,
+            input: (variable?.input as TemplateVariable['input']) ?? 'text',
+            rules: Array.isArray(variable?.rules) ? (variable.rules as string[]) : undefined,
           }))
           .filter((variable: TemplateVariable) => variable.name)
       : [];
     const imagesPayload = Array.isArray(payload.images)
-      ? payload.images
-          .map((option: any) => ({
+      ? (payload.images as Record<string, unknown>[])
+          .map((option) => ({
             name: String(option?.name ?? '').trim(),
             label: option?.label ? String(option.label) : undefined,
             image: String(option?.image ?? '').trim(),
@@ -129,24 +129,30 @@ function TemplateCreateModal() {
       supportedPorts: ports.length ? ports : [25565],
       allocatedMemoryMb: toNumber(payload.allocatedMemoryMb, 1024),
       allocatedCpuCores: toNumber(payload.allocatedCpuCores, 2),
-      features: {
+      features: (() => {
+        const features = (payload.features ?? {}) as Record<string, unknown>;
+        return {
         ...templateFeatures,
         ...(payload.features ?? {}),
-        iconUrl: payload.features?.iconUrl ? String(payload.features.iconUrl) : undefined,
-        ...(payload.features?.configFile ? { configFile: String(payload.features.configFile) } : {}),
-        ...(Array.isArray(payload.features?.configFiles)
-          ? { configFiles: payload.features.configFiles }
+        ...(features.iconUrl ? { iconUrl: String(features.iconUrl) } : {}),
+        ...(features.configFile ? { configFile: String(features.configFile) } : {}),
+        ...(Array.isArray(features.configFiles)
+          ? { configFiles: features.configFiles }
           : {}),
-        ...(payload.features?.restartOnExit ? { restartOnExit: Boolean(payload.features.restartOnExit) } : {}),
-        ...(payload.features?.maxInstances ? { maxInstances: Number(payload.features.maxInstances) } : {}),
-        ...(Array.isArray(payload.features?.backupPaths) ? { backupPaths: payload.features.backupPaths } : {}),
-        ...(payload.features?.fileEditor ? {
-          fileEditor: {
-            enabled: Boolean(payload.features.fileEditor.enabled),
-            ...(Array.isArray(payload.features.fileEditor.restrictedPaths) ? { restrictedPaths: payload.features.fileEditor.restrictedPaths } : {}),
-          },
-        } : {}),
-      },
+        ...(features.restartOnExit ? { restartOnExit: Boolean(features.restartOnExit) } : {}),
+        ...(features.maxInstances ? { maxInstances: Number(features.maxInstances) } : {}),
+        ...(Array.isArray(features.backupPaths) ? { backupPaths: features.backupPaths } : {}),
+        ...(features.fileEditor ? (() => {
+          const fe = features.fileEditor as Record<string, unknown>;
+          return {
+            fileEditor: {
+              enabled: Boolean(fe.enabled),
+              ...(Array.isArray(fe.restrictedPaths) ? { restrictedPaths: fe.restrictedPaths } : {}),
+            },
+          };
+        })() : {}),
+      };
+      })(),
     };
   };
 
@@ -222,12 +228,12 @@ function TemplateCreateModal() {
     },
   });
 
-  const applyTemplateImport = (raw: any) => {
+  const applyTemplateImport = (raw: unknown) => {
     if (!raw || typeof raw !== 'object') {
       setImportError('Invalid template JSON');
       return;
     }
-    const payload: any = normalizeTemplateImport(raw);
+    const payload = normalizeTemplateImport(raw);
     setImportError('');
     setName(String(payload.name ?? ''));
     setDescription(String(payload.description ?? ''));
@@ -236,7 +242,7 @@ function TemplateCreateModal() {
     setImage(String(payload.image ?? ''));
     setImageOptions(
       Array.isArray(payload.images)
-        ? payload.images.map((option: any) => ({
+        ? (payload.images as Record<string, unknown>[]).map((option) => ({
             name: String(option?.name ?? ''),
             label: option?.label ? String(option.label) : undefined,
             image: String(option?.image ?? ''),
@@ -251,11 +257,12 @@ function TemplateCreateModal() {
       payload.sendSignalTo === 'SIGKILL' ? 'SIGKILL' : payload.sendSignalTo === 'SIGINT' ? 'SIGINT' : 'SIGTERM',
     );
     setInstallScript(String(payload.installScript ?? ''));
-    setConfigFile(String(payload.features?.configFile ?? ''));
-    setConfigFiles(Array.isArray(payload.features?.configFiles) ? payload.features.configFiles : payload.features?.configFile ? [String(payload.features.configFile)] : []);
+    const features = (payload.features ?? {}) as Record<string, unknown>;
+    setConfigFile(String(features.configFile ?? ''));
+    setConfigFiles(Array.isArray(features.configFiles) ? (features.configFiles as unknown[]).map(String) : features.configFile ? [String(features.configFile)] : []);
     setSupportedPorts(
       Array.isArray(payload.supportedPorts)
-        ? payload.supportedPorts.join(', ')
+        ? (payload.supportedPorts as unknown[]).join(', ')
         : '25565',
     );
     setAllocatedMemoryMb(
@@ -264,21 +271,22 @@ function TemplateCreateModal() {
     setAllocatedCpuCores(
       payload.allocatedCpuCores ? String(payload.allocatedCpuCores) : '2',
     );
-    setIconUrl(String(payload.features?.iconUrl ?? ''));
-    setRestartOnExit(Boolean(payload.features?.restartOnExit));
-    setMaxInstances(String(payload.features?.maxInstances ?? ''));
-    setBackupPaths(Array.isArray(payload.features?.backupPaths) ? payload.features.backupPaths.join(', ') : '');
-    setFileEditorEnabled(payload.features?.fileEditor?.enabled !== false);
-    setFileEditorRestrictedPaths(Array.isArray(payload.features?.fileEditor?.restrictedPaths) ? payload.features.fileEditor.restrictedPaths.join(', ') : '');
+    setIconUrl(String(features.iconUrl ?? ''));
+    setRestartOnExit(Boolean(features.restartOnExit));
+    setMaxInstances(String(features.maxInstances ?? ''));
+    setBackupPaths(Array.isArray(features.backupPaths) ? (features.backupPaths as unknown[]).join(', ') : '');
+    setFileEditorEnabled(features.fileEditor !== false);
+    const fileEditor = features.fileEditor as Record<string, unknown> | undefined;
+    setFileEditorRestrictedPaths(Array.isArray(fileEditor?.restrictedPaths) ? (fileEditor.restrictedPaths as unknown[]).join(', ') : '');
     setTemplateFeatures(payload.features ?? {});
     const importedVariables = Array.isArray(payload.variables)
-      ? payload.variables.map((variable: any) => ({
+      ? (payload.variables as Record<string, unknown>[]).map((variable) => ({
           name: String(variable?.name ?? ''),
           description: String(variable?.description ?? ''),
           defaultValue: String(variable?.default ?? ''),
           required: Boolean(variable?.required),
-          input: variable?.input ?? 'text',
-          rules: Array.isArray(variable?.rules) ? variable.rules.join('; ') : '',
+          input: (variable?.input as TemplateVariable['input']) ?? 'text',
+          rules: Array.isArray(variable?.rules) ? (variable.rules as string[]).join('; ') : '',
         }))
       : [];
     setVariables(importedVariables.length ? importedVariables : [createVariableDraft()]);

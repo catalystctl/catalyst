@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { authApi } from '../../services/api/auth';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { getErrorMessage } from '../../utils/errors';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
 
 function ResetPasswordPage() {
@@ -55,9 +56,8 @@ function ResetPasswordPage() {
       await authApi.resetPassword(token, password);
       setIsReset(true);
       notifySuccess('Password reset successfully');
-    } catch (error: any) {
-      const message = error?.response?.data?.error || 'Failed to reset password';
-      notifyError(message);
+    } catch (error: unknown) {
+      notifyError(getErrorMessage(error, 'Failed to reset password'));
     } finally {
       setIsLoading(false);
     }

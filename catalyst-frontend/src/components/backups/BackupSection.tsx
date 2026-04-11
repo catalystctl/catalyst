@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useBackups } from '../../hooks/useBackups';
 import { notifyError, notifyInfo } from '../../utils/notify';
+import { getErrorMessage } from '../../utils/errors';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import BackupList from './BackupList';
 import CreateBackupModal from './CreateBackupModal';
@@ -118,10 +119,9 @@ function BackupSection({
       URL.revokeObjectURL(url);
       clearProgress(`${progressKeyPrefix}${backupId}`);
       notifyInfo('Backup download started');
-    } catch (error: any) {
+    } catch (error: unknown) {
       clearProgress(`${progressKeyPrefix}${backupId}`);
-      const message = error?.response?.data?.error || 'Failed to download backup';
-      notifyError(message);
+      notifyError(getErrorMessage(error, 'Failed to download backup'));
     }
   };
 
@@ -455,9 +455,8 @@ function BackupSection({
                   sftpConfig,
                 });
                 notifySuccess('Backup settings updated');
-              } catch (error: any) {
-                const message = error?.response?.data?.error || error?.message || 'Failed to update settings';
-                notifyError(message);
+              } catch (error: unknown) {
+                notifyError(getErrorMessage(error, 'Failed to update settings'));
               }
             }}
             disabled={isSuspended || !canWrite}

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { nodesApi } from '../../services/api/nodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { getErrorMessage } from '../../utils/errors';
 
 export type NodeAssignmentWithExpiration = {
   nodeId: string | null; // null for wildcard (*)
@@ -143,9 +144,9 @@ export function NodeAssignmentsSelector({
       // Invalidate queries after successful API call
       queryClient.invalidateQueries({ queryKey: ['roles', roleId, 'nodes'] });
       queryClient.invalidateQueries({ queryKey: ['users', userId, 'nodes'] });
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Revert on error
-      notifyError(error?.response?.data?.error || 'Failed to update wildcard assignment');
+      notifyError(getErrorMessage(error, 'Failed to update wildcard assignment'));
       // Revert the optimistic update
       if (hasWildcard) {
         // We tried to remove but failed - add it back
@@ -191,7 +192,7 @@ export function NodeAssignmentsSelector({
         // Add to server
         await addNodeAssignment(nodeId);
       }
-    } catch (error: any) {
+    } catch (_error: unknown) {
       // Revert on error
       onSelectionChange(previousSelection);
     }
@@ -212,8 +213,8 @@ export function NodeAssignmentsSelector({
       queryClient.invalidateQueries({ queryKey: ['roles', roleId, 'nodes'] });
       queryClient.invalidateQueries({ queryKey: ['users', userId, 'nodes'] });
       return true;
-    } catch (error: any) {
-      notifyError(error?.response?.data?.error || 'Failed to assign node');
+    } catch (error: unknown) {
+      notifyError(getErrorMessage(error, 'Failed to assign node'));
       return false;
     }
   };
@@ -237,8 +238,8 @@ export function NodeAssignmentsSelector({
         return true;
       }
       return false;
-    } catch (error: any) {
-      notifyError(error?.response?.data?.error || 'Failed to unassign node');
+    } catch (error: unknown) {
+      notifyError(getErrorMessage(error, 'Failed to unassign node'));
       return false;
     }
   };
@@ -278,8 +279,8 @@ export function NodeAssignmentsSelector({
       setExpirationNodeId(null);
       setExpirationDate('');
       notifySuccess('Expiration updated');
-    } catch (error: any) {
-      notifyError(error?.response?.data?.error || 'Failed to update expiration');
+    } catch (error: unknown) {
+      notifyError(getErrorMessage(error, 'Failed to update expiration'));
     }
   };
 
@@ -287,7 +288,7 @@ export function NodeAssignmentsSelector({
   const filteredNodes = useMemo(() =>
     nodes.filter(node =>
       node.name.toLowerCase().includes(search.toLowerCase()) ||
-      (node as any).location?.name.toLowerCase().includes(search.toLowerCase())
+      node.location?.name.toLowerCase().includes(search.toLowerCase())
     ), [nodes, search]
   );
 
@@ -485,7 +486,7 @@ export function NodeAssignmentsSelector({
                       />
                     )}
                     <span className="flex-1 font-medium text-slate-900 dark:text-slate-200">{node.name}</span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">{(node as any).location?.name}</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">{node.location?.name}</span>
                   </label>
                 );
               })

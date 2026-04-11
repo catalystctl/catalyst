@@ -173,7 +173,7 @@ export function ApiKeysPage() {
               </label>
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as any)}
+                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'disabled' | 'expired')}
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
               >
                 <option value="all">All</option>

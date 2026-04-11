@@ -29,7 +29,7 @@ export function createRbacMiddleware(prisma: PrismaClient) {
     resourceIdFromParam?: string
   ) {
     return async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = (request as any).user?.userId;
+      const userId = request.user?.userId;
       if (!userId) {
         return reply.status(401).send({ error: "Unauthorized" });
       }
@@ -59,7 +59,7 @@ export function createRbacMiddleware(prisma: PrismaClient) {
     resourceIdFromParam?: string
   ) {
     return async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = (request as any).user?.userId;
+      const userId = request.user?.userId;
       if (!userId) {
         return reply.status(401).send({ error: "Unauthorized" });
       }
@@ -88,7 +88,7 @@ export function createRbacMiddleware(prisma: PrismaClient) {
     resourceIdFromParam?: string
   ) {
     return async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = (request as any).user?.userId;
+      const userId = request.user?.userId;
       if (!userId) {
         return reply.status(401).send({ error: "Unauthorized" });
       }
@@ -179,7 +179,7 @@ export class RbacMiddleware {
       return false;
     }
 
-    return access.permissions.includes(requiredPermission as any);
+    return access.permissions.includes(requiredPermission);
   }
 
   async checkAnyPermission(
@@ -197,7 +197,7 @@ export class RbacMiddleware {
       return false;
     }
 
-    return permissions.some((p) => access.permissions.includes(p as any));
+    return permissions.some((p) => access.permissions.includes(p));
   }
 
   async grantPermission(
@@ -216,14 +216,14 @@ export class RbacMiddleware {
         data: {
           userId,
           serverId,
-          permissions: [permission as any],
+          permissions: [permission],
         },
       });
-    } else if (!access.permissions.includes(permission as any)) {
+    } else if (!access.permissions.includes(permission)) {
       await this.prisma.serverAccess.update({
         where: { id: access.id },
         data: {
-          permissions: [...access.permissions, permission as any],
+          permissions: [...access.permissions, permission],
         },
       });
     }

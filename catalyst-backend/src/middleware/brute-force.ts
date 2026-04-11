@@ -43,7 +43,7 @@ export const bruteForceProtection = async (
   }
 
   // Store user in request for later use in handleFailedLogin/handleSuccessfulLogin
-  (request as any).userForLockout = user;
+  request.userForLockout = user;
 };
 
 /**
@@ -56,7 +56,7 @@ export const handleFailedLogin = async (
   prisma: PrismaClient,
   request: FastifyRequest
 ): Promise<void> => {
-  const user = (request as any).userForLockout as User | undefined;
+  const user = request.userForLockout as User | undefined;
   if (!user) return;
 
   const failedAttempts = user.failedLoginAttempts + 1;

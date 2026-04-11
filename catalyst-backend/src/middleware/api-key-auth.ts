@@ -9,7 +9,7 @@ import { auth } from "../auth";
  * Returns true if the action is allowed or if not an API key request.
  */
 export function checkApiKeyScope(request: FastifyRequest, category: string, action: string): boolean {
-  const user = (request as any).user;
+  const user = request.user;
   if (!user?.isApiKeyAuth) return true; // Not API key auth — no restriction
   const perms = user.apiKeyPermissions;
   if (!perms || typeof perms !== "object" || Object.keys(perms).length === 0) {
@@ -112,13 +112,12 @@ export async function authOrApiKey(request: FastifyRequest, reply: FastifyReply)
         }
 
         // Attach user and API key permissions to request
-        (request as any).user = {
-          id: user.id,
+        request.user = {
+          userId: user.id,
           email: user.email,
           username: user.username,
-          apiKeyId: apiKey.id,
-          apiKeyPermissions: apiKey.permissions || {},
           isApiKeyAuth: true,
+          apiKeyPermissions: (apiKey.permissions as Record<string, string[]>) || {},
         };
 
         return; // Continue to route handler
@@ -146,7 +145,12 @@ export async function authOrApiKey(request: FastifyRequest, reply: FastifyReply)
     }
 
     // Attach user to request
-    (request as any).user = session.user;
+    const sessionUser = session.user;
+    request.user = {
+      userId: sessionUser.id,
+      email: sessionUser.email,
+      username: sessionUser.username || sessionUser.name,
+    };
   } catch (error: any) {
     request.log.error(error, "Session authentication error");
     return reply.status(401).send({

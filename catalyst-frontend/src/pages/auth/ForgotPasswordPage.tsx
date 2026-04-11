@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { authApi } from '../../services/api/auth';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { getErrorMessage } from '../../utils/errors';
 
 function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -21,9 +22,8 @@ function ForgotPasswordPage() {
       await authApi.forgotPassword(email.trim());
       setIsSubmitted(true);
       notifySuccess('Password reset email sent');
-    } catch (error: any) {
-      const message = error?.response?.data?.error || 'Failed to send reset email';
-      notifyError(message);
+    } catch (error: unknown) {
+      notifyError(getErrorMessage(error, 'Failed to send reset email'));
     } finally {
       setIsLoading(false);
     }

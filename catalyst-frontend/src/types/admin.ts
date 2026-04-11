@@ -72,6 +72,10 @@ export interface AdminNode {
   _count: {
     servers: number;
   };
+  location?: {
+    id: string;
+    name: string;
+  };
 }
 
 export interface AdminNodesResponse {

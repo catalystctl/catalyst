@@ -29,7 +29,7 @@ export const requireAuthAndPermission = (
   return [
     // First verify identity
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = (request as any).user?.userId;
+      const userId = request.user?.userId;
       if (!userId) {
         return reply.status(401).send({ error: "Unauthorized" });
       }
@@ -57,7 +57,7 @@ export const requireAuthAndAnyPermission = (
   return [
     // First verify identity
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = (request as any).user?.userId;
+      const userId = request.user?.userId;
       if (!userId) {
         return reply.status(401).send({ error: "Unauthorized" });
       }
@@ -85,7 +85,7 @@ export const requireAuthAndAllPermissions = (
   return [
     // First verify identity
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = (request as any).user?.userId;
+      const userId = request.user?.userId;
       if (!userId) {
         return reply.status(401).send({ error: "Unauthorized" });
       }

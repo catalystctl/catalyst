@@ -216,6 +216,7 @@ export async function nodeRoutes(app: FastifyInstance) {
             _count: {
               select: { servers: true },
             },
+            location: { select: { id: true, name: true } },
           },
         });
       } else {
@@ -230,6 +231,7 @@ export async function nodeRoutes(app: FastifyInstance) {
             _count: {
               select: { servers: true },
             },
+            location: { select: { id: true, name: true } },
           },
         });
       }

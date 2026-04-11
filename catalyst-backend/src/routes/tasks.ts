@@ -65,7 +65,7 @@ export async function taskRoutes(app: FastifyInstance) {
     '/:serverId/tasks',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const { serverId } = request.params as { serverId: string };
       const { name, description, action, payload, schedule } = request.body as {
         name: string;
@@ -145,7 +145,7 @@ export async function taskRoutes(app: FastifyInstance) {
     '/:serverId/tasks',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const { serverId } = request.params as { serverId: string };
 
       const canSchedule = await ensureSchedulePermission(
@@ -170,7 +170,7 @@ export async function taskRoutes(app: FastifyInstance) {
     '/:serverId/tasks/:taskId',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const { serverId, taskId } = request.params as { serverId: string; taskId: string };
 
       const canSchedule = await ensureSchedulePermission(
@@ -201,7 +201,7 @@ export async function taskRoutes(app: FastifyInstance) {
     '/:serverId/tasks/:taskId',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const { serverId, taskId } = request.params as { serverId: string; taskId: string };
       const { name, description, action, payload, schedule, enabled } = request.body as {
         name?: string;
@@ -274,7 +274,7 @@ export async function taskRoutes(app: FastifyInstance) {
     '/:serverId/tasks/:taskId',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const { serverId, taskId } = request.params as { serverId: string; taskId: string };
 
       const canSchedule = await ensureSchedulePermission(
@@ -305,7 +305,7 @@ export async function taskRoutes(app: FastifyInstance) {
     '/:serverId/tasks/:taskId/execute',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const { serverId, taskId } = request.params as { serverId: string; taskId: string };
 
       const canSchedule = await ensureSchedulePermission(
