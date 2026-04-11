@@ -136,6 +136,8 @@ export const serversApi = {
       storageMode?: BackupStorageMode;
       retentionCount?: number;
       retentionDays?: number;
+      s3Config?: Record<string, unknown>;
+      sftpConfig?: Record<string, unknown>;
     },
   ) => {
     const { data } = await apiClient.patch<ApiResponse<any>>(

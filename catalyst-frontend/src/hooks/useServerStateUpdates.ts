@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type Query } from '@tanstack/react-query';
 import { useWebSocketStore } from '../stores/websocketStore';
 
 export function useServerStateUpdates() {
@@ -36,7 +36,7 @@ export function useServerStateUpdates() {
           },
         );
 
-        const serverListPredicate = (query: { queryKey: unknown[] }) =>
+        const serverListPredicate = (query: Query) =>
           Array.isArray(query.queryKey) && query.queryKey[0] === 'servers';
 
         // Update cached server lists (all filters) if present.
@@ -59,7 +59,8 @@ export function useServerStateUpdates() {
 
         // Invalidate to refetch fresh data.
         queryClient.invalidateQueries({
-          predicate: (query) =>
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          predicate: (query: any) =>
             Array.isArray(query.queryKey) &&
             query.queryKey[0] === 'server' &&
             query.state.data &&

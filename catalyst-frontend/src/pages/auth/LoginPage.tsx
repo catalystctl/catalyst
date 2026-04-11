@@ -32,7 +32,6 @@ function LoginPage() {
   const [totpTrustDevice, setTotpTrustDevice] = useState(false);
   const [totpSubmitting, setTotpSubmitting] = useState(false);
   const [totpError, setTotpError] = useState<string | null>(null);
-  const [lastRememberMe, setLastRememberMe] = useState<boolean | undefined>(undefined);
   const passkeyAutoFillAttempted = useRef(false);
   const {
     register,
@@ -96,7 +95,7 @@ function LoginPage() {
         allowFallback ? { forcePasskeyFallback: true } : undefined,
       );
       setTimeout(() => navigate(from || '/servers'), 100);
-      lastRememberMe = values.rememberMe;
+      setTimeout(() => navigate(from || '/servers'), 100);
     } catch (err) {
       if ((err as any).code === 'PASSKEY_REQUIRED') {
         setAuthStep('passkey');

@@ -85,12 +85,12 @@ function NodeAllocationsPage() {
   });
 
   // Fetch IP pools (IpAllocation via pools)
-  const { data: allPools = [], isLoading: poolsLoading } = useQuery<IpPool[]>({
+  const { data: allPools = [], isLoading: poolsLoading } = useQuery({
     queryKey: ['ip-pools'],
     queryFn: adminApi.listIpPools,
   });
 
-  const nodePools = useMemo(() => allPools.filter((p) => p.nodeId === nodeId), [allPools, nodeId]);
+  const nodePools = useMemo(() => (allPools as IpPool[]).filter((p: IpPool) => p.nodeId === nodeId), [allPools, nodeId]);
 
   // Port allocation mutations
   const createPortMutation = useMutation({
@@ -194,7 +194,7 @@ function NodeAllocationsPage() {
   // IP pool stats
   const ipPoolStats = useMemo(() => {
     const totals = nodePools.reduce(
-      (acc, pool) => {
+      (acc: { available: number; used: number; total: number; reserved: number }, pool: IpPool) => {
         acc.available += pool.availableCount;
         acc.used += pool.usedCount;
         acc.reserved += pool.reservedCount;
@@ -493,7 +493,7 @@ function NodeAllocationsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {nodePools.map((pool) => (
+              {nodePools.map((pool: IpPool) => (
                 <div
                   key={pool.id}
                   className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-surface-light transition-all duration-300 hover:-translate-y-1 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark dark:hover:border-primary-500/30"
@@ -553,7 +553,7 @@ function NodeAllocationsPage() {
                         Assigned IPs ({pool.allocations.length})
                       </div>
                       <div className="max-h-32 space-y-1 overflow-y-auto">
-                        {pool.allocations.map((alloc) => (
+                        {pool.allocations?.map((alloc: any) => (
                           <div key={alloc.id} className="flex items-center justify-between text-xs">
                             <span className="font-mono text-slate-600 dark:text-slate-400">
                               {alloc.ip}

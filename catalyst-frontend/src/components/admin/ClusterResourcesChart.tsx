@@ -264,7 +264,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
                                 style={{ backgroundColor: entry.color }}
                               />
                               <span className="text-slate-600 dark:text-slate-400">
-                                {entry.name?.replace(/_/g, ' ')}:
+                                {String(entry.name ?? '').replace(/_/g, ' ')}:
                               </span>
                               <span className="font-semibold text-slate-900 dark:text-white">
                                 {typeof entry.value === 'number' ? entry.value.toFixed(1) : entry.value}

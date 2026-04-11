@@ -95,6 +95,7 @@ export interface Server {
     endpoint?: string | null;
     accessKeyId?: string | null;
     secretAccessKey?: string | null;
+    pathStyle?: boolean | null;
   } | null;
   backupSftpConfig?: {
     host?: string | null;
@@ -130,12 +131,14 @@ export interface ServerListParams {
 
 export interface CreateServerPayload {
   name: string;
+  description?: string;
   templateId: string;
   nodeId: string;
   locationId: string;
   allocatedMemoryMb: number;
   allocatedCpuCores: number;
   allocatedDiskMb: number;
+  backupAllocationMb?: number;
   databaseAllocation?: number;
   primaryPort: number;
   primaryIp?: string | null;
@@ -147,6 +150,7 @@ export interface CreateServerPayload {
 
 export interface UpdateServerPayload {
   name?: string;
+  description?: string;
   startupCommand?: string | null;
   environment?: Record<string, string>;
   allocatedMemoryMb?: number;
@@ -154,6 +158,7 @@ export interface UpdateServerPayload {
   allocatedDiskMb?: number;
   primaryPort?: number;
   primaryIp?: string | null;
+  allocationId?: string;
   portBindings?: Record<number, number>;
   backupAllocationMb?: number;
   databaseAllocation?: number;

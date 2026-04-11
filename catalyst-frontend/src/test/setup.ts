@@ -23,8 +23,6 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Mock IntersectionObserver
-declare const globalThis: typeof global & Window;
-
 globalThis.IntersectionObserver = class IntersectionObserver {
   constructor() {}
   disconnect() {}

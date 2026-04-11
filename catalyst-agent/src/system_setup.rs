@@ -137,10 +137,13 @@ impl SystemSetup {
         // 5. Ensure IP tooling is available (iproute2)
         Self::ensure_iproute(&pkg_manager).await?;
 
-        // 6. Ensure CNI plugin binaries are installed
+        // 6. Ensure iptables is available (port forwarding / NAT)
+        Self::ensure_iptables(&pkg_manager).await?;
+
+        // 7. Ensure CNI plugin binaries are installed
         Self::ensure_cni_plugins(&pkg_manager).await?;
 
-        // 7. Setup CNI networking only (static host-local IPAM)
+        // 8. Setup CNI networking only (static host-local IPAM)
         Self::setup_cni_static_networking(config).await?;
 
         info!("✅ System initialization complete!");
@@ -391,7 +394,8 @@ impl SystemSetup {
 
         // 3. Create a systemd override so containerd creates the socket with
         //    group "containerd" and mode 0660.
-        if has_systemctl {
+        //    Skip entirely on non-systemd systems (e.g. Alpine with OpenRC).
+        if has_systemctl && std::path::Path::new("/run/systemd/system").exists() {
             let override_dir = "/etc/systemd/system/containerd.service.d";
             let override_file = format!("{}/override.conf", override_dir);
 
@@ -478,6 +482,53 @@ impl SystemSetup {
         }
 
         info!("✓ ip installed");
+        Ok(())
+    }
+
+    /// Ensure `iptables` is available (needed for port forwarding / NAT).
+    async fn ensure_iptables(pkg_manager: &str) -> Result<(), AgentError> {
+        if Command::new("which")
+            .arg("iptables")
+            .output()
+            .map_err(|e| AgentError::IoError(format!("Failed to check iptables: {}", e)))?
+            .status
+            .success()
+        {
+            info!("✓ iptables already installed");
+            return Ok(());
+        }
+
+        warn!("iptables not found, installing...");
+        match pkg_manager {
+            "apk" => {
+                Self::run_command("apk", &["add", "--no-cache", "iptables"], None)?;
+            }
+            "apt" => {
+                Self::run_command("apt-get", &["update", "-qq"], None)?;
+                Self::run_command("apt-get", &["install", "-y", "-qq", "iptables"], None)?;
+            }
+            "yum" | "dnf" => {
+                Self::run_command(pkg_manager, &["install", "-y", "iptables"], None)?;
+            }
+            "pacman" => {
+                Self::run_command("pacman", &["-S", "--noconfirm", "iptables"], None)?;
+            }
+            "zypper" => {
+                Self::run_command(
+                    "zypper",
+                    &["--non-interactive", "install", "iptables"],
+                    None,
+                )?;
+            }
+            _ => {
+                warn!("Automatic installation not supported for {}", pkg_manager);
+                return Err(AgentError::InternalError(format!(
+                    "Please install iptables manually for {}",
+                    pkg_manager
+                )));
+            }
+        }
+        info!("✓ iptables installed");
         Ok(())
     }
 

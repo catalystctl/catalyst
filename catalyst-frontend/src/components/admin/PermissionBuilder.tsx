@@ -384,5 +384,3 @@ export default function PermissionBuilder({
     </div>
   );
 }
-
-export { PERMISSION_PRESETS };

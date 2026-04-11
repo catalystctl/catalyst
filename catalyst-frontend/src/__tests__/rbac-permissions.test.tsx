@@ -5,9 +5,7 @@
  * and permission-related hooks.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { describe, it, expect } from 'vitest';
 import {
   hasAnyAdminPermission,
   hasAnyPermission,

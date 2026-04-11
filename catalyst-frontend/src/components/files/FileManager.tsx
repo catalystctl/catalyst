@@ -911,7 +911,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
                 isDirty={isDirty}
                 onChange={updateActiveContent}
                 onSave={() => saveMutation.mutate()}
-                onDownload={() => handleDownload(activeFile)}
+                onDownload={() => activeFile && handleDownload(activeFile as unknown as FileEntry)}
                 onReset={() => {
                   if (!activeFile) return;
                   updateActiveContent(activeFile.originalContent);

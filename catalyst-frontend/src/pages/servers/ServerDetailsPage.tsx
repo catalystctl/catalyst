@@ -1389,7 +1389,7 @@ function ServerDetailsPage() {
   };
 
   const loadConfigFile = useCallback(
-    async (pathValue: string) => {
+    async (pathValue: string): Promise<ConfigFileState> => {
       const format = detectConfigFormat(pathValue);
       if (!format) {
         return {

@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { useAdminStats, useAuditLogs, useAdminHealth } from '../../hooks/useAdmin';
-import { useDashboardActivity } from '../../hooks/useDashboard';
 import { useAdminNodes, useAdminServers } from '../../hooks/useAdmin';
 import { useClusterMetrics } from '../../hooks/useClusterMetrics';
 import { ClusterResourcesChart } from '../../components/admin/ClusterResourcesChart';
@@ -9,13 +8,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { motion } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 import {
   Users,
   Server,
   HardDrive,
   Activity,
-  AlertTriangle,
   CheckCircle,
   XCircle,
   ArrowUpRight,
@@ -31,12 +29,11 @@ import {
   FileText,
   TrendingUp,
   TrendingDown,
-  MoreVertical,
   Sparkles,
   Waves,
   Cpu,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,7 +54,7 @@ const containerVariants = {
   },
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { opacity: 0, y: 20 },
   visible: {
     opacity: 1,
@@ -70,7 +67,7 @@ const itemVariants = {
   },
 };
 
-const scaleVariants = {
+const scaleVariants: Variants = {
   hidden: { opacity: 0, scale: 0.9 },
   visible: {
     opacity: 1,
@@ -602,7 +599,7 @@ function EnhancedMiniStat({
   href,
   loading,
   trend,
-  color = 'primary',
+  color = 'cyan' as const,
   index,
 }: {
   title: string;
