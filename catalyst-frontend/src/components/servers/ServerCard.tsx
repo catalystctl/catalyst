@@ -166,7 +166,7 @@ function ServerCard({ server }: { server: Server }) {
 
         {/* Actions */}
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4 dark:border-slate-800">
-          <ServerControls serverId={server.id} status={server.status} />
+          <ServerControls serverId={server.id} status={server.status} permissions={server.effectivePermissions} />
           <Link
             to={isSuspended ? '#' : `/servers/${server.id}/console`}
             className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all duration-300 ${

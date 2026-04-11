@@ -8,12 +8,19 @@ import type { ServerStatus } from '../../types/server';
 type Props = {
   serverId: string;
   status: ServerStatus;
+  permissions?: string[];
 };
 
-function ServerControls({ serverId, status }: Props) {
+function ServerControls({ serverId, status, permissions }: Props) {
   const queryClient = useQueryClient();
   const isSuspended = status === 'suspended';
   const [showKillConfirm, setShowKillConfirm] = useState(false);
+
+  const p = new Set(permissions ?? []);
+  const canStart = p.size === 0 || p.has('server.start');
+  const canStop = p.size === 0 || p.has('server.stop');
+  const canRestart = canStart && canStop;
+  const canKill = canStop;
 
   const invalidate = () =>
     queryClient.invalidateQueries({
@@ -61,37 +68,51 @@ function ServerControls({ serverId, status }: Props) {
     kill.mutate();
   };
 
+  // If permissions are provided and the user has none of the action permissions, show nothing.
+  // An empty permissions array means "not yet loaded" — show buttons optimistically.
+  if (permissions && permissions.length > 0 && !canStart && !canStop && !canKill) {
+    return null;
+  }
+
   return (
     <>
       <div className="flex flex-wrap gap-2 text-xs">
-        <button
-          className="rounded-md bg-emerald-600 px-3 py-1 font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all duration-300 hover:bg-emerald-500 disabled:opacity-60"
-          disabled={start.isPending || status === 'running' || isSuspended}
-          onClick={() => start.mutate()}
-        >
-          Start
-        </button>
-        <button
-          className="rounded-md bg-slate-600 px-3 py-1 font-semibold text-white shadow-lg shadow-slate-500/20 transition-all duration-300 hover:bg-slate-500 disabled:opacity-60"
-          disabled={stop.isPending || status === 'stopped' || isSuspended}
-          onClick={() => stop.mutate()}
-        >
-          Stop
-        </button>
-        <button
-          className="rounded-md bg-primary-600 px-3 py-1 font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
-          disabled={restart.isPending || isSuspended}
-          onClick={() => restart.mutate()}
-        >
-          Restart
-        </button>
-        <button
-          className="rounded-md bg-rose-600 px-3 py-1 font-semibold text-white shadow-lg shadow-rose-500/20 transition-all duration-300 hover:bg-rose-500 disabled:opacity-60"
-          disabled={kill.isPending || isSuspended || status === 'stopped'}
-          onClick={() => setShowKillConfirm(true)}
-        >
-          Kill
-        </button>
+        {canStart && (
+          <button
+            className="rounded-md bg-emerald-600 px-3 py-1 font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all duration-300 hover:bg-emerald-500 disabled:opacity-60"
+            disabled={start.isPending || status === 'running' || isSuspended}
+            onClick={() => start.mutate()}
+          >
+            Start
+          </button>
+        )}
+        {canStop && (
+          <button
+            className="rounded-md bg-slate-600 px-3 py-1 font-semibold text-white shadow-lg shadow-slate-500/20 transition-all duration-300 hover:bg-slate-500 disabled:opacity-60"
+            disabled={stop.isPending || status === 'stopped' || isSuspended}
+            onClick={() => stop.mutate()}
+          >
+            Stop
+          </button>
+        )}
+        {canRestart && (
+          <button
+            className="rounded-md bg-primary-600 px-3 py-1 font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+            disabled={restart.isPending || isSuspended}
+            onClick={() => restart.mutate()}
+          >
+            Restart
+          </button>
+        )}
+        {canKill && (
+          <button
+            className="rounded-md bg-rose-600 px-3 py-1 font-semibold text-white shadow-lg shadow-rose-500/20 transition-all duration-300 hover:bg-rose-500 disabled:opacity-60"
+            disabled={kill.isPending || isSuspended || status === 'stopped'}
+            onClick={() => setShowKillConfirm(true)}
+          >
+            Kill
+          </button>
+        )}
       </div>
 
       <ConfirmDialog

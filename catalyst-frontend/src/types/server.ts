@@ -121,6 +121,8 @@ export interface Server {
     host?: string | null;
     port?: number | null;
   };
+  /** Effective permissions for the current user on this server */
+  effectivePermissions?: string[];
 }
 
 export interface ServerListParams {

@@ -92,7 +92,7 @@ export async function backupRoutes(app: FastifyInstance) {
       const { serverId } = request.params as { serverId: string };
       const { name } = request.body as { name?: string };
       const userId = request.user.userId;
-      const accessServer = await ensureBackupAccess(serverId, userId, reply, "file.write");
+      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.create");
       if (!accessServer) return;
 
       // Get server
@@ -197,7 +197,7 @@ export async function backupRoutes(app: FastifyInstance) {
         page?: string;
       };
       const userId = request.user.userId;
-      const accessServer = await ensureBackupAccess(serverId, userId, reply, "file.read");
+      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.read");
       if (!accessServer) return;
 
       const parsedLimit = parseInt(limit);
@@ -275,7 +275,7 @@ export async function backupRoutes(app: FastifyInstance) {
         backupId: string;
       };
       const userId = request.user.userId;
-      const accessServer = await ensureBackupAccess(serverId, userId, reply, "file.read");
+      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.read");
       if (!accessServer) return;
 
       const backup = await prisma.backup.findFirst({
@@ -317,7 +317,7 @@ export async function backupRoutes(app: FastifyInstance) {
         backupId: string;
       };
       const userId = request.user.userId;
-      const accessServer = await ensureBackupAccess(serverId, userId, reply, "file.write");
+      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.restore");
       if (!accessServer) return;
 
       const server = await prisma.server.findUnique({
@@ -421,7 +421,7 @@ export async function backupRoutes(app: FastifyInstance) {
         backupId: string;
       };
       const userId = request.user.userId;
-      const accessServer = await ensureBackupAccess(serverId, userId, reply, "file.write");
+      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.delete");
       if (!accessServer) return;
 
       const backup = await prisma.backup.findFirst({
@@ -479,7 +479,7 @@ export async function backupRoutes(app: FastifyInstance) {
         backupId: string;
       };
       const userId = request.user.userId;
-      const accessServer = await ensureBackupAccess(serverId, userId, reply, "file.read");
+      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.read");
       if (!accessServer) return;
 
       const backup = await prisma.backup.findFirst({

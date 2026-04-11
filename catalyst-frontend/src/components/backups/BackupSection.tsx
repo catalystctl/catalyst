@@ -62,7 +62,9 @@ function BackupSection({
     user?.permissions?.includes('*') ||
     user?.permissions?.includes('admin.write') ||
     user?.permissions?.includes('file.write') ||
-    Boolean(server && user?.id && server.ownerId === user.id);
+    user?.permissions?.includes('backup.create') ||
+    Boolean(server && user?.id && server.ownerId === user.id) ||
+    Boolean(server?.effectivePermissions?.includes('backup.create'));
   const canRead =
     user?.permissions?.includes('*') ||
     user?.permissions?.includes('admin.read') ||
