@@ -49,6 +49,10 @@ impl CatalystAgent {
             .await?,
         );
 
+        // Initialize firewall manager — loads persisted rule state from disk
+        // so rules can be cleaned up even after agent restart.
+        FirewallManager::init();
+
         // FileManager uses the same base data_dir as storage - servers are stored at {data_dir}/{server_uuid}
         let file_manager = Arc::new(FileManager::new(config.server.data_dir.clone()));
         let storage_manager = Arc::new(StorageManager::new(config.server.data_dir.clone()));
@@ -112,6 +116,10 @@ impl CatalystAgent {
             _ = health_task => {},
             _ = tunnel_task => {},
         }
+
+        // Clean up firewall rules on shutdown.
+        info!("Shutting down — cleaning up tracked firewall rules");
+        FirewallManager::remove_all_tracked().await;
 
         Ok(())
     }

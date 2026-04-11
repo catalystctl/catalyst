@@ -4485,6 +4485,20 @@ export async function serverRoutes(app: FastifyInstance) {
         await tx.server.delete({ where: { id: serverId } });
       });
 
+      // Tell the agent to clean up the container and firewall rules.
+      if (server.nodeId) {
+        const gateway = (app as any).wsGateway;
+        if (gateway) {
+          gateway.sendToAgent(server.nodeId, {
+            type: "delete_server",
+            serverId: server.id,
+            serverUuid: server.uuid,
+          }).catch((err: any) => {
+            console.error(`Failed to send delete_server command to agent for ${server.id}:`, err);
+          });
+        }
+      }
+
       reply.send({ success: true });
     }
   );
