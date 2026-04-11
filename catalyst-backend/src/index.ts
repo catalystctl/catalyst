@@ -314,7 +314,7 @@ async function bootstrap() {
       },
       keyGenerator: (request) => {
         // Use user ID for authenticated requests, IP for unauthenticated
-        return (request as any).user?.userId || request.ip;
+        return request.user?.userId || request.ip;
       },
       allowList: async (request) => {
         // Node agent API keys bypass rate limiting entirely
@@ -633,7 +633,7 @@ async function bootstrap() {
           : request.hostname.split(':')[0];
 
       // Find a valid session token for this user to use as SFTP password
-      const userId = (request as any).user?.userId;
+      const userId = request.user?.userId;
       let sftpPassword: string | null = null;
       if (userId) {
         const activeSession = await prisma.session.findFirst({

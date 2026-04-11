@@ -57,7 +57,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
     try {
       // Validate body with Zod
       const body = createApiKeySchema.parse(request.body);
-      const userId = (request as any).user.id;
+      const userId = request.user.userId;
 
       // Create API key using standalone service
       const response = await createApiKey({
@@ -206,7 +206,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
     try {
       const { id } = request.params;
       const body = updateApiKeySchema.parse(request.body);
-      const userId = (request as any).user.id;
+      const userId = request.user.userId;
 
       const apiKey = await prisma.apikey.update({
         where: { id },
@@ -255,7 +255,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const { id } = request.params;
-      const userId = (request as any).user.id;
+      const userId = request.user.userId;
 
       const apiKey = await prisma.apikey.findUnique({
         where: { id },

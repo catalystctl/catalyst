@@ -11,21 +11,20 @@ export type ServerStatus =
 export type RestartPolicy = 'always' | 'on-failure' | 'never';
 export type BackupStorageMode = 'local' | 's3' | 'sftp' | 'stream';
 type ModManagerTarget = 'mods' | 'datapacks' | 'modpacks';
-type ModManagerProvider =
-  | string
-  | {
-      id: string;
-      label?: string;
-      game?: string;
-      targets?: ModManagerTarget[];
-      curseforge?: {
-        gameId?: string | number;
-        gameSlug?: string;
-        classIds?: Partial<Record<ModManagerTarget, string | number>>;
-        classSlugs?: Partial<Record<ModManagerTarget, string>>;
-        modLoaderMap?: Record<string, string | number>;
-      };
-    };
+export interface ModManagerProviderObject {
+  id: string;
+  label?: string;
+  game?: string;
+  targets?: ModManagerTarget[];
+  curseforge?: {
+    gameId?: string | number;
+    gameSlug?: string;
+    classIds?: Partial<Record<ModManagerTarget, string | number>>;
+    classSlugs?: Partial<Record<ModManagerTarget, string>>;
+    modLoaderMap?: Record<string, string | number>;
+  };
+}
+type ModManagerProvider = string | ModManagerProviderObject;
 
 export interface Server {
   id: string;

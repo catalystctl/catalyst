@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { StateCreator } from 'zustand/vanilla';
 import { authApi } from '../services/api/auth';
 import type { User } from '../types/user';
 import type { LoginSchema, RegisterSchema } from '../validators/auth';
@@ -23,148 +24,155 @@ interface AuthState {
   verifyTwoFactor: (payload: { code: string; trustDevice?: boolean }) => Promise<void>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const useAuthStore = create<AuthState>()(
-  persist(
-    // @ts-expect-error zustand v5 persist StateCreator type mismatch
-    (set, get) => {
-      const rememberMe = localStorage.getItem('catalyst-remember-me') === 'true';
-      return {
-      user: null,
-      token: null, // No longer using localStorage tokens
-      rememberMe,
-      isAuthenticated: false,
-      isReady: false,
-      isLoading: false,
-      isRefreshing: false,
-      error: null,
-      login: async (values, options) => {
-        set({ isLoading: true, error: null });
-        try {
-          const { user } = await authApi.login(values, options);
-          // Cookie-based authentication - tokens stored in HttpOnly cookies
-          set({
-            user,
-            token: null, // No longer storing token in memory
-            rememberMe: Boolean(values.rememberMe),
-            isAuthenticated: true,
-            isLoading: false,
-            isReady: true,
-            error: null,
-          });
-        } catch (err: any) {
-          if (err.code === 'TWO_FACTOR_REQUIRED' || err.code === 'PASSKEY_REQUIRED') {
-            set({ isLoading: false, error: null, token: null, rememberMe: Boolean(values.rememberMe) });
-            throw err;
-          }
-          const rawError = err.response?.data?.error;
-          const message = (typeof rawError === 'string' ? rawError : rawError?.message || rawError?.error) || err.message || 'Login failed';
-          set({ isLoading: false, error: message });
-          throw err;
-        }
-      },
-      register: async (values) => {
-        set({ isLoading: true, error: null });
-        try {
-          const { user } = await authApi.register(values);
-          // Cookie-based authentication - tokens stored in HttpOnly cookies
-          set({ user, token: null, isAuthenticated: true, isLoading: false, isReady: true, error: null });
-        } catch (err: any) {
-          const rawError = err.response?.data?.error;
-          const message = (typeof rawError === 'string' ? rawError : rawError?.message || rawError?.error) || err.message || 'Registration failed';
-          set({ isLoading: false, error: message });
-          throw err;
-        }
-      },
-        refresh: async () => {
-          // With cookie-based auth, always try to refresh - cookies are sent automatically
-          set({ isRefreshing: true, error: null, isReady: true });
-          try {
-            const { user } = await authApi.refresh();
-            set({
-              token: null,
-              user,
-              isAuthenticated: true,
-              isRefreshing: false,
-              isReady: true,
-              error: null,
-            });
-          } catch (error: any) {
-          const rawError = error.response?.data?.error;
-          const message = (typeof rawError === 'string' ? rawError : rawError?.message || rawError?.error) || error.message || 'Session expired';
-          // Clean up any remaining localStorage items
-          localStorage.removeItem('catalyst-auth-token');
-          sessionStorage.removeItem('catalyst-session-token');
-          set({
-            token: null,
-            user: null,
-            isAuthenticated: false,
-            isRefreshing: false,
-            isReady: true,
-            error: message,
-            rememberMe: false,
-            });
-            throw error;
-          } finally {
-            set({ isRefreshing: false, isReady: true });
-          }
-        },
-        init: () => {
-          set({ isReady: true });
-          // Always try to refresh - cookie-based auth doesn't need stored token
-          void get().refresh();
-          return undefined;
-        },
-      logout: () => {
-        localStorage.removeItem('catalyst-remember-me');
-        localStorage.removeItem('catalyst-auth');
-        set({ user: null, token: null, isAuthenticated: false, isReady: true, rememberMe: false });
-        void authApi.logout().catch(() => {
-          // Ignore network errors after local logout
+type AuthSet = (
+  partial: AuthState | Partial<AuthState> | ((state: AuthState) => AuthState | Partial<AuthState>),
+  replace?: boolean | undefined,
+) => void;
+type AuthGet = () => AuthState;
+
+const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [], AuthState> = (set, get) => {
+  const rememberMe = localStorage.getItem('catalyst-remember-me') === 'true';
+  return {
+    user: null,
+    token: null, // No longer using localStorage tokens
+    rememberMe,
+    isAuthenticated: false,
+    isReady: false,
+    isLoading: false,
+    isRefreshing: false,
+    error: null,
+    login: async (values, options) => {
+      (set as AuthSet)({ isLoading: true, error: null });
+      try {
+        const { user } = await authApi.login(values, options);
+        // Cookie-based authentication - tokens stored in HttpOnly cookies
+        (set as AuthSet)({
+          user,
+          token: null, // No longer storing token in memory
+          rememberMe: Boolean(values.rememberMe),
+          isAuthenticated: true,
+          isLoading: false,
+          isReady: true,
+          error: null,
         });
-      },
-      setUser: (user) => set({ user, isAuthenticated: Boolean(user) }),
-        setSession: ({ user }) => {
-          set({
-            user,
-            token: get().token,
-            rememberMe: get().rememberMe,
-            isAuthenticated: true,
-            isLoading: false,
-            isReady: true,
-            error: null,
-          });
-        },
-      verifyTwoFactor: async (payload) => {
-        set({ isLoading: true, error: null });
-        try {
-          const { user } = await authApi.verifyTwoFactor(payload);
-          // Cookie-based authentication - tokens stored in HttpOnly cookies
-          set({
-            user,
-            token: null,
-            isAuthenticated: true,
-            isLoading: false,
-            isReady: true,
-            error: null,
-          });
-        } catch (err: any) {
-          const rawError = err.response?.data?.error;
-          const message = (typeof rawError === 'string' ? rawError : rawError?.message || rawError?.error) || err.message || 'Two-factor verification failed';
-          set({ isLoading: false, error: message });
+      } catch (err: unknown) {
+        const error = err as { code?: string; response?: { data?: { error?: unknown } }; message?: string };
+        if (error.code === 'TWO_FACTOR_REQUIRED' || error.code === 'PASSKEY_REQUIRED') {
+          (set as AuthSet)({ isLoading: false, error: null, token: null, rememberMe: Boolean(values.rememberMe) });
           throw err;
         }
-      },
-    };
+        const rawError = error.response?.data?.error;
+        const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || error.message || 'Login failed';
+        (set as AuthSet)({ isLoading: false, error: message as string });
+        throw err;
+      }
     },
-    {
-      name: 'catalyst-auth',
-      partialize: (state: AuthState) => ({
-        user: state.user,
-        isAuthenticated: state.isAuthenticated,
-        rememberMe: state.rememberMe,
-        // Do NOT store token - using HttpOnly cookies instead
-      }),
+    register: async (values) => {
+      (set as AuthSet)({ isLoading: true, error: null });
+      try {
+        const { user } = await authApi.register(values);
+        // Cookie-based authentication - tokens stored in HttpOnly cookies
+        (set as AuthSet)({ user, token: null, isAuthenticated: true, isLoading: false, isReady: true, error: null });
+      } catch (err: unknown) {
+        const error = err as { response?: { data?: { error?: unknown } }; message?: string };
+        const rawError = error.response?.data?.error;
+        const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || error.message || 'Registration failed';
+        (set as AuthSet)({ isLoading: false, error: message as string });
+        throw err;
+      }
     },
-  ),
+    refresh: async () => {
+      // With cookie-based auth, always try to refresh - cookies are sent automatically
+      (set as AuthSet)({ isRefreshing: true, error: null, isReady: true });
+      try {
+        const { user } = await authApi.refresh();
+        (set as AuthSet)({
+          token: null,
+          user,
+          isAuthenticated: true,
+          isRefreshing: false,
+          isReady: true,
+          error: null,
+        });
+      } catch (error: unknown) {
+        const err = error as { response?: { data?: { error?: unknown } }; message?: string };
+        const rawError = err.response?.data?.error;
+        const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || err.message || 'Session expired';
+        // Clean up any remaining localStorage items
+        localStorage.removeItem('catalyst-auth-token');
+        sessionStorage.removeItem('catalyst-session-token');
+        (set as AuthSet)({
+          token: null,
+          user: null,
+          isAuthenticated: false,
+          isRefreshing: false,
+          isReady: true,
+          error: message as string,
+          rememberMe: false,
+        });
+        throw error;
+      } finally {
+        (set as AuthSet)({ isRefreshing: false, isReady: true });
+      }
+    },
+    init: async () => {
+      (set as AuthSet)({ isReady: true });
+      // Always try to refresh - cookie-based auth doesn't need stored token
+      void (get as AuthGet)().refresh();
+    },
+    logout: () => {
+      localStorage.removeItem('catalyst-remember-me');
+      localStorage.removeItem('catalyst-auth');
+      (set as AuthSet)({ user: null, token: null, isAuthenticated: false, isReady: true, rememberMe: false });
+      void authApi.logout().catch(() => {
+        // Ignore network errors after local logout
+      });
+    },
+    setUser: (user) => (set as AuthSet)({ user, isAuthenticated: Boolean(user) }),
+    setSession: ({ user }) => {
+      const current = get as AuthGet;
+      (set as AuthSet)({
+        user,
+        token: current().token,
+        rememberMe: current().rememberMe,
+        isAuthenticated: true,
+        isLoading: false,
+        isReady: true,
+        error: null,
+      });
+    },
+    verifyTwoFactor: async (payload) => {
+      (set as AuthSet)({ isLoading: true, error: null });
+      try {
+        const { user } = await authApi.verifyTwoFactor(payload);
+        // Cookie-based authentication - tokens stored in HttpOnly cookies
+        (set as AuthSet)({
+          user,
+          token: null,
+          isAuthenticated: true,
+          isLoading: false,
+          isReady: true,
+          error: null,
+        });
+      } catch (err: unknown) {
+        const error = err as { response?: { data?: { error?: unknown } }; message?: string };
+        const rawError = error.response?.data?.error;
+        const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || error.message || 'Two-factor verification failed';
+        (set as AuthSet)({ isLoading: false, error: message as string });
+        throw err;
+      }
+    },
+  };
+};
+
+export const useAuthStore = create<AuthState>()(
+  persist(createAuthState, {
+    name: 'catalyst-auth',
+    partialize: (state: AuthState) => ({
+      user: state.user,
+      isAuthenticated: state.isAuthenticated,
+      rememberMe: state.rememberMe,
+      // Do NOT store token - using HttpOnly cookies instead
+    }),
+  }),
 );

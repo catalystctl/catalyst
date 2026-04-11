@@ -10,7 +10,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
     '/stats',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
 
       // Check if user has any relevant permission
       const canReadServers = await hasPermission(prisma, user.userId, 'server.read');
@@ -51,7 +51,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
     '/activity',
     { preHandler: authenticate },
     async (request: FastifyRequest<{ Querystring: { limit?: string } }>, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const limit = Math.min(20, parseInt(request.query.limit || '5', 10));
 
       const isAdmin = await hasAnyPermission(prisma, user.userId, ['admin.read', 'admin.write']);
@@ -91,7 +91,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
     '/resources',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
 
       const canReadNodes = await hasPermission(prisma, user.userId, 'node.read');
       const isAdmin = await hasAnyPermission(prisma, user.userId, ['admin.read', 'admin.write']);

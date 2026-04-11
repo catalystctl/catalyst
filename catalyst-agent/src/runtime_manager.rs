@@ -203,6 +203,7 @@ pub struct DeviceProfile {
 
 impl DeviceProfile {
     /// Minimal profile - only null device
+    #[allow(dead_code)]
     pub fn minimal() -> Self {
         Self {
             devices: vec![
@@ -228,6 +229,7 @@ impl DeviceProfile {
     }
 
     /// GPU profile - includes GPU device access
+    #[allow(dead_code)]
     pub fn gpu() -> Self {
         let mut standard = Self::standard();
         // Add NVIDIA GPU devices (typically /dev/nvidia*)
@@ -237,6 +239,7 @@ impl DeviceProfile {
     }
 
     /// Extended profile - for servers that need more device access
+    #[allow(dead_code)]
     pub fn extended() -> Self {
         let mut standard = Self::standard();
         // Add additional common devices
@@ -246,6 +249,7 @@ impl DeviceProfile {
     }
 
     /// Get device profile by name
+    #[allow(dead_code)]
     pub fn from_name(name: &str) -> Self {
         match name.to_lowercase().as_str() {
             "minimal" => Self::minimal(),

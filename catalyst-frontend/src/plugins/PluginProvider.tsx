@@ -43,9 +43,9 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
       
       setPlugins(loadedPlugins);
       setInitialized(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to load plugins:', err);
-      setError(err.message || 'Failed to load plugins');
+      setError(err instanceof Error ? err.message : 'Failed to load plugins');
     } finally {
       setLoading(false);
     }

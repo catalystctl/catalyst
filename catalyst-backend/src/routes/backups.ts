@@ -161,7 +161,7 @@ export async function backupRoutes(app: FastifyInstance) {
       });
 
       // Send backup request to agent
-      const gateway = (app as any).wsGateway;
+      const gateway = app.wsGateway!;
       const success = await gateway.sendToAgent(server.nodeId, {
         type: "create_backup",
         serverId: server.id,
@@ -362,7 +362,7 @@ export async function backupRoutes(app: FastifyInstance) {
 
       const serverDir = buildServerDir(server.uuid);
 
-      const gateway = (app as any).wsGateway;
+      const gateway = app.wsGateway!;
        let restorePath = backup.path;
        if (backup.storageMode === "s3" || backup.storageMode === "sftp") {
          const { storageKey } = backup.metadata as { storageKey?: string };
@@ -452,7 +452,7 @@ export async function backupRoutes(app: FastifyInstance) {
         });
       }
 
-      const gateway = (app as any).wsGateway;
+      const gateway = app.wsGateway!;
        await deleteBackupFromStorage(gateway, backup, {
          id: server.id,
          uuid: server.uuid,
@@ -554,7 +554,7 @@ export async function backupRoutes(app: FastifyInstance) {
           return reply.status(404).send({ error: "Backup file not found on disk" });
         }
 
-         const gateway = (app as any).wsGateway;
+         const gateway = app.wsGateway!;
          const stream = new PassThrough();
         let bytesWritten = 0;
         const finalize = (error?: Error) => {

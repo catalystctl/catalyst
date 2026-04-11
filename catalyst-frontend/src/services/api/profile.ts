@@ -75,8 +75,10 @@ export const profileApi = {
       name: payload.name,
       authenticatorAttachment: payload.authenticatorAttachment,
     });
-    if ((response as any)?.error) {
-      throw new Error((response as any).error?.message || 'Failed to add passkey');
+    const resp = response as Record<string, unknown> | null;
+    if (resp && typeof resp === 'object' && 'error' in resp && resp.error) {
+      const err = resp.error as { message?: string } | string | null;
+      throw new Error(typeof err === 'string' ? err : err?.message || 'Failed to add passkey');
     }
     return response;
   },

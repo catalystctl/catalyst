@@ -21,7 +21,7 @@ function AdminNodesPage() {
 
   const onlineNodes = nodes.filter((node) => node.isOnline);
   const offlineNodes = nodes.filter((node) => !node.isOnline);
-  const totalServers = nodes.reduce((acc, node) => acc + (node._count?.servers ?? (node as any).servers?.length ?? 0), 0);
+  const totalServers = nodes.reduce((acc, node) => acc + (node._count?.servers ?? 0), 0);
   const totalCpu = nodes.reduce((acc, node) => acc + (node.maxCpuCores ?? 0), 0);
   const totalMemory = nodes.reduce((acc, node) => acc + (node.maxMemoryMb ?? 0), 0);
 

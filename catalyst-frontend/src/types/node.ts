@@ -21,6 +21,10 @@ export interface NodeInfo {
   _count?: {
     servers: number;
   };
+  location?: {
+    id: string;
+    name: string;
+  };
 }
 
 export interface NodeAllocation {

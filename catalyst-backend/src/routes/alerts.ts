@@ -71,7 +71,7 @@ export async function alertRoutes(app: FastifyInstance) {
     '/alert-rules',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const isAdmin = await isAdminUser(user.userId);
       const { name, description, type, target, targetId, conditions, actions, enabled } = request.body as {
         name: string;
@@ -161,7 +161,7 @@ export async function alertRoutes(app: FastifyInstance) {
     '/alert-rules',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const { type, enabled, scope, target, targetId } = request.query as {
         type?: string;
         enabled?: string;
@@ -194,7 +194,7 @@ export async function alertRoutes(app: FastifyInstance) {
     '/alert-rules/:ruleId',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const isAdmin = await isAdminUser(user.userId);
       const { ruleId } = request.params as { ruleId: string };
 
@@ -218,7 +218,7 @@ export async function alertRoutes(app: FastifyInstance) {
     '/alert-rules/:ruleId',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const isAdmin = await isAdminUser(user.userId);
       const { ruleId } = request.params as { ruleId: string };
       const { name, description, conditions, actions, enabled } = request.body as {
@@ -273,7 +273,7 @@ export async function alertRoutes(app: FastifyInstance) {
     '/alert-rules/:ruleId',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const isAdmin = await isAdminUser(user.userId);
       const { ruleId } = request.params as { ruleId: string };
 
@@ -311,7 +311,7 @@ export async function alertRoutes(app: FastifyInstance) {
     '/alerts/:alertId/deliveries',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const isAdmin = await isAdminUser(user.userId);
       const { alertId } = request.params as { alertId: string };
       const alert = await prisma.alert.findUnique({ where: { id: alertId }, select: { id: true, userId: true, serverId: true } });
@@ -346,7 +346,7 @@ export async function alertRoutes(app: FastifyInstance) {
     '/alerts',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const {
         page = 1,
         limit = 50,
@@ -428,7 +428,7 @@ export async function alertRoutes(app: FastifyInstance) {
     '/alerts/:alertId',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const isAdmin = await isAdminUser(user.userId);
       const { alertId } = request.params as { alertId: string };
 
@@ -476,7 +476,7 @@ export async function alertRoutes(app: FastifyInstance) {
     '/alerts/:alertId/resolve',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const isAdmin = await isAdminUser(user.userId);
       const { alertId } = request.params as { alertId: string };
       const alert = await prisma.alert.findUnique({
@@ -525,7 +525,7 @@ export async function alertRoutes(app: FastifyInstance) {
     '/alerts/bulk-resolve',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const isAdmin = await isAdminUser(user.userId);
       const { alertIds } = request.body as { alertIds: string[] };
 
@@ -577,7 +577,7 @@ export async function alertRoutes(app: FastifyInstance) {
     '/alerts/stats',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const user = (request as any).user;
+      const user = request.user;
       const { scope } = request.query as { scope?: 'mine' | 'all' };
       const isAdmin = await isAdminUser(user.userId);
       const where = !isAdmin || scope !== 'all' ? { userId: user.userId } : {};

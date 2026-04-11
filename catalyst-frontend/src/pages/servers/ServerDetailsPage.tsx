@@ -44,6 +44,7 @@ import { databasesApi } from '../../services/api/databases';
 import { modManagerApi } from '../../services/api/modManager';
 import { pluginManagerApi } from '../../services/api/pluginManager';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { getErrorMessage } from '../../utils/errors';
 import {
   detectConfigFormat,
   parseConfig,
@@ -57,7 +58,24 @@ import type {
   ServerAccessEntry,
   ServerInvite,
   ServerPermissionsResponse,
+  ModManagerProviderObject,
 } from '../../types/server';
+
+interface PluginVersion {
+  id: string | number;
+  name?: string;
+  version?: string;
+  slug?: string;
+  gameVersion?: string;
+  date?: string;
+  createdAt?: string;
+  [key: string]: unknown;
+}
+
+interface PluginVersionsResponse {
+  data?: PluginVersion[];
+  result?: PluginVersion[];
+}
 
 type ConfigEntry = {
   key: string;
@@ -379,7 +397,7 @@ function ServerDetailsPage() {
   const modManagerConfig = server?.template?.features?.modManager;
   const modProviderOptions = useMemo<ModManagerProviderOption[]>(() => {
     const providers = Array.isArray(modManagerConfig?.providers) ? modManagerConfig.providers : [];
-    const rootTargets = normalizeModManagerTargets((modManagerConfig as any)?.targets);
+    const rootTargets = normalizeModManagerTargets(modManagerConfig?.targets);
     const fallbackTargets = rootTargets.length ? rootTargets : defaultModManagerTargets;
     return providers
       .map((entry, index) => {
@@ -395,22 +413,21 @@ function ServerDetailsPage() {
           };
         }
         if (!entry || typeof entry !== 'object') return null;
+        const provider = entry as ModManagerProviderObject;
         const providerIdRaw =
-          typeof (entry as any).id === 'string'
-            ? (entry as any).id
-            : typeof (entry as any).provider === 'string'
-              ? (entry as any).provider
-              : '';
+          typeof provider.id === 'string'
+            ? provider.id
+            : '';
         const providerId = providerIdRaw.trim().toLowerCase();
         if (!providerId) return null;
         const game =
-          typeof (entry as any).game === 'string' && (entry as any).game.trim()
-            ? (entry as any).game.trim().toLowerCase()
+          typeof provider.game === 'string' && provider.game.trim()
+            ? provider.game.trim().toLowerCase()
             : undefined;
-        const providerTargets = normalizeModManagerTargets((entry as any).targets);
+        const providerTargets = normalizeModManagerTargets(provider.targets);
         const label =
-          typeof (entry as any).label === 'string' && (entry as any).label.trim()
-            ? (entry as any).label.trim()
+          typeof provider.label === 'string' && provider.label.trim()
+            ? provider.label.trim()
             : `${displayProviderName(providerId)}${game ? ` (${titleCase(game)})` : ''}`;
         return {
           key: `${providerId}::${game || 'default'}::${index}`,
@@ -811,9 +828,8 @@ function ServerDetailsPage() {
       const data = await serversApi.allocations(serverId);
       setAllocations(data || []);
       setAllocationsError(null);
-    } catch (error: any) {
-      const message = error?.response?.data?.error || 'Unable to load allocations';
-      setAllocationsError(message);
+    } catch (error: unknown) {
+      setAllocationsError(getErrorMessage(error, 'Unable to load allocations'));
     }
   }, [serverId]);
 
@@ -1270,10 +1286,11 @@ function ServerDetailsPage() {
 
   const pluginVersionOptions = useMemo(() => {
     if (!pluginVersions) return [];
-    const raw = Array.isArray(pluginVersions.data)
-      ? pluginVersions.data
-      : Array.isArray((pluginVersions as any).result)
-        ? (pluginVersions as any).result
+    const versionsResponse = pluginVersions as PluginVersionsResponse;
+    const raw = Array.isArray(versionsResponse.data)
+      ? versionsResponse.data
+      : Array.isArray(versionsResponse.result)
+        ? versionsResponse.result
         : Array.isArray(pluginVersions)
           ? pluginVersions
           : [];
@@ -1428,12 +1445,12 @@ function ServerDetailsPage() {
           viewMode: 'form',
           rawContent: content,
         };
-      } catch (error: any) {
+      } catch (error: unknown) {
         return {
           path: pathValue,
           sections: [],
           format,
-          error: error?.message || 'Failed to load config file',
+          error: getErrorMessage(error, 'Failed to load config file'),
           loaded: true,
           viewMode: 'form',
           rawContent: '',
@@ -1644,9 +1661,8 @@ function ServerDetailsPage() {
     try {
       await serversApi.install(serverId);
       notifySuccess('Reinstall started');
-    } catch (error: any) {
-      const message = error?.response?.data?.error || 'Failed to reinstall server';
-      notifyError(message);
+    } catch (error: unknown) {
+      notifyError(getErrorMessage(error, 'Failed to reinstall server'));
     }
   }, [serverId]);
 

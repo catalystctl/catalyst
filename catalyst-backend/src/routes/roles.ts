@@ -39,7 +39,7 @@ export async function roleRoutes(app: FastifyInstance) {
     '/',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = (request as any).user.userId;
+      const userId = request.user.userId;
 
       if (!(await checkPermission(userId, 'role.read', reply))) return;
 
@@ -72,7 +72,7 @@ export async function roleRoutes(app: FastifyInstance) {
     '/:roleId',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = (request as any).user.userId;
+      const userId = request.user.userId;
 
       if (!(await checkPermission(userId, 'role.read', reply))) return;
 
@@ -120,7 +120,7 @@ export async function roleRoutes(app: FastifyInstance) {
     '/',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = (request as any).user.userId;
+      const userId = request.user.userId;
 
       if (!(await checkPermission(userId, 'role.create', reply))) return;
 
@@ -174,7 +174,7 @@ export async function roleRoutes(app: FastifyInstance) {
     '/:roleId',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = (request as any).user.userId;
+      const userId = request.user.userId;
 
       if (!(await checkPermission(userId, 'role.update', reply))) return;
 
@@ -241,7 +241,7 @@ export async function roleRoutes(app: FastifyInstance) {
     '/:roleId',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = (request as any).user.userId;
+      const userId = request.user.userId;
 
       if (!(await checkPermission(userId, 'role.delete', reply))) return;
 
@@ -287,7 +287,7 @@ export async function roleRoutes(app: FastifyInstance) {
     '/:roleId/permissions',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = (request as any).user.userId;
+      const userId = request.user.userId;
 
       if (!(await checkPermission(userId, 'role.update', reply))) return;
 
@@ -337,7 +337,7 @@ export async function roleRoutes(app: FastifyInstance) {
     '/:roleId/permissions/*',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = (request as any).user.userId;
+      const userId = request.user.userId;
 
       if (!(await checkPermission(userId, 'role.update', reply))) return;
 
@@ -387,7 +387,7 @@ export async function roleRoutes(app: FastifyInstance) {
     '/:roleId/users/:userId',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const currentUserId = (request as any).user.userId;
+      const currentUserId = request.user.userId;
 
       if (!(await checkPermission(currentUserId, 'user.set_roles', reply))) return;
 
@@ -441,7 +441,7 @@ export async function roleRoutes(app: FastifyInstance) {
     '/:roleId/users/:userId',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const currentUserId = (request as any).user.userId;
+      const currentUserId = request.user.userId;
 
       if (!(await checkPermission(currentUserId, 'user.set_roles', reply))) return;
 
@@ -488,7 +488,7 @@ export async function roleRoutes(app: FastifyInstance) {
     '/users/:userId/roles',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const currentUserId = (request as any).user.userId;
+      const currentUserId = request.user.userId;
 
       if (!(await checkPermission(currentUserId, 'user.read', reply))) return;
 
@@ -538,7 +538,7 @@ export async function roleRoutes(app: FastifyInstance) {
     '/presets',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = (request as any).user.userId;
+      const userId = request.user.userId;
 
       if (!(await checkPermission(userId, 'role.read', reply))) return;
 
@@ -557,7 +557,7 @@ export async function roleRoutes(app: FastifyInstance) {
     '/:roleId/nodes',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const currentUserId = (request as any).user.userId;
+      const currentUserId = request.user.userId;
 
       if (!(await checkPermission(currentUserId, 'node.read', reply))) return;
 
@@ -664,7 +664,7 @@ export async function roleRoutes(app: FastifyInstance) {
     '/users/:userId/nodes',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const currentUserId = (request as any).user.userId;
+      const currentUserId = request.user.userId;
 
       // Users can view their own accessible nodes
       if (currentUserId !== (request.params as any).userId) {

@@ -337,7 +337,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
     try {
       const entries = await filesApi.listArchiveContents(serverId, archivePath);
       setArchiveEntries(entries);
-    } catch (error: any) {
+    } catch (error: unknown) {
       const bufErr = isBufferError(error);
       if (bufErr) {
         setBufferError(bufErr);
