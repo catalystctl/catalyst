@@ -58,21 +58,9 @@ function LoginPage() {
     }
   };
 
-  const applyPasskeySession = async (data?: any, tokenOverride?: string | null) => {
-    const token = tokenOverride || data?.session?.token || null;
-
-    if (token) {
-      const rememberMe = localStorage.getItem('catalyst-remember-me') === 'true';
-      if (rememberMe) {
-        localStorage.setItem('catalyst-auth-token', token);
-        sessionStorage.removeItem('catalyst-session-token');
-      } else {
-        sessionStorage.setItem('catalyst-session-token', token);
-        localStorage.removeItem('catalyst-auth-token');
-      }
-      useAuthStore.setState({ token });
-    }
-
+  const applyPasskeySession = async (data?: any, _tokenOverride?: string | null) => {
+    // Cookie-based auth: HttpOnly cookies are set by the backend.
+    // No need to store tokens in localStorage/sessionStorage.
     if (data?.user) {
       setSession({ user: data.user });
       useAuthStore.setState({ isAuthenticated: true });
@@ -96,7 +84,6 @@ function LoginPage() {
         { ...values, allowPasskeyFallback: Boolean(allowFallback) },
         allowFallback ? { forcePasskeyFallback: true } : undefined,
       );
-      setTimeout(() => navigate(from || '/servers'), 100);
       setTimeout(() => navigate(from || '/servers'), 100);
     } catch (err) {
       const error = err as { code?: string };
@@ -369,6 +356,8 @@ function LoginPage() {
           <div className="space-y-3">
             <Input
               type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
               value={totpCode}
               onChange={(e) => setTotpCode(e.target.value)}
               placeholder="123456"

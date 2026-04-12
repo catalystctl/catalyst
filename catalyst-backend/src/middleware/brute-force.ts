@@ -59,22 +59,24 @@ export const handleFailedLogin = async (
   const user = request.userForLockout as User | undefined;
   if (!user) return;
 
-  const failedAttempts = user.failedLoginAttempts + 1;
-  const updateData: any = {
-    failedLoginAttempts: failedAttempts,
-    lastFailedLogin: new Date(),
-  };
+  // Use atomic increment to avoid race conditions with parallel login attempts.
+  // This ensures the counter is always accurate even under concurrent load.
+  const updatedUser = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      failedLoginAttempts: { increment: 1 },
+      lastFailedLogin: new Date(),
+    },
+  });
 
   // Apply lockout if threshold reached
-  const threshold = LOCKOUT_THRESHOLDS.find(t => failedAttempts >= t.attempts);
+  const threshold = LOCKOUT_THRESHOLDS.find(t => updatedUser.failedLoginAttempts >= t.attempts);
   if (threshold) {
-    updateData.lockedUntil = new Date(Date.now() + threshold.lockout);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lockedUntil: new Date(Date.now() + threshold.lockout) },
+    });
   }
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: updateData,
-  });
 };
 
 /**

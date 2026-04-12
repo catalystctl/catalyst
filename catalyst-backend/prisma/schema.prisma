@@ -59,7 +59,6 @@ model session {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([token])
 }
 
 model account {
@@ -119,6 +118,7 @@ model verification {
 
   @@index([identifier])
   @@index([expiresAt])
+  @@index([value])
 }
 
 model twoFactor {
@@ -128,7 +128,6 @@ model twoFactor {
   userId      String
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([secret])
   @@index([userId])
 }
 

@@ -43,9 +43,11 @@ const _auth = betterAuth({
   },
   trustedOrigins: [
     baseUrl,
-    process.env.FRONTEND_URL, 
-    process.env.CORS_ORIGIN, 
-    ...(process.env.NODE_ENV !== 'production' ? ["http://localhost:5173"] : []),
+    process.env.FRONTEND_URL,
+    ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(s => s.trim()) : []),
+    ...(process.env.NODE_ENV !== 'production'
+      ? ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"]
+      : []),
   ].filter((origin): origin is string => Boolean(origin)),
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   emailAndPassword: {
@@ -86,17 +88,13 @@ const _auth = betterAuth({
           session: ["list", "revoke", "delete"],
         });
         return {
-          admin: base.newRole({
+          administrator: base.newRole({
             user: ["create", "list", "set-role", "ban", "impersonate", "delete", "set-password", "get", "update"],
             session: ["list", "revoke", "delete"],
           }),
           user: base.newRole({
             user: [],
             session: [],
-          }),
-          administrator: base.newRole({
-            user: ["create", "list", "set-role", "ban", "impersonate", "delete", "set-password", "get", "update"],
-            session: ["list", "revoke", "delete"],
           }),
         };
       })(),
@@ -105,9 +103,11 @@ const _auth = betterAuth({
     passkey({
       origin: [
         baseUrl,
-        process.env.FRONTEND_URL, 
-        process.env.CORS_ORIGIN, 
-        ...(process.env.NODE_ENV !== 'production' ? ["http://localhost:5173"] : []),
+        process.env.FRONTEND_URL,
+        ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(s => s.trim()) : []),
+        ...(process.env.NODE_ENV !== 'production'
+          ? ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"]
+          : []),
       ].filter((origin): origin is string => Boolean(origin)),
       rpID: process.env.PASSKEY_RP_ID || undefined,
       advanced: {

@@ -430,12 +430,19 @@ async function bootstrap() {
         if (request.method === "OPTIONS") {
           return reply.status(204).send();
         }
-        if (
-          request.url === "/api/auth/login" ||
-          request.url === "/api/auth/register" ||
-          request.url === "/api/auth/me"
-        ) {
-          return;
+        // Routes handled by custom authRoutes above — skip the catch-all proxy.
+        // Fastify's route matching already prioritises specific routes over wildcards,
+        // but this guard prevents accidentally reaching the proxy on edge cases.
+        const customAuthPaths = [
+          '/api/auth/login',
+          '/api/auth/register',
+          '/api/auth/me',
+          '/api/auth/profile',
+          '/api/auth/forgot-password',
+          '/api/auth/reset-password',
+        ];
+        if (customAuthPaths.some(p => request.url === p || request.url.startsWith(p + '/'))) {
+          return reply.status(404).send({ error: 'Not found' });
         }
         const url = new URL(request.url, `http://${request.headers.host ?? "localhost:3000"}`);
         const headers = new Headers();
@@ -480,7 +487,7 @@ async function bootstrap() {
           }
         }
         if (url.pathname === "/api/auth/sign-out") {
-          setCookies.push("better-auth-passkey=; Max-Age=0; Path=/; SameSite=Lax; HttpOnly");
+          setCookies.push("better-auth-passkey=; Max-Age=0; Path=/; SameSite=Strict; HttpOnly");
         }
         if (setCookies.length > 0) {
           setCookies.forEach((cookie) => reply.header("set-cookie", cookie));

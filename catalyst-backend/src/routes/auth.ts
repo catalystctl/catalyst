@@ -11,7 +11,6 @@ import {
 } from "../middleware/brute-force";
 import {
   passwordSchema,
-  basicPasswordSchema,
   validateRequestBody,
   userRegistrationSchema,
   userLoginSchema,
@@ -58,25 +57,18 @@ export async function authRoutes(app: FastifyInstance) {
   app.post(
     "/register",
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { email, username, password } = request.body as {
-        email: string; username: string; password: string;
-      };
-
-      if (!email || !username || !password) {
-        return reply.status(400).send({ error: "Missing required fields: email, username, password" });
-      }
-
-      // Validate password complexity
-      const passwordValidation = passwordSchema.safeParse(password);
-      if (!passwordValidation.success) {
+      // Validate all registration fields using the pre-built schema
+      const regValidation = userRegistrationSchema.safeParse(request.body);
+      if (!regValidation.success) {
         return reply.status(400).send({
-          error: 'Password does not meet requirements',
-          details: passwordValidation.error.issues.map(err => ({
+          error: 'Validation failed',
+          details: regValidation.error.issues.map(err => ({
             field: err.path.join('.'),
             message: err.message,
           })),
         });
       }
+      const { email, username, password } = regValidation.data;
 
       const existing = await prisma.user.findFirst({
         where: { OR: [{ email }, { username }] },
@@ -131,13 +123,19 @@ export async function authRoutes(app: FastifyInstance) {
   app.post(
     "/login",
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { email, password } = request.body as { email: string; password: string };
-
-      if (!email || !password) {
-        return reply.status(400).send({ error: "Missing email or password" });
+      // Validate login fields using the pre-built schema
+      const loginValidation = userLoginSchema.safeParse(request.body);
+      if (!loginValidation.success) {
+        return reply.status(400).send({
+          error: 'Validation failed',
+          details: loginValidation.error.issues.map(err => ({
+            field: err.path.join('.'),
+            message: err.message,
+          })),
+        });
       }
-
-      const normalizedEmail = email.trim().toLowerCase();
+      const { email, password } = loginValidation.data;
+      const normalizedEmail = email;
 
       // Resolve the actual email (case-insensitive lookup)
       const userRecord = await prisma.user.findFirst({
@@ -158,7 +156,7 @@ export async function authRoutes(app: FastifyInstance) {
           body: {
             email: userRecord.email,
             password,
-            rememberMe: (request.body as any)?.rememberMe,
+            rememberMe: loginValidation.data.rememberMe,
           },
           returnHeaders: true,
         });
@@ -225,7 +223,7 @@ export async function authRoutes(app: FastifyInstance) {
         where: { id: request.user.userId },
         select: {
           id: true, email: true, username: true, createdAt: true,
-          roles: { select: { permissions: true } },
+          roles: { select: { name: true, permissions: true } },
         },
       });
 
@@ -237,6 +235,7 @@ export async function authRoutes(app: FastifyInstance) {
         success: true,
         data: {
           id: user.id, email: user.email, username: user.username,
+          role: user.roles[0]?.name || 'user',
           permissions: user.roles.flatMap((role) => role.permissions),
           createdAt: user.createdAt,
         },
@@ -279,13 +278,18 @@ export async function authRoutes(app: FastifyInstance) {
     "/profile/change-password",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { currentPassword, newPassword, revokeOtherSessions } = request.body as {
-        currentPassword: string; newPassword: string; revokeOtherSessions?: boolean;
-      };
-
-      if (!currentPassword || !newPassword) {
-        return reply.status(400).send({ error: "Missing current or new password" });
+      // Validate password change using the pre-built schema
+      const changeValidation = passwordChangeSchema.safeParse(request.body);
+      if (!changeValidation.success) {
+        return reply.status(400).send({
+          error: 'Validation failed',
+          details: changeValidation.error.issues.map(err => ({
+            field: err.path.join('.'),
+            message: err.message,
+          })),
+        });
       }
+      const { currentPassword, newPassword, revokeOtherSessions } = changeValidation.data;
 
       const response = await auth.api.changePassword({
         headers: getHeaders(request),

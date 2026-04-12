@@ -98,8 +98,10 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         const err = error as { response?: { data?: { error?: unknown } }; message?: string };
         const rawError = err.response?.data?.error;
         const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || err.message || 'Session expired';
-        // Clean up any remaining localStorage items
+        // Clean up any remaining localStorage items from previous token-based auth
         localStorage.removeItem('catalyst-auth-token');
+        localStorage.removeItem('catalyst-session-token');
+        sessionStorage.removeItem('catalyst-auth-token');
         sessionStorage.removeItem('catalyst-session-token');
         (set as AuthSet)({
           token: null,
@@ -116,9 +118,13 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
       }
     },
     init: async () => {
-      (set as AuthSet)({ isReady: true });
-      // Always try to refresh - cookie-based auth doesn't need stored token
-      void (get as AuthGet)().refresh();
+      // Don't set isReady until refresh completes to prevent flashing authenticated
+      // content with a potentially expired server-side session.
+      try {
+        await (get as AuthGet)().refresh();
+      } finally {
+        (set as AuthSet)({ isReady: true });
+      }
     },
     logout: () => {
       localStorage.removeItem('catalyst-remember-me');
