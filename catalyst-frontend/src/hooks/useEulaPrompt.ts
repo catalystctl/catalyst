@@ -38,6 +38,9 @@ export function useEulaPrompt(serverId?: string) {
       try {
         await serversApi.respondEula(eulaPrompt.serverId, accepted);
         setEulaPrompt(null);
+        if (accepted) {
+          await serversApi.start(eulaPrompt.serverId);
+        }
       } catch {
         // Keep the modal open so the user can retry
       } finally {
