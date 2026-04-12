@@ -34,6 +34,8 @@ import CustomConsole from '../../components/console/CustomConsole';
 import AlertsPage from '../alerts/AlertsPage';
 import EmptyState from '../../components/shared/EmptyState';
 import { useConsole } from '../../hooks/useConsole';
+import { useEulaPrompt } from '../../hooks/useEulaPrompt';
+import EulaModal from '../../components/servers/EulaModal';
 import { useTasks } from '../../hooks/useTasks';
 import { useServerDatabases } from '../../hooks/useServerDatabases';
 import { useDatabaseHosts } from '../../hooks/useAdmin';
@@ -502,6 +504,8 @@ function ServerDetailsPage() {
     const key = tab ?? 'console';
     return key in tabLabels ? (key as keyof typeof tabLabels) : 'console';
   }, [tab]);
+
+  const { eulaPrompt, isLoading: eulaLoading, respond: respondEula } = useEulaPrompt(serverId);
 
   const canSend = isConnected && Boolean(serverId) && server?.status === 'running' && !isSuspended && hasServerPerm('console.write');
   const canManageDatabases =
@@ -4683,6 +4687,15 @@ function ServerDetailsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {eulaPrompt && (
+        <EulaModal
+          eulaText={eulaPrompt.eulaText}
+          isLoading={eulaLoading}
+          onAccept={() => respondEula(true)}
+          onDecline={() => respondEula(false)}
+        />
       )}
     </div>
   );
