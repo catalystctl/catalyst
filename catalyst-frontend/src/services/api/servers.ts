@@ -201,4 +201,12 @@ export const serversApi = {
     >('/api/sftp/connection-info');
     return data.data;
   },
+
+  respondEula: async (serverId: string, accepted: boolean) => {
+    const { data } = await apiClient.post<ApiResponse<void>>('/api/servers/eula', {
+      serverId,
+      accepted,
+    });
+    return data;
+  },
 };

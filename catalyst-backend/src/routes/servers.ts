@@ -5727,6 +5727,62 @@ export async function serverRoutes(app: FastifyInstance) {
     }
   );
 
+  // Respond to EULA prompt (accept or decline)
+  app.post(
+    "/eula",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId, accepted } = request.body as {
+        serverId: string;
+        accepted: boolean;
+      };
+
+      if (!serverId || typeof accepted !== "boolean") {
+        return reply.status(400).send({ error: "serverId (string) and accepted (boolean) are required" });
+      }
+
+      const server = await prisma.server.findUnique({
+        where: { id: serverId },
+        include: { node: true },
+      });
+
+      if (!server) {
+        return reply.status(404).send({ error: "Server not found" });
+      }
+
+      const gateway = (app as any).wsGateway;
+      if (!gateway) {
+        return reply.status(500).send({ error: "WebSocket gateway not available" });
+      }
+
+      const success = await gateway.sendToAgent(server.nodeId, {
+        type: accepted ? "accept_eula" : "decline_eula",
+        serverId: server.id,
+        serverUuid: server.uuid,
+      });
+
+      if (!success) {
+        return reply.status(503).send({ error: "Failed to send command to agent" });
+      }
+
+      // Update server status
+      await prisma.server.update({
+        where: { id: serverId },
+        data: { status: accepted ? "stopped" : "error" },
+      });
+
+      await prisma.serverLog.create({
+        data: {
+          serverId: serverId,
+          stream: "system",
+          data: accepted ? "EULA accepted." : "EULA declined.",
+        },
+      });
+
+      reply.send({ success: true });
+    }
+  );
+
   // Rebuild server (stops server, removes container, recreates from image, preserves data)
   app.post(
     "/:serverId/rebuild",

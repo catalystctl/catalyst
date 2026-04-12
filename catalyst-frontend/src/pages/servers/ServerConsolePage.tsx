@@ -5,6 +5,8 @@ import ServerStatusBadge from '../../components/servers/ServerStatusBadge';
 import CustomConsole from '../../components/console/CustomConsole';
 import { useConsole } from '../../hooks/useConsole';
 import { useServer } from '../../hooks/useServer';
+import { useEulaPrompt } from '../../hooks/useEulaPrompt';
+import EulaModal from '../../components/servers/EulaModal';
 
 const ALL_STREAMS = ['stdout', 'stderr', 'system', 'stdin'] as const;
 const STREAM_COLORS: Record<string, { dot: string; active: string; inactive: string }> = {
@@ -34,6 +36,7 @@ function ServerConsolePage() {
   const { serverId } = useParams();
   const { data: server } = useServer(serverId);
   const { entries, send, isConnected, isLoading, isError, refetch, clear } = useConsole(serverId);
+  const { eulaPrompt, isLoading: eulaLoading, respond: respondEula } = useEulaPrompt(serverId);
 
   const [command, setCommand] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
@@ -326,6 +329,16 @@ function ServerConsolePage() {
           </button>
         </form>
       </div>
+
+      {/* EULA Modal */}
+      {eulaPrompt && (
+        <EulaModal
+          eulaText={eulaPrompt.eulaText}
+          onAccept={() => respondEula(true)}
+          onDecline={() => respondEula(false)}
+          isLoading={eulaLoading}
+        />
+      )}
     </div>
   );
 }
