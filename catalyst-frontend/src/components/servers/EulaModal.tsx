@@ -8,12 +8,19 @@ type EulaModalProps = {
 };
 
 export default function EulaModal({ eulaText, onAccept, onDecline, isLoading }: EulaModalProps) {
-  const [scrollToBottom, setScrollToBottom] = useState(false);
+  const [canAccept, setCanAccept] = useState(false);
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 40) {
-      setScrollToBottom(true);
+      setCanAccept(true);
+    }
+  };
+
+  // If content doesn't overflow, enable accept immediately
+  const handleContentRef = (el: HTMLDivElement | null) => {
+    if (el && el.scrollHeight <= el.clientHeight) {
+      setCanAccept(true);
     }
   };
 
@@ -42,10 +49,11 @@ export default function EulaModal({ eulaText, onAccept, onDecline, isLoading }: 
           <div
             className="max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
             onScroll={handleScroll}
+            ref={handleContentRef}
           >
             {eulaText || 'EULA text could not be loaded from the server files.'}
           </div>
-          {!scrollToBottom && (
+          {!canAccept && (
             <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
               Scroll to the bottom to enable the accept button.
             </p>
@@ -64,7 +72,7 @@ export default function EulaModal({ eulaText, onAccept, onDecline, isLoading }: 
           <button
             className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-500/30 transition-all duration-200 hover:bg-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={onAccept}
-            disabled={isLoading || !scrollToBottom}
+            disabled={isLoading || !canAccept}
           >
             {isLoading ? 'Submitting...' : 'I Agree'}
           </button>
