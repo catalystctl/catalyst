@@ -5,6 +5,11 @@ import { useAuthStore } from '../../stores/authStore';
 import type { RegisterSchema } from '../../validators/auth';
 import { registerSchema } from '../../validators/auth';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 function RegisterPage() {
   const navigate = useNavigate();
@@ -21,7 +26,6 @@ function RegisterPage() {
   const onSubmit = async (values: RegisterSchema) => {
     try {
       await registerUser(values);
-      // Redirect on successful registration
       setTimeout(() => {
         navigate('/servers');
       }, 100);
@@ -32,84 +36,80 @@ function RegisterPage() {
 
   return (
     <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
-        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Create account</h1>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-          Start managing your infrastructure.
-        </p>
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-br from-primary/3 via-transparent to-violet-500/3" />
+      <div className="relative w-full max-w-sm">
+        <Card className="border-border shadow-surface-lg">
+          <CardContent className="px-6 py-8">
+            <h1 className="text-xl font-bold tracking-tight text-foreground">Create account</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Start managing your infrastructure.
+            </p>
 
-        {error ? (
-          <div className="mt-4 rounded-lg border border-rose-200 bg-rose-100/60 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
-            {error}
-          </div>
-        ) : null}
-
-        <form className="mt-6 space-y-4" onSubmit={handleSubmit(onSubmit)}>
-          <div className="space-y-2">
-            <label className="block text-sm text-slate-600 dark:text-slate-300" htmlFor="username">
-              Username
-            </label>
-            <input
-              id="username"
-              type="text"
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
-              placeholder="yourname"
-              {...register('username')}
-            />
-            {errors.username ? (
-              <p className="text-xs text-red-400">{errors.username.message}</p>
+            {error ? (
+              <Alert variant="destructive" className="mt-4">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             ) : null}
-          </div>
 
-          <div className="space-y-2">
-            <label className="block text-sm text-slate-600 dark:text-slate-300" htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
-              placeholder="you@example.com"
-              {...register('email')}
-            />
-            {errors.email ? <p className="text-xs text-red-400">{errors.email.message}</p> : null}
-          </div>
+            <form className="mt-6 space-y-3" onSubmit={handleSubmit(onSubmit)}>
+              <div className="space-y-1.5">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="yourname"
+                  {...register('username')}
+                />
+                {errors.username ? (
+                  <p className="text-xs text-destructive">{errors.username.message}</p>
+                ) : null}
+              </div>
 
-          <div className="space-y-2">
-            <label className="block text-sm text-slate-600 dark:text-slate-300" htmlFor="password">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
-              placeholder="••••••••"
-              {...register('password')}
-            />
-            <PasswordStrengthMeter password={passwordValue} />
-            {errors.password ? (
-              <p className="text-xs text-red-400">{errors.password.message}</p>
-            ) : null}
-          </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  {...register('email')}
+                />
+                {errors.email ? <p className="text-xs text-destructive">{errors.email.message}</p> : null}
+              </div>
 
-          <button
-            type="submit"
-            className="w-full rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-70"
-            disabled={isLoading}
-          >
-            {isLoading ? 'Creating…' : 'Create account'}
-          </button>
-        </form>
+              <div className="space-y-1.5">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  {...register('password')}
+                />
+                <PasswordStrengthMeter password={passwordValue} />
+                {errors.password ? (
+                  <p className="text-xs text-destructive">{errors.password.message}</p>
+                ) : null}
+              </div>
 
-        <p className="mt-4 text-center text-sm text-slate-600 dark:text-slate-400">
-          Already have an account?{' '}
-          <Link
-            to="/login"
-            className="font-medium text-primary-600 transition-all duration-300 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
-          >
-            Sign in
-          </Link>
-        </p>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isLoading}
+              >
+                {isLoading ? 'Creating…' : 'Create account'}
+              </Button>
+            </form>
+
+            <p className="mt-4 text-center text-sm text-muted-foreground">
+              Already have an account?{' '}
+              <Link
+                to="/login"
+                className="font-medium text-primary hover:text-primary-hover transition-colors"
+              >
+                Sign in
+              </Link>
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

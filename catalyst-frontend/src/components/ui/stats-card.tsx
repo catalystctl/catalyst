@@ -13,15 +13,15 @@ interface StatsCardProps {
 
 export function StatsCard({ title, value, subtitle, icon, onClick, className }: StatsCardProps) {
   return (
-    <Card className={cn('transition-all hover:shadow-md', onClick && 'cursor-pointer', className)} onClick={onClick}>
+    <Card className={cn('transition-all duration-150 hover:shadow-surface-md', onClick && 'cursor-pointer', className)} onClick={onClick}>
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{title}</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
-            {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>}
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{title}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{value}</p>
+            {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
           </div>
-          {icon && <div className="text-slate-400 dark:text-slate-500">{icon}</div>}
+          {icon && <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-1 text-muted-foreground">{icon}</div>}
         </div>
       </CardContent>
     </Card>

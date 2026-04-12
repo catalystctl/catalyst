@@ -68,18 +68,16 @@ function ServerControls({ serverId, status, permissions }: Props) {
     kill.mutate();
   };
 
-  // If permissions are provided and the user has none of the action permissions, show nothing.
-  // An empty permissions array means "not yet loaded" — show buttons optimistically.
   if (permissions && permissions.length > 0 && !canStart && !canStop && !canKill) {
     return null;
   }
 
   return (
     <>
-      <div className="flex flex-wrap gap-2 text-xs">
+      <div className="flex flex-wrap gap-1.5 text-xs">
         {canStart && (
           <button
-            className="rounded-md bg-emerald-600 px-3 py-1 font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all duration-300 hover:bg-emerald-500 disabled:opacity-60"
+            className="rounded-md bg-emerald-600 px-2.5 py-1 font-semibold text-white transition-all duration-150 hover:bg-emerald-500 disabled:opacity-60"
             disabled={start.isPending || status === 'running' || isSuspended}
             onClick={() => start.mutate()}
           >
@@ -88,7 +86,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
         )}
         {canStop && (
           <button
-            className="rounded-md bg-slate-600 px-3 py-1 font-semibold text-white shadow-lg shadow-slate-500/20 transition-all duration-300 hover:bg-slate-500 disabled:opacity-60"
+            className="rounded-md border border-border bg-surface-1 px-2.5 py-1 font-semibold text-foreground transition-all duration-150 hover:bg-surface-2 disabled:opacity-60"
             disabled={stop.isPending || status === 'stopped' || isSuspended}
             onClick={() => stop.mutate()}
           >
@@ -97,7 +95,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
         )}
         {canRestart && (
           <button
-            className="rounded-md bg-primary-600 px-3 py-1 font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+            className="rounded-md bg-primary px-2.5 py-1 font-semibold text-primary-foreground transition-all duration-150 hover:bg-primary-hover disabled:opacity-60"
             disabled={restart.isPending || isSuspended}
             onClick={() => restart.mutate()}
           >
@@ -106,7 +104,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
         )}
         {canKill && (
           <button
-            className="rounded-md bg-rose-600 px-3 py-1 font-semibold text-white shadow-lg shadow-rose-500/20 transition-all duration-300 hover:bg-rose-500 disabled:opacity-60"
+            className="rounded-md bg-destructive px-2.5 py-1 font-semibold text-destructive-foreground transition-all duration-150 hover:bg-destructive/90 disabled:opacity-60"
             disabled={kill.isPending || isSuspended || status === 'stopped'}
             onClick={() => setShowKillConfirm(true)}
           >

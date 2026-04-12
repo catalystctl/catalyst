@@ -201,10 +201,10 @@ function MenuItem({ to, label, icon: Icon, collapsed }: MenuItemProps) {
       <NavLink
         to={to}
         className={cn(
-          'flex h-9 w-9 items-center justify-center rounded-lg transition-all duration-200',
+          'flex h-8 w-8 items-center justify-center rounded-md transition-all duration-150',
           isActive
-            ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/30'
-            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white',
+            ? 'bg-primary text-primary-foreground shadow-glow'
+            : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
         )}
         title={label}
       >
@@ -217,10 +217,10 @@ function MenuItem({ to, label, icon: Icon, collapsed }: MenuItemProps) {
     <NavLink
       to={to}
       className={cn(
-        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
+        'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-all duration-150',
         isActive
-          ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/30'
-          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white',
+          ? 'bg-primary text-primary-foreground shadow-glow'
+          : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
       )}
     >
       <Icon className="h-4 w-4 flex-shrink-0" />
@@ -254,7 +254,7 @@ function Section({ title, links, defaultExpanded = false, collapsed }: SectionPr
 
   if (collapsed) {
     return (
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         {links.map((link) => (
           <MenuItem key={link.to} {...link} collapsed />
         ))}
@@ -263,21 +263,21 @@ function Section({ title, links, defaultExpanded = false, collapsed }: SectionPr
   }
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-0.5">
       <button
         type="button"
         onClick={toggleExpanded}
-        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 transition-colors hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300"
+        className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60 transition-colors hover:text-muted-foreground"
       >
         <span>{title}</span>
         {shouldExpand ? (
-          <ChevronDown className="h-3.5 w-3.5" />
+          <ChevronDown className="h-3 w-3" />
         ) : (
-          <ChevronRight className="h-3.5 w-3.5" />
+          <ChevronRight className="h-3 w-3" />
         )}
       </button>
       {shouldExpand && (
-        <div className="space-y-1 border-l border-slate-200 pl-3 dark:border-slate-700">
+        <div className="space-y-0.5 border-l border-border pl-2.5 ml-1">
           {links.map((link) => (
             <MenuItem key={link.to} {...link} />
           ))}
@@ -310,14 +310,15 @@ function Sidebar() {
   return (
     <aside
       className={cn(
-        'sticky top-0 flex h-screen flex-col border-r border-slate-200 bg-gradient-to-b from-white to-slate-50/50 transition-all duration-300 dark:border-slate-800 dark:from-slate-900 dark:to-slate-950',
-        sidebarCollapsed ? 'w-16' : 'w-64',
+        'sticky top-0 flex h-screen flex-col border-r border-border bg-surface-0 transition-all duration-200',
+        sidebarCollapsed ? 'w-[52px]' : 'w-56',
       )}
     >
+      {/* Logo */}
       <div
         className={cn(
-          'flex items-center border-b border-slate-200 dark:border-slate-800',
-          sidebarCollapsed ? 'justify-center p-3' : 'gap-3 px-4 py-4',
+          'flex items-center border-b border-border',
+          sidebarCollapsed ? 'justify-center p-3' : 'gap-2.5 px-4 h-14',
         )}
       >
         <Link
@@ -327,19 +328,20 @@ function Sidebar() {
           <img
             src={logoUrl}
             alt={`${panelName} logo`}
-            className="h-7 w-7 rounded-lg shadow-sm"
+            className="h-6 w-6 rounded-md"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
             }}
           />
           {!sidebarCollapsed && (
-            <span className="text-lg font-bold text-slate-900 dark:text-white">{panelName}</span>
+            <span className="text-sm font-bold tracking-tight text-foreground">{panelName}</span>
           )}
         </Link>
       </div>
 
-      <div className={cn('flex-1 overflow-y-auto', sidebarCollapsed ? 'px-2 py-4' : 'px-3 py-4')}>
-        <div className="space-y-1">
+      {/* Nav */}
+      <div className={cn('flex-1 overflow-y-auto', sidebarCollapsed ? 'px-2 py-3' : 'px-2.5 py-3')}>
+        <div className="space-y-0.5">
           {mainLinks.map((link) => (
             <MenuItem key={link.to} {...link} collapsed={sidebarCollapsed} />
           ))}
@@ -348,11 +350,11 @@ function Sidebar() {
         {filteredSections.length > 0 && (
           <div
             className={cn(
-              'border-t border-slate-200 pt-4 dark:border-slate-800',
-              sidebarCollapsed ? 'mt-4' : 'mt-6',
+              'border-t border-border pt-3',
+              sidebarCollapsed ? 'mt-3' : 'mt-4',
             )}
           >
-            <div className={cn('space-y-2', sidebarCollapsed ? 'space-y-3' : '')}>
+            <div className={cn('space-y-2', sidebarCollapsed ? 'space-y-2' : '')}>
               {filteredSections.map((section) => (
                 <Section key={section.title} {...section} collapsed={sidebarCollapsed} />
               ))}
@@ -361,41 +363,42 @@ function Sidebar() {
         )}
       </div>
 
+      {/* Footer */}
       <div
         className={cn(
-          'border-t border-slate-200 dark:border-slate-800',
-          sidebarCollapsed ? 'p-2' : 'p-3',
+          'border-t border-border',
+          sidebarCollapsed ? 'p-2' : 'p-2.5',
         )}
       >
         <NavLink
           to="/profile"
           className={cn(
-            'flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800',
+            'flex items-center gap-2.5 rounded-md p-2 transition-colors hover:bg-surface-2',
             sidebarCollapsed && 'justify-center',
           )}
         >
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-linear-to-br from-primary-500 to-primary-700 text-sm font-medium text-white shadow-lg shadow-primary-500/30">
+          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
             {initials}
           </div>
           {!sidebarCollapsed && (
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-slate-900 dark:text-white">
+              <div className="truncate text-sm font-medium text-foreground">
                 {user?.username || 'User'}
               </div>
-              <div className="truncate text-xs text-slate-500 dark:text-slate-400">
+              <div className="truncate text-xs text-muted-foreground">
                 {user?.role || 'Member'}
               </div>
             </div>
           )}
         </NavLink>
 
-        <div className={cn('mt-2 flex', sidebarCollapsed ? 'flex-col gap-1' : 'gap-2')}>
+        <div className={cn('mt-1.5 flex', sidebarCollapsed ? 'flex-col gap-1' : 'gap-1')}>
           <button
             type="button"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             className={cn(
-              'flex h-8 items-center justify-center gap-2 rounded-lg border border-slate-200 font-medium text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800',
-              sidebarCollapsed ? 'w-8 text-xs' : 'flex-1 px-3 text-xs',
+              'flex h-7 items-center justify-center gap-1.5 rounded-md text-muted-foreground transition-all hover:bg-surface-2 hover:text-foreground',
+              sidebarCollapsed ? 'w-7 text-xs' : 'flex-1 px-2 text-xs',
             )}
             title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
           >
@@ -405,7 +408,7 @@ function Sidebar() {
           <button
             type="button"
             onClick={toggleSidebar}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 font-medium text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-surface-2 hover:text-foreground"
             title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {sidebarCollapsed ? (
@@ -418,7 +421,7 @@ function Sidebar() {
             <button
               type="button"
               onClick={logout}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-rose-600 transition-all hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive"
               title="Logout"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -429,7 +432,7 @@ function Sidebar() {
           <button
             type="button"
             onClick={logout}
-            className="mt-1 flex h-8 w-full items-center justify-center rounded-lg text-rose-600 transition-all hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+            className="mt-1 flex h-7 w-full items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive"
             title="Logout"
           >
             <LogOut className="h-3.5 w-3.5" />

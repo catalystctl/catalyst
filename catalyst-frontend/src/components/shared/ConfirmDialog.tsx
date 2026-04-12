@@ -25,16 +25,16 @@ interface ConfirmDialogProps {
 
 const variantConfig = {
   default: {
-    icon: <Info className="h-6 w-6 text-primary-600 dark:text-primary-400" />,
-    buttonClass: 'bg-primary-600 hover:bg-primary-500',
+    icon: <Info className="h-5 w-5 text-primary" />,
+    buttonClass: 'bg-primary hover:bg-primary-hover',
   },
   danger: {
-    icon: <AlertTriangle className="h-6 w-6 text-destructive" />,
+    icon: <AlertTriangle className="h-5 w-5 text-destructive" />,
     buttonClass: 'bg-destructive hover:bg-destructive/90',
   },
   warning: {
-    icon: <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />,
-    buttonClass: 'bg-amber-600 hover:bg-amber-500',
+    icon: <AlertTriangle className="h-5 w-5 text-amber-500" />,
+    buttonClass: 'bg-amber-500 hover:bg-amber-600',
   },
 };
 
@@ -55,7 +55,7 @@ export function ConfirmDialog({
     <AlertDialog open={open} onOpenChange={(isOpen) => !isOpen && onCancel()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <div className="flex items-start gap-4">
+          <div className="flex items-start gap-3">
             <div className="flex-shrink-0 mt-0.5">{config.icon}</div>
             <div className="flex-1">
               <AlertDialogTitle>{title}</AlertDialogTitle>

@@ -81,7 +81,6 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
 
   const userPermissions = user?.permissions || [];
 
-  // Filter admin items based on permissions
   const visibleAdminNavItems = useMemo(() => {
     return adminNavigationItems.filter((item) => {
       if (!item.permissions) return true;
@@ -89,21 +88,17 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
     });
   }, [userPermissions]);
 
-  // Build all searchable items
   const allItems = useMemo((): SearchItem[] => {
     const items: SearchItem[] = [];
 
-    // Navigation items
     navigationItems.forEach((item) => {
       items.push({ ...item, category: 'Navigation' });
     });
 
-    // Admin navigation items
     visibleAdminNavItems.forEach((item) => {
       items.push({ ...item, category: 'Admin' });
     });
 
-    // Servers
     if (servers) {
       servers.forEach((server) => {
         items.push({
@@ -118,7 +113,6 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
       });
     }
 
-    // Quick actions
     items.push({
       id: 'action-create-server',
       label: 'Create New Server',
@@ -131,7 +125,6 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
     return items;
   }, [servers, visibleAdminNavItems, onCreateServer]);
 
-  // Filter items by query
   const filteredItems = useMemo(() => {
     if (!query.trim()) return allItems;
 
@@ -144,7 +137,6 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
     });
   }, [allItems, query]);
 
-  // Group items by category
   const groupedItems = useMemo(() => {
     const groups: Record<string, SearchItem[]> = {};
     filteredItems.forEach((item) => {
@@ -156,18 +148,13 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
     return groups;
   }, [filteredItems]);
 
-  // Flat list for keyboard navigation
   const flatItems = filteredItems;
 
-  // Handle query changes and isOpen changes using refs
-  // This is a valid pattern for resetting modal state when it opens
   useEffect(() => {
     const prevQuery = prevQueryRef.current;
     const prevIsOpen = prevIsOpenRef.current;
 
-    // Reset when modal opens - this is intentional state reset for modal open
     if (isOpen && !prevIsOpen) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery('');
       setSelectedIndex(0);
       setTimeout(() => {
@@ -175,7 +162,6 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
       }, 0);
     }
 
-    // Reset selection when query changes - intentional UI sync
     if (query !== prevQuery) {
       setSelectedIndex(0);
     }
@@ -184,7 +170,6 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
     prevIsOpenRef.current = isOpen;
   }, [query, isOpen]);
 
-  // Scroll selected item into view
   useEffect(() => {
     if (listRef.current && flatItems.length > 0) {
       const selectedElement = listRef.current.querySelector(`[data-index="${selectedIndex}"]`);
@@ -194,7 +179,6 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
     }
   }, [selectedIndex, flatItems.length]);
 
-  // Handle keyboard navigation
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       switch (e.key) {
@@ -242,19 +226,16 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
 
   return createPortal(
     <div className="fixed inset-0 z-[100] overflow-y-auto p-4">
-      {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Dialog */}
       <div className="relative mx-auto max-w-xl mt-[10vh]">
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl transition-all dark:border-slate-700 dark:bg-slate-900">
-          {/* Search input */}
-          <div className="flex items-center border-b border-slate-200 px-4 dark:border-slate-700">
-            <Search className="h-5 w-5 text-slate-400" />
+        <div className="overflow-hidden rounded-xl border border-border bg-popover shadow-surface-lg">
+          <div className="flex items-center border-b border-border px-4">
+            <Search className="h-4 w-4 text-muted-foreground" />
             <input
               ref={inputRef}
               type="text"
@@ -262,31 +243,30 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Search pages, servers, actions..."
-              className="flex-1 border-none bg-transparent px-3 py-4 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-0 dark:text-white"
+              className="flex-1 border-none bg-transparent px-3 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0"
             />
             {serversLoading && (
-              <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             )}
             <button
               type="button"
               onClick={onClose}
-              className="ml-2 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+              className="ml-2 rounded-md p-1 text-muted-foreground hover:bg-surface-2 hover:text-foreground"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          {/* Results */}
-          <div ref={listRef} className="max-h-[60vh] overflow-y-auto p-2">
+          <div ref={listRef} className="max-h-[60vh] overflow-y-auto p-1.5">
             {flatItems.length === 0 ? (
-              <div className="py-8 text-center text-slate-500 dark:text-slate-400">
-                <Search className="mx-auto h-8 w-8 mb-2 opacity-50" />
-                <p>No results found</p>
+              <div className="py-8 text-center text-muted-foreground">
+                <Search className="mx-auto h-7 w-7 mb-2 opacity-40" />
+                <p className="text-sm">No results found</p>
               </div>
             ) : (
               Object.entries(groupedItems).map(([category, items]) => (
-                <div key={category} className="mb-2">
-                  <div className="px-2 py-1.5 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
+                <div key={category} className="mb-1">
+                  <div className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60">
                     {category}
                   </div>
                   {items.map((item) => {
@@ -301,24 +281,24 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
                         data-index={globalIndex}
                         onClick={() => handleItemClick(item)}
                         className={cn(
-                          'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors',
+                          'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors',
                           isSelected
-                            ? 'bg-primary-50 text-primary-900 dark:bg-primary-500/10 dark:text-primary-100'
-                            : 'text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-foreground hover:bg-surface-2'
                         )}
                       >
-                        <Icon className="h-5 w-5 flex-shrink-0 text-slate-400" />
+                        <Icon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                         <div className="min-w-0 flex-1">
                           <div className="font-medium">{item.label}</div>
                           {item.description && (
-                            <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                            <div className="text-xs text-muted-foreground truncate">
                               {item.description}
                             </div>
                           )}
                         </div>
                         {isSelected && (
-                          <div className="text-xs text-slate-400 dark:text-slate-500">
-                            <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">
+                          <div className="text-[11px] text-muted-foreground">
+                            <kbd className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">
                               Enter
                             </kbd>
                           </div>
@@ -331,23 +311,22 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
             )}
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-between border-t border-slate-200 px-4 py-2 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
-            <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
+            <div className="flex items-center gap-3">
               <div className="flex items-center gap-1">
-                <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">
-                  <Command className="inline h-3 w-3" />K
+                <kbd className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">
+                  <Command className="inline h-2.5 w-2.5" />K
                 </kbd>
-                <span>to open</span>
+                <span>open</span>
               </div>
               <div className="flex items-center gap-1">
-                <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">Esc</kbd>
-                <span>to close</span>
+                <kbd className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">Esc</kbd>
+                <span>close</span>
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">↑↓</kbd>
-              <span>to navigate</span>
+              <kbd className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">↑↓</kbd>
+              <span>navigate</span>
             </div>
           </div>
         </div>

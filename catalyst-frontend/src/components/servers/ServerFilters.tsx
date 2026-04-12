@@ -26,10 +26,10 @@ function ServerFilters({ onChange }: Props) {
   }, [search, status, onChange]);
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-wrap items-center gap-2">
       <div className="flex-1 min-w-[240px]">
         <div className="relative">
-          <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
@@ -37,7 +37,7 @@ function ServerFilters({ onChange }: Props) {
             placeholder="Search by name or node..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:focus:border-primary-400 dark:focus:ring-primary-400/20"
+            className="w-full rounded-lg border border-input bg-transparent py-2 pl-10 pr-4 text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
         </div>
       </div>
@@ -45,7 +45,7 @@ function ServerFilters({ onChange }: Props) {
         <select
           value={status ?? ''}
           onChange={(e) => setStatus(e.target.value ? (e.target.value as ServerStatus) : undefined)}
-          className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:focus:border-primary-400 dark:focus:ring-primary-400/20"
+          className="w-full rounded-lg border border-input bg-transparent px-4 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
         >
           <option value="">All statuses</option>
           {statuses.map((s) => (
@@ -61,9 +61,9 @@ function ServerFilters({ onChange }: Props) {
             setSearch('');
             setStatus(undefined);
           }}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition-all duration-300 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-rose-500/30 dark:hover:bg-rose-950/20 dark:hover:text-rose-400"
+          className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/5 hover:text-destructive"
         >
-          Clear filters
+          Clear
         </button>
       )}
     </div>

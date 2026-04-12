@@ -59,8 +59,6 @@ function LoginPage() {
   };
 
   const applyPasskeySession = async (data?: any, _tokenOverride?: string | null) => {
-    // Cookie-based auth: HttpOnly cookies are set by the backend.
-    // No need to store tokens in localStorage/sessionStorage.
     if (data?.user) {
       setSession({ user: data.user });
       useAuthStore.setState({ isAuthenticated: true });
@@ -199,117 +197,122 @@ function LoginPage() {
 
   return (
     <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
-      <Card className="w-full max-w-md">
-        <CardContent className="px-6 py-8">
-          <div className="flex flex-col items-center text-center">
-            <img src="/logo.png" alt="Catalyst logo" className="h-12 w-12" />
-            <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
-              Catalyst Panel
-            </span>
-          </div>
-          <h1 className="mt-6 text-2xl font-semibold text-slate-900 dark:text-white">
-            Welcome back
-          </h1>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-            Sign in to manage your servers.
-          </p>
-
-          {error && !authStep && (
-            <Alert variant="destructive" className="mt-4">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <form className="mt-6 space-y-4" onSubmit={handleSubmit(onSubmit)}>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="username webauthn"
-                placeholder="you@example.com"
-                {...register('email')}
-              />
-              {errors.email && <p className="text-xs text-red-400">{errors.email.message}</p>}
+      {/* Subtle background gradient */}
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-br from-primary/3 via-transparent to-violet-500/3" />
+      
+      <div className="relative w-full max-w-sm">
+        <Card className="border-border shadow-surface-lg">
+          <CardContent className="px-6 py-8">
+            <div className="flex flex-col items-center text-center">
+              <img src="/logo.png" alt="Catalyst logo" className="h-10 w-10 rounded-lg" />
+              <span className="mt-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Catalyst Panel
+              </span>
             </div>
+            <h1 className="mt-6 text-xl font-bold tracking-tight text-foreground">
+              Welcome back
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Sign in to manage your servers.
+            </p>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
-                <Link
-                  to="/forgot-password"
-                  className="text-xs font-medium text-primary-600 transition-all duration-300 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
-                >
-                  Forgot password?
-                </Link>
+            {error && !authStep && (
+              <Alert variant="destructive" className="mt-4">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <form className="mt-6 space-y-3" onSubmit={handleSubmit(onSubmit)}>
+              <div className="space-y-1.5">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  autoComplete="username webauthn"
+                  placeholder="you@example.com"
+                  {...register('email')}
+                />
+                {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
               </div>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="current-password webauthn"
-                placeholder="••••••••"
-                {...register('password')}
-              />
-              {errors.password && <p className="text-xs text-red-400">{errors.password.message}</p>}
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <Link
+                    to="/forgot-password"
+                    className="text-xs font-medium text-primary hover:text-primary-hover transition-colors"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+                <Input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password webauthn"
+                  placeholder="••••••••"
+                  {...register('password')}
+                />
+                {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+              </div>
+
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={isLoading || authStep === 'passkey'}
+              >
+                {isLoading ? 'Signing in…' : 'Sign in'}
+              </Button>
+
+              <div className="flex items-center gap-2">
+                <Controller
+                  name="rememberMe"
+                  control={control}
+                  render={({ field }) => (
+                    <Checkbox
+                      id="rememberMe"
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  )}
+                />
+                <Label htmlFor="rememberMe" className="text-sm font-normal">
+                  Remember me
+                </Label>
+              </div>
+            </form>
+
+            <div className="mt-3">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={handlePasskeySignIn}
+                disabled={passkeySubmitting}
+              >
+                {passkeySubmitting ? 'Waiting for passkey…' : 'Sign in with passkey'}
+              </Button>
             </div>
 
-            <Button 
-              type="submit" 
-              className="w-full" 
-              disabled={isLoading || authStep === 'passkey'}
-            >
-              {isLoading ? 'Signing in…' : 'Sign in'}
-            </Button>
-
-            <div className="flex items-center gap-2">
-              <Controller
-                name="rememberMe"
-                control={control}
-                render={({ field }) => (
-                  <Checkbox
-                    id="rememberMe"
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                  />
+            {(showWhmcs || showPaymenter) && (
+              <div className="mt-4 space-y-2">
+                {showWhmcs && (
+                  <Button variant="outline" className="w-full" onClick={() => handleProvider('whmcs')}>
+                    Continue with WHMCS
+                  </Button>
                 )}
-              />
-              <Label htmlFor="rememberMe" className="text-sm font-normal">
-                Remember me
-              </Label>
-            </div>
-          </form>
-
-          <div className="mt-4">
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={handlePasskeySignIn}
-              disabled={passkeySubmitting}
-            >
-              {passkeySubmitting ? 'Waiting for passkey…' : 'Sign in with passkey'}
-            </Button>
-          </div>
-
-          {(showWhmcs || showPaymenter) && (
-            <div className="mt-6 space-y-2">
-              {showWhmcs && (
-                <Button variant="outline" className="w-full" onClick={() => handleProvider('whmcs')}>
-                  Continue with WHMCS
-                </Button>
-              )}
-              {showPaymenter && (
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => handleProvider('paymenter')}
-                >
-                  Continue with Paymenter
-                </Button>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                {showPaymenter && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => handleProvider('paymenter')}
+                  >
+                    Continue with Paymenter
+                  </Button>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <Dialog open={authStep === 'passkey'} onOpenChange={() => setAuthStep(null)}>
         <DialogContent>

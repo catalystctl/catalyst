@@ -12,10 +12,9 @@ import {
   MemoryStick,
   Network,
   ArrowRight,
-  Zap,
   Shield,
   Clock,
-  Sparkles,
+  Zap,
 } from 'lucide-react';
 
 function DashboardPage() {
@@ -52,25 +51,22 @@ function DashboardPage() {
       label: 'CPU',
       value: resources?.cpuUtilization ?? 0,
       icon: Cpu,
-      color: 'text-primary-500',
-      bg: 'bg-primary-500',
-      bgLight: 'bg-primary-100 dark:bg-primary-900/30',
+      color: 'text-primary',
+      barColor: 'bg-primary',
     },
     {
       label: 'Memory',
       value: resources?.memoryUtilization ?? 0,
       icon: MemoryStick,
       color: 'text-emerald-500',
-      bg: 'bg-emerald-500',
-      bgLight: 'bg-emerald-100 dark:bg-emerald-900/30',
+      barColor: 'bg-emerald-500',
     },
     {
       label: 'Network',
       value: resources?.networkThroughput ?? 0,
       icon: Network,
       color: 'text-amber-500',
-      bg: 'bg-amber-500',
-      bgLight: 'bg-amber-100 dark:bg-amber-900/30',
+      barColor: 'bg-amber-500',
     },
   ];
 
@@ -80,7 +76,7 @@ function DashboardPage() {
       description: 'Deploy a new game server',
       icon: Plus,
       href: '/servers',
-      color: 'bg-primary-500',
+      accent: 'text-primary',
       show: canCreateServer,
     },
     {
@@ -88,7 +84,7 @@ function DashboardPage() {
       description: 'Manage your servers',
       icon: Server,
       href: '/servers',
-      color: 'bg-emerald-500',
+      accent: 'text-primary',
       show: !canCreateServer,
     },
     {
@@ -96,7 +92,7 @@ function DashboardPage() {
       description: 'Add infrastructure',
       icon: HardDrive,
       href: '/admin/nodes',
-      color: 'bg-emerald-500',
+      accent: 'text-emerald-500',
       show: isAdmin,
     },
     {
@@ -104,7 +100,7 @@ function DashboardPage() {
       description: alertsUnacked > 0 ? `${alertsUnacked} need attention` : 'All clear',
       icon: Shield,
       href: isAdmin ? '/admin/alerts' : '/profile',
-      color: alertsUnacked > 0 ? 'bg-rose-500' : 'bg-slate-500',
+      accent: alertsUnacked > 0 ? 'text-destructive' : 'text-muted-foreground',
       show: isAdmin,
     },
     {
@@ -112,180 +108,178 @@ function DashboardPage() {
       description: 'Manage your account',
       icon: Activity,
       href: '/profile',
-      color: 'bg-violet-500',
+      accent: 'text-violet-400',
       show: !isAdmin,
     },
   ].filter((action) => action.show);
 
   return (
-    <div className="space-y-8">
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-600 via-primary-700 to-violet-700 p-8 text-white shadow-2xl">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djItSDI0di0yaDEyek0zNiAyNHYySDI0di0yaDEyeiIvPjwvZz48L2c+PC9zdmc+')] opacity-30" />
-        <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-        <div className="absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-violet-500/20 blur-3xl" />
+    <div className="space-y-6">
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-xl border border-border bg-surface-0 p-6 lg:p-8">
+        {/* Subtle gradient accent */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-violet-500/5" />
+        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-primary/10 blur-3xl" />
         
         <div className="relative z-10">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2 text-primary-200">
-                <Sparkles className="h-4 w-4" />
-                <span className="text-sm font-medium">Dashboard</span>
-              </div>
-              <h1 className="mt-2 text-3xl font-bold">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground lg:text-3xl">
                 {getGreeting()}, {user?.username || 'there'}
               </h1>
-              <p className="mt-2 text-primary-100 max-w-lg">
-                Welcome back. Here's an overview of your infrastructure at a glance.
+              <p className="mt-1 text-sm text-muted-foreground">
+                Welcome back. Here's an overview of your infrastructure.
               </p>
             </div>
-            <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm backdrop-blur-sm">
-              <Activity className="h-4 w-4 text-emerald-300" />
-              <span>System healthy</span>
+            <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-500 border border-emerald-500/20">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+              All systems operational
             </div>
           </div>
 
-          <div className={`mt-8 grid grid-cols-1 gap-4 ${isAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+          <div className={`mt-6 grid grid-cols-1 gap-3 ${isAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
             <Link
               to="/servers"
-              className="group flex items-center gap-4 rounded-2xl bg-white/10 p-4 backdrop-blur-sm transition-all hover:bg-white/20"
+              className="group flex items-center gap-3 rounded-lg border border-border bg-surface-1 p-4 transition-all duration-150 hover:border-primary/30 hover:bg-surface-2"
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20">
-                <Server className="h-6 w-6" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Server className="h-5 w-5" />
               </div>
               <div className="flex-1">
                 {statsLoading ? (
-                  <Skeleton className="h-8 w-16 bg-white/20" />
+                  <Skeleton className="h-7 w-12" />
                 ) : (
-                  <div className="text-3xl font-bold">{serversTotal}</div>
+                  <div className="text-2xl font-bold tabular-nums text-foreground">{serversTotal}</div>
                 )}
-                <div className="text-sm text-primary-200">
+                <div className="text-xs text-muted-foreground">
                   {serversOnline} running
                 </div>
               </div>
-              <ArrowRight className="h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
+              <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 group-hover:translate-x-0.5" />
             </Link>
 
             {isAdmin && (
               <Link
                 to="/admin/nodes"
-                className="group flex items-center gap-4 rounded-2xl bg-white/10 p-4 backdrop-blur-sm transition-all hover:bg-white/20"
+                className="group flex items-center gap-3 rounded-lg border border-border bg-surface-1 p-4 transition-all duration-150 hover:border-emerald-500/30 hover:bg-surface-2"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20">
-                  <HardDrive className="h-6 w-6" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+                  <HardDrive className="h-5 w-5" />
                 </div>
                 <div className="flex-1">
                   {statsLoading ? (
-                    <Skeleton className="h-8 w-16 bg-white/20" />
+                    <Skeleton className="h-7 w-12" />
                   ) : (
-                    <div className="text-3xl font-bold">{nodesTotal}</div>
+                    <div className="text-2xl font-bold tabular-nums text-foreground">{nodesTotal}</div>
                   )}
-                  <div className="text-sm text-primary-200">
+                  <div className="text-xs text-muted-foreground">
                     {nodesOnline} connected
                   </div>
                 </div>
-                <ArrowRight className="h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
+                <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 group-hover:translate-x-0.5" />
               </Link>
             )}
 
             {isAdmin && (
               <Link
                 to="/admin/alerts"
-                className="group flex items-center gap-4 rounded-2xl bg-white/10 p-4 backdrop-blur-sm transition-all hover:bg-white/20"
+                className="group flex items-center gap-3 rounded-lg border border-border bg-surface-1 p-4 transition-all duration-150 hover:border-amber-500/30 hover:bg-surface-2"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20">
-                  <AlertTriangle className="h-6 w-6" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+                  <AlertTriangle className="h-5 w-5" />
                 </div>
                 <div className="flex-1">
                   {statsLoading ? (
-                    <Skeleton className="h-8 w-16 bg-white/20" />
+                    <Skeleton className="h-7 w-12" />
                   ) : (
-                    <div className="text-3xl font-bold">{stats?.alerts ?? 0}</div>
+                    <div className="text-2xl font-bold tabular-nums text-foreground">{stats?.alerts ?? 0}</div>
                   )}
-                  <div className="text-sm text-primary-200">
+                  <div className="text-xs text-muted-foreground">
                     {alertsUnacked > 0 ? `${alertsUnacked} unacknowledged` : 'All resolved'}
                   </div>
                 </div>
-                <ArrowRight className="h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
+                <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 group-hover:translate-x-0.5" />
               </Link>
             )}
 
             {!isAdmin && (
               <Link
                 to="/profile"
-                className="group flex items-center gap-4 rounded-2xl bg-white/10 p-4 backdrop-blur-sm transition-all hover:bg-white/20"
+                className="group flex items-center gap-3 rounded-lg border border-border bg-surface-1 p-4 transition-all duration-150 hover:border-primary/30 hover:bg-surface-2"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20">
-                  <Activity className="h-6 w-6" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
+                  <Activity className="h-5 w-5" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-3xl font-bold">Account</div>
-                  <div className="text-sm text-primary-200">
+                  <div className="text-2xl font-bold text-foreground">Account</div>
+                  <div className="text-xs text-muted-foreground">
                     Manage your profile
                   </div>
                 </div>
-                <ArrowRight className="h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
+                <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 group-hover:translate-x-0.5" />
               </Link>
             )}
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {quickActions.map((action) => (
           <Link
             key={action.title}
             to={action.href}
-            className="group flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-surface-light transition-all hover:-translate-y-1 hover:border-primary-500 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark dark:hover:border-primary-500/30"
+            className="group flex items-center gap-3 rounded-lg border border-border bg-surface-0 p-4 transition-all duration-150 hover:border-primary/30 hover:shadow-surface-md"
           >
-            <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${action.color} text-white`}>
-              <action.icon className="h-6 w-6" />
+            <div className={`flex h-9 w-9 items-center justify-center rounded-lg bg-surface-1 ${action.accent} transition-colors group-hover:bg-surface-2`}>
+              <action.icon className="h-4 w-4" />
             </div>
-            <div className="flex-1">
-              <div className="font-semibold text-slate-900 dark:text-white">
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-foreground">
                 {action.title}
               </div>
-              <div className="text-sm text-slate-500 dark:text-slate-400">
+              <div className="text-xs text-muted-foreground">
                 {action.description}
               </div>
             </div>
-            <ArrowRight className="h-5 w-5 text-slate-300 transition-all group-hover:text-primary-500 group-hover:translate-x-1" />
+            <ArrowRight className="h-4 w-4 text-muted-foreground transition-all group-hover:text-primary group-hover:translate-x-0.5" />
           </Link>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <div className="lg:col-span-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-surface-light dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark">
+      {/* Bottom Grid */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+        {/* Resource Utilization */}
+        <div className="lg:col-span-3 rounded-lg border border-border bg-surface-0 p-5">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+              <h2 className="text-sm font-semibold text-foreground">
                 Resource Utilization
               </h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-muted-foreground">
                 Live metrics across all nodes
               </p>
             </div>
-            <div className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+            <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-500 border border-emerald-500/20">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
               Live
             </div>
           </div>
 
-          <div className="mt-6 space-y-5">
+          <div className="mt-5 space-y-4">
             {resourcesLoading ? (
               resourceMetrics.map((metric) => (
                 <div key={metric.label} className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className={`rounded-lg p-1.5 ${metric.bgLight}`}>
-                        <metric.icon className={`h-4 w-4 ${metric.color}`} />
-                      </div>
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      <metric.icon className={`h-4 w-4 text-muted-foreground`} />
+                      <span className="text-sm font-medium text-foreground">
                         {metric.label}
                       </span>
                     </div>
-                    <Skeleton className="h-5 w-12" />
+                    <Skeleton className="h-4 w-10" />
                   </div>
-                  <Skeleton className="h-2.5 w-full rounded-full" />
+                  <Skeleton className="h-1.5 w-full rounded-full" />
                 </div>
               ))
             ) : (
@@ -293,20 +287,18 @@ function DashboardPage() {
                 <div key={metric.label} className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className={`rounded-lg p-1.5 ${metric.bgLight}`}>
-                        <metric.icon className={`h-4 w-4 ${metric.color}`} />
-                      </div>
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      <metric.icon className={`h-4 w-4 ${metric.color}`} />
+                      <span className="text-sm font-medium text-foreground">
                         {metric.label}
                       </span>
                     </div>
-                    <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                    <span className="text-sm font-semibold tabular-nums text-foreground">
                       {metric.value}%
                     </span>
                   </div>
-                  <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
                     <div
-                      className={`h-full rounded-full ${metric.bg} transition-all duration-500`}
+                      className={`h-full rounded-full ${metric.barColor} transition-all duration-500`}
                       style={{ width: `${Math.min(100, metric.value)}%` }}
                     />
                   </div>
@@ -316,15 +308,16 @@ function DashboardPage() {
           </div>
         </div>
 
-        <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white p-6 shadow-surface-light dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark">
+        {/* Recent Activity */}
+        <div className="lg:col-span-2 rounded-lg border border-border bg-surface-0 p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+            <h2 className="text-sm font-semibold text-foreground">
               Recent Activity
             </h2>
             {isAdmin && (
               <Link
                 to="/admin/audit-logs"
-                className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+                className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary-hover"
               >
                 View all
                 <ArrowRight className="h-3 w-3" />
@@ -336,34 +329,32 @@ function DashboardPage() {
             {activitiesLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <Skeleton className="mt-0.5 h-8 w-8 rounded-lg" />
+                  <div key={i} className="flex items-start gap-2.5">
+                    <Skeleton className="mt-0.5 h-7 w-7 rounded-md" />
                     <div className="flex-1 space-y-1">
-                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-3.5 w-3/4" />
                       <Skeleton className="h-3 w-1/2" />
                     </div>
                   </div>
                 ))}
               </div>
             ) : activities && activities.length > 0 ? (
-              <div className="space-y-1">
-                {activities.map((item, index) => (
+              <div className="space-y-0.5">
+                {activities.map((item) => (
                   <div
                     key={item.id}
-                    className={`flex items-start gap-3 rounded-xl p-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50 ${
-                      index !== activities.length - 1 ? 'border-b border-slate-100 dark:border-slate-800' : ''
-                    }`}
+                    className="flex items-start gap-2.5 rounded-md p-2 transition-colors hover:bg-surface-1"
                   >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
-                      <Zap className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-1 text-muted-foreground">
+                      <Zap className="h-3.5 w-3.5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-slate-900 dark:text-white">
+                      <div className="truncate text-sm font-medium text-foreground">
                         {item.title}
                       </div>
-                      <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                         <span className="truncate">{item.detail}</span>
-                        <span className="shrink-0 text-slate-300 dark:text-slate-600">|</span>
+                        <span className="text-border">·</span>
                         <span className="flex items-center gap-1 shrink-0">
                           <Clock className="h-3 w-3" />
                           {item.time}
@@ -374,9 +365,9 @@ function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center dark:border-slate-700 dark:bg-slate-800/50">
-                <Activity className="h-8 w-8 text-slate-300 dark:text-slate-600" />
-                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-1 px-4 py-8 text-center">
+                <Activity className="h-7 w-7 text-muted-foreground/40" />
+                <p className="mt-2 text-sm text-muted-foreground">
                   No recent activity
                 </p>
               </div>
