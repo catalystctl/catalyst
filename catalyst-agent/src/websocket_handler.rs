@@ -1057,6 +1057,9 @@ impl WebSocketHandler {
     }
 
     /// Handle a container exit: emit crash state and optionally auto-restart.
+    /// If the server exited because the Minecraft EULA was not accepted, pause
+    /// and wait for the user to respond via the frontend modal instead of
+    /// marking the server as crashed or auto-restarting.
     async fn handle_container_exit(
         &self,
         server_id: &str,
@@ -1067,6 +1070,46 @@ impl WebSocketHandler {
         // Clean up port tracking for this server
         self.server_ports.write().await.remove(server_id);
         self.server_health_state.write().await.remove(server_id);
+
+        // Check for EULA requirement before considering auto-restart or crash.
+        // If eula.txt exists but is not accepted, pause and prompt the user.
+        let server_uuid = {
+            let msgs = self.start_server_messages.read().await;
+            msgs.get(server_id)
+                .and_then(|m| m.get("serverUuid"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        };
+
+        if let Some(ref uuid) = server_uuid {
+            let eula_path = self.config.server.data_dir.join(uuid).join("eula.txt");
+            if eula_path.exists() {
+                if let Ok(content) = tokio::fs::read_to_string(&eula_path).await {
+                    if !content.to_lowercase().contains("eula=true") {
+                        info!(
+                            "EULA not accepted for server {} (exit {:?}), pausing",
+                            server_id, exit_code
+                        );
+                        let _ = self
+                            .emit_console_output(
+                                server_id,
+                                "system",
+                                "[Catalyst] Server stopped: Minecraft EULA must be accepted before starting.\n",
+                            )
+                            .await;
+                        let _ = self
+                            .emit_eula_required(
+                                server_id,
+                                uuid,
+                                &content,
+                                &self.config.server.data_dir.join(uuid).to_string_lossy(),
+                            )
+                            .await;
+                        return;
+                    }
+                }
+            }
+        }
 
         // Check if auto-restart is configured and allowed
         let should_restart = {
