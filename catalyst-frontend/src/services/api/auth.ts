@@ -159,7 +159,7 @@ export const authApi = {
   },
 
   async refresh(): Promise<{ user: User }> {
-    const response = await apiClient.get<{ success: boolean; data?: { id: string; email: string; username: string; permissions?: string[] }; error?: string }>('/api/auth/me');
+    const response = await apiClient.get<{ success: boolean; data?: { id: string; email: string; username: string; role?: string; permissions?: string[] }; error?: string }>('/api/auth/me');
     const data = response.data;
     if (!data?.success || !data?.data) {
       throw new Error(data?.error || 'Refresh failed');
@@ -169,7 +169,7 @@ export const authApi = {
         id: data.data.id,
         email: data.data.email,
         username: data.data.username,
-        role: 'user',
+        role: (data.data.role as User['role']) || 'user',
         permissions: data.data.permissions ?? [],
       },
     };
