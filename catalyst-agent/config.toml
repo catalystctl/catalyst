@@ -10,13 +10,13 @@ backend_url = "ws://localhost:3000/ws"
 node_id = "cmntddu120001k3i53532eric"
 
 # Agent API key (required for node authentication)
-api_key = "catalyst_CdHVL-o75HC8eygnM8EIqZqHRc5OOZacVVj-TcTDLSs"
+api_key = "catalyst_2g5HBmUaSPsZOVmSBZPUDcuy1sp0H6u6oUvrpreEPmg"
 
 # Hostname of this server
 hostname = "localhost"
 
 # Data directory for container volumes
-data_dir = "/var/lib/catalyst"
+data_dir = "/var/lib/catalyst/servers"
 
 # Maximum concurrent WebSocket connections
 max_connections = 100

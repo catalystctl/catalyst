@@ -959,6 +959,20 @@ export class WebSocketGateway {
           return;
         }
         await this.routeConsoleToSubscribers(message.serverId, message);
+      } else if (message.type === "eula_required") {
+        // Forward EULA requirement to subscribed browser clients so the
+        // frontend can display an acceptance modal.
+        if (!message.serverId) {
+          this.logger.warn({ nodeId }, "eula_required missing serverId");
+          return;
+        }
+        await this.routeToClients(message.serverId, {
+          type: "eula_required",
+          serverId: message.serverId,
+          serverUuid: message.serverUuid,
+          eulaText: message.eulaText,
+          timestamp: Date.now(),
+        });
       } else if (message.type === "server_state_update") {
         if (!message.serverId || typeof message.state !== "string") {
           return;

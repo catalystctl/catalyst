@@ -698,6 +698,8 @@ impl WebSocketHandler {
             Some("create_network") => self.handle_create_network(&msg, write).await?,
             Some("update_network") => self.handle_update_network(&msg, write).await?,
             Some("delete_network") => self.handle_delete_network(&msg, write).await?,
+            Some("accept_eula") => self.handle_eula_response(&msg, true).await?,
+            Some("decline_eula") => self.handle_eula_response(&msg, false).await?,
             Some("node_handshake_response") => {
                 info!("Handshake accepted by backend");
                 self.set_backend_connected(true).await;
@@ -1468,6 +1470,26 @@ impl WebSocketHandler {
         if stdout_buffer.trim().is_empty() && stderr_buffer.trim().is_empty() {
             self.emit_console_output(server_id, "system", "[Catalyst] Installation complete.\n")
                 .await?;
+        }
+
+        // Check for EULA files that require acceptance before marking install as done.
+        // If a known EULA file exists but is not accepted, pause here and wait for
+        // the user to accept/decline via the frontend modal.
+        let eula_file = std::path::PathBuf::from(&host_server_dir).join("eula.txt");
+        if eula_file.exists() {
+            let eula_content = tokio::fs::read_to_string(&eula_file).await.unwrap_or_default();
+            if !eula_content.to_lowercase().contains("eula=true") {
+                info!("EULA not accepted for server {}, pausing install", server_uuid);
+                self.emit_console_output(
+                    server_id,
+                    "system",
+                    "[Catalyst] Minecraft EULA must be accepted before the server can start.\n",
+                )
+                .await?;
+                self.emit_eula_required(server_id, server_uuid, &eula_content, &host_server_dir)
+                    .await?;
+                return Ok(());
+            }
         }
 
         // Stop any existing log streams for this server before marking as stopped
@@ -3456,6 +3478,93 @@ impl WebSocketHandler {
             if let Err(err) = w.send(Message::Text(msg.to_string().into())).await {
                 error!("Failed to send console output: {}", err);
             }
+        }
+
+        Ok(())
+    }
+
+    /// Emit an eula_required message to the backend so the frontend can
+    /// display an EULA acceptance modal.  The install is paused until the user
+    /// responds via `accept_eula` or `decline_eula`.
+    async fn emit_eula_required(
+        &self,
+        server_id: &str,
+        server_uuid: &str,
+        eula_text: &str,
+        server_dir: &str,
+    ) -> AgentResult<()> {
+        let msg = json!({
+            "type": "eula_required",
+            "serverId": server_id,
+            "serverUuid": server_uuid,
+            "eulaText": eula_text,
+            "serverDir": server_dir,
+            "timestamp": chrono::Utc::now().timestamp_millis(),
+        });
+
+        info!("Emitting eula_required for server {}", server_id);
+
+        let writer = { self.write.read().await.clone() };
+        if let Some(ws) = writer {
+            let mut w = ws.lock().await;
+            if let Err(err) = w.send(Message::Text(msg.to_string().into())).await {
+                error!("Failed to send eula_required: {}", err);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Handle the user's response to the EULA prompt.
+    /// - accepted: writes `eula=true` to eula.txt and marks the server as stopped.
+    /// - declined: marks the server as errored so the user must reinstall.
+    async fn handle_eula_response(&self, msg: &Value, accepted: bool) -> AgentResult<()> {
+        let server_uuid = msg["serverUuid"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
+
+        let server_id = msg["serverId"]
+            .as_str()
+            .unwrap_or(server_uuid);
+
+        validate_safe_path_segment(server_uuid, "serverUuid")?;
+        let server_dir = self.config.server.data_dir.join(server_uuid);
+        let eula_file = server_dir.join("eula.txt");
+
+        if accepted {
+            tokio::fs::write(&eula_file, "eula=true
+")
+                .await
+                .map_err(|e| AgentError::IoError(format!("Failed to write eula.txt: {}", e)))?;
+
+            info!("EULA accepted for server {}", server_uuid);
+            self.emit_console_output(
+                server_id,
+                "system",
+                "[Catalyst] EULA accepted. Server is ready to start.\n",
+            )
+            .await?;
+
+            self.stop_log_streams_for_server(server_id).await;
+            self.emit_server_state_update(server_id, "stopped", None, None, None)
+                .await?;
+        } else {
+            info!("EULA declined for server {}", server_uuid);
+            self.emit_console_output(
+                server_id,
+                "system",
+                "[Catalyst] EULA declined. Server installation cancelled.\n",
+            )
+            .await?;
+
+            self.emit_server_state_update(
+                server_id,
+                "error",
+                Some("EULA declined by user".to_string()),
+                None,
+                None,
+            )
+            .await?;
         }
 
         Ok(())

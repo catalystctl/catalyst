@@ -56,4 +56,11 @@ export type WebSocketMessage =
       allocatedDiskMb?: number;
       success: boolean;
       error?: string;
+    }
+  | {
+      type: 'eula_required';
+      serverId: string;
+      serverUuid?: string;
+      eulaText?: string;
+      timestamp?: number | string;
     };
