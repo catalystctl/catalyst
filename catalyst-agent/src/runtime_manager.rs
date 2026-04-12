@@ -2543,6 +2543,36 @@ impl ContainerdRuntime {
             let _ = self
                 .exec_cni_plugin(&cfg, "DEL", container_id, &netns, "eth0")
                 .await;
+        } else {
+            // Container is already gone (e.g. agent restart).  Try to release
+            // the IPAM lease directly so the address is not permanently stuck.
+            // The host-local IPAM plugin reads the result file to know which
+            // address to free; if that also fails, fall back to removing the
+            // lease file from the data directory.
+            let ipam_data_dir = cfg["ipam"]["dataDir"]
+                .as_str()
+                .unwrap_or("/var/lib/cni/networks");
+            let ipam_dir = PathBuf::from(ipam_data_dir).join("catalyst");
+            let result_json = fs::read_to_string(&rp).ok()
+                .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+            if let Some(ref result) = result_json {
+                if let Some(ips) = result.get("ips").and_then(|v| v.as_array()) {
+                    for ip_entry in ips {
+                        if let Some(addr) = ip_entry.get("address").and_then(|v| v.as_str()) {
+                            // Strip CIDR prefix to get bare IP for the lease filename
+                            let bare_ip = addr.split('/').next().unwrap_or(addr);
+                            let lease = ipam_dir.join(bare_ip);
+                            if lease.exists() {
+                                info!(
+                                    "Releasing stale CNI IPAM lease {} for container {}",
+                                    bare_ip, container_id
+                                );
+                                let _ = fs::remove_file(&lease);
+                            }
+                        }
+                    }
+                }
+            }
         }
         let _ = fs::remove_file(&rp);
         let _ = fs::remove_file(&cfg_path);
