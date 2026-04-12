@@ -29,5 +29,8 @@
     "test": "bun --filter='*' run test",
     "test:e2e": "bun --filter=catalyst-frontend run test:e2e",
     "clean": "rm -rf catalyst-backend/dist catalyst-backend/node_modules catalyst-frontend/dist catalyst-frontend/node_modules catalyst-shared/node_modules node_modules"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.2"
   }
 }

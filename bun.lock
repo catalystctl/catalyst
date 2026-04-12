@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "catalyst",
+      "devDependencies": {
+        "typescript": "^6.0.2",
+      },
     },
     "catalyst-backend": {
       "name": "catalyst-backend",
