@@ -46,3 +46,4 @@ catalyst-frontend/.vite/
 
 # Pi agent runtime state
 .pi/
+context.md
