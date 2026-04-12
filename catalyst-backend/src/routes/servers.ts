@@ -1413,7 +1413,11 @@ export async function serverRoutes(app: FastifyInstance) {
                 });
               }
             } else if (rule.startsWith("regex:")) {
-              const pattern = rule.substring(6);
+              let pattern = rule.substring(6);
+              // Strip leading/trailing / delimiters if present
+              if (pattern.startsWith("/") && pattern.endsWith("/")) {
+                pattern = pattern.slice(1, -1);
+              }
               try {
                 const regex = new RegExp(pattern);
                 if (!regex.test(value)) {
