@@ -2582,6 +2582,80 @@ impl ContainerdRuntime {
     fn cleanup_io(&self, container_id: &str) {
         let _ = fs::remove_dir_all(PathBuf::from(CONSOLE_BASE_DIR).join(container_id));
     }
+
+    /// Scan stored CNI result files and release IPAM leases for containers
+    /// that no longer exist in containerd.  Must be called on agent startup
+    /// to prevent stale allocations from blocking new containers.
+    pub async fn cleanup_stale_cni_leases(&self) {
+        // --- Phase 1: Release leases via CNI result files ---
+        let results_dir = Path::new("/var/lib/cni/results");
+        if results_dir.exists() {
+            if let Ok(entries) = fs::read_dir(results_dir) {
+                let mut stale_results: Vec<(String, String)> = Vec::new();
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    if let Some(cid) = fname.strip_prefix("catalyst-") {
+                        if fname.contains("-config") {
+                            continue;
+                        }
+                        stale_results.push((cid.to_string(), path.to_string_lossy().to_string()));
+                    }
+                }
+
+                for (container_id, result_path) in &stale_results {
+                    if self.container_exists(container_id).await {
+                        continue;
+                    }
+                    info!(
+                        "Container {} no longer exists, releasing stale CNI lease",
+                        container_id
+                    );
+                    if let Err(e) = self.teardown_cni_network(container_id).await {
+                        warn!("CNI teardown failed for stale container {}: {}", container_id, e);
+                    }
+                    let cfg_path = format!("/var/lib/cni/results/catalyst-{}-config", container_id);
+                    let _ = fs::remove_file(result_path);
+                    let _ = fs::remove_file(&cfg_path);
+                }
+            }
+        }
+
+        // --- Phase 2: Scan IPAM data dir for orphaned leases ---
+        // Even if result files are gone (e.g. agent was force-killed), the
+        // host-local IPAM plugin may still hold lease files.  Cross-reference
+        // each lease file's container ID against containerd.
+        let ipam_base = Path::new("/var/lib/cni/networks/catalyst");
+        if !ipam_base.exists() {
+            return;
+        }
+        if let Ok(entries) = fs::read_dir(ipam_base) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_file() {
+                    continue;
+                }
+                // Lease files are named by IP address (e.g. 10.42.0.15)
+                // and their contents hold the container ID.
+                let container_id = fs::read_to_string(&path)
+                    .ok()
+                    .map(|s| s.trim().to_string())
+                    .unwrap_or_default();
+                if container_id.is_empty() {
+                    continue;
+                }
+                if self.container_exists(container_id.trim()).await {
+                    continue;
+                }
+                info!(
+                    "Removing orphaned CNI IPAM lease {} (container {})",
+                    path.display(),
+                    container_id
+                );
+                let _ = fs::remove_file(&path);
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

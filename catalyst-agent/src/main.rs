@@ -63,6 +63,10 @@ impl CatalystAgent {
             backend_connected.clone(),
         ));
 
+        // Release any stale CNI IPAM leases from containers that no longer exist
+        // (e.g. containers that were running when the agent was killed).
+        runtime.cleanup_stale_cni_leases().await;
+
         let ws_handler = Arc::new(WebSocketHandler::new(
             config.clone(),
             runtime.clone(),
