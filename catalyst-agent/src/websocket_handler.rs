@@ -29,6 +29,8 @@ type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 type WsWrite = SplitSink<WsStream, Message>;
 const CONTAINER_SERVER_DIR: &str = "/data";
+const CONTAINER_UID: u32 = 1000;
+const CONTAINER_GID: u32 = 1000;
 const MAX_BACKUP_UPLOAD_BYTES: u64 = 10 * 1024 * 1024 * 1024; // 10GB
 const BACKUP_UPLOAD_INACTIVITY_TIMEOUT: Duration = Duration::from_secs(600); // 10 minutes
 
@@ -221,6 +223,25 @@ fn parse_auto_restart_config(msg: &Value) -> AutoRestartConfig {
         .and_then(Value::as_u64)
         .unwrap_or(config.window_secs);
     config
+}
+
+/// Set ownership of a directory to the container user (uid 1000:gid 1000)
+/// so the game server process can read/write its data.
+async fn chown_to_container_user(dir: &std::path::Path) -> std::io::Result<()> {
+    use tokio::process::Command;
+    let status = Command::new("chown")
+        .arg("-R")
+        .arg(format!("{}:{}", CONTAINER_UID, CONTAINER_GID))
+        .arg(dir)
+        .status()
+        .await?;
+    if !status.success() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            format!("chown failed with exit code {:?}", status.code()),
+        ));
+    }
+    Ok(())
 }
 
 fn encrypt_backup(data: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
@@ -1360,6 +1381,11 @@ impl WebSocketHandler {
 
         info!("Created server directory: {}", server_dir_path.display());
 
+        // Container runs as uid 1000:1000 — ensure it can write to its data dir
+        if let Err(e) = chown_to_container_user(&server_dir_path).await {
+            warn!("Failed to chown server directory: {}", e);
+        }
+
         // Replace variables in install script
         let mut final_script = install_script.to_string();
         // Strip carriage returns to avoid $'\r': command not found errors
@@ -1861,6 +1887,10 @@ impl WebSocketHandler {
             self.storage_manager
                 .ensure_mounted(server_uuid, &server_dir_path, disk_mb)
                 .await?;
+            // Container runs as uid 1000:1000 — ensure it can write to its data dir
+            if let Err(e) = chown_to_container_user(&server_dir_path).await {
+                warn!("Failed to chown server directory: {}", e);
+            }
             env_map.insert("HOST_SERVER_DIR".to_string(), host_server_dir.clone());
             env_map.insert("SERVER_DIR".to_string(), CONTAINER_SERVER_DIR.to_string());
 
@@ -2675,6 +2705,11 @@ impl WebSocketHandler {
 
         tokio::fs::create_dir_all(&server_dir).await?;
 
+        // Ensure restored data is owned by container user
+        if let Err(e) = chown_to_container_user(&server_dir).await {
+            warn!("Failed to chown restored server directory: {}", e);
+        }
+
         info!(
             "Restoring backup {} for server {} into {}",
             backup_file.display(),
@@ -2707,8 +2742,6 @@ impl WebSocketHandler {
 
         let restore_result = tokio::process::Command::new("tar")
             .arg("-xzf")
-            .arg("--no-same-owner")
-            .arg("--no-same-permissions")
             .arg(&actual_backup_file)
             .arg("-C")
             .arg(&server_dir)
@@ -3253,7 +3286,12 @@ impl WebSocketHandler {
         }
 
         let normalized = if requested.is_absolute() {
-            base_dir.join(requested_path.trim_start_matches('/'))
+            // Backend sends absolute paths (e.g. /var/lib/catalyst/backups/<uuid>/file.tar.gz)
+            // but we store backups under data_dir/backups/<uuid>/. Extract just the filename.
+            let filename = requested
+                .file_name()
+                .ok_or_else(|| AgentError::InvalidRequest("Invalid backup path".to_string()))?;
+            base_dir.join(filename)
         } else {
             base_dir.join(&requested)
         };

@@ -7015,6 +7015,7 @@ export async function serverRoutes(app: FastifyInstance) {
         await wsGateway.sendToAgent(server.nodeId, {
           type: "create_backup",
           serverId: id,
+          serverUuid: server.uuid,
           backupName,
           backupPath: agentPath,
           backupId: backupRecord.id,

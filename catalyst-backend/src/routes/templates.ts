@@ -116,7 +116,7 @@ export async function templateRoutes(app: FastifyInstance) {
           startup,
           stopCommand,
           sendSignalTo,
-          variables,
+          variables: typeof variables === 'string' ? JSON.parse(variables) : (Array.isArray(variables) ? variables : []),
           installScript,
           supportedPorts,
           allocatedMemoryMb,
@@ -179,7 +179,7 @@ export async function templateRoutes(app: FastifyInstance) {
       if (startup !== undefined) nextData.startup = startup;
       if (stopCommand !== undefined) nextData.stopCommand = stopCommand;
       if (sendSignalTo !== undefined) nextData.sendSignalTo = sendSignalTo;
-      if (variables !== undefined) nextData.variables = variables;
+      if (variables !== undefined) nextData.variables = typeof variables === 'string' ? JSON.parse(variables) : (Array.isArray(variables) ? variables : []);
       if (installScript !== undefined) nextData.installScript = installScript;
       if (supportedPorts !== undefined) nextData.supportedPorts = supportedPorts;
       if (allocatedMemoryMb !== undefined) nextData.allocatedMemoryMb = allocatedMemoryMb;
