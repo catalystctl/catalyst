@@ -5,6 +5,7 @@ import Breadcrumbs from './Breadcrumbs';
 import { useWebSocketConnection } from '../../hooks/useWebSocketConnection';
 import { useServerStateUpdates } from '../../hooks/useServerStateUpdates';
 import { useThemeStore } from '../../stores/themeStore';
+import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { useCmdK } from '../../hooks/useKeyboardShortcut';
 import { Menu, X, Search } from 'lucide-react';
 import SearchPalette from '../search/SearchPalette';
@@ -14,6 +15,7 @@ function AppLayout() {
   useWebSocketConnection();
   useServerStateUpdates();
   const { sidebarCollapsed } = useThemeStore();
+  const { panelName } = usePanelBranding();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -46,7 +48,7 @@ function AppLayout() {
         >
           <Menu className="h-5 w-5" />
         </button>
-        <span className="font-display text-lg font-semibold text-zinc-900 dark:text-zinc-100">Catalyst</span>
+        <span className="font-display text-lg font-semibold text-zinc-900 dark:text-zinc-100">{panelName}</span>
         <button
           type="button"
           onClick={() => setIsSearchOpen(true)}

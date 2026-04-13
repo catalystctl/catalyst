@@ -4749,7 +4749,7 @@ export async function serverRoutes(app: FastifyInstance) {
       });
 
       const inviteUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/invites/${token}`;
-      const emailContent = renderInviteEmail({
+      const emailContent = await renderInviteEmail({
         serverName: server.name,
         inviteUrl,
         expiresAt,

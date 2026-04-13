@@ -95,11 +95,12 @@ export async function authRoutes(app: FastifyInstance) {
       // Send welcome email (non-blocking)
       try {
         const { sendEmail } = await import('../services/mailer');
+        const panelName = (await import('../db').then(m => m.prisma.themeSettings.findUnique({ where: { id: 'default' } })))?.panelName || process.env.APP_NAME || 'Catalyst';
         await sendEmail({
           to: email,
-          subject: 'Welcome to Catalyst',
-          html: `<p>Welcome to Catalyst, ${username}!</p><p>Your account has been created successfully.</p><p>You can now log in and start managing your servers.</p>`,
-          text: `Welcome to Catalyst, ${username}! Your account has been created successfully.`,
+          subject: `Welcome to ${panelName}`,
+          html: `<p>Welcome to ${panelName}, ${username}!</p><p>Your account has been created successfully.</p><p>You can now log in and start managing your servers.</p>`,
+          text: `Welcome to ${panelName}, ${username}! Your account has been created successfully.`,
         });
       } catch (emailErr) {
         // Log but don't fail registration

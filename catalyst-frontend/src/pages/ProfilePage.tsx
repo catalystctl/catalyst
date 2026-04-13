@@ -219,7 +219,7 @@ function ProfilePage() {
               </div>
               <div>
                 <div className="text-sm font-semibold text-foreground dark:text-white">
-                  {profile?.username || 'Catalyst User'}
+                  {profile?.username || 'User'}
                 </div>
                 <div className="text-xs text-muted-foreground dark:text-muted-foreground">{profile?.email}</div>
               </div>
