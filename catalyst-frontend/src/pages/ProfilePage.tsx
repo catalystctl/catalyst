@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useThemeStore } from '../stores/themeStore';
+import { BrandFooter } from '../components/shared/BrandFooter';
 
 function ProfilePage() {
   const queryClient = useQueryClient();
@@ -200,7 +201,7 @@ function ProfilePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="relative min-h-[calc(100vh-8rem)] space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground dark:text-white">Profile</h1>
@@ -504,6 +505,7 @@ function ProfilePage() {
           </Button>
         </DialogContent>
       </Dialog>
+      <BrandFooter />
     </div>
   );
 }

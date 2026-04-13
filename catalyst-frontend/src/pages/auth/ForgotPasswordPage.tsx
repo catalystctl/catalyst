@@ -4,6 +4,7 @@ import { authApi } from '../../services/api/auth';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
+import { BrandFooter } from '../../components/shared/BrandFooter';
 
 function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -32,7 +33,7 @@ function ForgotPasswordPage() {
   };
 
   return (
-    <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
+    <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
       <div className="w-full max-w-md rounded-xl border border-border bg-white px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
         <div className="flex flex-col items-center text-center">
           <img src={logoUrl} alt={`${panelName} logo`} className="h-12 w-12" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
@@ -99,6 +100,7 @@ function ForgotPasswordPage() {
           </form>
         )}
       </div>
+      <BrandFooter />
     </div>
   );
 }

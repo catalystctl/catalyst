@@ -11,6 +11,7 @@ import { notifyError } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
 import { useThemeStore } from '../../stores/themeStore';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
+import { BrandFooter } from '../../components/shared/BrandFooter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -200,7 +201,7 @@ function LoginPage() {
   };
 
   return (
-    <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
+    <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
       <Card className="w-full max-w-md">
         <CardContent className="px-6 py-8">
           <div className="flex flex-col items-center text-center">
@@ -380,6 +381,7 @@ function LoginPage() {
           </div>
         </DialogContent>
       </Dialog>
+      <BrandFooter />
     </div>
   );
 }
