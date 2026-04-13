@@ -51,14 +51,14 @@ function FileContextMenu({
   };
 
   const itemClass =
-    'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white';
+    'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:text-zinc-300 dark:hover:bg-surface-2 dark:hover:text-foreground';
   const dangerClass =
     'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-rose-600 transition-colors hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10';
 
   const menu = (
     <div
       ref={menuRef}
-      className="w-44 rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+      className="w-44 rounded-xl border border-border bg-white p-1 shadow-lg dark:border-border dark:bg-surface-1"
     >
       <button type="button" className={itemClass} onClick={wrap(onOpen)}>
         {entry.isDirectory ? <FolderOpen className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
@@ -82,7 +82,7 @@ function FileContextMenu({
           Rename
         </button>
       )}
-      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+      <div className="my-1 border-t border-border dark:border-border" />
       {onCompress && (
         <button type="button" className={itemClass} onClick={wrap(onCompress)}>
           <Archive className="h-3.5 w-3.5" />
@@ -101,7 +101,7 @@ function FileContextMenu({
           Permissions
         </button>
       )}
-      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+      <div className="my-1 border-t border-border dark:border-border" />
       <button type="button" className={dangerClass} onClick={wrap(onDelete)}>
         <Trash2 className="h-3.5 w-3.5" />
         Delete
@@ -149,7 +149,7 @@ function FileContextMenu({
   return (
     <details ref={detailsRef} className="relative" onClick={(e) => e.stopPropagation()}>
       <summary
-        className="list-none flex cursor-pointer items-center justify-center rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-300 [&::-webkit-details-marker]:hidden"
+        className="list-none flex cursor-pointer items-center justify-center rounded-lg p-1 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-muted-foreground dark:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-zinc-300 [&::-webkit-details-marker]:hidden"
         aria-label="File actions"
       >
         <MoreHorizontal className="h-4 w-4" />

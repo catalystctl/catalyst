@@ -13,22 +13,22 @@ const STREAM_COLORS: Record<string, { dot: string; active: string; inactive: str
   stdout: {
     dot: 'bg-emerald-400',
     active: 'border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-    inactive: 'border-slate-300 text-slate-500 hover:border-slate-400 dark:border-slate-700 dark:hover:border-slate-600',
+    inactive: 'border-border text-muted-foreground hover:border-zinc-400 dark:border-border dark:hover:border-zinc-600',
   },
   stderr: {
     dot: 'bg-rose-400',
     active: 'border-rose-500/50 bg-rose-500/10 text-rose-600 dark:text-rose-400',
-    inactive: 'border-slate-300 text-slate-500 hover:border-slate-400 dark:border-slate-700 dark:hover:border-slate-600',
+    inactive: 'border-border text-muted-foreground hover:border-zinc-400 dark:border-border dark:hover:border-zinc-600',
   },
   system: {
     dot: 'bg-sky-400',
     active: 'border-sky-500/50 bg-sky-500/10 text-sky-600 dark:text-sky-400',
-    inactive: 'border-slate-300 text-slate-500 hover:border-slate-400 dark:border-slate-700 dark:hover:border-slate-600',
+    inactive: 'border-border text-muted-foreground hover:border-zinc-400 dark:border-border dark:hover:border-zinc-600',
   },
   stdin: {
     dot: 'bg-amber-400',
     active: 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400',
-    inactive: 'border-slate-300 text-slate-500 hover:border-slate-400 dark:border-slate-700 dark:hover:border-slate-600',
+    inactive: 'border-border text-muted-foreground hover:border-zinc-400 dark:border-border dark:hover:border-zinc-600',
   },
 };
 
@@ -141,12 +141,12 @@ function ServerConsolePage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Console</h1>
-            <span className="text-lg text-slate-300 dark:text-slate-700">—</span>
-            <span className="text-lg font-medium text-slate-600 dark:text-slate-300">{title}</span>
+            <h1 className="text-2xl font-semibold text-foreground dark:text-white">Console</h1>
+            <span className="text-lg text-zinc-300 dark:text-foreground">—</span>
+            <span className="text-lg font-medium text-muted-foreground dark:text-zinc-300">{title}</span>
             {server?.status ? <ServerStatusBadge status={server.status} /> : null}
           </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+          <p className="text-sm text-muted-foreground dark:text-muted-foreground">
             Real-time output and command input
           </p>
           {isSuspended ? (
@@ -158,9 +158,9 @@ function ServerConsolePage() {
       </div>
 
       {/* Console Container */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 shadow-surface-light dark:shadow-surface-dark dark:border-slate-800">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border shadow-surface-light dark:shadow-surface-dark dark:border-border">
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border bg-white px-3 py-2 dark:border-border dark:bg-surface-1">
           {/* Connection Status */}
           <span
             className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
@@ -175,7 +175,7 @@ function ServerConsolePage() {
             {isConnected ? 'Live' : 'Connecting'}
           </span>
 
-          <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
+          <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
 
           {/* Stream Filters */}
           <div className="flex items-center gap-1">
@@ -191,28 +191,28 @@ function ServerConsolePage() {
                     isActive ? colors.active : colors.inactive
                   }`}
                 >
-                  <span className={`h-1.5 w-1.5 rounded-full ${isActive ? colors.dot : 'bg-slate-300 dark:bg-slate-600'}`} />
+                  <span className={`h-1.5 w-1.5 rounded-full ${isActive ? colors.dot : 'bg-zinc-300 dark:bg-zinc-600'}`} />
                   {stream}
                 </button>
               );
             })}
           </div>
 
-          <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
+          <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
 
           {/* Search */}
           {searchOpen ? (
-            <div className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 dark:border-slate-700 dark:bg-slate-800">
-              <Search className="h-3 w-3 text-slate-400" />
+            <div className="flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1 dark:border-border dark:bg-surface-2">
+              <Search className="h-3 w-3 text-muted-foreground" />
               <input
                 ref={searchRef}
-                className="w-40 bg-transparent text-xs text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-200"
+                className="w-40 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground dark:text-zinc-200"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Filter output…"
               />
               {searchQuery ? (
-                <span className="text-[10px] tabular-nums text-slate-500">
+                <span className="text-[10px] tabular-nums text-muted-foreground">
                   {entries.filter((e) => activeStreams.has(e.stream) && e.data.toLowerCase().includes(searchQuery.toLowerCase())).length}
                 </span>
               ) : null}
@@ -222,7 +222,7 @@ function ServerConsolePage() {
                   setSearchOpen(false);
                   setSearchQuery('');
                 }}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="text-muted-foreground hover:text-muted-foreground dark:hover:text-zinc-200"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -234,7 +234,7 @@ function ServerConsolePage() {
                 setSearchOpen(true);
                 setTimeout(() => searchRef.current?.focus(), 50);
               }}
-              className="flex items-center gap-1.5 rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-500 transition-all hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600"
+              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-border dark:border-border dark:hover:border-zinc-600"
             >
               <Search className="h-3 w-3" />
               Search
@@ -244,11 +244,11 @@ function ServerConsolePage() {
           <div className="flex-1" />
 
           {/* Right-side actions */}
-          <span className="text-[11px] tabular-nums text-slate-400 dark:text-slate-600">
+          <span className="text-[11px] tabular-nums text-muted-foreground dark:text-muted-foreground">
             {entries.length} lines
           </span>
 
-          <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
+          <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
 
           <button
             type="button"
@@ -256,7 +256,7 @@ function ServerConsolePage() {
             className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-all ${
               autoScroll
                 ? 'border-primary-500/30 bg-primary-500/10 text-primary-500 dark:text-primary-400'
-                : 'border-slate-200 text-slate-500 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'
+                : 'border-border text-muted-foreground hover:border-border dark:border-border dark:hover:border-zinc-600'
             }`}
           >
             <ArrowDown className="h-3 w-3" />
@@ -266,7 +266,7 @@ function ServerConsolePage() {
           <button
             type="button"
             onClick={handleCopy}
-            className="flex items-center gap-1.5 rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-500 transition-all hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600"
+            className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-border dark:border-border dark:hover:border-zinc-600"
           >
             {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
             {copied ? 'Copied' : 'Copy'}
@@ -275,7 +275,7 @@ function ServerConsolePage() {
           <button
             type="button"
             onClick={handleClear}
-            className="flex items-center gap-1.5 rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-500 transition-all hover:border-rose-300 hover:text-rose-500 dark:border-slate-700 dark:hover:border-rose-500/30 dark:hover:text-rose-400"
+            className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-rose-300 hover:text-rose-500 dark:border-border dark:hover:border-rose-500/30 dark:hover:text-rose-400"
           >
             <Trash2 className="h-3 w-3" />
             Clear
@@ -299,12 +299,12 @@ function ServerConsolePage() {
         {/* Command Input */}
         <form
           onSubmit={handleSubmit}
-          className="flex items-center gap-3 border-t border-slate-200 bg-white px-4 py-2.5 dark:border-slate-800 dark:bg-slate-900"
+          className="flex items-center gap-3 border-t border-border bg-white px-4 py-2.5 dark:border-border dark:bg-surface-1"
         >
           <span className="select-none text-sm font-bold text-primary-500">$</span>
           <input
             ref={inputRef}
-            className="w-full bg-transparent font-mono text-sm text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-200"
+            className="w-full bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200"
             value={command}
             onChange={(e) => {
               setCommand(e.target.value);

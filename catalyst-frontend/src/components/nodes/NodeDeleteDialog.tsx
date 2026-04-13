@@ -33,16 +33,16 @@ function NodeDeleteDialog({ nodeId, nodeName }: Props) {
         Delete
       </button>
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-slate-950/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
-            <div className="text-lg font-semibold text-slate-900 dark:text-white">Delete node</div>
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-xl border border-border bg-white p-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
+            <div className="text-lg font-semibold text-foreground dark:text-white">Delete node</div>
+            <p className="mt-2 text-sm text-muted-foreground dark:text-zinc-300">
               Are you sure you want to delete <span className="font-semibold">{nodeName}</span>? This
               action cannot be undone.
             </p>
             <div className="mt-4 flex justify-end gap-2 text-xs">
               <button
-                className="rounded-md border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                 onClick={() => setOpen(false)}
               >
                 Cancel

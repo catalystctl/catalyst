@@ -79,43 +79,43 @@ function InvitesPage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="mx-auto max-w-lg space-y-4 rounded-xl border border-slate-200 bg-white px-6 py-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Server Invite</h1>
-        <p className="text-sm text-slate-600 dark:text-slate-400">
+      <div className="mx-auto max-w-lg space-y-4 rounded-xl border border-border bg-white px-6 py-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+        <h1 className="text-2xl font-semibold text-foreground dark:text-white">Server Invite</h1>
+        <p className="text-sm text-muted-foreground dark:text-muted-foreground">
           Create your account to accept the invite. Your email is locked to the invite address.
         </p>
         {invitePreview ? (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
-            <div className="text-slate-500 dark:text-slate-400">Server</div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{invitePreview.serverName}</div>
-            <div className="mt-2 text-slate-500 dark:text-slate-400">Permissions</div>
-            <div className="text-xs text-slate-700 dark:text-slate-200">{invitePreview.permissions.join(', ')}</div>
+          <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 text-xs text-muted-foreground dark:border-border dark:bg-zinc-950/60 dark:text-zinc-300">
+            <div className="text-muted-foreground dark:text-muted-foreground">Server</div>
+            <div className="text-sm font-semibold text-foreground dark:text-zinc-100">{invitePreview.serverName}</div>
+            <div className="mt-2 text-muted-foreground dark:text-muted-foreground">Permissions</div>
+            <div className="text-xs text-foreground dark:text-zinc-200">{invitePreview.permissions.join(', ')}</div>
           </div>
         ) : null}
-        <div className="space-y-3 text-sm text-slate-600 dark:text-slate-300">
-          <label className="block text-xs text-slate-600 dark:text-slate-300">
+        <div className="space-y-3 text-sm text-muted-foreground dark:text-zinc-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             Email
             <input
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
               value={invitePreview?.email ?? ''}
               placeholder="invitee@example.com"
               disabled
             />
           </label>
-          <label className="block text-xs text-slate-600 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             Username
             <input
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
               value={registerUsername}
               onChange={(event) => setRegisterUsername(event.target.value)}
               placeholder="yourname"
             />
           </label>
-          <label className="block text-xs text-slate-600 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             Password
             <input
               type="password"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
               value={registerPassword}
               onChange={(event) => setRegisterPassword(event.target.value)}
               placeholder="••••••••"
@@ -131,7 +131,7 @@ function InvitesPage() {
             Create account & accept
           </button>
           <button
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-primary-500/30"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
             onClick={() => navigate('/login', { state: { from: location } })}
           >
             Sign in instead
@@ -142,9 +142,9 @@ function InvitesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg space-y-4 rounded-xl border border-slate-200 bg-white px-6 py-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-      <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Server Invite</h1>
-      <p className="text-sm text-slate-600 dark:text-slate-400">
+    <div className="mx-auto max-w-lg space-y-4 rounded-xl border border-border bg-white px-6 py-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+      <h1 className="text-2xl font-semibold text-foreground dark:text-white">Server Invite</h1>
+      <p className="text-sm text-muted-foreground dark:text-muted-foreground">
         Accept the invite to gain access to the server. You must be logged in with the invited email.
       </p>
       <button

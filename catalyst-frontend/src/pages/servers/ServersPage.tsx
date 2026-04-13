@@ -32,33 +32,12 @@ function ServersPage() {
   }, [data, filters]);
 
   const statusCounts = useMemo(() => {
-    const counts = {
-      running: 0,
-      stopped: 0,
-      transitioning: 0,
-      issues: 0,
-    };
+    const counts = { running: 0, stopped: 0, transitioning: 0, issues: 0 };
     data?.forEach((server) => {
-      if (server.status === 'running') {
-        counts.running += 1;
-        return;
-      }
-      if (server.status === 'stopped') {
-        counts.stopped += 1;
-        return;
-      }
-      if (
-        server.status === 'installing' ||
-        server.status === 'starting' ||
-        server.status === 'stopping' ||
-        server.status === 'transferring'
-      ) {
-        counts.transitioning += 1;
-        return;
-      }
-      if (server.status === 'crashed' || server.status === 'suspended') {
-        counts.issues += 1;
-      }
+      if (server.status === 'running') { counts.running += 1; return; }
+      if (server.status === 'stopped') { counts.stopped += 1; return; }
+      if (['installing', 'starting', 'stopping', 'transferring'].includes(server.status)) { counts.transitioning += 1; return; }
+      if (server.status === 'crashed' || server.status === 'suspended') { counts.issues += 1; }
     });
     return counts;
   }, [data]);
@@ -72,8 +51,8 @@ function ServersPage() {
         <CardContent className="px-6 py-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-1">
-              <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Servers</h1>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
+              <h1 className="font-display text-2xl font-bold text-foreground">Servers</h1>
+              <p className="text-sm text-muted-foreground">
                 Manage your game servers, monitor resources, and control power states
               </p>
             </div>
@@ -124,8 +103,8 @@ function ServersPage() {
       {isLoading ? (
         <Card>
           <CardContent className="px-6 py-12 text-center">
-            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-primary-600 dark:border-slate-700 dark:border-t-primary-400" />
-            <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">Loading servers...</p>
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-surface-2 border-t-primary" />
+            <p className="mt-4 text-sm text-muted-foreground">Loading servers...</p>
           </CardContent>
         </Card>
       ) : (

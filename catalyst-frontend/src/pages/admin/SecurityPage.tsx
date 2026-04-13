@@ -152,30 +152,30 @@ function SecurityPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark dark:hover:border-primary-500/30">
+      <div className="rounded-2xl border border-border bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Security</h1>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
+            <h1 className="text-2xl font-semibold text-foreground dark:text-white">Security</h1>
+            <p className="text-sm text-muted-foreground dark:text-muted-foreground">
               Configure rate limits, lockout policy, and audit retention.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-400">
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-800 dark:bg-slate-950/60">
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground dark:text-muted-foreground">
+            <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
               {lockouts.length} lockouts
             </span>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-800 dark:bg-slate-950/60">
+            <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
               Page {lockoutPagination?.page ?? lockoutPage}
             </span>
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+      <div className="rounded-2xl border border-border bg-white px-6 py-5 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Security settings</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <h2 className="text-lg font-semibold text-foreground dark:text-white">Security settings</h2>
+            <p className="text-xs text-muted-foreground dark:text-muted-foreground">
               Rate limits apply per minute unless noted. Lockouts apply per email + IP.
             </p>
           </div>
@@ -188,42 +188,42 @@ function SecurityPage() {
           </button>
         </div>
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             Auth requests / min
             <input
               value={authRateLimitMax}
               onChange={(event) => setAuthRateLimitMax(event.target.value)}
               type="number"
               min="1"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             File ops / min
             <input
               value={fileRateLimitMax}
               onChange={(event) => setFileRateLimitMax(event.target.value)}
               type="number"
               min="1"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             Console input / min
             <input
               value={consoleRateLimitMax}
               onChange={(event) => setConsoleRateLimitMax(event.target.value)}
               type="number"
               min="1"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             <span className="flex items-center gap-1">
               Console output lines / sec
               <span className="group relative">
-                <Info className="h-3.5 w-3.5 cursor-help text-slate-400 dark:text-slate-500" />
-                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground dark:text-muted-foreground" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-border bg-white px-3 py-2 text-xs leading-relaxed text-muted-foreground opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-border dark:bg-surface-2 dark:text-zinc-300">
                   Maximum lines per second from server console output. Increase for servers with large startup logs.
                 </span>
               </span>
@@ -233,15 +233,15 @@ function SecurityPage() {
               onChange={(event) => setConsoleOutputLinesMax(event.target.value)}
               type="number"
               min="1"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             <span className="flex items-center gap-1">
               Console output bytes / sec
               <span className="group relative">
-                <Info className="h-3.5 w-3.5 cursor-help text-slate-400 dark:text-slate-500" />
-                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground dark:text-muted-foreground" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-border bg-white px-3 py-2 text-xs leading-relaxed text-muted-foreground opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-border dark:bg-surface-2 dark:text-zinc-300">
                   Per-server websocket console output cap. Allowed range is 65,536 to 10,485,760 bytes per second.
                 </span>
               </span>
@@ -252,15 +252,15 @@ function SecurityPage() {
               type="number"
               min={String(MIN_CONSOLE_OUTPUT_BYTES_PER_SECOND)}
               max={String(MAX_CONSOLE_OUTPUT_BYTES_PER_SECOND)}
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             <span className="flex items-center gap-1">
               Agent messages / sec
               <span className="group relative">
-                <Info className="h-3.5 w-3.5 cursor-help text-slate-400 dark:text-slate-500" />
-                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground dark:text-muted-foreground" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-border bg-white px-3 py-2 text-xs leading-relaxed text-muted-foreground opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-border dark:bg-surface-2 dark:text-zinc-300">
                   Maximum WebSocket messages per second from each agent node.
                 </span>
               </span>
@@ -270,15 +270,15 @@ function SecurityPage() {
               onChange={(event) => setAgentMessageMax(event.target.value)}
               type="number"
               min="1"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             <span className="flex items-center gap-1">
               Agent metrics / sec
               <span className="group relative">
-                <Info className="h-3.5 w-3.5 cursor-help text-slate-400 dark:text-slate-500" />
-                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground dark:text-muted-foreground" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-border bg-white px-3 py-2 text-xs leading-relaxed text-muted-foreground opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-border dark:bg-surface-2 dark:text-zinc-300">
                   Maximum agent-level metric messages per second from each agent node.
                 </span>
               </span>
@@ -288,15 +288,15 @@ function SecurityPage() {
               onChange={(event) => setAgentMetricsMax(event.target.value)}
               type="number"
               min="1"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             <span className="flex items-center gap-1">
               Server metrics / sec
               <span className="group relative">
-                <Info className="h-3.5 w-3.5 cursor-help text-slate-400 dark:text-slate-500" />
-                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground dark:text-muted-foreground" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-border bg-white px-3 py-2 text-xs leading-relaxed text-muted-foreground opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-border dark:bg-surface-2 dark:text-zinc-300">
                   Maximum server-level metric messages per second per server.
                 </span>
               </span>
@@ -306,55 +306,55 @@ function SecurityPage() {
               onChange={(event) => setServerMetricsMax(event.target.value)}
               type="number"
               min="1"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             Lockout attempts
             <input
               value={lockoutMaxAttempts}
               onChange={(event) => setLockoutMaxAttempts(event.target.value)}
               type="number"
               min="1"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             Lockout window (min)
             <input
               value={lockoutWindowMinutes}
               onChange={(event) => setLockoutWindowMinutes(event.target.value)}
               type="number"
               min="1"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             Lockout duration (min)
             <input
               value={lockoutDurationMinutes}
               onChange={(event) => setLockoutDurationMinutes(event.target.value)}
               type="number"
               min="1"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             Audit retention (days)
             <input
               value={auditRetentionDays}
               onChange={(event) => setAuditRetentionDays(event.target.value)}
               type="number"
               min="1"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             <span className="flex items-center gap-1">
               Max buffer (MB)
               <span className="group relative">
-                <Info className="h-3.5 w-3.5 cursor-help text-slate-400 dark:text-slate-500" />
-                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground dark:text-muted-foreground" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-border bg-white px-3 py-2 text-xs leading-relaxed text-muted-foreground opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-border dark:bg-surface-2 dark:text-zinc-300">
                   Maximum output buffer for server file operations such as compressing, decompressing, and browsing archive contents. Increase this if large archives fail with buffer errors. Default is 50 MB.
                 </span>
               </span>
@@ -364,28 +364,28 @@ function SecurityPage() {
               onChange={(event) => setMaxBufferMb(event.target.value)}
               type="number"
               min="1"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+      <div className="rounded-2xl border border-border bg-white px-6 py-5 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">File tunnel settings</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <h2 className="text-lg font-semibold text-foreground dark:text-white">File tunnel settings</h2>
+            <p className="text-xs text-muted-foreground dark:text-muted-foreground">
               Limits for the agent file tunnel used for file operations.
             </p>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             <span className="flex items-center gap-1">
               Tunnel requests / min
               <span className="group relative">
-                <Info className="h-3.5 w-3.5 cursor-help text-slate-400 dark:text-slate-500" />
-                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground dark:text-muted-foreground" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-border bg-white px-3 py-2 text-xs leading-relaxed text-muted-foreground opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-border dark:bg-surface-2 dark:text-zinc-300">
                   Maximum file tunnel requests per minute per agent node.
                 </span>
               </span>
@@ -395,15 +395,15 @@ function SecurityPage() {
               onChange={(event) => setFileTunnelRateLimitMax(event.target.value)}
               type="number"
               min="1"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             <span className="flex items-center gap-1">
               Max upload size (MB)
               <span className="group relative">
-                <Info className="h-3.5 w-3.5 cursor-help text-slate-400 dark:text-slate-500" />
-                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground dark:text-muted-foreground" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-border bg-white px-3 py-2 text-xs leading-relaxed text-muted-foreground opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-border dark:bg-surface-2 dark:text-zinc-300">
                   Maximum file upload size in megabytes for file tunnel operations.
                 </span>
               </span>
@@ -413,15 +413,15 @@ function SecurityPage() {
               onChange={(event) => setFileTunnelMaxUploadMb(event.target.value)}
               type="number"
               min="1"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             <span className="flex items-center gap-1">
               Max pending per node
               <span className="group relative">
-                <Info className="h-3.5 w-3.5 cursor-help text-slate-400 dark:text-slate-500" />
-                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground dark:text-muted-foreground" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-border bg-white px-3 py-2 text-xs leading-relaxed text-muted-foreground opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-border dark:bg-surface-2 dark:text-zinc-300">
                   Maximum pending file operations queued per agent node.
                 </span>
               </span>
@@ -431,15 +431,15 @@ function SecurityPage() {
               onChange={(event) => setFileTunnelMaxPendingPerNode(event.target.value)}
               type="number"
               min="1"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             <span className="flex items-center gap-1">
               Max concurrent (agent)
               <span className="group relative">
-                <Info className="h-3.5 w-3.5 cursor-help text-slate-400 dark:text-slate-500" />
-                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground dark:text-muted-foreground" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-border bg-white px-3 py-2 text-xs leading-relaxed text-muted-foreground opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-border dark:bg-surface-2 dark:text-zinc-300">
                   Maximum concurrent file operations processed by each agent. Requires agent restart to take effect.
                 </span>
               </span>
@@ -449,19 +449,19 @@ function SecurityPage() {
               onChange={(event) => setFileTunnelConcurrentMax(event.target.value)}
               type="number"
               min="1"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+      <div className="rounded-2xl border border-border bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-4 dark:border-border">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Auth lockouts</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Track recent lockout entries.</p>
+            <h2 className="text-lg font-semibold text-foreground dark:text-white">Auth lockouts</h2>
+            <p className="text-xs text-muted-foreground dark:text-muted-foreground">Track recent lockout entries.</p>
           </div>
-          <label className="text-xs text-slate-500 dark:text-slate-300">
+          <label className="text-xs text-muted-foreground dark:text-zinc-300">
             Search
             <input
               value={search}
@@ -470,36 +470,36 @@ function SecurityPage() {
                 setLockoutPage(1);
               }}
               placeholder="Search lockouts"
-              className="mt-1 w-56 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-56 rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
             />
           </label>
         </div>
 
         {lockoutsLoading ? (
-          <div className="px-6 py-6 text-sm text-slate-600 dark:text-slate-300">Loading lockouts...</div>
+          <div className="px-6 py-6 text-sm text-muted-foreground dark:text-zinc-300">Loading lockouts...</div>
         ) : lockouts.length ? (
           <div>
-            <div className="divide-y divide-slate-200 dark:divide-slate-800">
+            <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
               {lockouts.map((lockout) => (
                 <div
                   key={lockout.id}
-                  className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 text-sm text-slate-600 dark:text-slate-300"
+                  className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300"
                 >
                   <div>
-                    <div className="text-slate-900 dark:text-slate-100">{lockout.email}</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{lockout.ipAddress}</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                    <div className="text-foreground dark:text-zinc-100">{lockout.email}</div>
+                    <div className="text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">{lockout.ipAddress}</div>
+                    <div className="text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
                       Attempts: {lockout.failureCount} · Last failed:{' '}
                       {new Date(lockout.lastFailedAt).toLocaleString()}
                     </div>
                   </div>
-                  <div className="text-right text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                  <div className="text-right text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
                     {lockout.lockedUntil
                       ? `Locked until ${new Date(lockout.lockedUntil).toLocaleString()}`
                       : 'Active'}
                   </div>
                   <button
-                    className="rounded-md border border-slate-200 px-3 py-1 text-xs text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 disabled:opacity-60 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                    className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground disabled:opacity-60 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                     onClick={() => clearMutation.mutate(lockout.id)}
                     disabled={clearMutation.isPending}
                   >
@@ -509,20 +509,20 @@ function SecurityPage() {
               ))}
             </div>
             {lockoutPagination ? (
-              <div className="flex items-center justify-between border-t border-slate-200 px-6 py-3 text-xs text-slate-500 dark:text-slate-400 dark:border-slate-800 dark:text-slate-500">
+              <div className="flex items-center justify-between border-t border-border px-6 py-3 text-xs text-muted-foreground dark:text-muted-foreground dark:border-border dark:text-muted-foreground">
                 <span>
                   Page {lockoutPagination.page} of {lockoutPagination.totalPages}
                 </span>
                 <div className="flex gap-2">
                   <button
-                    className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 disabled:opacity-50 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                    className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground disabled:opacity-50 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                     onClick={() => setLockoutPage((prev) => Math.max(1, prev - 1))}
                     disabled={lockoutPage <= 1}
                   >
                     Previous
                   </button>
                   <button
-                    className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 disabled:opacity-50 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                    className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground disabled:opacity-50 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                     onClick={() =>
                       setLockoutPage((prev) =>
                         lockoutPagination.page < lockoutPagination.totalPages ? prev + 1 : prev,

@@ -104,8 +104,8 @@ function ThemeSettingsPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-surface-light dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark">
-          <p className="text-slate-500 dark:text-slate-400">Loading theme settings...</p>
+        <div className="rounded-xl border border-border bg-white p-6 shadow-surface-light dark:border-border dark:bg-surface-1 dark:shadow-surface-dark">
+          <p className="text-muted-foreground dark:text-muted-foreground">Loading theme settings...</p>
         </div>
       </div>
     );
@@ -116,17 +116,17 @@ function ThemeSettingsPage() {
 
       <div className="space-y-6">
         {/* Branding Section */}
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-surface-light dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark">
+        <div className="rounded-xl border border-border bg-white p-6 shadow-surface-light dark:border-border dark:bg-surface-1 dark:shadow-surface-dark">
           <div className="mb-4">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Branding</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <h2 className="text-lg font-semibold text-foreground dark:text-zinc-100">Branding</h2>
+            <p className="text-sm text-muted-foreground dark:text-muted-foreground">
               Customize your panel's branding and identity.
             </p>
           </div>
 
           <div className="space-y-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              <label className="mb-1 block text-sm font-medium text-foreground dark:text-zinc-300">
                 Panel Name
               </label>
               <input
@@ -134,12 +134,12 @@ function ThemeSettingsPage() {
                 value={panelName}
                 onChange={(e) => setPanelName(e.target.value)}
                 placeholder="Catalyst"
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500"
+                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-border dark:bg-surface-2 dark:text-zinc-100 dark:placeholder:text-muted-foreground"
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              <label className="mb-1 block text-sm font-medium text-foreground dark:text-zinc-300">
                 Logo URL
               </label>
               <input
@@ -147,15 +147,15 @@ function ThemeSettingsPage() {
                 value={logoUrl}
                 onChange={(e) => setLogoUrl(e.target.value)}
                 placeholder="https://example.com/logo.png"
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500"
+                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-border dark:bg-surface-2 dark:text-zinc-100 dark:placeholder:text-muted-foreground"
               />
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              <p className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
                 Leave empty to use default logo. Recommended size: 24x24px.
               </p>
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              <label className="mb-1 block text-sm font-medium text-foreground dark:text-zinc-300">
                 Favicon URL
               </label>
               <input
@@ -163,9 +163,9 @@ function ThemeSettingsPage() {
                 value={faviconUrl}
                 onChange={(e) => setFaviconUrl(e.target.value)}
                 placeholder="https://example.com/favicon.ico"
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500"
+                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-border dark:bg-surface-2 dark:text-zinc-100 dark:placeholder:text-muted-foreground"
               />
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              <p className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
                 Leave empty to use default favicon.
               </p>
             </div>
@@ -173,25 +173,25 @@ function ThemeSettingsPage() {
         </div>
 
         {/* Theme Options Section */}
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-surface-light dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark">
+        <div className="rounded-xl border border-border bg-white p-6 shadow-surface-light dark:border-border dark:bg-surface-1 dark:shadow-surface-dark">
           <div className="mb-4">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            <h2 className="text-lg font-semibold text-foreground dark:text-zinc-100">
               Theme Options
             </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-muted-foreground dark:text-muted-foreground">
               Configure default theme and enable/disable themes.
             </p>
           </div>
 
           <div className="space-y-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              <label className="mb-1 block text-sm font-medium text-foreground dark:text-zinc-300">
                 Default Theme
               </label>
               <select
                 value={defaultTheme}
                 onChange={(e) => setDefaultTheme(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-border dark:bg-surface-2 dark:text-zinc-100"
               >
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
@@ -200,7 +200,7 @@ function ThemeSettingsPage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              <label className="mb-2 block text-sm font-medium text-foreground dark:text-zinc-300">
                 Enabled Themes
               </label>
               <div className="space-y-2">
@@ -209,18 +209,18 @@ function ThemeSettingsPage() {
                     type="checkbox"
                     checked={enabledThemes.includes('light')}
                     onChange={() => toggleTheme('light')}
-                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-2 focus:ring-primary-500/20 dark:border-slate-600"
+                    className="h-4 w-4 rounded border-border text-primary-600 focus:ring-2 focus:ring-primary-500/20 dark:border-zinc-600"
                   />
-                  <span className="text-sm text-slate-700 dark:text-slate-300">Light Theme</span>
+                  <span className="text-sm text-foreground dark:text-zinc-300">Light Theme</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={enabledThemes.includes('dark')}
                     onChange={() => toggleTheme('dark')}
-                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-2 focus:ring-primary-500/20 dark:border-slate-600"
+                    className="h-4 w-4 rounded border-border text-primary-600 focus:ring-2 focus:ring-primary-500/20 dark:border-zinc-600"
                   />
-                  <span className="text-sm text-slate-700 dark:text-slate-300">Dark Theme</span>
+                  <span className="text-sm text-foreground dark:text-zinc-300">Dark Theme</span>
                 </label>
               </div>
             </div>
@@ -228,19 +228,19 @@ function ThemeSettingsPage() {
         </div>
 
         {/* Color Customization Section */}
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-surface-light dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark">
+        <div className="rounded-xl border border-border bg-white p-6 shadow-surface-light dark:border-border dark:bg-surface-1 dark:shadow-surface-dark">
           <div className="mb-4">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            <h2 className="text-lg font-semibold text-foreground dark:text-zinc-100">
               Color Scheme
             </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-muted-foreground dark:text-muted-foreground">
               Customize your panel's color palette.
             </p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              <label className="mb-1 block text-sm font-medium text-foreground dark:text-zinc-300">
                 Primary Color
               </label>
               <div className="flex items-center gap-2">
@@ -248,19 +248,19 @@ function ThemeSettingsPage() {
                   type="color"
                   value={primaryColor}
                   onChange={(e) => setPrimaryColor(e.target.value)}
-                  className="h-10 w-16 cursor-pointer rounded border border-slate-200 dark:border-slate-700"
+                  className="h-10 w-16 cursor-pointer rounded border border-border dark:border-border"
                 />
                 <input
                   type="text"
                   value={primaryColor}
                   onChange={(e) => setPrimaryColor(e.target.value)}
-                  className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="flex-1 rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-border dark:bg-surface-2 dark:text-zinc-100"
                 />
               </div>
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              <label className="mb-1 block text-sm font-medium text-foreground dark:text-zinc-300">
                 Secondary Color
               </label>
               <div className="flex items-center gap-2">
@@ -268,19 +268,19 @@ function ThemeSettingsPage() {
                   type="color"
                   value={secondaryColor}
                   onChange={(e) => setSecondaryColor(e.target.value)}
-                  className="h-10 w-16 cursor-pointer rounded border border-slate-200 dark:border-slate-700"
+                  className="h-10 w-16 cursor-pointer rounded border border-border dark:border-border"
                 />
                 <input
                   type="text"
                   value={secondaryColor}
                   onChange={(e) => setSecondaryColor(e.target.value)}
-                  className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="flex-1 rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-border dark:bg-surface-2 dark:text-zinc-100"
                 />
               </div>
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              <label className="mb-1 block text-sm font-medium text-foreground dark:text-zinc-300">
                 Accent Color
               </label>
               <div className="flex items-center gap-2">
@@ -288,13 +288,13 @@ function ThemeSettingsPage() {
                   type="color"
                   value={accentColor}
                   onChange={(e) => setAccentColor(e.target.value)}
-                  className="h-10 w-16 cursor-pointer rounded border border-slate-200 dark:border-slate-700"
+                  className="h-10 w-16 cursor-pointer rounded border border-border dark:border-border"
                 />
                 <input
                   type="text"
                   value={accentColor}
                   onChange={(e) => setAccentColor(e.target.value)}
-                  className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="flex-1 rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-border dark:bg-surface-2 dark:text-zinc-100"
                 />
               </div>
             </div>
@@ -302,12 +302,12 @@ function ThemeSettingsPage() {
         </div>
 
         {/* Custom CSS Section */}
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-surface-light dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark">
+        <div className="rounded-xl border border-border bg-white p-6 shadow-surface-light dark:border-border dark:bg-surface-1 dark:shadow-surface-dark">
           <div className="mb-4">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            <h2 className="text-lg font-semibold text-foreground dark:text-zinc-100">
               Custom CSS
             </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-muted-foreground dark:text-muted-foreground">
               Advanced styling customization. CSS will be injected into the page.
             </p>
           </div>
@@ -318,9 +318,9 @@ function ThemeSettingsPage() {
               onChange={(e) => setCustomCss(e.target.value)}
               placeholder="/* Your custom CSS here */&#10;.my-custom-class {&#10;  color: red;&#10;}"
               rows={12}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500"
+              className="w-full rounded-lg border border-border bg-white px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-border dark:bg-surface-2 dark:text-zinc-100 dark:placeholder:text-muted-foreground"
             />
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
               Maximum 100KB. Be careful with custom CSS as it can break the UI.
             </p>
           </div>
@@ -331,7 +331,7 @@ function ThemeSettingsPage() {
           <button
             type="button"
             onClick={handleReset}
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+            className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-surface-2 dark:border-border dark:bg-surface-2 dark:text-zinc-300 dark:hover:bg-surface-2"
           >
             Reset
           </button>

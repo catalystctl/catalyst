@@ -39,11 +39,11 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+      <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Node Assignments</h2>
+          <h2 className="text-sm font-semibold text-foreground dark:text-white">Node Assignments</h2>
         </div>
-        <div className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
+        <div className="mt-4 text-center text-sm text-muted-foreground dark:text-muted-foreground">
           Loading assignments...
         </div>
       </div>
@@ -51,9 +51,9 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+    <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
+        <h2 className="text-sm font-semibold text-foreground dark:text-white">
           Node Assignments
           {assignments.length > 0 && (
             <span className="ml-2 rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-600 dark:bg-primary-500/10 dark:text-primary-400">
@@ -64,8 +64,8 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
       </div>
 
       {assignments.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center dark:border-slate-700">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+        <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center dark:border-border">
+          <p className="text-sm text-muted-foreground dark:text-muted-foreground">
             No assignments yet. Assign this node to users or roles to grant them access.
           </p>
         </div>
@@ -74,7 +74,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
           {assignments.map((assignment) => (
             <div
               key={assignment.id}
-              className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 transition-all duration-200 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950/40 dark:hover:border-slate-700"
+              className="flex items-center justify-between rounded-lg border border-border bg-surface-2 px-3 py-2 transition-all duration-200 hover:border-border dark:border-border dark:bg-zinc-950/40 dark:hover:border-border"
             >
               <div className="flex-1">
                 <div className="flex items-center gap-2">
@@ -83,7 +83,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
                       <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
                         User
                       </span>
-                      <span className="text-sm font-medium text-slate-900 dark:text-white">
+                      <span className="text-sm font-medium text-foreground dark:text-white">
                         {assignment.userId}
                       </span>
                     </>
@@ -92,13 +92,13 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
                       <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-600 dark:bg-purple-500/10 dark:text-purple-400">
                         Role
                       </span>
-                      <span className="text-sm font-medium text-slate-900 dark:text-white">
+                      <span className="text-sm font-medium text-foreground dark:text-white">
                         {assignment.roleName || assignment.roleId}
                       </span>
                     </>
                   )}
                 </div>
-                <div className="mt-1 flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground dark:text-muted-foreground">
                   <span>
                     Assigned: {new Date(assignment.assignedAt).toLocaleDateString()}
                   </span>
@@ -116,7 +116,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
               </div>
               {canManage && (
                 <button
-                  className="ml-2 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-500 transition-all duration-300 hover:border-red-500 hover:text-red-600 dark:border-slate-800 dark:text-slate-400 dark:hover:border-red-500/30 dark:hover:text-red-400"
+                  className="ml-2 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-red-500 hover:text-red-600 dark:border-border dark:text-muted-foreground dark:hover:border-red-500/30 dark:hover:text-red-400"
                   onClick={() => handleRemove(assignment.id)}
                   disabled={removeMutation.isPending}
                 >

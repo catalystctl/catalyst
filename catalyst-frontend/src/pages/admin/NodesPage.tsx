@@ -32,7 +32,7 @@ function AdminNodesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50/50 p-6 shadow-surface-light dark:border-slate-800 dark:from-slate-900 dark:to-slate-900/50 dark:shadow-surface-dark">
+      <div className="rounded-2xl border border-border bg-gradient-to-br from-white to-zinc-50/50 p-6 shadow-surface-light dark:border-border dark:from-zinc-900 dark:to-zinc-900/50 dark:shadow-surface-dark">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
@@ -40,8 +40,8 @@ function AdminNodesPage() {
                 <Server className="h-5 w-5 text-primary-600 dark:text-primary-400" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Nodes</h1>
-                <p className="text-sm text-slate-600 dark:text-slate-400">
+                <h1 className="text-2xl font-semibold text-foreground dark:text-zinc-100">Nodes</h1>
+                <p className="text-sm text-muted-foreground dark:text-muted-foreground">
                   Manage infrastructure nodes and monitor availability
                 </p>
               </div>
@@ -51,51 +51,51 @@ function AdminNodesPage() {
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-white/80 p-4 dark:border-slate-700/50 dark:bg-slate-800/30">
+          <div className="rounded-xl border border-border bg-white/80 p-4 dark:border-border/50 dark:bg-surface-2/30">
             <div className="flex items-center gap-2">
               <Activity className="h-4 w-4 text-emerald-500" />
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Online</span>
+              <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">Online</span>
             </div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900 dark:text-slate-100">
+            <div className="mt-1 text-2xl font-semibold text-foreground dark:text-zinc-100">
               {onlineNodes.length}
             </div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">
+            <div className="text-xs text-muted-foreground dark:text-muted-foreground">
               of {nodes.length} nodes
             </div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white/80 p-4 dark:border-slate-700/50 dark:bg-slate-800/30">
+          <div className="rounded-xl border border-border bg-white/80 p-4 dark:border-border/50 dark:bg-surface-2/30">
             <div className="flex items-center gap-2">
               <Server className="h-4 w-4 text-primary-500" />
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Servers</span>
+              <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">Servers</span>
             </div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900 dark:text-slate-100">
+            <div className="mt-1 text-2xl font-semibold text-foreground dark:text-zinc-100">
               {totalServers}
             </div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">
+            <div className="text-xs text-muted-foreground dark:text-muted-foreground">
               across all nodes
             </div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white/80 p-4 dark:border-slate-700/50 dark:bg-slate-800/30">
+          <div className="rounded-xl border border-border bg-white/80 p-4 dark:border-border/50 dark:bg-surface-2/30">
             <div className="flex items-center gap-2">
               <Cpu className="h-4 w-4 text-amber-500" />
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">CPU Cores</span>
+              <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">CPU Cores</span>
             </div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900 dark:text-slate-100">
+            <div className="mt-1 text-2xl font-semibold text-foreground dark:text-zinc-100">
               {totalCpu}
             </div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">
+            <div className="text-xs text-muted-foreground dark:text-muted-foreground">
               total capacity
             </div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white/80 p-4 dark:border-slate-700/50 dark:bg-slate-800/30">
+          <div className="rounded-xl border border-border bg-white/80 p-4 dark:border-border/50 dark:bg-surface-2/30">
             <div className="flex items-center gap-2">
               <HardDrive className="h-4 w-4 text-violet-500" />
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Memory</span>
+              <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">Memory</span>
             </div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900 dark:text-slate-100">
+            <div className="mt-1 text-2xl font-semibold text-foreground dark:text-zinc-100">
               {formatMemory(totalMemory)}
             </div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">
+            <div className="text-xs text-muted-foreground dark:text-muted-foreground">
               total capacity
             </div>
           </div>
@@ -104,7 +104,7 @@ function AdminNodesPage() {
 
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -112,7 +112,7 @@ function AdminNodesPage() {
             className="pl-9"
           />
         </div>
-        <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground dark:text-muted-foreground">
           {offlineNodes.length > 0 && (
             <span className="flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-xs font-medium text-rose-600 dark:bg-rose-950/30 dark:text-rose-400">
               <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
@@ -130,7 +130,7 @@ function AdminNodesPage() {
           {[1, 2].map((i) => (
             <div
               key={i}
-              className="rounded-2xl border border-slate-200 bg-white p-5 shadow-surface-light dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark"
+              className="rounded-2xl border border-border bg-white p-5 shadow-surface-light dark:border-border dark:bg-surface-1 dark:shadow-surface-dark"
             >
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="space-y-3">

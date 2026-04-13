@@ -19,15 +19,15 @@ function FileUploader({ path, isUploading, onUpload, onClose }: Props) {
   };
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+    <div className="rounded-xl border border-border bg-white p-4 dark:border-border dark:bg-surface-1">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Upload Files</h3>
-          <p className="text-xs text-slate-400 dark:text-slate-500">Target: {path}</p>
+          <h3 className="text-sm font-semibold text-foreground dark:text-white">Upload Files</h3>
+          <p className="text-xs text-muted-foreground dark:text-muted-foreground">Target: {path}</p>
         </div>
         <button
           type="button"
-          className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-zinc-300"
           onClick={onClose}
         >
           <X className="h-4 w-4" />
@@ -37,7 +37,7 @@ function FileUploader({ path, isUploading, onUpload, onClose }: Props) {
         className={`mt-3 flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 transition-colors ${
           isDragActive
             ? 'border-primary-500 bg-primary-500/5 text-primary-600 dark:text-primary-400'
-            : 'border-slate-200 text-slate-400 dark:border-slate-700 dark:text-slate-500'
+            : 'border-border text-muted-foreground dark:border-border dark:text-muted-foreground'
         }`}
         onDragOver={(e) => {
           e.preventDefault();

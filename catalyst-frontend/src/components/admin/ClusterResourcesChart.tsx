@@ -110,7 +110,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
 
   if (isLoading || !data) {
     return (
-      <Card className="group relative overflow-hidden border-slate-200/80 bg-gradient-to-br from-white to-slate-50/50 shadow-sm dark:border-slate-700/50 dark:from-slate-900 dark:to-slate-800/50 lg:col-span-2">
+      <Card className="group relative overflow-hidden border-border/80 bg-gradient-to-br from-white to-zinc-50/50 shadow-sm dark:border-border/50 dark:from-zinc-900 dark:to-zinc-800/50 lg:col-span-2">
         <div className="pointer-events-none absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgNDBWMGg0MHYyMEgwTDIwIDBoMjBMMCAgNDBWMGg2MEgwLDAgNDBWTDIweiBmaWxsPSJub25lIiBzdHJva2Utd2lkdGg9IiNlNWU1ZTdlNyIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48L3JlY3Q+PHJlY3Qgd2lkdGg9iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQiIG9wYWNpdHk9IjAuMDIiLz4vc3ZnPg==')] opacity-50 dark:opacity-20" />
         <CardHeader className="relative pb-3">
           <div className="flex items-center justify-between">
@@ -161,7 +161,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
   };
 
   return (
-    <Card className="group relative overflow-hidden border-slate-200/80 bg-gradient-to-br from-white to-slate-50/50 shadow-sm transition-all hover:shadow-md dark:border-slate-700/50 dark:from-slate-900 dark:to-slate-800/50 lg:col-span-2">
+    <Card className="group relative overflow-hidden border-border/80 bg-gradient-to-br from-white to-zinc-50/50 shadow-sm transition-all hover:shadow-md dark:border-border/50 dark:from-zinc-900 dark:to-zinc-800/50 lg:col-span-2">
       <div className="pointer-events-none absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgNDBWMGg0MHYyMEgwTDIwIDBoMjBMMCAgNDBWMGg2MEgwLDAgNDBWTDIweiBmaWxsPSJub25lIiBzdHJva2Utd2lkdGg9IiNlNWU1ZTdlNyIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48L3JlY3Q+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkZSIgb3BhY2l0eT0iMC4wMiIvPjwvc3ZnPg==')] opacity-50 dark:opacity-20" />
       <CardHeader className="relative pb-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -173,7 +173,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
               </div>
               <div>
                 <span>Cluster Resources</span>
-                <p className="text-sm font-normal text-slate-600 dark:text-slate-400">
+                <p className="text-sm font-normal text-muted-foreground dark:text-muted-foreground">
                   Real-time metrics
                 </p>
               </div>
@@ -189,7 +189,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
                 </span>
                 <span className="ml-1.5 font-semibold">Live</span>
               </Badge>
-              <span className="mt-1 block text-xs text-slate-600 dark:text-slate-400">
+              <span className="mt-1 block text-xs text-muted-foreground dark:text-muted-foreground">
                 {data.onlineCount} of {data.nodes.length} nodes online
               </span>
             </CardDescription>
@@ -198,7 +198,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
             type="single"
             value={metric}
             onValueChange={(v) => v && setMetric(v as typeof metric)}
-            className="border border-slate-200 dark:border-slate-700"
+            className="border border-border dark:border-border"
           >
             <ToggleGroupItem
               value="cpu"
@@ -225,17 +225,17 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
         </div>
       </CardHeader>
       <CardContent>
-        <div className="relative h-72 overflow-hidden rounded-xl border border-slate-100 bg-white dark:border-slate-800 dark:bg-slate-900/50">
-          <div className="absolute inset-0 bg-gradient-to-b from-slate-50/50 to-transparent dark:from-slate-800/20" />
+        <div className="relative h-72 overflow-hidden rounded-xl border border-border bg-white dark:border-border dark:bg-surface-1/50">
+          <div className="absolute inset-0 bg-gradient-to-b from-zinc-50/50 to-transparent dark:from-zinc-800/20" />
           <div className="relative h-full">
             {history.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={history} margin={{ top: 5, right: 5, left: -10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-700" />
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-700" />
                   <XAxis
                     dataKey="time"
                     tick={{ fontSize: 10 }}
-                    className="text-slate-500"
+                    className="text-muted-foreground"
                     axisLine={false}
                     tickLine={false}
                     interval="preserveStartEnd"
@@ -244,7 +244,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
                     domain={getYDomain()}
                     tick={{ fontSize: 10 }}
                     tickFormatter={(v) => `${v}${getUnit()}`}
-                    className="text-slate-500"
+                    className="text-muted-foreground"
                     axisLine={false}
                     tickLine={false}
                     width={45}
@@ -253,8 +253,8 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
                     content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null;
                       return (
-                        <div className="rounded-lg border border-slate-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/95">
-                          <p className="mb-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        <div className="rounded-lg border border-border bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm dark:border-border dark:bg-surface-2/95">
+                          <p className="mb-2 text-xs font-semibold text-foreground dark:text-zinc-300">
                             {label}
                           </p>
                           {payload.map((entry, index) => (
@@ -263,10 +263,10 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
                                 className="h-2 w-2 rounded-full shadow-sm"
                                 style={{ backgroundColor: entry.color }}
                               />
-                              <span className="text-slate-600 dark:text-slate-400">
+                              <span className="text-muted-foreground dark:text-muted-foreground">
                                 {String(entry.name ?? '').replace(/_/g, ' ')}:
                               </span>
-                              <span className="font-semibold text-slate-900 dark:text-white">
+                              <span className="font-semibold text-foreground dark:text-white">
                                 {typeof entry.value === 'number' ? entry.value.toFixed(1) : entry.value}
                                 {getUnit()}
                               </span>
@@ -279,7 +279,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
                   <Legend
                     wrapperStyle={{ paddingTop: '10px' }}
                     formatter={(value) => (
-                      <span className="text-xs font-medium text-slate-700 dark:text-slate-400">
+                      <span className="text-xs font-medium text-foreground dark:text-muted-foreground">
                         {value.replace(/_/g, ' ')}
                       </span>
                     )}
@@ -314,7 +314,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
                       <Waves className="h-6 w-6 text-violet-600 dark:text-violet-400" />
                     </div>
                   </div>
-                  <p className="mt-3 text-sm font-medium text-slate-600 dark:text-slate-400">
+                  <p className="mt-3 text-sm font-medium text-muted-foreground dark:text-muted-foreground">
                     Collecting metrics...
                   </p>
                 </div>
@@ -322,28 +322,28 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
             )}
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs dark:border-slate-800">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-xs dark:border-border">
           <div className="flex items-center gap-4">
-            <span className="font-semibold text-slate-700 dark:text-slate-300">
+            <span className="font-semibold text-foreground dark:text-zinc-300">
               {getMetricLabel()}
             </span>
             {metric === 'cpu' && (
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              <span className="rounded-full bg-surface-2 px-2 py-0.5 font-medium text-foreground dark:bg-surface-2 dark:text-zinc-300">
                 Avg: {data.totalCpu}%
               </span>
             )}
             {metric === 'memory' && (
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              <span className="rounded-full bg-surface-2 px-2 py-0.5 font-medium text-foreground dark:bg-surface-2 dark:text-zinc-300">
                 Avg: {data.totalMemory}%
               </span>
             )}
             {metric === 'network' && (
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              <span className="rounded-full bg-surface-2 px-2 py-0.5 font-medium text-foreground dark:bg-surface-2 dark:text-zinc-300">
                 RX: {data.avgNetworkRx.toFixed(1)} MB | TX: {data.avgNetworkTx.toFixed(1)} MB
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+          <div className="flex items-center gap-1.5 text-muted-foreground dark:text-muted-foreground">
             <span className="relative flex h-1.5 w-1.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />

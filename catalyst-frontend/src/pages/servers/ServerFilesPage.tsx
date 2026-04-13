@@ -21,14 +21,14 @@ function ServerFilesPage() {
     <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Files - {title}</h1>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
+          <h1 className="text-2xl font-semibold text-foreground dark:text-white">Files - {title}</h1>
+          <p className="text-sm text-muted-foreground dark:text-muted-foreground">
             Upload, edit, and manage server files.
           </p>
           </div>
         </div>
       {isLoading ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-slate-600 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-primary-500/30">
+        <div className="rounded-xl border border-border bg-white px-4 py-6 text-muted-foreground shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-primary/30">
           Loading file manager...
         </div>
       ) : isError ? (

@@ -73,36 +73,36 @@ function PluginSettingsModal({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-slate-900 rounded-lg p-6 w-full max-w-md z-50 border border-slate-200 dark:border-slate-800">
+        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-surface-1 rounded-lg p-6 w-full max-w-md z-50 border border-border dark:border-border">
           <div className="flex items-center justify-between mb-4">
-            <Dialog.Title className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+            <Dialog.Title className="text-xl font-semibold text-foreground dark:text-zinc-100">
               Plugin Settings
             </Dialog.Title>
-            <Dialog.Close className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
+            <Dialog.Close className="text-muted-foreground hover:text-foreground dark:hover:text-foreground">
               <X className="h-5 w-5" />
             </Dialog.Close>
           </div>
           
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
             <>
               <div className="mb-4">
-                <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-                  Configure settings for <span className="font-semibold text-slate-900 dark:text-white">{pluginDetails?.displayName}</span>
+                <p className="text-sm text-muted-foreground dark:text-muted-foreground mb-4">
+                  Configure settings for <span className="font-semibold text-foreground dark:text-white">{pluginDetails?.displayName}</span>
                 </p>
                 
                 <div className="space-y-4">
                   {Object.keys(config).length === 0 ? (
-                    <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">
+                    <p className="text-sm text-muted-foreground dark:text-muted-foreground text-center py-4">
                       No configuration options available
                     </p>
                   ) : (
                     Object.entries(config).map(([key, value]) => (
                       <div key={key}>
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        <label className="block text-sm font-medium text-foreground dark:text-zinc-300 mb-1">
                           {key}
                         </label>
                         {typeof value === 'boolean' ? (
@@ -111,9 +111,9 @@ function PluginSettingsModal({
                               type="checkbox"
                               checked={value}
                               onChange={(e) => handleConfigChange(key, e.target.checked)}
-                              className="rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-primary-500 focus:ring-primary-500"
+                              className="rounded border-border dark:border-zinc-600 bg-white dark:bg-surface-2 text-primary-500 focus:ring-primary-500"
                             />
-                            <span className="text-sm text-slate-600 dark:text-slate-400">
+                            <span className="text-sm text-muted-foreground dark:text-muted-foreground">
                               {value ? 'Enabled' : 'Disabled'}
                             </span>
                           </label>
@@ -122,14 +122,14 @@ function PluginSettingsModal({
                             type="number"
                             value={value}
                             onChange={(e) => handleConfigChange(key, parseFloat(e.target.value))}
-                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                            className="w-full px-3 py-2 bg-white dark:bg-surface-2 border border-border dark:border-zinc-600 rounded-lg text-foreground dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                           />
                         ) : (
                           <input
                             type="text"
                             value={String(value)}
                             onChange={(e) => handleConfigChange(key, e.target.value)}
-                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                            className="w-full px-3 py-2 bg-white dark:bg-surface-2 border border-border dark:border-zinc-600 rounded-lg text-foreground dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                           />
                         )}
                       </div>
@@ -139,7 +139,7 @@ function PluginSettingsModal({
               </div>
               
               <div className="flex items-center gap-2 justify-end">
-                <Dialog.Close className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white transition-colors">
+                <Dialog.Close className="px-4 py-2 rounded-lg bg-surface-2 dark:bg-surface-2 hover:bg-surface-3 dark:hover:bg-surface-2 text-foreground dark:text-white transition-colors">
                   Cancel
                 </Dialog.Close>
                 <button
@@ -239,20 +239,20 @@ export default function PluginsPage() {
   
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-surface-dark dark:hover:border-primary-500/30">
+      <div className="rounded-2xl border border-border bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1/70 dark:shadow-surface-dark dark:hover:border-primary/30">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Plugins</h1>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
+            <h1 className="text-2xl font-semibold text-foreground dark:text-zinc-100">Plugins</h1>
+            <p className="text-sm text-muted-foreground dark:text-muted-foreground">
               Manage and configure installed plugins
             </p>
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-400">
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-800 dark:bg-slate-950/60">
+        <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground dark:text-muted-foreground">
+          <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
             {plugins?.length ?? 0} plugin{plugins?.length === 1 ? '' : 's'} installed
           </span>
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-800 dark:bg-slate-950/60">
+          <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
             {plugins?.filter((p) => p.enabled).length ?? 0} enabled
           </span>
         </div>
@@ -267,13 +267,13 @@ export default function PluginsPage() {
       )}
       
       {!plugins || plugins.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-12 text-center shadow-surface-light dark:border-slate-800 dark:bg-slate-900/60 dark:shadow-surface-dark">
-          <Package className="h-16 w-16 text-slate-400 dark:text-slate-600 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">
+        <div className="rounded-xl border border-border bg-white p-12 text-center shadow-surface-light dark:border-border dark:bg-surface-1/60 dark:shadow-surface-dark">
+          <Package className="h-16 w-16 text-muted-foreground dark:text-muted-foreground mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-foreground dark:text-zinc-100 mb-2">
             No Plugins Installed
           </h2>
-          <p className="text-slate-600 dark:text-slate-400">
-            Place plugins in the <code className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">catalyst-plugins/</code> directory to get started.
+          <p className="text-muted-foreground dark:text-muted-foreground">
+            Place plugins in the <code className="bg-surface-2 dark:bg-surface-2 px-2 py-1 rounded">catalyst-plugins/</code> directory to get started.
           </p>
         </div>
       ) : (
@@ -281,23 +281,23 @@ export default function PluginsPage() {
           {plugins.map((plugin) => (
             <div
               key={plugin.name}
-              className="rounded-xl border border-slate-200 bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900/60 dark:shadow-surface-dark dark:hover:border-primary-500/30"
+              className="rounded-xl border border-border bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1/60 dark:shadow-surface-dark dark:hover:border-primary/30"
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{plugin.displayName}</h3>
+                    <h3 className="text-lg font-semibold text-foreground dark:text-zinc-100">{plugin.displayName}</h3>
                     {getStatusIcon(plugin.status, plugin.error)}
                   </div>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">v{plugin.version}</p>
+                  <p className="text-sm text-muted-foreground dark:text-muted-foreground">v{plugin.version}</p>
                 </div>
               </div>
               
-              <p className="text-sm text-slate-600 dark:text-slate-300 mb-4 line-clamp-2">
+              <p className="text-sm text-muted-foreground dark:text-zinc-300 mb-4 line-clamp-2">
                 {plugin.description}
               </p>
               
-              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-4">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground dark:text-muted-foreground mb-4">
                 <span>By {plugin.author}</span>
                 <span>•</span>
                 <span>{getStatusText(plugin.status)}</span>
@@ -344,18 +344,18 @@ export default function PluginsPage() {
                 <button
                   onClick={() => reloadMutation.mutate(plugin.name)}
                   disabled={processingPlugin === plugin.name}
-                  className="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-2 rounded-lg bg-surface-2 hover:bg-surface-3 dark:bg-surface-2 dark:hover:bg-surface-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Reload plugin"
                 >
-                  <RefreshCw className="h-4 w-4 text-slate-700 dark:text-slate-300" />
+                  <RefreshCw className="h-4 w-4 text-foreground dark:text-zinc-300" />
                 </button>
                 
                 <button
                   onClick={() => setSettingsPlugin(plugin.name)}
-                  className="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
+                  className="px-3 py-2 rounded-lg bg-surface-2 hover:bg-surface-3 dark:bg-surface-2 dark:hover:bg-surface-2 transition-colors"
                   title="Plugin settings"
                 >
-                  <Settings className="h-4 w-4 text-slate-700 dark:text-slate-300" />
+                  <Settings className="h-4 w-4 text-foreground dark:text-zinc-300" />
                 </button>
               </div>
             </div>

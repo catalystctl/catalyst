@@ -261,30 +261,30 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark dark:hover:border-primary-500/30">
+      <div className="rounded-2xl border border-border bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">
+            <h1 className="text-2xl font-semibold text-foreground dark:text-white">
               {showAdminTargets ? 'Alerts' : 'Server alerts'}
             </h1>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
+            <p className="text-sm text-muted-foreground dark:text-muted-foreground">
               {showAdminTargets
                 ? 'Monitor incidents and resolve alerts in real time.'
                 : 'Manage alert rules and incidents for this server.'}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-800 dark:bg-slate-950/60">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground dark:text-muted-foreground">
+            <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
               {alerts.filter((alert) => !alert.resolved).length} active
             </span>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-800 dark:bg-slate-950/60">
+            <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
               {alerts.length} total
             </span>
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <select
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+            className="rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
             value={filterResolved}
             onChange={(event) => setFilterResolved(event.target.value as 'false' | 'true' | 'all')}
           >
@@ -293,7 +293,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
             <option value="all">All</option>
           </select>
           <button
-            className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:border-primary-500/30"
+            className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground disabled:opacity-60 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
             onClick={() => bulkResolveMutation.mutate(unresolvedAlertIds)}
             disabled={!canBulkResolve}
           >
@@ -309,51 +309,51 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
       </div>
       {alertStats ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-            <div className="text-xs text-slate-500 dark:text-slate-400">Active alerts</div>
-            <div className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">
+          <div className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+            <div className="text-xs text-muted-foreground dark:text-muted-foreground">Active alerts</div>
+            <div className="mt-2 text-2xl font-semibold text-foreground dark:text-zinc-100">
               {alertStats?.unresolved ?? 0}
             </div>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-            <div className="text-xs text-slate-500 dark:text-slate-400">Total alerts</div>
-            <div className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">
+          <div className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+            <div className="text-xs text-muted-foreground dark:text-muted-foreground">Total alerts</div>
+            <div className="mt-2 text-2xl font-semibold text-foreground dark:text-zinc-100">
               {alertStats?.total ?? 0}
             </div>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-            <div className="text-xs text-slate-500 dark:text-slate-400">Critical alerts</div>
-            <div className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">
+          <div className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+            <div className="text-xs text-muted-foreground dark:text-muted-foreground">Critical alerts</div>
+            <div className="mt-2 text-2xl font-semibold text-foreground dark:text-zinc-100">
               {alertStats?.bySeverity?.critical ?? 0}
             </div>
           </div>
         </div>
       ) : null}
 
-      <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+      <div className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Alert rules</div>
-            <div className="text-xs text-slate-600 dark:text-slate-400">
+            <div className="text-sm font-semibold text-foreground dark:text-zinc-100">Alert rules</div>
+            <div className="text-xs text-muted-foreground dark:text-muted-foreground">
               Manage thresholds and notification targets.
             </div>
           </div>
         </div>
-        <div className="mt-4 space-y-3 text-xs text-slate-600 dark:text-slate-300">
+        <div className="mt-4 space-y-3 text-xs text-muted-foreground dark:text-zinc-300">
           {alertRules.length ? (
             alertRules.map((rule) => (
               <div
                 key={rule.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-950/60 dark:hover:border-primary-500/30"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface-2 px-4 py-3 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-zinc-950/60 dark:hover:border-primary/30"
               >
                 <div>
-                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                     {rule.name}
                   </div>
-                  <div className="text-xs text-slate-600 dark:text-slate-400">
+                  <div className="text-xs text-muted-foreground dark:text-muted-foreground">
                     {rule.description || rule.type.replace('_', ' ')} · {rule.target}
                     {showAdminTargets ? (
-                      <span className="ml-2 rounded-full border border-slate-200 px-2 py-0.5 text-[10px] uppercase text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                      <span className="ml-2 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase text-muted-foreground dark:border-border dark:text-zinc-300">
                         {rule.target === 'global' ? 'global' : rule.target}
                       </span>
                     ) : null}
@@ -364,17 +364,17 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                         className={`rounded-full border px-2 py-1 text-[10px] uppercase tracking-wide ${
                           rule.enabled
                             ? 'border-emerald-200 bg-emerald-100/60 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200'
-                            : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                            : 'border-border bg-surface-2 text-muted-foreground dark:border-border dark:bg-surface-2 dark:text-zinc-300'
                         }`}
                       >
                     {rule.enabled ? 'Enabled' : 'Disabled'}
                   </span>
                   {!showAdminTargets && rule.userId && user?.id && rule.userId !== user.id ? (
-                    <span className="text-[10px] text-slate-500 dark:text-slate-500">Read only</span>
+                    <span className="text-[10px] text-muted-foreground dark:text-muted-foreground">Read only</span>
                   ) : null}
                   <button
                     type="button"
-                    className="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:border-primary-500/30"
+                    className="rounded-md border border-border px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground disabled:opacity-60 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                     onClick={() => updateRuleMutation.mutate({ rule, updates: { enabled: !rule.enabled } })}
                     disabled={
                       updateRuleMutation.isPending ||
@@ -385,7 +385,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                   </button>
                   <button
                     type="button"
-                    className="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-primary-500/30"
+                    className="rounded-md border border-border px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                     onClick={() => {
                       setEditingRule(rule);
                       setShowRuleModal(true);
@@ -424,39 +424,39 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
               </div>
             ))
           ) : (
-            <div className="rounded-lg border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 px-6 py-6 text-center text-xs text-slate-500 dark:text-slate-400">
+            <div className="rounded-lg border border-dashed border-border dark:border-border bg-white dark:bg-surface-1/50 px-6 py-6 text-center text-xs text-muted-foreground dark:text-muted-foreground">
               No alert rules created yet.
             </div>
           )}
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 px-5 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:hover:border-primary-500/30">
+      <div className="rounded-2xl border border-border dark:border-border bg-white dark:bg-surface-1/60 px-5 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:hover:border-primary/30">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Alert history</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">Latest triggered alerts and delivery status.</div>
+            <div className="text-sm font-semibold text-foreground dark:text-zinc-100">Alert history</div>
+            <div className="text-xs text-muted-foreground dark:text-muted-foreground">Latest triggered alerts and delivery status.</div>
           </div>
         </div>
-        <div className="mt-4 space-y-3 text-xs text-slate-600 dark:text-slate-300">
+        <div className="mt-4 space-y-3 text-xs text-muted-foreground dark:text-zinc-300">
           {alertsLoading ? (
-            <div className="text-xs text-slate-500 dark:text-slate-400">Loading alerts...</div>
+            <div className="text-xs text-muted-foreground dark:text-muted-foreground">Loading alerts...</div>
           ) : hasAlerts ? (
             alerts.map((alert) => (
-              <div key={alert.id} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/60 px-4 py-3">
+              <div key={alert.id} className="rounded-xl border border-border dark:border-border bg-white dark:bg-zinc-950/60 px-4 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
                       <span className={`rounded-full border px-2 py-1 text-[10px] uppercase ${formatSeverityBadge(alert.severity)}`}>
                         {alert.severity}
                       </span>
-                      <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{alert.title}</span>
+                      <span className="text-sm font-semibold text-foreground dark:text-zinc-100">{alert.title}</span>
                     </div>
-                    <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{alert.message}</div>
-                    <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-slate-500 dark:text-slate-500">
+                    <div className="mt-2 text-xs text-muted-foreground dark:text-muted-foreground">{alert.message}</div>
+                    <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted-foreground dark:text-muted-foreground">
                       <span>{new Date(alert.createdAt).toLocaleString()}</span>
                       {showAdminTargets ? (
-                        <span className="rounded-full border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] uppercase text-slate-600 dark:text-slate-300">
+                        <span className="rounded-full border border-border dark:border-border px-2 py-0.5 text-[10px] uppercase text-muted-foreground dark:text-zinc-300">
                           {alert.nodeId ? 'Node' : alert.serverId ? 'Server' : 'Global'}
                         </span>
                       ) : null}
@@ -467,13 +467,13 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                   </div>
                   <div className="flex items-center gap-2">
                     {alert.resolved ? (
-                      <span className="rounded-full border border-slate-200 dark:border-slate-700 px-2 py-1 text-[10px] uppercase text-slate-600 dark:text-slate-300">
+                      <span className="rounded-full border border-border dark:border-border px-2 py-1 text-[10px] uppercase text-muted-foreground dark:text-zinc-300">
                         Resolved
                       </span>
                     ) : (
                       <button
                         type="button"
-                        className="rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-[10px] font-semibold text-slate-600 dark:text-slate-200 hover:border-slate-500 disabled:opacity-60"
+                        className="rounded-md border border-border dark:border-border px-2 py-1 text-[10px] font-semibold text-muted-foreground dark:text-zinc-200 hover:border-zinc-500 disabled:opacity-60"
                         onClick={() => resolveAlertMutation.mutate(alert.id)}
                         disabled={resolveAlertMutation.isPending}
                       >
@@ -483,27 +483,27 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                   </div>
                 </div>
                 {alert.deliveries?.length ? (
-                  <div className="mt-3 grid grid-cols-1 gap-2 text-[11px] text-slate-600 dark:text-slate-300 sm:grid-cols-2">
+                  <div className="mt-3 grid grid-cols-1 gap-2 text-[11px] text-muted-foreground dark:text-zinc-300 sm:grid-cols-2">
                     {alert.deliveries.map((delivery) => (
                       <div
                         key={delivery.id}
-                        className="rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2"
+                        className="rounded-md border border-border dark:border-border bg-white dark:bg-surface-1 px-3 py-2"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-500 dark:text-slate-400">{delivery.channel}</span>
+                          <span className="text-muted-foreground dark:text-muted-foreground">{delivery.channel}</span>
                           <span
                             className={
                               delivery.status === 'failed'
                                 ? 'text-rose-300'
                                 : delivery.status === 'sent'
                                   ? 'text-emerald-300'
-                                  : 'text-slate-600 dark:text-slate-300'
+                                  : 'text-muted-foreground dark:text-zinc-300'
                             }
                           >
                             {delivery.status}
                           </span>
                         </div>
-                        <div className="mt-1 text-slate-600 dark:text-slate-200">{delivery.target}</div>
+                        <div className="mt-1 text-muted-foreground dark:text-zinc-200">{delivery.target}</div>
                         {delivery.lastError ? (
                           <div className="mt-1 text-[10px] text-rose-300">{delivery.lastError}</div>
                         ) : null}
@@ -521,13 +521,13 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
 
       {showRuleModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-2xl rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-6 py-4">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          <div className="w-full max-w-2xl rounded-xl border border-border dark:border-border bg-white dark:bg-zinc-950 shadow-xl">
+            <div className="flex items-center justify-between border-b border-border dark:border-border px-6 py-4">
+              <h2 className="text-lg font-semibold text-foreground dark:text-zinc-100">
                 {editingRule ? 'Edit alert rule' : 'Create alert rule'}
               </h2>
               <button
-                className="rounded-md border border-slate-200 dark:border-slate-800 px-2 py-1 text-xs text-slate-600 dark:text-slate-300 hover:border-slate-200 dark:border-slate-700"
+                className="rounded-md border border-border dark:border-border px-2 py-1 text-xs text-muted-foreground dark:text-zinc-300 hover:border-border dark:border-border"
                 onClick={() => {
                   setShowRuleModal(false);
                   setEditingRule(null);
@@ -537,7 +537,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                 Close
               </button>
             </div>
-            <div className="space-y-4 px-6 py-4 text-sm text-slate-900 dark:text-slate-100">
+            <div className="space-y-4 px-6 py-4 text-sm text-foreground dark:text-zinc-100">
               <div className="flex gap-4">
                 <div className="w-36 shrink-0 space-y-2">
                   {ruleStepOrder.map((key, index) => {
@@ -554,10 +554,10 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                         className={`w-full rounded-lg border px-3 py-2 text-left text-xs font-semibold transition-all duration-300 ${
                           isActive
                             ? 'border-primary-500 bg-primary-50 text-primary-700 dark:border-primary-400 dark:bg-primary-500/10 dark:text-primary-200'
-                            : 'border-slate-200 text-slate-600 hover:border-primary-200 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30'
+                            : 'border-border text-muted-foreground hover:border-primary-200 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30'
                         }`}
                       >
-                        <div className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                           Step {index + 1}
                         </div>
                         <div className="capitalize">
@@ -576,18 +576,18 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                     <>
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                         <label className="block space-y-1">
-                          <span className="text-xs text-slate-600 dark:text-slate-300">Rule name</span>
+                          <span className="text-xs text-muted-foreground dark:text-zinc-300">Rule name</span>
                           <input
-                            className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
+                            className="w-full rounded-lg border border-border dark:border-border bg-white dark:bg-surface-1 px-3 py-2 text-sm text-foreground dark:text-zinc-100"
                             value={ruleName}
                             onChange={(event) => setRuleName(event.target.value)}
                             placeholder="High CPU usage"
                           />
                         </label>
                         <label className="block space-y-1">
-                          <span className="text-xs text-slate-600 dark:text-slate-300">Description</span>
+                          <span className="text-xs text-muted-foreground dark:text-zinc-300">Description</span>
                           <input
-                            className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
+                            className="w-full rounded-lg border border-border dark:border-border bg-white dark:bg-surface-1 px-3 py-2 text-sm text-foreground dark:text-zinc-100"
                             value={ruleDescription}
                             onChange={(event) => setRuleDescription(event.target.value)}
                             placeholder="Notify when CPU stays high"
@@ -596,9 +596,9 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                       </div>
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                         <label className="block space-y-1">
-                          <span className="text-xs text-slate-600 dark:text-slate-300">Rule type</span>
+                          <span className="text-xs text-muted-foreground dark:text-zinc-300">Rule type</span>
                           <select
-                            className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
+                            className="w-full rounded-lg border border-border dark:border-border bg-white dark:bg-surface-1 px-3 py-2 text-sm text-foreground dark:text-zinc-100"
                             value={ruleType}
                             onChange={(event) => setRuleType(event.target.value as AlertType)}
                           >
@@ -610,9 +610,9 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                           </select>
                         </label>
                         <label className="block space-y-1">
-                          <span className="text-xs text-slate-600 dark:text-slate-300">Target</span>
+                          <span className="text-xs text-muted-foreground dark:text-zinc-300">Target</span>
                           <select
-                            className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
+                            className="w-full rounded-lg border border-border dark:border-border bg-white dark:bg-surface-1 px-3 py-2 text-sm text-foreground dark:text-zinc-100"
                             value={ruleTarget}
                             onChange={(event) =>
                               setRuleTarget(event.target.value as 'global' | 'server' | 'node')
@@ -625,9 +625,9 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                           </select>
                         </label>
                         <label className="block space-y-1">
-                          <span className="text-xs text-slate-600 dark:text-slate-300">Target ID</span>
+                          <span className="text-xs text-muted-foreground dark:text-zinc-300">Target ID</span>
                           <select
-                            className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
+                            className="w-full rounded-lg border border-border dark:border-border bg-white dark:bg-surface-1 px-3 py-2 text-sm text-foreground dark:text-zinc-100"
                             value={ruleTargetId}
                             onChange={(event) => setRuleTargetId(event.target.value)}
                             disabled={!showAdminTargets || ruleTarget === 'global'}
@@ -652,34 +652,34 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                       {ruleType === 'resource_threshold' ? (
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                           <label className="block space-y-1">
-                            <span className="text-xs text-slate-600 dark:text-slate-300">CPU threshold (%)</span>
+                            <span className="text-xs text-muted-foreground dark:text-zinc-300">CPU threshold (%)</span>
                             <input
                               type="number"
                               min={1}
                               max={100}
-                              className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
+                              className="w-full rounded-lg border border-border dark:border-border bg-white dark:bg-surface-1 px-3 py-2 text-sm text-foreground dark:text-zinc-100"
                               value={cpuThreshold}
                               onChange={(event) => setCpuThreshold(event.target.value)}
                             />
                           </label>
                           <label className="block space-y-1">
-                            <span className="text-xs text-slate-600 dark:text-slate-300">Memory threshold (%)</span>
+                            <span className="text-xs text-muted-foreground dark:text-zinc-300">Memory threshold (%)</span>
                             <input
                               type="number"
                               min={1}
                               max={100}
-                              className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
+                              className="w-full rounded-lg border border-border dark:border-border bg-white dark:bg-surface-1 px-3 py-2 text-sm text-foreground dark:text-zinc-100"
                               value={memoryThreshold}
                               onChange={(event) => setMemoryThreshold(event.target.value)}
                             />
                           </label>
                           <label className="block space-y-1">
-                            <span className="text-xs text-slate-600 dark:text-slate-300">Disk threshold (%)</span>
+                            <span className="text-xs text-muted-foreground dark:text-zinc-300">Disk threshold (%)</span>
                             <input
                               type="number"
                               min={1}
                               max={100}
-                              className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
+                              className="w-full rounded-lg border border-border dark:border-border bg-white dark:bg-surface-1 px-3 py-2 text-sm text-foreground dark:text-zinc-100"
                               value={diskThreshold}
                               onChange={(event) => setDiskThreshold(event.target.value)}
                             />
@@ -688,18 +688,18 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                       ) : null}
                       {ruleType === 'node_offline' ? (
                         <label className="block space-y-1">
-                          <span className="text-xs text-slate-600 dark:text-slate-300">Offline threshold (minutes)</span>
+                          <span className="text-xs text-muted-foreground dark:text-zinc-300">Offline threshold (minutes)</span>
                           <input
                             type="number"
                             min={1}
-                            className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
+                            className="w-full rounded-lg border border-border dark:border-border bg-white dark:bg-surface-1 px-3 py-2 text-sm text-foreground dark:text-zinc-100"
                             value={offlineThreshold}
                             onChange={(event) => setOfflineThreshold(event.target.value)}
                           />
                         </label>
                       ) : null}
                       {ruleType === 'server_crashed' ? (
-                        <div className="rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
+                        <div className="rounded-md border border-border dark:border-border bg-white dark:bg-surface-1 px-3 py-2 text-xs text-muted-foreground dark:text-muted-foreground">
                           This rule triggers when the server reports a crash event.
                         </div>
                       ) : null}
@@ -709,11 +709,11 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                     <>
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                         <div className="space-y-2">
-                          <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground dark:text-zinc-300">
                             <span>Webhook URLs</span>
                             <button
                               type="button"
-                              className="rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-[10px] font-semibold text-slate-600 dark:text-slate-200 hover:border-slate-500"
+                              className="rounded-md border border-border dark:border-border px-2 py-1 text-[10px] font-semibold text-muted-foreground dark:text-zinc-200 hover:border-zinc-500"
                               onClick={() => setWebhookTargets((current) => [...current, ''])}
                             >
                               + Add
@@ -722,7 +722,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                           {webhookTargets.map((value, index) => (
                             <div key={`webhook-${index}`} className="flex items-center gap-2">
                               <input
-                                className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
+                                className="w-full rounded-lg border border-border dark:border-border bg-white dark:bg-surface-1 px-3 py-2 text-sm text-foreground dark:text-zinc-100"
                                 value={value}
                                 onChange={(event) =>
                                   setWebhookTargets((current) =>
@@ -748,11 +748,11 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                           ))}
                         </div>
                         <div className="space-y-2">
-                          <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground dark:text-zinc-300">
                             <span>Email recipients</span>
                             <button
                               type="button"
-                              className="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-primary-500/30"
+                              className="rounded-md border border-border px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                               onClick={() => setEmailTargets((current) => [...current, ''])}
                             >
                               + Add
@@ -761,7 +761,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                           {emailTargets.map((value, index) => (
                             <div key={`email-${index}`} className="flex items-center gap-2">
                               <input
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                                 value={value}
                                 onChange={(event) =>
                                   setEmailTargets((current) =>
@@ -788,21 +788,21 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                         </div>
                       </div>
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                        <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-zinc-300">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded border-slate-200 bg-white text-primary-600 dark:border-slate-700 dark:bg-slate-900 dark:text-primary-400"
+                            className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                             checked={notifyOwner}
                             onChange={(event) => setNotifyOwner(event.target.checked)}
                           />
                           Notify server owner
                         </label>
                         <label className="block space-y-1 md:col-span-2">
-                          <span className="text-xs text-slate-600 dark:text-slate-300">Cooldown (minutes)</span>
+                          <span className="text-xs text-muted-foreground dark:text-zinc-300">Cooldown (minutes)</span>
                           <input
                             type="number"
                             min={1}
-                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                             value={cooldownMinutes}
                             onChange={(event) => setCooldownMinutes(event.target.value)}
                           />
@@ -813,9 +813,9 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                 </div>
               </div>
             </div>
-            <div className="flex justify-between gap-2 border-t border-slate-200 px-6 py-4 text-xs dark:border-slate-800">
+            <div className="flex justify-between gap-2 border-t border-border px-6 py-4 text-xs dark:border-border">
               <button
-                className="rounded-md border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                 onClick={() => {
                   setShowRuleModal(false);
                   setEditingRule(null);
@@ -827,7 +827,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
               <div className="flex items-center gap-2">
                 {ruleStepIndex > 0 ? (
                   <button
-                    className="rounded-md border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                    className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                     onClick={() => setRuleStep(ruleStepOrder[ruleStepIndex - 1])}
                   >
                     Back

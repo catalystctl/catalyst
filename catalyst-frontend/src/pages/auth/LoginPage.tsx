@@ -203,14 +203,14 @@ function LoginPage() {
         <CardContent className="px-6 py-8">
           <div className="flex flex-col items-center text-center">
             <img src="/logo.png" alt="Catalyst logo" className="h-12 w-12" />
-            <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+            <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
               Catalyst Panel
             </span>
           </div>
-          <h1 className="mt-6 text-2xl font-semibold text-slate-900 dark:text-white">
+          <h1 className="mt-6 font-display text-2xl font-bold text-foreground">
             Welcome back
           </h1>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+          <p className="mt-2 text-sm text-muted-foreground">
             Sign in to manage your servers.
           </p>
 

@@ -196,15 +196,15 @@ function ProfilePage() {
   });
 
   if (isLoading) {
-    return <div className="text-sm text-slate-600 dark:text-slate-300">Loading profile...</div>;
+    return <div className="text-sm text-muted-foreground dark:text-zinc-300">Loading profile...</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Profile</h1>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
+          <h1 className="text-2xl font-semibold text-foreground dark:text-white">Profile</h1>
+          <p className="text-sm text-muted-foreground dark:text-muted-foreground">
             Manage your account security, sign-in methods, and linked providers.
           </p>
         </div>
@@ -214,17 +214,17 @@ function ProfilePage() {
         <CardContent className="px-6 py-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-surface-2 text-sm font-semibold text-foreground dark:border-border dark:bg-zinc-950 dark:text-zinc-200">
                 {(profile?.username?.slice(0, 2) || profile?.email?.slice(0, 2) || 'U').toUpperCase()}
               </div>
               <div>
-                <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                <div className="text-sm font-semibold text-foreground dark:text-white">
                   {profile?.username || 'Catalyst User'}
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">{profile?.email}</div>
+                <div className="text-xs text-muted-foreground dark:text-muted-foreground">{profile?.email}</div>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground dark:text-zinc-300">
               <Badge variant="outline">2FA {profile?.twoFactorEnabled ? 'enabled' : 'disabled'}</Badge>
               <Badge variant="outline">Password {profile?.hasPassword ? 'set' : 'unset'}</Badge>
               {profile?.createdAt && (
@@ -323,11 +323,11 @@ function ProfilePage() {
                 </Button>
               </div>
               {backupCodes.length > 0 && (
-                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-                  <div className="font-semibold text-slate-700 dark:text-slate-200">Backup codes</div>
+                <div className="mt-4 rounded-lg border border-border bg-surface-2 px-4 py-3 text-xs text-muted-foreground dark:border-border dark:bg-surface-1 dark:text-zinc-300">
+                  <div className="font-semibold text-foreground dark:text-zinc-200">Backup codes</div>
                   <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                     {backupCodes.map((code) => (
-                      <span key={code} className="rounded bg-white px-2 py-1 dark:bg-slate-800">
+                      <span key={code} className="rounded bg-white px-2 py-1 dark:bg-surface-2">
                         {code}
                       </span>
                     ))}
@@ -358,12 +358,12 @@ function ProfilePage() {
               </div>
               <div className="mt-4 space-y-2">
                 {passkeys.length === 0 ? (
-                  <div className="text-sm text-slate-500 dark:text-slate-400">No passkeys registered.</div>
+                  <div className="text-sm text-muted-foreground dark:text-muted-foreground">No passkeys registered.</div>
                 ) : (
                   passkeys.map((passkey) => (
                     <div
                       key={passkey.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-200"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm text-foreground dark:border-border dark:text-zinc-200"
                     >
                       {editingPasskeyId === passkey.id ? (
                         <Input
@@ -424,14 +424,14 @@ function ProfilePage() {
               </div>
               <div className="mt-4 space-y-2">
                 {(ssoAccounts ?? []).filter((account) => account.providerId !== 'credential').length === 0 ? (
-                  <div className="text-sm text-slate-500 dark:text-slate-400">No SSO accounts linked.</div>
+                  <div className="text-sm text-muted-foreground dark:text-muted-foreground">No SSO accounts linked.</div>
                 ) : (
                   (ssoAccounts ?? [])
                     .filter((account) => account.providerId !== 'credential')
                     .map((account) => (
                       <div
                         key={account.id}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-200"
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm text-foreground dark:border-border dark:text-zinc-200"
                       >
                         <span>
                           {account.providerId.toUpperCase()} • {account.accountId}
@@ -466,7 +466,7 @@ function ProfilePage() {
             <img
               src={qrValue}
               alt="TOTP QR code"
-              className="w-full rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"
+              className="w-full rounded-lg border border-border bg-white p-3 dark:border-border dark:bg-surface-1"
             />
           )}
           {twoFactorSetup?.otpAuthUrl && (
@@ -478,16 +478,16 @@ function ProfilePage() {
             </a>
           )}
           {twoFactorSetup?.secret && (
-            <div className="text-xs text-slate-600 dark:text-slate-300">
+            <div className="text-xs text-muted-foreground dark:text-zinc-300">
               Manual code: <span className="font-semibold">{twoFactorSetup.secret}</span>
             </div>
           )}
           {twoFactorSetup?.backupCodes?.length && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-              <div className="font-semibold text-slate-700 dark:text-slate-200">Backup codes</div>
+            <div className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground dark:border-border dark:bg-surface-1 dark:text-zinc-300">
+              <div className="font-semibold text-foreground dark:text-zinc-200">Backup codes</div>
               <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                 {twoFactorSetup.backupCodes.map((code) => (
-                  <span key={code} className="rounded bg-white px-2 py-1 dark:bg-slate-800">
+                  <span key={code} className="rounded bg-white px-2 py-1 dark:bg-surface-2">
                     {code}
                   </span>
                 ))}

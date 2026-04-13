@@ -78,73 +78,73 @@ function DatabasePage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark dark:hover:border-primary-500/30">
+      <div className="rounded-2xl border border-border bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Database</h1>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
+            <h1 className="text-2xl font-semibold text-foreground dark:text-white">Database</h1>
+            <p className="text-sm text-muted-foreground dark:text-muted-foreground">
               Manage database hosts for server provisioning.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-400">
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-800 dark:bg-slate-950/60">
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground dark:text-muted-foreground">
+            <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
               {databaseHosts.length} hosts
             </span>
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+      <div className="rounded-2xl border border-border bg-white px-6 py-5 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Database Hosts</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <h2 className="text-lg font-semibold text-foreground dark:text-white">Database Hosts</h2>
+            <p className="text-xs text-muted-foreground dark:text-muted-foreground">
               Register MySQL hosts used to provision per-server databases.
             </p>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             Name
             <input
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
               value={dbName}
               onChange={(event) => setDbName(event.target.value)}
               placeholder="primary-mysql"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             Host
             <input
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
               value={dbHost}
               onChange={(event) => setDbHost(event.target.value)}
               placeholder="mysql.internal"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             Port
             <input
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
               value={dbPort}
               onChange={(event) => setDbPort(event.target.value)}
               placeholder="3306"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             Username
             <input
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
               value={dbUsername}
               onChange={(event) => setDbUsername(event.target.value)}
               placeholder="catalyst_admin"
             />
           </label>
-          <label className="block text-xs text-slate-500 dark:text-slate-300">
+          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
             Password
             <input
               type="password"
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
               value={dbPassword}
               onChange={(event) => setDbPassword(event.target.value)}
               placeholder="secret"
@@ -164,8 +164,8 @@ function DatabasePage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Active hosts</h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <h2 className="text-lg font-semibold text-foreground dark:text-white">Active hosts</h2>
+          <p className="text-xs text-muted-foreground dark:text-muted-foreground">
             View connection details and manage existing database hosts.
           </p>
         </div>
@@ -173,7 +173,7 @@ function DatabasePage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {isLoading ? (
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-slate-600 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-primary-500/30">
+          <div className="rounded-xl border border-border bg-white px-4 py-6 text-muted-foreground shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-primary/30">
             Loading database hosts...
           </div>
         ) : databaseHosts.length === 0 ? (
@@ -185,23 +185,23 @@ function DatabasePage() {
           databaseHosts.map((dbHostEntry) => (
             <div
               key={dbHostEntry.id}
-              className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:-translate-y-1 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30"
+              className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:-translate-y-1 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                     {dbHostEntry.name}
                   </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                  <div className="text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
                     {dbHostEntry.host}:{dbHostEntry.port}
                   </div>
-                  <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  <div className="mt-2 text-xs text-muted-foreground dark:text-muted-foreground">
                     User: {dbHostEntry.username}
                   </div>
                 </div>
                 <div className="flex gap-2 text-xs">
                   <button
-                    className="rounded-md border border-slate-200 px-2 py-1 text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                    className="rounded-md border border-border px-2 py-1 text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                     onClick={() => {
                       setDbHostId(dbHostEntry.id);
                       setDbName(dbHostEntry.name);
@@ -223,12 +223,12 @@ function DatabasePage() {
                 </div>
               </div>
               {dbHostId === dbHostEntry.id ? (
-                <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
+                <div className="mt-4 space-y-3 rounded-xl border border-border bg-surface-2 px-4 py-4 text-xs text-muted-foreground dark:border-border dark:bg-zinc-950/60 dark:text-zinc-300">
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <label className="block">
                       Name
                       <input
-                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                        className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                         value={dbName}
                         onChange={(event) => setDbName(event.target.value)}
                       />
@@ -236,7 +236,7 @@ function DatabasePage() {
                     <label className="block">
                       Host
                       <input
-                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                        className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                         value={dbHost}
                         onChange={(event) => setDbHost(event.target.value)}
                       />
@@ -244,7 +244,7 @@ function DatabasePage() {
                     <label className="block">
                       Port
                       <input
-                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                        className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                         value={dbPort}
                         onChange={(event) => setDbPort(event.target.value)}
                       />
@@ -252,7 +252,7 @@ function DatabasePage() {
                     <label className="block">
                       Username
                       <input
-                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                        className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                         value={dbUsername}
                         onChange={(event) => setDbUsername(event.target.value)}
                       />
@@ -261,7 +261,7 @@ function DatabasePage() {
                       Password
                       <input
                         type="password"
-                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                        className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                         value={dbPassword}
                         onChange={(event) => setDbPassword(event.target.value)}
                       />
@@ -276,7 +276,7 @@ function DatabasePage() {
                       Save
                     </button>
                     <button
-                      className="rounded-md border border-slate-200 px-3 py-1 text-xs text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                      className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                       onClick={() => setDbHostId(null)}
                     >
                       Cancel

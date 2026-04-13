@@ -109,31 +109,31 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
         Create task
       </button>
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-slate-950/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border border-border bg-white p-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Create task</h2>
+              <h2 className="text-lg font-semibold text-foreground dark:text-white">Create task</h2>
               <button
-                className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-500 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                 onClick={() => setOpen(false)}
               >
                 Close
               </button>
             </div>
-            <div className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300">
+            <div className="mt-4 space-y-3 text-sm text-muted-foreground dark:text-zinc-300">
               <label className="block space-y-1">
-                <span className="text-slate-500 dark:text-slate-400">Name</span>
+                <span className="text-muted-foreground dark:text-muted-foreground">Name</span>
                 <input
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="Nightly restart"
                 />
               </label>
               <label className="block space-y-1">
-                <span className="text-slate-500 dark:text-slate-400">Action</span>
+                <span className="text-muted-foreground dark:text-muted-foreground">Action</span>
                 <select
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                   value={action}
                   onChange={(event) => setAction(event.target.value as Task['action'])}
                 >
@@ -146,9 +146,9 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
               </label>
               {action === 'command' ? (
                 <label className="block space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400">Command</span>
+                  <span className="text-muted-foreground dark:text-muted-foreground">Command</span>
                   <input
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                     value={command}
                     onChange={(event) => setCommand(event.target.value)}
                     placeholder="say Server restart in 5 minutes"
@@ -156,23 +156,23 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
                 </label>
               ) : null}
               <label className="block space-y-1">
-                <span className="text-slate-500 dark:text-slate-400">Start time</span>
+                <span className="text-muted-foreground dark:text-muted-foreground">Start time</span>
                 <input
                   type="datetime-local"
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                   value={startDate}
                   onChange={(event) => setStartDate(event.target.value)}
                 />
-                <span className="text-xs text-slate-500 dark:text-slate-500">
+                <span className="text-xs text-muted-foreground dark:text-muted-foreground">
                   {timezoneLabel
                     ? `Times are interpreted using your local timezone (${timezoneLabel}).`
                     : 'Times are interpreted using your local timezone.'}
                 </span>
               </label>
               <label className="block space-y-1">
-                <span className="text-slate-500 dark:text-slate-400">Repeat</span>
+                <span className="text-muted-foreground dark:text-muted-foreground">Repeat</span>
                 <select
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                   value={repeat}
                   onChange={(event) => setRepeat(event.target.value as typeof repeat)}
                 >
@@ -185,9 +185,9 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
               </label>
               {repeat === 'weekly' ? (
                 <label className="block space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400">Day of week</span>
+                  <span className="text-muted-foreground dark:text-muted-foreground">Day of week</span>
                   <select
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                     value={weekday}
                     onChange={(event) => setWeekday(event.target.value)}
                   >
@@ -204,7 +204,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
             </div>
             <div className="mt-5 flex justify-end gap-2 text-xs">
               <button
-                className="rounded-md border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                 onClick={() => setOpen(false)}
               >
                 Cancel

@@ -66,10 +66,10 @@ function ResetPasswordPage() {
   if (isValidating) {
     return (
       <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
-        <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
+        <div className="w-full max-w-md rounded-xl border border-border bg-white px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
           <div className="flex flex-col items-center text-center">
-            <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-primary-600" />
-            <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-border border-t-primary-600" />
+            <p className="mt-4 text-sm text-muted-foreground dark:text-muted-foreground">
               Validating reset link...
             </p>
           </div>
@@ -81,14 +81,14 @@ function ResetPasswordPage() {
   if (!token || !isValid) {
     return (
       <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
-        <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
+        <div className="w-full max-w-md rounded-xl border border-border bg-white px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
           <div className="flex flex-col items-center text-center">
             <img src="/logo.png" alt="Catalyst logo" className="h-12 w-12" />
           </div>
-          <h1 className="mt-6 text-2xl font-semibold text-slate-900 dark:text-white">
+          <h1 className="mt-6 text-2xl font-semibold text-foreground dark:text-white">
             Invalid link
           </h1>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+          <p className="mt-2 text-sm text-muted-foreground dark:text-muted-foreground">
             This password reset link is invalid or has expired. Please request a new one.
           </p>
           <div className="mt-6">
@@ -106,18 +106,18 @@ function ResetPasswordPage() {
 
   return (
     <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
+      <div className="w-full max-w-md rounded-xl border border-border bg-white px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
         <div className="flex flex-col items-center text-center">
           <img src="/logo.png" alt="Catalyst logo" className="h-12 w-12" />
-          <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+          <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground dark:text-muted-foreground">
             Catalyst Panel
           </span>
         </div>
 
-        <h1 className="mt-6 text-2xl font-semibold text-slate-900 dark:text-white">
+        <h1 className="mt-6 text-2xl font-semibold text-foreground dark:text-white">
           Reset your password
         </h1>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+        <p className="mt-2 text-sm text-muted-foreground dark:text-muted-foreground">
           Enter a new password for your account.
         </p>
 
@@ -138,14 +138,14 @@ function ResetPasswordPage() {
         ) : (
           <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-2">
-              <label className="block text-sm text-slate-600 dark:text-slate-300" htmlFor="password">
+              <label className="block text-sm text-muted-foreground dark:text-zinc-300" htmlFor="password">
                 New password
               </label>
               <input
                 id="password"
                 type="password"
                 autoComplete="new-password"
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -154,14 +154,14 @@ function ResetPasswordPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="block text-sm text-slate-600 dark:text-slate-300" htmlFor="confirmPassword">
+              <label className="block text-sm text-muted-foreground dark:text-zinc-300" htmlFor="confirmPassword">
                 Confirm new password
               </label>
               <input
                 id="confirmPassword"
                 type="password"
                 autoComplete="new-password"
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                 placeholder="••••••••"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
