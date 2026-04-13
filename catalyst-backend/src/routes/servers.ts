@@ -6848,20 +6848,12 @@ export async function serverRoutes(app: FastifyInstance) {
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const { targetNodeId, transferMode } = request.body as {
+      const { targetNodeId } = request.body as {
         targetNodeId: string;
-        transferMode?: string;
       };
 
       if (!targetNodeId) {
         return reply.status(400).send({ error: "targetNodeId is required" });
-      }
-
-      const transferModes = ["local", "s3", "stream"];
-      if (transferMode && !transferModes.includes(transferMode)) {
-        return reply.status(400).send({
-          error: `Invalid transferMode. Must be one of: ${transferModes.join(", ")}`,
-        });
       }
 
       // Get server with current node
@@ -6990,25 +6982,19 @@ export async function serverRoutes(app: FastifyInstance) {
         });
 
         const backupName = `transfer-${Date.now()}`;
-        const mode = (transferMode || server.backupStorageMode || "local") as import("../services/backup-storage").BackupStorageMode;
-        const { buildBackupPaths, buildTransferBackupPath } = await import("../services/backup-storage");
-        const { agentPath, storagePath, storageKey } = buildBackupPaths(server.uuid, backupName, mode, server);
-        if (mode === "s3" && !storageKey) {
-          throw new Error("Missing S3 storage key");
-        }
-        if (mode === "sftp" && !storageKey) {
-          throw new Error("Missing SFTP storage key");
-        }
+        const { buildBackupPaths, buildTransferBackupPath, uploadStreamToAgent } =
+          await import("../services/backup-storage");
+        const { agentPath } = buildBackupPaths(server.uuid, backupName, "local", server);
         const transferPath = buildTransferBackupPath(server.uuid, backupName);
 
         const backupRecord = await prisma.backup.create({
           data: {
             serverId: server.id,
             name: backupName,
-            path: mode === "stream" || mode === "s3" ? transferPath : storagePath,
-            storageMode: mode,
+            path: transferPath,
+            storageMode: "local",
             sizeMb: 0,
-            metadata: { agentPath, storageKey, transferPath },
+            metadata: { agentPath, transferPath },
           },
         });
 
@@ -7021,7 +7007,7 @@ export async function serverRoutes(app: FastifyInstance) {
           backupId: backupRecord.id,
         });
 
-        // Wait a moment for backup to be created (in production, use proper async handling)
+        // Wait for backup to be created
         await new Promise((resolve) => setTimeout(resolve, 2000));
 
         await prisma.serverLog.create({
@@ -7032,42 +7018,23 @@ export async function serverRoutes(app: FastifyInstance) {
           },
         });
 
-        const backupPath = mode === "stream" || mode === "s3" || mode === "sftp" ? transferPath : storagePath;
-
-        if (mode === "s3") {
-          const { openStorageStream, uploadStreamToAgent } = await import("../services/backup-storage");
-          const { stream } = await openStorageStream(
-            {
-              path: storagePath,
-              storageMode: "s3",
-              metadata: { storageKey },
-            },
-            server,
+        // Stream backup from source agent's filesystem to target agent via WebSocket
+        const { createReadStream } = await import("fs");
+        const backupFilePath = agentPath;
+        try {
+          const stream = createReadStream(backupFilePath);
+          await uploadStreamToAgent(
+            wsGateway,
+            targetNodeId,
+            id,
+            server.uuid,
+            transferPath,
+            stream,
           );
-          await uploadStreamToAgent(wsGateway, targetNodeId, id, server.uuid, transferPath, stream);
-        }
-
-        if (mode === "sftp") {
-          const { openStorageStream, uploadStreamToAgent } = await import("../services/backup-storage");
-          const { stream } = await openStorageStream(
-            {
-              path: storagePath,
-              storageMode: "sftp",
-              metadata: { storageKey },
-            },
-            server,
+        } catch (err: any) {
+          throw new Error(
+            `Failed to stream backup to target node: ${err.message}`,
           );
-          await uploadStreamToAgent(wsGateway, targetNodeId, id, server.uuid, transferPath, stream);
-        }
-
-        if (mode === "stream") {
-          const { openStorageStream, uploadStreamToAgent } = await import("../services/backup-storage");
-          const { stream } = await openStorageStream({
-            path: backupPath,
-            storageMode: "local",
-            metadata: { storageKey },
-          });
-          await uploadStreamToAgent(wsGateway, targetNodeId, id, server.uuid, transferPath, stream);
         }
 
         await prisma.serverLog.create({
@@ -7091,7 +7058,7 @@ export async function serverRoutes(app: FastifyInstance) {
           type: "restore_backup",
           serverId: id,
           serverUuid: server.uuid,
-          backupPath: backupPath,
+          backupPath: transferPath,
           backupId: backupRecord.id,
           serverDir: `${targetNode.serverDataDir || "/var/lib/catalyst/servers"}/${server.uuid}`,
         });

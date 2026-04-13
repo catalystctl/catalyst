@@ -469,6 +469,18 @@ export const deleteBackupFromStorage = async (
   }
 };
 
+const BACKUP_CHUNK_SIZE = 256 * 1024; // 256 KB per binary frame
+
+/**
+ * Stream a backup file to an agent using binary WebSocket frames.
+ *
+ * Binary protocol:
+ *   - First 16 bytes: requestId (UUID, UTF-8, zero-padded)
+ *   - Remaining bytes: raw file data
+ *
+ * This avoids the 33% base64 overhead of JSON text frames and eliminates
+ * per-chunk JSON parsing / ack round-trips.
+ */
 export const uploadStreamToAgent = async (
   gateway: WebSocketGateway,
   nodeId: string,
@@ -486,15 +498,20 @@ export const uploadStreamToAgent = async (
     backupPath: targetPath,
   });
 
+  // Encode requestId once as a 16-byte header for every binary frame
+  const header = Buffer.alloc(16, 0);
+  Buffer.from(requestId, "utf-8").copy(header);
+
   for await (const chunk of source) {
     if (!chunk || chunk.length === 0) continue;
-    await gateway.sendToAgent(nodeId, {
-      type: "upload_backup_chunk",
-      requestId,
-      serverId,
-      serverUuid,
-      data: Buffer.isBuffer(chunk) ? chunk.toString("base64") : Buffer.from(chunk).toString("base64"),
-    });
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    let offset = 0;
+    while (offset < buf.length) {
+      const slice = buf.subarray(offset, offset + BACKUP_CHUNK_SIZE);
+      const frame = Buffer.concat([header, slice]);
+      gateway.sendBinaryToAgent(nodeId, frame);
+      offset += slice.length;
+    }
   }
 
   await gateway.requestFromAgent(nodeId, {

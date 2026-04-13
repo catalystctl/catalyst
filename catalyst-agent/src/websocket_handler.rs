@@ -577,6 +577,22 @@ impl WebSocketHandler {
                         error!("Error handling message: {}", e);
                     }
                 }
+                Ok(Message::Binary(data)) => {
+                    // Binary frames are used for high-throughput backup streaming.
+                    // Protocol: first 16 bytes = requestId (UUID, UTF-8, zero-padded),
+                    //           remaining bytes = raw file data.
+                    if data.len() > 16 {
+                        let request_id = String::from_utf8_lossy(&data[..16])
+                            .trim_end_matches('\0')
+                            .to_string();
+                        if let Err(e) = self
+                            .handle_upload_backup_chunk_binary(&request_id, &data[16..])
+                            .await
+                        {
+                            error!("Error handling binary backup chunk: {}", e);
+                        }
+                    }
+                }
                 Ok(Message::Close(_)) => {
                     info!("Backend closed connection");
                     break;
@@ -3194,6 +3210,58 @@ impl WebSocketHandler {
         w.send(Message::Text(event.to_string().into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Handle a binary backup chunk (from the optimized streaming protocol).
+    /// Writes directly to the file without JSON parsing or per-chunk ack responses.
+    async fn handle_upload_backup_chunk_binary(
+        &self,
+        request_id: &str,
+        data: &[u8],
+    ) -> AgentResult<()> {
+        if data.is_empty() {
+            return Ok(());
+        }
+
+        // Take the session out of the map, write, then put it back.
+        // This avoids holding the write lock across the async I/O.
+        let mut session = {
+            let mut uploads = self.active_uploads.write().await;
+            match uploads.remove(request_id) {
+                Some(mut s) => {
+                    let next_total = s.bytes_written.saturating_add(data.len() as u64);
+                    if next_total > MAX_BACKUP_UPLOAD_BYTES {
+                        let path = s.path.clone();
+                        let _ = tokio::fs::remove_file(&path).await;
+                        return Err(AgentError::InvalidRequest(format!(
+                            "Upload too large (max {} bytes)",
+                            MAX_BACKUP_UPLOAD_BYTES
+                        )));
+                    }
+                    s.bytes_written = next_total;
+                    s.last_activity = tokio::time::Instant::now();
+                    s
+                }
+                None => {
+                    return Err(AgentError::InvalidRequest(
+                        "Unknown upload request".to_string(),
+                    ));
+                }
+            }
+        };
+
+        session
+            .file
+            .write_all(data)
+            .await
+            .map_err(|e| AgentError::IoError(format!("Failed to write backup chunk: {}", e)))?;
+
+        self.active_uploads
+            .write()
+            .await
+            .insert(request_id.to_string(), session);
+
         Ok(())
     }
 

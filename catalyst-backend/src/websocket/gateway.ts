@@ -1959,6 +1959,20 @@ export class WebSocketGateway {
     }
   }
 
+  /** Send a raw binary payload to an agent (used for efficient backup streaming). */
+  sendBinaryToAgent(nodeId: string, data: Buffer): boolean {
+    const agent = this.agents.get(nodeId);
+    if (!agent || !agent.authenticated || agent.socket.readyState !== 1) {
+      return false;
+    }
+    try {
+      agent.socket.send(data);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async requestFromAgent(nodeId: string, message: any, timeoutMs = 15000): Promise<any> {
     const agent = this.agents.get(nodeId);
     if (!agent || !agent.authenticated || agent.socket.readyState !== 1) {
