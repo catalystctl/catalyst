@@ -7,6 +7,9 @@ on:
     branches: [main, develop]
     types: [opened, closed]
 
+permissions:
+  contents: read
+
 jobs:
   notify:
     runs-on: blacksmith-2vcpu-ubuntu-2404

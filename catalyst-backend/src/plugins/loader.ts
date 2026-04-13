@@ -93,6 +93,12 @@ export class PluginLoader {
    */
   async loadPlugin(pluginPath: string): Promise<void> {
     const pluginName = path.basename(pluginPath);
+    // Prevent path traversal: ensure resolved path is within plugins directory
+    const resolvedPath = path.resolve(pluginPath);
+    const canonicalBase = path.resolve(this.pluginsDir);
+    if (!resolvedPath.startsWith(canonicalBase + path.sep) && resolvedPath !== canonicalBase) {
+      throw new Error(`Plugin path escapes plugins directory: ${pluginName}`);
+    }
     this.logger.info({ plugin: pluginName }, 'Loading plugin');
     
     try {

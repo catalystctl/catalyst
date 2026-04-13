@@ -1254,7 +1254,9 @@ export async function serverRoutes(app: FastifyInstance) {
     // Fallback: if we somehow didn't get enough valid bytes, pad with random chars
     while (id.length < length) {
       const byte = randomBytes(1)[0];
-      id += alphabet[byte % 36];
+      if (byte < 252) {
+        id += alphabet[byte % 36];
+      }
     }
     return `${prefix}${id}`;
   };

@@ -208,7 +208,8 @@ async function main() {
     console.error("  Expected path:", agentConfigPath);
     console.error("  Copy the output below and save it manually to catalyst-agent/config.toml");
     console.log("\n--- config.toml ---");
-    console.log(agentConfigContent);
+    // Redact API key from logged config for security
+    console.log(agentConfigContent.replace(/(api_key\s*=\s*)"[^"]+"/, '$1"<REDACTED>"'));
     console.log("--- end ---\n");
   }
 
@@ -547,7 +548,7 @@ echo '[Catalyst] Node.js bot installation complete.'
   console.log("Development node ready at:", node.publicAddress);
   console.log("Agent config.toml generated with all required variables:");
   console.log("  - node_id:", node.id);
-  console.log("  - api_key:", apiKey || "(not created)");
+  console.log("  - api_key:", apiKey ? "<generated>" : "(not created)");
   console.log("  - hostname:", node.hostname);
   console.log("  - backend_url:", toWebSocketUrl(backendUrl) + "/ws");
 }

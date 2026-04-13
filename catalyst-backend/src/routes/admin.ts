@@ -1633,7 +1633,7 @@ export async function adminRoutes(app: FastifyInstance) {
           rangeStart: startIp || undefined,
           rangeEnd: endIp || undefined,
         }).catch((err: Error) => {
-          console.error(`Failed to send network creation to agent ${nodeId}:`, err);
+          console.error("Failed to send network creation to agent", { nodeId, error: err.message });
         });
       }
 

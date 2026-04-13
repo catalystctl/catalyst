@@ -257,7 +257,8 @@ function formatZodIssues(issues: ZodIssue[]) {
  */
 export const sanitizeInput = (input: string): string => {
   return input
-    .replace(/<script[^>]*>.*?<\/script>/gi, '')
+    .replace(/<\/?script[^>]*>/gi, '')
+    .replace(/<script/gi, '')
     .replace(/<[^>]+>/g, '')
     .trim();
 };
