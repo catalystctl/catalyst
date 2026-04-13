@@ -210,7 +210,8 @@ function AuditLogsPage() {
         </div>
       ) : logs.length ? (
         <div className="rounded-2xl border border-border bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-          <div className="grid grid-cols-12 gap-3 border-b border-border px-5 py-3 text-xs uppercase text-muted-foreground dark:border-border dark:text-muted-foreground">
+          {/* Desktop header */}
+          <div className="hidden border-b border-border px-5 py-3 text-xs uppercase text-muted-foreground dark:border-border dark:text-muted-foreground md:grid md:grid-cols-12 md:gap-3">
             <div className="col-span-3">User</div>
             <div className="col-span-3">Action</div>
             <div className="col-span-2">Resource</div>
@@ -221,23 +222,45 @@ function AuditLogsPage() {
             {logs.map((log) => (
               <div
                 key={log.id}
-                className="grid grid-cols-12 gap-3 px-5 py-4 text-sm text-muted-foreground dark:text-zinc-300"
+                className="px-5 py-4 text-sm text-muted-foreground dark:text-zinc-300"
               >
-                <div className="col-span-3">
-                  <div className="font-semibold text-foreground dark:text-zinc-100">
-                    {log.user?.username ?? 'Unknown'}
+                {/* Mobile: stacked card */}
+                <div className="md:hidden">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-semibold text-foreground dark:text-zinc-100">
+                        {log.user?.username ?? 'Unknown'}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground dark:text-muted-foreground">
+                        {log.action} &middot; {log.resource}
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 text-right text-xs text-muted-foreground dark:text-muted-foreground">
+                      {new Date(log.timestamp).toLocaleString()}
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
-                    {log.user?.email ?? log.userId ?? 'n/a'}
+                  <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
+                    {log.ipAddress ?? 'n/a'}
                   </div>
                 </div>
-                <div className="col-span-3 text-foreground dark:text-zinc-100">{log.action}</div>
-                <div className="col-span-2 text-muted-foreground dark:text-zinc-300">{log.resource}</div>
-                <div className="col-span-2 text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
-                  {log.ipAddress ?? 'n/a'}
-                </div>
-                <div className="col-span-2 text-right text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
-                  {new Date(log.timestamp).toLocaleString()}
+                {/* Desktop: grid layout */}
+                <div className="hidden grid-cols-12 gap-3 md:grid">
+                  <div className="col-span-3">
+                    <div className="font-semibold text-foreground dark:text-zinc-100">
+                      {log.user?.username ?? 'Unknown'}
+                    </div>
+                    <div className="text-xs text-muted-foreground dark:text-muted-foreground">
+                      {log.user?.email ?? log.userId ?? 'n/a'}
+                    </div>
+                  </div>
+                  <div className="col-span-3 text-foreground dark:text-zinc-100">{log.action}</div>
+                  <div className="col-span-2 text-muted-foreground dark:text-zinc-300">{log.resource}</div>
+                  <div className="col-span-2 text-xs text-muted-foreground dark:text-muted-foreground">
+                    {log.ipAddress ?? 'n/a'}
+                  </div>
+                  <div className="col-span-2 text-right text-xs text-muted-foreground dark:text-muted-foreground">
+                    {new Date(log.timestamp).toLocaleString()}
+                  </div>
                 </div>
               </div>
             ))}
