@@ -34,7 +34,20 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       const code = error.response?.data?.code;
       if (code !== 'TWO_FACTOR_REQUIRED') {
-        useAuthStore.getState().logout();
+        // Only clear local auth state — do NOT call the server-side sign-out
+        // endpoint. Calling sign-out here invalidates the session cookie, which
+        // causes a vicious cycle during login: signIn creates a session → a
+        // subsequent 401 (e.g. from /api/auth/me racing before the cookie is
+        // committed) triggers sign-out → session destroyed → user kicked back
+        // to login.  The server session will expire on its own; we just need
+        // to reset the client-side state so the ProtectedRoute redirects.
+        useAuthStore.setState({
+          user: null,
+          token: null,
+          isAuthenticated: false,
+          isReady: true,
+          rememberMe: false,
+        });
       }
     }
     return Promise.reject(error);
