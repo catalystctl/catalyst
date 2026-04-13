@@ -38,6 +38,7 @@ import ProfilePage from './pages/ProfilePage';
 import NotFoundPage from './pages/NotFoundPage';
 import { ApiKeysPage } from './pages/ApiKeysPage';
 import PluginTabPage from './pages/PluginTabPage';
+import PluginRoutePage from './pages/PluginRoutePage';
 import { PluginProvider } from './plugins/PluginProvider';
 import NodeAllocationsPage from './pages/admin/NodeAllocationsPage';
 
@@ -114,6 +115,7 @@ function App() {
           <Route path="profile" element={<ProfilePage />} />
           <Route path="servers" element={<ServersPage />} />
           <Route path="servers/:serverId/:tab?" element={<ServerDetailsPage />} />
+          <Route path="tickets" element={<ProtectedRoute><PluginRoutePage /></ProtectedRoute>} />
             <Route
               path="admin/nodes/:nodeId"
               element={

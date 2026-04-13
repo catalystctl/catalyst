@@ -151,14 +151,15 @@ export class PluginLoader {
         loadedPlugin.wsHandlers,
         loadedPlugin.tasks,
         loadedPlugin.eventHandlers,
-        this.eventEmitter
+        this.eventEmitter,
+        (this.fastify as any).authenticate
       );
       
       loadedPlugin.context = context;
       
       // Load backend if exists
       if (manifest.backend?.entry) {
-        const backendPath = path.join(pluginPath, manifest.backend.entry);
+        const backendPath = path.resolve(pluginPath, manifest.backend.entry);
         const backendModule = await import(backendPath);
         loadedPlugin.backend = backendModule.default || backendModule;
         
@@ -359,7 +360,7 @@ export class PluginLoader {
     await this.unloadPlugin(name);
     
     // Clear module cache
-    const backendPath = path.join(pluginPath, plugin.manifest.backend?.entry || '');
+    const backendPath = path.resolve(pluginPath, plugin.manifest.backend?.entry || '');
     delete require.cache[require.resolve(backendPath)];
     
     // Load plugin again

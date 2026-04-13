@@ -27,7 +27,8 @@ export function createPluginContext(
   wsHandlers: Map<string, PluginWebSocketHandler>,
   tasks: Map<string, { cron: string; handler: PluginTaskHandler; job?: ScheduledTask }>,
   eventHandlers: Map<string, Set<PluginEventHandler>>,
-  eventEmitter: EventEmitter
+  eventEmitter: EventEmitter,
+  authenticate?: Function
 ): PluginBackendContext {
   const pluginLogger = logger.child({ plugin: manifest.name });
   
@@ -40,10 +41,15 @@ export function createPluginContext(
     registerRoute(options: RouteOptions) {
       // Prefix route path with plugin namespace
       const prefixedPath = `/api/plugins/${manifest.name}${options.url}`;
-      routes.push({
+      const routeOptions: RouteOptions = {
         ...options,
         url: prefixedPath,
-      });
+      };
+      // Auto-inject auth middleware if authenticate is available and route doesn't already have it
+      if (authenticate && !options.preHandler && !options.onRequest) {
+        (routeOptions as any).preHandler = [authenticate];
+      }
+      routes.push(routeOptions);
       pluginLogger.info({ route: prefixedPath, method: options.method }, 'Registered route');
     },
     

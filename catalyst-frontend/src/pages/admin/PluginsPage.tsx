@@ -15,6 +15,7 @@ import {
   Package,
   X,
 } from 'lucide-react';
+import { usePluginContext } from '../../plugins/PluginProvider';
 
 interface PluginConfig {
   [key: string]: any;
@@ -100,40 +101,71 @@ function PluginSettingsModal({
                       No configuration options available
                     </p>
                   ) : (
-                    Object.entries(config).map(([key, value]) => (
-                      <div key={key}>
-                        <label className="block text-sm font-medium text-foreground dark:text-zinc-300 mb-1">
-                          {key}
-                        </label>
-                        {typeof value === 'boolean' ? (
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={value}
-                              onChange={(e) => handleConfigChange(key, e.target.checked)}
-                              className="rounded border-border dark:border-zinc-600 bg-white dark:bg-surface-2 text-primary-500 focus:ring-primary-500"
-                            />
-                            <span className="text-sm text-muted-foreground dark:text-muted-foreground">
-                              {value ? 'Enabled' : 'Disabled'}
-                            </span>
+                    Object.entries(config).map(([key, value]) => {
+                      // Plugin config schema format: { type, default, description }
+                      const isSchema = value && typeof value === 'object' && 'type' in value;
+                      const fieldType = isSchema ? value.type : typeof value;
+                      const currentValue = isSchema ? value.default : value;
+                      const description = isSchema ? value.description : '';
+                      const displayKey = isSchema
+                        ? key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())
+                        : key;
+
+                      return (
+                        <div key={key}>
+                          <label className="block text-sm font-medium text-foreground dark:text-zinc-300 mb-1">
+                            {displayKey}
                           </label>
-                        ) : typeof value === 'number' ? (
-                          <input
-                            type="number"
-                            value={value}
-                            onChange={(e) => handleConfigChange(key, parseFloat(e.target.value))}
-                            className="w-full px-3 py-2 bg-white dark:bg-surface-2 border border-border dark:border-zinc-600 rounded-lg text-foreground dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          />
-                        ) : (
-                          <input
-                            type="text"
-                            value={String(value)}
-                            onChange={(e) => handleConfigChange(key, e.target.value)}
-                            className="w-full px-3 py-2 bg-white dark:bg-surface-2 border border-border dark:border-zinc-600 rounded-lg text-foreground dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          />
-                        )}
-                      </div>
-                    ))
+                          {description && (
+                            <p className="text-xs text-muted-foreground dark:text-muted-foreground mb-1.5">
+                              {description}
+                            </p>
+                          )}
+                          {fieldType === 'boolean' ? (
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={!!currentValue}
+                                onChange={(e) =>
+                                  handleConfigChange(key, isSchema
+                                    ? { ...value, default: e.target.checked }
+                                    : e.target.checked
+                                  )
+                                }
+                                className="rounded border-border dark:border-zinc-600 bg-white dark:bg-surface-2 text-primary-500 focus:ring-primary-500"
+                              />
+                              <span className="text-sm text-muted-foreground dark:text-muted-foreground">
+                                {currentValue ? 'Enabled' : 'Disabled'}
+                              </span>
+                            </label>
+                          ) : fieldType === 'number' ? (
+                            <input
+                              type="number"
+                              value={currentValue ?? ''}
+                              onChange={(e) =>
+                                handleConfigChange(key, isSchema
+                                  ? { ...value, default: parseFloat(e.target.value) || 0 }
+                                  : parseFloat(e.target.value) || 0
+                                )
+                              }
+                              className="w-full px-3 py-2 bg-white dark:bg-surface-2 border border-border dark:border-zinc-600 rounded-lg text-foreground dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                            />
+                          ) : (
+                            <input
+                              type="text"
+                              value={String(currentValue ?? '')}
+                              onChange={(e) =>
+                                handleConfigChange(key, isSchema
+                                  ? { ...value, default: e.target.value }
+                                  : e.target.value
+                                )
+                              }
+                              className="w-full px-3 py-2 bg-white dark:bg-surface-2 border border-border dark:border-zinc-600 rounded-lg text-foreground dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                            />
+                          )}
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -161,6 +193,7 @@ function PluginSettingsModal({
 
 export default function PluginsPage() {
   const queryClient = useQueryClient();
+  const { reloadPlugins } = usePluginContext();
   const [processingPlugin, setProcessingPlugin] = useState<string | null>(null);
   const [settingsPlugin, setSettingsPlugin] = useState<string | null>(null);
   
@@ -177,6 +210,7 @@ export default function PluginsPage() {
     },
     onSuccess: (_, { enabled }) => {
       queryClient.invalidateQueries({ queryKey: ['plugins'] });
+      reloadPlugins();
       toast.success(`Plugin ${enabled ? 'enabled' : 'disabled'} successfully`);
     },
     onError: (error: any) => {
@@ -194,6 +228,7 @@ export default function PluginsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plugins'] });
+      reloadPlugins();
       toast.success('Plugin reloaded successfully');
     },
     onError: (error: any) => {

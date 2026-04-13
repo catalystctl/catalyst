@@ -1,0 +1,61 @@
+{
+  "name": "ticketing-plugin",
+  "version": "1.0.0",
+  "displayName": "Ticketing System",
+  "description": "Full-featured ticketing system with server/user linking, categories, priorities, assignments, comments, and real-time notifications",
+  "author": "Catalyst Team",
+  "catalystVersion": ">=1.0.0",
+  "permissions": [
+    "server.read",
+    "server.write",
+    "admin.read",
+    "admin.write",
+    "user.read"
+  ],
+  "backend": {
+    "entry": "backend/index.js"
+  },
+  "frontend": {
+    "entry": "frontend/index.ts",
+    "hasTabs": true,
+    "hasComponents": false
+  },
+  "config": {
+    "autoCloseDays": {
+      "type": "number",
+      "default": 30,
+      "description": "Automatically close resolved tickets after this many days (0 to disable)"
+    },
+    "maxOpenTicketsPerUser": {
+      "type": "number",
+      "default": 20,
+      "description": "Maximum number of open tickets per user (0 for unlimited)"
+    },
+    "defaultPriority": {
+      "type": "string",
+      "default": "medium",
+      "description": "Default priority for new tickets (low, medium, high, critical)"
+    },
+    "allowedPriorities": {
+      "type": "string",
+      "default": "low,medium,high,critical",
+      "description": "Comma-separated list of allowed priorities"
+    },
+    "notifyOnAssignment": {
+      "type": "boolean",
+      "default": true,
+      "description": "Send WebSocket notification when a ticket is assigned"
+    },
+    "notifyOnComment": {
+      "type": "boolean",
+      "default": true,
+      "description": "Send WebSocket notification on new ticket comments"
+    },
+    "notifyOnStatusChange": {
+      "type": "boolean",
+      "default": true,
+      "description": "Send WebSocket notification on ticket status changes"
+    }
+  },
+  "dependencies": {}
+}

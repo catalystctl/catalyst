@@ -1,49 +1,58 @@
-import type { LoadedPlugin, PluginManifest, PluginTabConfig } from './types';
+import type { LoadedPlugin, PluginManifest, PluginTabConfig, PluginRouteConfig } from './types';
 
 /**
- * Load plugin frontend configuration
- * 
- * In production, this would:
- * 1. Fetch the plugin's frontend bundle from the backend
- * 2. Dynamically import/execute it in a sandboxed context
- * 3. Extract tab and component registrations
- * 
- * For now, we'll import known plugins statically
+ * Dynamically load plugin frontend components at runtime.
+ *
+ * Each plugin lives under src/plugins/{plugin-name}/components.tsx and can export:
+ *   - AdminTab   → tab injected into the admin panel sidebar
+ *   - ServerTab  → tab injected into server detail pages
+ *   - UserPage   → standalone page at /tickets (or plugin-specific path)
+ *
+ * New plugins only need their components.tsx placed in
+ * src/plugins/{name}/components.tsx — no changes to this loader required.
  */
 export async function loadPluginFrontend(manifest: PluginManifest): Promise<LoadedPlugin> {
   const tabs: PluginTabConfig[] = [];
-  
-  // For the example plugin, load the tab components
-  if (manifest.name === 'example-plugin') {
-    try {
-      const components = await import('./example-plugin/components');
-      
+  const routes: PluginRouteConfig[] = [];
+
+  if (!manifest.enabled || !manifest.hasFrontend) {
+    return { manifest, routes: [], tabs, components: [] };
+  }
+
+  try {
+    const mod = await import(`./${manifest.name}/components.tsx`);
+
+    if (mod.AdminTab) {
       tabs.push({
-        id: 'example-admin',
-        label: 'Example Plugin',
-        component: components.ExampleAdminTab,
+        id: `${manifest.name}-admin`,
+        label: manifest.displayName,
+        component: mod.AdminTab,
         location: 'admin',
-        order: 100,
+        order: 50,
         requiredPermissions: ['admin.read'],
       });
-      
+    }
+
+    if (mod.ServerTab) {
       tabs.push({
-        id: 'example-server',
-        label: 'Plugin Demo',
-        component: components.ExampleServerTab,
+        id: `${manifest.name}-server`,
+        label: manifest.displayName,
+        component: mod.ServerTab,
         location: 'server',
-        order: 100,
+        order: 50,
         requiredPermissions: ['server.read'],
       });
-    } catch (error) {
-      console.error(`Failed to load frontend for ${manifest.name}:`, error);
     }
+
+    if (mod.UserPage) {
+      routes.push({
+        path: `/tickets`,
+        component: mod.UserPage,
+      });
+    }
+  } catch (error) {
+    console.error(`[PluginLoader] Failed to load frontend for "${manifest.name}":`, error);
   }
-  
-  return {
-    manifest,
-    routes: [],
-    tabs,
-    components: [],
-  };
+
+  return { manifest, routes, tabs, components: [] };
 }

@@ -18,8 +18,6 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
   const [initialized, setInitialized] = useState(false);
   
   const loadPlugins = async () => {
-    if (loading && initialized) return; // Prevent concurrent loads
-    
     setLoading(true);
     setError(null);
     

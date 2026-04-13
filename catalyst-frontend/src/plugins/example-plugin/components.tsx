@@ -5,7 +5,7 @@ import React from 'react';
  * 
  * This tab appears in the admin panel when the plugin is enabled
  */
-export function ExampleAdminTab() {
+export function AdminTab() {
   const [counter, setCounter] = React.useState(0);
   const [stats, setStats] = React.useState<any>(null);
   
@@ -97,7 +97,7 @@ export function ExampleAdminTab() {
  * 
  * This tab appears in server detail pages when the plugin is enabled
  */
-export function ExampleServerTab({ serverId }: { serverId: string }) {
+export function ServerTab({ serverId }: { serverId: string }) {
   const [message, setMessage] = React.useState('');
   const [responses, setResponses] = React.useState<any[]>([]);
   

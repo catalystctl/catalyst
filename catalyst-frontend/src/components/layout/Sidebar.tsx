@@ -29,10 +29,12 @@ import {
 } from 'lucide-react';
 import { useState, MouseEvent, useMemo } from 'react';
 import { cn } from '@/lib/utils';
+import { usePluginTabs, usePluginRoutes } from '../../plugins/hooks';
 
 const mainLinks = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/servers', label: 'Servers', icon: Server },
+  { to: '/tickets', label: 'Tickets', icon: Plug },
 ];
 
 const adminSections = [
@@ -293,15 +295,33 @@ function Sidebar() {
   const { user, logout } = useAuthStore();
   const { themeSettings, sidebarCollapsed, toggleSidebar } = useThemeStore();
   const userPermissions = user?.permissions || [];
+  const pluginTabs = usePluginTabs('admin');
+  const pluginRoutes = usePluginRoutes();
+
+  const hasUserTicketPage = pluginRoutes.length > 0;
 
   const filteredSections = useMemo(() => {
-    return adminSections
+    const sections = adminSections
       .map((section) => ({
         ...section,
         links: section.links.filter((link) => hasAnyPermission(userPermissions, link.permissions)),
       }))
       .filter((section) => section.links.length > 0);
-  }, [userPermissions]);
+
+    // Inject plugin tabs as a section
+    if (pluginTabs.length > 0 && hasAnyPermission(userPermissions, ['admin.read', 'admin.write'])) {
+      sections.push({
+        title: 'Plugin Tabs',
+        links: pluginTabs.map((tab) => ({
+          to: `/admin/plugin/${tab.id}`,
+          label: tab.label,
+          icon: Plug,
+        })),
+      });
+    }
+
+    return sections;
+  }, [userPermissions, pluginTabs]);
 
   const initials =
     user?.username?.slice(0, 2).toUpperCase() || user?.email?.slice(0, 2).toUpperCase() || 'U';
@@ -343,7 +363,9 @@ function Sidebar() {
       {/* Navigation */}
       <div className={cn('flex-1 overflow-y-auto', sidebarCollapsed ? 'px-2 py-4' : 'px-3 py-4')}>
         <div className="space-y-1">
-          {mainLinks.map((link) => (
+          {mainLinks
+            .filter((link) => link.to !== '/tickets' || hasUserTicketPage)
+            .map((link) => (
             <MenuItem key={link.to} {...link} collapsed={sidebarCollapsed} />
           ))}
         </div>
