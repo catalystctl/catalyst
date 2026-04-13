@@ -550,7 +550,7 @@ export class AlertService {
         throw new Error('Alert not found for email dispatch');
       }
       const alertUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/alerts`;
-      const emailContent = renderAlertEmail({
+      const emailContent = await renderAlertEmail({
         title: alert.title,
         message: alert.message,
         severity: alert.severity,
@@ -677,7 +677,7 @@ export class AlertService {
   ) {
     try {
       const alertUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/alerts`;
-      const emailContent = renderAlertEmail({
+      const emailContent = await renderAlertEmail({
         title: alert.title,
         message: alert.message,
         severity: alert.severity,

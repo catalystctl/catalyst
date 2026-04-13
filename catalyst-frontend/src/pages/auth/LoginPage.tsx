@@ -10,6 +10,7 @@ import { authClient } from '../../services/authClient';
 import { notifyError } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
 import { useThemeStore } from '../../stores/themeStore';
+import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -176,6 +177,7 @@ function LoginPage() {
   const authProviders = useThemeStore((s) => s.themeSettings?.authProviders);
   const showWhmcs = authProviders?.whmcs ?? false;
   const showPaymenter = authProviders?.paymenter ?? false;
+  const { panelName, logoUrl } = usePanelBranding();
 
   const handleTotpSubmit = async () => {
     if (!totpCode) {
@@ -202,9 +204,9 @@ function LoginPage() {
       <Card className="w-full max-w-md">
         <CardContent className="px-6 py-8">
           <div className="flex flex-col items-center text-center">
-            <img src="/logo.png" alt="Catalyst logo" className="h-12 w-12" />
+            <img src={logoUrl} alt={`${panelName} logo`} className="h-12 w-12" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
             <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-              Catalyst Panel
+              {panelName} Panel
             </span>
           </div>
           <h1 className="mt-6 font-display text-2xl font-bold text-foreground">

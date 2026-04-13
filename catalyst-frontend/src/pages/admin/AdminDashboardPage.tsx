@@ -18,12 +18,10 @@ import {
   XCircle,
   ArrowUpRight,
   Zap,
-  Shield,
   Clock,
   Settings,
   Database,
   Globe,
-  Lock,
   Play,
   Square,
   FileText,
@@ -511,81 +509,7 @@ function AdminDashboardPage() {
           </Card>
         </motion.div>
 
-        {/* Quick Navigation Grid */}
-        <motion.div variants={itemVariants}>
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold text-foreground dark:text-white">Quick Navigation</h2>
-            <p className="text-sm text-muted-foreground dark:text-muted-foreground">
-              Jump to administration sections
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-            <EnhancedAdminLink
-              href="/admin/users"
-              icon={Users}
-              label="Users"
-              description="User accounts"
-              color="cyan"
-              index={0}
-            />
-            <EnhancedAdminLink
-              href="/admin/roles"
-              icon={Shield}
-              label="Roles"
-              description="Access control"
-              color="violet"
-              index={1}
-            />
-            <EnhancedAdminLink
-              href="/admin/servers"
-              icon={Server}
-              label="Servers"
-              description="Game servers"
-              color="sky"
-              index={2}
-            />
-            <EnhancedAdminLink
-              href="/admin/nodes"
-              icon={HardDrive}
-              label="Nodes"
-              description="Infrastructure"
-              color="emerald"
-              index={3}
-            />
-            <EnhancedAdminLink
-              href="/admin/templates"
-              icon={FileText}
-              label="Templates"
-              description="Server templates"
-              color="amber"
-              index={4}
-            />
-            <EnhancedAdminLink
-              href="/admin/database"
-              icon={Database}
-              label="Databases"
-              description="Data management"
-              color="rose"
-              index={5}
-            />
-            <EnhancedAdminLink
-              href="/admin/network"
-              icon={Globe}
-              label="Network"
-              description="Networking"
-              color="indigo"
-              index={6}
-            />
-            <EnhancedAdminLink
-              href="/admin/security"
-              icon={Lock}
-              label="Security"
-              description="Security settings"
-              color="slate"
-              index={7}
-            />
-          </div>
-        </motion.div>
+
       </div>
     </motion.div>
   );
@@ -786,122 +710,7 @@ function EnhancedHealthRow({
   );
 }
 
-// Enhanced Admin Link
-function EnhancedAdminLink({
-  href,
-  icon: Icon,
-  label,
-  description,
-  color,
-  index,
-}: {
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  description: string;
-  color: string;
-  index: number;
-}) {
-  const colorMap: Record<
-    string,
-    {
-      from: string;
-      to: string;
-      icon: string;
-      hover: string;
-    }
-  > = {
-    cyan: {
-      from: 'from-cyan-50',
-      to: 'to-cyan-100/50',
-      icon: 'text-cyan-600 dark:text-cyan-400',
-      hover: 'hover:border-cyan-200 dark:hover:border-cyan-800',
-    },
-    violet: {
-      from: 'from-violet-50',
-      to: 'to-violet-100/50',
-      icon: 'text-violet-600 dark:text-violet-400',
-      hover: 'hover:border-violet-200 dark:hover:border-violet-800',
-    },
-    sky: {
-      from: 'from-sky-50',
-      to: 'to-sky-100/50',
-      icon: 'text-sky-600 dark:text-sky-400',
-      hover: 'hover:border-sky-200 dark:hover:border-sky-800',
-    },
-    emerald: {
-      from: 'from-emerald-50',
-      to: 'to-emerald-100/50',
-      icon: 'text-emerald-600 dark:text-emerald-400',
-      hover: 'hover:border-emerald-200 dark:hover:border-emerald-800',
-    },
-    rose: {
-      from: 'from-rose-50',
-      to: 'to-rose-100/50',
-      icon: 'text-rose-600 dark:text-rose-400',
-      hover: 'hover:border-rose-200 dark:hover:border-rose-800',
-    },
-    amber: {
-      from: 'from-amber-50',
-      to: 'to-amber-100/50',
-      icon: 'text-amber-600 dark:text-amber-400',
-      hover: 'hover:border-amber-200 dark:hover:border-amber-800',
-    },
-    indigo: {
-      from: 'from-indigo-50',
-      to: 'to-indigo-100/50',
-      icon: 'text-indigo-600 dark:text-indigo-400',
-      hover: 'hover:border-indigo-200 dark:hover:border-indigo-800',
-    },
-    slate: {
-      from: 'from-zinc-50',
-      to: 'to-zinc-100/50',
-      icon: 'text-muted-foreground dark:text-muted-foreground',
-      hover: 'hover:border-border dark:hover:border-border',
-    },
-  };
 
-  const colors = colorMap[color] || colorMap.slate;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ delay: index * 0.04 }}
-    >
-      <Link to={href}>
-        <Card
-          className={cn(
-            'group h-full border-border/80 bg-gradient-to-br shadow-sm transition-all hover:-translate-y-1 hover:shadow-lg dark:border-border/50',
-            colors.from,
-            colors.to,
-            colors.hover
-          )}
-        >
-          <CardContent className="flex flex-col items-center justify-center gap-3 p-5">
-            <div
-              className={cn(
-                'flex h-11 w-11 items-center justify-center rounded-xl bg-white shadow-sm transition-transform group-hover:scale-110 dark:bg-surface-1',
-                colors.icon
-              )}
-            >
-              <Icon className="h-5.5 w-5.5" />
-            </div>
-            <div className="space-y-1 text-center">
-              <span className="block text-sm font-bold text-foreground dark:text-white">
-                {label}
-              </span>
-              <span className="block text-xs text-muted-foreground dark:text-muted-foreground">
-                {description}
-              </span>
-            </div>
-            <ArrowUpRight className="h-4 w-4 text-muted-foreground opacity-0 transition-all group-hover:translate-x-1 group-hover:translate-y-[-1px] group-hover:opacity-100 dark:text-muted-foreground" />
-          </CardContent>
-        </Card>
-      </Link>
-    </motion.div>
-  );
-}
 
 // Quick Actions Menu
 function QuickActionsMenu() {

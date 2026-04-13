@@ -4,6 +4,7 @@ import { authApi } from '../../services/api/auth';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
+import { usePanelBranding } from '../../hooks/usePanelBranding';
 
 function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -15,6 +16,7 @@ function ResetPasswordPage() {
   const [isReset, setIsReset] = useState(false);
   const [isValidating, setIsValidating] = useState(true);
   const [isValid, setIsValid] = useState(false);
+  const { panelName, logoUrl } = usePanelBranding();
 
   // Validate token on mount
   useEffect(() => {
@@ -83,7 +85,7 @@ function ResetPasswordPage() {
       <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
         <div className="w-full max-w-md rounded-xl border border-border bg-white px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
           <div className="flex flex-col items-center text-center">
-            <img src="/logo.png" alt="Catalyst logo" className="h-12 w-12" />
+            <img src={logoUrl} alt={`${panelName} logo`} className="h-12 w-12" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
           </div>
           <h1 className="mt-6 text-2xl font-semibold text-foreground dark:text-white">
             Invalid link
@@ -108,9 +110,9 @@ function ResetPasswordPage() {
     <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
       <div className="w-full max-w-md rounded-xl border border-border bg-white px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
         <div className="flex flex-col items-center text-center">
-          <img src="/logo.png" alt="Catalyst logo" className="h-12 w-12" />
+          <img src={logoUrl} alt={`${panelName} logo`} className="h-12 w-12" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
           <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground dark:text-muted-foreground">
-            Catalyst Panel
+            {panelName} Panel
           </span>
         </div>
 
