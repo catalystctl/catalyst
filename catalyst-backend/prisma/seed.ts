@@ -206,12 +206,7 @@ async function main() {
   } catch (error) {
     console.error("✗ Failed to write agent config.toml:", error);
     console.error("  Expected path:", agentConfigPath);
-    console.error("  Copy the output below and save it manually to catalyst-agent/config.toml");
-    console.log("\n--- config.toml ---");
-    // Generate a redacted config from safe values (never expose apiKey)
-    const redactedConfig = generateAgentConfig(node, backendUrl, "<REDACTED>");
-    console.log(redactedConfig);
-    console.log("--- end ---\n");
+    console.error("  The config file contains your API key — read it from the written file.");
   }
 
   // Create admin role

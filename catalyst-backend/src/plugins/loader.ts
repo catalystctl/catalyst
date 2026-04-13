@@ -99,6 +99,8 @@ export class PluginLoader {
     if (!resolvedPath.startsWith(canonicalBase + path.sep) && resolvedPath !== canonicalBase) {
       throw new Error(`Plugin path escapes plugins directory: ${pluginName}`);
     }
+    // Use only the validated resolved path from here on
+    pluginPath = resolvedPath;
     this.logger.info({ plugin: pluginName }, 'Loading plugin');
     
     try {
