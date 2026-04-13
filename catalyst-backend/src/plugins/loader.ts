@@ -99,13 +99,11 @@ export class PluginLoader {
     if (!resolvedPath.startsWith(canonicalBase + path.sep) && resolvedPath !== canonicalBase) {
       throw new Error(`Plugin path escapes plugins directory: ${pluginName}`);
     }
-    // Use only the validated resolved path from here on
-    pluginPath = resolvedPath;
     this.logger.info({ plugin: pluginName }, 'Loading plugin');
     
     try {
-      // Read manifest
-      const manifestPath = path.join(pluginPath, 'plugin.json');
+      // Read manifest (use validated resolvedPath, not raw pluginPath)
+      const manifestPath = path.join(resolvedPath, 'plugin.json');
       const manifestData = await fs.readFile(manifestPath, 'utf-8');
       const manifest = validateManifest(JSON.parse(manifestData)) as PluginManifest;
       
@@ -167,7 +165,7 @@ export class PluginLoader {
       
       // Load backend if exists
       if (manifest.backend?.entry) {
-        const backendPath = path.resolve(pluginPath, manifest.backend.entry);
+        const backendPath = path.resolve(resolvedPath, manifest.backend.entry);
         const backendModule = await import(backendPath);
         loadedPlugin.backend = backendModule.default || backendModule;
         
