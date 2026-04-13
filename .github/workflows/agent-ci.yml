@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: self-hosted
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     container:
       image: rust:1.75-bullseye
 
@@ -47,7 +47,7 @@ jobs:
 
   build:
     needs: test
-    runs-on: self-hosted
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     container:
       image: rust:1.75-bullseye
 
