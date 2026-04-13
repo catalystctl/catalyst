@@ -26,6 +26,11 @@ import {
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
+// Module-level flag: persists across SPA route changes (sign-out → sign-in remounts
+// the component but the module stays loaded). Set from onSubmit to prevent the
+// delayed autoFill timer from starting a ceremony that would immediately abort.
+let passkeyAutoFillSuppressed = false;
+
 function LoginPage() {
   const navigate = useNavigate();
   const { login, verifyTwoFactor, isLoading, error, setSession } = useAuthStore();
@@ -37,6 +42,8 @@ function LoginPage() {
   const [totpSubmitting, setTotpSubmitting] = useState(false);
   const [totpError, setTotpError] = useState<string | null>(null);
   const passkeyAutoFillAttempted = useRef(false);
+  // Ref to allow onSubmit to cancel the delayed autoFill timeout
+  const passkeyAutoFillTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const {
     register,
     handleSubmit,
@@ -74,6 +81,9 @@ function LoginPage() {
   };
 
   const onSubmit = async (values: LoginSchema, fallbackOverride?: boolean | BaseSyntheticEvent) => {
+    // Cancel any pending autoFill and prevent new ones — user is signing in manually
+    clearTimeout(passkeyAutoFillTimer.current);
+    passkeyAutoFillSuppressed = true;
     const allowFallback =
       typeof fallbackOverride === 'boolean' ? fallbackOverride : allowPasskeyFallback;
     try {
@@ -132,39 +142,50 @@ function LoginPage() {
   };
 
   useEffect(() => {
-    if (passkeyAutoFillAttempted.current) return;
+    if (passkeyAutoFillAttempted.current || passkeyAutoFillSuppressed) return;
     if (
       typeof window === 'undefined' ||
       !window.PublicKeyCredential?.isConditionalMediationAvailable
     )
       return;
-    void window.PublicKeyCredential.isConditionalMediationAvailable().then((isAvailable) => {
-      if (!isAvailable) return;
-      passkeyAutoFillAttempted.current = true;
-      return authClient.signIn
-        .passkey({
-          autoFill: true,
-          fetchOptions: {
-            onError(context) {
-              if (context.error?.code === 'AUTH_CANCELLED' || context.error?.name === 'AbortError')
-                return;
-              notifyError(context.error?.message || 'Passkey sign-in failed');
+    // Delay autoFill by 1.5s so it only starts if the user is actually waiting
+    // for a passkey prompt (not actively typing credentials). onSubmit clears
+    // this timer and sets the module-level suppress flag.
+    passkeyAutoFillTimer.current = setTimeout(() => {
+      passkeyAutoFillTimer.current = undefined;
+      if (passkeyAutoFillSuppressed) return;
+      void window.PublicKeyCredential.isConditionalMediationAvailable().then((isAvailable) => {
+        if (!isAvailable || passkeyAutoFillSuppressed) return;
+        passkeyAutoFillAttempted.current = true;
+        passkeyAutoFillSuppressed = true;
+        return authClient.signIn
+          .passkey({
+            autoFill: true,
+            fetchOptions: {
+              onError(context) {
+                if (context.error?.code === 'AUTH_CANCELLED' || context.error?.name === 'AbortError')
+                  return;
+                notifyError(context.error?.message || 'Passkey sign-in failed');
+              },
+              onSuccess(context) {
+                const token = context.response?.headers?.get?.('set-auth-token') || null;
+                void applyPasskeySession(context.data, token).then(() => {
+                  setAuthStep(null);
+                  setAllowPasskeyFallback(false);
+                  setTimeout(() => navigate(from || '/servers'), 100);
+                });
+              },
             },
-            onSuccess(context) {
-              const token = context.response?.headers?.get?.('set-auth-token') || null;
-              void applyPasskeySession(context.data, token).then(() => {
-                setAuthStep(null);
-                setAllowPasskeyFallback(false);
-                setTimeout(() => navigate(from || '/servers'), 100);
-              });
-            },
-          },
-        })
-        .catch((err: any) => {
-          if (err?.code === 'AUTH_CANCELLED' || err?.name === 'AbortError') return;
-        })
-        .finally(() => setPasskeySubmitting(false));
-    });
+          })
+          .catch((err: any) => {
+            if (err?.code === 'AUTH_CANCELLED' || err?.name === 'AbortError') return;
+          })
+          .finally(() => setPasskeySubmitting(false));
+      });
+    }, 1500);
+    return () => {
+      if (passkeyAutoFillTimer.current) clearTimeout(passkeyAutoFillTimer.current);
+    };
   }, []);
 
   const handleProvider = async (providerId: 'whmcs' | 'paymenter') => {
