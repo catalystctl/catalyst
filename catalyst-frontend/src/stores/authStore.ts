@@ -55,6 +55,21 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
           isReady: true,
           error: null,
         });
+        // If the inline refresh inside authApi.login failed, the user object
+        // may lack Catalyst permissions.  Kick off a background refresh so
+        // permission-gated UI (admin routes, etc.) works without a reload.
+        if (user.permissions && user.permissions.length === 0) {
+          setTimeout(async () => {
+            try {
+              const { user: hydrated } = await authApi.refresh();
+              if (hydrated.permissions && hydrated.permissions.length > 0) {
+                (set as AuthSet)({ user: hydrated });
+              }
+            } catch {
+              // Best-effort — will retry on next navigation
+            }
+          }, 2_000);
+        }
       } catch (err: unknown) {
         const error = err as { code?: string; response?: { data?: { error?: unknown } }; message?: string };
         if (error.code === 'TWO_FACTOR_REQUIRED' || error.code === 'PASSKEY_REQUIRED') {
