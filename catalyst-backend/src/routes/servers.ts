@@ -2035,6 +2035,16 @@ export async function serverRoutes(app: FastifyInstance) {
         allocatedCpuCores !== undefined ||
         allocatedDiskMb !== undefined
       ) {
+        if (
+          (allocatedMemoryMb !== undefined && allocatedMemoryMb <= 0) ||
+          (allocatedCpuCores !== undefined && allocatedCpuCores <= 0) ||
+          (allocatedDiskMb !== undefined && allocatedDiskMb <= 0)
+        ) {
+          return reply.status(400).send({
+            error: "Resource values must be positive numbers",
+          });
+        }
+
         const node = server.node;
         const otherServers = await prisma.server.findMany({
           where: {
@@ -2275,12 +2285,12 @@ export async function serverRoutes(app: FastifyInstance) {
             description: description !== undefined ? description : server.description,
             environment: nextEnvironment,
             ...(startupCommand !== undefined ? { startupCommand: startupCommand || null } : {}),
-          allocatedMemoryMb: allocatedMemoryMb ?? server.allocatedMemoryMb,
-          allocatedCpuCores: allocatedCpuCores ?? server.allocatedCpuCores,
-          allocatedDiskMb: allocatedDiskMb ?? server.allocatedDiskMb,
-          backupAllocationMb: backupAllocationMb ?? server.backupAllocationMb ?? 0,
-          databaseAllocation: databaseAllocation ?? server.databaseAllocation ?? 0,
-          primaryPort: nextPrimaryPort,
+            allocatedMemoryMb: allocatedMemoryMb ?? server.allocatedMemoryMb,
+            allocatedCpuCores: allocatedCpuCores ?? server.allocatedCpuCores,
+            allocatedDiskMb: allocatedDiskMb ?? server.allocatedDiskMb,
+            backupAllocationMb: backupAllocationMb ?? server.backupAllocationMb ?? 0,
+            databaseAllocation: databaseAllocation ?? server.databaseAllocation ?? 0,
+            primaryPort: nextPrimaryPort,
             portBindings: effectiveBindings,
             primaryIp: nextPrimaryIp,
           },
