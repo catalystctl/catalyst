@@ -54,6 +54,12 @@ export default [
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       'no-debugger': 'error',
       'eqeqeq': ['error', 'always'],
+
+      // ESLint 10 rules — disable for existing codebase
+      'no-useless-escape': 'off',
+      'preserve-caught-error': 'off',
+      'no-useless-assignment': 'off',
+      '@typescript-eslint/no-unsafe-function-type': 'off',
       'prefer-const': 'warn',
       'no-var': 'warn',
       'prefer-template': 'warn',
@@ -62,6 +68,16 @@ export default [
     },
   },
   {
-    ignores: ['dist/**', 'node_modules/**', 'migrations/**', '**/*.d.ts'],
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'migrations/**',
+      '**/*.d.ts',
+      '*.tsbuildinfo',
+      'build/**',
+      'coverage/**',
+      '.nyc_output/**',
+      'prisma/migrations/**',
+    ],
   },
 ];

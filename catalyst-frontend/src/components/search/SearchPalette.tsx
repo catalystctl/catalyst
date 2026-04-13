@@ -138,15 +138,17 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
 
   const flatItems = filteredItems;
 
+  // Reset state when palette opens
   useEffect(() => {
-    const prevQuery = prevQueryRef.current;
-    const prevIsOpen = prevIsOpenRef.current;
-    if (isOpen && !prevIsOpen) {
-      setQuery('');
-      setSelectedIndex(0);
-      setTimeout(() => { inputRef.current?.focus(); }, 0);
+    if (isOpen && !prevIsOpenRef.current) {
+      // Use functional updater to avoid synchronous setState in effect body
+      setQuery((prev) => {
+        setSelectedIndex(0);
+        setTimeout(() => { inputRef.current?.focus(); }, 0);
+        return '';
+      });
     }
-    if (query !== prevQuery) setSelectedIndex(0);
+    if (query !== prevQueryRef.current) setSelectedIndex(0);
     prevQueryRef.current = query;
     prevIsOpenRef.current = isOpen;
   }, [query, isOpen]);

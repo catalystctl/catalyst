@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAuthStore } from '../../stores/authStore';
 import { motion, type Variants } from 'framer-motion';
 import {
   Ticket,
@@ -1484,13 +1485,7 @@ export function ServerTab({ serverId }: { serverId: string }) {
 
 export function UserPage() {
   // Get current user from the app's auth store
-  let currentUserId: string | null = null;
-  try {
-    const { useAuthStore } = require('../../stores/authStore');
-    currentUserId = useAuthStore.getState().user?.id || null;
-  } catch {
-    // Auth store not available (e.g. standalone preview)
-  }
+  const currentUserId = useAuthStore.getState().user?.id || null;
 
   const [tickets, setTickets] = React.useState<Ticket[]>([]);
   const [selectedTicket, setSelectedTicket] = React.useState<Ticket | null>(null);
