@@ -227,8 +227,10 @@ export const authApi = {
     return data;
   },
 
-  async logout(): Promise<void> {
-    await authClient.signOut();
+  async logout(options?: { signal?: AbortSignal }): Promise<void> {
+    await authClient.signOut({
+      fetchOptions: options?.signal ? { signal: options.signal } : undefined,
+    });
   },
 
   async forgotPassword(email: string): Promise<void> {
