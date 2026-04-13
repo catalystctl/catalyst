@@ -316,7 +316,8 @@ function AdminServersPage() {
 
       {isLoading ? (
         <div className="rounded-2xl border border-border bg-white shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
-          <div className="grid grid-cols-12 gap-3 border-b border-border px-5 py-3 text-xs uppercase text-muted-foreground dark:border-border dark:text-muted-foreground">
+          {/* Desktop header */}
+          <div className="hidden border-b border-border px-5 py-3 text-xs uppercase text-muted-foreground dark:border-border dark:text-muted-foreground md:grid md:grid-cols-12 md:gap-3">
             <div className="col-span-1">Select</div>
             <div className="col-span-2">Server</div>
             <div className="col-span-1">Status</div>
@@ -445,7 +446,8 @@ function AdminServersPage() {
           </div>
 
           <div className="rounded-2xl border border-border bg-white shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
-            <div className="grid grid-cols-12 gap-3 border-b border-border px-5 py-3 text-xs uppercase text-muted-foreground dark:border-border dark:text-muted-foreground">
+            {/* Desktop header */}
+            <div className="hidden border-b border-border px-5 py-3 text-xs uppercase text-muted-foreground dark:border-border dark:text-muted-foreground md:grid md:grid-cols-12 md:gap-3">
               <div className="col-span-1">Select</div>
               <div className="col-span-2">Server</div>
               <div className="col-span-1">Status</div>
@@ -468,7 +470,36 @@ function AdminServersPage() {
                     key={server.id}
                     className="grid grid-cols-12 gap-3 px-5 py-4 text-sm text-muted-foreground transition-all duration-200 hover:bg-surface-2 dark:text-zinc-300 dark:hover:bg-surface-2/50"
                   >
-                    <div className="col-span-1 flex items-center">
+                    {/* Mobile: stacked card layout */}
+                    <div className="col-span-12 flex flex-wrap items-center gap-3 md:hidden">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() =>
+                          setSelectedIds((prev) =>
+                            prev.includes(server.id)
+                              ? prev.filter((id) => id !== server.id)
+                              : [...prev, server.id],
+                          )
+                        }
+                        className="h-4 w-4 flex-shrink-0 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+                      />
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-xs ${getStatusBadgeClass(server.status)}`}
+                      >
+                        {server.status}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-semibold text-foreground dark:text-zinc-100">
+                          {server.name}
+                        </div>
+                        <div className="text-xs text-muted-foreground dark:text-muted-foreground">
+                          {server.node.name} &middot; {server.template.name}
+                        </div>
+                      </div>
+                    </div>
+                    {/* Desktop: grid layout */}
+                    <div className="col-span-1 hidden items-center md:flex">
                       <input
                         type="checkbox"
                         checked={isSelected}
@@ -482,20 +513,20 @@ function AdminServersPage() {
                         className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                       />
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-2 hidden md:block">
                       <div className="font-semibold text-foreground dark:text-zinc-100">
                         {server.name}
                       </div>
                       <div className="text-xs text-muted-foreground dark:text-muted-foreground">{server.id}</div>
                     </div>
-                    <div className="col-span-1 flex items-center">
+                    <div className="col-span-1 hidden items-center md:flex">
                       <span
                         className={`rounded-full border px-2 py-0.5 text-xs ${getStatusBadgeClass(server.status)}`}
                       >
                         {server.status}
                       </span>
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-2 hidden md:block">
                       <div className="font-medium text-foreground dark:text-zinc-100">
                         {server.node.name}
                       </div>
@@ -503,15 +534,15 @@ function AdminServersPage() {
                         {server.node.hostname}
                       </div>
                     </div>
-                    <div className="col-span-2 flex items-center">
+                    <div className="col-span-2 hidden items-center md:flex">
                       <span className="text-foreground dark:text-zinc-100">{server.template.name}</span>
                     </div>
-                    <div className="col-span-2 flex items-center">
+                    <div className="col-span-2 hidden items-center md:flex">
                       <span className="text-foreground dark:text-zinc-100">
                         {server.owner?.username || server.owner?.email || 'Unassigned'}
                       </span>
                     </div>
-                    <div className="col-span-2 flex items-center justify-end gap-1">
+                    <div className="col-span-2 hidden items-center justify-end gap-1 md:flex">
                       <Link
                         to={`/servers/${server.id}/console`}
                         className="rounded border border-zinc-600 px-2 py-0.5 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-zinc-500 hover:bg-surface-2 dark:border-zinc-400 dark:text-muted-foreground dark:hover:bg-surface-2/50"
@@ -555,6 +586,29 @@ function AdminServersPage() {
                         serverName={server.name}
                         disabled={bulkActionMutation.isPending}
                       />
+                    </div>
+                    {/* Mobile actions row */}
+                    <div className="col-span-12 flex items-center justify-end gap-1 border-t border-border pt-3 md:hidden dark:border-border/50">
+                      <Link
+                        to={`/servers/${server.id}/console`}
+                        className="rounded border border-zinc-600 px-2 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-zinc-500 hover:bg-surface-2 dark:border-zinc-400 dark:text-muted-foreground dark:hover:bg-surface-2/50"
+                      >
+                        Console
+                      </Link>
+                      <button
+                        className="rounded border border-emerald-600 px-2 py-1 text-xs font-semibold text-emerald-600 transition-all duration-300 hover:border-emerald-500 hover:bg-emerald-50 disabled:opacity-60 dark:text-emerald-300 dark:hover:bg-emerald-950/50"
+                        onClick={() => handleBulkAction('start', [server.id], server.name)}
+                        disabled={bulkActionMutation.isPending || isSuspended || isRunning || isBusy}
+                      >
+                        Start
+                      </button>
+                      <button
+                        className="rounded border border-amber-600 px-2 py-1 text-xs font-semibold text-amber-600 transition-all duration-300 hover:border-amber-500 hover:bg-amber-50 disabled:opacity-60 dark:text-amber-300 dark:hover:bg-amber-950/50"
+                        onClick={() => handleBulkAction('stop', [server.id], server.name)}
+                        disabled={bulkActionMutation.isPending || isSuspended || isStopped || isBusy}
+                      >
+                        Stop
+                      </button>
                     </div>
                   </div>
                 );
