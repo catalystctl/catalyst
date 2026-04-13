@@ -63,7 +63,10 @@ fn load_tracked_rules() {
                 .inspect(|rule| rules.push(rule.clone()))
                 .count();
             if count > 0 {
-                info!("Loaded {} tracked firewall rules from {}", count, RULE_STATE_FILE);
+                info!(
+                    "Loaded {} tracked firewall rules from {}",
+                    count, RULE_STATE_FILE
+                );
             }
         }
         Err(e) => warn!("Could not load firewall rule state: {}", e),
@@ -247,8 +250,7 @@ impl FirewallManager {
                         Self::remove_port_firewalld(rule.port, &rule.proto).await
                     }
                     FirewallType::Iptables => {
-                        Self::remove_port_iptables(rule.port, &rule.proto, &rule.container_ip)
-                            .await
+                        Self::remove_port_iptables(rule.port, &rule.proto, &rule.container_ip).await
                     }
                     FirewallType::None => Ok(()),
                 };
@@ -265,7 +267,10 @@ impl FirewallManager {
     /// Remove all tracked firewall rules on agent shutdown.
     /// This is a safety net — rules are normally removed per-server.
     pub async fn remove_all_tracked() {
-        let rules = TRACKED_RULES.lock().unwrap();
+        let rules: Vec<_> = {
+            let guard = TRACKED_RULES.lock().unwrap();
+            guard.iter().cloned().collect()
+        };
         if rules.is_empty() {
             return;
         }
@@ -276,7 +281,7 @@ impl FirewallManager {
         );
 
         let mut seen: HashSet<(u16, String, String)> = HashSet::new();
-        for rule in rules.iter() {
+        for rule in &rules {
             let key = (rule.port, rule.proto.clone(), rule.container_ip.clone());
             if seen.insert(key) {
                 let firewall_type = Self::detect_firewall();
@@ -286,8 +291,7 @@ impl FirewallManager {
                         Self::remove_port_firewalld(rule.port, &rule.proto).await
                     }
                     FirewallType::Iptables => {
-                        Self::remove_port_iptables(rule.port, &rule.proto, &rule.container_ip)
-                            .await
+                        Self::remove_port_iptables(rule.port, &rule.proto, &rule.container_ip).await
                     }
                     FirewallType::None => Ok(()),
                 };
@@ -307,9 +311,7 @@ impl FirewallManager {
                 // No FORWARD rules needed for port-based allow rules.
                 Ok(())
             }
-            FirewallType::Iptables => {
-                Self::allow_container_ip_iptables(container_ip).await
-            }
+            FirewallType::Iptables => Self::allow_container_ip_iptables(container_ip).await,
         }
     }
 
@@ -320,9 +322,7 @@ impl FirewallManager {
 
         match firewall_type {
             FirewallType::Ufw | FirewallType::Firewalld | FirewallType::None => Ok(()),
-            FirewallType::Iptables => {
-                Self::remove_container_ip_iptables(container_ip).await
-            }
+            FirewallType::Iptables => Self::remove_container_ip_iptables(container_ip).await,
         }
     }
 
@@ -337,7 +337,12 @@ impl FirewallManager {
         info!("Configuring UFW to allow port {}", port);
 
         let output = Command::new("ufw")
-            .args(["allow", &port.to_string(), "comment", "catalyst-game-server"])
+            .args([
+                "allow",
+                &port.to_string(),
+                "comment",
+                "catalyst-game-server",
+            ])
             .output()
             .map_err(|e| AgentError::FirewallError(format!("Failed to run ufw: {}", e)))?;
 
@@ -367,7 +372,10 @@ impl FirewallManager {
             .map_err(|e| AgentError::FirewallError(format!("Failed to list ufw rules: {}", e)))?;
 
         if !output.status.success() {
-            warn!("Could not list UFW rules, skipping removal for port {}", port);
+            warn!(
+                "Could not list UFW rules, skipping removal for port {}",
+                port
+            );
             return Ok(());
         }
 
@@ -378,16 +386,14 @@ impl FirewallManager {
         // We need to parse from bottom to top when deleting.
         let mut matching_numbers: Vec<String> = Vec::new();
         for line in stdout.lines() {
-            if line.contains(&format!("{}/tcp", port))
-                || line.contains(&format!("{}/udp", port))
+            if (line.contains(&format!("{}/tcp", port)) || line.contains(&format!("{}/udp", port)))
+                && line.contains("catalyst-game-server")
             {
-                if line.contains("catalyst-game-server") {
-                    // Extract the number between [ and ].
-                    if let Some(start) = line.find('[') {
-                        if let Some(end) = line[start..].find(']') {
-                            let num = line[start + 1..start + end].trim();
-                            matching_numbers.push(num.to_string());
-                        }
+                // Extract the number between [ and ].
+                if let Some(start) = line.find('[') {
+                    if let Some(end) = line[start..].find(']') {
+                        let num = line[start + 1..start + end].trim();
+                        matching_numbers.push(num.to_string());
                     }
                 }
             }
@@ -436,9 +442,7 @@ impl FirewallManager {
                 &format!("{}/{}", port, protocol),
             ])
             .output()
-            .map_err(|e| {
-                AgentError::FirewallError(format!("Failed to run firewall-cmd: {}", e))
-            })?;
+            .map_err(|e| AgentError::FirewallError(format!("Failed to run firewall-cmd: {}", e)))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -464,9 +468,7 @@ impl FirewallManager {
                 &format!("{}/{}", port, protocol),
             ])
             .output()
-            .map_err(|e| {
-                AgentError::FirewallError(format!("Failed to run firewall-cmd: {}", e))
-            })?;
+            .map_err(|e| AgentError::FirewallError(format!("Failed to run firewall-cmd: {}", e)))?;
 
         if !output.status.success() {
             warn!(
@@ -484,9 +486,7 @@ impl FirewallManager {
         let output = Command::new("firewall-cmd")
             .arg("--reload")
             .output()
-            .map_err(|e| {
-                AgentError::FirewallError(format!("Failed to reload firewalld: {}", e))
-            })?;
+            .map_err(|e| AgentError::FirewallError(format!("Failed to reload firewalld: {}", e)))?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(AgentError::FirewallError(format!(
@@ -503,11 +503,7 @@ impl FirewallManager {
 
     /// Add idempotent iptables rules using the `catalyst` comment match.
     /// `-C` checks first to avoid duplicates.
-    async fn allow_port_iptables(
-        port: u16,
-        protocol: &str,
-        container_ip: &str,
-    ) -> AgentResult<()> {
+    async fn allow_port_iptables(port: u16, protocol: &str, container_ip: &str) -> AgentResult<()> {
         info!(
             "Configuring iptables to allow port {}/{} for container {}",
             port, protocol, container_ip
@@ -515,27 +511,56 @@ impl FirewallManager {
 
         // INPUT rule — allow traffic to the host port.
         Self::iptables_ensure_rule(&[
-            "-I", "INPUT", "-p", protocol, "--dport", &port.to_string(),
-            "-m", "comment", "--comment", "catalyst-game-server",
-            "-j", "ACCEPT",
+            "-I",
+            "INPUT",
+            "-p",
+            protocol,
+            "--dport",
+            &port.to_string(),
+            "-m",
+            "comment",
+            "--comment",
+            "catalyst-game-server",
+            "-j",
+            "ACCEPT",
         ])
         .await?;
 
         // FORWARD rule — incoming to container.
         Self::iptables_ensure_rule(&[
-            "-I", "FORWARD", "-p", protocol, "--dport", &port.to_string(),
-            "-d", container_ip,
-            "-m", "comment", "--comment", "catalyst-game-server",
-            "-j", "ACCEPT",
+            "-I",
+            "FORWARD",
+            "-p",
+            protocol,
+            "--dport",
+            &port.to_string(),
+            "-d",
+            container_ip,
+            "-m",
+            "comment",
+            "--comment",
+            "catalyst-game-server",
+            "-j",
+            "ACCEPT",
         ])
         .await?;
 
         // FORWARD rule — outgoing from container.
         Self::iptables_ensure_rule(&[
-            "-I", "FORWARD", "-p", protocol, "--sport", &port.to_string(),
-            "-s", container_ip,
-            "-m", "comment", "--comment", "catalyst-game-server",
-            "-j", "ACCEPT",
+            "-I",
+            "FORWARD",
+            "-p",
+            protocol,
+            "--sport",
+            &port.to_string(),
+            "-s",
+            container_ip,
+            "-m",
+            "comment",
+            "--comment",
+            "catalyst-game-server",
+            "-j",
+            "ACCEPT",
         ])
         .await?;
 
@@ -622,14 +647,36 @@ impl FirewallManager {
     /// Allow all traffic to/from a container IP in the FORWARD chain.
     async fn allow_container_ip_iptables(container_ip: &str) -> AgentResult<()> {
         let rules: &[(&str, &[&str])] = &[
-            ("incoming", &[
-                "-I", "FORWARD", "-d", container_ip, "-j", "ACCEPT",
-                "-m", "comment", "--comment", "catalyst-container",
-            ]),
-            ("outgoing", &[
-                "-I", "FORWARD", "-s", container_ip, "-j", "ACCEPT",
-                "-m", "comment", "--comment", "catalyst-container",
-            ]),
+            (
+                "incoming",
+                &[
+                    "-I",
+                    "FORWARD",
+                    "-d",
+                    container_ip,
+                    "-j",
+                    "ACCEPT",
+                    "-m",
+                    "comment",
+                    "--comment",
+                    "catalyst-container",
+                ],
+            ),
+            (
+                "outgoing",
+                &[
+                    "-I",
+                    "FORWARD",
+                    "-s",
+                    container_ip,
+                    "-j",
+                    "ACCEPT",
+                    "-m",
+                    "comment",
+                    "--comment",
+                    "catalyst-container",
+                ],
+            ),
         ];
         for (args_desc, args) in rules {
             Self::iptables_ensure_rule(args)
@@ -667,9 +714,7 @@ impl FirewallManager {
                 let mut found_num: Option<usize> = None;
 
                 for line in stdout.lines() {
-                    if line.contains("catalyst-container")
-                        && (line.contains(container_ip))
-                    {
+                    if line.contains("catalyst-container") && (line.contains(container_ip)) {
                         if let Some(num_str) = line.split_whitespace().next() {
                             if let Ok(num) = num_str.parse::<usize>() {
                                 found_num = Some(num);
@@ -725,9 +770,7 @@ impl FirewallManager {
         let output = Command::new("iptables")
             .args(args)
             .output()
-            .map_err(|e| {
-                AgentError::FirewallError(format!("Failed to run iptables: {}", e))
-            })?;
+            .map_err(|e| AgentError::FirewallError(format!("Failed to run iptables: {}", e)))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);

@@ -1,11 +1,11 @@
+use aes_gcm::aead::Aead;
+use aes_gcm::{AeadCore, Aes256Gcm, KeyInit, Nonce};
 use base64::Engine;
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
 use regex::Regex;
 use reqwest::Url;
 use serde_json::{json, Value};
-use aes_gcm::aead::Aead;
-use aes_gcm::{AeadCore, Aes256Gcm, KeyInit, Nonce};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Component, Path, PathBuf};
@@ -21,8 +21,8 @@ use tracing::{debug, error, info, warn};
 
 use crate::config::CniNetworkConfig;
 use crate::{
-    AgentConfig, AgentError, AgentResult, ContainerdRuntime, FileManager, NetworkManager,
-    StorageManager, FirewallManager, runtime_manager::rotate_logs,
+    runtime_manager::rotate_logs, AgentConfig, AgentError, AgentResult, ContainerdRuntime,
+    FileManager, FirewallManager, NetworkManager, StorageManager,
 };
 
 type WsStream =
@@ -54,9 +54,8 @@ pub fn requires_bash(command: &str) -> bool {
     }
     // Array syntax: var=( ... ) or ${arr[@]}
     static ARRAY_RE: OnceLock<Regex> = OnceLock::new();
-    let re = ARRAY_RE.get_or_init(|| {
-        Regex::new(r"\w+=\(|\$\{\w+\[@]\}").expect("valid array regex")
-    });
+    let re =
+        ARRAY_RE.get_or_init(|| Regex::new(r"\w+=\(|\$\{\w+\[@]\}").expect("valid array regex"));
     if re.is_match(command) {
         return true;
     }
@@ -228,8 +227,8 @@ fn encrypt_backup(data: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
     if key.len() != 32 {
         return Err("Encryption key must be 32 bytes for AES-256".to_string());
     }
-    let cipher = Aes256Gcm::new_from_slice(key)
-        .map_err(|e| format!("Failed to create cipher: {}", e))?;
+    let cipher =
+        Aes256Gcm::new_from_slice(key).map_err(|e| format!("Failed to create cipher: {}", e))?;
     let nonce = Aes256Gcm::generate_nonce(&mut rand_08::thread_rng()); // 96-bit
     let ciphertext = cipher
         .encrypt(&nonce, data)
@@ -254,8 +253,8 @@ fn decrypt_backup(data: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
     }
     let nonce = Nonce::from_slice(&payload[..12]);
     let ciphertext = &payload[12..];
-    let cipher = Aes256Gcm::new_from_slice(key)
-        .map_err(|e| format!("Failed to create cipher: {}", e))?;
+    let cipher =
+        Aes256Gcm::new_from_slice(key).map_err(|e| format!("Failed to create cipher: {}", e))?;
     cipher
         .decrypt(nonce, ciphertext)
         .map_err(|e| format!("Decryption failed: {}", e))
@@ -669,9 +668,7 @@ impl WebSocketHandler {
                 self.start_server_with_details(&msg).await?;
             }
             Some("delete_server") => {
-                let server_uuid = msg["serverUuid"]
-                    .as_str()
-                    .unwrap_or("");
+                let server_uuid = msg["serverUuid"].as_str().unwrap_or("");
                 let server_id = msg["serverId"].as_str().unwrap_or(server_uuid);
                 self.delete_server(server_id, server_uuid).await?;
             }
@@ -1276,19 +1273,15 @@ impl WebSocketHandler {
                     Ok(a) => a,
                     Err(_) => continue,
                 };
-                let healthy =
-                    tokio::task::spawn_blocking(move || {
-                        std::net::TcpStream::connect_timeout(
-                            &parsed,
-                            Duration::from_secs(3),
-                        )
-                    })
-                    .await
-                    .unwrap_or(Err(std::io::Error::new(
-                        std::io::ErrorKind::TimedOut,
-                        "health check timed out",
-                    )))
-                    .is_ok();
+                let healthy = tokio::task::spawn_blocking(move || {
+                    std::net::TcpStream::connect_timeout(&parsed, Duration::from_secs(3))
+                })
+                .await
+                .unwrap_or(Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "health check timed out",
+                )))
+                .is_ok();
 
                 // Only emit when state actually changes to avoid noise
                 let mut health_states = self.server_health_state.write().await;
@@ -1520,9 +1513,14 @@ impl WebSocketHandler {
         // the user to accept/decline via the frontend modal.
         let eula_file = std::path::PathBuf::from(&host_server_dir).join("eula.txt");
         if eula_file.exists() {
-            let eula_content = tokio::fs::read_to_string(&eula_file).await.unwrap_or_default();
+            let eula_content = tokio::fs::read_to_string(&eula_file)
+                .await
+                .unwrap_or_default();
             if !eula_content.to_lowercase().contains("eula=true") {
-                info!("EULA not accepted for server {}, pausing install", server_uuid);
+                info!(
+                    "EULA not accepted for server {}, pausing install",
+                    server_uuid
+                );
                 self.emit_console_output(
                     server_id,
                     "system",
@@ -1562,19 +1560,18 @@ impl WebSocketHandler {
 
         // Stop server if running
         let container_id = self.resolve_container_id(server_id, server_uuid).await;
-        if !container_id.is_empty() {
-            if self
+        if !container_id.is_empty()
+            && self
                 .runtime
                 .is_container_running(&container_id)
                 .await
                 .unwrap_or(false)
-            {
-                let stop_policy = StopPolicy::default();
-                let _ = self
-                    .stop_server(server_id, container_id.clone(), &stop_policy)
-                    .await;
-                tokio::time::sleep(Duration::from_secs(2)).await;
-            }
+        {
+            let stop_policy = StopPolicy::default();
+            let _ = self
+                .stop_server(server_id, container_id.clone(), &stop_policy)
+                .await;
+            tokio::time::sleep(Duration::from_secs(2)).await;
         }
 
         // Cleanup all containers
@@ -1585,9 +1582,9 @@ impl WebSocketHandler {
         validate_safe_path_segment(server_uuid, "serverUuid")?;
         let server_dir = self.config.server.data_dir.join(server_uuid);
         if server_dir.exists() {
-            let mut entries = tokio::fs::read_dir(&server_dir)
-                .await
-                .map_err(|e| AgentError::IoError(format!("Failed to read server directory: {}", e)))?;
+            let mut entries = tokio::fs::read_dir(&server_dir).await.map_err(|e| {
+                AgentError::IoError(format!("Failed to read server directory: {}", e))
+            })?;
             while let Some(entry) = entries.next_entry().await.map_err(|e| {
                 AgentError::IoError(format!("Failed to read directory entry: {}", e))
             })? {
@@ -1611,24 +1608,27 @@ impl WebSocketHandler {
             .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
 
         info!("Rebuilding server: {} (UUID: {})", server_id, server_uuid);
-        self.emit_console_output(server_id, "system", "[Catalyst] Rebuilding server container...\n")
-            .await?;
+        self.emit_console_output(
+            server_id,
+            "system",
+            "[Catalyst] Rebuilding server container...\n",
+        )
+        .await?;
 
         // Stop server if running
         let container_id = self.resolve_container_id(server_id, server_uuid).await;
-        if !container_id.is_empty() {
-            if self
+        if !container_id.is_empty()
+            && self
                 .runtime
                 .is_container_running(&container_id)
                 .await
                 .unwrap_or(false)
-            {
-                let stop_policy = StopPolicy::default();
-                let _ = self
-                    .stop_server(server_id, container_id.clone(), &stop_policy)
-                    .await;
-                tokio::time::sleep(Duration::from_secs(2)).await;
-            }
+        {
+            let stop_policy = StopPolicy::default();
+            let _ = self
+                .stop_server(server_id, container_id.clone(), &stop_policy)
+                .await;
+            tokio::time::sleep(Duration::from_secs(2)).await;
         }
 
         // Cleanup containers only (NOT data)
@@ -2290,12 +2290,18 @@ impl WebSocketHandler {
                     .unwrap_or(false)
                 {
                     if let Err(e) = self.runtime.stop_container(container_name, 5).await {
-                        warn!("Failed to stop container {} during delete: {}", container_name, e);
+                        warn!(
+                            "Failed to stop container {} during delete: {}",
+                            container_name, e
+                        );
                         let _ = self.runtime.kill_container(container_name, "SIGKILL").await;
                     }
                 }
                 if let Err(e) = self.runtime.remove_container(container_name).await {
-                    warn!("Failed to remove container {} during delete: {}", container_name, e);
+                    warn!(
+                        "Failed to remove container {} during delete: {}",
+                        container_name, e
+                    );
                 }
             }
         }
@@ -2313,7 +2319,11 @@ impl WebSocketHandler {
                 let server_dir = std::path::Path::new(&data_dir).join(id);
                 if server_dir.exists() {
                     if let Err(e) = tokio::fs::remove_dir_all(&server_dir).await {
-                        warn!("Failed to remove server data dir {}: {}", server_dir.display(), e);
+                        warn!(
+                            "Failed to remove server data dir {}: {}",
+                            server_dir.display(),
+                            e
+                        );
                     } else {
                         info!("Removed server data directory: {}", server_dir.display());
                     }
@@ -2570,13 +2580,20 @@ impl WebSocketHandler {
             }
             hasher.update(&buffer[..read]);
         }
-        let checksum = hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect::<String>();
+        let checksum = hasher
+            .finalize()
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>();
 
         // Optionally encrypt the backup if an encryption key is provided
-        let encrypted = if let Some(enc_key_b64) = msg.get("encryptionKey").and_then(|v| v.as_str()) {
+        let encrypted = if let Some(enc_key_b64) = msg.get("encryptionKey").and_then(|v| v.as_str())
+        {
             let key = base64::engine::general_purpose::STANDARD
                 .decode(enc_key_b64)
-                .map_err(|e| AgentError::InvalidRequest(format!("Invalid encryption key: {}", e)))?;
+                .map_err(|e| {
+                    AgentError::InvalidRequest(format!("Invalid encryption key: {}", e))
+                })?;
             let raw = tokio::fs::read(&backup_path).await?;
             match encrypt_backup(&raw, &key) {
                 Ok(encrypted_data) => {
@@ -2671,7 +2688,9 @@ impl WebSocketHandler {
         if let Some(enc_key_b64) = msg.get("encryptionKey").and_then(|v| v.as_str()) {
             let key = base64::engine::general_purpose::STANDARD
                 .decode(enc_key_b64)
-                .map_err(|e| AgentError::InvalidRequest(format!("Invalid encryption key: {}", e)))?;
+                .map_err(|e| {
+                    AgentError::InvalidRequest(format!("Invalid encryption key: {}", e))
+                })?;
             let raw = tokio::fs::read(&backup_file).await?;
             let decrypted = decrypt_backup(&raw, &key).map_err(|e| {
                 AgentError::InvalidRequest(format!("Backup decryption failed: {}", e))
@@ -2719,8 +2738,9 @@ impl WebSocketHandler {
         // Security: validate that no symlinks in the restored archive escape the
         // server directory.  This prevents a malicious backup from planting symlinks
         // that point to host paths like /etc/shadow or /var/lib/catalyst.
-        let canonical_base = std::fs::canonicalize(&server_dir)
-            .map_err(|e| AgentError::FileSystemError(format!("Cannot resolve server dir: {}", e)))?;
+        let canonical_base = std::fs::canonicalize(&server_dir).map_err(|e| {
+            AgentError::FileSystemError(format!("Cannot resolve server dir: {}", e))
+        })?;
         let mut dangerous_symlinks = Vec::new();
         self.check_restore_symlinks(&server_dir, &canonical_base, &mut dangerous_symlinks)
             .await?;
@@ -2757,9 +2777,9 @@ impl WebSocketHandler {
         canonical_base: &std::path::Path,
         dangerous: &mut Vec<String>,
     ) -> AgentResult<()> {
-        let mut entries = tokio::fs::read_dir(dir).await.map_err(|e| {
-            AgentError::FileSystemError(format!("Cannot read dir: {}", e))
-        })?;
+        let mut entries = tokio::fs::read_dir(dir)
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("Cannot read dir: {}", e)))?;
         while let Some(entry) = entries
             .next_entry()
             .await
@@ -2767,39 +2787,28 @@ impl WebSocketHandler {
         {
             let path = entry.path();
             match entry.file_type().await {
-                Ok(ft) if ft.is_symlink() => {
-                    match std::fs::read_link(&path) {
-                        Ok(target) => {
-                            let parent = path.parent().unwrap_or(dir);
-                            let resolved = parent.join(&target);
-                            if let Ok(canon) = resolved.canonicalize() {
-                                if !canon.starts_with(canonical_base) {
-                                    dangerous.push(format!(
-                                        "{} -> {}",
-                                        path.display(),
-                                        target.display()
-                                    ));
-                                }
-                            } else if resolved.is_absolute() {
-                                if !resolved.starts_with(canonical_base) {
-                                    dangerous.push(format!(
-                                        "{} -> {}",
-                                        path.display(),
-                                        target.display()
-                                    ));
-                                }
+                Ok(ft) if ft.is_symlink() => match std::fs::read_link(&path) {
+                    Ok(target) => {
+                        let parent = path.parent().unwrap_or(dir);
+                        let resolved = parent.join(&target);
+                        if let Ok(canon) = resolved.canonicalize() {
+                            if !canon.starts_with(canonical_base) {
+                                dangerous.push(format!(
+                                    "{} -> {}",
+                                    path.display(),
+                                    target.display()
+                                ));
                             }
-                        }
-                        Err(e) => {
-                            debug!("Cannot read symlink {:?}: {}", path, e);
+                        } else if resolved.is_absolute() && !resolved.starts_with(canonical_base) {
+                            dangerous.push(format!("{} -> {}", path.display(), target.display()));
                         }
                     }
-                }
+                    Err(e) => {
+                        debug!("Cannot read symlink {:?}: {}", path, e);
+                    }
+                },
                 Ok(ft) if ft.is_dir() => {
-                    Box::pin(self.check_restore_symlinks(
-                        &path, canonical_base, dangerous,
-                    ))
-                    .await?;
+                    Box::pin(self.check_restore_symlinks(&path, canonical_base, dangerous)).await?;
                 }
                 _ => {}
             }
@@ -3212,7 +3221,11 @@ impl WebSocketHandler {
     }
 
     fn backup_base_dir(&self, server_uuid: &str) -> PathBuf {
-        self.config.server.data_dir.join("backups").join(server_uuid)
+        self.config
+            .server
+            .data_dir
+            .join("backups")
+            .join(server_uuid)
     }
 
     async fn resolve_backup_path(
@@ -3566,19 +3579,20 @@ impl WebSocketHandler {
             .as_str()
             .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
 
-        let server_id = msg["serverId"]
-            .as_str()
-            .unwrap_or(server_uuid);
+        let server_id = msg["serverId"].as_str().unwrap_or(server_uuid);
 
         validate_safe_path_segment(server_uuid, "serverUuid")?;
         let server_dir = self.config.server.data_dir.join(server_uuid);
         let eula_file = server_dir.join("eula.txt");
 
         if accepted {
-            tokio::fs::write(&eula_file, "eula=true
-")
-                .await
-                .map_err(|e| AgentError::IoError(format!("Failed to write eula.txt: {}", e)))?;
+            tokio::fs::write(
+                &eula_file,
+                "eula=true
+",
+            )
+            .await
+            .map_err(|e| AgentError::IoError(format!("Failed to write eula.txt: {}", e)))?;
 
             info!("EULA accepted for server {}", server_uuid);
             self.emit_console_output(

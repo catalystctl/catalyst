@@ -110,7 +110,11 @@ async fn get_container_pids(cgroup_path: &str) -> Option<Vec<u32>> {
         .lines()
         .filter_map(|l| l.trim().parse().ok())
         .collect();
-    if pids.is_empty() { None } else { Some(pids) }
+    if pids.is_empty() {
+        None
+    } else {
+        Some(pids)
+    }
 }
 
 /// Read network I/O stats for a container via /proc/{pid}/net/dev
@@ -187,7 +191,9 @@ pub async fn rotate_logs(container_id: &str) {
                 let _ = tokio::fs::File::create(&log_path).await;
                 info!(
                     "Rotated log for container {}: {} (was {} bytes)",
-                    container_id, log_name, metadata.len()
+                    container_id,
+                    log_name,
+                    metadata.len()
                 );
             }
         }
@@ -233,8 +239,12 @@ impl DeviceProfile {
     pub fn gpu() -> Self {
         let mut standard = Self::standard();
         // Add NVIDIA GPU devices (typically /dev/nvidia*)
-        standard.devices.push(serde_json::json!({"allow": true, "type": "c", "major": 195, "access": "rwm"}));
-        standard.devices.push(serde_json::json!({"allow": true, "type": "c", "major": 506, "access": "rwm"}));
+        standard
+            .devices
+            .push(serde_json::json!({"allow": true, "type": "c", "major": 195, "access": "rwm"}));
+        standard
+            .devices
+            .push(serde_json::json!({"allow": true, "type": "c", "major": 506, "access": "rwm"}));
         standard
     }
 
@@ -633,7 +643,9 @@ impl ContainerdRuntime {
                     config.port_bindings.values().copied().collect()
                 };
                 for p in ports {
-                    if let Err(e) = FirewallManager::allow_port(p, "tcp", &ip, config.server_id).await {
+                    if let Err(e) =
+                        FirewallManager::allow_port(p, "tcp", &ip, config.server_id).await
+                    {
                         error!("Firewall config failed for port {}: {}", p, e);
                     }
                 }
@@ -1405,12 +1417,16 @@ impl ContainerdRuntime {
             format!("{}MiB / 0MiB", mem / (1024 * 1024))
         };
         let net_io = if !cg.is_empty() {
-            read_network_io(&cg).await.unwrap_or_else(|| "0B / 0B".to_string())
+            read_network_io(&cg)
+                .await
+                .unwrap_or_else(|| "0B / 0B".to_string())
         } else {
             "0B / 0B".to_string()
         };
         let block_io = if !cg.is_empty() {
-            read_block_io(&cg).await.unwrap_or_else(|| "0B / 0B".to_string())
+            read_block_io(&cg)
+                .await
+                .unwrap_or_else(|| "0B / 0B".to_string())
         } else {
             "0B / 0B".to_string()
         };
@@ -2175,7 +2191,14 @@ impl ContainerdRuntime {
         // Check if rules already exist to avoid duplicates
         let check_output = Command::new("iptables")
             .args([
-                "-C", "FORWARD", "-i", "catalyst0", "-o", iface, "-j", "ACCEPT",
+                "-C",
+                "FORWARD",
+                "-i",
+                "catalyst0",
+                "-o",
+                iface,
+                "-j",
+                "ACCEPT",
             ])
             .output()
             .await;
@@ -2185,8 +2208,15 @@ impl ContainerdRuntime {
                 // Rule doesn't exist, add it
                 let result = Command::new("iptables")
                     .args([
-                        "-I", "FORWARD", "1",
-                        "-i", "catalyst0", "-o", iface, "-j", "ACCEPT",
+                        "-I",
+                        "FORWARD",
+                        "1",
+                        "-i",
+                        "catalyst0",
+                        "-o",
+                        iface,
+                        "-j",
+                        "ACCEPT",
                     ])
                     .output()
                     .await;
@@ -2203,14 +2233,24 @@ impl ContainerdRuntime {
 
                 let result = Command::new("iptables")
                     .args([
-                        "-I", "FORWARD", "2",
-                        "-i", iface, "-o", "catalyst0", "-j", "ACCEPT",
+                        "-I",
+                        "FORWARD",
+                        "2",
+                        "-i",
+                        iface,
+                        "-o",
+                        "catalyst0",
+                        "-j",
+                        "ACCEPT",
                     ])
                     .output()
                     .await;
                 match result {
                     Ok(o) if o.status.success() => {
-                        info!("Added FORWARD rule: {} -> catalyst0 (allow new connections)", iface)
+                        info!(
+                            "Added FORWARD rule: {} -> catalyst0 (allow new connections)",
+                            iface
+                        )
                     }
                     Ok(o) => warn!(
                         "Failed to add FORWARD rule: {}",
@@ -2553,7 +2593,8 @@ impl ContainerdRuntime {
                 .as_str()
                 .unwrap_or("/var/lib/cni/networks");
             let ipam_dir = PathBuf::from(ipam_data_dir).join("catalyst");
-            let result_json = fs::read_to_string(&rp).ok()
+            let result_json = fs::read_to_string(&rp)
+                .ok()
                 .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
             if let Some(ref result) = result_json {
                 if let Some(ips) = result.get("ips").and_then(|v| v.as_array()) {
@@ -2612,7 +2653,10 @@ impl ContainerdRuntime {
                         container_id
                     );
                     if let Err(e) = self.teardown_cni_network(container_id).await {
-                        warn!("CNI teardown failed for stale container {}: {}", container_id, e);
+                        warn!(
+                            "CNI teardown failed for stale container {}: {}",
+                            container_id, e
+                        );
                     }
                     let cfg_path = format!("/var/lib/cni/results/catalyst-{}-config", container_id);
                     let _ = fs::remove_file(result_path);
@@ -2993,11 +3037,7 @@ async fn read_cgroup_cpu_usage(path: &str) -> Option<u64> {
         .ok()?;
     for line in content.lines() {
         if line.starts_with("usage_usec") {
-            return line
-                .split_whitespace()
-                .nth(1)?
-                .parse::<u64>()
-                .ok();
+            return line.split_whitespace().nth(1)?.parse::<u64>().ok();
         }
     }
     Some(0)

@@ -53,9 +53,7 @@ fn ensure_sudo_password() -> Result<(), AgentError> {
         })?;
 
     // First, probe whether the user has passwordless sudo.
-    let probe = Command::new("sudo")
-        .args(["-n", "true"])
-        .status();
+    let probe = Command::new("sudo").args(["-n", "true"]).status();
     if let Ok(status) = probe {
         if status.success() {
             // Passwordless sudo works – cache an empty marker.
@@ -76,7 +74,10 @@ fn ensure_sudo_password() -> Result<(), AgentError> {
         ));
     }
     // Trim trailing newline/CR but keep everything else.
-    let password = password.trim_end_matches('\n').trim_end_matches('\r').to_string();
+    let password = password
+        .trim_end_matches('\n')
+        .trim_end_matches('\r')
+        .to_string();
 
     // Verify the password actually works.
     let mut verify = Command::new("sudo")
@@ -85,9 +86,7 @@ fn ensure_sudo_password() -> Result<(), AgentError> {
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
-        .map_err(|e| {
-            AgentError::PermissionDenied(format!("Failed to invoke sudo: {}", e))
-        })?;
+        .map_err(|e| AgentError::PermissionDenied(format!("Failed to invoke sudo: {}", e)))?;
     if let Some(mut stdin) = verify.stdin.take() {
         let _ = writeln!(stdin, "{}", password);
     }
@@ -295,7 +294,10 @@ impl SystemSetup {
         // Ensure the socket is group-accessible.
         // containerd defaults to root:root 0600 which blocks non-root users.
         if let Err(e) = Self::configure_containerd_socket_access(has_systemctl) {
-            warn!("Containerd socket access configuration failed (will try chmod fallback): {}", e);
+            warn!(
+                "Containerd socket access configuration failed (will try chmod fallback): {}",
+                e
+            );
         }
 
         if has_systemctl {
@@ -320,21 +322,16 @@ impl SystemSetup {
         // Verify the current user can actually connect.
         if !is_root() {
             use std::os::unix::fs::{MetadataExt, PermissionsExt};
-            let meta = fs::metadata("/run/containerd/containerd.sock")
-                .map_err(|e| AgentError::InternalError(format!(
-                    "Cannot stat containerd socket: {}", e
-                )))?;
+            let meta = fs::metadata("/run/containerd/containerd.sock").map_err(|e| {
+                AgentError::InternalError(format!("Cannot stat containerd socket: {}", e))
+            })?;
             let mode = meta.permissions().mode();
             let uid = meta.uid();
             if uid == 0 && (mode & 0o006) == 0 {
                 // Socket is owned by root with no other permissions.
                 // Fall back to chmod 0660 as a last resort.
                 warn!("containerd socket has restrictive permissions, adjusting...");
-                Self::run_command(
-                    "chmod",
-                    &["666", "/run/containerd/containerd.sock"],
-                    None,
-                )?;
+                Self::run_command("chmod", &["666", "/run/containerd/containerd.sock"], None)?;
             }
         }
 
@@ -368,14 +365,11 @@ impl SystemSetup {
             // getent may not exist on Alpine (busybox); double-check by
             // reading /etc/group directly.
             let group_exists = fs::read_to_string("/etc/group")
-                .map(|contents| {
-                    contents.lines().any(|line| line.starts_with("containerd:"))
-                })
+                .map(|contents| contents.lines().any(|line| line.starts_with("containerd:")))
                 .unwrap_or(false);
             if !group_exists {
-                let created = Self::run_command_allow_failure(
-                    "groupadd", &["--system", "containerd"],
-                );
+                let created =
+                    Self::run_command_allow_failure("groupadd", &["--system", "containerd"]);
                 if !created {
                     // Retry without --system (Alpine busybox compat).
                     let created_plain =
@@ -404,15 +398,16 @@ impl SystemSetup {
             if !exists {
                 // Create the directory via sudo (needs elevated privileges).
                 if let Err(e) = Self::run_command("mkdir", &["-p", override_dir], None) {
-                    warn!("Could not create containerd override dir (non-fatal): {}", e);
+                    warn!(
+                        "Could not create containerd override dir (non-fatal): {}",
+                        e
+                    );
                     return Ok(());
                 }
 
-                let content = format!(
-                    "[Service]\n\
+                let content = "[Service]\n\
                     ExecStartPre=-/bin/chown root:containerd /run/containerd\n\
-                    ExecStartPost=-/bin/chmod 660 /run/containerd/containerd.sock\n"
-                );
+                    ExecStartPost=-/bin/chmod 660 /run/containerd/containerd.sock\n";
 
                 // Write to a user-writable temp location, then sudo-copy to
                 // the protected systemd directory.
@@ -420,7 +415,10 @@ impl SystemSetup {
                 if let Err(e) = fs::write(tmp, content).map_err(|e| {
                     AgentError::IoError(format!("Failed to write containerd override: {}", e))
                 }) {
-                    warn!("Could not write containerd override temp file (non-fatal): {}", e);
+                    warn!(
+                        "Could not write containerd override temp file (non-fatal): {}",
+                        e
+                    );
                     return Ok(());
                 }
 
@@ -616,7 +614,11 @@ impl SystemSetup {
             }
             hasher.update(&buffer[..read]);
         }
-        Ok(hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect::<String>())
+        Ok(hasher
+            .finalize()
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>())
     }
 
     fn extract_sha256_hex(text: &str) -> Option<String> {
@@ -667,10 +669,9 @@ impl SystemSetup {
                 pkg_manager,
                 &["install", "-y", "containernetworking-plugins"],
             ),
-            "pacman" => Self::run_command_allow_failure(
-                "pacman",
-                &["-S", "--noconfirm", "cni-plugins"],
-            ),
+            "pacman" => {
+                Self::run_command_allow_failure("pacman", &["-S", "--noconfirm", "cni-plugins"])
+            }
             "zypper" => Self::run_command_allow_failure(
                 "zypper",
                 &["--non-interactive", "install", "cni-plugins"],
@@ -762,11 +763,7 @@ impl SystemSetup {
         //   /opt/cni/bin           — upstream tarball / Debian packages
         //   /usr/libexec/cni       — Fedora / RHEL packages
         //   /usr/lib/cni           — Arch / Alpine / openSUSE packages
-        const CNI_BIN_DIRS: [&str; 3] = [
-            "/opt/cni/bin",
-            "/usr/libexec/cni",
-            "/usr/lib/cni",
-        ];
+        const CNI_BIN_DIRS: [&str; 3] = ["/opt/cni/bin", "/usr/libexec/cni", "/usr/lib/cni"];
 
         for dir in CNI_BIN_DIRS {
             let has_all = REQUIRED
