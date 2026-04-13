@@ -14,6 +14,8 @@ interface AuthState {
   isReady: boolean;
   isRefreshing: boolean;
   error: string | null;
+  /** @internal AbortController for an in-flight server sign-out request */
+  _pendingLogoutController?: AbortController;
   login: (values: LoginSchema, options?: { forcePasskeyFallback?: boolean }) => Promise<void>;
   register: (values: RegisterSchema) => Promise<void>;
   refresh: () => Promise<void>;
@@ -42,6 +44,14 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
     isRefreshing: false,
     error: null,
     login: async (values, options) => {
+      // Abort any in-flight server sign-out from a previous logout — otherwise
+      // it can destroy the new session cookie we're about to create.
+      (get as AuthGet)()._pendingLogoutController?.abort();
+      // Suppress the 401 interceptor while login is in flight so that a stale
+      // sign-out (or any transient 401) doesn't wipe isAuthenticated before
+      // we've finished setting it.
+      const { loginGuard } = await import('../services/api/client');
+      loginGuard.active = true;
       (set as AuthSet)({ isLoading: true, error: null });
       try {
         const { user } = await authApi.login(values, options);
@@ -58,6 +68,9 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         // If the inline refresh inside authApi.login failed, the user object
         // may lack Catalyst permissions.  Kick off a background refresh so
         // permission-gated UI (admin routes, etc.) works without a reload.
+        // Keep the login-in-progress flag true during this window so transient
+        // 401s from a stale sign-out don't bounce the user.
+        const clearFlag = () => { loginGuard.active = false; };
         if (user.permissions && user.permissions.length === 0) {
           setTimeout(async () => {
             try {
@@ -67,8 +80,14 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
               }
             } catch {
               // Best-effort — will retry on next navigation
+            } finally {
+              clearFlag();
             }
           }, 2_000);
+        } else {
+          // No delayed refresh needed — clear after a short grace period for
+          // any in-flight page-level API calls that might 401 transiently.
+          setTimeout(clearFlag, 3_000);
         }
       } catch (err: unknown) {
         const error = err as { code?: string; response?: { data?: { error?: unknown } }; message?: string };
@@ -79,6 +98,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         const rawError = error.response?.data?.error;
         const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || error.message || 'Login failed';
         (set as AuthSet)({ isLoading: false, error: message as string });
+        loginGuard.active = false;
         throw err;
       }
     },
@@ -145,9 +165,12 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
       localStorage.removeItem('catalyst-remember-me');
       localStorage.removeItem('catalyst-auth');
       (set as AuthSet)({ user: null, token: null, isAuthenticated: false, isReady: true, rememberMe: false });
-      void authApi.logout().catch(() => {
-        // Ignore network errors after local logout
-      });
+      // Fire-and-forget server sign-out, but abort it if the user logs back in
+      // before it completes — otherwise the delayed sign-out response destroys
+      // the brand-new session cookie, causing an immediate redirect to /login.
+      const controller = new AbortController();
+      void authApi.logout({ signal: controller.signal }).catch(() => {});
+      (get as AuthGet)()._pendingLogoutController = controller;
     },
     setUser: (user) => (set as AuthSet)({ user, isAuthenticated: Boolean(user) }),
     setSession: ({ user }) => {
