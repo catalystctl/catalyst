@@ -28,9 +28,9 @@ class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 text-center text-slate-900 transition-all duration-300 dark:bg-slate-950 dark:text-slate-100">
+        <div className="flex min-h-screen flex-col items-center justify-center bg-surface-2 px-4 text-center text-foreground transition-all duration-300 dark:bg-zinc-950 dark:text-zinc-100">
           <h1 className="text-2xl font-semibold">Something went wrong</h1>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+          <p className="mt-2 text-sm text-muted-foreground dark:text-muted-foreground">
             {this.state.message ?? 'Unexpected error encountered.'}
           </p>
           <button

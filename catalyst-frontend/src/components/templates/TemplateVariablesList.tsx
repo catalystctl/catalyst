@@ -6,7 +6,7 @@ type Props = {
 
 function TemplateVariablesList({ variables }: Props) {
   if (!variables.length) {
-    return <div className="text-sm text-slate-500 dark:text-slate-400">No variables defined.</div>;
+    return <div className="text-sm text-muted-foreground dark:text-muted-foreground">No variables defined.</div>;
   }
 
   return (
@@ -14,30 +14,30 @@ function TemplateVariablesList({ variables }: Props) {
       {variables.map((variable) => (
         <div
           key={variable.name}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30"
+          className="rounded-lg border border-border bg-white px-3 py-2 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
         >
           <div className="flex items-center justify-between gap-2">
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
               {variable.name}
               {variable.required ? <span className="ml-1 text-xs text-rose-400">*</span> : null}
             </div>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-muted-foreground dark:bg-surface-2 dark:text-zinc-300">
               {variable.input ?? 'text'}
             </span>
           </div>
           {variable.description ? (
-            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
               {variable.description}
             </div>
           ) : null}
-          <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+          <div className="mt-2 text-xs text-muted-foreground dark:text-muted-foreground">
             Default:{' '}
-            <span className="text-slate-700 dark:text-slate-300">{variable.default || '—'}</span>
+            <span className="text-foreground dark:text-zinc-300">{variable.default || '—'}</span>
           </div>
           {variable.rules?.length ? (
-            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
               Rules:{' '}
-              <span className="text-slate-700 dark:text-slate-300">{variable.rules.join(', ')}</span>
+              <span className="text-foreground dark:text-zinc-300">{variable.rules.join(', ')}</span>
             </div>
           ) : null}
         </div>

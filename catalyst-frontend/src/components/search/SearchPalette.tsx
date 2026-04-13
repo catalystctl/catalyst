@@ -81,7 +81,6 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
 
   const userPermissions = user?.permissions || [];
 
-  // Filter admin items based on permissions
   const visibleAdminNavItems = useMemo(() => {
     return adminNavigationItems.filter((item) => {
       if (!item.permissions) return true;
@@ -89,21 +88,10 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
     });
   }, [userPermissions]);
 
-  // Build all searchable items
   const allItems = useMemo((): SearchItem[] => {
     const items: SearchItem[] = [];
-
-    // Navigation items
-    navigationItems.forEach((item) => {
-      items.push({ ...item, category: 'Navigation' });
-    });
-
-    // Admin navigation items
-    visibleAdminNavItems.forEach((item) => {
-      items.push({ ...item, category: 'Admin' });
-    });
-
-    // Servers
+    navigationItems.forEach((item) => items.push({ ...item, category: 'Navigation' }));
+    visibleAdminNavItems.forEach((item) => items.push({ ...item, category: 'Admin' }));
     if (servers) {
       servers.forEach((server) => {
         items.push({
@@ -117,8 +105,6 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
         });
       });
     }
-
-    // Quick actions
     items.push({
       id: 'action-create-server',
       label: 'Create New Server',
@@ -127,14 +113,11 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
       category: 'Actions',
       description: 'Create a new game server',
     });
-
     return items;
   }, [servers, visibleAdminNavItems, onCreateServer]);
 
-  // Filter items by query
   const filteredItems = useMemo(() => {
     if (!query.trim()) return allItems;
-
     const lowerQuery = query.toLowerCase();
     return allItems.filter((item) => {
       const labelMatch = item.label.toLowerCase().includes(lowerQuery);
@@ -144,57 +127,37 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
     });
   }, [allItems, query]);
 
-  // Group items by category
   const groupedItems = useMemo(() => {
     const groups: Record<string, SearchItem[]> = {};
     filteredItems.forEach((item) => {
-      if (!groups[item.category]) {
-        groups[item.category] = [];
-      }
+      if (!groups[item.category]) groups[item.category] = [];
       groups[item.category].push(item);
     });
     return groups;
   }, [filteredItems]);
 
-  // Flat list for keyboard navigation
   const flatItems = filteredItems;
 
-  // Handle query changes and isOpen changes using refs
-  // This is a valid pattern for resetting modal state when it opens
   useEffect(() => {
     const prevQuery = prevQueryRef.current;
     const prevIsOpen = prevIsOpenRef.current;
-
-    // Reset when modal opens - this is intentional state reset for modal open
     if (isOpen && !prevIsOpen) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery('');
       setSelectedIndex(0);
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 0);
+      setTimeout(() => { inputRef.current?.focus(); }, 0);
     }
-
-    // Reset selection when query changes - intentional UI sync
-    if (query !== prevQuery) {
-      setSelectedIndex(0);
-    }
-
+    if (query !== prevQuery) setSelectedIndex(0);
     prevQueryRef.current = query;
     prevIsOpenRef.current = isOpen;
   }, [query, isOpen]);
 
-  // Scroll selected item into view
   useEffect(() => {
     if (listRef.current && flatItems.length > 0) {
       const selectedElement = listRef.current.querySelector(`[data-index="${selectedIndex}"]`);
-      if (selectedElement) {
-        selectedElement.scrollIntoView({ block: 'nearest' });
-      }
+      if (selectedElement) selectedElement.scrollIntoView({ block: 'nearest' });
     }
   }, [selectedIndex, flatItems.length]);
 
-  // Handle keyboard navigation
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       switch (e.key) {
@@ -210,13 +173,8 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
           e.preventDefault();
           if (flatItems[selectedIndex]) {
             const item = flatItems[selectedIndex];
-            if (item.to) {
-              navigate(item.to);
-              onClose();
-            } else if (item.action) {
-              item.action();
-              onClose();
-            }
+            if (item.to) { navigate(item.to); onClose(); }
+            else if (item.action) { item.action(); onClose(); }
           }
           break;
         case 'Escape':
@@ -225,36 +183,23 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
           break;
       }
     },
-    [flatItems, selectedIndex, navigate, onClose]
+    [flatItems, selectedIndex, navigate, onClose],
   );
 
   const handleItemClick = (item: SearchItem) => {
-    if (item.to) {
-      navigate(item.to);
-      onClose();
-    } else if (item.action) {
-      item.action();
-      onClose();
-    }
+    if (item.to) { navigate(item.to); onClose(); }
+    else if (item.action) { item.action(); onClose(); }
   };
 
   if (!isOpen) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[100] overflow-y-auto p-4">
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* Dialog */}
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={onClose} aria-hidden="true" />
       <div className="relative mx-auto max-w-xl mt-[10vh]">
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl transition-all dark:border-slate-700 dark:bg-slate-900">
-          {/* Search input */}
-          <div className="flex items-center border-b border-slate-200 px-4 dark:border-slate-700">
-            <Search className="h-5 w-5 text-slate-400" />
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-elevated dark:shadow-elevated-dark">
+          <div className="flex items-center border-b border-border px-4">
+            <Search className="h-5 w-5 text-muted-foreground" />
             <input
               ref={inputRef}
               type="text"
@@ -262,31 +207,28 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Search pages, servers, actions..."
-              className="flex-1 border-none bg-transparent px-3 py-4 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-0 dark:text-white"
+              className="flex-1 border-none bg-transparent px-3 py-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0"
             />
-            {serversLoading && (
-              <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
-            )}
+            {serversLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
             <button
               type="button"
               onClick={onClose}
-              className="ml-2 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+              className="ml-2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
 
-          {/* Results */}
           <div ref={listRef} className="max-h-[60vh] overflow-y-auto p-2">
             {flatItems.length === 0 ? (
-              <div className="py-8 text-center text-slate-500 dark:text-slate-400">
-                <Search className="mx-auto h-8 w-8 mb-2 opacity-50" />
+              <div className="py-8 text-center text-muted-foreground">
+                <Search className="mx-auto mb-2 h-8 w-8 opacity-50" />
                 <p>No results found</p>
               </div>
             ) : (
               Object.entries(groupedItems).map(([category, items]) => (
                 <div key={category} className="mb-2">
-                  <div className="px-2 py-1.5 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
+                  <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                     {category}
                   </div>
                   {items.map((item) => {
@@ -303,24 +245,20 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
                         className={cn(
                           'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors',
                           isSelected
-                            ? 'bg-primary-50 text-primary-900 dark:bg-primary-500/10 dark:text-primary-100'
-                            : 'text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-foreground hover:bg-surface-2'
                         )}
                       >
-                        <Icon className="h-5 w-5 flex-shrink-0 text-slate-400" />
+                        <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
                         <div className="min-w-0 flex-1">
                           <div className="font-medium">{item.label}</div>
                           {item.description && (
-                            <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                              {item.description}
-                            </div>
+                            <div className="text-xs text-muted-foreground truncate">{item.description}</div>
                           )}
                         </div>
                         {isSelected && (
-                          <div className="text-xs text-slate-400 dark:text-slate-500">
-                            <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">
-                              Enter
-                            </kbd>
+                          <div className="text-xs text-muted-foreground">
+                            <kbd className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[11px]">Enter</kbd>
                           </div>
                         )}
                       </button>
@@ -331,29 +269,28 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
             )}
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-between border-t border-slate-200 px-4 py-2 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+          <div className="flex items-center justify-between border-t border-border px-4 py-2 text-xs text-muted-foreground">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1">
-                <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">
+                <kbd className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[11px]">
                   <Command className="inline h-3 w-3" />K
                 </kbd>
                 <span>to open</span>
               </div>
               <div className="flex items-center gap-1">
-                <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">Esc</kbd>
+                <kbd className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[11px]">Esc</kbd>
                 <span>to close</span>
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">↑↓</kbd>
+              <kbd className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[11px]">↑↓</kbd>
               <span>to navigate</span>
             </div>
           </div>
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
 

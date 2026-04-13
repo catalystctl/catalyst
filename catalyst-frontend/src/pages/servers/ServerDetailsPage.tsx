@@ -1514,7 +1514,7 @@ function ServerDetailsPage() {
             checked={checked}
             onChange={(event) => onValueChange(event.target.checked ? 'true' : 'false')}
           />
-          <div className="h-5 w-10 rounded-full bg-slate-200 transition peer-checked:bg-primary-500 dark:bg-slate-700">
+          <div className="h-5 w-10 rounded-full bg-surface-3 transition peer-checked:bg-primary-500 dark:bg-surface-2">
             <div className="h-4 w-4 translate-x-0.5 translate-y-0.5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
           </div>
         </label>
@@ -1524,7 +1524,7 @@ function ServerDetailsPage() {
     return (
       <input
         type={entry.type === 'number' ? 'number' : 'text'}
-        className={`${className} rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-primary-400`}
+        className={`${className} rounded-md border border-border bg-white px-2 py-1 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-zinc-600 dark:bg-surface-2 dark:text-zinc-200 dark:focus:border-primary-400`}
         value={entry.value}
         onChange={(event) => onValueChange(event.target.value)}
         placeholder="Value"
@@ -1715,7 +1715,7 @@ function ServerDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-slate-600 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-primary-500/30">
+      <div className="rounded-xl border border-border bg-white px-4 py-6 text-muted-foreground shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-primary/30">
         Loading server...
       </div>
     );
@@ -1751,16 +1751,16 @@ function ServerDetailsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+      <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">
+              <h1 className="text-2xl font-semibold text-foreground dark:text-white">
                 {server.name}
               </h1>
               <ServerStatusBadge status={server.status} />
             </div>
-            <div className="text-sm text-slate-600 dark:text-slate-400">
+            <div className="text-sm text-muted-foreground dark:text-muted-foreground">
               Node: {nodeLabel} (IP: {nodeIp}, Port: {nodePort})
             </div>
           </div>
@@ -1779,7 +1779,7 @@ function ServerDetailsPage() {
       </div>
 
       {/* Tab navigation - grid on mobile, horizontal on desktop */}
-      <div className="grid grid-cols-4 sm:grid-cols-none sm:flex sm:flex-wrap gap-1.5 p-2 sm:p-1.5 rounded-xl border border-slate-200 bg-white text-xs shadow-surface-light dark:shadow-surface-dark dark:border-slate-800 dark:bg-slate-900">
+      <div className="grid grid-cols-4 sm:grid-cols-none sm:flex sm:flex-wrap gap-1.5 p-2 sm:p-1.5 rounded-xl border border-border bg-white text-xs shadow-surface-light dark:shadow-surface-dark dark:border-border dark:bg-surface-1">
         {Object.entries(tabLabels)
           .filter(([key]) => {
             if (key === 'admin') return canAdminWrite || hasServerPerm('server.delete');
@@ -1803,7 +1803,7 @@ function ServerDetailsPage() {
                 className={`flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 rounded-lg px-2 py-2 sm:px-3 transition-all duration-200 ${
                   isActive
                     ? 'bg-primary-600 text-white shadow-sm'
-                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'
+                    : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground dark:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-zinc-200'
                 }`}
                 onClick={() => navigate(`/servers/${server.id}/${key}`)}
               >
@@ -1820,14 +1820,14 @@ function ServerDetailsPage() {
           {liveMetrics && (
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               {/* CPU */}
-              <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+              <div className="rounded-lg border border-border bg-white p-3 dark:border-border dark:bg-surface-1">
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400">CPU</span>
-                  <span className="text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                  <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">CPU</span>
+                  <span className="text-sm font-semibold tabular-nums text-foreground dark:text-zinc-100">
                     {liveMetrics.cpuPercent.toFixed(1)}%
                   </span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                <div className="h-2 overflow-hidden rounded-full bg-surface-2 dark:bg-surface-2">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300"
                     style={{ width: `${Math.min(100, liveMetrics.cpuPercent)}%` }}
@@ -1836,35 +1836,35 @@ function ServerDetailsPage() {
               </div>
 
               {/* Memory */}
-              <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+              <div className="rounded-lg border border-border bg-white p-3 dark:border-border dark:bg-surface-1">
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Memory</span>
-                  <span className="text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                  <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">Memory</span>
+                  <span className="text-sm font-semibold tabular-nums text-foreground dark:text-zinc-100">
                     {liveMetrics.memoryPercent.toFixed(1)}%
                   </span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                <div className="h-2 overflow-hidden rounded-full bg-surface-2 dark:bg-surface-2">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600 transition-all duration-300"
                     style={{ width: `${Math.min(100, liveMetrics.memoryPercent)}%` }}
                   />
                 </div>
-                <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-500">
+                <div className="mt-1 text-[10px] text-muted-foreground dark:text-muted-foreground">
                   {liveMetrics.memoryUsageMb} MB
                 </div>
               </div>
 
               {/* Disk */}
-              <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+              <div className="rounded-lg border border-border bg-white p-3 dark:border-border dark:bg-surface-1">
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Disk</span>
-                  <span className="text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                  <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">Disk</span>
+                  <span className="text-sm font-semibold tabular-nums text-foreground dark:text-zinc-100">
                     {liveDiskUsageMb != null && liveDiskTotalMb
                       ? ((liveDiskUsageMb / liveDiskTotalMb) * 100).toFixed(1)
                       : '0.0'}%
                   </span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                <div className="h-2 overflow-hidden rounded-full bg-surface-2 dark:bg-surface-2">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-600 transition-all duration-300"
                     style={{ 
@@ -1872,29 +1872,29 @@ function ServerDetailsPage() {
                     }}
                   />
                 </div>
-                <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-500">
+                <div className="mt-1 text-[10px] text-muted-foreground dark:text-muted-foreground">
                   {liveDiskUsageMb ?? 0} / {liveDiskTotalMb ?? 0} MB
                 </div>
               </div>
 
               {/* Network */}
-              <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+              <div className="rounded-lg border border-border bg-white p-3 dark:border-border dark:bg-surface-1">
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Network</span>
-                  <span className="text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                  <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">Network</span>
+                  <span className="text-sm font-semibold tabular-nums text-foreground dark:text-zinc-100">
                     ↓↑
                   </span>
                 </div>
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center justify-between text-[10px]">
-                    <span className="text-slate-500 dark:text-slate-500">RX</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-300">
+                    <span className="text-muted-foreground dark:text-muted-foreground">RX</span>
+                    <span className="font-medium text-foreground dark:text-zinc-300">
                       {formatBytes(Number(liveMetrics.networkRxBytes ?? 0))}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-[10px]">
-                    <span className="text-slate-500 dark:text-slate-500">TX</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-300">
+                    <span className="text-muted-foreground dark:text-muted-foreground">TX</span>
+                    <span className="font-medium text-foreground dark:text-zinc-300">
                       {formatBytes(Number(liveMetrics.networkTxBytes ?? 0))}
                     </span>
                   </div>
@@ -1904,9 +1904,9 @@ function ServerDetailsPage() {
           )}
 
           {/* Console */}
-        <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200 shadow-surface-light dark:shadow-surface-dark dark:border-slate-800">
+        <div className="flex flex-col overflow-hidden rounded-xl border border-border shadow-surface-light dark:shadow-surface-dark dark:border-border">
           {/* Toolbar */}
-          <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-white px-3 py-2 dark:border-border dark:bg-surface-1">
             <span
               className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
                 isConnected
@@ -1921,7 +1921,7 @@ function ServerDetailsPage() {
             </span>
 
 
-            <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
+            <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
 
             {/* Stream Filters */}
             <div className="flex items-center gap-1">
@@ -1955,11 +1955,11 @@ function ServerDetailsPage() {
                     className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-all ${
                       isActive
                         ? activeColors[stream]
-                        : 'border-slate-700 text-slate-500 hover:border-slate-600'
+                        : 'border-border text-muted-foreground hover:border-zinc-600'
                     }`}
                   >
                     <span
-                      className={`h-1.5 w-1.5 rounded-full ${isActive ? dotColors[stream] : 'bg-slate-600'}`}
+                      className={`h-1.5 w-1.5 rounded-full ${isActive ? dotColors[stream] : 'bg-zinc-600'}`}
                     />
                     {stream}
                   </button>
@@ -1967,21 +1967,21 @@ function ServerDetailsPage() {
               })}
             </div>
 
-            <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
+            <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
 
             {/* Search */}
             {consoleSearchOpen ? (
-              <div className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 dark:border-slate-700 dark:bg-slate-800">
-                <Search className="h-3 w-3 text-slate-400" />
+              <div className="flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1 dark:border-border dark:bg-surface-2">
+                <Search className="h-3 w-3 text-muted-foreground" />
                 <input
                   ref={consoleSearchRef}
-                  className="w-40 bg-transparent text-xs text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-200"
+                  className="w-40 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground dark:text-zinc-200"
                   value={consoleSearch}
                   onChange={(e) => setConsoleSearch(e.target.value)}
                   placeholder="Filter output…"
                 />
                 {consoleSearch ? (
-                  <span className="text-[10px] tabular-nums text-slate-500">
+                  <span className="text-[10px] tabular-nums text-muted-foreground">
                     {
                       entries.filter(
                         (e) =>
@@ -1997,7 +1997,7 @@ function ServerDetailsPage() {
                     setConsoleSearchOpen(false);
                     setConsoleSearch('');
                   }}
-                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  className="text-muted-foreground hover:text-muted-foreground dark:hover:text-zinc-200"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -2009,7 +2009,7 @@ function ServerDetailsPage() {
                   setConsoleSearchOpen(true);
                   setTimeout(() => consoleSearchRef.current?.focus(), 50);
                 }}
-                className="flex items-center gap-1.5 rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-500 transition-all hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600"
+                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-border dark:border-border dark:hover:border-zinc-600"
               >
                 <Search className="h-3 w-3" />
                 Search
@@ -2017,10 +2017,10 @@ function ServerDetailsPage() {
             )}
 
             {/* Scrollback selector */}
-            <div className="flex items-center gap-1.5 rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-500 dark:border-slate-700">
+            <div className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground dark:border-border">
               <span>Buffer</span>
               <select
-                className="bg-transparent text-[11px] text-slate-600 outline-none dark:text-slate-400"
+                className="bg-transparent text-[11px] text-muted-foreground outline-none dark:text-muted-foreground"
                 value={consoleScrollback}
                 onChange={(event) => {
                   const nextValue = Number(event.target.value);
@@ -2039,10 +2039,10 @@ function ServerDetailsPage() {
 
             <div className="flex-1" />
 
-            <span className="text-[11px] tabular-nums text-slate-400 dark:text-slate-600">
+            <span className="text-[11px] tabular-nums text-muted-foreground dark:text-muted-foreground">
               {entries.length} lines
             </span>
-            <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
+            <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
 
             <button
               type="button"
@@ -2050,7 +2050,7 @@ function ServerDetailsPage() {
               className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-all ${
                 consoleAutoScroll
                   ? 'border-primary-500/30 bg-primary-500/10 text-primary-500 dark:text-primary-400'
-                  : 'border-slate-200 text-slate-500 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'
+                  : 'border-border text-muted-foreground hover:border-border dark:border-border dark:hover:border-zinc-600'
               }`}
             >
               <ArrowDown className="h-3 w-3" />
@@ -2068,7 +2068,7 @@ function ServerDetailsPage() {
                 setConsoleCopied(true);
                 setTimeout(() => setConsoleCopied(false), 2000);
               }}
-              className="flex items-center gap-1.5 rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-500 transition-all hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600"
+              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-border dark:border-border dark:hover:border-zinc-600"
             >
               {consoleCopied ? (
                 <Check className="h-3 w-3 text-emerald-400" />
@@ -2084,7 +2084,7 @@ function ServerDetailsPage() {
                 clearConsole();
                 setConsoleAutoScroll(true);
               }}
-              className="flex items-center gap-1.5 rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-500 transition-all hover:border-rose-300 hover:text-rose-500 dark:border-slate-700 dark:hover:border-rose-500/30 dark:hover:text-rose-400"
+              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-rose-300 hover:text-rose-500 dark:border-border dark:hover:border-rose-500/30 dark:hover:text-rose-400"
             >
               <Trash2 className="h-3 w-3" />
               Clear
@@ -2109,12 +2109,12 @@ function ServerDetailsPage() {
           {/* Command Input */}
           <form
             onSubmit={handleSend}
-            className="flex items-center gap-3 border-t border-slate-200 bg-white px-4 py-2.5 dark:border-slate-800 dark:bg-slate-900"
+            className="flex items-center gap-3 border-t border-border bg-white px-4 py-2.5 dark:border-border dark:bg-surface-1"
           >
             <span className="select-none text-sm font-bold text-primary-500">$</span>
             <input
               ref={consoleInputRef}
-              className="w-full bg-transparent font-mono text-sm text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-200"
+              className="w-full bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200"
               value={command}
               onChange={(event) => {
                 setCommand(event.target.value);
@@ -2162,14 +2162,14 @@ function ServerDetailsPage() {
 
       {activeTab === 'files' ? (
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+          <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
             <FileManager serverId={server.id} isSuspended={isSuspended} />
           </div>
-          <details className="rounded-xl border border-slate-200 bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-            <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+          <details className="rounded-xl border border-border bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+            <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-foreground dark:text-zinc-200">
               SFTP Connection Details
             </summary>
-            <div className="border-t border-slate-200 px-4 py-4 dark:border-slate-800">
+            <div className="border-t border-border px-4 py-4 dark:border-border">
               <SftpConnectionInfo serverId={server.id} />
             </div>
           </details>
@@ -2177,7 +2177,7 @@ function ServerDetailsPage() {
       ) : null}
 
       {activeTab === 'backups' ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+        <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
           <BackupSection
             serverId={server.id}
             serverStatus={server.status}
@@ -2187,13 +2187,13 @@ function ServerDetailsPage() {
       ) : null}
 
       {activeTab === 'tasks' ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+        <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                 Scheduled tasks
               </div>
-              <div className="text-xs text-slate-600 dark:text-slate-400">
+              <div className="text-xs text-muted-foreground dark:text-muted-foreground">
                 Automate restarts, backups, and commands.
               </div>
             </div>
@@ -2201,54 +2201,54 @@ function ServerDetailsPage() {
           </div>
           <div className="mt-4">
             {tasksLoading ? (
-              <div className="text-sm text-slate-500 dark:text-slate-400">Loading tasks...</div>
+              <div className="text-sm text-muted-foreground dark:text-muted-foreground">Loading tasks...</div>
             ) : tasks.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center text-sm text-slate-500 dark:text-slate-500 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-400">
+              <div className="rounded-lg border border-dashed border-border bg-surface-2 px-6 py-8 text-center text-sm text-muted-foreground dark:text-muted-foreground dark:border-border dark:bg-surface-1/50 dark:text-muted-foreground">
                 No tasks configured for this server yet.
               </div>
             ) : (
               <div className="space-y-3">
                 {tasks.map((task) => (
                   <div
-                    className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30"
+                    className="rounded-lg border border-border bg-surface-2 px-4 py-3 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
                     key={task.id}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                         {task.name}
                       </div>
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground dark:bg-surface-2 dark:text-zinc-300">
                         {task.action}
                       </span>
                     </div>
-                    <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                    <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
                       {task.description || 'No description'}
                     </div>
-                    <div className="mt-2 text-xs text-slate-500 dark:text-slate-500">
+                    <div className="mt-2 text-xs text-muted-foreground dark:text-muted-foreground">
                       Schedule: {task.schedule}
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-500 dark:text-slate-400 sm:grid-cols-4">
-                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1 dark:border-slate-800 dark:bg-slate-900">
-                        <div className="text-slate-500 dark:text-slate-500">Next run</div>
-                        <div className="text-slate-700 dark:text-slate-200">
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-muted-foreground dark:text-muted-foreground sm:grid-cols-4">
+                      <div className="rounded-md border border-border bg-white px-2 py-1 dark:border-border dark:bg-surface-1">
+                        <div className="text-muted-foreground dark:text-muted-foreground">Next run</div>
+                        <div className="text-foreground dark:text-zinc-200">
                           {formatDateTime(task.nextRunAt)}
                         </div>
                       </div>
-                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1 dark:border-slate-800 dark:bg-slate-900">
-                        <div className="text-slate-500 dark:text-slate-500">Last run</div>
-                        <div className="text-slate-700 dark:text-slate-200">
+                      <div className="rounded-md border border-border bg-white px-2 py-1 dark:border-border dark:bg-surface-1">
+                        <div className="text-muted-foreground dark:text-muted-foreground">Last run</div>
+                        <div className="text-foreground dark:text-zinc-200">
                           {formatDateTime(task.lastRunAt)}
                         </div>
                       </div>
-                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1 dark:border-slate-800 dark:bg-slate-900">
-                        <div className="text-slate-500 dark:text-slate-500">Status</div>
-                        <div className="text-slate-700 dark:text-slate-200">
+                      <div className="rounded-md border border-border bg-white px-2 py-1 dark:border-border dark:bg-surface-1">
+                        <div className="text-muted-foreground dark:text-muted-foreground">Status</div>
+                        <div className="text-foreground dark:text-zinc-200">
                           {task.lastStatus ?? '—'}
                         </div>
                       </div>
-                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1 dark:border-slate-800 dark:bg-slate-900">
-                        <div className="text-slate-500 dark:text-slate-500">Runs</div>
-                        <div className="text-slate-700 dark:text-slate-200">
+                      <div className="rounded-md border border-border bg-white px-2 py-1 dark:border-border dark:bg-surface-1">
+                        <div className="text-muted-foreground dark:text-muted-foreground">Runs</div>
+                        <div className="text-foreground dark:text-zinc-200">
                           {task.runCount ?? 0}
                         </div>
                       </div>
@@ -2292,16 +2292,16 @@ function ServerDetailsPage() {
       ) : null}
 
       {activeTab === 'databases' ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+        <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                 Databases
               </div>
-              <div className="text-xs text-slate-600 dark:text-slate-400">
+              <div className="text-xs text-muted-foreground dark:text-muted-foreground">
                 Create and manage per-server database credentials.
               </div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">
+              <div className="text-xs text-muted-foreground dark:text-muted-foreground">
                 Allocation:{' '}
                 {databaseAllocation === 0 ? 'Disabled' : `${databaseAllocation} databases`}
               </div>
@@ -2309,7 +2309,7 @@ function ServerDetailsPage() {
             {canManageDatabases ? (
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <select
-                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                  className="rounded-lg border border-border bg-white px-2 py-1 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                   value={databaseHostId}
                   onChange={(event) => setDatabaseHostId(event.target.value)}
                   disabled={isSuspended || databaseAllocation === 0}
@@ -2322,7 +2322,7 @@ function ServerDetailsPage() {
                   ))}
                 </select>
                 <input
-                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                  className="rounded-lg border border-border bg-white px-2 py-1 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                   value={databaseName}
                   onChange={(event) => setDatabaseName(event.target.value)}
                   placeholder="database_name"
@@ -2353,7 +2353,7 @@ function ServerDetailsPage() {
                 ) : null}
               </div>
             ) : (
-              <div className="text-xs text-slate-500 dark:text-slate-400">
+              <div className="text-xs text-muted-foreground dark:text-muted-foreground">
                 No database permissions assigned.
               </div>
             )}
@@ -2366,7 +2366,7 @@ function ServerDetailsPage() {
           ) : null}
 
           {databasesLoading ? (
-            <div className="mt-4 text-sm text-slate-500 dark:text-slate-400">
+            <div className="mt-4 text-sm text-muted-foreground dark:text-muted-foreground">
               Loading databases...
             </div>
           ) : databasesError ? (
@@ -2374,7 +2374,7 @@ function ServerDetailsPage() {
               Unable to load databases.
             </div>
           ) : databases.length === 0 ? (
-            <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center text-sm text-slate-500 dark:text-slate-500 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-400">
+            <div className="mt-4 rounded-lg border border-dashed border-border bg-surface-2 px-6 py-8 text-center text-sm text-muted-foreground dark:text-muted-foreground dark:border-border dark:bg-surface-1/50 dark:text-muted-foreground">
               No databases created yet.
             </div>
           ) : (
@@ -2382,14 +2382,14 @@ function ServerDetailsPage() {
               {databases.map((database) => (
                 <div
                   key={database.id}
-                  className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-950/60 dark:hover:border-primary-500/30"
+                  className="rounded-lg border border-border bg-surface-2 px-4 py-3 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-zinc-950/60 dark:hover:border-primary/30"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                         {database.name}
                       </div>
-                      <div className="text-xs text-slate-600 dark:text-slate-400">
+                      <div className="text-xs text-muted-foreground dark:text-muted-foreground">
                         Host: {database.hostName} ({database.host}:{database.port})
                       </div>
                     </div>
@@ -2397,7 +2397,7 @@ function ServerDetailsPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:border-primary-500/30"
+                          className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground disabled:opacity-60 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                           onClick={() => rotateDatabaseMutation.mutate(database.id)}
                           disabled={rotateDatabaseMutation.isPending || isSuspended}
                         >
@@ -2414,22 +2414,22 @@ function ServerDetailsPage() {
                       </div>
                     ) : null}
                   </div>
-                  <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-slate-600 dark:text-slate-300 sm:grid-cols-3">
-                    <div className="rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
-                      <div className="text-slate-500 dark:text-slate-400">Database</div>
-                      <div className="font-semibold text-slate-900 dark:text-slate-100">
+                  <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-muted-foreground dark:text-zinc-300 sm:grid-cols-3">
+                    <div className="rounded-md border border-border bg-white px-3 py-2 dark:border-border dark:bg-surface-1">
+                      <div className="text-muted-foreground dark:text-muted-foreground">Database</div>
+                      <div className="font-semibold text-foreground dark:text-zinc-100">
                         {database.name}
                       </div>
                     </div>
-                    <div className="rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
-                      <div className="text-slate-500 dark:text-slate-400">Username</div>
-                      <div className="font-semibold text-slate-900 dark:text-slate-100">
+                    <div className="rounded-md border border-border bg-white px-3 py-2 dark:border-border dark:bg-surface-1">
+                      <div className="text-muted-foreground dark:text-muted-foreground">Username</div>
+                      <div className="font-semibold text-foreground dark:text-zinc-100">
                         {database.username}
                       </div>
                     </div>
-                    <div className="rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
-                      <div className="text-slate-500 dark:text-slate-400">Password</div>
-                      <div className="font-semibold text-slate-900 dark:text-slate-100">
+                    <div className="rounded-md border border-border bg-white px-3 py-2 dark:border-border dark:bg-surface-1">
+                      <div className="text-muted-foreground dark:text-muted-foreground">Password</div>
+                      <div className="font-semibold text-foreground dark:text-zinc-100">
                         {database.password}
                       </div>
                     </div>
@@ -2448,34 +2448,34 @@ function ServerDetailsPage() {
               cpu={liveMetrics?.cpuPercent ?? server?.cpuPercent ?? 0}
               memory={liveMetrics?.memoryPercent ?? server?.memoryPercent ?? 0}
             />
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30 lg:col-span-2">
+            <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30 lg:col-span-2">
               <div className="mb-3 flex items-center justify-between">
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                   Live snapshot
                 </div>
                 <div
                   className={`flex items-center gap-2 text-xs ${
                     isConnected
                       ? 'text-emerald-600 dark:text-emerald-300'
-                      : 'text-slate-500 dark:text-slate-400'
+                      : 'text-muted-foreground dark:text-muted-foreground'
                   }`}
                 >
                   <span
-                    className={`h-2 w-2 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-500'}`}
+                    className={`h-2 w-2 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-zinc-400 dark:bg-surface-20'}`}
                   />
                   {isConnected ? 'Live' : 'Offline'}
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-3 text-xs text-slate-600 dark:text-slate-300 sm:grid-cols-2">
-                <div className="rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
-                  <div className="text-slate-500 dark:text-slate-400">Memory used</div>
-                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <div className="grid grid-cols-1 gap-3 text-xs text-muted-foreground dark:text-zinc-300 sm:grid-cols-2">
+                <div className="rounded-md border border-border bg-white px-3 py-2 dark:border-border dark:bg-surface-1">
+                  <div className="text-muted-foreground dark:text-muted-foreground">Memory used</div>
+                  <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                     {liveMetrics?.memoryUsageMb ? `${liveMetrics.memoryUsageMb} MB` : 'n/a'}
                   </div>
                 </div>
-                <div className="rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
-                  <div className="text-slate-500 dark:text-slate-400">Disk usage</div>
-                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                <div className="rounded-md border border-border bg-white px-3 py-2 dark:border-border dark:bg-surface-1">
+                  <div className="text-muted-foreground dark:text-muted-foreground">Disk usage</div>
+                  <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                     {liveDiskUsageMb != null && (liveDiskTotalMb || diskLimitMb)
                       ? `${liveDiskUsageMb} / ${liveDiskTotalMb || diskLimitMb} MB${
                           diskPercent != null ? ` (${diskPercent.toFixed(0)}%)` : ''
@@ -2483,29 +2483,29 @@ function ServerDetailsPage() {
                       : 'n/a'}
                   </div>
                 </div>
-                <div className="rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
-                  <div className="text-slate-500 dark:text-slate-400">Disk IO (last tick)</div>
-                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                <div className="rounded-md border border-border bg-white px-3 py-2 dark:border-border dark:bg-surface-1">
+                  <div className="text-muted-foreground dark:text-muted-foreground">Disk IO (last tick)</div>
+                  <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                     {liveDiskIoMb != null ? `${liveDiskIoMb} MB` : 'n/a'}
                   </div>
                 </div>
-                <div className="rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
-                  <div className="text-slate-500 dark:text-slate-400">Network RX</div>
-                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                <div className="rounded-md border border-border bg-white px-3 py-2 dark:border-border dark:bg-surface-1">
+                  <div className="text-muted-foreground dark:text-muted-foreground">Network RX</div>
+                  <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                     {formatBytes(Number(metricsHistory?.latest?.networkRxBytes ?? 0))}
                   </div>
                 </div>
-                <div className="rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
-                  <div className="text-slate-500 dark:text-slate-400">Network TX</div>
-                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                <div className="rounded-md border border-border bg-white px-3 py-2 dark:border-border dark:bg-surface-1">
+                  <div className="text-muted-foreground dark:text-muted-foreground">Network TX</div>
+                  <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                     {formatBytes(Number(metricsHistory?.latest?.networkTxBytes ?? 0))}
                   </div>
                 </div>
               </div>
             </div>
           </div>
-          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <div className="flex items-center justify-between rounded-xl border border-border bg-white px-4 py-3 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+            <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
               Historical metrics
             </div>
             <MetricsTimeRangeSelector
@@ -2531,7 +2531,7 @@ function ServerDetailsPage() {
       {activeTab === 'modManager' ? (
         <div className="space-y-4">
           {!modManagerConfig ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="rounded-xl border border-border bg-white p-8 shadow-sm dark:border-border dark:bg-surface-1">
               <EmptyState
                 title="Mod manager not available"
                 description="This server template does not have a mod manager configured."
@@ -2543,19 +2543,19 @@ function ServerDetailsPage() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <Package className="h-5 w-5 text-primary-500" />
-                  <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Mod Manager</h2>
+                  <h2 className="text-base font-semibold text-foreground dark:text-zinc-100">Mod Manager</h2>
                 </div>
-                <div className="flex items-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
+                <div className="flex items-center overflow-hidden rounded-lg border border-border bg-surface-2 dark:border-border dark:bg-surface-2">
                   <button
                     type="button"
-                    className={`px-4 py-1.5 text-xs font-semibold transition-colors ${modSubTab === 'browse' ? 'bg-primary-600 text-white dark:bg-primary-500' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+                    className={`px-4 py-1.5 text-xs font-semibold transition-colors ${modSubTab === 'browse' ? 'bg-primary-600 text-white dark:bg-primary-500' : 'text-muted-foreground hover:text-foreground dark:text-muted-foreground dark:hover:text-zinc-200'}`}
                     onClick={() => setModSubTab('browse')}
                   >
                     Browse
                   </button>
                   <button
                     type="button"
-                    className={`px-4 py-1.5 text-xs font-semibold transition-colors ${modSubTab === 'installed' ? 'bg-primary-600 text-white dark:bg-primary-500' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+                    className={`px-4 py-1.5 text-xs font-semibold transition-colors ${modSubTab === 'installed' ? 'bg-primary-600 text-white dark:bg-primary-500' : 'text-muted-foreground hover:text-foreground dark:text-muted-foreground dark:hover:text-zinc-200'}`}
                     onClick={() => { setModSubTab('installed'); refetchInstalledMods(); }}
                   >
                     Installed
@@ -2571,12 +2571,12 @@ function ServerDetailsPage() {
               {modSubTab === 'browse' ? (
                 <div className="space-y-4">
                   {/* Filters card */}
-                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                  <div className="rounded-xl border border-border bg-white p-4 shadow-sm dark:border-border dark:bg-surface-1">
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       <div>
-                        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Provider</label>
+                        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-muted-foreground">Provider</label>
                         <select
-                          className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-primary-400 dark:focus:bg-slate-900"
+                          className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-200 dark:focus:border-primary-400 dark:focus:bg-surface-1"
                           value={selectedModProvider?.key ?? ''}
                           onChange={(event) => setModProviderKey(event.target.value)}
                         >
@@ -2587,9 +2587,9 @@ function ServerDetailsPage() {
                       </div>
                       {supportsModLoaderFilter ? (
                         <div>
-                          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Loader</label>
+                          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-muted-foreground">Loader</label>
                           <select
-                            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-primary-400 dark:focus:bg-slate-900"
+                            className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-200 dark:focus:border-primary-400 dark:focus:bg-surface-1"
                             value={modLoader}
                             onChange={(event) => setModLoader(event.target.value)}
                           >
@@ -2601,16 +2601,16 @@ function ServerDetailsPage() {
                         </div>
                       ) : (
                         <div>
-                          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Loader</label>
-                          <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-3 py-2 text-sm text-slate-400 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-500">
+                          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-muted-foreground">Loader</label>
+                          <div className="rounded-lg border border-dashed border-border bg-surface-2/50 px-3 py-2 text-sm text-muted-foreground dark:border-border dark:bg-surface-2/50 dark:text-muted-foreground">
                             N/A
                           </div>
                         </div>
                       )}
                       <div>
-                        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Target</label>
+                        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-muted-foreground">Target</label>
                         <select
-                          className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-primary-400 dark:focus:bg-slate-900"
+                          className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-200 dark:focus:border-primary-400 dark:focus:bg-surface-1"
                           value={modTarget}
                           onChange={(event) => setModTarget(event.target.value as typeof modTarget)}
                         >
@@ -2620,9 +2620,9 @@ function ServerDetailsPage() {
                         </select>
                       </div>
                       <div>
-                        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Game Version</label>
+                        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-muted-foreground">Game Version</label>
                         <input
-                          className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-primary-400 dark:focus:bg-slate-900"
+                          className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-200 dark:focus:border-primary-400 dark:focus:bg-surface-1"
                           value={modGameVersion}
                           onChange={(event) => setModGameVersion(event.target.value)}
                           placeholder={serverGameVersion || 'e.g. 1.20.1'}
@@ -2631,9 +2631,9 @@ function ServerDetailsPage() {
                     </div>
                     <div className="mt-3 flex gap-2">
                       <div className="relative flex-1">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <input
-                          className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-900 transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-primary-400 dark:focus:bg-slate-900"
+                          className="w-full rounded-lg border border-border bg-surface-2 py-2 pl-9 pr-3 text-sm text-foreground transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-200 dark:focus:border-primary-400 dark:focus:bg-surface-1"
                           value={modQuery}
                           onChange={(event) => setModQuery(event.target.value)}
                           onKeyDown={(event) => { if (event.key === 'Enter') refetchModSearch(); }}
@@ -2655,12 +2655,12 @@ function ServerDetailsPage() {
                   {modSearchLoading ? (
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       {Array.from({ length: 6 }).map((_, index) => (
-                        <div key={index} className="animate-pulse rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                        <div key={index} className="animate-pulse rounded-xl border border-border bg-white p-4 dark:border-border dark:bg-surface-1">
                           <div className="flex gap-3">
-                            <div className="h-12 w-12 rounded-lg bg-slate-200 dark:bg-slate-800" />
+                            <div className="h-12 w-12 rounded-lg bg-surface-3 dark:bg-surface-2" />
                             <div className="flex-1 space-y-2">
-                              <div className="h-4 w-2/3 rounded bg-slate-200 dark:bg-slate-800" />
-                              <div className="h-3 w-full rounded bg-slate-100 dark:bg-slate-800/60" />
+                              <div className="h-4 w-2/3 rounded bg-surface-3 dark:bg-surface-2" />
+                              <div className="h-3 w-full rounded bg-surface-2 dark:bg-surface-2/60" />
                             </div>
                           </div>
                         </div>
@@ -2671,7 +2671,7 @@ function ServerDetailsPage() {
                       Unable to load search results. Check your provider API keys in admin settings.
                     </div>
                   ) : modResults.length === 0 ? (
-                    <div className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <div className="rounded-xl border border-border bg-white p-8 shadow-sm dark:border-border dark:bg-surface-1">
                       <EmptyState
                         title="No results"
                         description={modQuery.trim() ? 'Try a different search term or adjust your filters.' : 'Search for a mod to get started.'}
@@ -2704,20 +2704,20 @@ function ServerDetailsPage() {
                         return (
                           <div
                             key={String(id)}
-                            className={`group relative cursor-pointer rounded-xl border p-4 transition-all duration-200 ${isActive ? 'border-primary-500 bg-primary-50/50 ring-1 ring-primary-500/20 dark:border-primary-400/60 dark:bg-primary-500/5 dark:ring-primary-400/10' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700'}`}
+                            className={`group relative cursor-pointer rounded-xl border p-4 transition-all duration-200 ${isActive ? 'border-primary-500 bg-primary-50/50 ring-1 ring-primary-500/20 dark:border-primary-400/60 dark:bg-primary-500/5 dark:ring-primary-400/10' : 'border-border bg-white hover:border-border hover:shadow-sm dark:border-border dark:bg-surface-1 dark:hover:border-border'}`}
                             onClick={() => { setSelectedProject(String(id)); setSelectedProjectName(title); }}
                           >
                             <div className="flex gap-3">
                               {imageUrl ? (
                                 <img src={imageUrl} alt="" loading="lazy" className="h-12 w-12 rounded-lg object-cover" />
                               ) : (
-                                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
-                                  <Package className="h-5 w-5 text-slate-400" />
+                                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-surface-2 dark:bg-surface-2">
+                                  <Package className="h-5 w-5 text-muted-foreground" />
                                 </div>
                               )}
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-start justify-between gap-2">
-                                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</span>
+                                  <span className="text-sm font-semibold text-foreground dark:text-zinc-100">{title}</span>
                                   {externalUrl && (
                                     <a
                                       href={externalUrl}
@@ -2727,15 +2727,15 @@ function ServerDetailsPage() {
                                       className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
                                       title={`View on ${providerLabel}`}
                                     >
-                                      <ExternalLink className="h-3.5 w-3.5 text-slate-400 hover:text-primary-500" />
+                                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-primary-500" />
                                     </a>
                                   )}
                                 </div>
                                 {summary && (
-                                  <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">{summary}</p>
+                                  <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground dark:text-muted-foreground">{summary}</p>
                                 )}
                                 {downloads > 0 && (
-                                  <div className="mt-1.5 flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">
+                                  <div className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground dark:text-muted-foreground">
                                     <Download className="h-3 w-3" />
                                     {downloads >= 1000000 ? `${(downloads / 1000000).toFixed(1)}M` : downloads >= 1000 ? `${(downloads / 1000).toFixed(1)}K` : downloads}
                                   </div>
@@ -2743,12 +2743,12 @@ function ServerDetailsPage() {
                               </div>
                             </div>
                             {isActive && (
-                              <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
+                              <div className="mt-3 border-t border-border pt-3 dark:border-border">
                                 <div className="flex items-end gap-2">
                                   <div className="flex-1">
-                                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Version</label>
+                                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-muted-foreground">Version</label>
                                     <select
-                                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-900 transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                                      className="w-full rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-foreground transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-200"
                                       value={selectedVersion}
                                       onChange={(event) => setSelectedVersion(event.target.value)}
                                       disabled={modVersionsLoading}
@@ -2784,13 +2784,13 @@ function ServerDetailsPage() {
                 </div>
               ) : (
                 /* Installed mods */
-                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div className="overflow-hidden rounded-xl border border-border bg-white shadow-sm dark:border-border dark:bg-surface-1">
                   {/* Toolbar */}
-                  <div className="space-y-3 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+                  <div className="space-y-3 border-b border-border px-4 py-3 dark:border-border">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <select
-                          className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700 transition-colors focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                          className="rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-foreground transition-colors focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-300"
                           value={modTarget}
                           onChange={(event) => setModTarget(event.target.value as typeof modTarget)}
                         >
@@ -2798,7 +2798,7 @@ function ServerDetailsPage() {
                             <option key={target} value={target}>{titleCase(target)}</option>
                           ))}
                         </select>
-                        <span className="text-xs tabular-nums text-slate-400 dark:text-slate-500">
+                        <span className="text-xs tabular-nums text-muted-foreground dark:text-muted-foreground">
                           {filteredInstalledMods.length}{filteredInstalledMods.length !== installedMods.length ? ` / ${installedMods.length}` : ''} file{installedMods.length !== 1 ? 's' : ''}
                         </span>
                       </div>
@@ -2840,7 +2840,7 @@ function ServerDetailsPage() {
                         )}
                         <button
                           type="button"
-                          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-zinc-200"
                           disabled={isCheckingModUpdates}
                           onClick={async () => {
                             if (!server?.id) return;
@@ -2868,17 +2868,17 @@ function ServerDetailsPage() {
                     {/* Search, Filter, Sort row */}
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="relative flex-1">
-                        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                         <input
                           type="text"
                           placeholder="Search installed mods…"
-                          className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs text-slate-700 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:placeholder:text-slate-500"
+                          className="w-full rounded-lg border border-border bg-surface-2 py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-300 dark:placeholder:text-muted-foreground"
                           value={modInstalledSearch}
                           onChange={(e) => setModInstalledSearch(e.target.value)}
                         />
                       </div>
                       <select
-                        className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700 focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        className="rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-foreground focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-300"
                         value={modInstalledFilter}
                         onChange={(e) => setModInstalledFilter(e.target.value as typeof modInstalledFilter)}
                       >
@@ -2888,7 +2888,7 @@ function ServerDetailsPage() {
                         <option value="untracked">Untracked</option>
                       </select>
                       <select
-                        className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700 focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        className="rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-foreground focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-300"
                         value={modInstalledSort}
                         onChange={(e) => setModInstalledSort(e.target.value as typeof modInstalledSort)}
                       >
@@ -2901,10 +2901,10 @@ function ServerDetailsPage() {
 
                   {/* Select All bar */}
                   {filteredInstalledMods.length > 0 && (
-                    <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/50 px-4 py-1.5 dark:border-slate-800 dark:bg-slate-800/30">
+                    <div className="flex items-center gap-3 border-b border-border bg-surface-2/50 px-4 py-1.5 dark:border-border dark:bg-surface-2/30">
                       <button
                         type="button"
-                        className="flex items-center gap-1.5 text-xs text-slate-500 transition-colors hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                        className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground dark:text-muted-foreground dark:hover:text-zinc-200"
                         onClick={() => {
                           if (selectedModFiles.size === filteredInstalledMods.length) {
                             setSelectedModFiles(new Set());
@@ -2923,7 +2923,7 @@ function ServerDetailsPage() {
                       {selectedModFiles.size > 0 && (
                         <button
                           type="button"
-                          className="text-xs text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-300"
+                          className="text-xs text-muted-foreground transition-colors hover:text-muted-foreground dark:hover:text-zinc-300"
                           onClick={() => setSelectedModFiles(new Set())}
                         >
                           Clear
@@ -2941,13 +2941,13 @@ function ServerDetailsPage() {
                       />
                     </div>
                   ) : (
-                    <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                    <div className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
                       {filteredInstalledMods.map((mod) => {
                         const isSelected = selectedModFiles.has(mod.name);
                         return (
                           <div
                             key={mod.name}
-                            className={`group flex items-center gap-3 px-4 py-3 transition-colors ${isSelected ? 'bg-primary-50/40 dark:bg-primary-500/5' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'}`}
+                            className={`group flex items-center gap-3 px-4 py-3 transition-colors ${isSelected ? 'bg-primary-50/40 dark:bg-primary-500/5' : 'hover:bg-surface-2 dark:hover:bg-surface-2/40'}`}
                           >
                             {/* Checkbox */}
                             <button
@@ -2962,19 +2962,19 @@ function ServerDetailsPage() {
                               {isSelected ? (
                                 <CheckSquare className="h-4 w-4 text-primary-500" />
                               ) : (
-                                <Square className="h-4 w-4 text-slate-300 transition-colors group-hover:text-slate-400 dark:text-slate-600 dark:group-hover:text-slate-500" />
+                                <Square className="h-4 w-4 text-zinc-300 transition-colors group-hover:text-muted-foreground dark:text-muted-foreground dark:group-hover:text-muted-foreground" />
                               )}
                             </button>
 
                             {/* Icon */}
-                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${mod.hasUpdate ? 'bg-amber-50 dark:bg-amber-500/10' : 'bg-slate-100 dark:bg-slate-800'}`}>
-                              <Package className={`h-4 w-4 ${mod.hasUpdate ? 'text-amber-500 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'}`} />
+                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${mod.hasUpdate ? 'bg-amber-50 dark:bg-amber-500/10' : 'bg-surface-2 dark:bg-surface-2'}`}>
+                              <Package className={`h-4 w-4 ${mod.hasUpdate ? 'text-amber-500 dark:text-amber-400' : 'text-muted-foreground dark:text-muted-foreground'}`} />
                             </div>
 
                             {/* Info */}
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <span className="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{mod.projectName || mod.name}</span>
+                                <span className="truncate text-sm font-medium text-foreground dark:text-zinc-200">{mod.projectName || mod.name}</span>
                                 {mod.hasUpdate && (
                                   <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
                                     <ArrowUpCircle className="h-2.5 w-2.5" />
@@ -2982,19 +2982,19 @@ function ServerDetailsPage() {
                                   </span>
                                 )}
                                 {mod.provider && (
-                                  <span className="inline-flex shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium capitalize text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                  <span className="inline-flex shrink-0 rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted-foreground dark:bg-surface-2 dark:text-muted-foreground">
                                     {mod.provider}
                                   </span>
                                 )}
                               </div>
-                              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-400 dark:text-slate-500">
+                              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground dark:text-muted-foreground">
                                 <span className="font-mono">{formatBytes(mod.size)}</span>
                                 {mod.modifiedAt && <span>{new Date(mod.modifiedAt).toLocaleDateString()}</span>}
                                 {mod.versionId && <span title={mod.versionId}>v{mod.versionId.length > 12 ? mod.versionId.slice(0, 8) + '…' : mod.versionId}</span>}
                                 {mod.hasUpdate && mod.latestVersionName && (
                                   <span className="font-medium text-amber-600 dark:text-amber-400">→ {mod.latestVersionName}</span>
                                 )}
-                                {!mod.provider && <span className="italic text-slate-300 dark:text-slate-600">untracked</span>}
+                                {!mod.provider && <span className="italic text-zinc-300 dark:text-muted-foreground">untracked</span>}
                               </div>
                             </div>
 
@@ -3017,7 +3017,7 @@ function ServerDetailsPage() {
                               )}
                               <button
                                 type="button"
-                                className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+                                className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
                                 title="Remove"
                                 onClick={() => { if (confirm(`Remove ${mod.projectName || mod.name}?`)) uninstallModMutation.mutate(mod.name); }}
                               >
@@ -3039,7 +3039,7 @@ function ServerDetailsPage() {
       {activeTab === 'pluginManager' ? (
         <div className="space-y-4">
           {!pluginManagerConfig ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="rounded-xl border border-border bg-white p-8 shadow-sm dark:border-border dark:bg-surface-1">
               <EmptyState
                 title="Plugin manager not available"
                 description="This server template does not have a plugin manager configured."
@@ -3051,19 +3051,19 @@ function ServerDetailsPage() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <Puzzle className="h-5 w-5 text-primary-500" />
-                  <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Plugin Manager</h2>
+                  <h2 className="text-base font-semibold text-foreground dark:text-zinc-100">Plugin Manager</h2>
                 </div>
-                <div className="flex items-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
+                <div className="flex items-center overflow-hidden rounded-lg border border-border bg-surface-2 dark:border-border dark:bg-surface-2">
                   <button
                     type="button"
-                    className={`px-4 py-1.5 text-xs font-semibold transition-colors ${pluginSubTab === 'browse' ? 'bg-primary-600 text-white dark:bg-primary-500' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+                    className={`px-4 py-1.5 text-xs font-semibold transition-colors ${pluginSubTab === 'browse' ? 'bg-primary-600 text-white dark:bg-primary-500' : 'text-muted-foreground hover:text-foreground dark:text-muted-foreground dark:hover:text-zinc-200'}`}
                     onClick={() => setPluginSubTab('browse')}
                   >
                     Browse
                   </button>
                   <button
                     type="button"
-                    className={`px-4 py-1.5 text-xs font-semibold transition-colors ${pluginSubTab === 'installed' ? 'bg-primary-600 text-white dark:bg-primary-500' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+                    className={`px-4 py-1.5 text-xs font-semibold transition-colors ${pluginSubTab === 'installed' ? 'bg-primary-600 text-white dark:bg-primary-500' : 'text-muted-foreground hover:text-foreground dark:text-muted-foreground dark:hover:text-zinc-200'}`}
                     onClick={() => { setPluginSubTab('installed'); refetchInstalledPlugins(); }}
                   >
                     Installed
@@ -3079,12 +3079,12 @@ function ServerDetailsPage() {
               {pluginSubTab === 'browse' ? (
                 <div className="space-y-4">
                   {/* Filters card */}
-                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                  <div className="rounded-xl border border-border bg-white p-4 shadow-sm dark:border-border dark:bg-surface-1">
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div>
-                        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Provider</label>
+                        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-muted-foreground">Provider</label>
                         <select
-                          className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-primary-400 dark:focus:bg-slate-900"
+                          className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-200 dark:focus:border-primary-400 dark:focus:bg-surface-1"
                           value={pluginProvider}
                           onChange={(event) => setPluginProvider(event.target.value)}
                         >
@@ -3096,9 +3096,9 @@ function ServerDetailsPage() {
                         </select>
                       </div>
                       <div>
-                        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Game Version</label>
+                        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-muted-foreground">Game Version</label>
                         <input
-                          className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-primary-400 dark:focus:bg-slate-900"
+                          className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-200 dark:focus:border-primary-400 dark:focus:bg-surface-1"
                           value={pluginGameVersion}
                           onChange={(event) => setPluginGameVersion(event.target.value)}
                           placeholder={serverGameVersion || 'e.g. 1.20.1'}
@@ -3107,9 +3107,9 @@ function ServerDetailsPage() {
                     </div>
                     <div className="mt-3 flex gap-2">
                       <div className="relative flex-1">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <input
-                          className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-900 transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-primary-400 dark:focus:bg-slate-900"
+                          className="w-full rounded-lg border border-border bg-surface-2 py-2 pl-9 pr-3 text-sm text-foreground transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-200 dark:focus:border-primary-400 dark:focus:bg-surface-1"
                           value={pluginQuery}
                           onChange={(event) => setPluginQuery(event.target.value)}
                           onKeyDown={(event) => { if (event.key === 'Enter') refetchPluginSearch(); }}
@@ -3131,12 +3131,12 @@ function ServerDetailsPage() {
                   {pluginSearchLoading ? (
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       {Array.from({ length: 6 }).map((_, index) => (
-                        <div key={index} className="animate-pulse rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                        <div key={index} className="animate-pulse rounded-xl border border-border bg-white p-4 dark:border-border dark:bg-surface-1">
                           <div className="flex gap-3">
-                            <div className="h-12 w-12 rounded-lg bg-slate-200 dark:bg-slate-800" />
+                            <div className="h-12 w-12 rounded-lg bg-surface-3 dark:bg-surface-2" />
                             <div className="flex-1 space-y-2">
-                              <div className="h-4 w-2/3 rounded bg-slate-200 dark:bg-slate-800" />
-                              <div className="h-3 w-full rounded bg-slate-100 dark:bg-slate-800/60" />
+                              <div className="h-4 w-2/3 rounded bg-surface-3 dark:bg-surface-2" />
+                              <div className="h-3 w-full rounded bg-surface-2 dark:bg-surface-2/60" />
                             </div>
                           </div>
                         </div>
@@ -3147,7 +3147,7 @@ function ServerDetailsPage() {
                       Unable to load search results. Check your provider API keys in admin settings.
                     </div>
                   ) : pluginResults.length === 0 ? (
-                    <div className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <div className="rounded-xl border border-border bg-white p-8 shadow-sm dark:border-border dark:bg-surface-1">
                       <EmptyState
                         title="No results"
                         description={pluginQuery.trim() ? 'Try a different search term or adjust your filters.' : 'Search for a plugin to get started.'}
@@ -3185,20 +3185,20 @@ function ServerDetailsPage() {
                         return (
                           <div
                             key={String(id)}
-                            className={`group relative cursor-pointer rounded-xl border p-4 transition-all duration-200 ${isActive ? 'border-primary-500 bg-primary-50/50 ring-1 ring-primary-500/20 dark:border-primary-400/60 dark:bg-primary-500/5 dark:ring-primary-400/10' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700'}`}
+                            className={`group relative cursor-pointer rounded-xl border p-4 transition-all duration-200 ${isActive ? 'border-primary-500 bg-primary-50/50 ring-1 ring-primary-500/20 dark:border-primary-400/60 dark:bg-primary-500/5 dark:ring-primary-400/10' : 'border-border bg-white hover:border-border hover:shadow-sm dark:border-border dark:bg-surface-1 dark:hover:border-border'}`}
                             onClick={() => { setSelectedPlugin(String(id)); setSelectedPluginName(title); }}
                           >
                             <div className="flex gap-3">
                               {imageUrl ? (
                                 <img src={imageUrl} alt="" loading="lazy" className="h-12 w-12 rounded-lg object-cover" />
                               ) : (
-                                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-surface-2 text-xs font-bold text-muted-foreground dark:bg-surface-2 dark:text-muted-foreground">
                                   {fallbackLabel || 'PL'}
                                 </div>
                               )}
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-start justify-between gap-2">
-                                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</span>
+                                  <span className="text-sm font-semibold text-foreground dark:text-zinc-100">{title}</span>
                                   {externalUrl && (
                                     <a
                                       href={externalUrl}
@@ -3208,15 +3208,15 @@ function ServerDetailsPage() {
                                       className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
                                       title={`View on ${providerLabel}`}
                                     >
-                                      <ExternalLink className="h-3.5 w-3.5 text-slate-400 hover:text-primary-500" />
+                                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-primary-500" />
                                     </a>
                                   )}
                                 </div>
                                 {summary && (
-                                  <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">{summary}</p>
+                                  <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground dark:text-muted-foreground">{summary}</p>
                                 )}
                                 {downloads > 0 && (
-                                  <div className="mt-1.5 flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">
+                                  <div className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground dark:text-muted-foreground">
                                     <Download className="h-3 w-3" />
                                     {downloads >= 1000000 ? `${(downloads / 1000000).toFixed(1)}M` : downloads >= 1000 ? `${(downloads / 1000).toFixed(1)}K` : downloads}
                                   </div>
@@ -3224,12 +3224,12 @@ function ServerDetailsPage() {
                               </div>
                             </div>
                             {isActive && (
-                              <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
+                              <div className="mt-3 border-t border-border pt-3 dark:border-border">
                                 <div className="flex items-end gap-2">
                                   <div className="flex-1">
-                                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Version</label>
+                                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-muted-foreground">Version</label>
                                     <select
-                                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-900 transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                                      className="w-full rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-foreground transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-200"
                                       value={selectedPluginVersion}
                                       onChange={(event) => setSelectedPluginVersion(event.target.value)}
                                       disabled={pluginVersionsLoading}
@@ -3265,11 +3265,11 @@ function ServerDetailsPage() {
                 </div>
               ) : (
                 /* Installed plugins */
-                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div className="overflow-hidden rounded-xl border border-border bg-white shadow-sm dark:border-border dark:bg-surface-1">
                   {/* Toolbar */}
-                  <div className="space-y-3 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+                  <div className="space-y-3 border-b border-border px-4 py-3 dark:border-border">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-xs tabular-nums text-slate-400 dark:text-slate-500">
+                      <span className="text-xs tabular-nums text-muted-foreground dark:text-muted-foreground">
                         {filteredInstalledPlugins.length}{filteredInstalledPlugins.length !== installedPlugins.length ? ` / ${installedPlugins.length}` : ''} plugin{installedPlugins.length !== 1 ? 's' : ''}
                       </span>
                       <div className="flex items-center gap-1.5">
@@ -3310,7 +3310,7 @@ function ServerDetailsPage() {
                         )}
                         <button
                           type="button"
-                          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-zinc-200"
                           disabled={isCheckingPluginUpdates}
                           onClick={async () => {
                             if (!server?.id) return;
@@ -3338,17 +3338,17 @@ function ServerDetailsPage() {
                     {/* Search, Filter, Sort row */}
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="relative flex-1">
-                        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                         <input
                           type="text"
                           placeholder="Search installed plugins…"
-                          className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs text-slate-700 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:placeholder:text-slate-500"
+                          className="w-full rounded-lg border border-border bg-surface-2 py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-300 dark:placeholder:text-muted-foreground"
                           value={pluginInstalledSearch}
                           onChange={(e) => setPluginInstalledSearch(e.target.value)}
                         />
                       </div>
                       <select
-                        className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700 focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        className="rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-foreground focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-300"
                         value={pluginInstalledFilter}
                         onChange={(e) => setPluginInstalledFilter(e.target.value as typeof pluginInstalledFilter)}
                       >
@@ -3358,7 +3358,7 @@ function ServerDetailsPage() {
                         <option value="untracked">Untracked</option>
                       </select>
                       <select
-                        className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700 focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        className="rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-foreground focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-300"
                         value={pluginInstalledSort}
                         onChange={(e) => setPluginInstalledSort(e.target.value as typeof pluginInstalledSort)}
                       >
@@ -3371,10 +3371,10 @@ function ServerDetailsPage() {
 
                   {/* Select All bar */}
                   {filteredInstalledPlugins.length > 0 && (
-                    <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/50 px-4 py-1.5 dark:border-slate-800 dark:bg-slate-800/30">
+                    <div className="flex items-center gap-3 border-b border-border bg-surface-2/50 px-4 py-1.5 dark:border-border dark:bg-surface-2/30">
                       <button
                         type="button"
-                        className="flex items-center gap-1.5 text-xs text-slate-500 transition-colors hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                        className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground dark:text-muted-foreground dark:hover:text-zinc-200"
                         onClick={() => {
                           if (selectedPluginFiles.size === filteredInstalledPlugins.length) {
                             setSelectedPluginFiles(new Set());
@@ -3393,7 +3393,7 @@ function ServerDetailsPage() {
                       {selectedPluginFiles.size > 0 && (
                         <button
                           type="button"
-                          className="text-xs text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-300"
+                          className="text-xs text-muted-foreground transition-colors hover:text-muted-foreground dark:hover:text-zinc-300"
                           onClick={() => setSelectedPluginFiles(new Set())}
                         >
                           Clear
@@ -3411,13 +3411,13 @@ function ServerDetailsPage() {
                       />
                     </div>
                   ) : (
-                    <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                    <div className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
                       {filteredInstalledPlugins.map((plugin) => {
                         const isSelected = selectedPluginFiles.has(plugin.name);
                         return (
                           <div
                             key={plugin.name}
-                            className={`group flex items-center gap-3 px-4 py-3 transition-colors ${isSelected ? 'bg-primary-50/40 dark:bg-primary-500/5' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'}`}
+                            className={`group flex items-center gap-3 px-4 py-3 transition-colors ${isSelected ? 'bg-primary-50/40 dark:bg-primary-500/5' : 'hover:bg-surface-2 dark:hover:bg-surface-2/40'}`}
                           >
                             {/* Checkbox */}
                             <button
@@ -3432,19 +3432,19 @@ function ServerDetailsPage() {
                               {isSelected ? (
                                 <CheckSquare className="h-4 w-4 text-primary-500" />
                               ) : (
-                                <Square className="h-4 w-4 text-slate-300 transition-colors group-hover:text-slate-400 dark:text-slate-600 dark:group-hover:text-slate-500" />
+                                <Square className="h-4 w-4 text-zinc-300 transition-colors group-hover:text-muted-foreground dark:text-muted-foreground dark:group-hover:text-muted-foreground" />
                               )}
                             </button>
 
                             {/* Icon */}
-                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${plugin.hasUpdate ? 'bg-amber-50 dark:bg-amber-500/10' : 'bg-slate-100 dark:bg-slate-800'}`}>
-                              <Puzzle className={`h-4 w-4 ${plugin.hasUpdate ? 'text-amber-500 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'}`} />
+                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${plugin.hasUpdate ? 'bg-amber-50 dark:bg-amber-500/10' : 'bg-surface-2 dark:bg-surface-2'}`}>
+                              <Puzzle className={`h-4 w-4 ${plugin.hasUpdate ? 'text-amber-500 dark:text-amber-400' : 'text-muted-foreground dark:text-muted-foreground'}`} />
                             </div>
 
                             {/* Info */}
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <span className="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{plugin.projectName || plugin.name}</span>
+                                <span className="truncate text-sm font-medium text-foreground dark:text-zinc-200">{plugin.projectName || plugin.name}</span>
                                 {plugin.hasUpdate && (
                                   <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
                                     <ArrowUpCircle className="h-2.5 w-2.5" />
@@ -3452,19 +3452,19 @@ function ServerDetailsPage() {
                                   </span>
                                 )}
                                 {plugin.provider && (
-                                  <span className="inline-flex shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium capitalize text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                  <span className="inline-flex shrink-0 rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted-foreground dark:bg-surface-2 dark:text-muted-foreground">
                                     {plugin.provider}
                                   </span>
                                 )}
                               </div>
-                              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-400 dark:text-slate-500">
+                              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground dark:text-muted-foreground">
                                 <span className="font-mono">{formatBytes(plugin.size)}</span>
                                 {plugin.modifiedAt && <span>{new Date(plugin.modifiedAt).toLocaleDateString()}</span>}
                                 {plugin.versionId && <span title={plugin.versionId}>v{plugin.versionId.length > 12 ? plugin.versionId.slice(0, 8) + '…' : plugin.versionId}</span>}
                                 {plugin.hasUpdate && plugin.latestVersionName && (
                                   <span className="font-medium text-amber-600 dark:text-amber-400">→ {plugin.latestVersionName}</span>
                                 )}
-                                {!plugin.provider && <span className="italic text-slate-300 dark:text-slate-600">untracked</span>}
+                                {!plugin.provider && <span className="italic text-zinc-300 dark:text-muted-foreground">untracked</span>}
                               </div>
                             </div>
 
@@ -3487,7 +3487,7 @@ function ServerDetailsPage() {
                               )}
                               <button
                                 type="button"
-                                className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+                                className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
                                 title="Remove"
                                 onClick={() => { if (confirm(`Remove ${plugin.projectName || plugin.name}?`)) uninstallPluginMutation.mutate(plugin.name); }}
                               >
@@ -3508,26 +3508,26 @@ function ServerDetailsPage() {
 
       {activeTab === 'users' ? (
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+          <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                   Invite user
                 </div>
-                <div className="text-xs text-slate-600 dark:text-slate-400">
+                <div className="text-xs text-muted-foreground dark:text-muted-foreground">
                   Send an invite to grant access to this server.
                 </div>
               </div>
             </div>
-            <div className="mt-4 grid grid-cols-1 gap-3 text-xs text-slate-600 dark:text-slate-300 sm:grid-cols-3">
+            <div className="mt-4 grid grid-cols-1 gap-3 text-xs text-muted-foreground dark:text-zinc-300 sm:grid-cols-3">
               <input
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                className="rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                 value={inviteEmail}
                 onChange={(event) => setInviteEmail(event.target.value)}
                 placeholder="user@example.com"
               />
               <select
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                className="rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                 value={invitePreset}
                 onChange={(event) =>
                   setInvitePreset(event.target.value as 'readOnly' | 'power' | 'full' | 'custom')
@@ -3548,12 +3548,12 @@ function ServerDetailsPage() {
               </button>
             </div>
             {invitePreset === 'custom' ? (
-              <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-slate-600 dark:text-slate-300 sm:grid-cols-2">
+              <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-muted-foreground dark:text-zinc-300 sm:grid-cols-2">
                 {permissionOptions.map((perm) => (
                   <label key={perm} className="flex items-center gap-2">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 rounded border-slate-200 bg-white text-primary-600 dark:border-slate-700 dark:bg-slate-900 dark:text-primary-400"
+                      className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                       checked={invitePermissions.includes(perm)}
                       onChange={(event) => {
                         setInvitePermissions((current) =>
@@ -3568,29 +3568,29 @@ function ServerDetailsPage() {
                 ))}
               </div>
             ) : (
-              <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+              <div className="mt-3 text-xs text-muted-foreground dark:text-muted-foreground">
                 {permissionsData?.presets?.[invitePreset]?.join(', ') || 'No preset loaded.'}
               </div>
             )}
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+            <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
               Active access
             </div>
-            <div className="mt-4 space-y-3 text-xs text-slate-600 dark:text-slate-300">
+            <div className="mt-4 space-y-3 text-xs text-muted-foreground dark:text-zinc-300">
               {permissionsData?.data?.length ? (
                 permissionsData.data.map((entry) => (
                   <div
                     key={entry.id}
-                    className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-950/60 dark:hover:border-primary-500/30"
+                    className="rounded-lg border border-border bg-surface-2 px-4 py-3 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-zinc-950/60 dark:hover:border-primary/30"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                        <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                           {entry.user.username}
                         </div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400">
+                        <div className="text-xs text-muted-foreground dark:text-muted-foreground">
                           {entry.user.email}
                         </div>
                       </div>
@@ -3604,7 +3604,7 @@ function ServerDetailsPage() {
                           Remove
                         </button>
                       ) : (
-                        <span className="rounded-full border border-slate-200 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                        <span className="rounded-full border border-border px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground dark:border-border dark:text-zinc-300">
                           Owner
                         </span>
                       )}
@@ -3614,7 +3614,7 @@ function ServerDetailsPage() {
                         <label key={`${entry.id}-${perm}`} className="flex items-center gap-2">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded border-slate-200 bg-white text-primary-600 dark:border-slate-700 dark:bg-slate-900 dark:text-primary-400"
+                            className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                             checked={(
                               accessPermissions[entry.userId] ?? entry.permissions
                             ).includes(perm)}
@@ -3651,29 +3651,29 @@ function ServerDetailsPage() {
                   </div>
                 ))
               ) : (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-6 py-6 text-center text-xs text-slate-500 dark:text-slate-500 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-400">
+                <div className="rounded-lg border border-dashed border-border bg-surface-2 px-6 py-6 text-center text-xs text-muted-foreground dark:text-muted-foreground dark:border-border dark:bg-surface-1/50 dark:text-muted-foreground">
                   No additional users yet.
                 </div>
               )}
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+            <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
               Pending invites
             </div>
-            <div className="mt-4 space-y-2 text-xs text-slate-600 dark:text-slate-300">
+            <div className="mt-4 space-y-2 text-xs text-muted-foreground dark:text-zinc-300">
               {invites.length ? (
                 invites.map((invite) => (
                   <div
                     key={invite.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-950/60 dark:hover:border-primary-500/30"
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-2 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-zinc-950/60 dark:hover:border-primary/30"
                   >
                     <div>
-                      <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                         {invite.email}
                       </div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                      <div className="text-[11px] text-muted-foreground dark:text-muted-foreground">
                         Expires {new Date(invite.expiresAt).toLocaleString()}
                       </div>
                     </div>
@@ -3688,7 +3688,7 @@ function ServerDetailsPage() {
                   </div>
                 ))
               ) : (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-6 py-6 text-center text-xs text-slate-500 dark:text-slate-500 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-400">
+                <div className="rounded-lg border border-dashed border-border bg-surface-2 px-6 py-6 text-center text-xs text-muted-foreground dark:text-muted-foreground dark:border-border dark:bg-surface-1/50 dark:text-muted-foreground">
                   No pending invites.
                 </div>
               )}
@@ -3702,26 +3702,26 @@ function ServerDetailsPage() {
           {/* ── Startup & Environment ── */}
           {isAdmin && (
             <section>
-              <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700/60" />
+              <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground dark:text-muted-foreground">
+                <span className="h-px flex-1 bg-surface-3 dark:bg-surface-2/60" />
                 Startup
-                <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700/60" />
+                <span className="h-px flex-1 bg-surface-3 dark:bg-surface-2/60" />
               </h3>
-              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div className="rounded-xl border border-border bg-white p-5 shadow-sm dark:border-border dark:bg-surface-1">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Startup command</div>
-                    <p className="mt-1 max-w-xl text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                    <div className="text-sm font-semibold text-foreground dark:text-zinc-100">Startup command</div>
+                    <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground dark:text-muted-foreground">
                       Executed when the server starts.{' '}
-                      <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[10px] dark:bg-slate-800">{'{{MEMORY}}'}</code>,{' '}
-                      <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[10px] dark:bg-slate-800">{'{{PORT}}'}</code>{' '}
+                      <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[10px] dark:bg-surface-2">{'{{MEMORY}}'}</code>,{' '}
+                      <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[10px] dark:bg-surface-2">{'{{PORT}}'}</code>{' '}
                       and other variables are substituted from the environment below.
                     </p>
                   </div>
                   {server.startupCommand && (
                     <button
                       type="button"
-                      className="shrink-0 rounded-md border border-slate-200 px-2.5 py-1 text-[10px] font-medium text-slate-500 transition-colors hover:border-primary-500 hover:text-primary-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-primary-400 dark:hover:text-primary-400"
+                      className="shrink-0 rounded-md border border-border px-2.5 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary-500 hover:text-primary-600 dark:border-border dark:text-muted-foreground dark:hover:border-primary-400 dark:hover:text-primary-400"
                       onClick={() => {
                         setStartupCommand(server.template?.startup ?? '');
                         serversApi.update(serverId!, { startupCommand: null }).then(() => {
@@ -3737,7 +3737,7 @@ function ServerDetailsPage() {
                 </div>
                 <div className="mt-3 flex items-center gap-2">
                   <input
-                    className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-900 transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-primary-400 dark:focus:bg-slate-900"
+                    className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3 py-2 font-mono text-xs text-foreground transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-200 dark:focus:border-primary-400 dark:focus:bg-surface-1"
                     value={startupCommand}
                     onChange={(event) => setStartupCommand(event.target.value)}
                     placeholder="e.g. java -Xms128M -Xmx{{MEMORY}}M -jar server.jar --port {{PORT}}"
@@ -3758,7 +3758,7 @@ function ServerDetailsPage() {
                   </button>
                 </div>
                 {server.template?.startup && startupCommand.trim() !== server.template.startup && (
-                  <p className="mt-1.5 text-[10px] text-slate-400 dark:text-slate-500">
+                  <p className="mt-1.5 text-[10px] text-muted-foreground dark:text-muted-foreground">
                     Template default:{' '}
                     <button
                       type="button"
@@ -3775,16 +3775,16 @@ function ServerDetailsPage() {
 
           {/* ── Server Overview & Environment ── */}
           <section>
-            <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-              <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700/60" />
+            <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground dark:text-muted-foreground">
+              <span className="h-px flex-1 bg-surface-3 dark:bg-surface-2/60" />
               Server
-              <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700/60" />
+              <span className="h-px flex-1 bg-surface-3 dark:bg-surface-2/60" />
             </h3>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {/* Server info */}
-              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Overview</div>
-                <div className="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
+              <div className="rounded-xl border border-border bg-white p-5 shadow-sm dark:border-border dark:bg-surface-1">
+                <div className="text-sm font-semibold text-foreground dark:text-zinc-100">Overview</div>
+                <div className="mt-4 divide-y divide-zinc-200 dark:divide-zinc-800">
                   {[
                     ['Template', server.template?.name ?? server.templateId],
                     ['Image', server.environment?.TEMPLATE_IMAGE || server.template?.defaultImage || server.template?.image || 'n/a'],
@@ -3794,21 +3794,21 @@ function ServerDetailsPage() {
                     ['Network', server.networkMode],
                   ].map(([label, value]) => (
                     <div key={String(label)} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
-                      <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
-                      <span className="text-xs font-medium text-slate-900 dark:text-slate-100">{String(value)}</span>
+                      <span className="text-xs text-muted-foreground dark:text-muted-foreground">{label}</span>
+                      <span className="text-xs font-medium text-foreground dark:text-zinc-100">{String(value)}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* Environment variables */}
-              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div className="rounded-xl border border-border bg-white p-5 shadow-sm dark:border-border dark:bg-surface-1">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Environment</div>
+                  <div className="text-sm font-semibold text-foreground dark:text-zinc-100">Environment</div>
                   {isAdmin && (
                     <button
                       type="button"
-                      className="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600 transition-colors hover:bg-primary-50 hover:text-primary-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-primary-500/10 dark:hover:text-primary-400"
+                      className="rounded-md bg-surface-2 px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-primary-50 hover:text-primary-600 dark:bg-surface-2 dark:text-muted-foreground dark:hover:bg-primary-500/10 dark:hover:text-primary-400"
                       onClick={() => { setEnvVars((prev) => [...prev, { key: '', value: '' }]); setEnvDirty(true); }}
                       disabled={isSuspended}
                     >
@@ -3819,20 +3819,20 @@ function ServerDetailsPage() {
                 {isAdmin ? (
                   <div className="mt-4 space-y-2">
                     {envVars.length === 0 && (
-                      <p className="py-4 text-center text-xs text-slate-400 dark:text-slate-500">No environment variables. Click "+ Add variable" to begin.</p>
+                      <p className="py-4 text-center text-xs text-muted-foreground dark:text-muted-foreground">No environment variables. Click "+ Add variable" to begin.</p>
                     )}
                     {envVars.map((row, idx) => (
                       <div key={idx} className="group flex items-center gap-2">
                         <input
-                          className="w-[130px] shrink-0 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 font-mono text-[11px] uppercase text-slate-700 transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:focus:border-primary-400 dark:focus:bg-slate-900"
+                          className="w-[130px] shrink-0 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] uppercase text-foreground transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-300 dark:focus:border-primary-400 dark:focus:bg-surface-1"
                           value={row.key}
                           onChange={(e) => { const next = [...envVars]; next[idx] = { ...next[idx], key: e.target.value }; setEnvVars(next); setEnvDirty(true); }}
                           placeholder="KEY"
                           disabled={isSuspended}
                         />
-                        <span className="text-[10px] text-slate-300 dark:text-slate-600">=</span>
+                        <span className="text-[10px] text-zinc-300 dark:text-muted-foreground">=</span>
                         <input
-                          className="min-w-0 flex-1 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 font-mono text-[11px] text-slate-700 transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:focus:border-primary-400 dark:focus:bg-slate-900"
+                          className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] text-foreground transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-300 dark:focus:border-primary-400 dark:focus:bg-surface-1"
                           value={row.value}
                           onChange={(e) => { const next = [...envVars]; next[idx] = { ...next[idx], value: e.target.value }; setEnvVars(next); setEnvDirty(true); }}
                           placeholder="value"
@@ -3840,7 +3840,7 @@ function ServerDetailsPage() {
                         />
                         <button
                           type="button"
-                          className="shrink-0 rounded-md p-1 text-slate-300 opacity-0 transition-all group-hover:opacity-100 hover:text-rose-500 dark:text-slate-600 dark:hover:text-rose-400"
+                          className="shrink-0 rounded-md p-1 text-zinc-300 opacity-0 transition-all group-hover:opacity-100 hover:text-rose-500 dark:text-muted-foreground dark:hover:text-rose-400"
                           onClick={() => { setEnvVars((prev) => prev.filter((_, i) => i !== idx)); setEnvDirty(true); }}
                           disabled={isSuspended}
                           title="Remove"
@@ -3863,16 +3863,16 @@ function ServerDetailsPage() {
                     )}
                   </div>
                 ) : (
-                  <div className="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
+                  <div className="mt-4 divide-y divide-zinc-200 dark:divide-zinc-800">
                     {server.environment && Object.keys(server.environment).length > 0 ? (
                       Object.entries(server.environment).map(([key, value]) => (
                         <div key={key} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
-                          <span className="font-mono text-[11px] uppercase text-slate-500 dark:text-slate-400">{key}</span>
-                          <span className="text-xs font-medium text-slate-900 dark:text-slate-100">{String(value)}</span>
+                          <span className="font-mono text-[11px] uppercase text-muted-foreground dark:text-muted-foreground">{key}</span>
+                          <span className="text-xs font-medium text-foreground dark:text-zinc-100">{String(value)}</span>
                         </div>
                       ))
                     ) : (
-                      <p className="py-4 text-center text-xs text-slate-400 dark:text-slate-500">No environment variables set.</p>
+                      <p className="py-4 text-center text-xs text-muted-foreground dark:text-muted-foreground">No environment variables set.</p>
                     )}
                   </div>
                 )}
@@ -3882,14 +3882,14 @@ function ServerDetailsPage() {
 
           {/* ── Config Files ── */}
           <section>
-            <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-              <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700/60" />
+            <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground dark:text-muted-foreground">
+              <span className="h-px flex-1 bg-surface-3 dark:bg-surface-2/60" />
               Config files
-              <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700/60" />
+              <span className="h-px flex-1 bg-surface-3 dark:bg-surface-2/60" />
             </h3>
-            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="rounded-xl border border-border bg-white p-5 shadow-sm dark:border-border dark:bg-surface-1">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-muted-foreground dark:text-muted-foreground">
                   {combinedConfigPaths.length
                     ? combinedConfigPaths.join(', ')
                     : 'No config files defined in template.'}
@@ -3897,7 +3897,7 @@ function ServerDetailsPage() {
               </div>
               <div className="mt-3">
                 <input
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-primary-400 dark:focus:bg-slate-900"
+                  className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-foreground transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-200 dark:focus:border-primary-400 dark:focus:bg-surface-1"
                   placeholder="Search config keys or values…"
                   value={configSearch}
                   onChange={(event) => setConfigSearch(event.target.value)}
@@ -3905,22 +3905,22 @@ function ServerDetailsPage() {
               </div>
               <div className="mt-4 space-y-3">
                 {!combinedConfigPaths.length ? (
-                  <p className="py-4 text-center text-xs text-slate-400 dark:text-slate-500">
-                    Add <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[10px] dark:bg-slate-800">features.configFiles</code> to the template to enable dynamic settings.
+                  <p className="py-4 text-center text-xs text-muted-foreground dark:text-muted-foreground">
+                    Add <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[10px] dark:bg-surface-2">features.configFiles</code> to the template to enable dynamic settings.
                   </p>
                 ) : (
                   <div className="space-y-2">
                     {filteredConfigFiles.length === 0 ? (
-                      <p className="rounded-lg border border-dashed border-slate-200 py-4 text-center text-xs text-slate-400 dark:border-slate-700 dark:text-slate-500">No matches found.</p>
+                      <p className="rounded-lg border border-dashed border-border py-4 text-center text-xs text-muted-foreground dark:border-border dark:text-muted-foreground">No matches found.</p>
                     ) : (
                       filteredConfigFiles.map((configFile) => (
                         <div
-                          className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50/50 transition-colors dark:border-slate-700 dark:bg-slate-800/40"
+                          className="overflow-hidden rounded-lg border border-border bg-surface-2/50 transition-colors dark:border-border dark:bg-surface-2/40"
                           key={configFile.path}
                         >
                           <button
                             type="button"
-                            className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-xs transition-colors hover:bg-slate-100/80 dark:hover:bg-slate-800/80"
+                            className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-xs transition-colors hover:bg-surface-2/80 dark:hover:bg-surface-2/80"
                             onClick={() => {
                               if (configSearch) return;
                               const fileIndex = fileIndexByPath.get(configFile.path) ?? -1;
@@ -3929,11 +3929,11 @@ function ServerDetailsPage() {
                               );
                             }}
                           >
-                            <span className="font-semibold text-slate-700 dark:text-slate-200">{configFile.path}</span>
+                            <span className="font-semibold text-foreground dark:text-zinc-200">{configFile.path}</span>
                             <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold tracking-wide transition-colors ${
                               configSearch || openConfigIndex === (fileIndexByPath.get(configFile.path) ?? -1)
                                 ? 'bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400'
-                                : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
+                                : 'bg-surface-2 text-muted-foreground dark:bg-surface-2 dark:text-muted-foreground'
                             }`}>
                               {configSearch
                                 ? 'Filtered'
@@ -3944,16 +3944,16 @@ function ServerDetailsPage() {
                           </button>
                           {configSearch ||
                           openConfigIndex === (fileIndexByPath.get(configFile.path) ?? -1) ? (
-                            <div className="border-t border-slate-200 px-4 py-4 dark:border-slate-700">
+                            <div className="border-t border-border px-4 py-4 dark:border-border">
                               {!configFile.loaded ? (
-                                <p className="text-xs text-slate-400 dark:text-slate-500">Loading config values…</p>
+                                <p className="text-xs text-muted-foreground dark:text-muted-foreground">Loading config values…</p>
                               ) : configFile.error ? (
                                 <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
                                   {configFile.error}
                                 </div>
                               ) : (
-                                <div className="space-y-3 text-xs text-slate-600 dark:text-slate-200">
-                                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+                                <div className="space-y-3 text-xs text-muted-foreground dark:text-zinc-200">
+                                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-white px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground dark:border-border dark:bg-surface-2 dark:text-muted-foreground">
                                     <div className="flex items-center gap-2">
                                       <span className="font-semibold">View</span>
                                       {configSearch ? (
@@ -3962,13 +3962,13 @@ function ServerDetailsPage() {
                                         </span>
                                       ) : null}
                                     </div>
-                                    <div className="flex items-center overflow-hidden rounded-full border border-slate-200 dark:border-slate-600">
+                                    <div className="flex items-center overflow-hidden rounded-full border border-border dark:border-zinc-600">
                                       <button
                                         type="button"
                                         className={`px-3 py-1 text-[10px] font-semibold tracking-wide transition-colors ${
                                           configFile.viewMode === 'form'
                                             ? 'bg-primary-600 text-white dark:bg-primary-500'
-                                            : 'bg-white text-slate-500 hover:text-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                                            : 'bg-white text-muted-foreground hover:text-foreground dark:bg-surface-2 dark:text-muted-foreground dark:hover:text-zinc-200'
                                         }`}
                                         onClick={() =>
                                           setConfigFiles((current) =>
@@ -3987,7 +3987,7 @@ function ServerDetailsPage() {
                                         className={`px-3 py-1 text-[10px] font-semibold tracking-wide transition-colors ${
                                           configFile.viewMode === 'raw'
                                             ? 'bg-primary-600 text-white dark:bg-primary-500'
-                                            : 'bg-white text-slate-500 hover:text-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                                            : 'bg-white text-muted-foreground hover:text-foreground dark:bg-surface-2 dark:text-muted-foreground dark:hover:text-zinc-200'
                                         }`}
                                         onClick={() =>
                                           setConfigFiles((current) =>
@@ -4005,7 +4005,7 @@ function ServerDetailsPage() {
                                   </div>
                                   {configFile.viewMode === 'raw' ? (
                                     <textarea
-                                      className="min-h-[240px] w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700 transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-primary-400 dark:focus:bg-slate-900"
+                                      className="min-h-[240px] w-full rounded-lg border border-border bg-surface-2 px-3 py-2 font-mono text-xs text-foreground transition-colors focus:border-primary-500 focus:bg-white focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-200 dark:focus:border-primary-400 dark:focus:bg-surface-1"
                                       value={configFile.rawContent}
                                       onChange={(event) =>
                                         setConfigFiles((current) =>
@@ -4022,7 +4022,7 @@ function ServerDetailsPage() {
                                     {configFile.sections.map((section, sectionIndex) => (
                                       <div
                                         key={`${configFile.path}-${section.title}`}
-                                        className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/60"
+                                        className="rounded-xl border border-border bg-white p-4 dark:border-border dark:bg-surface-2/60"
                                       >
                                         <button
                                           type="button"
@@ -4047,13 +4047,13 @@ function ServerDetailsPage() {
                                             )
                                           }
                                         >
-                                          <div className="flex items-center gap-3 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                          <div className="flex items-center gap-3 text-sm font-semibold text-foreground dark:text-zinc-100">
                                             <span className="h-2 w-2 rounded-full bg-primary-500" />
                                             <span className="uppercase tracking-wide">
                                               {section.title}
                                             </span>
                                           </div>
-                                          <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold tracking-wide ${section.collapsed ? 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400' : 'bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400'}`}>
+                                          <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold tracking-wide ${section.collapsed ? 'bg-surface-2 text-muted-foreground dark:bg-surface-2 dark:text-muted-foreground' : 'bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400'}`}>
                                             {section.collapsed ? 'Expand' : 'Collapse'}
                                           </span>
                                         </button>
@@ -4067,7 +4067,7 @@ function ServerDetailsPage() {
                                                     className="p-3"
                                                   >
                                                     <div className="flex items-center justify-between">
-                                                      <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-900 dark:text-slate-100">
+                                                      <h4 className="text-sm font-semibold text-foreground dark:text-foreground dark:text-zinc-100">
                                                         {entry.key || 'Object'}
                                                       </h4>
                                                       <button
@@ -4090,10 +4090,10 @@ function ServerDetailsPage() {
                                                         (child, childIndex) => (
                                                           <div
                                                             key={`${entry.key}-${child.key}-${childIndex}`}
-                                                            className="space-y-3 border-b border-slate-200 dark:border-slate-700/60 px-3 py-3 last:border-b-0"
+                                                            className="space-y-3 border-b border-border dark:border-border/60 px-3 py-3 last:border-b-0"
                                                           >
                                                             <div className="flex items-start justify-between gap-3">
-                                                              <div className="text-base font-semibold text-slate-900 dark:text-slate-900 dark:text-slate-100">
+                                                              <div className="text-base font-semibold text-foreground dark:text-foreground dark:text-zinc-100">
                                                                 {child.key || 'Key'}
                                                               </div>
                                                               <button
@@ -4132,10 +4132,10 @@ function ServerDetailsPage() {
                                                 ) : (
                                                   <div
                                                     key={`${entry.key}-${entryIndex}`}
-                                                    className="space-y-3 border-b border-slate-200 px-3 py-3 last:border-b-0 dark:border-slate-700/60"
+                                                    className="space-y-3 border-b border-border px-3 py-3 last:border-b-0 dark:border-border/60"
                                                   >
                                                     <div className="flex items-start justify-between gap-3">
-                                                      <div className="text-base font-semibold text-slate-900 dark:text-slate-900 dark:text-slate-100">
+                                                      <div className="text-base font-semibold text-foreground dark:text-foreground dark:text-zinc-100">
                                                         {entry.key || 'Key'}
                                                       </div>
                                                       <button
@@ -4168,7 +4168,7 @@ function ServerDetailsPage() {
                                             <div className="flex flex-wrap items-center gap-2">
                                               <button
                                                 type="button"
-                                                className="rounded-md border border-slate-200 px-3 py-1 text-xs text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-200 dark:hover:border-primary-500/30"
+                                                className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-200 dark:hover:border-primary/30"
                                                 onClick={() =>
                                                   addConfigEntry(
                                                     fileIndexByPath.get(configFile.path) ?? 0,
@@ -4217,13 +4217,13 @@ function ServerDetailsPage() {
       {activeTab === 'admin' ? (
         isAdmin ? (
           <div className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+            <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                     Suspension
                   </div>
-                  <div className="text-xs text-slate-600 dark:text-slate-400">
+                  <div className="text-xs text-muted-foreground dark:text-muted-foreground">
                     Suspend or restore access to the server.
                   </div>
                 </div>
@@ -4241,11 +4241,11 @@ function ServerDetailsPage() {
               {server.status !== 'suspended' ? (
                 <div className="mt-3 flex flex-wrap items-end gap-3 text-xs">
                   <div className="flex-1">
-                    <label className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    <label className="text-[11px] uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                       Reason (optional)
                     </label>
                     <input
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                      className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                       value={suspendReason}
                       onChange={(event) => setSuspendReason(event.target.value)}
                       placeholder="Billing, abuse, or other admin notes"
@@ -4263,17 +4263,17 @@ function ServerDetailsPage() {
               ) : null}
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+            <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                     Port allocations
                   </div>
-                  <div className="text-xs text-slate-600 dark:text-slate-400">
+                  <div className="text-xs text-muted-foreground dark:text-muted-foreground">
                     Add or remove host-to-container bindings.
                   </div>
                 </div>
-                <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                   {server.status === 'stopped' ? 'Stopped' : 'Stop server to edit'}
                 </span>
               </div>
@@ -4282,9 +4282,9 @@ function ServerDetailsPage() {
                   {allocationsError}
                 </div>
               ) : null}
-              <div className="mt-3 grid grid-cols-1 gap-3 text-xs text-slate-600 dark:text-slate-300 sm:grid-cols-2">
+              <div className="mt-3 grid grid-cols-1 gap-3 text-xs text-muted-foreground dark:text-zinc-300 sm:grid-cols-2">
                 <input
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                  className="rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                   value={newContainerPort}
                   onChange={(event) => setNewContainerPort(event.target.value)}
                   placeholder="Container port"
@@ -4294,7 +4294,7 @@ function ServerDetailsPage() {
                   disabled={server.status !== 'stopped' || isSuspended}
                 />
                 <input
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                  className="rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                   value={newHostPort}
                   onChange={(event) => setNewHostPort(event.target.value)}
                   placeholder="Host port (optional)"
@@ -4316,17 +4316,17 @@ function ServerDetailsPage() {
               </div>
               <div className="mt-4 space-y-2 text-xs">
                 {allocations.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-center text-slate-500 dark:text-slate-500 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-400">
+                  <div className="rounded-lg border border-dashed border-border bg-surface-2 px-4 py-4 text-center text-muted-foreground dark:text-muted-foreground dark:border-border dark:bg-surface-1/50 dark:text-muted-foreground">
                     No allocations configured.
                   </div>
                 ) : (
                   allocations.map((allocation) => (
                     <div
                       key={`${allocation.containerPort}-${allocation.hostPort}`}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-950/70 dark:hover:border-primary-500/30"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-zinc-950/70 dark:hover:border-primary/30"
                     >
                       <div className="flex items-center gap-3">
-                        <span className="text-slate-900 dark:text-slate-100">
+                        <span className="text-foreground dark:text-zinc-100">
                           {allocation.containerPort} → {allocation.hostPort}
                         </span>
                         {allocation.isPrimary ? (
@@ -4338,7 +4338,7 @@ function ServerDetailsPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          className="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:border-primary-500/30"
+                          className="rounded-md border border-border px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground disabled:opacity-60 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                           onClick={() => setPrimaryMutation.mutate(allocation.containerPort)}
                           disabled={
                             allocation.isPrimary ||
@@ -4369,24 +4369,24 @@ function ServerDetailsPage() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+            <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                     Crash recovery
                   </div>
-                  <div className="text-xs text-slate-600 dark:text-slate-400">
+                  <div className="text-xs text-muted-foreground dark:text-muted-foreground">
                     Configure automatic restart behavior for crashes.
                   </div>
                 </div>
               </div>
-              <div className="mt-3 grid grid-cols-1 gap-3 text-xs text-slate-600 dark:text-slate-300 sm:grid-cols-2">
+              <div className="mt-3 grid grid-cols-1 gap-3 text-xs text-muted-foreground dark:text-zinc-300 sm:grid-cols-2">
                 <div>
-                  <label className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  <label className="text-[11px] uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                     Restart policy
                   </label>
                   <select
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                    className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                     value={restartPolicy}
                     onChange={(event) => setRestartPolicy(event.target.value as 'always' | 'on-failure' | 'never')}
                     disabled={isSuspended}
@@ -4397,11 +4397,11 @@ function ServerDetailsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  <label className="text-[11px] uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                     Max crash count
                   </label>
                   <input
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                    className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                     type="number"
                     min={0}
                     max={100}
@@ -4422,13 +4422,13 @@ function ServerDetailsPage() {
                 </button>
                 <button
                   type="button"
-                  className="rounded-md border border-slate-200 px-3 py-2 font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:border-primary-500/30"
+                  className="rounded-md border border-border px-3 py-2 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground disabled:opacity-60 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                   onClick={() => resetCrashCountMutation.mutate()}
                   disabled={isSuspended || resetCrashCountMutation.isPending}
                 >
                   Reset crash count
                 </button>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                <div className="text-[11px] text-muted-foreground dark:text-muted-foreground">
                   Crashes: {server.crashCount ?? 0} / {server.maxCrashCount ?? 0}
                   {server.lastCrashAt
                     ? ` · Last crash ${new Date(server.lastCrashAt).toLocaleString()}`
@@ -4440,11 +4440,11 @@ function ServerDetailsPage() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+              <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                 Resource allocation
               </div>
-              <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+              <p className="mt-2 text-xs text-muted-foreground dark:text-muted-foreground">
                 Adjust memory, CPU, disk, or primary IP assignments.
               </p>
               <div className="mt-3 flex flex-wrap gap-2 text-xs">
@@ -4479,16 +4479,16 @@ function ServerDetailsPage() {
       {activeTab === 'settings' ? (
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+              <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                 Rename server
               </div>
-              <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+              <p className="mt-2 text-xs text-muted-foreground dark:text-muted-foreground">
                 Update how this server appears in your list.
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
                 <input
-                  className="min-w-[220px] flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                  className="min-w-[220px] flex-1 rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                   value={serverName}
                   onChange={(event) => setServerName(event.target.value)}
                   placeholder="Server name"
@@ -4509,11 +4509,11 @@ function ServerDetailsPage() {
                 </button>
               </div>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+              <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                 Maintenance
               </div>
-              <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+              <p className="mt-2 text-xs text-muted-foreground dark:text-muted-foreground">
                 Reinstalling will re-run the template install script and may overwrite files.
               </p>
               <div className="mt-3 flex flex-wrap gap-2 text-xs">
@@ -4534,16 +4534,16 @@ function ServerDetailsPage() {
       {/* Mod Update Confirmation Modal */}
       {updateConfirmMods.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+          <div className="mx-4 w-full max-w-md rounded-2xl border border-border bg-white p-6 shadow-xl dark:border-border dark:bg-surface-1">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/10">
                 <ArrowUpCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                <h3 className="text-base font-semibold text-foreground dark:text-zinc-100">
                   Confirm Mod Update{updateConfirmMods.length > 1 ? 's' : ''}
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-muted-foreground dark:text-muted-foreground">
                   {updateConfirmMods.length} mod{updateConfirmMods.length !== 1 ? 's' : ''} will be updated
                 </p>
               </div>
@@ -4557,9 +4557,9 @@ function ServerDetailsPage() {
 
             <div className="mb-4 max-h-60 space-y-2 overflow-y-auto">
               {updateConfirmMods.map((mod) => (
-                <div key={mod.name} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
-                  <span className="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{mod.name}</span>
-                  <span className="ml-2 shrink-0 text-xs text-slate-500 dark:text-slate-400">
+                <div key={mod.name} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 dark:border-border">
+                  <span className="truncate text-sm font-medium text-foreground dark:text-zinc-200">{mod.name}</span>
+                  <span className="ml-2 shrink-0 text-xs text-muted-foreground dark:text-muted-foreground">
                     {mod.currentVersion.slice(0, 8)} → <span className="text-amber-600 dark:text-amber-400">{mod.latestVersion}</span>
                   </span>
                 </div>
@@ -4569,7 +4569,7 @@ function ServerDetailsPage() {
             <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
-                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-2 dark:text-muted-foreground dark:hover:bg-surface-2"
                 onClick={() => setUpdateConfirmMods([])}
                 disabled={isUpdatingMods}
               >
@@ -4613,16 +4613,16 @@ function ServerDetailsPage() {
       {/* Plugin Update Confirmation Modal */}
       {updateConfirmPlugins.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+          <div className="mx-4 w-full max-w-md rounded-2xl border border-border bg-white p-6 shadow-xl dark:border-border dark:bg-surface-1">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/10">
                 <ArrowUpCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                <h3 className="text-base font-semibold text-foreground dark:text-zinc-100">
                   Confirm Plugin Update{updateConfirmPlugins.length > 1 ? 's' : ''}
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-muted-foreground dark:text-muted-foreground">
                   {updateConfirmPlugins.length} plugin{updateConfirmPlugins.length !== 1 ? 's' : ''} will be updated
                 </p>
               </div>
@@ -4636,9 +4636,9 @@ function ServerDetailsPage() {
 
             <div className="mb-4 max-h-60 space-y-2 overflow-y-auto">
               {updateConfirmPlugins.map((plugin) => (
-                <div key={plugin.name} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
-                  <span className="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{plugin.name}</span>
-                  <span className="ml-2 shrink-0 text-xs text-slate-500 dark:text-slate-400">
+                <div key={plugin.name} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 dark:border-border">
+                  <span className="truncate text-sm font-medium text-foreground dark:text-zinc-200">{plugin.name}</span>
+                  <span className="ml-2 shrink-0 text-xs text-muted-foreground dark:text-muted-foreground">
                     {plugin.currentVersion.slice(0, 8)} → <span className="text-amber-600 dark:text-amber-400">{plugin.latestVersion}</span>
                   </span>
                 </div>
@@ -4648,7 +4648,7 @@ function ServerDetailsPage() {
             <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
-                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-2 dark:text-muted-foreground dark:hover:bg-surface-2"
                 onClick={() => setUpdateConfirmPlugins([])}
                 disabled={isUpdatingPlugins}
               >

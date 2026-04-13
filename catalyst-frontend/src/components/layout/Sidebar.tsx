@@ -203,8 +203,8 @@ function MenuItem({ to, label, icon: Icon, collapsed }: MenuItemProps) {
         className={cn(
           'flex h-9 w-9 items-center justify-center rounded-lg transition-all duration-200',
           isActive
-            ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/30'
-            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white',
+            ? 'bg-primary text-primary-foreground shadow-sm'
+            : 'text-zinc-500 hover:bg-surface-2 hover:text-zinc-100',
         )}
         title={label}
       >
@@ -219,8 +219,8 @@ function MenuItem({ to, label, icon: Icon, collapsed }: MenuItemProps) {
       className={cn(
         'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
         isActive
-          ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/30'
-          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white',
+          ? 'bg-primary text-primary-foreground shadow-sm'
+          : 'text-zinc-400 hover:bg-surface-2 hover:text-zinc-100',
       )}
     >
       <Icon className="h-4 w-4 flex-shrink-0" />
@@ -267,17 +267,18 @@ function Section({ title, links, defaultExpanded = false, collapsed }: SectionPr
       <button
         type="button"
         onClick={toggleExpanded}
-        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 transition-colors hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300"
+        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-zinc-500 transition-colors hover:text-zinc-300"
       >
         <span>{title}</span>
         {shouldExpand ? (
-          <ChevronDown className="h-3.5 w-3.5" />
+          <ChevronDown className="h-3 w-3" />
         ) : (
-          <ChevronRight className="h-3.5 w-3.5" />
+          <ChevronRight className="h-3 w-3" />
         )}
       </button>
       {shouldExpand && (
-        <div className="space-y-1 border-l border-slate-200 pl-3 dark:border-slate-700">
+        <div className="space-y-1 border-l border-zinc-800 pl-3">
+          <div className="absolute" />
           {links.map((link) => (
             <MenuItem key={link.to} {...link} />
           ))}
@@ -310,13 +311,14 @@ function Sidebar() {
   return (
     <aside
       className={cn(
-        'sticky top-0 flex h-screen flex-col border-r border-slate-200 bg-gradient-to-b from-white to-slate-50/50 transition-all duration-300 dark:border-slate-800 dark:from-slate-900 dark:to-slate-950',
-        sidebarCollapsed ? 'w-16' : 'w-64',
+        'sticky top-0 flex h-screen flex-col border-r border-zinc-800 bg-surface-0 transition-all duration-300',
+        sidebarCollapsed ? 'w-16' : 'w-60',
       )}
     >
+      {/* Logo */}
       <div
         className={cn(
-          'flex items-center border-b border-slate-200 dark:border-slate-800',
+          'flex items-center border-b border-zinc-800',
           sidebarCollapsed ? 'justify-center p-3' : 'gap-3 px-4 py-4',
         )}
       >
@@ -333,11 +335,12 @@ function Sidebar() {
             }}
           />
           {!sidebarCollapsed && (
-            <span className="text-lg font-bold text-slate-900 dark:text-white">{panelName}</span>
+            <span className="font-display text-lg font-bold text-zinc-100">{panelName}</span>
           )}
         </Link>
       </div>
 
+      {/* Navigation */}
       <div className={cn('flex-1 overflow-y-auto', sidebarCollapsed ? 'px-2 py-4' : 'px-3 py-4')}>
         <div className="space-y-1">
           {mainLinks.map((link) => (
@@ -348,7 +351,7 @@ function Sidebar() {
         {filteredSections.length > 0 && (
           <div
             className={cn(
-              'border-t border-slate-200 pt-4 dark:border-slate-800',
+              'border-t border-zinc-800 pt-4',
               sidebarCollapsed ? 'mt-4' : 'mt-6',
             )}
           >
@@ -361,28 +364,29 @@ function Sidebar() {
         )}
       </div>
 
+      {/* User Section */}
       <div
         className={cn(
-          'border-t border-slate-200 dark:border-slate-800',
+          'border-t border-zinc-800',
           sidebarCollapsed ? 'p-2' : 'p-3',
         )}
       >
         <NavLink
           to="/profile"
           className={cn(
-            'flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800',
+            'flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-surface-2',
             sidebarCollapsed && 'justify-center',
           )}
         >
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-linear-to-br from-primary-500 to-primary-700 text-sm font-medium text-white shadow-lg shadow-primary-500/30">
+          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground">
             {initials}
           </div>
           {!sidebarCollapsed && (
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-slate-900 dark:text-white">
+              <div className="truncate text-sm font-medium text-zinc-100">
                 {user?.username || 'User'}
               </div>
-              <div className="truncate text-xs text-slate-500 dark:text-slate-400">
+              <div className="truncate text-xs text-zinc-500">
                 {user?.role || 'Member'}
               </div>
             </div>
@@ -394,7 +398,7 @@ function Sidebar() {
             type="button"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             className={cn(
-              'flex h-8 items-center justify-center gap-2 rounded-lg border border-slate-200 font-medium text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800',
+              'flex h-8 items-center justify-center gap-2 rounded-lg border border-zinc-800 font-medium text-zinc-400 transition-all hover:bg-surface-2 hover:text-zinc-200',
               sidebarCollapsed ? 'w-8 text-xs' : 'flex-1 px-3 text-xs',
             )}
             title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
@@ -405,7 +409,7 @@ function Sidebar() {
           <button
             type="button"
             onClick={toggleSidebar}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 font-medium text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-800 font-medium text-zinc-400 transition-all hover:bg-surface-2 hover:text-zinc-200"
             title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {sidebarCollapsed ? (
@@ -418,7 +422,7 @@ function Sidebar() {
             <button
               type="button"
               onClick={logout}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-rose-600 transition-all hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-danger transition-all hover:bg-danger/10"
               title="Logout"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -429,7 +433,7 @@ function Sidebar() {
           <button
             type="button"
             onClick={logout}
-            className="mt-1 flex h-8 w-full items-center justify-center rounded-lg text-rose-600 transition-all hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+            className="mt-1 flex h-8 w-full items-center justify-center rounded-lg text-danger transition-all hover:bg-danger/10"
             title="Logout"
           >
             <LogOut className="h-3.5 w-3.5" />

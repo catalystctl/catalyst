@@ -28,22 +28,22 @@ function NodeMetricsCard({ stats }: { stats: NodeStats }) {
   ];
 
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+    <div className="space-y-3 rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Live usage</h3>
-        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+        <h3 className="text-sm font-semibold text-foreground dark:text-white">Live usage</h3>
+        <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-muted-foreground dark:bg-surface-2 dark:text-zinc-300">
           Live
         </span>
       </div>
       {metrics.map((metric) => (
         <div key={metric.label} className="space-y-1">
-          <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
+          <div className="flex items-center justify-between text-xs text-muted-foreground dark:text-zinc-300">
             <span>{metric.label}</span>
-            <span className="font-semibold text-slate-900 dark:text-slate-100">
+            <span className="font-semibold text-foreground dark:text-zinc-100">
               {metric.value.toFixed(0)}%
             </span>
           </div>
-          <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800">
+          <div className="h-2 rounded-full bg-surface-2 dark:bg-surface-2">
             <div
               className={`h-2 rounded-full ${metric.color}`}
               style={{ width: `${metric.value}%` }}

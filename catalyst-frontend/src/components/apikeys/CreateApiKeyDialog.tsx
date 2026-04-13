@@ -76,20 +76,20 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white dark:bg-slate-900 rounded-xl p-6 max-w-xl w-full mx-4 shadow-xl">
+      <div className="bg-white dark:bg-surface-1 rounded-xl p-6 max-w-xl w-full mx-4 shadow-xl">
         {!createdKey ? (
           <>
-            <h2 className="text-xl font-semibold mb-2 text-slate-900 dark:text-slate-100">
+            <h2 className="text-xl font-semibold mb-2 text-foreground dark:text-zinc-100">
               Create API Key
             </h2>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+            <p className="text-sm text-muted-foreground dark:text-muted-foreground mb-6">
               Generate a new API key for automated access to Catalyst
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Name */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                <label className="text-sm font-medium text-foreground dark:text-zinc-100">
                   Name *
                 </label>
                 <input
@@ -97,17 +97,17 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
                   placeholder="e.g., Billing System Integration"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3 py-2 border border-border dark:border-border rounded-lg bg-white dark:bg-surface-1 text-foreground dark:text-zinc-100"
                   required
                 />
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-muted-foreground dark:text-muted-foreground">
                   A descriptive name to identify this API key
                 </p>
               </div>
 
               {/* Expiration */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                <label className="text-sm font-medium text-foreground dark:text-zinc-100">
                   Expiration
                 </label>
                 <select
@@ -115,7 +115,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
                   onChange={(e) =>
                     setFormData({ ...formData, expiresIn: Number(e.target.value) })
                   }
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3 py-2 border border-border dark:border-border rounded-lg bg-white dark:bg-surface-1 text-foreground dark:text-zinc-100"
                 >
                   {expirationOptions.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -127,7 +127,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
 
               {/* Rate Limit */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                <label className="text-sm font-medium text-foreground dark:text-zinc-100">
                   Rate Limit
                 </label>
                 <div className="flex gap-2 items-center">
@@ -139,13 +139,13 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
                     onChange={(e) =>
                       setFormData({ ...formData, rateLimitMax: Number(e.target.value) })
                     }
-                    className="w-32 px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    className="w-32 px-3 py-2 border border-border dark:border-border rounded-lg bg-white dark:bg-surface-1 text-foreground dark:text-zinc-100"
                   />
-                  <span className="text-sm text-slate-500 dark:text-slate-400">
+                  <span className="text-sm text-muted-foreground dark:text-muted-foreground">
                     requests per minute
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-muted-foreground dark:text-muted-foreground">
                   Maximum number of requests allowed per minute
                 </p>
               </div>
@@ -154,7 +154,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+                  className="px-4 py-2 text-sm font-semibold text-foreground dark:text-zinc-300 hover:bg-surface-2 dark:hover:bg-surface-2 rounded transition-colors"
                 >
                   Cancel
                 </button>
@@ -170,10 +170,10 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
           </>
         ) : (
           <>
-            <h2 className="text-xl font-semibold mb-2 text-slate-900 dark:text-slate-100">
+            <h2 className="text-xl font-semibold mb-2 text-foreground dark:text-zinc-100">
               API Key Created
             </h2>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+            <p className="text-sm text-muted-foreground dark:text-muted-foreground mb-6">
               Copy your API key now. For security reasons, it won't be shown again.
             </p>
 
@@ -187,19 +187,19 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
 
               {/* API Key Display */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                <label className="text-sm font-medium text-foreground dark:text-zinc-100">
                   Your API Key
                 </label>
                 <div className="flex gap-2">
                   <input
                     readOnly
                     value={createdKey}
-                    className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-mono text-sm"
+                    className="flex-1 px-3 py-2 border border-border dark:border-border rounded-lg bg-white dark:bg-surface-1 text-foreground dark:text-zinc-100 font-mono text-sm"
                     onFocus={(e) => e.target.select()}
                   />
                   <button
                     onClick={handleCopy}
-                    className="px-4 py-2 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                    className="px-4 py-2 border border-border dark:border-border hover:bg-surface-2 dark:hover:bg-surface-2 rounded-lg transition-colors"
                   >
                     {copied ? (
                       <CheckCircle2 className="w-4 h-4 text-green-500" />
@@ -210,11 +210,11 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
                 </div>
               </div>
 
-              <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-lg">
-                <h4 className="font-semibold mb-2 text-slate-900 dark:text-slate-100 text-sm">
+              <div className="bg-surface-2 dark:bg-surface-2 p-4 rounded-lg">
+                <h4 className="font-semibold mb-2 text-foreground dark:text-zinc-100 text-sm">
                   Usage Example
                 </h4>
-                <pre className="text-xs overflow-x-auto text-slate-700 dark:text-slate-300">
+                <pre className="text-xs overflow-x-auto text-foreground dark:text-zinc-300">
                   <code>{`curl -H "x-api-key: ${createdKey}" \\
   ${window.location.origin}/api/servers`}</code>
                 </pre>

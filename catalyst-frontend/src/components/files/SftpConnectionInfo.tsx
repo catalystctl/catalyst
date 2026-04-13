@@ -28,7 +28,7 @@ export default function SftpConnectionInfo({ serverId }: SftpConnectionInfoProps
 
   if (isLoading || !sftpInfo) {
     return (
-      <div className="text-sm text-slate-500 dark:text-slate-400">Loading SFTP info…</div>
+      <div className="text-sm text-muted-foreground dark:text-muted-foreground">Loading SFTP info…</div>
     );
   }
 
@@ -42,27 +42,27 @@ export default function SftpConnectionInfo({ serverId }: SftpConnectionInfoProps
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-500 dark:text-slate-400">
+      <p className="text-xs text-muted-foreground dark:text-muted-foreground">
         Connect using any SFTP client (FileZilla, WinSCP, etc.)
       </p>
       <div className="grid gap-2">
         {fields.map(({ label, value, key }) => (
           <div
             key={key}
-            className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/50"
+            className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 dark:bg-surface-2/50"
           >
             <div className="min-w-0">
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">
                 {label}
               </span>
-              <p className="truncate font-mono text-sm text-slate-900 dark:text-slate-100">
+              <p className="truncate font-mono text-sm text-foreground dark:text-zinc-100">
                 {value}
               </p>
             </div>
             <button
               type="button"
               onClick={() => copyToClipboard(value, key)}
-              className="ml-2 flex-shrink-0 rounded p-1 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+              className="ml-2 flex-shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-surface-3 hover:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-zinc-300"
               title={`Copy ${label}`}
             >
               {copiedField === key ? (
@@ -75,12 +75,12 @@ export default function SftpConnectionInfo({ serverId }: SftpConnectionInfoProps
         ))}
 
         {/* Password field with show/hide */}
-        <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/50">
+        <div className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 dark:bg-surface-2/50">
           <div className="min-w-0 flex-1">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+            <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">
               Password
             </span>
-            <p className="truncate font-mono text-sm text-slate-900 dark:text-slate-100">
+            <p className="truncate font-mono text-sm text-foreground dark:text-zinc-100">
               {password ? (showPassword ? password : '••••••••••••••••') : 'No session token available'}
             </p>
           </div>
@@ -90,7 +90,7 @@ export default function SftpConnectionInfo({ serverId }: SftpConnectionInfoProps
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+                  className="rounded p-1 text-muted-foreground transition-colors hover:bg-surface-3 hover:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-zinc-300"
                   title={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
@@ -102,7 +102,7 @@ export default function SftpConnectionInfo({ serverId }: SftpConnectionInfoProps
                 <button
                   type="button"
                   onClick={() => copyToClipboard(password, 'Password')}
-                  className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+                  className="rounded p-1 text-muted-foreground transition-colors hover:bg-surface-3 hover:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-zinc-300"
                   title="Copy password"
                 >
                   {copiedField === 'Password' ? (
@@ -119,12 +119,12 @@ export default function SftpConnectionInfo({ serverId }: SftpConnectionInfoProps
 
       {/* Quick connect URI */}
       {password && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/50">
-          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+        <div className="rounded-lg border border-border bg-surface-2 px-3 py-2 dark:border-border dark:bg-surface-2/50">
+          <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">
             Quick Connect URI
           </span>
           <div className="flex items-center gap-2">
-            <code className="flex-1 truncate text-xs text-slate-700 dark:text-slate-300">
+            <code className="flex-1 truncate text-xs text-foreground dark:text-zinc-300">
               sftp://{serverId}@{sftpInfo.host}:{sftpInfo.port}
             </code>
             <button
@@ -135,7 +135,7 @@ export default function SftpConnectionInfo({ serverId }: SftpConnectionInfoProps
                   'URI',
                 )
               }
-              className="flex-shrink-0 rounded p-1 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+              className="flex-shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-surface-3 hover:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-zinc-300"
               title="Copy URI"
             >
               {copiedField === 'URI' ? (

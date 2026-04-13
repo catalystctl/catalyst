@@ -2,120 +2,140 @@
 @import 'sonner/dist/styles.css';
 @config "../../tailwind.config.js";
 
-:root {
-  --brand-yellow: 44 100% 63%;
-  --brand-magenta: 308 67% 56%;
-  --brand-cyan: 189 100% 50%;
-  --brand-violet: 273 71% 39%;
-  --brand-blue: 216 100% 50%;
-  --brand-black: 224 60% 5%;
+/* ═══════════════════════════════════════════════════════════
+   OBSIDIAN DESIGN SYSTEM
+   Dark-first industrial control panel with warm zinc surfaces,
+   vibrant teal accent, and clean geometric typography.
+   ═══════════════════════════════════════════════════════════ */
 
-  --background: 220 14% 94%;
-  --foreground: 222 47% 11%;
-  --muted: 220 13% 91%;
-  --muted-foreground: 215 16% 47%;
-  --popover: 220 18% 97%;
-  --popover-foreground: 222 47% 11%;
-  --card: 220 18% 97%;
-  --card-foreground: 222 47% 11%;
-  --border: 220 13% 86%;
-  --input: 220 13% 86%;
-  --primary: 189 94% 42%;
-  --primary-foreground: 220 18% 15%;
-  --secondary: 220 13% 92%;
-  --secondary-foreground: 222 47% 11%;
-  --accent: var(--brand-magenta);
+:root {
+  /* ── Accent Palette ── */
+  --accent-teal: 174 80% 46%;
+  --accent-teal-light: 174 72% 56%;
+  --accent-teal-muted: 174 80% 46% / 0.15;
+
+  /* ── Semantic Colors ── */
+  --success: 160 84% 39%;
+  --success-muted: 160 84% 39% / 0.15;
+  --warning: 38 92% 50%;
+  --warning-muted: 38 92% 50% / 0.15;
+  --danger: 0 84% 60%;
+  --danger-muted: 0 84% 60% / 0.15;
+  --info: 217 91% 60%;
+  --info-muted: 217 91% 60% / 0.15;
+
+  /* ── Light Mode Tokens ── */
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 3.9%;
+  --border: 240 5.9% 90%;
+  --input: 240 5.9% 90%;
+  --primary: var(--accent-teal);
+  --primary-foreground: 0 0% 100%;
+  --secondary: 240 4.8% 95.9%;
+  --secondary-foreground: 240 10% 3.9%;
+  --accent: var(--accent-teal);
   --accent-foreground: 0 0% 100%;
-  --destructive: 0 70% 54%;
+  --destructive: var(--danger);
   --destructive-foreground: 0 0% 100%;
-  --ring: 189 94% 42%;
+  --ring: var(--accent-teal);
   --radius: 0.5rem;
 
-  --slate-50: 220 16% 96%;
-  --slate-100: 220 14% 93%;
-  --slate-200: 220 13% 87%;
-  --slate-300: 220 11% 80%;
-  --slate-400: 215 16% 57%;
-  --slate-500: 215 16% 47%;
-  --slate-600: 215 19% 35%;
-  --slate-700: 215 25% 27%;
-  --slate-800: 217 33% 17%;
-  --slate-900: 222 47% 11%;
-  --slate-950: 224 71% 4%;
+  /* ── Zinc Scale (Light) ── */
+  --zinc-50: 0 0% 98%;
+  --zinc-100: 240 4.8% 95.9%;
+  --zinc-200: 240 5.9% 90%;
+  --zinc-300: 240 4.9% 83.9%;
+  --zinc-400: 240 5% 64.9%;
+  --zinc-500: 240 3.8% 46.1%;
+  --zinc-600: 240 5.2% 33.9%;
+  --zinc-700: 240 5.9% 24%;
+  --zinc-800: 240 3.7% 15.9%;
+  --zinc-900: 240 10% 3.9%;
+  --zinc-950: 240 10% 3.9%;
 
-  --sky-50: 190 100% 96%;
-  --sky-100: 190 100% 92%;
-  --sky-200: 190 100% 86%;
-  --sky-300: 190 100% 76%;
-  --sky-400: 189 100% 60%;
-  --sky-500: var(--brand-cyan);
-  --sky-600: 189 92% 46%;
-  --sky-700: 189 88% 38%;
-  --sky-800: 189 82% 30%;
-  --sky-900: 189 75% 22%;
+  /* ── Surface Elevation ── */
+  --surface-0: 0 0% 100%;
+  --surface-1: 0 0% 100%;
+  --surface-2: 240 4.8% 95.9%;
+  --surface-3: 240 5.9% 90%;
 
+  /* ── Scrollbar ── */
+  --scrollbar-track: 240 4.8% 95.9%;
+  --scrollbar-thumb: 240 5.9% 83.9%;
+  --scrollbar-thumb-hover: 240 4.9% 64.9%;
+
+  /* ── Sonner Toast ── */
   --sonner-background: hsl(var(--card));
   --sonner-border: hsl(var(--border));
   --sonner-text: hsl(var(--foreground));
-  --sonner-success: hsl(142 70% 40%);
-  --sonner-error: hsl(0 72% 54%);
-  --sonner-info: hsl(var(--primary));
-  --sonner-warning: hsl(44 100% 60%);
+  --sonner-success: hsl(var(--success));
+  --sonner-error: hsl(var(--danger));
+  --sonner-info: hsl(var(--accent-teal));
+  --sonner-warning: hsl(var(--warning));
 
   color-scheme: light;
 }
 
 .dark {
-  --background: 222 38% 14%;
-  --foreground: 210 40% 98%;
-  --muted: 222 38% 14%;
-  --muted-foreground: 215 20% 75%;
-  --popover: 222 38% 14%;
-  --popover-foreground: 210 40% 98%;
-  --card: 222 38% 14%;
-  --card-foreground: 210 40% 98%;
-  --border: 217 24% 20%;
-  --input: 217 24% 20%;
-  --primary: 189 94% 42%;
-  --primary-foreground: 220 30% 12%;
-  --secondary: 217 32% 18%;
-  --secondary-foreground: 210 40% 98%;
-  --accent: var(--brand-magenta);
-  --accent-foreground: 0 0% 100%;
-  --destructive: 0 72% 56%;
+  /* ── Dark Mode Tokens ── */
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --primary: var(--accent-teal);
+  --primary-foreground: 240 10% 3.9%;
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+  --accent: var(--accent-teal);
+  --accent-foreground: 240 10% 3.9%;
+  --destructive: var(--danger);
   --destructive-foreground: 0 0% 100%;
-  --ring: 189 94% 42%;
+  --ring: var(--accent-teal);
 
-  --slate-50: 210 40% 98%;
-  --slate-100: 210 40% 96%;
-  --slate-200: 214 32% 91%;
-  --slate-300: 213 27% 84%;
-  --slate-400: 215 20% 65%;
-  --slate-500: 215 16% 47%;
-  --slate-600: 215 19% 35%;
-  --slate-700: 215 25% 27%;
-  --slate-800: 217 33% 17%;
-  --slate-900: 222 47% 11%;
-  --slate-950: 224 71% 4%;
+  /* ── Zinc Scale (Dark) ── */
+  --zinc-50: 0 0% 98%;
+  --zinc-100: 240 4.8% 95.9%;
+  --zinc-200: 240 5.9% 90%;
+  --zinc-300: 240 4.9% 83.9%;
+  --zinc-400: 240 5% 64.9%;
+  --zinc-500: 240 3.8% 46.1%;
+  --zinc-600: 240 5.2% 33.9%;
+  --zinc-700: 240 5.9% 24%;
+  --zinc-800: 240 3.7% 15.9%;
+  --zinc-900: 240 10% 3.9%;
+  --zinc-950: 240 10% 3.9%;
 
-  --sky-50: 189 100% 92%;
-  --sky-100: 189 100% 86%;
-  --sky-200: 189 100% 76%;
-  --sky-300: 189 100% 64%;
-  --sky-400: 189 100% 56%;
-  --sky-500: var(--brand-cyan);
-  --sky-600: 189 96% 48%;
-  --sky-700: 189 90% 38%;
-  --sky-800: 189 82% 30%;
-  --sky-900: 189 75% 22%;
+  /* ── Surface Elevation (Dark) ── */
+  --surface-0: 240 10% 3.9%;
+  --surface-1: 240 10% 5.9%;
+  --surface-2: 240 3.7% 15.9%;
+  --surface-3: 240 5.9% 24%;
 
-  --sonner-background: hsl(var(--card));
+  /* ── Scrollbar ── */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: 240 3.7% 15.9%;
+  --scrollbar-thumb-hover: 240 5% 33.9%;
+
+  /* ── Sonner Toast ── */
+  --sonner-background: hsl(var(--surface-1));
   --sonner-border: hsl(var(--border));
   --sonner-text: hsl(var(--foreground));
-  --sonner-success: hsl(142 70% 55%);
+  --sonner-success: hsl(160 84% 50%);
   --sonner-error: hsl(0 84% 60%);
-  --sonner-info: hsl(var(--primary));
-  --sonner-warning: hsl(44 100% 60%);
+  --sonner-info: hsl(var(--accent-teal));
+  --sonner-warning: hsl(38 92% 50%);
 
   color-scheme: dark;
 }
@@ -124,11 +144,9 @@
   color-scheme: light;
 }
 
-/* Soften hard-coded bg-white surfaces in light mode */
-:root:not(.dark) .bg-white {
-  background-color: hsl(var(--card));
-}
-
+/* ═══════════════════════════════════════════════════════════
+   BASE STYLES
+   ═══════════════════════════════════════════════════════════ */
 
 * {
   border-color: hsl(var(--border));
@@ -136,10 +154,28 @@
 
 body {
   margin: 0;
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   TYPOGRAPHY SCALE
+   ═══════════════════════════════════════════════════════════ */
+
+.font-display {
+  font-family: 'Outfit', system-ui, sans-serif;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   APP SHELL
+   ═══════════════════════════════════════════════════════════ */
 
 .app-shell {
   background: hsl(var(--background));
@@ -156,116 +192,54 @@ body {
   padding-right: 1rem;
 }
 
-/* Custom scrollbar styling */
+/* ═══════════════════════════════════════════════════════════
+   SCROLLBAR STYLING
+   ═══════════════════════════════════════════════════════════ */
+
 html,
 body {
   scrollbar-width: thin;
-  scrollbar-color: hsl(var(--primary) / 0.3) transparent;
+  scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
 }
 
-.dark,
-.dark html,
-.dark body {
-  scrollbar-color: hsl(var(--primary) / 0.4) transparent;
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
 }
 
-/* Webkit browsers (Chrome, Safari, Edge) */
 html::-webkit-scrollbar,
 body::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 html::-webkit-scrollbar-track,
-body::-webkit-scrollbar-track {
-  background: transparent;
+body::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
+  background: hsl(var(--scrollbar-track));
+  border-radius: 3px;
 }
 
 html::-webkit-scrollbar-thumb,
-body::-webkit-scrollbar-thumb {
-  background: hsl(var(--primary) / 0.3);
-  border-radius: 100px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-.dark html::-webkit-scrollbar-thumb,
-.dark body::-webkit-scrollbar-thumb {
-  background: hsl(var(--primary) / 0.4);
-  border: 2px solid transparent;
-  background-clip: padding-box;
+body::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+  background: hsl(var(--scrollbar-thumb));
+  border-radius: 3px;
 }
 
 html::-webkit-scrollbar-thumb:hover,
-body::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--primary) / 0.5);
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-.dark html::-webkit-scrollbar-thumb:hover,
-.dark body::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--primary) / 0.6);
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-html::-webkit-scrollbar-thumb:active,
-body::-webkit-scrollbar-thumb:active {
-  background: hsl(var(--primary));
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-/* Scrollbar for other elements */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--slate-400)) hsl(var(--slate-100));
-}
-
-.dark * {
-  scrollbar-color: hsl(var(--slate-600)) hsl(var(--slate-800));
-}
-
-*::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-*::-webkit-scrollbar-track {
-  background: hsl(var(--slate-100));
-  border-radius: 4px;
-}
-
-.dark *::-webkit-scrollbar-track {
-  background: hsl(var(--slate-800));
-}
-
-*::-webkit-scrollbar-thumb {
-  background: hsl(var(--slate-400));
-  border-radius: 4px;
-}
-
-.dark *::-webkit-scrollbar-thumb {
-  background: hsl(var(--slate-600));
-}
-
+body::-webkit-scrollbar-thumb:hover,
 *::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--slate-500));
+  background: hsl(var(--scrollbar-thumb-hover));
 }
 
-.dark *::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--slate-500));
-}
+/* ═══════════════════════════════════════════════════════════
+   CUSTOM SELECT STYLING
+   ═══════════════════════════════════════════════════════════ */
 
-*::-webkit-scrollbar-thumb:active {
-  background: hsl(var(--primary));
-}
-
-/* Custom select dropdown styling */
 select {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2371717a' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
   background-position: right 0.5rem center;
   background-repeat: no-repeat;
   background-size: 1.5em 1.5em;
@@ -274,7 +248,7 @@ select {
 }
 
 .dark select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%23a1a1aa' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
 }
 
 select:hover {
@@ -285,7 +259,6 @@ select:focus {
   outline: none;
 }
 
-/* Style option elements */
 select option {
   background-color: hsl(var(--card));
   color: hsl(var(--foreground));
@@ -293,56 +266,59 @@ select option {
 }
 
 .dark select option {
-  background-color: hsl(var(--slate-900));
+  background-color: hsl(var(--surface-1));
   color: hsl(var(--foreground));
 }
 
-/* Firefox-specific option styling */
 @-moz-document url-prefix() {
   select option {
     background-color: white;
-    color: hsl(var(--slate-900));
+    color: hsl(var(--foreground));
   }
-  
+
   .dark select option {
-    background-color: hsl(var(--slate-900));
-    color: hsl(var(--slate-100));
+    background-color: hsl(var(--surface-1));
+    color: hsl(var(--foreground));
   }
-  
+
   select option:checked {
     background-color: hsl(var(--primary));
     color: white;
   }
 }
 
-/* Console styles — light mode */
+/* ═══════════════════════════════════════════════════════════
+   CONSOLE STYLES
+   ═══════════════════════════════════════════════════════════ */
+
+/* Console — light mode */
 .console-output {
-  background: hsl(var(--slate-50));
-  scrollbar-color: hsl(var(--slate-300)) hsl(var(--slate-50));
+  background: hsl(var(--zinc-50));
+  scrollbar-color: hsl(var(--zinc-200)) hsl(var(--zinc-50));
 }
 
 .console-output::-webkit-scrollbar-track {
-  background: hsl(var(--slate-50));
+  background: hsl(var(--zinc-50));
 }
 
 .console-output::-webkit-scrollbar-thumb {
-  background: hsl(var(--slate-300));
-  border-color: hsl(var(--slate-50));
+  background: hsl(var(--zinc-200));
+  border-color: hsl(var(--zinc-50));
 }
 
-/* Console styles — dark mode */
+/* Console — dark mode */
 .dark .console-output {
-  background: hsl(224 71% 4%);
-  scrollbar-color: hsl(var(--slate-700)) hsl(224 71% 4%);
+  background: hsl(var(--zinc-950));
+  scrollbar-color: hsl(var(--zinc-800)) hsl(var(--zinc-950));
 }
 
 .dark .console-output::-webkit-scrollbar-track {
-  background: hsl(224 71% 4%);
+  background: hsl(var(--zinc-950));
 }
 
 .dark .console-output::-webkit-scrollbar-thumb {
-  background: hsl(var(--slate-700));
-  border-color: hsl(224 71% 4%);
+  background: hsl(var(--zinc-800));
+  border-color: hsl(var(--zinc-950));
 }
 
 .console-line {
@@ -355,7 +331,7 @@ select option {
 }
 
 .dark .console-line:hover {
-  background: rgba(255, 255, 255, 0.025);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .console-search-match {
@@ -366,7 +342,7 @@ select option {
 }
 
 .dark .console-search-match {
-  background: rgba(250, 204, 21, 0.25);
+  background: rgba(250, 204, 21, 0.2);
   color: #fde68a;
 }
 
@@ -443,7 +419,10 @@ select option {
   color: #fb923c;
 }
 
-/* Hide scrollbar utility - useful for horizontal scroll containers */
+/* ═══════════════════════════════════════════════════════════
+   UTILITY CLASSES
+   ═══════════════════════════════════════════════════════════ */
+
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
