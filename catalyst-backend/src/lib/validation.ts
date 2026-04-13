@@ -256,11 +256,9 @@ function formatZodIssues(issues: ZodIssue[]) {
  * Removes HTML tags and special characters
  */
 export const sanitizeInput = (input: string): string => {
-  return input
-    .replace(/<\/?script[^>]*>/gi, '')
-    .replace(/<script/gi, '')
-    .replace(/<[^>]+>/g, '')
-    .trim();
+  // Remove all HTML/XML tags, then strip any remaining angle brackets
+  // to ensure no partial tags like <script survive
+  return input.replace(/<[^>]*>/g, '').replace(/[<>]/g, '').trim();
 };
 
 /**

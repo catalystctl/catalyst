@@ -208,8 +208,9 @@ async function main() {
     console.error("  Expected path:", agentConfigPath);
     console.error("  Copy the output below and save it manually to catalyst-agent/config.toml");
     console.log("\n--- config.toml ---");
-    // Redact API key from logged config for security
-    console.log(agentConfigContent.replace(/(api_key\s*=\s*)"[^"]+"/, '$1"<REDACTED>"'));
+    // Generate a redacted config from safe values (never expose apiKey)
+    const redactedConfig = generateAgentConfig(node, backendUrl, "<REDACTED>");
+    console.log(redactedConfig);
     console.log("--- end ---\n");
   }
 

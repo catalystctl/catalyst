@@ -451,7 +451,7 @@ export async function nodeRoutes(app: FastifyInstance) {
             purpose: "agent",
           },
         });
-        request.log.info({ apiKeyId: apiKeyResponse.id, nodeId }, "API key created");
+        request.log.info({ nodeId }, "API key created");
         const apiKey = apiKeyResponse.key;
         if (!apiKey) {
           return reply.status(500).send({ error: "Failed to create API key" });
