@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: self-hosted
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     container:
       image: oven/bun:1.3-debian
     
@@ -55,7 +55,7 @@ jobs:
         run: bun run build
 
   security:
-    runs-on: self-hosted
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v6
         with:
@@ -74,7 +74,7 @@ jobs:
 
   build:
     needs: test
-    runs-on: self-hosted
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     container:
       image: oven/bun:1.3-debian
     if: github.ref == 'refs/heads/main'
@@ -82,11 +82,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
 
       - name: Build Docker image
-        uses: docker/build-push-action@v7
+        uses: useblacksmith/build-push-action@v2
         with:
           context: ./catalyst-backend
           tags: catalyst:latest
