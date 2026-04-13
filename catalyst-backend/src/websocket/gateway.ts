@@ -1123,6 +1123,12 @@ export class WebSocketGateway {
             primaryPort: server.primaryPort,
             portBindings,
             networkMode: server.networkMode,
+            autoRestart: {
+              enabled: true,
+              delay: 10,
+              maxRestarts: server.maxCrashCount ?? 5,
+              windowSecs: 60,
+            },
           });
           if (!restartSent) {
             this.autoRestartingServers.delete(server.id);

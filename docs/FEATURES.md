@@ -676,7 +676,7 @@ Optimized for high throughput:
 - 📖 **[Testing Guide](tests/README.md)** - Run and write tests
 
 ### Community
-- 🐛 **[Issues](https://github.com/your-repo/issues)** - Bug reports
+- 🐛 **[Issues](https://github.com/catalystctl/catalyst/issues)** - Bug reports
 - 💬 **[Discord](https://discord.gg/your-server)** - Community chat
 - 📧 **[Support](mailto:support@catalyst.dev)** - Enterprise support
 

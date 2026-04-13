@@ -32,7 +32,7 @@ That's it. The panel, backend, PostgreSQL, and Redis all run in containers.
 ### Step 1: Clone
 
 ```bash
-git clone https://github.com/your-repo/catalyst.git
+git clone https://github.com/catalystctl/catalyst.git
 cd catalyst
 ```
 

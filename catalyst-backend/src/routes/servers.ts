@@ -6035,6 +6035,12 @@ export async function serverRoutes(app: FastifyInstance) {
         primaryPort: server.primaryPort,
         portBindings: portBindings,
         networkMode: server.networkMode,
+        autoRestart: {
+          enabled: server.restartPolicy !== "never",
+          delay: 10,
+          maxRestarts: server.maxCrashCount ?? 5,
+          windowSecs: 60,
+        },
       });
 
       if (!success) {

@@ -3700,9 +3700,8 @@ impl WebSocketHandler {
             }
 
             let is_running = container.status.contains("Up");
-            let state = if is_running { "running" } else { "stopped" };
 
-            // If container is stopped, try to get exit code
+            // If container is stopped, try to get exit code to distinguish crashed vs stopped
             let exit_code = if !is_running {
                 self.runtime
                     .get_container_exit_code(&container.id)
@@ -3711,6 +3710,15 @@ impl WebSocketHandler {
                     .flatten()
             } else {
                 None
+            };
+
+            // A non-zero exit code means the container crashed, not a clean stop
+            let state = if is_running {
+                "running"
+            } else if exit_code.is_some_and(|code| code != 0) {
+                "crashed"
+            } else {
+                "stopped"
             };
 
             info!(
@@ -3853,7 +3861,6 @@ impl WebSocketHandler {
             .is_container_running(container_name)
             .await
             .unwrap_or(false);
-        let state = if is_running { "running" } else { "stopped" };
 
         let exit_code = if !is_running {
             self.runtime
@@ -3863,6 +3870,15 @@ impl WebSocketHandler {
                 .flatten()
         } else {
             None
+        };
+
+        // A non-zero exit code means the container crashed, not a clean stop
+        let state = if is_running {
+            "running"
+        } else if exit_code.is_some_and(|code| code != 0) {
+            "crashed"
+        } else {
+            "stopped"
         };
 
         let msg = json!({
