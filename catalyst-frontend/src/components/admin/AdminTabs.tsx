@@ -67,7 +67,7 @@ function AdminTabs() {
   }
 
   return (
-    <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+    <div className="flex flex-wrap gap-2 rounded-xl border border-border bg-white px-3 py-2 text-xs shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
       {allTabs.map((tab) => (
         <NavLink
           key={tab.to}
@@ -77,7 +77,7 @@ function AdminTabs() {
             `rounded-full px-3 py-1.5 font-semibold transition-all duration-300 ${
               isActive
                 ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/20'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white'
+                : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground dark:text-zinc-300 dark:hover:bg-surface-2 dark:hover:text-foreground'
             }`
           }
         >

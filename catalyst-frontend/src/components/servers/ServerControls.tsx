@@ -29,57 +29,35 @@ function ServerControls({ serverId, status, permissions }: Props) {
 
   const start = useMutation({
     mutationFn: () => serversApi.start(serverId),
-    onSuccess: () => {
-      invalidate();
-      notifySuccess('Server started');
-    },
+    onSuccess: () => { invalidate(); notifySuccess('Server started'); },
     onError: () => notifyError('Failed to start server'),
   });
   const stop = useMutation({
     mutationFn: () => serversApi.stop(serverId),
-    onSuccess: () => {
-      invalidate();
-      notifySuccess('Server stopped');
-    },
+    onSuccess: () => { invalidate(); notifySuccess('Server stopped'); },
     onError: () => notifyError('Failed to stop server'),
   });
   const restart = useMutation({
     mutationFn: () => serversApi.restart(serverId),
-    onSuccess: () => {
-      invalidate();
-      notifySuccess('Server restarted');
-    },
+    onSuccess: () => { invalidate(); notifySuccess('Server restarted'); },
     onError: () => notifyError('Failed to restart server'),
   });
   const kill = useMutation({
     mutationFn: () => serversApi.kill(serverId),
-    onSuccess: () => {
-      invalidate();
-      notifySuccess('Server killed');
-      setShowKillConfirm(false);
-    },
-    onError: () => {
-      notifyError('Failed to kill server');
-      setShowKillConfirm(false);
-    },
+    onSuccess: () => { invalidate(); notifySuccess('Server killed'); setShowKillConfirm(false); },
+    onError: () => { notifyError('Failed to kill server'); setShowKillConfirm(false); },
   });
 
-  const handleKillConfirm = () => {
-    kill.mutate();
-  };
-
-  // If permissions are provided and the user has none of the action permissions, show nothing.
-  // An empty permissions array means "not yet loaded" — show buttons optimistically.
   if (permissions && permissions.length > 0 && !canStart && !canStop && !canKill) {
     return null;
   }
 
   return (
     <>
-      <div className="flex flex-wrap gap-2 text-xs">
+      <div className="flex flex-wrap gap-1.5 text-xs">
         {canStart && (
           <button
-            className="rounded-md bg-emerald-600 px-3 py-1 font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all duration-300 hover:bg-emerald-500 disabled:opacity-60"
+            className="rounded-lg bg-success px-3 py-1.5 font-semibold text-white transition-all duration-200 hover:opacity-90 disabled:opacity-40"
             disabled={start.isPending || status === 'running' || isSuspended}
             onClick={() => start.mutate()}
           >
@@ -88,7 +66,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
         )}
         {canStop && (
           <button
-            className="rounded-md bg-slate-600 px-3 py-1 font-semibold text-white shadow-lg shadow-slate-500/20 transition-all duration-300 hover:bg-slate-500 disabled:opacity-60"
+            className="rounded-lg bg-zinc-700 px-3 py-1.5 font-semibold text-zinc-100 transition-all duration-200 hover:bg-zinc-600 disabled:opacity-40 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
             disabled={stop.isPending || status === 'stopped' || isSuspended}
             onClick={() => stop.mutate()}
           >
@@ -97,7 +75,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
         )}
         {canRestart && (
           <button
-            className="rounded-md bg-primary-600 px-3 py-1 font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+            className="rounded-lg bg-primary px-3 py-1.5 font-semibold text-primary-foreground transition-all duration-200 hover:opacity-90 disabled:opacity-40"
             disabled={restart.isPending || isSuspended}
             onClick={() => restart.mutate()}
           >
@@ -106,7 +84,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
         )}
         {canKill && (
           <button
-            className="rounded-md bg-rose-600 px-3 py-1 font-semibold text-white shadow-lg shadow-rose-500/20 transition-all duration-300 hover:bg-rose-500 disabled:opacity-60"
+            className="rounded-lg bg-danger px-3 py-1.5 font-semibold text-white transition-all duration-200 hover:opacity-90 disabled:opacity-40"
             disabled={kill.isPending || isSuspended || status === 'stopped'}
             onClick={() => setShowKillConfirm(true)}
           >
@@ -123,7 +101,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
         cancelText="Cancel"
         variant="danger"
         loading={kill.isPending}
-        onConfirm={handleKillConfirm}
+        onConfirm={() => kill.mutate()}
         onCancel={() => setShowKillConfirm(false)}
       />
     </>

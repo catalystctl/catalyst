@@ -100,7 +100,7 @@ function NodeDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-slate-600 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-primary-500/30">
+      <div className="rounded-xl border border-border bg-white px-4 py-6 text-muted-foreground shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-primary/30">
         Loading node...
       </div>
     );
@@ -119,19 +119,19 @@ function NodeDetailsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+      <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">
+              <h1 className="text-2xl font-semibold text-foreground dark:text-white">
                 {node.name}
               </h1>
               <NodeStatusBadge isOnline={node.isOnline} />
             </div>
-            <div className="text-sm text-slate-600 dark:text-slate-400">
+            <div className="text-sm text-muted-foreground dark:text-muted-foreground">
               {node.hostname ?? 'hostname n/a'} · {node.publicAddress ?? 'address n/a'}
             </div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Last seen: {lastSeen}</div>
+            <div className="text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">Last seen: {lastSeen}</div>
           </div>
           {canWrite ? (
             <div className="grid grid-cols-2 gap-2 text-xs">
@@ -145,7 +145,7 @@ function NodeDetailsPage() {
                 className={`rounded-md border px-3 py-1 font-semibold transition-all duration-300 disabled:opacity-60 ${
                   apiKeyStatus?.exists
                     ? 'border-amber-300 text-amber-700 hover:border-amber-500 dark:border-amber-500/30 dark:text-amber-400 dark:hover:border-amber-500/50'
-                    : 'border-slate-200 text-slate-600 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30'
+                    : 'border-border text-muted-foreground hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30'
                 }`}
                 onClick={handleApiKeyClick}
                 disabled={apiKeyMutation.isPending}
@@ -153,7 +153,7 @@ function NodeDetailsPage() {
                 {apiKeyMutation.isPending ? 'Processing...' : apiKeyStatus?.exists ? 'View API Key' : 'Generate API Key'}
               </button>
               <button
-                className="rounded-md border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 disabled:opacity-60 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground disabled:opacity-60 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                 onClick={() => deployMutation.mutate()}
                 disabled={deployMutation.isPending}
               >
@@ -172,48 +172,48 @@ function NodeDetailsPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {stats ? <NodeMetricsCard stats={stats} /> : null}
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30 lg:col-span-2">
+        <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30 lg:col-span-2">
           <div className="mb-2 flex items-center justify-between">
-            <div className="text-sm font-semibold text-slate-900 dark:text-white">Capacity</div>
-            <span className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
+            <div className="text-sm font-semibold text-foreground dark:text-white">Capacity</div>
+            <span className="text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
               {serverCount} servers
             </span>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-xs text-slate-600 dark:text-slate-300">
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-              <div className="text-slate-500 dark:text-slate-400 dark:text-slate-500">CPU cores</div>
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-xs text-muted-foreground dark:text-zinc-300">
+            <div className="rounded-md border border-border bg-surface-2 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+              <div className="text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">CPU cores</div>
+              <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                 {node.maxCpuCores ?? 0}
               </div>
               {resourceSummary ? (
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                <div className="text-[11px] text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
                   Allocated: {resourceSummary.allocatedCpuCores} · Available: {resourceSummary.availableCpuCores}
                 </div>
               ) : null}
             </div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-              <div className="text-slate-500 dark:text-slate-400 dark:text-slate-500">Memory</div>
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <div className="rounded-md border border-border bg-surface-2 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+              <div className="text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">Memory</div>
+              <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                 {node.maxMemoryMb ?? 0} MB
               </div>
               {resourceSummary ? (
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                <div className="text-[11px] text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
                   Allocated: {resourceSummary.allocatedMemoryMb} · Available: {resourceSummary.availableMemoryMb}
                 </div>
               ) : null}
             </div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-              <div className="text-slate-500 dark:text-slate-400 dark:text-slate-500">Disk</div>
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <div className="rounded-md border border-border bg-surface-2 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+              <div className="text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">Disk</div>
+              <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                 {resourceSummary ? `${resourceSummary.actualDiskUsageMb} / ${resourceSummary.actualDiskTotalMb} MB` : 'n/a'}
               </div>
             </div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-              <div className="text-slate-500 dark:text-slate-400 dark:text-slate-500">Uptime</div>
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <div className="rounded-md border border-border bg-surface-2 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+              <div className="text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">Uptime</div>
+              <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
                 {stats?.lastMetricsUpdate ? 'Active' : 'Unknown'}
               </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500">
+              <div className="text-[11px] text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
                 Metrics refresh every 30s
               </div>
             </div>
@@ -221,9 +221,9 @@ function NodeDetailsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
+      <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Servers on node</h2>
+          <h2 className="text-sm font-semibold text-foreground dark:text-white">Servers on node</h2>
           <Link
             to="/servers"
             className="text-xs font-medium text-primary-600 transition-all duration-300 hover:text-primary-500 dark:text-primary-400"
@@ -232,21 +232,21 @@ function NodeDetailsPage() {
           </Link>
           </div>
         {serverList.length ? (
-          <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-300">
+          <ul className="space-y-2 text-sm text-muted-foreground dark:text-zinc-300">
             {serverList.map((server) => (
               <li
                 key={server.id}
-                className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30"
+                className="flex items-center justify-between rounded-md border border-border bg-surface-2 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
               >
                 <div>
-                  <div className="text-slate-900 dark:text-slate-100">{server.name}</div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                  <div className="text-foreground dark:text-zinc-100">{server.name}</div>
+                  <div className="text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
                     {server.status}
                   </div>
                 </div>
                 <Link
                   to={`/servers/${server.id}`}
-                  className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                  className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                 >
                   Open
                 </Link>
@@ -254,7 +254,7 @@ function NodeDetailsPage() {
             ))}
           </ul>
         ) : (
-          <div className="text-sm text-slate-600 dark:text-slate-400">
+          <div className="text-sm text-muted-foreground dark:text-muted-foreground">
             No servers assigned yet.
           </div>
         )}
@@ -267,7 +267,7 @@ function NodeDetailsPage() {
           {canAssignNodes && (
             <div className="flex justify-center">
               <button
-                className="rounded-lg border-2 border-dashed border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-surface-light transition-all duration-300 hover:border-primary-500 hover:text-primary-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:shadow-surface-dark dark:hover:border-primary-500/30 dark:hover:text-primary-400"
+                className="rounded-lg border-2 border-dashed border-border bg-white px-4 py-2 text-sm font-semibold text-muted-foreground shadow-surface-light transition-all duration-300 hover:border-primary-500 hover:text-primary-600 dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:shadow-surface-dark dark:hover:border-primary/30 dark:hover:text-primary-400"
                 onClick={() => setShowAssignmentModal(true)}
               >
                 + Assign Node to User or Role
@@ -278,33 +278,33 @@ function NodeDetailsPage() {
       ) : null}
 
       {deployInfo ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-slate-950/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Deploy agent</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-xl border border-border bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
+            <div className="flex items-center justify-between border-b border-border px-6 py-4 dark:border-border">
+              <h2 className="text-lg font-semibold text-foreground dark:text-white">Deploy agent</h2>
               <button
-                className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-500 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                 onClick={() => setDeployInfo(null)}
               >
                 Close
               </button>
             </div>
-            <div className="space-y-3 px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
-              <div className="text-slate-600 dark:text-slate-300">
+            <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300">
+              <div className="text-muted-foreground dark:text-zinc-300">
                 Run this on the node to install and register the agent (valid for 24 hours).
               </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100">
+              <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 text-xs text-foreground dark:border-border dark:bg-zinc-950/40 dark:text-zinc-100">
                 <code className="whitespace-pre-wrap">
                   {`curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`}
                 </code>
               </div>
-              <div className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
+              <div className="text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
                 Token expires: {new Date(deployInfo.expiresAt).toLocaleString()}
               </div>
             </div>
-            <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4 text-xs dark:border-slate-800">
+            <div className="flex justify-end gap-2 border-t border-border px-6 py-4 text-xs dark:border-border">
               <button
-                className="rounded-md border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                 onClick={() => setDeployInfo(null)}
               >
                 Done
@@ -314,31 +314,31 @@ function NodeDetailsPage() {
         </div>
       ) : null}
       {generatedApiKey ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-slate-950/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Agent API Key</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-xl border border-border bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
+            <div className="flex items-center justify-between border-b border-border px-6 py-4 dark:border-border">
+              <h2 className="text-lg font-semibold text-foreground dark:text-white">Agent API Key</h2>
               <button
-                className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-500 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                 onClick={() => setGeneratedApiKey(null)}
               >
                 Close
               </button>
             </div>
-            <div className="space-y-3 px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
-              <div className="text-slate-600 dark:text-slate-300">
-                Add this API key to your agent's <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">config.toml</code> file:
+            <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300">
+              <div className="text-muted-foreground dark:text-zinc-300">
+                Add this API key to your agent's <code className="rounded bg-surface-2 px-1 dark:bg-surface-2">config.toml</code> file:
               </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100">
+              <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 text-xs text-foreground dark:border-border dark:bg-zinc-950/40 dark:text-zinc-100">
                 <code className="whitespace-pre-wrap break-all">api_key = "{generatedApiKey}"</code>
               </div>
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
                 <strong>Important:</strong> Save this key now. It will not be shown again.
               </div>
             </div>
-            <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4 text-xs dark:border-slate-800">
+            <div className="flex justify-end gap-2 border-t border-border px-6 py-4 text-xs dark:border-border">
               <button
-                className="rounded-md border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                 onClick={() => {
                   navigator.clipboard.writeText(generatedApiKey);
                   notifySuccess('API key copied to clipboard');
@@ -347,7 +347,7 @@ function NodeDetailsPage() {
                 Copy to clipboard
               </button>
               <button
-                className="rounded-md border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                 onClick={() => setGeneratedApiKey(null)}
               >
                 Done
@@ -358,37 +358,37 @@ function NodeDetailsPage() {
       ) : null}
       {/* API Key Info Modal (when key exists) */}
       {showApiKeyModal && apiKeyStatus?.apiKey ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-slate-950/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Existing Agent API Key</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-xl border border-border bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
+            <div className="flex items-center justify-between border-b border-border px-6 py-4 dark:border-border">
+              <h2 className="text-lg font-semibold text-foreground dark:text-white">Existing Agent API Key</h2>
               <button
-                className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-500 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                 onClick={() => setShowApiKeyModal(false)}
               >
                 Close
               </button>
             </div>
-            <div className="space-y-3 px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
-              <div className="text-slate-600 dark:text-slate-300">
+            <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300">
+              <div className="text-muted-foreground dark:text-zinc-300">
                 An API key already exists for this node's agent.
               </div>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-slate-500 dark:text-slate-400">Name:</span>
-                  <div className="font-medium text-slate-900 dark:text-slate-100">
+                  <span className="text-muted-foreground dark:text-muted-foreground">Name:</span>
+                  <div className="font-medium text-foreground dark:text-zinc-100">
                     {apiKeyStatus.apiKey.name}
                   </div>
                 </div>
                 <div>
-                  <span className="text-slate-500 dark:text-slate-400">Created:</span>
-                  <div className="font-medium text-slate-900 dark:text-slate-100">
+                  <span className="text-muted-foreground dark:text-muted-foreground">Created:</span>
+                  <div className="font-medium text-foreground dark:text-zinc-100">
                     {new Date(apiKeyStatus.apiKey.createdAt).toLocaleString()}
                   </div>
                 </div>
               </div>
               {apiKeyStatus.apiKey.preview && (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-900 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100">
+                <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 text-xs text-foreground dark:border-border dark:bg-zinc-950/40 dark:text-zinc-100">
                   <code className="whitespace-pre-wrap break-all">{apiKeyStatus.apiKey.preview}</code>
                 </div>
               )}
@@ -397,7 +397,7 @@ function NodeDetailsPage() {
                 If you need to update the agent's key, you must regenerate it.
               </div>
             </div>
-            <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4 text-xs dark:border-slate-800">
+            <div className="flex justify-end gap-2 border-t border-border px-6 py-4 text-xs dark:border-border">
               <button
                 className="rounded-md border border-red-300 px-3 py-1 font-semibold text-red-600 transition-all duration-300 hover:border-red-500 hover:bg-red-50 dark:border-red-500/30 dark:text-red-400 dark:hover:border-red-500/50 dark:hover:bg-red-500/10"
                 onClick={() => {
@@ -408,7 +408,7 @@ function NodeDetailsPage() {
                 Regenerate Key
               </button>
               <button
-                className="rounded-md border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                 onClick={() => setShowApiKeyModal(false)}
               >
                 Done
@@ -419,12 +419,12 @@ function NodeDetailsPage() {
       ) : null}
       {/* Regenerate Confirmation Modal */}
       {showRegenerateConfirm ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-slate-950/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl border-2 border-red-500 bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:bg-slate-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-xl border-2 border-red-500 bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:bg-surface-1">
             <div className="flex items-center justify-between border-b border-red-200 bg-red-50 px-6 py-4 dark:border-red-500/30 dark:bg-red-500/10">
               <h2 className="text-lg font-semibold text-red-900 dark:text-red-300">⚠️ Regenerate API Key</h2>
             </div>
-            <div className="space-y-3 px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
+            <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300">
               <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-900/20">
                 <p className="text-sm font-semibold text-red-800 dark:text-red-300 mb-2">
                   This action will:
@@ -435,15 +435,15 @@ function NodeDetailsPage() {
                   <li>Require <strong>manual reconfiguration</strong> of the agent with the new key</li>
                 </ul>
               </div>
-              <p className="text-slate-600 dark:text-slate-400">
+              <p className="text-muted-foreground dark:text-muted-foreground">
                 The agent will be <strong>unable to communicate</strong> with Catalyst until you update its
-                <code className="mx-1 rounded bg-slate-100 px-1 dark:bg-slate-800">config.toml</code>
+                <code className="mx-1 rounded bg-surface-2 px-1 dark:bg-surface-2">config.toml</code>
                 with the new API key.
               </p>
             </div>
-            <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4 text-xs dark:border-slate-800">
+            <div className="flex justify-end gap-2 border-t border-border px-6 py-4 text-xs dark:border-border">
               <button
-                className="rounded-md border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                 onClick={() => setShowRegenerateConfirm(false)}
                 disabled={apiKeyMutation.isPending}
               >

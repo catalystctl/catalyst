@@ -392,7 +392,7 @@ function TemplateCreateModal() {
           New Template
         </button>
         <button
-          className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+          className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
           onClick={() => importFileRef.current?.click()}
         >
           Import
@@ -408,18 +408,18 @@ function TemplateCreateModal() {
       </div>
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10 backdrop-blur-sm">
-          <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-5 dark:border-slate-800">
+          <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl transition-all duration-300 dark:border-border dark:bg-surface-1">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5 dark:border-border">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                <h2 className="text-lg font-semibold text-foreground dark:text-white">
                   Create template
                 </h2>
-                <p className="text-xs text-slate-600 dark:text-slate-400">
+                <p className="text-xs text-muted-foreground dark:text-muted-foreground">
                   Define runtime images, resources, and startup commands.
                 </p>
               </div>
               <button
-                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-500 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                 onClick={() => {
                   setOpen(false);
                   setImportError('');
@@ -428,7 +428,7 @@ function TemplateCreateModal() {
                 Close
               </button>
             </div>
-            <div className="space-y-6 overflow-y-auto px-6 py-5 text-sm text-slate-600 dark:text-slate-300">
+            <div className="space-y-6 overflow-y-auto px-6 py-5 text-sm text-muted-foreground dark:text-zinc-300">
               {importError ? (
                 <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-500 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
                   {importError}
@@ -436,45 +436,45 @@ function TemplateCreateModal() {
               ) : null}
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <label className="block space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400">Name</span>
+                  <span className="text-muted-foreground dark:text-muted-foreground">Name</span>
                   <input
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                     placeholder="Minecraft Paper"
                   />
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400">Author</span>
+                  <span className="text-muted-foreground dark:text-muted-foreground">Author</span>
                   <input
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                     value={author}
                     onChange={(event) => setAuthor(event.target.value)}
                     placeholder="Catalyst Maintainers"
                   />
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400">Version</span>
+                  <span className="text-muted-foreground dark:text-muted-foreground">Version</span>
                   <input
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                     value={version}
                     onChange={(event) => setVersion(event.target.value)}
                     placeholder="1.20.4"
                   />
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400">Icon URL (optional)</span>
+                  <span className="text-muted-foreground dark:text-muted-foreground">Icon URL (optional)</span>
                   <input
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                     value={iconUrl}
                     onChange={(event) => setIconUrl(event.target.value)}
                     placeholder="https://example.com/icon.png"
                   />
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400">Import template (optional)</span>
+                  <span className="text-muted-foreground dark:text-muted-foreground">Import template (optional)</span>
                   <input
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 transition-all duration-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-600 hover:file:bg-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:file:bg-slate-800 dark:file:text-slate-600 dark:text-slate-200 dark:hover:file:bg-slate-700"
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-muted-foreground hover:file:bg-surface-3 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:file:bg-surface-2 dark:file:text-muted-foreground dark:text-zinc-200 dark:hover:file:bg-surface-2"
                     type="file"
                     accept="application/json,.json,application/x-yaml,.yaml,.yml"
                     onChange={handleImportFile}
@@ -483,57 +483,57 @@ function TemplateCreateModal() {
                 </label>
               </div>
               <label className="block space-y-1">
-                <span className="text-slate-500 dark:text-slate-400">Description</span>
+                <span className="text-muted-foreground dark:text-muted-foreground">Description</span>
                 <textarea
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                   rows={2}
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
                   placeholder="Template summary"
                 />
               </label>
-              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-all duration-300 dark:border-slate-800 dark:bg-slate-900/40">
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-200">
+              <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
+                <div className="text-sm font-semibold text-foreground dark:text-zinc-200">
                   Runtime images
                 </div>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <label className="block space-y-1">
-                    <span className="text-slate-500 dark:text-slate-400">Container image</span>
+                    <span className="text-muted-foreground dark:text-muted-foreground">Container image</span>
                     <input
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                       value={image}
                       onChange={(event) => setImage(event.target.value)}
                       placeholder="itzg/minecraft-server:latest"
                     />
                   </label>
                   <label className="block space-y-1">
-                    <span className="text-slate-500 dark:text-slate-400">
+                    <span className="text-muted-foreground dark:text-muted-foreground">
                       Default image (optional)
                     </span>
                     <input
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                       value={defaultImage}
                       onChange={(event) => setDefaultImage(event.target.value)}
                       placeholder="eclipse-temurin:21-jre"
                     />
                   </label>
                   <label className="block space-y-1 md:col-span-2">
-                    <span className="text-slate-500 dark:text-slate-400">Install image (optional)</span>
+                    <span className="text-muted-foreground dark:text-muted-foreground">Install image (optional)</span>
                     <input
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                       value={installImage}
                       onChange={(event) => setInstallImage(event.target.value)}
                       placeholder="alpine:3.19"
                     />
                   </label>
                 </div>
-                <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3 transition-all duration-300 dark:border-slate-800 dark:bg-slate-950/40">
+                <div className="space-y-3 rounded-lg border border-border bg-white p-3 transition-all duration-300 dark:border-border dark:bg-zinc-950/40">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    <div className="text-xs font-semibold text-muted-foreground dark:text-zinc-300">
                       Image variants
                     </div>
                     <button
-                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                      className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                       onClick={() =>
                         setImageOptions((prev) => [...prev, { name: '', label: '', image: '' }])
                       }
@@ -550,9 +550,9 @@ function TemplateCreateModal() {
                           className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"
                         >
                           <label className="block space-y-1">
-                            <span className="text-xs text-slate-500 dark:text-slate-400">Name</span>
+                            <span className="text-xs text-muted-foreground dark:text-muted-foreground">Name</span>
                             <input
-                              className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+                              className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
                               value={option.name}
                               onChange={(event) =>
                                 setImageOptions((prev) =>
@@ -566,9 +566,9 @@ function TemplateCreateModal() {
                             />
                           </label>
                           <label className="block space-y-1">
-                            <span className="text-xs text-slate-500 dark:text-slate-400">Label</span>
+                            <span className="text-xs text-muted-foreground dark:text-muted-foreground">Label</span>
                             <input
-                              className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+                              className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
                               value={option.label ?? ''}
                               onChange={(event) =>
                                 setImageOptions((prev) =>
@@ -582,9 +582,9 @@ function TemplateCreateModal() {
                             />
                           </label>
                           <label className="block space-y-1">
-                            <span className="text-xs text-slate-500 dark:text-slate-400">Image</span>
+                            <span className="text-xs text-muted-foreground dark:text-muted-foreground">Image</span>
                             <input
-                              className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+                              className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
                               value={option.image}
                               onChange={(event) =>
                                 setImageOptions((prev) =>
@@ -612,29 +612,29 @@ function TemplateCreateModal() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <p className="text-xs text-muted-foreground dark:text-muted-foreground">
                       Add optional image variants for selectable runtimes.
                     </p>
                   )}
                 </div>
               </div>
-              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-all duration-300 dark:border-slate-800 dark:bg-slate-900/40">
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-200">
+              <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
+                <div className="text-sm font-semibold text-foreground dark:text-zinc-200">
                   Commands & config
                 </div>
                 <label className="block space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400">Config file path (optional)</span>
+                  <span className="text-muted-foreground dark:text-muted-foreground">Config file path (optional)</span>
                   <input
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                     value={configFile}
                     onChange={(event) => setConfigFile(event.target.value)}
                     placeholder="/config/server.properties"
                   />
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400">Config files (optional)</span>
+                  <span className="text-muted-foreground dark:text-muted-foreground">Config files (optional)</span>
                   <input
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                     value={configFiles.join(', ')}
                     onChange={(event) => {
                       const next = event.target.value
@@ -647,9 +647,9 @@ function TemplateCreateModal() {
                   />
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400">Startup command</span>
+                  <span className="text-muted-foreground dark:text-muted-foreground">Startup command</span>
                   <textarea
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                     rows={2}
                     value={startup}
                     onChange={(event) => setStartup(event.target.value)}
@@ -658,18 +658,18 @@ function TemplateCreateModal() {
                 </label>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   <label className="block space-y-1 md:col-span-2">
-                    <span className="text-slate-500 dark:text-slate-400">Stop command</span>
+                    <span className="text-muted-foreground dark:text-muted-foreground">Stop command</span>
                     <input
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                       value={stopCommand}
                       onChange={(event) => setStopCommand(event.target.value)}
                       placeholder="stop"
                     />
                   </label>
                   <label className="block space-y-1">
-                    <span className="text-slate-500 dark:text-slate-400">Signal</span>
+                    <span className="text-muted-foreground dark:text-muted-foreground">Signal</span>
                     <select
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                       value={sendSignalTo}
                       onChange={(event) =>
                         setSendSignalTo(event.target.value as 'SIGTERM' | 'SIGINT' | 'SIGKILL')
@@ -682,9 +682,9 @@ function TemplateCreateModal() {
                   </label>
                 </div>
                 <label className="block space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400">Install script (optional)</span>
+                  <span className="text-muted-foreground dark:text-muted-foreground">Install script (optional)</span>
                   <textarea
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                     rows={5}
                     value={installScript}
                     onChange={(event) => setInstallScript(event.target.value)}
@@ -692,24 +692,24 @@ function TemplateCreateModal() {
                   />
                 </label>
               </div>
-              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-all duration-300 dark:border-slate-800 dark:bg-slate-900/40">
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-200">
+              <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
+                <div className="text-sm font-semibold text-foreground dark:text-zinc-200">
                   Resources & ports
                 </div>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   <label className="block space-y-1">
-                    <span className="text-slate-500 dark:text-slate-400">Ports (comma separated)</span>
+                    <span className="text-muted-foreground dark:text-muted-foreground">Ports (comma separated)</span>
                     <input
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                       value={supportedPorts}
                       onChange={(event) => setSupportedPorts(event.target.value)}
                       placeholder="25565, 25566"
                     />
                   </label>
                   <label className="block space-y-1">
-                    <span className="text-slate-500 dark:text-slate-400">Allocated memory (MB)</span>
+                    <span className="text-muted-foreground dark:text-muted-foreground">Allocated memory (MB)</span>
                     <input
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                       type="number"
                       min={128}
                       value={allocatedMemoryMb}
@@ -717,9 +717,9 @@ function TemplateCreateModal() {
                     />
                   </label>
                   <label className="block space-y-1">
-                    <span className="text-slate-500 dark:text-slate-400">Allocated CPU cores</span>
+                    <span className="text-muted-foreground dark:text-muted-foreground">Allocated CPU cores</span>
                     <input
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                       type="number"
                       min={1}
                       step={1}
@@ -729,13 +729,13 @@ function TemplateCreateModal() {
                   </label>
                 </div>
               </div>
-              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-all duration-300 dark:border-slate-800 dark:bg-slate-900/40">
+              <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-200">
+                  <h3 className="text-sm font-semibold text-foreground dark:text-zinc-200">
                     Variables
                   </h3>
                   <button
-                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                    className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                     onClick={() => setVariables((prev) => [...prev, createVariableDraft()])}
                     type="button"
                   >
@@ -745,10 +745,10 @@ function TemplateCreateModal() {
                 {variables.map((variable, index) => (
                   <div
                     key={`${variable.name}-${index}`}
-                    className="rounded-xl border border-slate-200 bg-white p-3 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-950/40 dark:hover:border-primary-500/30"
+                    className="rounded-xl border border-border bg-white p-3 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-zinc-950/40 dark:hover:border-primary/30"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                      <div className="text-xs font-semibold text-muted-foreground dark:text-zinc-300">
                         Variable {index + 1}
                       </div>
                       {variables.length > 1 ? (
@@ -765,9 +765,9 @@ function TemplateCreateModal() {
                     </div>
                     <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                       <label className="block space-y-1">
-                        <span className="text-slate-500 dark:text-slate-400">Name</span>
+                        <span className="text-muted-foreground dark:text-muted-foreground">Name</span>
                         <input
-                          className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                          className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                           value={variable.name}
                           onChange={(event) =>
                             setVariables((prev) =>
@@ -779,9 +779,9 @@ function TemplateCreateModal() {
                         />
                       </label>
                       <label className="block space-y-1">
-                        <span className="text-slate-500 dark:text-slate-400">Default</span>
+                        <span className="text-muted-foreground dark:text-muted-foreground">Default</span>
                         <input
-                          className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                          className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                           value={variable.defaultValue}
                           onChange={(event) =>
                             setVariables((prev) =>
@@ -795,9 +795,9 @@ function TemplateCreateModal() {
                         />
                       </label>
                       <label className="block space-y-1 md:col-span-2">
-                        <span className="text-slate-500 dark:text-slate-400">Description</span>
+                        <span className="text-muted-foreground dark:text-muted-foreground">Description</span>
                         <input
-                          className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                          className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                           value={variable.description}
                           onChange={(event) =>
                             setVariables((prev) =>
@@ -810,10 +810,10 @@ function TemplateCreateModal() {
                           }
                         />
                       </label>
-                      <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-300">
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-zinc-300">
                         <input
                           type="checkbox"
-                          className="rounded border-slate-300 bg-white text-primary-600 focus:ring-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-primary-400 dark:focus:ring-primary-400"
+                          className="rounded border-border bg-white text-primary-600 focus:ring-primary-500 dark:border-border dark:bg-surface-1 dark:text-primary-400 dark:focus:ring-primary-400"
                           checked={variable.required}
                           onChange={(event) =>
                             setVariables((prev) =>
@@ -828,9 +828,9 @@ function TemplateCreateModal() {
                         Required
                       </label>
                       <label className="block space-y-1">
-                        <span className="text-slate-500 dark:text-slate-400">Input type</span>
+                        <span className="text-muted-foreground dark:text-muted-foreground">Input type</span>
                         <select
-                          className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                          className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                           value={variable.input}
                           onChange={(event) =>
                             setVariables((prev) =>
@@ -854,11 +854,11 @@ function TemplateCreateModal() {
                         </select>
                       </label>
                       <label className="block space-y-1 md:col-span-2">
-                        <span className="text-slate-500 dark:text-slate-400">
+                        <span className="text-muted-foreground dark:text-muted-foreground">
                           Rules (semicolon separated)
                         </span>
                         <input
-                          className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                          className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                           value={variable.rules}
                           onChange={(event) =>
                             setVariables((prev) =>
@@ -874,24 +874,24 @@ function TemplateCreateModal() {
                   </div>
                 ))}
               </div>
-              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-all duration-300 dark:border-slate-800 dark:bg-slate-900/40">
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-200">
+              <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
+                <div className="text-sm font-semibold text-foreground dark:text-zinc-200">
                   Advanced features
                 </div>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-300">
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-zinc-300">
                     <input
                       type="checkbox"
-                      className="rounded border-slate-300 bg-white text-primary-600 focus:ring-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-primary-400 dark:focus:ring-primary-400"
+                      className="rounded border-border bg-white text-primary-600 focus:ring-primary-500 dark:border-border dark:bg-surface-1 dark:text-primary-400 dark:focus:ring-primary-400"
                       checked={restartOnExit}
                       onChange={(event) => setRestartOnExit(event.target.checked)}
                     />
                     Restart on exit
                   </label>
                   <label className="block space-y-1">
-                    <span className="text-slate-500 dark:text-slate-400">Max instances (optional)</span>
+                    <span className="text-muted-foreground dark:text-muted-foreground">Max instances (optional)</span>
                     <input
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                       type="number"
                       min={1}
                       value={maxInstances}
@@ -899,19 +899,19 @@ function TemplateCreateModal() {
                       placeholder="Unlimited"
                     />
                   </label>
-                  <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-300">
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-zinc-300">
                     <input
                       type="checkbox"
-                      className="rounded border-slate-300 bg-white text-primary-600 focus:ring-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-primary-400 dark:focus:ring-primary-400"
+                      className="rounded border-border bg-white text-primary-600 focus:ring-primary-500 dark:border-border dark:bg-surface-1 dark:text-primary-400 dark:focus:ring-primary-400"
                       checked={fileEditorEnabled}
                       onChange={(event) => setFileEditorEnabled(event.target.checked)}
                     />
                     Enable file editor
                   </label>
                   <label className="block space-y-1">
-                    <span className="text-slate-500 dark:text-slate-400">File editor restricted paths (optional)</span>
+                    <span className="text-muted-foreground dark:text-muted-foreground">File editor restricted paths (optional)</span>
                     <input
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                       value={fileEditorRestrictedPaths}
                       onChange={(event) => setFileEditorRestrictedPaths(event.target.value)}
                       placeholder="/sensitive, /config"
@@ -919,9 +919,9 @@ function TemplateCreateModal() {
                   </label>
                 </div>
                 <label className="block space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400">Backup paths (optional)</span>
+                  <span className="text-muted-foreground dark:text-muted-foreground">Backup paths (optional)</span>
                   <input
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                     value={backupPaths}
                     onChange={(event) => setBackupPaths(event.target.value)}
                     placeholder="/world, /plugins, /config"
@@ -929,24 +929,24 @@ function TemplateCreateModal() {
                 </label>
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-4 text-xs dark:border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-4 text-xs dark:border-border">
               <div className="space-y-1">
                 {missingFields.length > 0 ? (
                   <div className="text-xs">
-                    <span className="text-slate-500 dark:text-slate-400">Missing required fields: </span>
+                    <span className="text-muted-foreground dark:text-muted-foreground">Missing required fields: </span>
                     <span className="text-amber-600 dark:text-amber-400 font-medium">
                       {missingFields.join(', ')}
                     </span>
                   </div>
                 ) : (
-                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                  <span className="text-xs text-muted-foreground dark:text-muted-foreground">
                     Templates are available immediately after creation.
                   </span>
                 )}
               </div>
               <div className="flex gap-2">
                 <button
-                  className="rounded-full border border-slate-200 px-4 py-2 font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                  className="rounded-full border border-border px-4 py-2 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                   onClick={() => {
                     setOpen(false);
                     setImportError('');

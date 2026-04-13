@@ -3,11 +3,14 @@ import { Link } from 'react-router-dom';
 import { authApi } from '../../services/api/auth';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
+import { usePanelBranding } from '../../hooks/usePanelBranding';
+import { BrandFooter } from '../../components/shared/BrandFooter';
 
 function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const { panelName, logoUrl } = usePanelBranding();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,19 +33,19 @@ function ForgotPasswordPage() {
   };
 
   return (
-    <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
+    <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
+      <div className="w-full max-w-md rounded-xl border border-border bg-white px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
         <div className="flex flex-col items-center text-center">
-          <img src="/logo.png" alt="Catalyst logo" className="h-12 w-12" />
-          <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
-            Catalyst Panel
+          <img src={logoUrl} alt={`${panelName} logo`} className="h-12 w-12" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
+          <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground dark:text-muted-foreground">
+            {panelName} Panel
           </span>
         </div>
 
-        <h1 className="mt-6 text-2xl font-semibold text-slate-900 dark:text-white">
+        <h1 className="mt-6 text-2xl font-semibold text-foreground dark:text-white">
           Forgot password?
         </h1>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+        <p className="mt-2 text-sm text-muted-foreground dark:text-muted-foreground">
           Enter your email address and we'll send you a link to reset your password.
         </p>
 
@@ -64,14 +67,14 @@ function ForgotPasswordPage() {
         ) : (
           <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-2">
-              <label className="block text-sm text-slate-600 dark:text-slate-300" htmlFor="email">
+              <label className="block text-sm text-muted-foreground dark:text-zinc-300" htmlFor="email">
                 Email address
               </label>
               <input
                 id="email"
                 type="email"
                 autoComplete="email"
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -97,6 +100,7 @@ function ForgotPasswordPage() {
           </form>
         )}
       </div>
+      <BrandFooter />
     </div>
   );
 }

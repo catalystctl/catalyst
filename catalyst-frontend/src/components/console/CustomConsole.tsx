@@ -213,7 +213,7 @@ function CustomConsole({
           onClick={handleExport}
           disabled={normalizedEntries.length === 0}
           title="Export console log"
-          className="rounded border border-slate-200 bg-white/90 px-2 py-1 text-xs font-medium text-slate-600 shadow-sm backdrop-blur-sm transition-all hover:border-primary-500 hover:text-slate-900 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-300 dark:hover:border-primary-500/50 dark:hover:text-white"
+          className="rounded border border-border bg-white/90 px-2 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-all hover:border-primary-500 hover:text-foreground disabled:opacity-50 dark:border-border dark:bg-surface-1/90 dark:text-zinc-300 dark:hover:border-primary-500/50 dark:hover:text-foreground"
         >
           <Download className="h-3.5 w-3.5" />
         </button>
@@ -223,7 +223,7 @@ function CustomConsole({
             onClick={onClear}
             disabled={normalizedEntries.length === 0}
             title="Clear console"
-            className="rounded border border-slate-200 bg-white/90 px-2 py-1 text-xs font-medium text-slate-600 shadow-sm backdrop-blur-sm transition-all hover:border-rose-500 hover:text-rose-600 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-300 dark:hover:border-rose-500/50 dark:hover:text-rose-400"
+            className="rounded border border-border bg-white/90 px-2 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-all hover:border-rose-500 hover:text-rose-600 disabled:opacity-50 dark:border-border dark:bg-surface-1/90 dark:text-zinc-300 dark:hover:border-rose-500/50 dark:hover:text-rose-400"
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
@@ -233,11 +233,11 @@ function CustomConsole({
       <div
         ref={outputRef}
         onScroll={handleScroll}
-        className="console-output h-full overflow-y-auto font-mono text-[13px] leading-[1.7] text-slate-800 dark:text-slate-300"
+        className="console-output h-full overflow-y-auto font-mono text-[13px] leading-[1.7] text-foreground dark:text-zinc-300"
       >
         {isLoading ? (
-          <div className="flex items-center gap-2 px-4 py-3 text-xs text-slate-500">
-            <div className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-primary-400 dark:border-slate-600" />
+          <div className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
+            <div className="h-3 w-3 animate-spin rounded-full border-2 border-border border-t-primary-400 dark:border-zinc-600" />
             Loading recent logs…
           </div>
         ) : null}
@@ -254,7 +254,7 @@ function CustomConsole({
           </div>
         ) : null}
         {!isLoading && normalizedEntries.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-xs text-slate-400 dark:text-slate-600">
+          <div className="flex h-full items-center justify-center text-xs text-muted-foreground dark:text-muted-foreground">
             No console output yet.
           </div>
         ) : (
@@ -268,15 +268,15 @@ function CustomConsole({
               return (
                 <div
                   key={entry.id}
-                  className={`console-line group flex border-l-2 ${streamBorderColors[entry.stream] ?? 'border-l-slate-300 dark:border-l-slate-700'}`}
+                  className={`console-line group flex border-l-2 ${streamBorderColors[entry.stream] ?? 'border-l-zinc-300 dark:border-l-zinc-700'}`}
                 >
                   {showLineNumbers ? (
-                    <span className="flex w-12 shrink-0 select-none items-start justify-end pr-3 pt-px text-[11px] text-slate-400 group-hover:text-slate-500 dark:text-slate-700 dark:group-hover:text-slate-500">
+                    <span className="flex w-12 shrink-0 select-none items-start justify-end pr-3 pt-px text-[11px] text-muted-foreground group-hover:text-muted-foreground dark:text-foreground dark:group-hover:text-muted-foreground">
                       {index + 1}
                     </span>
                   ) : null}
                   {displayTs ? (
-                    <span className="shrink-0 select-none px-3 pt-px text-[11px] text-slate-400 group-hover:text-slate-500 dark:text-slate-600 dark:group-hover:text-slate-500">
+                    <span className="shrink-0 select-none px-3 pt-px text-[11px] text-muted-foreground group-hover:text-muted-foreground dark:text-muted-foreground dark:group-hover:text-muted-foreground">
                       {formatTime(displayTs)}
                     </span>
                   ) : (
@@ -327,7 +327,7 @@ function CustomConsole({
         <button
           type="button"
           onClick={scrollToBottom}
-          className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-slate-300 bg-white/95 px-3 py-1.5 text-[11px] text-slate-500 shadow-lg backdrop-blur-sm transition-all hover:border-primary-500/50 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-400 dark:hover:text-slate-200"
+          className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-white/95 px-3 py-1.5 text-[11px] text-muted-foreground shadow-lg backdrop-blur-sm transition-all hover:border-primary-500/50 hover:text-foreground dark:border-border dark:bg-surface-1/95 dark:text-muted-foreground dark:hover:text-zinc-200"
         >
           <ArrowDown className="h-3 w-3" />
           New output below

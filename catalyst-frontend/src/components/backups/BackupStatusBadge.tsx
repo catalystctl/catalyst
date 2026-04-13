@@ -6,7 +6,7 @@ const colorMap: Record<BackupStatus, string> = {
   in_progress: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30',
   failed: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/30',
   restored: 'bg-primary-100 text-primary-700 border-primary-200 dark:bg-primary-500/10 dark:text-primary-400 dark:border-primary-500/30',
-  unknown: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700/40 dark:text-slate-300 dark:border-slate-600/60',
+  unknown: 'bg-surface-2 text-muted-foreground border-border dark:bg-surface-2/40 dark:text-zinc-300 dark:border-zinc-600/60',
 };
 
 function BackupStatusBadge({ status }: { status: BackupStatus }) {

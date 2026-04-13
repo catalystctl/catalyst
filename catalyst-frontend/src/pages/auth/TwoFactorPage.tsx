@@ -43,9 +43,9 @@ function TwoFactorPage() {
 
   return (
     <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
-        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Two-factor verification</h1>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      <div className="w-full max-w-md rounded-xl border border-border bg-white px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
+        <h1 className="text-2xl font-semibold text-foreground dark:text-white">Two-factor verification</h1>
+        <p className="mt-2 text-sm text-muted-foreground dark:text-muted-foreground">
           Enter the code from your authenticator app or backup code.
         </p>
 
@@ -57,7 +57,7 @@ function TwoFactorPage() {
 
         <form className="mt-6 space-y-4" onSubmit={handleSubmit(onSubmit)}>
           <div className="space-y-2">
-            <label className="block text-sm text-slate-600 dark:text-slate-300" htmlFor="code">
+            <label className="block text-sm text-muted-foreground dark:text-zinc-300" htmlFor="code">
               Verification code
             </label>
             <input
@@ -65,15 +65,15 @@ function TwoFactorPage() {
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400 dark:hover:border-primary-500/30"
+              className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
               placeholder="123456"
               {...register('code')}
             />
             {errors.code ? <p className="text-xs text-red-400">{errors.code.message}</p> : null}
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-            <input type="checkbox" className="rounded border-slate-300" {...register('trustDevice')} />
+          <label className="flex items-center gap-2 text-sm text-muted-foreground dark:text-zinc-300">
+            <input type="checkbox" className="rounded border-border" {...register('trustDevice')} />
             Trust this device for 30 days
           </label>
 
@@ -87,7 +87,7 @@ function TwoFactorPage() {
           {returnTo ? (
             <button
               type="button"
-              className="w-full rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+              className="w-full rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
               onClick={() => navigate(returnTo, { replace: true, state: { from: location.state?.from } })}
             >
               Use passkey instead

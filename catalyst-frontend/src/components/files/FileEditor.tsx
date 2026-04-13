@@ -122,7 +122,7 @@ function FileEditor({
   if (!file) return null;
 
   const btnSecondary =
-    'inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white';
+    'inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 dark:border-border dark:text-zinc-300 dark:hover:bg-surface-2 dark:hover:text-foreground';
   const btnPrimary =
     'inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-primary-500 disabled:opacity-50';
 
@@ -131,7 +131,7 @@ function FileEditor({
       <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <h3 className="truncate text-sm font-semibold text-foreground dark:text-zinc-100">
               {file.name}
             </h3>
             {isDirty && (
@@ -145,7 +145,7 @@ function FileEditor({
               </span>
             )}
           </div>
-          <p className="mt-0.5 truncate text-xs text-slate-400 dark:text-slate-500">{file.path}</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground dark:text-muted-foreground">{file.path}</p>
         </div>
         <div className="flex items-center gap-1 sm:gap-2">
           <button
@@ -182,7 +182,7 @@ function FileEditor({
           </button>
           <button
             type="button"
-            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-zinc-300"
             onClick={handleClose}
             title="Close"
           >
@@ -191,10 +191,10 @@ function FileEditor({
         </div>
       </div>
       <div
-        className="min-h-0 flex-1 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800"
+        className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border dark:border-border"
       >
         {isLoading ? (
-          <div className="flex h-full items-center justify-center text-sm text-slate-500 dark:text-slate-400">
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground dark:text-muted-foreground">
             Loading file contents...
           </div>
         ) : (

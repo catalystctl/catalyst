@@ -1,4 +1,4 @@
-import { type BaseSyntheticEvent, useEffect, useRef, useState } from 'react';
+import { type BaseSyntheticEvent, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -10,6 +10,8 @@ import { authClient } from '../../services/authClient';
 import { notifyError } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
 import { useThemeStore } from '../../stores/themeStore';
+import { usePanelBranding } from '../../hooks/usePanelBranding';
+import { BrandFooter } from '../../components/shared/BrandFooter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,7 +36,6 @@ function LoginPage() {
   const [totpTrustDevice, setTotpTrustDevice] = useState(false);
   const [totpSubmitting, setTotpSubmitting] = useState(false);
   const [totpError, setTotpError] = useState<string | null>(null);
-  const passkeyAutoFillAttempted = useRef(false);
   const {
     register,
     handleSubmit,
@@ -129,42 +130,6 @@ function LoginPage() {
     }
   };
 
-  useEffect(() => {
-    if (passkeyAutoFillAttempted.current) return;
-    if (
-      typeof window === 'undefined' ||
-      !window.PublicKeyCredential?.isConditionalMediationAvailable
-    )
-      return;
-    void window.PublicKeyCredential.isConditionalMediationAvailable().then((isAvailable) => {
-      if (!isAvailable) return;
-      passkeyAutoFillAttempted.current = true;
-      return authClient.signIn
-        .passkey({
-          autoFill: true,
-          fetchOptions: {
-            onError(context) {
-              if (context.error?.code === 'AUTH_CANCELLED' || context.error?.name === 'AbortError')
-                return;
-              notifyError(context.error?.message || 'Passkey sign-in failed');
-            },
-            onSuccess(context) {
-              const token = context.response?.headers?.get?.('set-auth-token') || null;
-              void applyPasskeySession(context.data, token).then(() => {
-                setAuthStep(null);
-                setAllowPasskeyFallback(false);
-                setTimeout(() => navigate(from || '/servers'), 100);
-              });
-            },
-          },
-        })
-        .catch((err: any) => {
-          if (err?.code === 'AUTH_CANCELLED' || err?.name === 'AbortError') return;
-        })
-        .finally(() => setPasskeySubmitting(false));
-    });
-  }, []);
-
   const handleProvider = async (providerId: 'whmcs' | 'paymenter') => {
     try {
       await authApi.signInWithProvider(providerId);
@@ -176,6 +141,7 @@ function LoginPage() {
   const authProviders = useThemeStore((s) => s.themeSettings?.authProviders);
   const showWhmcs = authProviders?.whmcs ?? false;
   const showPaymenter = authProviders?.paymenter ?? false;
+  const { panelName, logoUrl } = usePanelBranding();
 
   const handleTotpSubmit = async () => {
     if (!totpCode) {
@@ -198,19 +164,19 @@ function LoginPage() {
   };
 
   return (
-    <div className="app-shell flex min-h-screen items-center justify-center px-4 font-sans">
+    <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
       <Card className="w-full max-w-md">
         <CardContent className="px-6 py-8">
           <div className="flex flex-col items-center text-center">
-            <img src="/logo.png" alt="Catalyst logo" className="h-12 w-12" />
-            <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
-              Catalyst Panel
+            <img src={logoUrl} alt={`${panelName} logo`} className="h-12 w-12" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
+            <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+              {panelName} Panel
             </span>
           </div>
-          <h1 className="mt-6 text-2xl font-semibold text-slate-900 dark:text-white">
+          <h1 className="mt-6 font-display text-2xl font-bold text-foreground">
             Welcome back
           </h1>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+          <p className="mt-2 text-sm text-muted-foreground">
             Sign in to manage your servers.
           </p>
 
@@ -378,6 +344,7 @@ function LoginPage() {
           </div>
         </DialogContent>
       </Dialog>
+      <BrandFooter />
     </div>
   );
 }

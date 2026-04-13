@@ -9,7 +9,7 @@ const Command = forwardRef<
   <CommandPrimitive
     ref={ref}
     className={cn(
-      'flex h-full w-full flex-col overflow-hidden rounded-md bg-white text-slate-900 transition-all duration-300 dark:bg-slate-900 dark:text-slate-200',
+      'flex h-full w-full flex-col overflow-hidden rounded-md bg-white text-foreground transition-all duration-300 dark:bg-surface-1 dark:text-zinc-200',
       className,
     )}
     {...props}
@@ -24,7 +24,7 @@ const CommandInput = forwardRef<
   <CommandPrimitive.Input
     ref={ref}
     className={cn(
-      'flex h-10 w-full border-b border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-500 dark:text-slate-400 transition-all duration-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500',
+      'flex h-10 w-full border-b border-border bg-white px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground dark:text-muted-foreground transition-all duration-300 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:placeholder:text-muted-foreground',
       className,
     )}
     {...props}
@@ -51,7 +51,7 @@ const CommandItem = forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      'relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-all duration-300 aria-selected:bg-primary-500/10 aria-selected:text-slate-900 dark:aria-selected:bg-primary-500/20 dark:aria-selected:text-white data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+      'relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-all duration-300 aria-selected:bg-primary-500/10 aria-selected:text-foreground dark:aria-selected:bg-primary-500/20 dark:aria-selected:text-white data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
       className,
     )}
     {...props}

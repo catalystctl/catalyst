@@ -110,11 +110,11 @@ export function ApiKeysPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-surface-light dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-surface-dark">
+      <div className="rounded-2xl border border-border bg-white p-6 shadow-surface-light dark:border-border dark:bg-surface-1/70 dark:shadow-surface-dark">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">API Keys</h1>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+            <h1 className="text-2xl font-semibold text-foreground dark:text-zinc-100">API Keys</h1>
+            <p className="text-sm text-muted-foreground dark:text-muted-foreground mt-1">
               Manage API keys for automated access to Catalyst
             </p>
           </div>
@@ -128,14 +128,14 @@ export function ApiKeysPage() {
         </div>
 
         {/* Stats */}
-        <div className="flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-400 mb-6">
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-800 dark:bg-slate-950/60">
+        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground dark:text-muted-foreground mb-6">
+          <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
             {stats.total} total
           </span>
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-800 dark:bg-slate-950/60">
+          <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
             {stats.active} active
           </span>
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-800 dark:bg-slate-950/60">
+          <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
             {stats.agent} agent keys
           </span>
           {stats.expired > 0 && (
@@ -146,8 +146,8 @@ export function ApiKeysPage() {
         </div>
 
         {/* Filters */}
-        <div className="rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/60 p-4 mb-6 space-y-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
+        <div className="rounded-xl border border-border bg-surface-2 dark:border-border dark:bg-zinc-950/60 p-4 mb-6 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground dark:text-zinc-300">
             <Filter className="w-4 h-4" />
             Filters
           </div>
@@ -155,7 +155,7 @@ export function ApiKeysPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Search */}
             <div>
-              <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+              <label className="block text-xs text-muted-foreground dark:text-muted-foreground mb-1">
                 Search
               </label>
               <Input
@@ -168,13 +168,13 @@ export function ApiKeysPage() {
 
             {/* Status Filter */}
             <div>
-              <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+              <label className="block text-xs text-muted-foreground dark:text-muted-foreground mb-1">
                 Status
               </label>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'disabled' | 'expired')}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
               >
                 <option value="all">All</option>
                 <option value="active">Active</option>
@@ -185,17 +185,17 @@ export function ApiKeysPage() {
 
             {/* Show Agent Keys Toggle */}
             <div>
-              <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">
+              <label className="block text-xs text-muted-foreground dark:text-muted-foreground mb-1">
                 Agent Keys
               </label>
-              <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 cursor-pointer hover:border-primary-500 dark:hover:border-primary-500/30 transition-all">
+              <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border dark:border-border bg-white dark:bg-surface-1 cursor-pointer hover:border-primary-500 dark:hover:border-primary/30 transition-all">
                 <input
                   type="checkbox"
                   checked={showAgentKeys}
                   onChange={(e) => setShowAgentKeys(e.target.checked)}
-                  className="rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500"
+                  className="rounded border-border dark:border-zinc-600 text-primary-600 focus:ring-primary-500"
                 />
-                <span className="text-sm text-slate-900 dark:text-slate-200">
+                <span className="text-sm text-foreground dark:text-zinc-200">
                   Show agent keys ({stats.agent})
                 </span>
               </label>
@@ -204,8 +204,8 @@ export function ApiKeysPage() {
 
           {/* Active Filters Display */}
           {(search || !showAgentKeys || statusFilter !== 'all') && (
-            <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-              <span className="text-xs text-slate-500 dark:text-slate-400">Active filters:</span>
+            <div className="flex items-center gap-2 pt-2 border-t border-border dark:border-border">
+              <span className="text-xs text-muted-foreground dark:text-muted-foreground">Active filters:</span>
               {!showAgentKeys && (
                 <span className="text-xs px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
                   Hiding {stats.agent} agent keys
@@ -226,7 +226,7 @@ export function ApiKeysPage() {
                   setSearch('');
                   setStatusFilter('all');
                 }}
-                className="ml-auto text-xs text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400"
+                className="ml-auto text-xs text-muted-foreground dark:text-muted-foreground hover:text-primary-600 dark:hover:text-primary-400"
               >
                 Clear filters
               </button>
@@ -247,7 +247,7 @@ export function ApiKeysPage() {
                 className={`rounded-xl border p-5 ${
                   isAgentKey(apiKey)
                     ? 'border-amber-300 bg-amber-50/50 dark:border-amber-500/30 dark:bg-amber-900/10'
-                    : 'border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50'
+                    : 'border-border bg-surface-2 dark:border-border dark:bg-surface-1/50'
                 }`}
               >
                 <div className="flex items-start justify-between">
@@ -257,9 +257,9 @@ export function ApiKeysPage() {
                       {isAgentKey(apiKey) ? (
                         <Server className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                       ) : (
-                        <Key className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                        <Key className="w-5 h-5 text-muted-foreground dark:text-muted-foreground" />
                       )}
-                      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                      <h3 className="text-lg font-semibold text-foreground dark:text-zinc-100">
                         {apiKey.name || 'Unnamed Key'}
                       </h3>
                       {isAgentKey(apiKey) && (
@@ -272,7 +272,7 @@ export function ApiKeysPage() {
                           Active
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-slate-700 bg-slate-200 rounded-full dark:bg-slate-800 dark:text-slate-400">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-foreground bg-surface-3 rounded-full dark:bg-surface-2 dark:text-muted-foreground">
                           Disabled
                         </span>
                       )}
@@ -292,20 +292,20 @@ export function ApiKeysPage() {
 
                     {/* Created By */}
                     {apiKey.user && (
-                      <div className="text-sm text-slate-600 dark:text-slate-400">
-                        Created by: <span className="font-medium text-slate-900 dark:text-slate-100">{apiKey.user.username || apiKey.user.email}</span>
+                      <div className="text-sm text-muted-foreground dark:text-muted-foreground">
+                        Created by: <span className="font-medium text-foreground dark:text-zinc-100">{apiKey.user.username || apiKey.user.email}</span>
                       </div>
                     )}
 
                     {/* Key Preview */}
                     {apiKey.prefix && apiKey.start && (
-                      <div className="flex items-center gap-2 font-mono text-sm bg-white dark:bg-slate-900 px-3 py-2 rounded border border-slate-200 dark:border-slate-800">
-                        <code className="text-slate-700 dark:text-slate-300">
+                      <div className="flex items-center gap-2 font-mono text-sm bg-white dark:bg-surface-1 px-3 py-2 rounded border border-border dark:border-border">
+                        <code className="text-foreground dark:text-zinc-300">
                           {apiKey.start}{'*'.repeat(40)}
                         </code>
                         <button
                           onClick={() => navigator.clipboard.writeText(apiKey.start || '')}
-                          className="ml-auto p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
+                          className="ml-auto p-1 hover:bg-surface-2 dark:hover:bg-surface-2 rounded"
                         >
                           <Copy className="w-4 h-4" />
                         </button>
@@ -315,33 +315,33 @@ export function ApiKeysPage() {
                     {/* Metadata */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
-                        <span className="text-slate-500 dark:text-slate-400">Created:</span>
-                        <div className="font-medium text-slate-900 dark:text-slate-100">
+                        <span className="text-muted-foreground dark:text-muted-foreground">Created:</span>
+                        <div className="font-medium text-foreground dark:text-zinc-100">
                           {formatDate(apiKey.createdAt)}
                         </div>
                       </div>
                       <div>
-                        <span className="text-slate-500 dark:text-slate-400">Last Used:</span>
-                        <div className="font-medium text-slate-900 dark:text-slate-100">
+                        <span className="text-muted-foreground dark:text-muted-foreground">Last Used:</span>
+                        <div className="font-medium text-foreground dark:text-zinc-100">
                           {formatDate(apiKey.lastRequest)}
                         </div>
                       </div>
                       <div>
-                        <span className="text-slate-500 dark:text-slate-400">Requests:</span>
-                        <div className="font-medium text-slate-900 dark:text-slate-100">
+                        <span className="text-muted-foreground dark:text-muted-foreground">Requests:</span>
+                        <div className="font-medium text-foreground dark:text-zinc-100">
                           {apiKey.requestCount || 0}
                         </div>
                       </div>
                       <div>
-                        <span className="text-slate-500 dark:text-slate-400">Expires:</span>
-                        <div className="font-medium text-slate-900 dark:text-slate-100">
+                        <span className="text-muted-foreground dark:text-muted-foreground">Expires:</span>
+                        <div className="font-medium text-foreground dark:text-zinc-100">
                           {apiKey.expiresAt ? formatDate(apiKey.expiresAt) : 'Never'}
                         </div>
                       </div>
                     </div>
 
                     {/* Rate Limit Info */}
-                    <div className="text-sm text-slate-500 dark:text-slate-400">
+                    <div className="text-sm text-muted-foreground dark:text-muted-foreground">
                       Rate Limit: {apiKey.rateLimitMax} requests per{' '}
                       {apiKey.rateLimitTimeWindow / 1000}s
                     </div>
@@ -387,10 +387,10 @@ export function ApiKeysPage() {
       {/* Delete Confirmation Dialog */}
       {deleteKey && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className={`bg-white dark:bg-slate-900 rounded-xl p-6 max-w-md w-full mx-4 shadow-xl ${
+          <div className={`bg-white dark:bg-surface-1 rounded-xl p-6 max-w-md w-full mx-4 shadow-xl ${
             isAgentKey(deleteKey) ? 'border-2 border-red-500' : ''
           }`}>
-            <h3 className="text-lg font-semibold mb-2 text-slate-900 dark:text-slate-100">
+            <h3 className="text-lg font-semibold mb-2 text-foreground dark:text-zinc-100">
               {confirmAgentDelete ? '⚠️ Final Warning' : 'Revoke API Key'}
             </h3>
             
@@ -406,7 +406,7 @@ export function ApiKeysPage() {
                     until a new API key is generated and configured.
                   </p>
                 </div>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+                <p className="text-sm text-muted-foreground dark:text-muted-foreground mb-6">
                   Are you sure you want to revoke "{deleteKey.name}"?
                 </p>
               </>
@@ -420,12 +420,12 @@ export function ApiKeysPage() {
                     You will need physical or remote access to the node to reconfigure it with a new API key.
                   </p>
                 </div>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
-                  Type the node ID to confirm: <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-xs">{getNodeId(deleteKey)?.slice(0, 8)}...</code>
+                <p className="text-sm text-muted-foreground dark:text-muted-foreground mb-6">
+                  Type the node ID to confirm: <code className="bg-surface-2 dark:bg-surface-2 px-1.5 py-0.5 rounded text-xs">{getNodeId(deleteKey)?.slice(0, 8)}...</code>
                 </p>
               </>
             ) : (
-              <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+              <p className="text-sm text-muted-foreground dark:text-muted-foreground mb-6">
                 Are you sure you want to revoke "{deleteKey.name}"? This action cannot be undone
                 and any applications using this key will immediately lose access.
               </p>
@@ -434,7 +434,7 @@ export function ApiKeysPage() {
             <div className="flex gap-3 justify-end">
               <button
                 onClick={handleCancelDelete}
-                className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+                className="px-4 py-2 text-sm font-semibold text-foreground dark:text-zinc-300 hover:bg-surface-2 dark:hover:bg-surface-2 rounded transition-colors"
               >
                 Cancel
               </button>

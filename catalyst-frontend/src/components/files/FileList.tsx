@@ -83,7 +83,7 @@ function InlineRenameInput({
   return (
     <input
       ref={inputRef}
-      className="w-full max-w-xs rounded border border-primary-500 bg-white px-1.5 py-0.5 text-sm text-slate-900 outline-none dark:bg-slate-800 dark:text-slate-200"
+      className="w-full max-w-xs rounded border border-primary-500 bg-white px-1.5 py-0.5 text-sm text-foreground outline-none dark:bg-surface-2 dark:text-zinc-200"
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onBlur={() => onSubmit(entry, value)}
@@ -164,7 +164,7 @@ function FileList({
 
   if (isLoading) {
     return (
-      <div className="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+      <div className="px-4 py-8 text-center text-sm text-muted-foreground dark:text-muted-foreground">
         Loading files...
       </div>
     );
@@ -185,19 +185,19 @@ function FileList({
   }
 
   const thClass =
-    'cursor-pointer select-none px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300';
+    'cursor-pointer select-none px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-muted-foreground dark:text-muted-foreground dark:hover:text-zinc-300';
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[640px]">
         <thead>
-          <tr className="border-b border-slate-100 dark:border-slate-800">
+          <tr className="border-b border-border dark:border-border">
             <th className="w-10 px-3 py-2.5">
               <input
                 type="checkbox"
                 checked={allSelected}
                 onChange={onSelectAll}
-                className="h-3.5 w-3.5 rounded border-slate-300 text-primary-500 dark:border-slate-600 dark:bg-slate-800"
+                className="h-3.5 w-3.5 rounded border-border text-primary-500 dark:border-zinc-600 dark:bg-surface-2"
               />
             </th>
             <th className={thClass} onClick={() => onSort('name')}>
@@ -216,7 +216,7 @@ function FileList({
             <th className="w-10 px-3 py-2.5" />
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
+        <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
           {files.map((entry) => {
             const selected = selectedPaths.has(entry.path);
             const isRenaming = renamingEntry?.path === entry.path;
@@ -226,7 +226,7 @@ function FileList({
                 className={`group transition-colors ${
                   selected
                     ? 'bg-primary-500/5 dark:bg-primary-500/10'
-                    : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                    : 'hover:bg-surface-2 dark:hover:bg-surface-2/50'
                 }`}
                 onContextMenu={(e) => {
                   e.preventDefault();
@@ -249,7 +249,7 @@ function FileList({
                         onShiftSelect(entry);
                       }
                     }}
-                    className="h-3.5 w-3.5 rounded border-slate-300 text-primary-500 dark:border-slate-600 dark:bg-slate-800"
+                    className="h-3.5 w-3.5 rounded border-border text-primary-500 dark:border-zinc-600 dark:bg-surface-2"
                   />
                 </td>
                 <td className="px-3 py-2">
@@ -264,7 +264,7 @@ function FileList({
                     {entry.isDirectory ? (
                       <Folder className="h-4 w-4 shrink-0 text-primary-500" />
                     ) : (
-                      <File className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+                      <File className="h-4 w-4 shrink-0 text-muted-foreground dark:text-muted-foreground" />
                     )}
                     {isRenaming ? (
                       <InlineRenameInput
@@ -273,19 +273,19 @@ function FileList({
                         onCancel={onRenameCancel}
                       />
                     ) : (
-                      <span className="truncate text-sm text-slate-800 dark:text-slate-200">
+                      <span className="truncate text-sm text-foreground dark:text-zinc-200">
                         {entry.name}
                       </span>
                     )}
                   </button>
                 </td>
-                <td className="px-3 py-2 font-mono text-xs text-slate-400 dark:text-slate-500">
+                <td className="px-3 py-2 font-mono text-xs text-muted-foreground dark:text-muted-foreground">
                   {formatFileMode(entry.mode)}
                 </td>
-                <td className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
+                <td className="px-3 py-2 text-xs text-muted-foreground dark:text-muted-foreground">
                   {entry.isDirectory ? '—' : formatBytes(entry.size)}
                 </td>
-                <td className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500">
+                <td className="px-3 py-2 text-xs text-muted-foreground dark:text-muted-foreground">
                   {entry.modified ? new Date(entry.modified).toLocaleString() : '—'}
                 </td>
                 <td className="px-3 py-2">
@@ -312,7 +312,7 @@ function FileList({
           })}
         </tbody>
       </table>
-      <div className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-400 dark:border-slate-800 dark:text-slate-500">
+      <div className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground dark:border-border dark:text-muted-foreground">
         {files.length} item{files.length !== 1 ? 's' : ''}
       </div>
       {contextMenuEntry && contextMenuPosition && (

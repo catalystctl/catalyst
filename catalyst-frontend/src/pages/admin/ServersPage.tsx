@@ -171,7 +171,7 @@ function AdminServersPage() {
       return 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300';
     }
     if (serverStatus === 'stopped') {
-      return 'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300';
+      return 'border-border bg-surface-2 text-foreground dark:border-border dark:bg-surface-1/60 dark:text-zinc-300';
     }
     if (serverStatus === 'suspended') {
       return 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300';
@@ -179,32 +179,32 @@ function AdminServersPage() {
     if (serverStatus === 'starting' || serverStatus === 'stopping') {
       return 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300';
     }
-    return 'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300';
+    return 'border-border bg-surface-2 text-foreground dark:border-border dark:bg-surface-1/60 dark:text-zinc-300';
   };
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-surface-dark dark:hover:border-primary-500/30">
+      <div className="rounded-2xl border border-border bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1/70 dark:shadow-surface-dark dark:hover:border-primary/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">All Servers</h1>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
+            <h1 className="text-2xl font-semibold text-foreground dark:text-zinc-100">All Servers</h1>
+            <p className="text-sm text-muted-foreground dark:text-muted-foreground">
               Monitor every server across nodes and manage suspensions.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-400">
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-800 dark:bg-slate-950/60">
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground dark:text-muted-foreground">
+            <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
               {data?.pagination?.total ?? servers.length} total servers
             </span>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-800 dark:bg-slate-950/60">
+            <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
               {statuses.length || 'All'} statuses
             </span>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-surface-light dark:border-slate-800 dark:bg-slate-950/60 dark:shadow-surface-dark">
-        <label className="text-xs text-slate-600 dark:text-slate-300">
+      <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-border bg-white px-4 py-3 shadow-surface-light dark:border-border dark:bg-zinc-950/60 dark:shadow-surface-dark">
+        <label className="text-xs text-muted-foreground dark:text-zinc-300">
           Search
           <Input
             value={search}
@@ -216,7 +216,7 @@ function AdminServersPage() {
             className="mt-1 w-56"
           />
         </label>
-        <label className="text-xs text-slate-600 dark:text-slate-300">
+        <label className="text-xs text-muted-foreground dark:text-zinc-300">
           Owner
           <Input
             value={ownerSearch}
@@ -228,7 +228,7 @@ function AdminServersPage() {
             className="mt-1 w-56"
           />
         </label>
-        <label className="text-xs text-slate-600 dark:text-slate-300">
+        <label className="text-xs text-muted-foreground dark:text-zinc-300">
           Status
           <Select
             value={status || 'all'}
@@ -250,7 +250,7 @@ function AdminServersPage() {
             </SelectContent>
           </Select>
         </label>
-        <label className="text-xs text-slate-600 dark:text-slate-300">
+        <label className="text-xs text-muted-foreground dark:text-zinc-300">
           Node
           <Select
             value={nodeId || 'all'}
@@ -272,7 +272,7 @@ function AdminServersPage() {
             </SelectContent>
           </Select>
         </label>
-        <label className="text-xs text-slate-600 dark:text-slate-300">
+        <label className="text-xs text-muted-foreground dark:text-zinc-300">
           Template
           <Select
             value={templateId || 'all'}
@@ -294,7 +294,7 @@ function AdminServersPage() {
             </SelectContent>
           </Select>
         </label>
-        <label className="text-xs text-slate-600 dark:text-slate-300">
+        <label className="text-xs text-muted-foreground dark:text-zinc-300">
           Sort
           <Select value={sort} onValueChange={(value) => setSort(value)}>
             <SelectTrigger className="mt-1 w-44">
@@ -309,14 +309,15 @@ function AdminServersPage() {
             </SelectContent>
           </Select>
         </label>
-        <div className="text-xs text-slate-500 dark:text-slate-400">
+        <div className="text-xs text-muted-foreground dark:text-muted-foreground">
           Showing {filteredServers.length} of {data?.pagination?.total ?? servers.length}
         </div>
       </div>
 
       {isLoading ? (
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark dark:hover:border-primary-500/30">
-          <div className="grid grid-cols-12 gap-3 border-b border-slate-200 px-5 py-3 text-xs uppercase text-slate-500 dark:border-slate-800 dark:text-slate-500">
+        <div className="rounded-2xl border border-border bg-white shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
+          {/* Desktop header */}
+          <div className="hidden border-b border-border px-5 py-3 text-xs uppercase text-muted-foreground dark:border-border dark:text-muted-foreground md:grid md:grid-cols-12 md:gap-3">
             <div className="col-span-1">Select</div>
             <div className="col-span-2">Server</div>
             <div className="col-span-1">Status</div>
@@ -325,32 +326,32 @@ function AdminServersPage() {
             <div className="col-span-2">Owner</div>
             <div className="col-span-2 text-right">Actions</div>
           </div>
-          <div className="divide-y divide-slate-200 dark:divide-slate-800">
+          <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="grid grid-cols-12 gap-3 px-5 py-4">
                 <div className="col-span-1">
-                  <div className="h-4 w-4 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div className="h-4 w-4 animate-pulse rounded bg-surface-3 dark:bg-surface-2" />
                 </div>
                 <div className="col-span-2 space-y-2">
-                  <div className="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                  <div className="h-3 w-16 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div className="h-4 w-24 animate-pulse rounded bg-surface-3 dark:bg-surface-2" />
+                  <div className="h-3 w-16 animate-pulse rounded bg-surface-3 dark:bg-surface-2" />
                 </div>
                 <div className="col-span-1">
-                  <div className="h-5 w-16 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
+                  <div className="h-5 w-16 animate-pulse rounded-full bg-surface-3 dark:bg-surface-2" />
                 </div>
                 <div className="col-span-2 space-y-2">
-                  <div className="h-4 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                  <div className="h-3 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div className="h-4 w-20 animate-pulse rounded bg-surface-3 dark:bg-surface-2" />
+                  <div className="h-3 w-24 animate-pulse rounded bg-surface-3 dark:bg-surface-2" />
                 </div>
                 <div className="col-span-2">
-                  <div className="h-4 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div className="h-4 w-20 animate-pulse rounded bg-surface-3 dark:bg-surface-2" />
                 </div>
                 <div className="col-span-2">
-                  <div className="h-4 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div className="h-4 w-20 animate-pulse rounded bg-surface-3 dark:bg-surface-2" />
                 </div>
                 <div className="col-span-2 flex justify-end gap-1">
-                  <div className="h-6 w-14 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                  <div className="h-6 w-14 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div className="h-6 w-14 animate-pulse rounded bg-surface-3 dark:bg-surface-2" />
+                  <div className="h-6 w-14 animate-pulse rounded bg-surface-3 dark:bg-surface-2" />
                 </div>
               </div>
             ))}
@@ -358,9 +359,9 @@ function AdminServersPage() {
         </div>
       ) : filteredServers.length ? (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs shadow-surface-light dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300 dark:shadow-surface-dark">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-white px-4 py-3 text-xs shadow-surface-light dark:border-border dark:bg-zinc-950/60 dark:text-zinc-300 dark:shadow-surface-dark">
             <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-zinc-300">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -372,18 +373,18 @@ function AdminServersPage() {
                       return Array.from(new Set([...prev, ...filteredIds]));
                     })
                   }
-                  className="h-4 w-4 rounded border-slate-200 bg-white text-primary-600 dark:border-slate-700 dark:bg-slate-900 dark:text-primary-400"
+                  className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                 />
                 Select all
               </label>
-              <span className="text-xs text-slate-500 dark:text-slate-400">
+              <span className="text-xs text-muted-foreground dark:text-muted-foreground">
                 {selectedIds.length} selected
               </span>
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-primary-500/30"
+                  className="flex items-center gap-1 rounded-md border border-border bg-white px-3 py-1.5 text-xs font-semibold text-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground disabled:opacity-60 dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-primary/30"
                   disabled={!selectedIds.length || bulkActionMutation.isPending}
                 >
                   Actions
@@ -395,7 +396,7 @@ function AdminServersPage() {
                   <ChevronDown className="ml-1 h-3 w-3" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+              <DropdownMenuContent align="end" className="bg-white dark:bg-surface-1 border-border dark:border-border">
                 <DropdownMenuItem
                   onClick={() => handleBulkAction('start', selectedIds, `${selectedIds.length} servers`)}
                   className="text-emerald-600 focus:text-emerald-700 dark:text-emerald-400"
@@ -444,8 +445,9 @@ function AdminServersPage() {
             </DropdownMenu>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:shadow-surface-dark dark:hover:border-primary-500/30">
-            <div className="grid grid-cols-12 gap-3 border-b border-slate-200 px-5 py-3 text-xs uppercase text-slate-500 dark:border-slate-800 dark:text-slate-500">
+          <div className="rounded-2xl border border-border bg-white shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
+            {/* Desktop header */}
+            <div className="hidden border-b border-border px-5 py-3 text-xs uppercase text-muted-foreground dark:border-border dark:text-muted-foreground md:grid md:grid-cols-12 md:gap-3">
               <div className="col-span-1">Select</div>
               <div className="col-span-2">Server</div>
               <div className="col-span-1">Status</div>
@@ -454,7 +456,7 @@ function AdminServersPage() {
               <div className="col-span-2">Owner</div>
               <div className="col-span-2 text-right">Actions</div>
             </div>
-            <div className="divide-y divide-slate-200 dark:divide-slate-800">
+            <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
               {filteredServers.map((server: AdminServer) => {
                 const isSelected = selectedIds.includes(server.id);
                 const isSuspended = server.status === 'suspended';
@@ -466,9 +468,10 @@ function AdminServersPage() {
                 return (
                   <div
                     key={server.id}
-                    className="grid grid-cols-12 gap-3 px-5 py-4 text-sm text-slate-600 transition-all duration-200 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/50"
+                    className="grid grid-cols-12 gap-3 px-5 py-4 text-sm text-muted-foreground transition-all duration-200 hover:bg-surface-2 dark:text-zinc-300 dark:hover:bg-surface-2/50"
                   >
-                    <div className="col-span-1 flex items-center">
+                    {/* Mobile: stacked card layout */}
+                    <div className="col-span-12 flex flex-wrap items-center gap-3 md:hidden">
                       <input
                         type="checkbox"
                         checked={isSelected}
@@ -479,42 +482,70 @@ function AdminServersPage() {
                               : [...prev, server.id],
                           )
                         }
-                        className="h-4 w-4 rounded border-slate-200 bg-white text-primary-600 dark:border-slate-700 dark:bg-slate-900 dark:text-primary-400"
+                        className="h-4 w-4 flex-shrink-0 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+                      />
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-xs ${getStatusBadgeClass(server.status)}`}
+                      >
+                        {server.status}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-semibold text-foreground dark:text-zinc-100">
+                          {server.name}
+                        </div>
+                        <div className="text-xs text-muted-foreground dark:text-muted-foreground">
+                          {server.node.name} &middot; {server.template.name}
+                        </div>
+                      </div>
+                    </div>
+                    {/* Desktop: grid layout */}
+                    <div className="col-span-1 hidden items-center md:flex">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() =>
+                          setSelectedIds((prev) =>
+                            prev.includes(server.id)
+                              ? prev.filter((id) => id !== server.id)
+                              : [...prev, server.id],
+                          )
+                        }
+                        className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                       />
                     </div>
-                    <div className="col-span-2">
-                      <div className="font-semibold text-slate-900 dark:text-slate-100">
+                    <div className="col-span-2 hidden md:block">
+                      <div className="font-semibold text-foreground dark:text-zinc-100">
                         {server.name}
                       </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400">{server.id}</div>
+                      <div className="text-xs text-muted-foreground dark:text-muted-foreground">{server.id}</div>
                     </div>
-                    <div className="col-span-1 flex items-center">
+                    <div className="col-span-1 hidden items-center md:flex">
                       <span
                         className={`rounded-full border px-2 py-0.5 text-xs ${getStatusBadgeClass(server.status)}`}
                       >
                         {server.status}
                       </span>
                     </div>
-                    <div className="col-span-2">
-                      <div className="font-medium text-slate-900 dark:text-slate-100">
+                    <div className="col-span-2 hidden md:block">
+                      <div className="font-medium text-foreground dark:text-zinc-100">
                         {server.node.name}
                       </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                      <div className="text-xs text-muted-foreground dark:text-muted-foreground">
                         {server.node.hostname}
                       </div>
                     </div>
-                    <div className="col-span-2 flex items-center">
-                      <span className="text-slate-900 dark:text-slate-100">{server.template.name}</span>
+                    <div className="col-span-2 hidden items-center md:flex">
+                      <span className="text-foreground dark:text-zinc-100">{server.template.name}</span>
                     </div>
-                    <div className="col-span-2 flex items-center">
-                      <span className="text-slate-900 dark:text-slate-100">
+                    <div className="col-span-2 hidden items-center md:flex">
+                      <span className="text-foreground dark:text-zinc-100">
                         {server.owner?.username || server.owner?.email || 'Unassigned'}
                       </span>
                     </div>
-                    <div className="col-span-2 flex items-center justify-end gap-1">
+                    <div className="col-span-2 hidden items-center justify-end gap-1 md:flex">
                       <Link
                         to={`/servers/${server.id}/console`}
-                        className="rounded border border-slate-600 px-2 py-0.5 text-xs font-semibold text-slate-600 transition-all duration-300 hover:border-slate-500 hover:bg-slate-50 dark:border-slate-400 dark:text-slate-400 dark:hover:bg-slate-800/50"
+                        className="rounded border border-zinc-600 px-2 py-0.5 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-zinc-500 hover:bg-surface-2 dark:border-zinc-400 dark:text-muted-foreground dark:hover:bg-surface-2/50"
                       >
                         Console
                       </Link>
@@ -556,12 +587,35 @@ function AdminServersPage() {
                         disabled={bulkActionMutation.isPending}
                       />
                     </div>
+                    {/* Mobile actions row */}
+                    <div className="col-span-12 flex items-center justify-end gap-1 border-t border-border pt-3 md:hidden dark:border-border/50">
+                      <Link
+                        to={`/servers/${server.id}/console`}
+                        className="rounded border border-zinc-600 px-2 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-zinc-500 hover:bg-surface-2 dark:border-zinc-400 dark:text-muted-foreground dark:hover:bg-surface-2/50"
+                      >
+                        Console
+                      </Link>
+                      <button
+                        className="rounded border border-emerald-600 px-2 py-1 text-xs font-semibold text-emerald-600 transition-all duration-300 hover:border-emerald-500 hover:bg-emerald-50 disabled:opacity-60 dark:text-emerald-300 dark:hover:bg-emerald-950/50"
+                        onClick={() => handleBulkAction('start', [server.id], server.name)}
+                        disabled={bulkActionMutation.isPending || isSuspended || isRunning || isBusy}
+                      >
+                        Start
+                      </button>
+                      <button
+                        className="rounded border border-amber-600 px-2 py-1 text-xs font-semibold text-amber-600 transition-all duration-300 hover:border-amber-500 hover:bg-amber-50 disabled:opacity-60 dark:text-amber-300 dark:hover:bg-amber-950/50"
+                        onClick={() => handleBulkAction('stop', [server.id], server.name)}
+                        disabled={bulkActionMutation.isPending || isSuspended || isStopped || isBusy}
+                      >
+                        Stop
+                      </button>
+                    </div>
                   </div>
                 );
               })}
             </div>
             {pagination ? (
-              <div className="border-t border-slate-200 px-5 py-4 dark:border-slate-800">
+              <div className="border-t border-border px-5 py-4 dark:border-border">
                 <Pagination
                   page={pagination.page}
                   totalPages={pagination.totalPages}
@@ -591,9 +645,9 @@ function AdminServersPage() {
               You are about to suspend <span className="font-semibold">{suspendTargets?.label}</span>.
             </p>
             <label className="block space-y-1">
-              <span className="text-sm text-slate-600 dark:text-slate-300">Reason (optional)</span>
+              <span className="text-sm text-muted-foreground dark:text-zinc-300">Reason (optional)</span>
               <input
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-200"
                 value={suspendReason}
                 onChange={(event) => setSuspendReason(event.target.value)}
                 placeholder="e.g., Billing issue"
@@ -628,7 +682,7 @@ function AdminServersPage() {
             <p>
               You are about to delete <span className="font-semibold">{deleteTargets?.label}</span>.
             </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-muted-foreground dark:text-muted-foreground">
               Servers must be stopped before deletion. This cannot be undone.
             </p>
           </div>

@@ -10,13 +10,13 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, actions, className }: PageHeaderProps) {
   return (
-    <Card className={cn('rounded-xl border-slate-200 dark:border-slate-800 shadow-surface-light dark:shadow-surface-dark', className)}>
+    <Card className={cn('border-border', className)}>
       <CardContent className="px-6 py-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">{title}</h1>
+            <h1 className="font-display text-2xl font-bold text-foreground">{title}</h1>
             {description && (
-              <p className="text-sm text-slate-600 dark:text-slate-400">{description}</p>
+              <p className="text-sm text-muted-foreground">{description}</p>
             )}
           </div>
           {actions && <div className="flex items-center gap-2">{actions}</div>}

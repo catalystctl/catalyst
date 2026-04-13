@@ -95,16 +95,16 @@ function ServerMetricsTrends({
       {cards.map((card) => (
         <div
           key={card.label}
-          className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30"
+          className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
         >
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                 {card.label}
               </div>
               <div className={`text-lg font-semibold ${card.color}`}>{card.value}</div>
             </div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-500">{timeRangeLabel}</div>
+            <div className="text-[11px] text-muted-foreground dark:text-muted-foreground">{timeRangeLabel}</div>
           </div>
           <div className="mt-3">
             <div className="h-24 w-full">

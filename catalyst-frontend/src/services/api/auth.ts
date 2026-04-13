@@ -35,8 +35,15 @@ interface BetterAuthResponse {
 }
 
 function extractResponse(response: unknown): BetterAuthResponse {
-  if (response && typeof response === 'object' && 'data' in response) {
-    return response.data as BetterAuthResponse;
+  if (response && typeof response === 'object') {
+    // better-fetch returns { data: ..., error: ... } on failures (data may be null)
+    const r = response as Record<string, unknown>;
+    const data = r.data ?? {};
+    const error = r.error ?? undefined;
+    return {
+      ...(typeof data === 'object' ? data : {}),
+      ...(error !== undefined ? { error } : {}),
+    } as BetterAuthResponse;
   }
   return (response ?? {}) as BetterAuthResponse;
 }
@@ -220,8 +227,10 @@ export const authApi = {
     return data;
   },
 
-  async logout(): Promise<void> {
-    await authClient.signOut();
+  async logout(options?: { signal?: AbortSignal }): Promise<void> {
+    await authClient.signOut({
+      fetchOptions: options?.signal ? { signal: options.signal } : undefined,
+    });
   },
 
   async forgotPassword(email: string): Promise<void> {

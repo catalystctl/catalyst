@@ -205,8 +205,8 @@ function NetworkPage() {
         <CardContent className="px-6 py-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Network</h1>
-              <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              <h1 className="text-2xl font-bold text-foreground dark:text-white">Network</h1>
+              <p className="mt-1 text-sm text-muted-foreground dark:text-muted-foreground">
                 Manage IP pools for macvlan network allocations
               </p>
             </div>
@@ -223,56 +223,56 @@ function NetworkPage() {
       </Card>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Card className="border-slate-200/80 bg-sky-50/50 dark:bg-sky-900/10">
+        <Card className="border-border/80 bg-sky-50/50 dark:bg-sky-900/10">
           <CardContent className="p-4">
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
               Total IPs
             </div>
-            <div className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
+            <div className="mt-2 text-2xl font-bold text-foreground dark:text-white">
               {poolStats.total}
             </div>
-            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Across all pools</div>
+            <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">Across all pools</div>
           </CardContent>
         </Card>
         <Card className="border-emerald-200/80 bg-emerald-50/50 dark:bg-emerald-900/10">
           <CardContent className="p-4">
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
               Available
             </div>
             <div className="mt-2 text-2xl font-bold text-emerald-700 dark:text-emerald-400">
               {poolStats.available}
             </div>
-            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Open for allocation</div>
+            <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">Open for allocation</div>
           </CardContent>
         </Card>
         <Card className="border-indigo-200/80 bg-indigo-50/50 dark:bg-indigo-900/10">
           <CardContent className="p-4">
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
               Used
             </div>
             <div className="mt-2 text-2xl font-bold text-indigo-700 dark:text-indigo-400">
               {poolStats.used}
             </div>
-            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Assigned to servers</div>
+            <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">Assigned to servers</div>
           </CardContent>
         </Card>
         <Card className="border-amber-200/80 bg-amber-50/50 dark:bg-amber-900/10">
           <CardContent className="p-4">
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
               Reserved
             </div>
             <div className="mt-2 text-2xl font-bold text-amber-700 dark:text-amber-400">
               {poolStats.reserved}
             </div>
-            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Held for static use</div>
+            <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">Held for static use</div>
           </CardContent>
         </Card>
       </div>
 
       <Card>
-        <CardHeader className="border-b border-slate-100 dark:border-slate-800">
+        <CardHeader className="border-b border-border dark:border-border">
           <CardTitle className="text-lg">Create IP Pool</CardTitle>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-muted-foreground dark:text-muted-foreground">
             Allocate static macvlan IPs per node. Pools map to network names (e.g. mc-lan).
           </p>
         </CardHeader>
@@ -281,9 +281,9 @@ function NetworkPage() {
             <div className="space-y-4 lg:col-span-2">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <label className="block">
-                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Node</span>
+                  <span className="text-xs font-medium text-foreground dark:text-zinc-300">Node</span>
                   <select
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-100"
                     value={nodeId}
                     onChange={(e) => setNodeId(e.target.value)}
                   >
@@ -296,50 +296,50 @@ function NetworkPage() {
                   </select>
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Network Name</span>
+                  <span className="text-xs font-medium text-foreground dark:text-zinc-300">Network Name</span>
                   <input
                     type="text"
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-100"
                     value={networkName}
                     onChange={(e) => setNetworkName(e.target.value)}
                     placeholder="mc-lan"
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300">CIDR</span>
+                  <span className="text-xs font-medium text-foreground dark:text-zinc-300">CIDR</span>
                   <input
                     type="text"
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-100"
                     value={cidr}
                     onChange={(e) => setCidr(e.target.value)}
                     placeholder="192.168.50.0/24"
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Gateway</span>
+                  <span className="text-xs font-medium text-foreground dark:text-zinc-300">Gateway</span>
                   <input
                     type="text"
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-100"
                     value={gateway}
                     onChange={(e) => setGateway(e.target.value)}
                     placeholder="192.168.50.1"
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Start IP (optional)</span>
+                  <span className="text-xs font-medium text-foreground dark:text-zinc-300">Start IP (optional)</span>
                   <input
                     type="text"
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-100"
                     value={startIp}
                     onChange={(e) => setStartIp(e.target.value)}
                     placeholder="192.168.50.10"
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300">End IP (optional)</span>
+                  <span className="text-xs font-medium text-foreground dark:text-zinc-300">End IP (optional)</span>
                   <input
                     type="text"
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-100"
                     value={endIp}
                     onChange={(e) => setEndIp(e.target.value)}
                     placeholder="192.168.50.200"
@@ -347,11 +347,11 @@ function NetworkPage() {
                 </label>
               </div>
               <label className="block">
-                <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                <span className="text-xs font-medium text-foreground dark:text-zinc-300">
                   Reserved IPs (comma or space separated)
                 </span>
                 <textarea
-                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all focus:border-primary-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-100"
                   value={reserved}
                   onChange={(e) => setReserved(e.target.value)}
                   rows={2}
@@ -366,15 +366,15 @@ function NetworkPage() {
               </div>
             </div>
             <div className="space-y-4">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
-                <h4 className="text-xs font-semibold text-slate-900 dark:text-white">Quick Setup</h4>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              <div className="rounded-xl border border-border bg-surface-2 p-4 dark:border-border dark:bg-surface-2/50">
+                <h4 className="text-xs font-semibold text-foreground dark:text-white">Quick Setup</h4>
+                <p className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
                   Paste a host IP to autofill a /24 pool configuration.
                 </p>
                 <div className="mt-3 flex gap-2">
                   <input
                     type="text"
-                    className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="flex-1 rounded-lg border border-border bg-white px-3 py-1.5 text-sm text-foreground dark:border-border dark:bg-surface-2 dark:text-zinc-100"
                     value={autoFillIp}
                     onChange={(e) => setAutoFillIp(e.target.value)}
                     placeholder={selectedNode?.publicAddress || '0.0.0.0'}
@@ -399,11 +399,11 @@ function NetworkPage() {
       </Card>
 
       <Card>
-        <CardHeader className="border-b border-slate-100 dark:border-slate-800">
+        <CardHeader className="border-b border-border dark:border-border">
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-lg">IP Address Pools</CardTitle>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-muted-foreground dark:text-muted-foreground">
                 {filteredPools.length} of {pools.length} pools shown
               </p>
             </div>
@@ -412,9 +412,9 @@ function NetworkPage() {
         <CardContent className="p-4">
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-slate-400" />
+              <Filter className="h-4 w-4 text-muted-foreground" />
               <select
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm text-foreground dark:border-border dark:bg-surface-2 dark:text-zinc-100"
                 value={filterNode}
                 onChange={(e) => setFilterNode(e.target.value)}
               >
@@ -426,7 +426,7 @@ function NetworkPage() {
                 ))}
               </select>
               <select
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm text-foreground dark:border-border dark:bg-surface-2 dark:text-zinc-100"
                 value={filterCidr}
                 onChange={(e) => setFilterCidr(e.target.value)}
               >
@@ -439,10 +439,10 @@ function NetworkPage() {
               </select>
             </div>
             <div className="relative ml-auto">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
-                className="w-64 rounded-lg border border-slate-200 bg-white py-1.5 pl-9 pr-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                className="w-64 rounded-lg border border-border bg-white py-1.5 pl-9 pr-3 text-sm text-foreground dark:border-border dark:bg-surface-2 dark:text-zinc-100"
                 placeholder="Search IPs or servers..."
                 value={searchIp}
                 onChange={(e) => setSearchIp(e.target.value)}
@@ -473,23 +473,23 @@ function NetworkPage() {
                 return (
                   <div
                     key={pool.id}
-                    className="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
+                    className="rounded-xl border border-border bg-white dark:border-border dark:bg-surface-2"
                   >
                     <div
-                      className="flex cursor-pointer items-center gap-4 p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                      className="flex cursor-pointer items-center gap-4 p-4 hover:bg-surface-2 dark:hover:bg-surface-2/50"
                       onClick={() => togglePoolExpand(pool.id)}
                     >
-                      <button className="text-slate-400">
+                      <button className="text-muted-foreground">
                         {isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
                       </button>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-slate-900 dark:text-white">{pool.nodeName}</span>
+                          <span className="font-semibold text-foreground dark:text-white">{pool.nodeName}</span>
                           <Badge variant="outline" className="text-xs">
                             {pool.networkName}
                           </Badge>
                         </div>
-                        <div className="mt-1 flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+                        <div className="mt-1 flex items-center gap-4 text-xs text-muted-foreground dark:text-muted-foreground">
                           <span className="font-mono">{pool.cidr}</span>
                           <span>Range: {pool.rangeStart} - {pool.rangeEnd}</span>
                           {pool.gateway && <span>Gateway: {pool.gateway}</span>}
@@ -498,22 +498,22 @@ function NetworkPage() {
                       <div className="flex items-center gap-4">
                         <div className="hidden gap-4 sm:flex">
                           <div className="text-center">
-                            <div className="text-lg font-bold text-slate-900 dark:text-white">{pool.total}</div>
-                            <div className="text-xs text-slate-500 dark:text-slate-400">Total</div>
+                            <div className="text-lg font-bold text-foreground dark:text-white">{pool.total}</div>
+                            <div className="text-xs text-muted-foreground dark:text-muted-foreground">Total</div>
                           </div>
                           <div className="text-center">
                             <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
                               {pool.availableCount}
                             </div>
-                            <div className="text-xs text-slate-500 dark:text-slate-400">Free</div>
+                            <div className="text-xs text-muted-foreground dark:text-muted-foreground">Free</div>
                           </div>
                           <div className="text-center">
                             <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{pool.usedCount}</div>
-                            <div className="text-xs text-slate-500 dark:text-slate-400">Used</div>
+                            <div className="text-xs text-muted-foreground dark:text-muted-foreground">Used</div>
                           </div>
                         </div>
                         <div className="w-20">
-                          <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                          <div className="h-2 overflow-hidden rounded-full bg-surface-3 dark:bg-surface-2">
                             <div
                               className={`h-full transition-all ${
                                 utilizationPercent > 90
@@ -525,12 +525,12 @@ function NetworkPage() {
                               style={{ width: `${utilizationPercent}%` }}
                             />
                           </div>
-                          <div className="mt-1 text-center text-xs text-slate-500 dark:text-slate-400">
+                          <div className="mt-1 text-center text-xs text-muted-foreground dark:text-muted-foreground">
                             {utilizationPercent}%
                           </div>
                         </div>
                         <button
-                          className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/20 dark:hover:text-rose-400"
+                          className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/20 dark:hover:text-rose-400"
                           onClick={(e) => {
                             e.stopPropagation();
                             deleteMutation.mutate(pool.id);
@@ -543,29 +543,29 @@ function NetworkPage() {
                     </div>
 
                     {isExpanded && pool.allocations && pool.allocations.length > 0 && (
-                      <div className="border-t border-slate-100 bg-slate-50/50 dark:border-slate-700 dark:bg-slate-900/50">
+                      <div className="border-t border-border bg-surface-2/50 dark:border-border dark:bg-surface-1/50">
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>
-                              <tr className="border-b border-slate-100 dark:border-slate-700">
-                                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                              <tr className="border-b border-border dark:border-border">
+                                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                                   IP Address
                                 </th>
-                                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                                   Server
                                 </th>
-                                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                                   Status
                                 </th>
-                                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                                   Assigned
                                 </th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
                               {pool.allocations.map((alloc) => (
-                                <tr key={alloc.id} className="hover:bg-white dark:hover:bg-slate-800">
-                                  <td className="px-4 py-2 font-mono text-slate-900 dark:text-white">{alloc.ip}</td>
+                                <tr key={alloc.id} className="hover:bg-white dark:hover:bg-surface-2">
+                                  <td className="px-4 py-2 font-mono text-foreground dark:text-white">{alloc.ip}</td>
                                   <td className="px-4 py-2">
                                     {alloc.serverId ? (
                                       <Link
@@ -577,7 +577,7 @@ function NetworkPage() {
                                         <ExternalLink className="h-3 w-3" />
                                       </Link>
                                     ) : (
-                                      <span className="text-slate-400 dark:text-slate-500">-</span>
+                                      <span className="text-muted-foreground dark:text-muted-foreground">-</span>
                                     )}
                                   </td>
                                   <td className="px-4 py-2">
@@ -595,10 +595,10 @@ function NetworkPage() {
                                         {alloc.serverStatus}
                                       </Badge>
                                     ) : (
-                                      <span className="text-slate-400 dark:text-slate-500">-</span>
+                                      <span className="text-muted-foreground dark:text-muted-foreground">-</span>
                                     )}
                                   </td>
-                                  <td className="px-4 py-2 text-xs text-slate-500 dark:text-slate-400">
+                                  <td className="px-4 py-2 text-xs text-muted-foreground dark:text-muted-foreground">
                                     {new Date(alloc.createdAt).toLocaleDateString()}
                                   </td>
                                 </tr>
@@ -610,7 +610,7 @@ function NetworkPage() {
                     )}
 
                     {isExpanded && (!pool.allocations || pool.allocations.length === 0) && (
-                      <div className="border-t border-slate-100 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                      <div className="border-t border-border px-4 py-6 text-center text-sm text-muted-foreground dark:border-border dark:text-muted-foreground">
                         No IPs allocated yet
                       </div>
                     )}
@@ -624,37 +624,37 @@ function NetworkPage() {
 
       {allAllocations.length > 0 && searchIp && (
         <Card>
-          <CardHeader className="border-b border-slate-100 dark:border-slate-800">
+          <CardHeader className="border-b border-border dark:border-border">
             <CardTitle className="text-lg">Search Results</CardTitle>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-muted-foreground dark:text-muted-foreground">
               {allAllocations.length} allocation{allAllocations.length !== 1 ? 's' : ''} found
             </p>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-800/50">
+                <thead className="bg-surface-2 dark:bg-surface-2/50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                       IP Address
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                       Node
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                       Pool
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                       Server
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
                   {allAllocations.map((alloc) => (
-                    <tr key={alloc.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                      <td className="px-4 py-3 font-mono text-slate-900 dark:text-white">{alloc.ip}</td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{alloc.nodeName}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-500 dark:text-slate-400">
+                    <tr key={alloc.id} className="hover:bg-surface-2 dark:hover:bg-surface-2/50">
+                      <td className="px-4 py-3 font-mono text-foreground dark:text-white">{alloc.ip}</td>
+                      <td className="px-4 py-3 text-muted-foreground dark:text-zinc-300">{alloc.nodeName}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground dark:text-muted-foreground">
                         {alloc.poolCidr}
                       </td>
                       <td className="px-4 py-3">
@@ -667,7 +667,7 @@ function NetworkPage() {
                             <ExternalLink className="h-3 w-3" />
                           </Link>
                         ) : (
-                          <span className="text-slate-400 dark:text-slate-500">Unassigned</span>
+                          <span className="text-muted-foreground dark:text-muted-foreground">Unassigned</span>
                         )}
                       </td>
                     </tr>

@@ -18,12 +18,10 @@ import {
   XCircle,
   ArrowUpRight,
   Zap,
-  Shield,
   Clock,
   Settings,
   Database,
   Globe,
-  Lock,
   Play,
   Square,
   FileText,
@@ -121,7 +119,7 @@ function AdminDashboardPage() {
         {/* Header Section */}
         <motion.div variants={itemVariants} className="relative">
           <div className="absolute inset-0 -z-10">
-            <div className="absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent dark:via-slate-800" />
+            <div className="absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-zinc-200 to-transparent dark:via-zinc-800" />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-1">
@@ -130,7 +128,7 @@ function AdminDashboardPage() {
                   <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-cyan-500 to-violet-500 opacity-20 blur-sm" />
                   <Sparkles className="relative h-7 w-7 text-cyan-600 dark:text-cyan-400" />
                 </div>
-                <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+                <h1 className="text-3xl font-bold tracking-tight text-foreground dark:text-white">
                   Admin Command
                 </h1>
                 <Badge
@@ -144,7 +142,7 @@ function AdminDashboardPage() {
                   <span className="ml-1.5">Live</span>
                 </Badge>
               </div>
-              <p className="ml-10 text-sm text-slate-600 dark:text-slate-400">
+              <p className="ml-10 text-sm text-muted-foreground dark:text-muted-foreground">
                 Platform health, resources, and system activity overview
               </p>
             </div>
@@ -240,7 +238,7 @@ function AdminDashboardPage() {
         <motion.div variants={itemVariants} className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <ClusterResourcesChart data={clusterMetrics} isLoading={metricsLoading} />
 
-          <Card className="group relative overflow-hidden border-slate-200/80 bg-gradient-to-br from-white to-slate-50/50 shadow-sm transition-all hover:shadow-md dark:border-slate-700/50 dark:from-slate-900 dark:to-slate-800/50">
+          <Card className="group relative overflow-hidden border-border/80 bg-gradient-to-br from-white to-zinc-50/50 shadow-sm transition-all hover:shadow-md dark:border-border/50 dark:from-zinc-900 dark:to-zinc-800/50">
             <div className="pointer-events-none absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgNDBWMGg0MHYyMEgwTDIwIDBoMjBMMCA0MHoiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2U1ZTdlNyIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIiBvcGFjaXR5PSIwLjAyIi8+PC9zdmc+')] opacity-50 dark:opacity-20" />
             <CardHeader className="relative pb-3">
               <div className="flex items-center justify-between">
@@ -297,12 +295,12 @@ function AdminDashboardPage() {
                 detail="Active"
                 icon={Globe}
               />
-              <div className="mt-4 flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900/50">
+              <div className="mt-4 flex items-center justify-between rounded-lg border border-border bg-surface-2/80 px-3 py-2.5 dark:border-border dark:bg-surface-1/50">
                 <div className="flex items-center gap-2">
-                  <Clock className="h-3.5 w-3.5 text-slate-400" />
-                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Last updated</span>
+                  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">Last updated</span>
                 </div>
-                <span className="text-xs font-mono text-slate-700 dark:text-slate-300">
+                <span className="text-xs font-mono text-foreground dark:text-zinc-300">
                   {new Date().toLocaleTimeString()}
                 </span>
               </div>
@@ -312,8 +310,8 @@ function AdminDashboardPage() {
 
         {/* Activity and Node Overview */}
         <motion.div variants={itemVariants} className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <Card className="lg:col-span-2 overflow-hidden border-slate-200/80 shadow-sm dark:border-slate-700/50">
-            <CardHeader className="border-b border-slate-100/50 bg-gradient-to-r from-slate-50/50 to-transparent dark:border-slate-800/50 dark:from-slate-800/30">
+          <Card className="lg:col-span-2 overflow-hidden border-border/80 shadow-sm dark:border-border/50">
+            <CardHeader className="border-b border-border/50 bg-gradient-to-r from-zinc-50/50 to-transparent dark:border-border/50 dark:from-zinc-800/30">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center gap-2.5">
@@ -323,7 +321,7 @@ function AdminDashboardPage() {
                     </div>
                     <div>
                       <span>Recent Activity</span>
-                      <p className="text-sm font-normal text-slate-500 dark:text-slate-400">
+                      <p className="text-sm font-normal text-muted-foreground dark:text-muted-foreground">
                         Latest platform events
                       </p>
                     </div>
@@ -351,14 +349,14 @@ function AdminDashboardPage() {
                   ))}
                 </div>
               ) : logs.length > 0 ? (
-                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
                   {logs.slice(0, 6).map((log, idx) => (
                     <motion.div
                       key={log.id}
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: idx * 0.05 }}
-                      className="group flex items-center gap-4 px-6 py-4 transition-colors hover:bg-slate-50/50 dark:hover:bg-slate-800/30"
+                      className="group flex items-center gap-4 px-6 py-4 transition-colors hover:bg-surface-2/50 dark:hover:bg-surface-2/30"
                     >
                       <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-50 to-violet-100 dark:from-violet-950/30 dark:to-violet-900/20">
                         <Zap className="h-5 w-5 text-violet-600 dark:text-violet-400" />
@@ -366,24 +364,24 @@ function AdminDashboardPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2.5">
-                          <span className="font-semibold text-slate-900 dark:text-white">
+                          <span className="font-semibold text-foreground dark:text-white">
                             {log.action}
                           </span>
                           <Badge
                             variant="outline"
-                            className="border-slate-200 bg-slate-50 text-xs font-medium dark:border-slate-700 dark:bg-slate-800"
+                            className="border-border bg-surface-2 text-xs font-medium dark:border-border dark:bg-surface-2"
                           >
                             {log.resource}
                           </Badge>
                         </div>
-                        <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
+                        <p className="mt-0.5 text-sm text-muted-foreground dark:text-muted-foreground">
                           by{' '}
-                          <span className="font-medium text-slate-900 dark:text-white">
+                          <span className="font-medium text-foreground dark:text-white">
                             {log.user?.username ?? log.user?.email ?? 'System'}
                           </span>
                         </p>
                       </div>
-                      <div className="flex shrink-0 items-center gap-2 rounded-full bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600 dark:bg-slate-800/50 dark:text-slate-400">
+                      <div className="flex shrink-0 items-center gap-2 rounded-full bg-surface-2 px-3 py-1.5 text-xs font-medium text-muted-foreground dark:bg-surface-2/50 dark:text-muted-foreground">
                         <Clock className="h-3 w-3" />
                         <span>{formatTime(log.timestamp)}</span>
                       </div>
@@ -393,15 +391,15 @@ function AdminDashboardPage() {
               ) : (
                 <div className="py-16 text-center">
                   <div className="relative inline-flex">
-                    <div className="absolute inset-0 -m-2 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 blur-xl dark:from-slate-800 dark:to-slate-700" />
-                    <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-slate-50 to-slate-100 shadow-sm dark:from-slate-900 dark:to-slate-800">
-                      <Activity className="h-7 w-7 text-slate-400" />
+                    <div className="absolute inset-0 -m-2 rounded-full bg-gradient-to-br from-zinc-100 to-zinc-200 blur-xl dark:from-zinc-800 dark:to-zinc-700" />
+                    <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-zinc-50 to-zinc-100 shadow-sm dark:from-zinc-900 dark:to-zinc-800">
+                      <Activity className="h-7 w-7 text-muted-foreground" />
                     </div>
                   </div>
-                  <p className="mt-4 text-sm font-medium text-slate-600 dark:text-slate-400">
+                  <p className="mt-4 text-sm font-medium text-muted-foreground dark:text-muted-foreground">
                     No recent activity
                   </p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">
+                  <p className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
                     Activity will appear here as actions are performed
                   </p>
                 </div>
@@ -409,8 +407,8 @@ function AdminDashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="overflow-hidden border-slate-200/80 shadow-sm dark:border-slate-700/50">
-            <CardHeader className="border-b border-slate-100/50 bg-gradient-to-r from-slate-50/50 to-transparent dark:border-slate-800/50 dark:from-slate-800/30">
+          <Card className="overflow-hidden border-border/80 shadow-sm dark:border-border/50">
+            <CardHeader className="border-b border-border/50 bg-gradient-to-r from-zinc-50/50 to-transparent dark:border-border/50 dark:from-zinc-800/30">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center gap-2.5">
@@ -420,7 +418,7 @@ function AdminDashboardPage() {
                     </div>
                     <div>
                       <span>Cluster Nodes</span>
-                      <p className="text-sm font-normal text-slate-500 dark:text-slate-400">
+                      <p className="text-sm font-normal text-muted-foreground dark:text-muted-foreground">
                         Infrastructure status
                       </p>
                     </div>
@@ -438,12 +436,12 @@ function AdminDashboardPage() {
               {nodes.length === 0 ? (
                 <div className="py-8 text-center">
                   <div className="relative inline-flex">
-                    <div className="absolute inset-0 -m-2 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 blur-xl dark:from-slate-800 dark:to-slate-700" />
-                    <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-slate-50 to-slate-100 shadow-sm dark:from-slate-900 dark:to-slate-800">
-                      <HardDrive className="h-6 w-6 text-slate-400" />
+                    <div className="absolute inset-0 -m-2 rounded-full bg-gradient-to-br from-zinc-100 to-zinc-200 blur-xl dark:from-zinc-800 dark:to-zinc-700" />
+                    <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-zinc-50 to-zinc-100 shadow-sm dark:from-zinc-900 dark:to-zinc-800">
+                      <HardDrive className="h-6 w-6 text-muted-foreground" />
                     </div>
                   </div>
-                  <p className="mt-4 text-sm font-medium text-slate-600 dark:text-slate-400">
+                  <p className="mt-4 text-sm font-medium text-muted-foreground dark:text-muted-foreground">
                     No nodes configured
                   </p>
                   <Button variant="outline" size="sm" className="mt-4" asChild>
@@ -460,13 +458,13 @@ function AdminDashboardPage() {
                   >
                     <Link
                       to={`/admin/nodes/${node.id}`}
-                      className="group flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50/50 to-transparent px-4 py-3.5 transition-all hover:border-slate-200 hover:shadow-md dark:border-slate-800 dark:from-slate-800/30 dark:hover:border-slate-700"
+                      className="group flex items-center justify-between gap-3 rounded-xl border border-border bg-gradient-to-r from-zinc-50/50 to-transparent px-4 py-3.5 transition-all hover:border-border hover:shadow-md dark:border-border dark:from-zinc-800/30 dark:hover:border-border"
                     >
                       <div className="flex items-center gap-3">
                         <div className="relative">
                           <span
                             className={cn(
-                              'flex h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-slate-900',
+                              'flex h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-zinc-900',
                               node.isOnline
                                 ? 'bg-emerald-500 shadow-[0_0_8px_-1px_rgba(16,185,129,0.5)]'
                                 : 'bg-rose-500'
@@ -477,10 +475,10 @@ function AdminDashboardPage() {
                           )}
                         </div>
                         <div className="space-y-0.5">
-                          <span className="block text-sm font-semibold text-slate-900 dark:text-white">
+                          <span className="block text-sm font-semibold text-foreground dark:text-white">
                             {node.name}
                           </span>
-                          <span className="block text-xs text-slate-500 dark:text-slate-400">
+                          <span className="block text-xs text-muted-foreground dark:text-muted-foreground">
                             {node.isOnline ? 'Online' : 'Offline'}
                           </span>
                         </div>
@@ -488,12 +486,12 @@ function AdminDashboardPage() {
                       <div className="flex items-center gap-2">
                         <Badge
                           variant="secondary"
-                          className="bg-slate-100 text-xs font-semibold dark:bg-slate-700"
+                          className="bg-surface-2 text-xs font-semibold dark:bg-surface-2"
                         >
                           <Cpu className="mr-1 h-3 w-3" />
                           {node._count?.servers ?? 0}
                         </Badge>
-                        <ArrowUpRight className="h-4 w-4 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-600 dark:group-hover:text-slate-300" />
+                        <ArrowUpRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground dark:group-hover:text-zinc-300" />
                       </div>
                     </Link>
                   </motion.div>
@@ -502,7 +500,7 @@ function AdminDashboardPage() {
               {nodes.length > 6 && (
                 <Link
                   to="/admin/nodes"
-                  className="block rounded-xl border border-dashed border-slate-200 py-3 text-center text-sm text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+                  className="block rounded-xl border border-dashed border-border py-3 text-center text-sm text-muted-foreground transition-colors hover:border-border hover:bg-surface-2 dark:border-border dark:text-muted-foreground dark:hover:bg-surface-2"
                 >
                   +{nodes.length - 6} more node{nodes.length - 6 > 1 ? 's' : ''}
                 </Link>
@@ -511,81 +509,7 @@ function AdminDashboardPage() {
           </Card>
         </motion.div>
 
-        {/* Quick Navigation Grid */}
-        <motion.div variants={itemVariants}>
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Quick Navigation</h2>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Jump to administration sections
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-            <EnhancedAdminLink
-              href="/admin/users"
-              icon={Users}
-              label="Users"
-              description="User accounts"
-              color="cyan"
-              index={0}
-            />
-            <EnhancedAdminLink
-              href="/admin/roles"
-              icon={Shield}
-              label="Roles"
-              description="Access control"
-              color="violet"
-              index={1}
-            />
-            <EnhancedAdminLink
-              href="/admin/servers"
-              icon={Server}
-              label="Servers"
-              description="Game servers"
-              color="sky"
-              index={2}
-            />
-            <EnhancedAdminLink
-              href="/admin/nodes"
-              icon={HardDrive}
-              label="Nodes"
-              description="Infrastructure"
-              color="emerald"
-              index={3}
-            />
-            <EnhancedAdminLink
-              href="/admin/templates"
-              icon={FileText}
-              label="Templates"
-              description="Server templates"
-              color="amber"
-              index={4}
-            />
-            <EnhancedAdminLink
-              href="/admin/database"
-              icon={Database}
-              label="Databases"
-              description="Data management"
-              color="rose"
-              index={5}
-            />
-            <EnhancedAdminLink
-              href="/admin/network"
-              icon={Globe}
-              label="Network"
-              description="Networking"
-              color="indigo"
-              index={6}
-            />
-            <EnhancedAdminLink
-              href="/admin/security"
-              icon={Lock}
-              label="Security"
-              description="Security settings"
-              color="slate"
-              index={7}
-            />
-          </div>
-        </motion.div>
+
       </div>
     </motion.div>
   );
@@ -671,11 +595,11 @@ function EnhancedMiniStat({
       text: 'text-indigo-700 dark:text-indigo-400',
     },
     slate: {
-      bg: 'bg-slate-50/80 dark:bg-slate-800/30',
-      icon: 'bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800/40 dark:to-slate-700/40 text-slate-700 dark:text-slate-300',
-      glow: 'group-hover:shadow-slate-200/50 dark:group-hover:shadow-slate-700/20',
-      border: 'border-slate-200 dark:border-slate-700/30',
-      text: 'text-slate-700 dark:text-slate-400',
+      bg: 'bg-surface-2/80 dark:bg-surface-2/30',
+      icon: 'bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800/40 dark:to-zinc-700/40 text-foreground dark:text-zinc-300',
+      glow: 'group-hover:shadow-zinc-200/50 dark:group-hover:shadow-zinc-700/20',
+      border: 'border-border dark:border-border/30',
+      text: 'text-foreground dark:text-muted-foreground',
     },
   };
 
@@ -706,11 +630,11 @@ function EnhancedMiniStat({
         {loading ? (
           <Skeleton className="mx-auto h-8 w-12" />
         ) : (
-          <span className="block text-2xl font-bold text-slate-900 dark:text-white tabular-nums">
+          <span className="block text-2xl font-bold text-foreground dark:text-white tabular-nums">
             {value ?? 0}
           </span>
         )}
-        <span className="block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+        <span className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
           {title}
         </span>
       </div>
@@ -753,12 +677,12 @@ function EnhancedHealthRow({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 bg-white px-4 py-3 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50 dark:hover:bg-slate-800/50">
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-white px-4 py-3 shadow-sm transition-colors hover:bg-surface-2 dark:border-border dark:bg-surface-1/50 dark:hover:bg-surface-2/50">
       <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
-          <Icon className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 dark:bg-surface-2">
+          <Icon className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
         </div>
-        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+        <span className="text-sm font-semibold text-foreground dark:text-zinc-300">
           {label}
         </span>
       </div>
@@ -767,7 +691,7 @@ function EnhancedHealthRow({
       ) : (
         <div className="flex items-center gap-3">
           {detail && (
-            <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+            <span className="text-sm font-medium text-muted-foreground dark:text-muted-foreground">
               {detail}
             </span>
           )}
@@ -786,122 +710,7 @@ function EnhancedHealthRow({
   );
 }
 
-// Enhanced Admin Link
-function EnhancedAdminLink({
-  href,
-  icon: Icon,
-  label,
-  description,
-  color,
-  index,
-}: {
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  description: string;
-  color: string;
-  index: number;
-}) {
-  const colorMap: Record<
-    string,
-    {
-      from: string;
-      to: string;
-      icon: string;
-      hover: string;
-    }
-  > = {
-    cyan: {
-      from: 'from-cyan-50',
-      to: 'to-cyan-100/50',
-      icon: 'text-cyan-600 dark:text-cyan-400',
-      hover: 'hover:border-cyan-200 dark:hover:border-cyan-800',
-    },
-    violet: {
-      from: 'from-violet-50',
-      to: 'to-violet-100/50',
-      icon: 'text-violet-600 dark:text-violet-400',
-      hover: 'hover:border-violet-200 dark:hover:border-violet-800',
-    },
-    sky: {
-      from: 'from-sky-50',
-      to: 'to-sky-100/50',
-      icon: 'text-sky-600 dark:text-sky-400',
-      hover: 'hover:border-sky-200 dark:hover:border-sky-800',
-    },
-    emerald: {
-      from: 'from-emerald-50',
-      to: 'to-emerald-100/50',
-      icon: 'text-emerald-600 dark:text-emerald-400',
-      hover: 'hover:border-emerald-200 dark:hover:border-emerald-800',
-    },
-    rose: {
-      from: 'from-rose-50',
-      to: 'to-rose-100/50',
-      icon: 'text-rose-600 dark:text-rose-400',
-      hover: 'hover:border-rose-200 dark:hover:border-rose-800',
-    },
-    amber: {
-      from: 'from-amber-50',
-      to: 'to-amber-100/50',
-      icon: 'text-amber-600 dark:text-amber-400',
-      hover: 'hover:border-amber-200 dark:hover:border-amber-800',
-    },
-    indigo: {
-      from: 'from-indigo-50',
-      to: 'to-indigo-100/50',
-      icon: 'text-indigo-600 dark:text-indigo-400',
-      hover: 'hover:border-indigo-200 dark:hover:border-indigo-800',
-    },
-    slate: {
-      from: 'from-slate-50',
-      to: 'to-slate-100/50',
-      icon: 'text-slate-600 dark:text-slate-400',
-      hover: 'hover:border-slate-200 dark:hover:border-slate-700',
-    },
-  };
 
-  const colors = colorMap[color] || colorMap.slate;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ delay: index * 0.04 }}
-    >
-      <Link to={href}>
-        <Card
-          className={cn(
-            'group h-full border-slate-200/80 bg-gradient-to-br shadow-sm transition-all hover:-translate-y-1 hover:shadow-lg dark:border-slate-700/50',
-            colors.from,
-            colors.to,
-            colors.hover
-          )}
-        >
-          <CardContent className="flex flex-col items-center justify-center gap-3 p-5">
-            <div
-              className={cn(
-                'flex h-11 w-11 items-center justify-center rounded-xl bg-white shadow-sm transition-transform group-hover:scale-110 dark:bg-slate-900',
-                colors.icon
-              )}
-            >
-              <Icon className="h-5.5 w-5.5" />
-            </div>
-            <div className="space-y-1 text-center">
-              <span className="block text-sm font-bold text-slate-900 dark:text-white">
-                {label}
-              </span>
-              <span className="block text-xs text-slate-600 dark:text-slate-400">
-                {description}
-              </span>
-            </div>
-            <ArrowUpRight className="h-4 w-4 text-slate-400 opacity-0 transition-all group-hover:translate-x-1 group-hover:translate-y-[-1px] group-hover:opacity-100 dark:text-slate-500" />
-          </CardContent>
-        </Card>
-      </Link>
-    </motion.div>
-  );
-}
 
 // Quick Actions Menu
 function QuickActionsMenu() {

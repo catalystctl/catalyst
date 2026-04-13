@@ -155,11 +155,11 @@ function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-surface-dark dark:hover:border-primary-500/30">
+      <div className="rounded-2xl border border-border bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1/70 dark:shadow-surface-dark dark:hover:border-primary/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">User Management</h1>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
+            <h1 className="text-2xl font-semibold text-foreground dark:text-white">User Management</h1>
+            <p className="text-sm text-muted-foreground dark:text-muted-foreground">
               Create and manage administrator accounts with role-based access.
             </p>
           </div>
@@ -174,21 +174,21 @@ function UsersPage() {
             Create user
           </button>
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-600 dark:text-slate-400">
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-800 dark:bg-slate-950/60">
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground dark:text-muted-foreground">
+          <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
             {data?.pagination?.total ?? users.length} total users
           </span>
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-800 dark:bg-slate-950/60">
+          <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
             {roles.length} roles available
           </span>
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-800 dark:bg-slate-950/60">
+          <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
             {servers.length} servers assignable
           </span>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-500/30">
-        <label className="text-xs text-slate-600 dark:text-slate-300">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-white px-4 py-3 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+        <label className="text-xs text-muted-foreground dark:text-zinc-300">
           Search
           <Input
             value={search}
@@ -200,13 +200,13 @@ function UsersPage() {
             className="mt-1 w-56"
           />
         </label>
-        <div className="text-xs text-slate-500 dark:text-slate-400">
+        <div className="text-xs text-muted-foreground dark:text-muted-foreground">
           Showing {users.length} of {data?.pagination?.total ?? users.length}
         </div>
       </div>
 
       {isLoading ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-slate-600 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-primary-500/30">
+        <div className="rounded-xl border border-border bg-white px-4 py-6 text-muted-foreground shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-primary/30">
           Loading users...
         </div>
       ) : users.length ? (
@@ -215,20 +215,20 @@ function UsersPage() {
             {users.map((user) => (
               <div
                 key={user.id}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-surface-light transition-all duration-300 hover:-translate-y-1 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-950/60 dark:shadow-surface-dark dark:hover:border-primary-500/30"
+                className="rounded-2xl border border-border bg-white p-5 shadow-surface-light transition-all duration-300 hover:-translate-y-1 hover:border-primary-500 dark:border-border dark:bg-zinc-950/60 dark:shadow-surface-dark dark:hover:border-primary/30"
               >
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    <div className="text-lg font-semibold text-foreground dark:text-zinc-100">
                       {user.username}
                     </div>
-                    <div className="text-xs text-slate-500 dark:text-slate-500">
+                    <div className="text-xs text-muted-foreground dark:text-muted-foreground">
                       Created {new Date(user.createdAt).toLocaleDateString()}
                     </div>
                   </div>
                   <div className="flex gap-2">
                     <button
-                      className="rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-primary-500/30"
+                      className="rounded-md border border-border px-2 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                       onClick={async () => {
                         const nextId = user.id;
                         const requestId = editingRequestRef.current + 1;
@@ -287,12 +287,12 @@ function UsersPage() {
                     </button>
                   </div>
                 </div>
-                <div className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
+                <div className="mt-4 space-y-3 text-sm text-muted-foreground dark:text-zinc-300">
+                  <div className="rounded-xl border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground dark:border-border dark:bg-surface-1/60 dark:text-zinc-300">
                     {user.email}
                   </div>
                   <div>
-                    <div className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                       Roles
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -300,13 +300,13 @@ function UsersPage() {
                         user.roles.map((role) => (
                           <span
                             key={role.id}
-                            className="rounded-full border border-slate-200 px-2 py-0.5 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300"
+                            className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground dark:border-border dark:text-zinc-300"
                           >
                             {role.name}
                           </span>
                         ))
                       ) : (
-                        <span className="text-xs text-slate-500 dark:text-slate-500">No roles</span>
+                        <span className="text-xs text-muted-foreground dark:text-muted-foreground">No roles</span>
                       )}
                     </div>
                   </div>
@@ -315,20 +315,20 @@ function UsersPage() {
             ))}
           </div>
           {pagination ? (
-            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500 shadow-surface-light dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400 dark:shadow-surface-dark">
+            <div className="flex items-center justify-between rounded-xl border border-border bg-white px-4 py-3 text-xs text-muted-foreground shadow-surface-light dark:border-border dark:bg-zinc-950/60 dark:text-muted-foreground dark:shadow-surface-dark">
               <span>
                 Page {pagination.page} of {pagination.totalPages}
               </span>
               <div className="flex gap-2">
                 <button
-                  className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-200 disabled:opacity-50"
+                  className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-200 disabled:opacity-50"
                   onClick={() => setPage((prev) => Math.max(1, prev - 1))}
                   disabled={page <= 1}
                 >
                   Previous
                 </button>
                 <button
-                  className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-200 disabled:opacity-50"
+                  className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-200 disabled:opacity-50"
                   onClick={() =>
                     setPage((prev) => (pagination.page < pagination.totalPages ? prev + 1 : prev))
                   }
@@ -352,64 +352,64 @@ function UsersPage() {
       )}
       {isCreateOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 md:m-4 md:h-auto md:max-h-[90vh]">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-5 dark:border-slate-800">
+          <div className="flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl dark:border-border dark:bg-zinc-950 md:m-4 md:h-auto md:max-h-[90vh]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5 dark:border-border">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                <h2 className="text-lg font-semibold text-foreground dark:text-zinc-100">
                   Create user
                 </h2>
-                <p className="text-xs text-slate-600 dark:text-slate-400">
+                <p className="text-xs text-muted-foreground dark:text-muted-foreground">
                   Assign credentials, roles, and server access.
                 </p>
               </div>
               <button
-                className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                 onClick={() => setIsCreateOpen(false)}
               >
                 Close
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto px-6 py-5 text-sm text-slate-900 dark:text-slate-100">
+            <div className="flex-1 overflow-y-auto px-6 py-5 text-sm text-foreground dark:text-zinc-100">
               <div className="space-y-6">
                 <div>
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                     Account details
                   </div>
                   <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <label className="text-xs text-slate-600 dark:text-slate-300">
+                  <label className="text-xs text-muted-foreground dark:text-zinc-300">
                     Email
                     <input
                       type="email"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
                       placeholder="user@example.com"
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                      className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                     />
                   </label>
-                  <label className="text-xs text-slate-600 dark:text-slate-300">
+                  <label className="text-xs text-muted-foreground dark:text-zinc-300">
                     Username
                     <input
                       value={username}
                       onChange={(event) => setUsername(event.target.value)}
                       placeholder="username"
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                      className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                     />
                   </label>
-                  <label className="text-xs text-slate-600 dark:text-slate-300">
+                  <label className="text-xs text-muted-foreground dark:text-zinc-300">
                     Password (min 8 chars)
                     <input
                       type="password"
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
                       placeholder="********"
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                      className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                     />
                   </label>
                 </div>
               </div>
               <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                <div className="rounded-xl border border-border bg-surface-2 p-4 dark:border-border dark:bg-surface-1/60">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                     Roles
                   </div>
                   <Input
@@ -422,24 +422,24 @@ function UsersPage() {
                     {filteredRoles.map((role) => (
                       <label
                         key={role.id}
-                        className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
+                        className="flex items-center gap-2 rounded-md border border-border bg-white px-2 py-1 text-xs text-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-zinc-950 dark:text-zinc-200"
                       >
                         <input
                           type="checkbox"
                           checked={roleIds.includes(role.id)}
                           onChange={() => setRoleIds((prev) => toggleItem(prev, role.id))}
-                          className="h-4 w-4 rounded border-slate-200 bg-white text-primary-600 dark:border-slate-700 dark:bg-slate-900 dark:text-primary-400"
+                          className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                         />
                         {role.name}
                       </label>
                     ))}
                     {!filteredRoles.length ? (
-                      <span className="text-xs text-slate-500 dark:text-slate-500">No roles match</span>
+                      <span className="text-xs text-muted-foreground dark:text-muted-foreground">No roles match</span>
                     ) : null}
                   </div>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                <div className="rounded-xl border border-border bg-surface-2 p-4 dark:border-border dark:bg-surface-1/60">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                     Server access
                   </div>
                   <Input
@@ -452,22 +452,22 @@ function UsersPage() {
                     {filteredServers.map((server) => (
                       <label
                         key={server.id}
-                        className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
+                        className="flex items-center gap-2 rounded-md border border-border bg-white px-2 py-1 text-xs text-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-zinc-950 dark:text-zinc-200"
                       >
                         <input
                           type="checkbox"
                           checked={serverIds.includes(server.id)}
                           onChange={() => setServerIds((prev) => toggleItem(prev, server.id))}
-                          className="h-4 w-4 rounded border-slate-200 bg-white text-primary-600 dark:border-slate-700 dark:bg-slate-900 dark:text-primary-400"
+                          className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                         />
                         <span>{server.name}</span>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-500">
+                        <span className="text-[10px] text-muted-foreground dark:text-muted-foreground">
                           ({server.id})
                         </span>
                       </label>
                     ))}
                     {!filteredServers.length ? (
-                      <span className="text-xs text-slate-500 dark:text-slate-500">
+                      <span className="text-xs text-muted-foreground dark:text-muted-foreground">
                         No servers match
                       </span>
                     ) : null}
@@ -483,13 +483,13 @@ function UsersPage() {
               </div>
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-4 text-xs dark:border-slate-800">
-              <span className="text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-4 text-xs dark:border-border">
+              <span className="text-xs text-muted-foreground dark:text-muted-foreground">
                 Passwords must be at least 8 characters.
               </span>
               <div className="flex gap-2">
                 <button
-                  className="rounded-md border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                  className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                   onClick={() => {
                     setIsCreateOpen(false);
                     setRoleSearch('');
@@ -512,59 +512,59 @@ function UsersPage() {
       ) : null}
       {editingUserId ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 md:m-4 md:h-auto md:max-h-[90vh]">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-5 dark:border-slate-800">
+          <div className="flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl dark:border-border dark:bg-zinc-950 md:m-4 md:h-auto md:max-h-[90vh]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5 dark:border-border">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Edit user</h2>
-                <p className="text-xs text-slate-600 dark:text-slate-400">
+                <h2 className="text-lg font-semibold text-foreground dark:text-zinc-100">Edit user</h2>
+                <p className="text-xs text-muted-foreground dark:text-muted-foreground">
                   Update profile details, roles, and server access.
                 </p>
               </div>
               <button
-                className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                 onClick={() => setEditingUserId(null)}
               >
                 Close
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto px-6 py-5 text-sm text-slate-900 dark:text-slate-100">
+            <div className="flex-1 overflow-y-auto px-6 py-5 text-sm text-foreground dark:text-zinc-100">
               <div className="space-y-6">
                 <div>
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                     Account details
                   </div>
                   <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <label className="text-xs text-slate-600 dark:text-slate-300">
+                    <label className="text-xs text-muted-foreground dark:text-zinc-300">
                       Email
                       <input
                         type="email"
                         value={editEmail}
                         onChange={(event) => setEditEmail(event.target.value)}
-                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                        className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                       />
                     </label>
-                    <label className="text-xs text-slate-600 dark:text-slate-300">
+                    <label className="text-xs text-muted-foreground dark:text-zinc-300">
                       Username
                       <input
                         value={editUsername}
                         onChange={(event) => setEditUsername(event.target.value)}
-                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                        className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                       />
                     </label>
-                    <label className="text-xs text-slate-600 dark:text-slate-300">
+                    <label className="text-xs text-muted-foreground dark:text-zinc-300">
                       Password (leave blank to keep)
                       <input
                         type="password"
                         value={editPassword}
                         onChange={(event) => setEditPassword(event.target.value)}
-                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-primary-400"
+                        className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
                       />
                     </label>
                   </div>
                 </div>
                 <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                <div className="rounded-xl border border-border bg-surface-2 p-4 dark:border-border dark:bg-surface-1/60">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                     Roles
                   </div>
                   <Input
@@ -577,24 +577,24 @@ function UsersPage() {
                     {filteredEditRoles.map((role) => (
                       <label
                         key={role.id}
-                        className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
+                        className="flex items-center gap-2 rounded-md border border-border bg-white px-2 py-1 text-xs text-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-zinc-950 dark:text-zinc-200"
                       >
                         <input
                           type="checkbox"
                           checked={editRoleIds.includes(role.id)}
                           onChange={() => setEditRoleIds((prev) => toggleItem(prev, role.id))}
-                          className="h-4 w-4 rounded border-slate-200 bg-white text-primary-600 dark:border-slate-700 dark:bg-slate-900 dark:text-primary-400"
+                          className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                         />
                         {role.name}
                       </label>
                     ))}
                     {!filteredEditRoles.length ? (
-                      <span className="text-xs text-slate-500 dark:text-slate-500">No roles match</span>
+                      <span className="text-xs text-muted-foreground dark:text-muted-foreground">No roles match</span>
                     ) : null}
                   </div>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                <div className="rounded-xl border border-border bg-surface-2 p-4 dark:border-border dark:bg-surface-1/60">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                     Server access
                   </div>
                   <Input
@@ -607,22 +607,22 @@ function UsersPage() {
                     {filteredEditServers.map((server) => (
                       <label
                         key={server.id}
-                        className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 transition-all duration-300 hover:border-primary-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
+                        className="flex items-center gap-2 rounded-md border border-border bg-white px-2 py-1 text-xs text-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-zinc-950 dark:text-zinc-200"
                       >
                         <input
                           type="checkbox"
                           checked={editServerIds.includes(server.id)}
                           onChange={() => setEditServerIds((prev) => toggleItem(prev, server.id))}
-                          className="h-4 w-4 rounded border-slate-200 bg-white text-primary-600 dark:border-slate-700 dark:bg-slate-900 dark:text-primary-400"
+                          className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                         />
                         <span>{server.name}</span>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-500">
+                        <span className="text-[10px] text-muted-foreground dark:text-muted-foreground">
                           ({server.id})
                         </span>
                       </label>
                     ))}
                     {!filteredEditServers.length ? (
-                      <span className="text-xs text-slate-500 dark:text-slate-500">
+                      <span className="text-xs text-muted-foreground dark:text-muted-foreground">
                         No servers match
                       </span>
                     ) : null}
@@ -638,13 +638,13 @@ function UsersPage() {
                 />
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-4 text-xs dark:border-slate-800">
-              <span className="text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-4 text-xs dark:border-border">
+              <span className="text-xs text-muted-foreground dark:text-muted-foreground">
                 Leave password blank to keep current credentials.
               </span>
               <div className="flex gap-2">
                 <button
-                  className="rounded-md border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition-all duration-300 hover:border-primary-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-primary-500/30"
+                  className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
                   onClick={() => {
                     setEditingUserId(null);
                     setEditRoleSearch('');

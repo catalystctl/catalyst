@@ -14,7 +14,7 @@ if (!authSecret && process.env.NODE_ENV !== "test") {
 // cannot name when inferring the return type of betterAuth(). Using satisfies to
 // capture the full inferred type without requiring portable type names.
 const _auth = betterAuth({
-  appName: "Catalyst",
+  appName: process.env.APP_NAME || "Catalyst",
   baseURL: baseUrl,
   secret: authSecret as string,
   user: {
@@ -54,8 +54,9 @@ const _auth = betterAuth({
     enabled: true,
     sendResetPassword: async ({ user, url }) => {
       const { sendEmail } = await import("./services/mailer");
+      const panelName = (await prisma.themeSettings.findUnique({ where: { id: 'default' } }))?.panelName || process.env.APP_NAME || 'Catalyst';
       const content = {
-        subject: "Reset your Catalyst password",
+        subject: `Reset your ${panelName} password`,
         html: `<p>Hello ${user.name},</p><p>Reset your password: <a href="${url}">${url}</a></p>`,
         text: `Reset your password: ${url}`,
       };
@@ -63,9 +64,10 @@ const _auth = betterAuth({
     },
     sendVerificationEmail: async ({ user, url }) => {
       const { sendEmail } = await import("./services/mailer");
+      const panelName = (await prisma.themeSettings.findUnique({ where: { id: 'default' } }))?.panelName || process.env.APP_NAME || 'Catalyst';
       await sendEmail({
         to: user.email,
-        subject: "Verify your Catalyst email",
+        subject: `Verify your ${panelName} email`,
         html: `<p>Hello ${user.name},</p><p>Please verify your email address by clicking the link below:</p><p><a href="${url}">${url}</a></p>`,
         text: `Verify your email: ${url}`,
       });
@@ -77,7 +79,7 @@ const _auth = betterAuth({
       requireSignature: true,
     }),
     twoFactor({
-      issuer: "Catalyst",
+      issuer: process.env.APP_NAME || "Catalyst",
       skipVerificationOnEnable: true,
     }),
     jwtPlugin(),
