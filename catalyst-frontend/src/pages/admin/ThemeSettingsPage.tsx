@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useThemeSettings } from '../../hooks/useAdmin';
+import { generatePalette, hexToHSL, type HarmonyMode } from '../../utils/generatePalette';
 import { adminApi } from '../../services/api/admin';
 import { useThemeStore, defaultThemeColors } from '../../stores/themeStore';
 import type { ThemeColors } from '../../services/api/theme';
@@ -22,6 +23,8 @@ import {
   Shield,
   AlertTriangle,
   Info,
+  Wand2,
+  Shuffle,
 } from 'lucide-react';
 
 // ─── Default color values matching the Obsidian design system ───
@@ -155,6 +158,10 @@ function ThemeSettingsPage() {
   // ── Custom CSS ──
   const [customCss, setCustomCss] = useState('');
 
+  // ── Palette Generator ──
+  const [seedColor, setSeedColor] = useState(DEFAULTS.primaryColor);
+  const [harmonyMode, setHarmonyMode] = useState<HarmonyMode>('auto');
+
   // ── Helper: push current form state to the live DOM preview ──
   // Uses explicit values (not closures) so it's always in sync.
   const pushPreview = (
@@ -169,6 +176,24 @@ function ThemeSettingsPage() {
       accentColor: overrides.accentColor ?? accentColor,
       themeColors: overrides.themeColors ?? themeColors,
     });
+  };
+
+  // ── Palette Generator (computed) ──
+  const isSeedValid = /^#[0-9A-Fa-f]{6}$/.test(seedColor);
+  const generatedPalette = useMemo(
+    () => (isSeedValid ? generatePalette(seedColor, harmonyMode) : null),
+    [seedColor, harmonyMode, isSeedValid],
+  );
+
+  const handleApplyPalette = () => {
+    if (!generatedPalette) return;
+    const { primaryColor: p, secondaryColor: sec, accentColor: acc, themeColors: tc } = generatedPalette;
+    setPrimaryColor(p);
+    setSecondaryColor(sec);
+    setAccentColor(acc);
+    setThemeColors(tc);
+    pushPreview({ primaryColor: p, accentColor: acc, themeColors: tc });
+    toast.success('Palette applied — review the colors below and save when ready');
   };
 
   // ── Initialize form from server response ──
@@ -187,6 +212,7 @@ function ThemeSettingsPage() {
     setPrimaryColor(settings.primaryColor || DEFAULTS.primaryColor);
     setSecondaryColor(settings.secondaryColor || DEFAULTS.secondaryColor);
     setAccentColor(settings.accentColor || DEFAULTS.accentColor);
+    setSeedColor(settings.primaryColor || DEFAULTS.primaryColor);
     setCustomCss(settings.customCss || '');
     setThemeColors(savedColors ? { ...DEFAULTS.themeColors, ...savedColors } : { ...DEFAULTS.themeColors });
   }, [settings]);
@@ -291,6 +317,7 @@ function ThemeSettingsPage() {
     setPrimaryColor(settings.primaryColor || DEFAULTS.primaryColor);
     setSecondaryColor(settings.secondaryColor || DEFAULTS.secondaryColor);
     setAccentColor(settings.accentColor || DEFAULTS.accentColor);
+    setSeedColor(settings.primaryColor || DEFAULTS.primaryColor);
     setCustomCss(settings.customCss || '');
     setThemeColors(savedColors ? { ...DEFAULTS.themeColors, ...savedColors } : { ...DEFAULTS.themeColors });
 
@@ -305,6 +332,7 @@ function ThemeSettingsPage() {
         setPrimaryColor(DEFAULTS.primaryColor);
         setSecondaryColor(DEFAULTS.secondaryColor);
         setAccentColor(DEFAULTS.accentColor);
+        setSeedColor(DEFAULTS.primaryColor);
         pushPreview({
           primaryColor: DEFAULTS.primaryColor,
           accentColor: DEFAULTS.accentColor,
@@ -504,6 +532,248 @@ function ThemeSettingsPage() {
                 <span className="text-sm text-zinc-700 dark:text-zinc-300">Dark</span>
               </label>
             </div>
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* ── Palette Generator ── */}
+      <SectionCard
+        title="Color Palette Generator"
+        description="Pick one color — we'll build your entire theme"
+        icon={Wand2}
+      >
+        <div className="space-y-5">
+          {/* Seed color input */}
+          <div className="flex items-start gap-5">
+            <div className="group relative flex-shrink-0">
+              <div
+                className="h-20 w-20 cursor-pointer rounded-2xl ring-1 ring-black/5 transition-all duration-200 group-hover:scale-105 dark:ring-white/10"
+                style={{
+                  backgroundColor: isSeedValid ? seedColor : '#71717a',
+                  boxShadow: isSeedValid
+                    ? `0 8px 24px ${seedColor}30, 0 2px 8px ${seedColor}15`
+                    : '0 4px 12px rgba(0,0,0,0.15)',
+                }}
+              />
+              <input
+                type="color"
+                value={isSeedValid ? seedColor : '#71717a'}
+                onChange={(e) => setSeedColor(e.target.value)}
+                className="absolute inset-0 h-full w-full cursor-pointer rounded-2xl opacity-0"
+              />
+            </div>
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center gap-1.5">
+                <Wand2 className="h-3.5 w-3.5 text-zinc-400" />
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Seed Color
+                </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={seedColor}
+                  onChange={(e) => setSeedColor(e.target.value)}
+                  placeholder="#0d9488"
+                  className={`w-32 rounded-lg border bg-white px-3 py-1.5 font-mono text-xs transition-colors focus:outline-none focus:ring-2 dark:bg-surface-2 ${
+                    isSeedValid
+                      ? 'border-zinc-200 text-zinc-800 focus:border-primary focus:ring-primary/20 dark:border-zinc-700 dark:text-zinc-200'
+                      : 'border-red-300 text-red-600 focus:border-red-400 focus:ring-red-400/20 dark:border-red-800 dark:text-red-400'
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSeedColor(
+                      '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0'),
+                    )
+                  }
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-400 transition-colors hover:border-zinc-300 hover:text-zinc-600 dark:border-zinc-700 dark:bg-surface-2 dark:hover:border-zinc-600 dark:hover:text-zinc-300"
+                  title="Random color"
+                >
+                  <Shuffle className="h-3.5 w-3.5" />
+                </button>
+                {isSeedValid && (
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                    HSL({hexToHSL(seedColor).h}°, {hexToHSL(seedColor).s}%, {hexToHSL(seedColor).l}%)
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                Choose the main color for your theme. We'll generate a harmonious palette
+                for all surfaces, semantics, and accents.
+              </p>
+            </div>
+          </div>
+
+          {/* Harmony mode selector */}
+          <div>
+            <label className="mb-2 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+              Color Harmony
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  { id: 'auto' as const, label: 'Auto', desc: 'Smart balance' },
+                  { id: 'complementary' as const, label: 'Complementary', desc: 'Opposite on the wheel' },
+                  { id: 'analogous' as const, label: 'Analogous', desc: 'Neighboring hues' },
+                  { id: 'triadic' as const, label: 'Triadic', desc: 'Three equidistant' },
+                  { id: 'split-complementary' as const, label: 'Split Comp.', desc: 'Flanking complement' },
+                  { id: 'monochromatic' as const, label: 'Mono', desc: 'Single hue variations' },
+                ] as const
+              ).map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  title={m.desc}
+                  onClick={() => setHarmonyMode(m.id)}
+                  className={`rounded-full px-3 py-1 text-[11px] font-medium transition-all ${
+                    harmonyMode === m.id
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700 dark:bg-surface-2 dark:text-zinc-400 dark:hover:bg-surface-3 dark:hover:text-zinc-300'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Palette preview */}
+          {generatedPalette && (
+            <div className="space-y-4 rounded-xl border border-zinc-100 bg-zinc-50/50 p-4 dark:border-zinc-800 dark:bg-surface-2/50">
+              {/* Brand colors */}
+              <div>
+                <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                  Brand
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {(
+                    [
+                      { label: 'Primary', color: generatedPalette.primaryColor },
+                      { label: 'Secondary', color: generatedPalette.secondaryColor },
+                      { label: 'Accent', color: generatedPalette.accentColor },
+                    ] as const
+                  ).map(({ label, color }) => (
+                    <div key={label} className="group/swatch">
+                      <div
+                        className="h-12 rounded-lg shadow-sm ring-1 ring-black/5 transition-transform group-hover/swatch:scale-[1.02] dark:ring-white/5"
+                        style={{ backgroundColor: color }}
+                      />
+                      <p className="mt-1 text-center text-[10px] font-medium text-zinc-500 dark:text-zinc-400">
+                        {label}
+                      </p>
+                      <p className="text-center font-mono text-[10px] text-zinc-400 dark:text-zinc-500">
+                        {color}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Semantic colors */}
+              <div>
+                <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                  Semantic
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      { label: 'Success', key: 'successColor' as const },
+                      { label: 'Warning', key: 'warningColor' as const },
+                      { label: 'Danger', key: 'dangerColor' as const },
+                      { label: 'Info', key: 'infoColor' as const },
+                    ] as const
+                  ).map(({ label, key }) => (
+                    <span
+                      key={label}
+                      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium"
+                      style={{
+                        backgroundColor: `${generatedPalette.themeColors[key]}18`,
+                        color: generatedPalette.themeColors[key],
+                      }}
+                    >
+                      <span
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{ backgroundColor: generatedPalette.themeColors[key] }}
+                      />
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dark surfaces */}
+              <div>
+                <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                  Dark Surfaces
+                </p>
+                <div className="flex gap-1 rounded-lg bg-zinc-900/50 p-1.5">
+                  {(
+                    [
+                      { label: 'BG', key: 'darkBackground' as const },
+                      { label: 'Card', key: 'darkCard' as const },
+                      { label: 'S1', key: 'darkSurface1' as const },
+                      { label: 'S2', key: 'darkSurface2' as const },
+                      { label: 'S3', key: 'darkSurface3' as const },
+                      { label: 'Bdr', key: 'darkBorder' as const },
+                      { label: 'FG', key: 'darkForeground' as const },
+                      { label: 'Mt', key: 'darkMuted' as const },
+                    ] as const
+                  ).map(({ label, key }) => (
+                    <div key={key} className="flex-1 text-center">
+                      <div
+                        className="mx-auto h-8 rounded-md ring-1 ring-black/10 transition-transform hover:scale-105 dark:ring-white/5"
+                        style={{ backgroundColor: generatedPalette.themeColors[key] }}
+                      />
+                      <p className="mt-0.5 text-[9px] font-medium text-zinc-400">{label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Light surfaces */}
+              <div>
+                <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                  Light Surfaces
+                </p>
+                <div className="flex gap-1 rounded-lg border border-zinc-200 p-1.5 dark:border-zinc-700">
+                  {(
+                    [
+                      { label: 'BG', key: 'lightBackground' as const },
+                      { label: 'Card', key: 'lightCard' as const },
+                      { label: 'S1', key: 'lightSurface1' as const },
+                      { label: 'S2', key: 'lightSurface2' as const },
+                      { label: 'S3', key: 'lightSurface3' as const },
+                      { label: 'Bdr', key: 'lightBorder' as const },
+                      { label: 'FG', key: 'lightForeground' as const },
+                      { label: 'Mt', key: 'lightMuted' as const },
+                    ] as const
+                  ).map(({ label, key }) => (
+                    <div key={key} className="flex-1 text-center">
+                      <div
+                        className="mx-auto h-8 rounded-md ring-1 ring-black/5 transition-transform hover:scale-105 dark:ring-white/5"
+                        style={{ backgroundColor: generatedPalette.themeColors[key] }}
+                      />
+                      <p className="mt-0.5 text-[9px] font-medium text-zinc-400">{label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Apply button */}
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={handleApplyPalette}
+              disabled={!isSeedValid || !generatedPalette}
+              className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-xs font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md disabled:opacity-40 disabled:shadow-none"
+            >
+              <Wand2 className="h-3.5 w-3.5" />
+              Apply Palette to Theme
+            </button>
           </div>
         </div>
       </SectionCard>
