@@ -972,6 +972,15 @@ export class WebSocketGateway {
             return;
           }
         }
+        // Per-message size limit to prevent DB bloat from a single huge log dump (1MB)
+        const MAX_CONSOLE_MESSAGE_BYTES = 1048576;
+        if (message.serverId && message.data && Buffer.byteLength(message.data) > MAX_CONSOLE_MESSAGE_BYTES) {
+          this.logger.warn(
+            { nodeId, serverId: message.serverId, size: Buffer.byteLength(message.data) },
+            "console_output single message exceeds 1MB limit, truncating for DB storage",
+          );
+          message.data = (message.data as string).slice(0, MAX_CONSOLE_MESSAGE_BYTES);
+        }
         if (message.serverId && message.data) {
           await this.prisma.serverLog.create({
             data: {
@@ -1555,7 +1564,8 @@ export class WebSocketGateway {
         const access = await this.prisma.serverAccess.findUnique({
           where: { userId_serverId: { userId: client.userId, serverId: server.id } },
         });
-        if (!access && server.ownerId !== client.userId && !isAdmin) {
+        const nodeAccess = await hasNodeAccess(this.prisma, client.userId, server.nodeId);
+        if (!access && server.ownerId !== client.userId && !isAdmin && !nodeAccess) {
           if (client.socket.readyState === 1) {
             client.socket.send(
               JSON.stringify({
@@ -1568,8 +1578,8 @@ export class WebSocketGateway {
           return;
         }
         const isOwner = server.ownerId === client.userId;
-        const canConsoleRead = isOwner || isAdmin || access?.permissions?.includes("console.read");
-        const canServerRead = isOwner || isAdmin || access?.permissions?.includes("server.read");
+        const canConsoleRead = isOwner || isAdmin || nodeAccess || access?.permissions?.includes("console.read");
+        const canServerRead = isOwner || isAdmin || nodeAccess || access?.permissions?.includes("server.read");
         if (!canConsoleRead && !canServerRead) {
           if (client.socket.readyState === 1) {
             client.socket.send(
@@ -1657,8 +1667,9 @@ export class WebSocketGateway {
             ? "server.start"
             : event.action === "stop"
               ? "server.stop"
-              : event.action === "restart" || event.action === "reboot" || event.action === "kill"
-                ? "server.start"
+              // kill, restart, and reboot are destructive actions requiring server.stop permission
+              : event.action === "kill" || event.action === "restart" || event.action === "reboot"
+                ? "server.stop"
                 : "server.start";
         if (!isOwner && !isAdmin && !nodeAccess && !access?.permissions?.includes(requiredPermission)) {
           return client.socket.send(
@@ -1820,13 +1831,18 @@ export class WebSocketGateway {
       return;
     }
 
-    const allowedUsers = [
+    // Build set of allowed users: owner + explicit access entries
+    const allowedUsers = new Set([
       server.ownerId,
       ...server.access.map((a) => a.userId),
-    ];
+    ]);
 
     for (const [, client] of this.clients) {
-      if (allowedUsers.includes(client.userId)) {
+      // Only send to clients who have explicitly subscribed (respect least-privilege)
+      if (!client.subscriptions.has(serverId)) {
+        continue;
+      }
+      if (allowedUsers.has(client.userId)) {
         if (client.socket.readyState === 1) {
           client.socket.send(JSON.stringify(message));
         }

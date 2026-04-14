@@ -5,6 +5,9 @@ import { serialize } from '../utils/serialize';
 import { v4 as uuidv4 } from "uuid";
 import { randomBytes } from "crypto";
 import { decryptBackupConfig, encryptBackupConfig, redactBackupConfig } from "../services/backup-credentials";
+import { revokeSftpTokensForUser } from "../services/sftp-token-manager";
+// SECURITY NOTE: decryptBackupConfig MUST always be followed by redactBackupConfig
+// when used in API response paths. Never expose decrypted credentials to clients.
 import { ServerStateMachine } from "../services/state-machine";
 import { ServerState } from "../shared-types";
 import { createWriteStream } from "fs";
@@ -1278,7 +1281,7 @@ export async function serverRoutes(app: FastifyInstance) {
   // Create server
   app.post(
     "/",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate, validateRequestBody(serverCreateSchema)] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
         name,

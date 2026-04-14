@@ -2,6 +2,7 @@ import "dotenv/config";
 import Fastify from "fastify";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import fastifyWebsocket from "@fastify/websocket";
 import fastifyCors from "@fastify/cors";
 import fastifyRateLimit from "@fastify/rate-limit";
@@ -317,7 +318,21 @@ async function bootstrap() {
         return request.user?.userId || request.ip;
       },
       allowList: async (request) => {
-        // Node agent API keys bypass rate limiting entirely
+        // Only bypass rate limiting for internal/agent endpoints.
+        // User-facing endpoints are rate-limited even when agent headers are present,
+        // to prevent abuse if an agent API key is compromised.
+        const url = request.url ?? '';
+        const isAgentEndpoint =
+          url.startsWith('/api/internal/') ||
+          url.startsWith('/api/agent/') ||
+          url.startsWith('/ws') ||
+          url.startsWith('/api/sftp/') ||
+          url.startsWith('/api/servers/') && url.includes('/file-tunnel');
+        if (!isAgentEndpoint) {
+          return false;
+        }
+
+        // Node agent API keys bypass rate limiting for agent-internal endpoints
         const query = (request.query as { nodeId?: string; token?: string }) || {};
         const headerNodeId =
           typeof (request.headers["x-catalyst-node-id"] ?? request.headers["x-catalyst-nodeid"]) === "string"
@@ -348,6 +363,7 @@ async function bootstrap() {
     // Register plugins
     const allowedOrigins = [
       ...(process.env.CORS_ORIGIN?.split(',').map(s => s.trim()) ?? []),
+      ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
       // Allow localhost origins only in development
       ...(process.env.NODE_ENV !== 'production'
         ? ['http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:3000', 'http://127.0.0.1:5173']
@@ -364,7 +380,11 @@ async function bootstrap() {
       allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "X-Client-Info"],
         credentials: true,
         maxAge: 86400,
-      });
+ });
+ // NOTE: Agent auth headers (X-Catalyst-Node-Id, X-Catalyst-Node-Token, X-Node-Api-Key)
+ // are intentionally NOT included in allowedHeaders. Agent requests are server-to-server
+ // and never originate from browsers. Exposing them in CORS would allow malicious
+ // web pages to probe agent authentication from a user's browser.
 
     await app.register(fastifySwagger, {
       openapi: {

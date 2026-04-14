@@ -111,3 +111,23 @@ export async function verifyAgentApiKey(
     return false;
   }
 }
+
+/**
+ * Invalidate cached agent API key verifications.
+ * Call this when an API key is revoked, disabled, or rotated.
+ * If `nodeId` is provided, only clears cache entries for that node.
+ */
+export function invalidateAgentApiKeyCache(nodeId?: string): void {
+  if (nodeId) {
+    // Clear only entries for the specific node
+    const prefix = `${nodeId}:`;
+    for (const key of verifiedKeyCache.keys()) {
+      if (key.startsWith(prefix)) {
+        verifiedKeyCache.delete(key);
+      }
+    }
+  } else {
+    // Clear all cached verifications
+    verifiedKeyCache.clear();
+  }
+}

@@ -1,11 +1,11 @@
-# Catalyst Backend - Dockerfile
-
-FROM oven/bun:1.3-alpine
+# Catalyst Backend - Multi-stage Dockerfile
+# Stage 1: Builder - installs build dependencies and compiles native modules
+FROM oven/bun:1.3-alpine AS builder
 
 WORKDIR /app
 
 # Install build dependencies (needed for native modules like ssh2)
-RUN apk add --no-cache python3 make g++ curl
+RUN apk add --no-cache python3 make g++
 
 # Copy backend source
 COPY catalyst-backend/package.json catalyst-backend/bun.lock ./
@@ -17,11 +17,30 @@ COPY catalyst-backend/prisma ./prisma
 RUN mkdir -p ../catalyst-shared
 COPY catalyst-shared/types.ts ../catalyst-shared/types.ts
 
-# Install dependencies
+# Install dependencies (including native modules)
 RUN bun install
 
 # Generate Prisma Client
 RUN bunx prisma generate --config prisma/prisma.config.ts
+
+# Stage 2: Runtime - clean image without build tools
+FROM oven/bun:1.3-alpine
+
+WORKDIR /app
+
+# Copy installed dependencies from builder (includes compiled native modules)
+COPY --from=builder /app/node_modules ./node_modules
+
+# Copy source and generated Prisma client
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/bun.lock ./bun.lock
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
+
+# Copy shared types
+RUN mkdir -p ../catalyst-shared
+COPY --from=builder /app/../catalyst-shared/types.ts ../catalyst-shared/types.ts
 
 # Create non-root user
 RUN addgroup -S catalyst && adduser -S catalyst -G catalyst

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AnsiToHtml from 'ansi-to-html';
+import DOMPurify from 'dompurify';
 import { ArrowDown, Download, Trash2 } from 'lucide-react';
 
 type ConsoleEntry = {
@@ -291,6 +292,8 @@ function CustomConsole({
                       let html = ansiConverter.toHtml(display || ' ');
                       html = applySyntaxHighlighting(html);
                       if (searchQuery) html = highlightSearchInHtml(html, searchQuery);
+                      // Sanitize final HTML to prevent XSS from ANSI/regex edge cases
+                      html = DOMPurify.sanitize(html);
                       return (
                         <div key={lineKey}>
                           <span
