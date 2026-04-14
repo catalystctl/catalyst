@@ -770,6 +770,29 @@ function ServerDetailsPage() {
       .catch(() => notifyError('Failed to reset startup command'));
   };
 
+  // ── Tab visibility filter (BEFORE early returns so hook count is always the same) ──
+  const modManagerConfig = server?.template?.features?.modManager;
+  const pluginManagerConfig = server?.template?.features?.pluginManager;
+  const visibleTabs = useMemo(() => {
+    return Object.entries(tabLabels).filter(([key]) => {
+      if (key === 'admin')
+        return canAdminWrite || hasServerPerm('server.delete');
+      if (key === 'console') return hasServerPerm('console.read');
+      if (key === 'files') return hasServerPerm('file.read');
+      if (key === 'backups') return hasServerPerm('backup.read');
+      if (key === 'databases') return hasServerPerm('database.read');
+      if (key === 'schedules') return hasServerPerm('server.schedule');
+      if (key === 'modManager') return Boolean(modManagerConfig);
+      if (key === 'pluginManager') return Boolean(pluginManagerConfig);
+      return true;
+    });
+  }, [
+    canAdminWrite,
+    hasServerPerm,
+    modManagerConfig,
+    pluginManagerConfig,
+  ]);
+
   // ── Loading / Error states ──
   if (isLoading) {
     return (
@@ -812,29 +835,6 @@ function ServerDetailsPage() {
   const diskLimitMb = server.allocatedDiskMb ?? 0;
   const liveDiskUsageMb = liveMetrics?.diskUsageMb;
   const liveDiskTotalMb = liveMetrics?.diskTotalMb;
-  const modManagerConfig = server.template?.features?.modManager;
-  const pluginManagerConfig = server.template?.features?.pluginManager;
-
-  // ── Tab visibility filter ──
-  const visibleTabs = useMemo(() => {
-    return Object.entries(tabLabels).filter(([key]) => {
-      if (key === 'admin')
-        return canAdminWrite || hasServerPerm('server.delete');
-      if (key === 'console') return hasServerPerm('console.read');
-      if (key === 'files') return hasServerPerm('file.read');
-      if (key === 'backups') return hasServerPerm('backup.read');
-      if (key === 'databases') return hasServerPerm('database.read');
-      if (key === 'schedules') return hasServerPerm('server.schedule');
-      if (key === 'modManager') return Boolean(modManagerConfig);
-      if (key === 'pluginManager') return Boolean(pluginManagerConfig);
-      return true;
-    });
-  }, [
-    canAdminWrite,
-    hasServerPerm,
-    modManagerConfig,
-    pluginManagerConfig,
-  ]);
 
   return (
     <motion.div

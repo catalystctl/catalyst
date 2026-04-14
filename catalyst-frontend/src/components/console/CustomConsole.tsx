@@ -1,7 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AnsiToHtml from 'ansi-to-html';
 import DOMPurify from 'dompurify';
-import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { ArrowDown, Download, Trash2 } from 'lucide-react';
 
 type ConsoleEntry = {
@@ -40,7 +39,6 @@ const ensureLineEnding = (value: string) =>
 const normalizeLineEndings = (value: string) =>
   value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
-// Shared converter instance (stateless, safe to reuse)
 const ansiConverter = new AnsiToHtml({
   escapeXML: true,
   newline: true,
@@ -61,7 +59,6 @@ function escapeRegex(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// Syntax highlighting rules applied to text segments outside HTML tags
 const syntaxRules: Array<{ pattern: RegExp; cls: string }> = [
   { pattern: /\b(ERROR|FATAL|SEVERE|EXCEPTION|PANIC|FAIL(?:ED|URE)?)\b/gi, cls: 'chl-error' },
   { pattern: /\b(WARN(?:ING)?|CAUTION|DEPRECATED)\b/gi, cls: 'chl-warn' },
@@ -73,7 +70,6 @@ const syntaxRules: Array<{ pattern: RegExp; cls: string }> = [
   { pattern: /https?:\/\/[^\s)>\]]+/gi, cls: 'chl-url' },
 ];
 
-/** Process only text segments in an HTML string (skip inside tags). */
 function processTextSegments(html: string, fn: (text: string) => string): string {
   let result = '';
   let inTag = false;
@@ -107,7 +103,6 @@ function processTextSegments(html: string, fn: (text: string) => string): string
   return result;
 }
 
-/** Apply syntax highlighting to text outside of HTML tags */
 function applySyntaxHighlighting(html: string): string {
   return processTextSegments(html, (text) => {
     let result = text;
@@ -130,7 +125,6 @@ function highlightSearchInHtml(html: string, query: string): string {
   );
 }
 
-// ── Process a single console entry into render-ready HTML ──
 type ProcessedEntry = {
   id: string;
   stream: string;
@@ -166,7 +160,7 @@ function processEntry(entry: ConsoleEntry, searchQuery: string): ProcessedEntry 
   };
 }
 
-// ── Row component — rendered per visible entry by Virtuoso ──
+// ── ConsoleRow ──
 function ConsoleRow({
   entry,
   index,
@@ -200,6 +194,7 @@ function ConsoleRow({
   );
 }
 
+// ── Main component ──
 function CustomConsole({
   entries,
   autoScroll: autoScrollProp = true,
@@ -216,18 +211,21 @@ function CustomConsole({
   onClear,
   serverId,
 }: CustomConsoleProps) {
-  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [autoScroll, setAutoScroll] = useState(autoScrollProp);
-  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
 
-  // Sync parent's autoScroll prop into local state
-  const prevAutoScrollProp = useRef(autoScrollProp);
-  if (prevAutoScrollProp.current !== autoScrollProp) {
-    prevAutoScrollProp.current = autoScrollProp;
-    setAutoScroll(autoScrollProp);
-  }
+  // Sync parent prop → local state
+  const prevPropRef = useRef(autoScrollProp);
+  useEffect(() => {
+    if (prevPropRef.current !== autoScrollProp) {
+      prevPropRef.current = autoScrollProp;
+      setAutoScroll(autoScrollProp);
+    }
+  }, [autoScrollProp]);
 
-  // ── Filter entries ──
+  // ── Filter ──
   const normalizedEntries = useMemo(() => {
     let filtered = entries.slice(-scrollback);
     if (streamFilter && streamFilter.size > 0) {
@@ -240,60 +238,70 @@ function CustomConsole({
     return filtered;
   }, [entries, scrollback, searchQuery, streamFilter]);
 
-  // ── Process entries into render-ready HTML (memoized) ──
+  // ── Process into HTML (memoized) ──
   const processedEntries = useMemo(
     () => normalizedEntries.map((entry) => processEntry(entry, searchQuery ?? '')),
     [normalizedEntries, searchQuery],
   );
 
-  // ── Follow output: scroll to bottom when new entries arrive and we're pinned ──
-  const prevCount = useRef(processedEntries.length);
-  if (autoScroll && processedEntries.length > prevCount.current) {
-    // This runs during render — Virtuoso's followOutput will handle it
-  }
-  prevCount.current = processedEntries.length;
+  // ── Auto-scroll via IntersectionObserver on a sentinel at the bottom ──
+  // This avoids reading scrollTop/scrollHeight during render (no forced reflow).
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    const container = scrollRef.current;
+    if (!sentinel || !container) return;
 
-  // ── Virtuoso callbacks ──
-  const handleIsAtBottom = useCallback(
-    (isAtBottom: boolean) => {
-      if (isAtBottom) {
-        setShowScrollButton(false);
-        if (!autoScroll) {
-          setAutoScroll(true);
-          onAutoScrollResume?.();
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry) return;
+        if (entry.isIntersecting) {
+          // Sentinel is visible → user is at the bottom
+          setShowScrollBtn(false);
+          if (!autoScroll) {
+            setAutoScroll(true);
+            onAutoScrollResume?.();
+          }
+        } else {
+          // Sentinel not visible → user scrolled up
+          if (autoScroll) {
+            setAutoScroll(false);
+            setShowScrollBtn(true);
+            onUserScroll?.();
+          }
         }
-      } else {
-        setShowScrollButton(true);
-        if (autoScroll) {
-          setAutoScroll(false);
-          onUserScroll?.();
-        }
-      }
-    },
-    [autoScroll, onUserScroll, onAutoScrollResume],
-  );
+      },
+      {
+        root: container,
+        threshold: 0,
+        rootMargin: '0px 0px 40px 0px',
+      },
+    );
 
-  const handleAtBottomChange = useCallback(
-    (atBottom: boolean) => {
-      if (!atBottom && autoScroll) {
-        // User scrolled away — stop following
-      }
-    },
-    [autoScroll],
-  );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [autoScroll, onUserScroll, onAutoScrollResume]);
+
+  // ── When autoScroll is true and new entries arrive, scroll to bottom ──
+  const prevLen = useRef(processedEntries.length);
+  useEffect(() => {
+    if (
+      autoScroll &&
+      processedEntries.length > prevLen.current &&
+      sentinelRef.current
+    ) {
+      sentinelRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+    prevLen.current = processedEntries.length;
+  }, [autoScroll, processedEntries.length]);
 
   const scrollToBottom = useCallback(() => {
     setAutoScroll(true);
-    setShowScrollButton(false);
-    // Small delay to let Virtuoso re-render with followOutput=true
+    setShowScrollBtn(false);
     requestAnimationFrame(() => {
-      virtuosoRef.current?.scrollToIndex({
-        index: processedEntries.length - 1,
-        behavior: 'smooth',
-      });
+      sentinelRef.current?.scrollIntoView({ behavior: 'smooth' });
     });
     onAutoScrollResume?.();
-  }, [processedEntries.length, onAutoScrollResume]);
+  }, [onAutoScrollResume]);
 
   // ── Export ──
   const handleExport = useCallback(() => {
@@ -315,14 +323,16 @@ function CustomConsole({
     URL.revokeObjectURL(url);
   }, [normalizedEntries, serverId]);
 
+  const hasContent = normalizedEntries.length > 0;
+
   return (
     <div className={`relative ${className}`}>
-      {/* Console toolbar */}
+      {/* Toolbar */}
       <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
         <button
           type="button"
           onClick={handleExport}
-          disabled={normalizedEntries.length === 0}
+          disabled={!hasContent}
           title="Export console log"
           className="rounded border border-border bg-white/90 px-2 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-all hover:border-primary-500 hover:text-foreground disabled:opacity-50 dark:border-border dark:bg-surface-1/90 dark:text-zinc-300 dark:hover:border-primary-500/50 dark:hover:text-foreground"
         >
@@ -332,7 +342,7 @@ function CustomConsole({
           <button
             type="button"
             onClick={onClear}
-            disabled={normalizedEntries.length === 0}
+            disabled={!hasContent}
             title="Clear console"
             className="rounded border border-border bg-white/90 px-2 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-all hover:border-rose-500 hover:text-rose-600 disabled:opacity-50 dark:border-border dark:bg-surface-1/90 dark:text-zinc-300 dark:hover:border-rose-500/50 dark:hover:text-rose-400"
           >
@@ -341,48 +351,49 @@ function CustomConsole({
         ) : null}
       </div>
 
-      {/* Loading / error states */}
-      {isLoading ? (
-        <div className="console-output flex h-full items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
-          <div className="h-3 w-3 animate-spin rounded-full border-2 border-border border-t-primary-400 dark:border-zinc-600" />
-          Loading recent logs…
-        </div>
-      ) : isError ? (
-        <div className="console-output mx-4 my-3 flex items-center justify-between rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">
-          <span>Unable to load historical logs.</span>
-          <button
-            type="button"
-            className="rounded border border-rose-500/30 px-2 py-0.5 text-rose-400 transition-colors hover:bg-rose-500/20"
-            onClick={() => onRetry?.()}
-          >
-            Retry
-          </button>
-        </div>
-      ) : normalizedEntries.length === 0 ? (
-        <div className="console-output flex h-full items-center justify-center text-xs text-muted-foreground dark:text-muted-foreground">
-          No console output yet.
-        </div>
-      ) : (
-        <Virtuoso
-          ref={virtuosoRef}
-          data={processedEntries}
-          className="console-output font-mono text-[13px] leading-[1.7] text-foreground dark:text-zinc-300"
-          followOutput={autoScroll ? 'smooth' : false}
-          atBottomStateChange={handleIsAtBottom}
-          atBottomChange={handleAtBottomChange}
-          initialTopMostItemIndex={processedEntries.length - 1}
-          overscan={200}
-          itemContent={(index, entry) => (
+      <div
+        ref={scrollRef}
+        className="console-output h-full overflow-y-auto font-mono text-[13px] leading-[1.7] text-foreground dark:text-zinc-300"
+      >
+        {isLoading && !hasContent ? (
+          <div className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
+            <div className="h-3 w-3 animate-spin rounded-full border-2 border-border border-t-primary-400 dark:border-zinc-600" />
+            Loading recent logs…
+          </div>
+        ) : null}
+        {isError && !hasContent ? (
+          <div className="mx-4 my-3 flex items-center justify-between rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">
+            <span>Unable to load historical logs.</span>
+            <button
+              type="button"
+              className="rounded border border-rose-500/30 px-2 py-0.5 text-rose-400 transition-colors hover:bg-rose-500/20"
+              onClick={() => onRetry?.()}
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
+        {!isLoading && !hasContent ? (
+          <div className="flex h-full items-center justify-center text-xs text-muted-foreground dark:text-muted-foreground">
+            No console output yet.
+          </div>
+        ) : null}
+
+        {hasContent &&
+          processedEntries.map((entry, index) => (
             <ConsoleRow
+              key={entry.id}
               entry={entry}
               index={index}
               showLineNumbers={showLineNumbers}
             />
-          )}
-        />
-      )}
+          ))}
 
-      {showScrollButton && !autoScroll ? (
+        {/* Sentinel for IntersectionObserver auto-scroll detection */}
+        {hasContent && <div ref={sentinelRef} className="h-px w-full" />}
+      </div>
+
+      {showScrollBtn && !autoScroll ? (
         <button
           type="button"
           onClick={scrollToBottom}

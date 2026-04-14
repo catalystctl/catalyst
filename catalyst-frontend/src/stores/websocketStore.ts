@@ -6,8 +6,6 @@ type MessageHandler = (message: WebSocketMessage) => void;
 
 interface WebSocketState {
   isConnected: boolean;
-  subscriptions: Set<string>;
-  messageHandlers: Set<MessageHandler>;
   connect: () => void;
   reconnect: () => void;
   subscribe: (serverId: string) => void;
@@ -18,17 +16,21 @@ interface WebSocketState {
 
 const manager = new WebSocketManager();
 
+// Internal mutable state — NOT part of the zustand store so that
+// subscribe/unsubscribe/onMessage don't trigger synchronous React
+// re-renders when called inside useEffect. Only `isConnected` is
+// reactive because components actually render based on it.
+const internalSubscriptions = new Set<string>();
+const internalHandlers = new Set<MessageHandler>();
+
 export const useWebSocketStore = create<WebSocketState>((set, get) => ({
   isConnected: false,
-  subscriptions: new Set<string>(),
-  messageHandlers: new Set<MessageHandler>(),
   connect: () => {
     manager.connect({
       onOpen: () => set({ isConnected: true }),
       onClose: () => set({ isConnected: false }),
       onMessage: (message) => {
-        const handlers = get().messageHandlers;
-        handlers.forEach((handler) => handler(message));
+        internalHandlers.forEach((handler) => handler(message));
       },
     });
   },
@@ -37,31 +39,23 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
       onOpen: () => set({ isConnected: true }),
       onClose: () => set({ isConnected: false }),
       onMessage: (message) => {
-        const handlers = get().messageHandlers;
-        handlers.forEach((handler) => handler(message));
+        internalHandlers.forEach((handler) => handler(message));
       },
     });
   },
   subscribe: (serverId) => {
     manager.subscribe(serverId);
-    const next = new Set(get().subscriptions);
-    next.add(serverId);
-    set({ subscriptions: next });
+    internalSubscriptions.add(serverId);
   },
   unsubscribe: (serverId) => {
     manager.unsubscribe(serverId);
-    const next = new Set(get().subscriptions);
-    next.delete(serverId);
-    set({ subscriptions: next });
+    internalSubscriptions.delete(serverId);
   },
   sendCommand: (serverId, command) => manager.sendCommand(serverId, command),
   onMessage: (handler) => {
-    const handlers = get().messageHandlers;
-    handlers.add(handler);
-    set({ messageHandlers: handlers });
+    internalHandlers.add(handler);
     return () => {
-      handlers.delete(handler);
-      set({ messageHandlers: new Set(handlers) });
+      internalHandlers.delete(handler);
     };
   },
 }));
