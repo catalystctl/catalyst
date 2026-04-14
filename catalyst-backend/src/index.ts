@@ -33,6 +33,7 @@ import { verifyApiKey as verifyApiKeyService, createApiKey as createApiKeyServic
 import { apiKeyRoutes } from "./routes/api-keys";
 import { AlertService } from "./services/alert-service";
 import { getSecuritySettings } from "./services/mailer";
+import { generateSftpToken, rotateSftpToken, getSftpTokenInfo, listSftpTokensForServer, revokeSftpToken, revokeAllSftpTokensForServer, SFTP_TTL_OPTIONS } from "./services/sftp-token-manager";
 import { startAuditRetention } from "./services/audit-retention";
 import { startStatRetention } from "./services/stat-retention";
 import { startBackupRetention } from "./services/backup-retention";
@@ -656,31 +657,159 @@ async function bootstrap() {
     });
 
     // SFTP connection info endpoint (authenticated)
-    app.get("/api/sftp/connection-info", { preHandler: [authenticate] }, async (request, reply) => {
-      const enabled = process.env.SFTP_ENABLED !== 'false';
-      const port = parseInt(process.env.SFTP_PORT || '2022');
-      const host = process.env.BACKEND_URL
+    // Uses a dedicated SFTP token manager with per-user configurable expiry.
+
+    function getSftpHost(request: any): string {
+      return process.env.BACKEND_URL
         ? new URL(process.env.BACKEND_URL).hostname
         : process.env.BACKEND_EXTERNAL_ADDRESS
           ? new URL(process.env.BACKEND_EXTERNAL_ADDRESS).hostname
           : request.hostname.split(':')[0];
+    }
 
-      // Find a valid session token for this user to use as SFTP password
+    app.get("/api/sftp/connection-info", { preHandler: [authenticate] }, async (request, reply) => {
+      const enabled = process.env.SFTP_ENABLED !== 'false';
+      const port = parseInt(process.env.SFTP_PORT || '2022');
+      const host = getSftpHost(request);
       const userId = request.user?.userId;
-      let sftpPassword: string | null = null;
-      if (userId) {
-        const activeSession = await prisma.session.findFirst({
-          where: { userId, expiresAt: { gt: new Date() } },
-          orderBy: { createdAt: 'desc' },
-          select: { token: true },
-        });
-        sftpPassword = activeSession?.token ?? null;
+      const serverId = (request.query as { serverId?: string }).serverId;
+
+      if (!userId || !serverId) {
+        return reply.status(400).send({ error: 'serverId query parameter is required' });
       }
+
+      const ttlMs = Number((request.query as { ttl?: string }).ttl) || undefined;
+      const result = generateSftpToken(userId, serverId, ttlMs);
 
       reply.send({
         success: true,
-        data: { enabled, host, port, sftpPassword },
+        data: {
+          enabled,
+          host,
+          port,
+          sftpPassword: result.token,
+          expiresAt: result.expiresAt,
+          ttlMs: result.ttlMs,
+          ttlOptions: SFTP_TTL_OPTIONS.map(o => ({ label: o.label, value: o.value })),
+        },
       });
+    });
+
+    // SFTP token rotation endpoint (authenticated)
+    app.post("/api/sftp/rotate-token", { preHandler: [authenticate] }, async (request, reply) => {
+      const userId = request.user?.userId;
+      const { serverId, ttlMs } = request.body as { serverId: string; ttlMs?: number };
+
+      if (!userId || !serverId) {
+        return reply.status(400).send({ error: 'serverId is required' });
+      }
+
+      const result = rotateSftpToken(userId, serverId, ttlMs);
+
+      reply.send({
+        success: true,
+        data: {
+          sftpPassword: result.token,
+          expiresAt: result.expiresAt,
+          ttlMs: result.ttlMs,
+        },
+      });
+    });
+
+    // List all SFTP tokens for a server (owner-only, or self-view for non-owners)
+    app.get("/api/sftp/tokens", { preHandler: [authenticate] }, async (request, reply) => {
+      const userId = request.user?.userId;
+      const serverId = (request.query as { serverId?: string }).serverId;
+
+      if (!userId || !serverId) {
+        return reply.status(400).send({ error: 'serverId query parameter is required' });
+      }
+
+      const server = await prisma.server.findUnique({
+        where: { id: serverId },
+        select: { ownerId: true },
+      });
+      if (!server) {
+        return reply.status(404).send({ error: 'Server not found' });
+      }
+
+      const isOwner = server.ownerId === userId;
+      const tokens = listSftpTokensForServer(serverId, userId, isOwner);
+
+      // Enrich tokens with user info
+      const enriched = await Promise.all(
+        tokens.map(async (t) => {
+          const user = await prisma.user.findUnique({
+            where: { id: t.userId },
+            select: { email: true, username: true },
+          });
+          return {
+            userId: t.userId,
+            email: user?.email ?? t.userId,
+            username: user?.username ?? null,
+            expiresAt: t.expiresAt,
+            ttlMs: t.ttlMs,
+            createdAt: t.createdAt,
+            token: t.token,
+            isSelf: t.isSelf,
+          };
+        }),
+      );
+
+      reply.send({ success: true, data: enriched });
+    });
+
+    // Revoke a specific user's SFTP token for a server (owner or self)
+    app.delete("/api/sftp/tokens/:targetUserId", { preHandler: [authenticate] }, async (request, reply) => {
+      const userId = request.user?.userId;
+      const { targetUserId } = request.params as { targetUserId: string };
+      const serverId = (request.query as { serverId?: string }).serverId;
+
+      if (!userId || !serverId || !targetUserId) {
+        return reply.status(400).send({ error: 'serverId and targetUserId are required' });
+      }
+
+      const server = await prisma.server.findUnique({
+        where: { id: serverId },
+        select: { ownerId: true },
+      });
+      if (!server) {
+        return reply.status(404).send({ error: 'Server not found' });
+      }
+
+      const isOwner = server.ownerId === userId;
+      const revoked = revokeSftpToken(targetUserId, serverId, userId, isOwner);
+
+      if (!revoked) {
+        return reply.status(404).send({ error: 'No active token found, or not authorized' });
+      }
+
+      reply.send({ success: true });
+    });
+
+    // Revoke ALL SFTP tokens for a server (owner-only)
+    app.delete("/api/sftp/tokens", { preHandler: [authenticate] }, async (request, reply) => {
+      const userId = request.user?.userId;
+      const serverId = (request.query as { serverId?: string }).serverId;
+
+      if (!userId || !serverId) {
+        return reply.status(400).send({ error: 'serverId query parameter is required' });
+      }
+
+      const server = await prisma.server.findUnique({
+        where: { id: serverId },
+        select: { ownerId: true },
+      });
+      if (!server) {
+        return reply.status(404).send({ error: 'Server not found' });
+      }
+
+      if (server.ownerId !== userId) {
+        return reply.status(403).send({ error: 'Only the server owner can revoke all tokens' });
+      }
+
+      const count = revokeAllSftpTokensForServer(serverId);
+      reply.send({ success: true, data: { revoked: count } });
     });
 
     // Public theme settings endpoint (unauthenticated)

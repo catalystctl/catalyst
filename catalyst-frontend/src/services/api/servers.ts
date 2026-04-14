@@ -195,10 +195,55 @@ export const serversApi = {
     return data;
   },
 
-  getSftpConnectionInfo: async () => {
-    const { data } = await apiClient.get<
-      ApiResponse<{ enabled: boolean; host: string; port: number; sftpPassword: string | null }>
-    >('/api/sftp/connection-info');
+  getSftpConnectionInfo: async (serverId: string, ttlMs?: number) => {
+    const params = new URLSearchParams({ serverId });
+    if (ttlMs) params.set('ttl', String(ttlMs));
+    const { data } = await apiClient.get<ApiResponse<{
+      enabled: boolean;
+      host: string;
+      port: number;
+      sftpPassword: string | null;
+      expiresAt: number;
+      ttlMs: number;
+      ttlOptions: Array<{ label: string; value: number }>;
+    }>>(`/api/sftp/connection-info?${params.toString()}`);
+    return data.data;
+  },
+
+  rotateSftpToken: async (serverId: string, ttlMs?: number) => {
+    const { data } = await apiClient.post<ApiResponse<{
+      sftpPassword: string;
+      expiresAt: number;
+      ttlMs: number;
+    }>>('/api/sftp/rotate-token', { serverId, ttlMs });
+    return data.data;
+  },
+
+  listSftpTokens: async (serverId: string) => {
+    const { data } = await apiClient.get<ApiResponse<Array<{
+      userId: string;
+      email: string;
+      username: string | null;
+      expiresAt: number;
+      ttlMs: number;
+      createdAt: number;
+      token: string | null;
+      isSelf: boolean;
+    }>>>(`/api/sftp/tokens?serverId=${serverId}`);
+    return data.data;
+  },
+
+  revokeSftpToken: async (serverId: string, targetUserId: string) => {
+    const { data } = await apiClient.delete<ApiResponse<void>>(
+      `/api/sftp/tokens/${targetUserId}?serverId=${serverId}`,
+    );
+    return data;
+  },
+
+  revokeAllSftpTokens: async (serverId: string) => {
+    const { data } = await apiClient.delete<ApiResponse<{ revoked: number }>>(
+      `/api/sftp/tokens?serverId=${serverId}`,
+    );
     return data.data;
   },
 

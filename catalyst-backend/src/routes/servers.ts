@@ -26,10 +26,8 @@ import {
   normalizeHostIp,
   shouldUseIpam,
 } from "../utils/ipam";
-import {
-  hasNodeAccess,
-  getUserAccessibleNodes,
-} from "../lib/permissions";
+import { hasNodeAccess, getUserAccessibleNodes } from "../lib/permissions";
+import { serverCreateSchema, validateRequestBody } from "../lib/validation";
 import {
   DatabaseProvisioningError,
   dropDatabase,
@@ -5146,6 +5144,9 @@ export async function serverRoutes(app: FastifyInstance) {
       await prisma.serverAccess.delete({
         where: { userId_serverId: { userId: targetUserId, serverId } },
       });
+
+      // Instantly revoke SFTP tokens for the removed user on this server
+      revokeSftpTokensForUser(targetUserId, serverId);
 
       await prisma.auditLog.create({
         data: {

@@ -8,7 +8,7 @@ import {
   useState,
 } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowDown, ArrowUpCircle, Check, CheckSquare, Copy, Download, ExternalLink, Loader2, Package, Puzzle, RefreshCw, Search, Square, Trash2, X, Terminal, FolderOpen, HardDrive, Clock, Database, BarChart3, Bell, Wrench, Users, Settings, Shield } from 'lucide-react';
+import { ArrowDown, ArrowUpCircle, Check, CheckSquare, Copy, Download, ExternalLink, Loader2, Package, Puzzle, RefreshCw, Search, Square, Trash2, X, Terminal, FolderOpen, HardDrive, Clock, Database, BarChart3, Bell, Wrench, Users, Settings, Shield, FolderSync } from 'lucide-react';
 import { useServer } from '../../hooks/useServer';
 import { useServerMetrics } from '../../hooks/useServerMetrics';
 import {
@@ -266,6 +266,7 @@ const filterAndSortVersions = (versions: any[], requestedGameVersion?: string) =
 const tabLabels = {
   console: 'Console',
   files: 'Files',
+  sftp: 'SFTP',
   backups: 'Backups',
   tasks: 'Tasks',
   databases: 'Databases',
@@ -282,6 +283,7 @@ const tabLabels = {
 const tabIcons: Record<keyof typeof tabLabels, React.ComponentType<{ className?: string }>> = {
   console: Terminal,
   files: FolderOpen,
+  sftp: FolderSync,
   backups: HardDrive,
   tasks: Clock,
   databases: Database,
@@ -2161,18 +2163,23 @@ function ServerDetailsPage() {
       ) : null}
 
       {activeTab === 'files' ? (
-        <div className="space-y-4">
-          <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-            <FileManager serverId={server.id} isSuspended={isSuspended} />
+        <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+          <FileManager serverId={server.id} isSuspended={isSuspended} />
+        </div>
+      ) : null}
+
+      {activeTab === 'sftp' ? (
+        <div className="rounded-xl border border-border bg-white px-6 py-5 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-foreground dark:text-white">SFTP Access</h2>
+            <p className="text-xs text-muted-foreground dark:text-muted-foreground">
+              Connect to your server files via SFTP using the credentials below.
+            </p>
           </div>
-          <details className="rounded-xl border border-border bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-            <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-foreground dark:text-zinc-200">
-              SFTP Connection Details
-            </summary>
-            <div className="border-t border-border px-4 py-4 dark:border-border">
-              <SftpConnectionInfo serverId={server.id} />
-            </div>
-          </details>
+          <SftpConnectionInfo
+            serverId={server.id}
+            isOwner={server.ownerId === user?.id}
+          />
         </div>
       ) : null}
 

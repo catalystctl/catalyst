@@ -9,6 +9,7 @@ import { generateKeyPairSync } from 'crypto';
 import type { Logger } from 'pino';
 import { auth } from './auth';
 import { realpathSync } from 'fs';
+import { validateSftpToken } from './services/sftp-token-manager.js';
 
 const { Server: SSHServer, utils } = ssh2;
 type SFTPStream = ssh2.SFTPStream;
@@ -54,16 +55,26 @@ async function validateTokenAndGetServer(username: string, password: string): Pr
     const serverId = username;
     let userId: string | null = null;
 
-    // Try bearer token auth first
-    try {
-      const session = await auth.api.getSession({
-        headers: new Headers({ authorization: `Bearer ${password}` }),
-      });
-      if (session) {
-        userId = session.user.id;
+    // Try dedicated SFTP token first (preferred — short-lived, single-purpose)
+    if (password.startsWith('sftp_')) {
+      const sftpResult = validateSftpToken(password, serverId);
+      if (sftpResult) {
+        userId = sftpResult.userId;
       }
-    } catch {
-      // Bearer auth failed, try direct session token lookup
+    }
+
+    // Fallback: try bearer token auth
+    if (!userId) {
+      try {
+        const session = await auth.api.getSession({
+          headers: new Headers({ authorization: `Bearer ${password}` }),
+        });
+        if (session) {
+          userId = session.user.id;
+        }
+      } catch {
+        // Bearer auth failed, try direct session token lookup
+      }
     }
 
     // Fallback: look up session token directly in database

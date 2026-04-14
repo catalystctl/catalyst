@@ -7,6 +7,7 @@
 
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { PrismaClient } from "@prisma/client";
+import { revokeSftpTokensForUser } from "../services/sftp-token-manager";
 import {
   hasPermission,
   hasAnyPermission,
@@ -244,6 +245,8 @@ export class RbacMiddleware {
       const updated = access.permissions.filter((p) => p !== permission);
       if (updated.length === 0) {
         await this.prisma.serverAccess.delete({ where: { id: access.id } });
+        // User lost all permissions — revoke SFTP tokens instantly
+        revokeSftpTokensForUser(userId, serverId);
       } else {
         await this.prisma.serverAccess.update({
           where: { id: access.id },

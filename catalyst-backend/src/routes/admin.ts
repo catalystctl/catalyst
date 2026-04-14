@@ -6,6 +6,7 @@ import { ServerState } from '../shared-types';
 import { ServerStateMachine } from '../services/state-machine';
 import { normalizeHostIp, releaseIpForServer, summarizePool } from '../utils/ipam';
 import { createAuditLog } from '../middleware/audit';
+import { revokeSftpTokensForUser } from '../services/sftp-token-manager';
 import { hasPermission, hasAnyPermission } from '../lib/permissions';
 import {
   DEFAULT_SECURITY_SETTINGS,
@@ -449,9 +450,17 @@ export async function adminRoutes(app: FastifyInstance) {
                 'server.delete',
               ];
 
+        const removedAccess = await prisma.serverAccess.findMany({
+          where: { userId, serverId: { notIn: uniqueServerIds } },
+          select: { serverId: true },
+        });
         await prisma.serverAccess.deleteMany({
           where: { userId, serverId: { notIn: uniqueServerIds } },
         });
+        // Instantly revoke SFTP tokens for all removed server assignments
+        for (const removed of removedAccess) {
+          revokeSftpTokensForUser(userId, removed.serverId);
+        }
         const existingAccess = await prisma.serverAccess.findMany({
           where: { userId, serverId: { in: uniqueServerIds } },
           select: { serverId: true, permissions: true },
