@@ -537,8 +537,14 @@ async function bootstrap() {
     await app.register(dashboardRoutes, { prefix: "/api/dashboard" });
     await app.register(apiKeyRoutes);
     await app.register((app) => pluginRoutes(app, pluginLoader));
-    // File tunnel routes need higher body limit for upload/stream endpoints
-    await app.register((app) => fileTunnelRoutes(app, prisma, logger, fileTunnel), { bodyLimit: 104857600 });
+    // File tunnel routes need higher body limit for upload/stream endpoints.
+    // Read the configured limit from security settings (admin-adjustable).
+    const initialSecuritySettings = await getSecuritySettings();
+    const fileTunnelBodyLimit = Math.max(
+      5 * 1024 * 1024, // 5MB minimum
+      Math.min(initialSecuritySettings.fileTunnelMaxUploadMb * 1024 * 1024, 500 * 1024 * 1024), // 500MB hard cap
+    );
+    await app.register((app) => fileTunnelRoutes(app, prisma, logger, fileTunnel), { bodyLimit: fileTunnelBodyLimit });
 
     // Agent binary download endpoint (public)
     app.get("/api/agent/download", async (request, reply) => {

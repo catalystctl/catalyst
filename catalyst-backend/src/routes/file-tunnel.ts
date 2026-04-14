@@ -140,6 +140,18 @@ export function fileTunnelRoutes(
   app.post(
     "/api/internal/file-tunnel/response/:requestId/stream",
     {
+      preHandler: async (request: FastifyRequest, reply: FastifyReply) => {
+        // Dynamically enforce the admin-configurable upload size limit.
+        // This ensures changes to the security setting take effect without restart.
+        const contentLength = request.headers['content-length'];
+        if (contentLength) {
+          const settings = await getSecuritySettings();
+          const maxBytes = settings.fileTunnelMaxUploadMb * 1024 * 1024;
+          if (Number(contentLength) > maxBytes) {
+            return reply.status(413).send({ error: `Upload exceeds maximum size of ${settings.fileTunnelMaxUploadMb}MB` });
+          }
+        }
+      },
       config: {
         rateLimit: {
           max: async () => {
