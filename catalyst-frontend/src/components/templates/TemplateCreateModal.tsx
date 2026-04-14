@@ -5,6 +5,7 @@ import type { TemplateImageOption, TemplateVariable } from '../../types/template
 import { templatesApi } from '../../services/api/templates';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { normalizeTemplateImport, parseEggContent } from '../../utils/pterodactylImport';
+import TemplateProviderEditor, { extractProviderIds } from './TemplateProviderEditor';
 
 type VariableDraft = {
   name: string;
@@ -53,6 +54,10 @@ function TemplateCreateModal() {
   const [templateFeatures, setTemplateFeatures] = useState<Record<string, any>>({});
   const [variables, setVariables] = useState<VariableDraft[]>([createVariableDraft()]);
   const [importError, setImportError] = useState('');
+  const [modManagerEnabled, setModManagerEnabled] = useState(false);
+  const [modProviders, setModProviders] = useState<string[]>([]);
+  const [pluginManagerEnabled, setPluginManagerEnabled] = useState(false);
+  const [pluginProviders, setPluginProviders] = useState<string[]>([]);
   const queryClient = useQueryClient();
 
   const parsedPorts = useMemo(
@@ -63,6 +68,8 @@ function TemplateCreateModal() {
         .filter((value) => Number.isFinite(value) && value > 0),
     [supportedPorts],
   );
+
+
 
   const buildVariables = () =>
     variables
@@ -189,6 +196,12 @@ function TemplateCreateModal() {
               ...(fileEditorRestrictedPaths ? { restrictedPaths: fileEditorRestrictedPaths.split(',').map(p => p.trim()).filter(Boolean) } : {}),
             },
           } : { fileEditor: { enabled: false } }),
+          ...(modManagerEnabled && modProviders.length ? {
+            modManager: { providers: modProviders },
+          } : {}),
+          ...(pluginManagerEnabled && pluginProviders.length ? {
+            pluginManager: { providers: pluginProviders },
+          } : {}),
         },
       }),
     onSuccess: () => {
@@ -219,6 +232,10 @@ function TemplateCreateModal() {
       setFileEditorEnabled(true);
       setFileEditorRestrictedPaths('');
       setTemplateFeatures({});
+      setModManagerEnabled(false);
+      setModProviders([]);
+      setPluginManagerEnabled(false);
+      setPluginProviders([]);
       setVariables([createVariableDraft()]);
       setImportError('');
     },
@@ -279,6 +296,10 @@ function TemplateCreateModal() {
     const fileEditor = features.fileEditor as Record<string, unknown> | undefined;
     setFileEditorRestrictedPaths(Array.isArray(fileEditor?.restrictedPaths) ? (fileEditor.restrictedPaths as unknown[]).join(', ') : '');
     setTemplateFeatures(payload.features ?? {});
+    setModManagerEnabled(!!payload.features?.modManager);
+    setModProviders(extractProviderIds((payload.features?.modManager as any)?.providers));
+    setPluginManagerEnabled(!!payload.features?.pluginManager);
+    setPluginProviders(extractProviderIds((payload.features?.pluginManager as any)?.providers));
     const importedVariables = Array.isArray(payload.variables)
       ? (payload.variables as Record<string, unknown>[]).map((variable) => ({
           name: String(variable?.name ?? ''),
@@ -928,6 +949,16 @@ function TemplateCreateModal() {
                   />
                 </label>
               </div>
+              <TemplateProviderEditor
+                modManagerEnabled={modManagerEnabled}
+                onModManagerEnabledChange={setModManagerEnabled}
+                modProviders={modProviders}
+                onModProvidersChange={setModProviders}
+                pluginManagerEnabled={pluginManagerEnabled}
+                onPluginManagerEnabledChange={setPluginManagerEnabled}
+                pluginProviders={pluginProviders}
+                onPluginProvidersChange={setPluginProviders}
+              />
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-4 text-xs dark:border-border">
               <div className="space-y-1">

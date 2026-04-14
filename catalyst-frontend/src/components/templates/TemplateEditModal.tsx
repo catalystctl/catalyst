@@ -5,6 +5,7 @@ import type { Template, TemplateImageOption, TemplateVariable } from '../../type
 import { templatesApi } from '../../services/api/templates';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { normalizeTemplateImport, parseEggContent } from '../../utils/pterodactylImport';
+import TemplateProviderEditor, { extractProviderIds } from './TemplateProviderEditor';
 
 type VariableDraft = {
   name: string;
@@ -67,6 +68,14 @@ function TemplateEditModal({ template }: { template: Template }) {
       : [createVariableDraft()],
   );
   const [importError, setImportError] = useState('');
+  const [modManagerEnabled, setModManagerEnabled] = useState(!!template.features?.modManager);
+  const [modProviders, setModProviders] = useState<string[]>(
+    extractProviderIds(template.features?.modManager?.providers),
+  );
+  const [pluginManagerEnabled, setPluginManagerEnabled] = useState(!!template.features?.pluginManager);
+  const [pluginProviders, setPluginProviders] = useState<string[]>(
+    extractProviderIds(template.features?.pluginManager?.providers),
+  );
   const queryClient = useQueryClient();
 
   const parsedPorts = useMemo(
@@ -77,6 +86,8 @@ function TemplateEditModal({ template }: { template: Template }) {
         .filter((value) => Number.isFinite(value) && value > 0),
     [supportedPorts],
   );
+
+
 
   const buildVariables = () =>
     variables
@@ -121,6 +132,10 @@ function TemplateEditModal({ template }: { template: Template }) {
     setFileEditorEnabled(template.features?.fileEditor?.enabled ?? true);
     setFileEditorRestrictedPaths(template.features?.fileEditor?.restrictedPaths?.join(', ') ?? '');
     setTemplateFeatures(template.features ?? {});
+    setModManagerEnabled(!!template.features?.modManager);
+    setModProviders(extractProviderIds(template.features?.modManager?.providers));
+    setPluginManagerEnabled(!!template.features?.pluginManager);
+    setPluginProviders(extractProviderIds(template.features?.pluginManager?.providers));
     setVariables(
       template.variables?.length
         ? template.variables.map((variable) => createVariableDraft(variable))
@@ -175,6 +190,10 @@ function TemplateEditModal({ template }: { template: Template }) {
     setFileEditorEnabled(payload.features?.fileEditor?.enabled !== false);
     setFileEditorRestrictedPaths(Array.isArray(payload.features?.fileEditor?.restrictedPaths) ? payload.features.fileEditor.restrictedPaths.join(', ') : '');
     setTemplateFeatures(payload.features ?? {});
+    setModManagerEnabled(!!payload.features?.modManager);
+    setModProviders(extractProviderIds((payload.features?.modManager as any)?.providers));
+    setPluginManagerEnabled(!!payload.features?.pluginManager);
+    setPluginProviders(extractProviderIds((payload.features?.pluginManager as any)?.providers));
     const importedVariables = Array.isArray(payload.variables)
       ? payload.variables.map((variable: any) => ({
           name: String(variable?.name ?? ''),
@@ -243,6 +262,19 @@ function TemplateEditModal({ template }: { template: Template }) {
               ...(fileEditorRestrictedPaths ? { restrictedPaths: fileEditorRestrictedPaths.split(',').map(p => p.trim()).filter(Boolean) } : {}),
             },
           } : { fileEditor: { enabled: false } }),
+          ...(modManagerEnabled && modProviders.length ? {
+            modManager: {
+              ...(templateFeatures?.modManager as any)?.targets ? { targets: (templateFeatures.modManager as any).targets } : {},
+              ...(templateFeatures?.modManager as any)?.paths ? { paths: (templateFeatures.modManager as any).paths } : {},
+              providers: modProviders,
+            },
+          } : {}),
+          ...(pluginManagerEnabled && pluginProviders.length ? {
+            pluginManager: {
+              ...(templateFeatures?.pluginManager as any)?.paths ? { paths: (templateFeatures.pluginManager as any).paths } : {},
+              providers: pluginProviders,
+            },
+          } : {}),
         },
       }),
     onSuccess: () => {
@@ -811,6 +843,16 @@ function TemplateEditModal({ template }: { template: Template }) {
                   />
                 </label>
               </div>
+              <TemplateProviderEditor
+                modManagerEnabled={modManagerEnabled}
+                onModManagerEnabledChange={setModManagerEnabled}
+                modProviders={modProviders}
+                onModProvidersChange={setModProviders}
+                pluginManagerEnabled={pluginManagerEnabled}
+                onPluginManagerEnabledChange={setPluginManagerEnabled}
+                pluginProviders={pluginProviders}
+                onPluginProvidersChange={setPluginProviders}
+              />
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-4 text-xs dark:border-border">
               <div className="space-y-1">
