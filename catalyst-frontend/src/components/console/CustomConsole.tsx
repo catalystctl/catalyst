@@ -212,7 +212,7 @@ function CustomConsole({
   serverId,
 }: CustomConsoleProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const programmaticScrollRef = useRef(false);
   const [autoScroll, setAutoScroll] = useState(autoScrollProp);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
 
@@ -244,61 +244,55 @@ function CustomConsole({
     [normalizedEntries, searchQuery],
   );
 
-  // ── Auto-scroll via IntersectionObserver on a sentinel at the bottom ──
-  // This avoids reading scrollTop/scrollHeight during render (no forced reflow).
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    const container = scrollRef.current;
-    if (!sentinel || !container) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry) return;
-        if (entry.isIntersecting) {
-          // Sentinel is visible → user is at the bottom
-          setShowScrollBtn(false);
-          if (!autoScroll) {
-            setAutoScroll(true);
-            onAutoScrollResume?.();
-          }
-        } else {
-          // Sentinel not visible → user scrolled up
-          if (autoScroll) {
-            setAutoScroll(false);
-            setShowScrollBtn(true);
-            onUserScroll?.();
-          }
-        }
-      },
-      {
-        root: container,
-        threshold: 0,
-        rootMargin: '0px 0px 40px 0px',
-      },
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
+  // ── Scroll handler: detect user scroll-away ──
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || programmaticScrollRef.current) return;
+    const { scrollTop: st, scrollHeight, clientHeight } = el;
+    const nearBottom = scrollHeight - st - clientHeight < 40;
+    if (nearBottom) {
+      setShowScrollBtn(false);
+      if (!autoScroll) {
+        setAutoScroll(true);
+        onAutoScrollResume?.();
+      }
+    } else {
+      if (autoScroll) {
+        setAutoScroll(false);
+        setShowScrollBtn(true);
+        onUserScroll?.();
+      }
+    }
   }, [autoScroll, onUserScroll, onAutoScrollResume]);
 
   // ── When autoScroll is true and new entries arrive, scroll to bottom ──
   const prevLen = useRef(processedEntries.length);
   useEffect(() => {
-    if (
-      autoScroll &&
-      processedEntries.length > prevLen.current &&
-      sentinelRef.current
-    ) {
-      sentinelRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (autoScroll && processedEntries.length > prevLen.current) {
+      const el = scrollRef.current;
+      if (el) {
+        programmaticScrollRef.current = true;
+        el.scrollTop = el.scrollHeight;
+        setTimeout(() => {
+          programmaticScrollRef.current = false;
+        }, 100);
+      }
     }
     prevLen.current = processedEntries.length;
   }, [autoScroll, processedEntries.length]);
 
   const scrollToBottom = useCallback(() => {
-    setAutoScroll(true);
+ setAutoScroll(true);
     setShowScrollBtn(false);
     requestAnimationFrame(() => {
-      sentinelRef.current?.scrollIntoView({ behavior: 'smooth' });
+      const el = scrollRef.current;
+      if (el) {
+        programmaticScrollRef.current = true;
+        el.scrollTop = el.scrollHeight;
+        setTimeout(() => {
+          programmaticScrollRef.current = false;
+        }, 100);
+      }
     });
     onAutoScrollResume?.();
   }, [onAutoScrollResume]);
@@ -353,6 +347,7 @@ function CustomConsole({
 
       <div
         ref={scrollRef}
+        onScroll={handleScroll}
         className="console-output h-full overflow-y-auto font-mono text-[13px] leading-[1.7] text-foreground dark:text-zinc-300"
       >
         {isLoading && !hasContent ? (
@@ -390,7 +385,7 @@ function CustomConsole({
           ))}
 
         {/* Sentinel for IntersectionObserver auto-scroll detection */}
-        {hasContent && <div ref={sentinelRef} className="h-px w-full" />}
+
       </div>
 
       {showScrollBtn && !autoScroll ? (
