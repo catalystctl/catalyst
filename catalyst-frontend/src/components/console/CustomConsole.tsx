@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AnsiToHtml from 'ansi-to-html';
 import DOMPurify from 'dompurify';
 import { ArrowDown, Download, Trash2 } from 'lucide-react';
@@ -126,9 +126,7 @@ function highlightSearchInHtml(html: string, query: string): string {
   );
 }
 
-// ── Per-line rendering height constants ──
-const LINE_HEIGHT_PX = 22; // 13px font × 1.7 line-height
-const OVERSCAN_ROWS = 15;
+
 
 // ── Process a single console entry into render-ready data ──
 // This is intentionally a plain function (not a hook) so it can be
@@ -283,78 +281,22 @@ function CustomConsole({
     [normalizedEntries, searchQuery],
   );
 
-  // ── Virtualization: compute total height and visible range ──
-  const [containerHeight, setContainerHeight] = useState(0);
-  const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
-  useEffect(() => {
-    const el = outputRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setContainerHeight(entry.contentRect.height);
-      }
-    });
-    observer.observe(el);
-    resizeObserverRef.current = observer;
-    return () => observer.disconnect();
-  }, []);
-
-  // Build a flat array of (entryIndex, rowIndex) pairs with cumulative heights
-  const rowMap = useMemo(() => {
-    const map: Array<{
-      entryIndex: number;
-      rowIndex: number;
-      top: number;
-      height: number;
-    }> = [];
-    let top = 0;
-    for (let i = 0; i < processedEntries.length; i++) {
-      const entry = processedEntries[i];
-      const lineCount = entry.htmlLines.length;
-      const height = lineCount * LINE_HEIGHT_PX;
-      map.push({ entryIndex: i, rowIndex: 0, top, height });
-      top += height;
-    }
-    return { rows: map, totalHeight: top };
-  }, [processedEntries]);
-
-  const { rows, totalHeight } = rowMap;
-
-  const scrollTopRef = useRef(0);
-  const [scrollTop, setScrollTop] = useState(0);
-
-  // Compute visible range based on scroll position
-  const visibleRange = useMemo(() => {
-    if (containerHeight <= 0) return { start: 0, end: 0 };
-    const start = Math.max(
-      0,
-      Math.floor(scrollTop / LINE_HEIGHT_PX) - OVERSCAN_ROWS,
-    );
-    const visibleCount = Math.ceil(containerHeight / LINE_HEIGHT_PX) + OVERSCAN_ROWS * 2;
-    const end = Math.min(rows.length, start + visibleCount);
-    return { start, end };
-  }, [scrollTop, containerHeight, rows.length]);
 
   // ── Auto-scroll ──
   useEffect(() => {
     if (!outputRef.current || !autoScroll) return;
     programmaticScrollRef.current = true;
-    outputRef.current.scrollTop = totalHeight;
-    scrollTopRef.current = totalHeight;
-    setScrollTop(totalHeight);
+    outputRef.current.scrollTop = outputRef.current.scrollHeight;
     setTimeout(() => {
       programmaticScrollRef.current = false;
     }, 100);
-  }, [autoScroll, totalHeight]);
+  }, [autoScroll, normalizedEntries.length]);
 
   // ── Scroll handler ──
   const handleScroll = useCallback(() => {
     if (!outputRef.current || programmaticScrollRef.current) return;
-    const st = outputRef.current.scrollTop;
-    scrollTopRef.current = st;
-    setScrollTop(st);
-    const { scrollHeight, clientHeight } = outputRef.current;
+    const { scrollTop: st, scrollHeight, clientHeight } = outputRef.current;
     const nearBottom = scrollHeight - st - clientHeight < 40;
     setShowScrollButton(!nearBottom);
     if (!nearBottom && onUserScroll) onUserScroll();
@@ -363,13 +305,13 @@ function CustomConsole({
   const scrollToBottom = useCallback(() => {
     if (!outputRef.current) return;
     programmaticScrollRef.current = true;
-    outputRef.current.scrollTop = totalHeight;
+    outputRef.current.scrollTop = outputRef.current.scrollHeight;
     setShowScrollButton(false);
     setTimeout(() => {
       programmaticScrollRef.current = false;
     }, 100);
     onAutoScrollResume?.();
-  }, [totalHeight, onAutoScrollResume]);
+  }, [onAutoScrollResume]);
 
   const handleToggleExpand = useCallback((key: string) => {
     setExpandedIds((prev) => {
@@ -455,42 +397,18 @@ function CustomConsole({
           </div>
         ) : null}
 
-        {/* Virtualized output: only render visible rows */}
-        {containerHeight > 0 && normalizedEntries.length > 0 && (
-          <div style={{ height: totalHeight, position: 'relative' }}>
-            {visibleRange.start > 0 && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: rows[visibleRange.start]?.top ?? 0,
-                }}
-              />
-            )}
-            {rows.slice(visibleRange.start, visibleRange.end).map((row) => (
-              <div
-                key={processedEntries[row.entryIndex].id}
-                style={{
-                  position: 'absolute',
-                  top: row.top,
-                  left: 0,
-                  right: 0,
-                  willChange: 'transform',
-                }}
-              >
-                <ConsoleRow
-                  entry={processedEntries[row.entryIndex]}
-                  index={row.entryIndex}
-                  showLineNumbers={showLineNumbers}
-                  expandedIds={expandedIds}
-                  onToggleExpand={handleToggleExpand}
-                />
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Render all entries — memoized processing keeps this fast */}
+        {normalizedEntries.length > 0 &&
+          processedEntries.map((entry, index) => (
+            <ConsoleRow
+              key={entry.id}
+              entry={entry}
+              index={index}
+              showLineNumbers={showLineNumbers}
+              expandedIds={expandedIds}
+              onToggleExpand={handleToggleExpand}
+            />
+          ))}
       </div>
 
       {showScrollButton && !autoScroll ? (
