@@ -41,7 +41,7 @@
     "chokidar": "~5.0.0",
     "cron-parser": "~5.5.0",
     "dotenv": "~17.2.3",
-    "fastify": "~5.7.4",
+    "fastify": "~5.8.5",
     "mysql2": "~3.16.3",
     "nanoid": "~5.1.6",
     "node-cron": "~4.2.1",
