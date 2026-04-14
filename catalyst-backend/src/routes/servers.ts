@@ -1279,7 +1279,7 @@ export async function serverRoutes(app: FastifyInstance) {
   // Create server
   app.post(
     "/",
-    { onRequest: [app.authenticate, validateRequestBody(serverCreateSchema)] },
+    { onRequest: [app.authenticate], preHandler: [validateRequestBody(serverCreateSchema)] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
         name,
@@ -1708,6 +1708,7 @@ export async function serverRoutes(app: FastifyInstance) {
             "server.start",
             "server.stop",
             "server.read",
+            "server.install",
             "alert.read",
             "alert.create",
             "alert.update",
@@ -4784,17 +4785,22 @@ export async function serverRoutes(app: FastifyInstance) {
       });
 
       const inviteUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/invites/${token}`;
-      const emailContent = await renderInviteEmail({
-        serverName: server.name,
-        inviteUrl,
-        expiresAt,
-      });
-      await sendEmail({
-        to: normalizedEmail,
-        subject: emailContent.subject,
-        html: emailContent.html,
-        text: emailContent.text,
-      });
+      try {
+        const emailContent = await renderInviteEmail({
+          serverName: server.name,
+          inviteUrl,
+          expiresAt,
+        });
+        await sendEmail({
+          to: normalizedEmail,
+          subject: emailContent.subject,
+          html: emailContent.html,
+          text: emailContent.text,
+        });
+      } catch (emailErr) {
+        // Log but don't fail — the invite is already in the DB
+        app.log.warn(emailErr, "Failed to send invite email");
+      }
 
       await prisma.auditLog.create({
         data: {
@@ -7367,6 +7373,94 @@ export async function serverRoutes(app: FastifyInstance) {
       if (webhookService) {
         webhookService.serverUnsuspended(serverId, server!.name, userId).catch(() => {});
       }
+
+      return reply.send({ success: true, data: updated });
+    }
+  );
+
+  // Transfer server ownership to another user
+  app.post(
+    "/:serverId/transfer-ownership",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId } = request.params as { serverId: string };
+      const userId = request.user.userId;
+      const { newOwnerId } = request.body as { newOwnerId?: string };
+
+      if (!newOwnerId) {
+        return reply.status(400).send({ error: "newOwnerId is required" });
+      }
+
+      // Only the current owner or an admin can transfer ownership
+      const server = await prisma.server.findUnique({
+        where: { id: serverId },
+        select: { id: true, name: true, ownerId: true },
+      });
+
+      if (!server) {
+        return reply.status(404).send({ error: "Server not found" });
+      }
+
+      const isAdmin = await isAdminUser(userId, "admin.write");
+      if (server.ownerId !== userId && !isAdmin) {
+        return reply.status(403).send({ error: "Only the server owner or an admin can transfer ownership" });
+      }
+
+      if (newOwnerId === server.ownerId) {
+        return reply.status(400).send({ error: "Cannot transfer ownership to the current owner" });
+      }
+
+      // Validate target user exists
+      const targetUser = await prisma.user.findUnique({ where: { id: newOwnerId } });
+      if (!targetUser) {
+        return reply.status(404).send({ error: "Target user not found" });
+      }
+
+      // Transfer ownership and ensure the new owner has full access
+      const updated = await prisma.$transaction(async (tx) => {
+        const s = await tx.server.update({
+          where: { id: serverId },
+          data: { ownerId: newOwnerId },
+        });
+        // Ensure the new owner has a ServerAccess row with full permissions
+        await tx.serverAccess.upsert({
+          where: { userId_serverId: { userId: newOwnerId, serverId } },
+          create: {
+            userId: newOwnerId,
+            serverId,
+            permissions: [
+              "server.start", "server.stop", "server.read", "server.install",
+              "alert.read", "alert.create", "alert.update", "alert.delete",
+              "file.read", "file.write", "console.read", "console.write",
+              "server.delete",
+            ],
+          },
+          update: {}, // Keep existing permissions
+        });
+        return s;
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: "server.transfer_ownership",
+          resource: "server",
+          resourceId: serverId,
+          details: {
+            previousOwnerId: server.ownerId,
+            newOwnerId,
+            serverName: server.name,
+          },
+        },
+      });
+
+      await prisma.serverLog.create({
+        data: {
+          serverId,
+          stream: "system",
+          data: `Ownership transferred to ${targetUser.username || targetUser.email}`,
+        },
+      });
 
       return reply.send({ success: true, data: updated });
     }

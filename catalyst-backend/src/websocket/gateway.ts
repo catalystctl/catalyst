@@ -2164,4 +2164,30 @@ export class WebSocketGateway {
     agent.socket.send(JSON.stringify(payload));
     await response;
   }
+
+  /**
+   * Disconnect all active WebSocket client connections for a specific user.
+   * Used when a user is deleted or banned to immediately revoke their real-time access.
+   * Returns the number of connections closed.
+   */
+  disconnectUser(userId: string): number {
+    let closed = 0;
+    for (const [clientId, client] of this.clients) {
+      if (client.userId === userId) {
+        try {
+          if (client.socket.readyState === 1) {
+            client.socket.close(4001, "User account terminated");
+          }
+        } catch {
+          // Socket may already be closing
+        }
+        this.clients.delete(clientId);
+        closed++;
+      }
+    }
+    if (closed > 0) {
+      this.logger.info({ userId, closed }, "Disconnected user WebSocket sessions");
+    }
+    return closed;
+  }
 }

@@ -230,4 +230,17 @@ export class WebhookService {
       data: { serverIds },
     });
   }
+
+  /**
+   * Helper: dispatch a user.deleted event.
+   */
+  async userDeleted(userId: string, email: string, username: string, deletedBy: string) {
+    return this.dispatch({
+      event: "user.deleted",
+      serverId: "",
+      userId: deletedBy,
+      timestamp: new Date().toISOString(),
+      data: { targetUserId: userId, email, username },
+    });
+  }
 }

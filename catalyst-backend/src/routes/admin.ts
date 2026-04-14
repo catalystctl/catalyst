@@ -553,8 +553,8 @@ export async function adminRoutes(app: FastifyInstance) {
   );
 
   // Delete user (requires user.delete)
-  app.delete(
-    '/users/:userId',
+  app.post(
+    '/users/:userId/delete',
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
@@ -574,6 +574,72 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'User not found' });
       }
 
+      // Check if the user owns any servers — block deletion unless force-transferring
+      const ownedServers = await prisma.server.findMany({
+        where: { ownerId: userId },
+        select: { id: true, name: true },
+      });
+
+      if (ownedServers.length > 0) {
+        const { force, transferToUserId } = request.body as { force?: boolean; transferToUserId?: string };
+
+        if (force && transferToUserId) {
+          // Validate target user exists
+          const targetUser = await prisma.user.findUnique({ where: { id: transferToUserId } });
+          if (!targetUser) {
+            return reply.status(400).send({ error: 'Transfer target user not found' });
+          }
+          if (transferToUserId === userId) {
+            return reply.status(400).send({ error: 'Cannot transfer servers to the user being deleted' });
+          }
+
+          // Transfer ownership of all servers
+          const serverIds = ownedServers.map(s => s.id);
+          await prisma.$transaction([
+            ...serverIds.map(id =>
+              prisma.server.update({
+                where: { id },
+                data: { ownerId: transferToUserId },
+              }),
+            ),
+          ]);
+
+          // Ensure the target user has ServerAccess for each transferred server
+          for (const id of serverIds) {
+            await prisma.serverAccess.upsert({
+              where: { userId_serverId: { userId: transferToUserId, serverId: id } },
+              create: {
+                userId: transferToUserId,
+                serverId: id,
+                permissions: [
+                  'server.start', 'server.stop', 'server.read', 'server.install',
+                  'alert.read', 'alert.create', 'alert.update', 'alert.delete',
+                  'file.read', 'file.write', 'console.read', 'console.write',
+                  'server.delete',
+                ],
+              },
+              update: {}, // Keep existing permissions
+            });
+          }
+        } else {
+          // Return helpful error with server list
+          return reply.status(409).send({
+            error: `User owns ${ownedServers.length} server(s). Transfer ownership first or use { force: true, transferToUserId: "..." } to auto-transfer.`,
+            ownedServers: ownedServers.map(s => ({ id: s.id, name: s.name })),
+          });
+        }
+      }
+
+      // Revoke all SFTP tokens for this user across all servers
+      revokeSftpTokensForUser(userId);
+
+      // Disconnect all WebSocket sessions for this user
+      const wsGateway = (app as any).wsGateway;
+      if (wsGateway?.disconnectUser) {
+        wsGateway.disconnectUser(userId);
+      }
+
+      // Delete the user (cascades: sessions, apikeys, passkeys, 2fa, serverAccess, nodeAssignments, etc.)
       await prisma.user.delete({ where: { id: userId } });
 
       await createAuditLog(user.userId, {
@@ -583,8 +649,15 @@ export async function adminRoutes(app: FastifyInstance) {
         details: {
           email: existingUser.email,
           username: existingUser.username,
+          ownedServerCount: ownedServers.length,
         },
       });
+
+      // Fire webhook
+      const webhookService: any = (app as any).webhookService;
+      if (webhookService) {
+        webhookService.userDeleted(userId, existingUser.email, existingUser.username, user.userId).catch(() => {});
+      }
 
       return reply.send({ success: true });
     }

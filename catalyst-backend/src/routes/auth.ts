@@ -4,6 +4,7 @@ import { auth } from "../auth";
 import { fromNodeHeaders } from "better-auth/node";
 import { logAuthAttempt } from "../middleware/audit";
 import { serialize } from '../utils/serialize';
+import { revokeSftpTokensForUser } from '../services/sftp-token-manager';
 import {
   bruteForceProtection,
   handleFailedLogin,
@@ -577,6 +578,68 @@ export async function authRoutes(app: FastifyInstance) {
       } catch {
         reply.send({ success: false, valid: false, error: "Invalid or expired token" });
       }
+    }
+  );
+
+  // ── Delete own account ─────────────────────────────────────────────
+  // Users can delete their own account if they don't own any servers.
+  // Sub-users (no servers) can delete freely.
+  app.post(
+    "/profile/delete",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user.userId;
+      const { confirm } = request.body as { confirm?: string };
+
+      if (confirm !== "DELETE") {
+        return reply.status(400).send({
+          error: 'Confirmation required. Send { "confirm": "DELETE" } to proceed.',
+        });
+      }
+
+      // Check for owned servers
+      const ownedServers = await prisma.server.findMany({
+        where: { ownerId: userId },
+        select: { id: true, name: true },
+      });
+
+      if (ownedServers.length > 0) {
+        return reply.status(409).send({
+          error: `You own ${ownedServers.length} server(s). Transfer or delete them before deleting your account.`,
+          ownedServers: ownedServers.map((s) => ({ id: s.id, name: s.name })),
+        });
+      }
+
+      // Revoke all SFTP tokens
+      revokeSftpTokensForUser(userId);
+
+      // Disconnect WebSocket sessions
+      const wsGateway = (app as any).wsGateway;
+      if (wsGateway?.disconnectUser) {
+        wsGateway.disconnectUser(userId);
+      }
+
+      // Invalidate all sessions (better-auth)
+      try {
+        await auth.api.signOut({
+          headers: getHeaders(request),
+        });
+      } catch {
+        // Session may already be invalid
+      }
+
+      // Delete the user
+      await prisma.user.delete({ where: { id: userId } });
+
+      // Fire webhook
+      const webhookService: any = (app as any).webhookService;
+      if (webhookService) {
+        webhookService.userDeleted(userId, "", "self-deleted", userId).catch(() => {});
+      }
+
+      // Clear session cookie
+      reply.header("set-cookie", "better-auth.session_token=; Max-Age=0; Path=/; SameSite=Strict; HttpOnly");
+      reply.send({ success: true, message: "Account deleted" });
     }
   );
 

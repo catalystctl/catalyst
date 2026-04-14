@@ -68,7 +68,7 @@ export const serverCreateSchema = z.object({
   templateId: z.string().min(1, 'Template ID is required'),
   nodeId: z.string().min(1, 'Node ID is required'),
   locationId: z.string().min(1, 'Location ID is required'),
-  ownerId: z.string().min(1, 'Owner ID is required'),
+  ownerId: z.string().min(1).optional(),
   environment: z.record(z.string(), z.string().min(1).max(4096)).optional().default({}),
   portBindings: z.record(z.string(), z.number().int().min(1).max(65535)).optional().default({}),
   primaryPort: z.number().int().min(1).max(65535),
