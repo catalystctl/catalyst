@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import AnsiToHtml from 'ansi-to-html';
 import DOMPurify from 'dompurify';
 import { ArrowDown, Download, Trash2 } from 'lucide-react';
@@ -34,12 +34,20 @@ const streamBorderColors: Record<string, string> = {
   stdin: 'border-l-amber-400/60',
 };
 
-const ensureLineEnding = (value: string) => (value.endsWith('\n') || value.endsWith('\r') ? value : `${value}\n`);
-const normalizeLineEndings = (value: string) => value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+const ensureLineEnding = (value: string) =>
+  value.endsWith('\n') || value.endsWith('\r') ? value : `${value}\n`;
+const normalizeLineEndings = (value: string) =>
+  value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
-const ansiConverter = new AnsiToHtml({ escapeXML: true, newline: true, stream: true });
+// Shared converter instance (stateless, safe to reuse)
+const ansiConverter = new AnsiToHtml({
+  escapeXML: true,
+  newline: true,
+  stream: true,
+});
 
-const timestampPattern = /^\s*(?:\\x07)?(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\s*/;
+const timestampPattern =
+  /^\s*(?:\\x07)?(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\s*/;
 const padTwo = (value: number) => String(value).padStart(2, '0');
 const formatTime = (value?: string) => {
   if (!value) return '';
@@ -54,38 +62,17 @@ function escapeRegex(s: string) {
 
 // Syntax highlighting rules applied to text segments outside HTML tags
 const syntaxRules: Array<{ pattern: RegExp; cls: string }> = [
-  // Error / fatal keywords
   { pattern: /\b(ERROR|FATAL|SEVERE|EXCEPTION|PANIC|FAIL(?:ED|URE)?)\b/gi, cls: 'chl-error' },
-  // Warning keywords
   { pattern: /\b(WARN(?:ING)?|CAUTION|DEPRECATED)\b/gi, cls: 'chl-warn' },
-  // Info / debug keywords
   { pattern: /\b(INFO|DEBUG|TRACE|NOTICE)\b/gi, cls: 'chl-info' },
-  // UUIDs
   { pattern: /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, cls: 'chl-uuid' },
-  // Timestamps  (HH:MM:SS or ISO-ish dates)
   { pattern: /\b\d{1,2}:\d{2}(?::\d{2})(?:\.\d+)?\b/g, cls: 'chl-time' },
   { pattern: /\b\d{4}[-/]\d{2}[-/]\d{2}[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?Z?\b/g, cls: 'chl-time' },
-  // IPv4 addresses
   { pattern: /\b(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?\b/g, cls: 'chl-ip' },
-  // URLs
   { pattern: /https?:\/\/[^\s)>\]]+/gi, cls: 'chl-url' },
 ];
 
-/** Apply syntax highlighting to text outside of HTML tags */
-function applySyntaxHighlighting(html: string): string {
-  return processTextSegments(html, (text) => {
-    let result = text;
-    for (const rule of syntaxRules) {
-      result = result.replace(rule.pattern, (m) => `<span class="${rule.cls}">${m}</span>`);
-    }
-    return result;
-  });
-}
-
-/**
- * Process only text segments in an HTML string (skip inside tags).
- * Calls `fn` for each text segment and reassembles the result.
- */
+/** Process only text segments in an HTML string (skip inside tags). */
 function processTextSegments(html: string, fn: (text: string) => string): string {
   let result = '';
   let inTag = false;
@@ -116,12 +103,139 @@ function processTextSegments(html: string, fn: (text: string) => string): string
   return result;
 }
 
+/** Apply syntax highlighting to text outside of HTML tags */
+function applySyntaxHighlighting(html: string): string {
+  return processTextSegments(html, (text) => {
+    let result = text;
+    for (const rule of syntaxRules) {
+      result = result.replace(
+        rule.pattern,
+        (m) => `<span class="${rule.cls}">${m}</span>`,
+      );
+    }
+    return result;
+  });
+}
+
 function highlightSearchInHtml(html: string, query: string): string {
   if (!query) return html;
   const escaped = escapeRegex(query);
   const regex = new RegExp(escaped, 'gi');
   return processTextSegments(html, (text) =>
     text.replace(regex, '<mark class="console-search-match">$&</mark>'),
+  );
+}
+
+// ── Per-line rendering height constants ──
+const LINE_HEIGHT_PX = 22; // 13px font × 1.7 line-height
+const OVERSCAN_ROWS = 15;
+
+// ── Process a single console entry into render-ready data ──
+// This is intentionally a plain function (not a hook) so it can be
+// called outside of React's render cycle for virtualization.
+function processEntry(
+  entry: ConsoleEntry,
+  searchQuery: string,
+): {
+  id: string;
+  stream: string;
+  timestamp: string;
+  htmlLines: string[];
+  isLongFlags: boolean[];
+  rawLineLengths: number[];
+} {
+  const message = normalizeLineEndings(ensureLineEnding(entry.data));
+  const tsMatch = message.match(timestampPattern);
+  const displayTs = entry.timestamp ?? tsMatch?.[1];
+  const cleaned = tsMatch ? message.replace(timestampPattern, '') : message;
+  const lines = cleaned
+    .split('\n')
+    .filter((l, i, a) => !(i === a.length - 1 && l === ''));
+
+  const htmlLines: string[] = [];
+  const isLongFlags: boolean[] = [];
+  const rawLineLengths: number[] = [];
+
+  for (const line of lines) {
+    rawLineLengths.push(line.length);
+    const isLong = line.length > 800;
+    isLongFlags.push(isLong);
+    const display = isLong ? line.slice(0, 800) : line;
+    let html = ansiConverter.toHtml(display || ' ');
+    html = applySyntaxHighlighting(html);
+    if (searchQuery) html = highlightSearchInHtml(html, searchQuery);
+    html = DOMPurify.sanitize(html);
+    htmlLines.push(html);
+  }
+
+  return {
+    id: entry.id,
+    stream: entry.stream,
+    timestamp: displayTs ?? '',
+    htmlLines,
+    isLongFlags,
+    rawLineLengths,
+  };
+}
+
+// ── Row component — rendered per visible entry ──
+function ConsoleRow({
+  entry,
+  index,
+  showLineNumbers,
+  expandedIds,
+  onToggleExpand,
+}: {
+  entry: ReturnType<typeof processEntry>;
+  index: number;
+  showLineNumbers: boolean;
+  expandedIds: Set<string>;
+  onToggleExpand: (key: string) => void;
+}) {
+  return (
+    <div
+      className={`console-line group flex border-l-2 ${streamBorderColors[entry.stream] ?? 'border-l-zinc-300 dark:border-l-zinc-700'}`}
+    >
+      {showLineNumbers ? (
+        <span className="flex w-12 shrink-0 select-none items-start justify-end pr-3 pt-px text-[11px] text-muted-foreground group-hover:text-muted-foreground dark:text-foreground dark:group-hover:text-muted-foreground">
+          {index + 1}
+        </span>
+      ) : null}
+      {entry.timestamp ? (
+        <span className="shrink-0 select-none px-3 pt-px text-[11px] text-muted-foreground group-hover:text-muted-foreground dark:text-muted-foreground dark:group-hover:text-muted-foreground">
+          {formatTime(entry.timestamp)}
+        </span>
+      ) : (
+        <span className="w-3 shrink-0" />
+      )}
+      <div className="min-w-0 flex-1 pr-4">
+        {entry.htmlLines.map((html, lineIndex) => {
+          const lineKey = `${entry.id}-${lineIndex}`;
+          const isLong = entry.isLongFlags[lineIndex];
+          const rawLen = entry.rawLineLengths[lineIndex];
+          const expanded = expandedIds.has(lineKey);
+          return (
+            <div key={lineKey}>
+              <span
+                className="whitespace-pre-wrap break-words"
+                dangerouslySetInnerHTML={{ __html: html }}
+              />
+              {isLong ? (
+                <button
+                  type="button"
+                  className="ml-1 text-[10px] text-sky-600/70 hover:text-sky-500 dark:text-sky-400/70 dark:hover:text-sky-300"
+                  onClick={() => onToggleExpand(lineKey)}
+                >
+                  {expanded
+                    ? '← less'
+                    : `… +${rawLen - 800} chars`}
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -146,6 +260,7 @@ function CustomConsole({
   const programmaticScrollRef = useRef(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
+  // ── Filter entries ──
   const normalizedEntries = useMemo(() => {
     let filtered = entries.slice(-scrollback);
     if (streamFilter && streamFilter.size > 0) {
@@ -158,11 +273,119 @@ function CustomConsole({
     return filtered;
   }, [entries, scrollback, searchQuery, streamFilter]);
 
-  // Export console output to a file
-  const handleExport = () => {
+  // ── Process all entries into render-ready data (memoized) ──
+  // This runs once per batch of new entries instead of during render.
+  const processedEntries = useMemo(
+    () =>
+      normalizedEntries.map((entry) =>
+        processEntry(entry, searchQuery ?? ''),
+      ),
+    [normalizedEntries, searchQuery],
+  );
+
+  // ── Virtualization: compute total height and visible range ──
+  const [containerHeight, setContainerHeight] = useState(0);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+
+  useEffect(() => {
+    const el = outputRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerHeight(entry.contentRect.height);
+      }
+    });
+    observer.observe(el);
+    resizeObserverRef.current = observer;
+    return () => observer.disconnect();
+  }, []);
+
+  // Build a flat array of (entryIndex, rowIndex) pairs with cumulative heights
+  const rowMap = useMemo(() => {
+    const map: Array<{
+      entryIndex: number;
+      rowIndex: number;
+      top: number;
+      height: number;
+    }> = [];
+    let top = 0;
+    for (let i = 0; i < processedEntries.length; i++) {
+      const entry = processedEntries[i];
+      const lineCount = entry.htmlLines.length;
+      const height = lineCount * LINE_HEIGHT_PX;
+      map.push({ entryIndex: i, rowIndex: 0, top, height });
+      top += height;
+    }
+    return { rows: map, totalHeight: top };
+  }, [processedEntries]);
+
+  const { rows, totalHeight } = rowMap;
+
+  const scrollTopRef = useRef(0);
+  const [scrollTop, setScrollTop] = useState(0);
+
+  // Compute visible range based on scroll position
+  const visibleRange = useMemo(() => {
+    if (containerHeight <= 0) return { start: 0, end: 0 };
+    const start = Math.max(
+      0,
+      Math.floor(scrollTop / LINE_HEIGHT_PX) - OVERSCAN_ROWS,
+    );
+    const visibleCount = Math.ceil(containerHeight / LINE_HEIGHT_PX) + OVERSCAN_ROWS * 2;
+    const end = Math.min(rows.length, start + visibleCount);
+    return { start, end };
+  }, [scrollTop, containerHeight, rows.length]);
+
+  // ── Auto-scroll ──
+  useEffect(() => {
+    if (!outputRef.current || !autoScroll) return;
+    programmaticScrollRef.current = true;
+    outputRef.current.scrollTop = totalHeight;
+    scrollTopRef.current = totalHeight;
+    setScrollTop(totalHeight);
+    setTimeout(() => {
+      programmaticScrollRef.current = false;
+    }, 100);
+  }, [autoScroll, totalHeight]);
+
+  // ── Scroll handler ──
+  const handleScroll = useCallback(() => {
+    if (!outputRef.current || programmaticScrollRef.current) return;
+    const st = outputRef.current.scrollTop;
+    scrollTopRef.current = st;
+    setScrollTop(st);
+    const { scrollHeight, clientHeight } = outputRef.current;
+    const nearBottom = scrollHeight - st - clientHeight < 40;
+    setShowScrollButton(!nearBottom);
+    if (!nearBottom && onUserScroll) onUserScroll();
+  }, [onUserScroll]);
+
+  const scrollToBottom = useCallback(() => {
+    if (!outputRef.current) return;
+    programmaticScrollRef.current = true;
+    outputRef.current.scrollTop = totalHeight;
+    setShowScrollButton(false);
+    setTimeout(() => {
+      programmaticScrollRef.current = false;
+    }, 100);
+    onAutoScrollResume?.();
+  }, [totalHeight, onAutoScrollResume]);
+
+  const handleToggleExpand = useCallback((key: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  // ── Export ──
+  const handleExport = useCallback(() => {
     const lines = normalizedEntries.map((entry) => {
       const timestamp = entry.timestamp ? `[${entry.timestamp}] ` : '';
-      const stream = entry.stream !== 'stdout' ? `[${entry.stream.toUpperCase()}] ` : '';
+      const stream =
+        entry.stream !== 'stdout' ? `[${entry.stream.toUpperCase()}] ` : '';
       return `${timestamp}${stream}${entry.data}`;
     });
     const content = lines.join('\n');
@@ -175,35 +398,7 @@ function CustomConsole({
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-  };
-
-  useEffect(() => {
-    if (!outputRef.current || !autoScroll) return;
-    programmaticScrollRef.current = true;
-    outputRef.current.scrollTop = outputRef.current.scrollHeight;
-    setTimeout(() => {
-      programmaticScrollRef.current = false;
-    }, 100);
-  }, [autoScroll, normalizedEntries]);
-
-  const handleScroll = () => {
-    if (!outputRef.current || programmaticScrollRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = outputRef.current;
-    const nearBottom = scrollHeight - scrollTop - clientHeight < 40;
-    setShowScrollButton(!nearBottom);
-    if (!nearBottom && onUserScroll) onUserScroll();
-  };
-
-  const scrollToBottom = () => {
-    if (!outputRef.current) return;
-    programmaticScrollRef.current = true;
-    outputRef.current.scrollTop = outputRef.current.scrollHeight;
-    setShowScrollButton(false);
-    setTimeout(() => {
-      programmaticScrollRef.current = false;
-    }, 100);
-    onAutoScrollResume?.();
-  };
+  }, [normalizedEntries, serverId]);
 
   return (
     <div className={`relative ${className}`}>
@@ -258,74 +453,46 @@ function CustomConsole({
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground dark:text-muted-foreground">
             No console output yet.
           </div>
-        ) : (
-          <div className="py-0.5">
-            {normalizedEntries.map((entry, index) => {
-              const message = normalizeLineEndings(ensureLineEnding(entry.data));
-              const tsMatch = message.match(timestampPattern);
-              const displayTs = entry.timestamp ?? tsMatch?.[1];
-              const cleaned = tsMatch ? message.replace(timestampPattern, '') : message;
-              const lines = cleaned.split('\n').filter((l, i, a) => !(i === a.length - 1 && l === ''));
-              return (
-                <div
-                  key={entry.id}
-                  className={`console-line group flex border-l-2 ${streamBorderColors[entry.stream] ?? 'border-l-zinc-300 dark:border-l-zinc-700'}`}
-                >
-                  {showLineNumbers ? (
-                    <span className="flex w-12 shrink-0 select-none items-start justify-end pr-3 pt-px text-[11px] text-muted-foreground group-hover:text-muted-foreground dark:text-foreground dark:group-hover:text-muted-foreground">
-                      {index + 1}
-                    </span>
-                  ) : null}
-                  {displayTs ? (
-                    <span className="shrink-0 select-none px-3 pt-px text-[11px] text-muted-foreground group-hover:text-muted-foreground dark:text-muted-foreground dark:group-hover:text-muted-foreground">
-                      {formatTime(displayTs)}
-                    </span>
-                  ) : (
-                    <span className="w-3 shrink-0" />
-                  )}
-                  <div className="min-w-0 flex-1 pr-4">
-                    {lines.map((line, lineIndex) => {
-                      const isLong = line.length > 800;
-                      const lineKey = `${entry.id}-${lineIndex}`;
-                      const expanded = expandedIds.has(lineKey);
-                      const display = isLong && !expanded ? line.slice(0, 800) : line;
-                      let html = ansiConverter.toHtml(display || ' ');
-                      html = applySyntaxHighlighting(html);
-                      if (searchQuery) html = highlightSearchInHtml(html, searchQuery);
-                      // Sanitize final HTML to prevent XSS from ANSI/regex edge cases
-                      html = DOMPurify.sanitize(html);
-                      return (
-                        <div key={lineKey}>
-                          <span
-                            className="whitespace-pre-wrap break-words"
-                            dangerouslySetInnerHTML={{ __html: html }}
-                          />
-                          {isLong ? (
-                            <button
-                              type="button"
-                              className="ml-1 text-[10px] text-sky-600/70 hover:text-sky-500 dark:text-sky-400/70 dark:hover:text-sky-300"
-                              onClick={() =>
-                                setExpandedIds((c) => {
-                                  const n = new Set(c);
-                                  if (n.has(lineKey)) n.delete(lineKey);
-                                  else n.add(lineKey);
-                                  return n;
-                                })
-                              }
-                            >
-                              {expanded ? '← less' : `… +${line.length - 800} chars`}
-                            </button>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
+        ) : null}
+
+        {/* Virtualized output: only render visible rows */}
+        {containerHeight > 0 && normalizedEntries.length > 0 && (
+          <div style={{ height: totalHeight, position: 'relative' }}>
+            {visibleRange.start > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: rows[visibleRange.start]?.top ?? 0,
+                }}
+              />
+            )}
+            {rows.slice(visibleRange.start, visibleRange.end).map((row) => (
+              <div
+                key={processedEntries[row.entryIndex].id}
+                style={{
+                  position: 'absolute',
+                  top: row.top,
+                  left: 0,
+                  right: 0,
+                  willChange: 'transform',
+                }}
+              >
+                <ConsoleRow
+                  entry={processedEntries[row.entryIndex]}
+                  index={row.entryIndex}
+                  showLineNumbers={showLineNumbers}
+                  expandedIds={expandedIds}
+                  onToggleExpand={handleToggleExpand}
+                />
+              </div>
+            ))}
           </div>
         )}
       </div>
+
       {showScrollButton && !autoScroll ? (
         <button
           type="button"

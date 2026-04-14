@@ -23,12 +23,60 @@ export function useConsole(serverId?: string, options: ConsoleOptions = {}) {
   const nextId = useRef(0);
   const maxEntries = options.maxEntries ?? 500;
   const initialLines = options.initialLines ?? 200;
-  const { sendCommand, subscribe, unsubscribe, onMessage, isConnected } = useWebSocketStore();
+  const { sendCommand, subscribe, unsubscribe, onMessage, isConnected } =
+    useWebSocketStore();
+
+  // ── Batching buffer ──
+  // Incoming WebSocket messages are collected into this buffer and flushed
+  // together via requestAnimationFrame. This collapses rapid-fire messages
+  // (e.g. log spam) into a single state update per frame, preventing the
+  // main thread from being overwhelmed by per-message re-renders.
+  const pendingBuffer = useRef<ConsoleEntry[]>([]);
+  const rafId = useRef<number>(0);
+  const isFlushing = useRef(false);
+
+  const flushBuffer = useCallback(() => {
+    isFlushing.current = false;
+    const batch = pendingBuffer.current;
+    if (batch.length === 0) return;
+    pendingBuffer.current = [];
+
+    setEntries((prev) => {
+      const next = prev.length + batch.length > maxEntries
+        ? prev.concat(batch).slice(-maxEntries)
+        : prev.concat(batch);
+      return next;
+    });
+  }, [maxEntries]);
+
+  const scheduleFlush = useCallback(() => {
+    if (isFlushing.current) return;
+    isFlushing.current = true;
+    // Use rAF so multiple messages within the same frame are batched.
+    // Falls back to setTimeout(0) if rAF is not available.
+    if (typeof requestAnimationFrame !== 'undefined') {
+      rafId.current = requestAnimationFrame(flushBuffer);
+    } else {
+      rafId.current = window.setTimeout(flushBuffer, 0) as unknown as number;
+    }
+  }, [flushBuffer]);
+
+  // Clean up pending rAF on unmount
+  useEffect(() => {
+    return () => {
+      if (rafId.current) {
+        cancelAnimationFrame(rafId.current);
+        clearTimeout(rafId.current);
+      }
+    };
+  }, []);
 
   const logsQuery = useQuery({
     queryKey: ['server-logs', serverId, initialLines],
     queryFn: () =>
-      serverId ? serversApi.logs(serverId, { lines: initialLines }) : Promise.reject(new Error('missing id')),
+      serverId
+        ? serversApi.logs(serverId, { lines: initialLines })
+        : Promise.reject(new Error('missing id')),
     enabled: Boolean(serverId),
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
@@ -45,19 +93,19 @@ export function useConsole(serverId?: string, options: ConsoleOptions = {}) {
     [],
   );
 
+  // Append to batch buffer instead of calling setEntries directly.
+  // This avoids triggering a React re-render for every single message.
   const appendEntry = useCallback(
     (entry: Omit<ConsoleEntry, 'id'>) => {
-      setEntries((prev) => {
-        const next = [...prev, buildEntry(entry)];
-        return next.length > maxEntries ? next.slice(-maxEntries) : next;
-      });
+      pendingBuffer.current.push(buildEntry(entry));
+      scheduleFlush();
     },
-    [buildEntry, maxEntries],
+    [buildEntry, scheduleFlush],
   );
 
   useEffect(() => {
     nextId.current = 0;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    pendingBuffer.current = [];
     setEntries([]);
   }, [serverId]);
 
@@ -70,10 +118,10 @@ export function useConsole(serverId?: string, options: ConsoleOptions = {}) {
         timestamp: log.timestamp,
       }),
     );
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEntries((prev) => {
-      if (!isConnected || !prev.length) return initialEntries.slice(-maxEntries);
-      const merged = [...initialEntries, ...prev];
+      if (!isConnected || !prev.length)
+        return initialEntries.slice(-maxEntries);
+      const merged = initialEntries.concat(prev);
       return merged.length > maxEntries ? merged.slice(-maxEntries) : merged;
     });
   }, [logsQuery.data, buildEntry, maxEntries, serverId, isConnected]);
@@ -81,9 +129,7 @@ export function useConsole(serverId?: string, options: ConsoleOptions = {}) {
   useEffect(() => {
     if (!serverId || isConnected) return;
     const interval = setInterval(() => {
-      logsQuery.refetch().catch(() => {
-        // ignore polling errors
-      });
+      logsQuery.refetch().catch(() => {});
     }, 2000);
     return () => clearInterval(interval);
   }, [serverId, isConnected, logsQuery]);
@@ -101,7 +147,8 @@ export function useConsole(serverId?: string, options: ConsoleOptions = {}) {
         });
         return;
       }
-      if (message.type !== 'console_output' || message.serverId !== serverId) return;
+      if (message.type !== 'console_output' || message.serverId !== serverId)
+        return;
       appendEntry({
         stream: message.stream ?? 'stdout',
         data: message.data ?? '',
@@ -116,6 +163,7 @@ export function useConsole(serverId?: string, options: ConsoleOptions = {}) {
 
   const clear = () => {
     nextId.current = 0;
+    pendingBuffer.current = [];
     setEntries([]);
   };
 

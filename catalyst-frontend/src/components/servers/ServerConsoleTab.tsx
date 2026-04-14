@@ -1,4 +1,4 @@
-import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, Check, Copy, Search, Trash2, X } from 'lucide-react';
 import CustomConsole from '../../components/console/CustomConsole';
 import { formatBytes } from '../../utils/formatters';
@@ -75,15 +75,21 @@ export default function ServerConsoleTab({
     [canSend, send],
   );
 
+  // Memoize the filtered entries text for copy to avoid rebuilding on every render.
+  const copyText = useMemo(
+    () =>
+      entries
+        .filter((e) => activeStreams.has(e.stream))
+        .map((e) => e.data)
+        .join(''),
+    [entries, activeStreams],
+  );
+
   const handleCopy = useCallback(async () => {
-    const text = entries
-      .filter((e) => activeStreams.has(e.stream))
-      .map((e) => e.data)
-      .join('');
-    await navigator.clipboard.writeText(text);
+    await navigator.clipboard.writeText(copyText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }, [entries, activeStreams]);
+  }, [copyText]);
 
   // Ctrl+F / Escape for search
   useEffect(() => {
@@ -226,7 +232,7 @@ export default function ServerConsoleTab({
               />
               {searchQuery && (
                 <span className="text-[10px] tabular-nums text-muted-foreground">
-                  {entries.filter((e) => activeStreams.has(e.stream) && e.data.toLowerCase().includes(searchQuery.toLowerCase())).length}
+                  {useMemo(() => entries.filter((e) => activeStreams.has(e.stream) && e.data.toLowerCase().includes(searchQuery.toLowerCase())).length, [entries, activeStreams, searchQuery])}
                 </span>
               )}
               <button type="button" onClick={() => { setSearchOpen(false); setSearchQuery(''); }} className="text-muted-foreground hover:text-foreground">
