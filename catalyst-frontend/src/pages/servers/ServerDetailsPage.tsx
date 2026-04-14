@@ -1,4 +1,4 @@
-import {
+import React, {
   type FormEvent,
   type KeyboardEvent,
   useCallback,
@@ -298,6 +298,32 @@ const tabIcons: Record<keyof typeof tabLabels, React.ComponentType<{ className?:
   admin: Shield,
 };
 
+// ── Memoized Console Input (prevents parent re-render on keystroke) ──
+const MemoizedConsoleInput = React.memo(function MemoizedConsoleInput({
+  value,
+  onChange,
+  onKeyDown,
+  placeholder,
+  disabled,
+}: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  placeholder: string;
+  disabled: boolean;
+}) {
+  return (
+    <input
+      className="w-full bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+      value={value}
+      onChange={onChange}
+      onKeyDown={onKeyDown}
+      placeholder={placeholder}
+      disabled={disabled}
+    />
+  );
+});
+
 // ── Animation Variants ──
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -383,7 +409,6 @@ function ServerDetailsPage() {
   const [consoleCommandHistory, setConsoleCommandHistory] = useState<string[]>([]);
   const [consoleHistoryIndex, setConsoleHistoryIndex] = useState(-1);
   const [consoleCopied, setConsoleCopied] = useState(false);
-  const consoleInputRef = useRef<HTMLInputElement>(null);
   const consoleSearchRef = useRef<HTMLInputElement>(null);
   const [consoleSearchOpen, setConsoleSearchOpen] = useState(false);
   const [configSearch, setConfigSearch] = useState('');
@@ -2155,9 +2180,7 @@ function ServerDetailsPage() {
             className="flex items-center gap-3 border-t border-border bg-card px-4 py-2.5"
           >
             <span className="select-none text-sm font-bold text-primary-500">$</span>
-            <input
-              ref={consoleInputRef}
-              className="w-full bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            <MemoizedConsoleInput
               value={command}
               onChange={(event) => {
                 setCommand(event.target.value);
