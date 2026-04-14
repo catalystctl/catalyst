@@ -49,7 +49,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
   const [showPassword, setShowPassword] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [selectedTtl, setSelectedTtl] = useState<number | undefined>(undefined);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
 
   const { data: sftpInfo, isLoading } = useQuery({
     queryKey: ['sftp-connection-info', serverId],
@@ -117,6 +117,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
   // Sync selected TTL from server response
   useEffect(() => {
     if (sftpInfo?.ttlMs && !selectedTtl) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing form from API response
       setSelectedTtl(sftpInfo.ttlMs);
     }
   }, [sftpInfo?.ttlMs, selectedTtl]);

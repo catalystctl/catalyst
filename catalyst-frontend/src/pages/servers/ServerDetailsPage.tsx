@@ -251,27 +251,15 @@ function ServerDetailsPage() {
   });
 
   // ── Allocations (admin) ──
-  const [allocations, setAllocations] = useState<
-    { containerPort: number; hostPort: number; isPrimary: boolean }[]
-  >([]);
-  const [allocationsError, setAllocationsError] = useState<string | null>(null);
-
-  const loadAllocations = useCallback(async () => {
-    if (!serverId) return;
-    try {
-      const data = await serversApi.allocations(serverId);
-      setAllocations(data || []);
-      setAllocationsError(null);
-    } catch (error: unknown) {
-      setAllocationsError(
-        getErrorMessage(error, 'Unable to load allocations'),
-      );
-    }
-  }, [serverId]);
-
-  useEffect(() => {
-    loadAllocations();
-  }, [loadAllocations]);
+  const allocationsQuery = useQuery({
+    queryKey: ['server-allocations', serverId],
+    queryFn: () => serversApi.allocations(serverId ?? ''),
+    enabled: Boolean(serverId),
+  });
+  const allocations = allocationsQuery.data ?? [];
+  const allocationsError = allocationsQuery.error
+    ? getErrorMessage(allocationsQuery.error, 'Unable to load allocations')
+    : null;
 
   // ── State: Settings ──
   const [serverName, setServerName] = useState('');
@@ -307,11 +295,13 @@ function ServerDetailsPage() {
   // ── Sync server data to local state ──
   useEffect(() => {
     if (!server?.name) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing form from server data
     setServerName(server.name);
   }, [server?.name]);
 
   useEffect(() => {
     if (!server) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing form from server data
     setRestartPolicy(server.restartPolicy ?? 'on-failure');
     setMaxCrashCount(
       server.maxCrashCount !== undefined && server.maxCrashCount !== null
@@ -322,6 +312,7 @@ function ServerDetailsPage() {
 
   useEffect(() => {
     if (!server) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing form from server data
     setStartupCommand(
       server.startupCommand ?? server.template?.startup ?? '',
     );
@@ -332,6 +323,7 @@ function ServerDetailsPage() {
     const entries = Object.entries(
       server.environment as Record<string, string>,
     ).map(([key, value]) => ({ key, value: String(value) }));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing form from server data
     setEnvVars(entries.length ? entries : [{ key: '', value: '' }]);
     setEnvDirty(false);
   }, [server?.id, server?.environment]);
@@ -342,12 +334,14 @@ function ServerDetailsPage() {
     permissionsData.data.forEach((entry) => {
       nextPermissions[entry.userId] = entry.permissions;
     });
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing permissions from API
     setAccessPermissions(nextPermissions);
   }, [permissionsData?.data]);
 
   useEffect(() => {
     if (!permissionsData?.presets) return;
     if (invitePreset !== 'custom') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- applying preset from API
       setInvitePermissions(permissionsData.presets[invitePreset]);
     }
   }, [invitePreset, permissionsData?.presets]);
@@ -384,7 +378,7 @@ function ServerDetailsPage() {
       );
     }
     return Array.from(all).sort();
-  }, [permissionsData?.data, permissionsData?.presets]);
+  }, [permissionsData]);
 
   // ── Mutations ──
   const pauseMutation = useMutation({
@@ -521,7 +515,7 @@ function ServerDetailsPage() {
       notifySuccess('Allocation added');
       setNewContainerPort('');
       setNewHostPort('');
-      loadAllocations();
+      queryClient.invalidateQueries({ queryKey: ['server-allocations', serverId] });
       queryClient.invalidateQueries({ queryKey: ['server', serverId] });
     },
     onError: (error: any) =>
@@ -539,7 +533,7 @@ function ServerDetailsPage() {
     },
     onSuccess: () => {
       notifySuccess('Allocation removed');
-      loadAllocations();
+      queryClient.invalidateQueries({ queryKey: ['server-allocations', serverId] });
       queryClient.invalidateQueries({ queryKey: ['server', serverId] });
     },
     onError: (error: any) =>
@@ -555,7 +549,7 @@ function ServerDetailsPage() {
     },
     onSuccess: () => {
       notifySuccess('Primary allocation updated');
-      loadAllocations();
+      queryClient.invalidateQueries({ queryKey: ['server-allocations', serverId] });
       queryClient.invalidateQueries({ queryKey: ['server', serverId] });
     },
     onError: (error: any) =>

@@ -59,7 +59,6 @@ export function useServerStateUpdates() {
 
         // Invalidate to refetch fresh data.
         queryClient.invalidateQueries({
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           predicate: (query: any) =>
             Array.isArray(query.queryKey) &&
             query.queryKey[0] === 'server' &&

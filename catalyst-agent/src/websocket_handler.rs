@@ -589,14 +589,11 @@ impl WebSocketHandler {
                     // Binary frames are used for two purposes:
                     // 1. Pipe relay: raw tar data when active_restore_request_id is set
                     // 2. Upload backup chunks: first 16 bytes = requestId header
-                    if let Some(restore_id) = {
-                        self.active_restore_request_id.read().await.clone()
-                    } {
+                    if let Some(restore_id) =
+                        { self.active_restore_request_id.read().await.clone() }
+                    {
                         // Active restore stream — route all binary frames to tar stdin
-                        if let Err(e) = self
-                            .write_restore_stream_chunk(&restore_id, &data)
-                            .await
-                        {
+                        if let Err(e) = self.write_restore_stream_chunk(&restore_id, &data).await {
                             error!("Error writing restore stream chunk: {}", e);
                         }
                     } else if data.len() > 16 {
@@ -749,15 +746,11 @@ impl WebSocketHandler {
             Some("upload_backup_complete") => {
                 self.handle_upload_backup_complete(&msg, write).await?
             }
-            Some("start_backup_stream") => {
-                self.handle_start_backup_stream(&msg, write).await?
-            }
+            Some("start_backup_stream") => self.handle_start_backup_stream(&msg, write).await?,
             Some("prepare_restore_stream") => {
                 self.handle_prepare_restore_stream(&msg, write).await?
             }
-            Some("finish_restore_stream") => {
-                self.handle_finish_restore_stream(&msg, write).await?
-            }
+            Some("finish_restore_stream") => self.handle_finish_restore_stream(&msg, write).await?,
             Some("resize_storage") => self.handle_resize_storage(&msg, write).await?,
             Some("resume_console") => self.resume_console(&msg).await?,
             Some("request_immediate_stats") => {

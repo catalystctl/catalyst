@@ -25,6 +25,7 @@ import {
   normalizeVersionLabel,
   filterAndSortVersions,
   formatDownloadCount,
+  isStableRelease,
 } from '../../../utils/modManagerUtils';
 import type {
   ServerPermissionsResponse,
@@ -366,9 +367,8 @@ export default function ServerModManagerTab({
     ) {
       return;
     }
-    const {
-      isStableRelease,
-    } = require('../../../utils/modManagerUtils');
+    // isStableRelease is already available from the top-level import
+    // (duplicated require removed — see modManagerUtils import above)
     const preferred =
       modVersionOptions.find((entry: any) => isStableRelease(entry)) ??
       modVersionOptions[0];

@@ -194,7 +194,7 @@ function PluginSettingsModal({
   onOpenChange: (open: boolean) => void;
 }) {
   const queryClient = useQueryClient();
-  const [config, setConfig] = useState<PluginConfig>({});
+  const [localConfig, setLocalConfig] = useState<PluginConfig | null>(null);
 
   const { data: pluginDetails, isLoading } = useQuery({
     queryKey: ['plugin', pluginName],
@@ -202,11 +202,20 @@ function PluginSettingsModal({
     enabled: open,
   });
 
+  // Use pluginDetails config as base, but allow local edits to override
+  const config = localConfig ?? pluginDetails?.config ?? {};
+
+  const handleConfigChange = (key: string, value: any) => {
+    setLocalConfig((prev) => ({ ...(prev ?? config), [key]: value }));
+  };
+
+  // Reset local edits when modal reopens
   useEffect(() => {
-    if (pluginDetails?.config) {
-      setConfig(pluginDetails.config);
+    if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting form on modal open
+      setLocalConfig(null);
     }
-  }, [pluginDetails]);
+  }, [open]);
 
   const updateMutation = useMutation({
     mutationFn: (newConfig: PluginConfig) => updatePluginConfig(pluginName, newConfig),
@@ -218,10 +227,6 @@ function PluginSettingsModal({
     },
     onError: (error: any) => toast.error(error.message || 'Failed to update configuration'),
   });
-
-  const handleConfigChange = (key: string, value: any) => {
-    setConfig((prev) => ({ ...prev, [key]: value }));
-  };
 
   if (!open) return null;
 

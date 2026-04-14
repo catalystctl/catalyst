@@ -217,7 +217,9 @@ function CustomConsole({
 
   // Latest autoScroll prop ref so scroll handler always sees current value
   const autoScrollRef = useRef(autoScrollProp);
-  autoScrollRef.current = autoScrollProp;
+  useEffect(() => {
+    autoScrollRef.current = autoScrollProp;
+  });
 
   // ── Filter ──
   const normalizedEntries = useMemo(() => {

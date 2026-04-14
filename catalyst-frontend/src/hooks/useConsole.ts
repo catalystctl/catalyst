@@ -106,6 +106,7 @@ export function useConsole(serverId?: string, options: ConsoleOptions = {}) {
   useEffect(() => {
     nextId.current = 0;
     pendingBuffer.current = [];
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting on server switch
     setEntries([]);
   }, [serverId]);
 
@@ -118,6 +119,7 @@ export function useConsole(serverId?: string, options: ConsoleOptions = {}) {
         timestamp: log.timestamp,
       }),
     );
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- merging initial logs from external API
     setEntries((prev) => {
       if (!isConnected || !prev.length)
         return initialEntries.slice(-maxEntries);
