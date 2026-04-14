@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Catalyst — Screenshots</title>
+  <meta name="description" content="Explore the Catalyst game server management panel through screenshots." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ═══════════════════════════════════════════════════════════
+       CATALYST — OBSIDIAN DESIGN SYSTEM
+       Dark-first industrial control panel with warm zinc surfaces,
+       vibrant teal accent, and clean geometric typography.
+       ═══════════════════════════════════════════════════════════ */
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent-teal: 174 80% 46%;
+      --accent-teal-light: 174 72% 56%;
+      --accent-teal-muted: 174 80% 46% / 0.15;
+      --success: 160 84% 39%;
+      --warning: 38 92% 50%;
+      --danger: 0 84% 60%;
+      --info: 217 91% 60%;
+
+      --background: 240 10% 3.9%;
+      --foreground: 0 0% 98%;
+      --muted: 240 3.7% 15.9%;
+      --muted-foreground: 240 5% 64.9%;
+      --card: 240 10% 3.9%;
+      --card-foreground: 0 0% 98%;
+      --border: 240 3.7% 15.9%;
+      --primary: var(--accent-teal);
+      --primary-foreground: 240 10% 3.9%;
+
+      --surface-0: 240 10% 3.9%;
+      --surface-1: 240 10% 5.9%;
+      --surface-2: 240 3.7% 15.9%;
+      --surface-3: 240 5.9% 24%;
+
+      --zinc-800: 240 3.7% 15.9%;
+      --zinc-900: 240 10% 3.9%;
+      --zinc-950: 240 10% 3.9%;
+
+      --radius: 0.5rem;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background-color: hsl(var(--background));
+      color: hsl(var(--foreground));
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: 100vh;
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb { background: hsl(var(--surface-2)); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: hsl(var(--surface-3)); }
+    * { scrollbar-width: thin; scrollbar-color: hsl(var(--surface-2)) transparent; }
+
+    .font-display { font-family: 'Outfit', system-ui, sans-serif; }
+
+    /* ═══════════════════════════════════════════════════════════
+       HEADER
+       ═══════════════════════════════════════════════════════════ */
+
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      border-bottom: 1px solid hsl(var(--border));
+      background: hsl(var(--surface-0) / 0.85);
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+    }
+
+    .header-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo-group {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+    }
+
+    .logo-mark {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, hsl(var(--accent-teal)), hsl(174 80% 32%));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      color: white;
+      font-weight: 700;
+      box-shadow: 0 0 20px hsl(var(--accent-teal) / 0.25);
+    }
+
+    .logo-text {
+      font-family: 'Outfit', system-ui, sans-serif;
+      font-size: 1.125rem;
+      font-weight: 700;
+      color: hsl(var(--foreground));
+      letter-spacing: -0.02em;
+    }
+
+    .logo-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.625rem;
+      font-weight: 500;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: hsl(var(--accent-teal) / 0.12);
+      color: hsl(var(--accent-teal-light));
+      border: 1px solid hsl(var(--accent-teal) / 0.2);
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .nav-link {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: hsl(var(--muted-foreground));
+      text-decoration: none;
+      transition: all 0.15s ease;
+      cursor: pointer;
+      border: none;
+      background: none;
+      font-family: inherit;
+    }
+
+    .nav-link:hover { color: hsl(var(--foreground)); background: hsl(var(--surface-2)); }
+    .nav-link.active { color: hsl(var(--accent-teal-light)); background: hsl(var(--accent-teal) / 0.1); }
+
+    /* ═══════════════════════════════════════════════════════════
+       HERO
+       ═══════════════════════════════════════════════════════════ */
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border-bottom: 1px solid hsl(var(--border));
+    }
+
+    .hero-glow-1 {
+      position: absolute;
+      top: -120px;
+      right: -80px;
+      width: 500px;
+      height: 500px;
+      border-radius: 50%;
+      background: hsl(var(--accent-teal) / 0.06);
+      filter: blur(100px);
+      pointer-events: none;
+    }
+
+    .hero-glow-2 {
+      position: absolute;
+      bottom: -80px;
+      left: -60px;
+      width: 400px;
+      height: 400px;
+      border-radius: 50%;
+      background: hsl(var(--accent-teal) / 0.04);
+      filter: blur(80px);
+      pointer-events: none;
+    }
+
+    .hero-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 4rem 1.5rem 3.5rem;
+      position: relative;
+      z-index: 1;
+      text-align: center;
+    }
+
+    .hero-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.6875rem;
+      font-weight: 500;
+      color: hsl(var(--accent-teal-light));
+      padding: 4px 12px;
+      border-radius: 999px;
+      border: 1px solid hsl(var(--accent-teal) / 0.25);
+      background: hsl(var(--accent-teal) / 0.08);
+      margin-bottom: 1.5rem;
+      letter-spacing: 0.02em;
+    }
+
+    .hero-tag-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: hsl(var(--accent-teal));
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    .hero h1 {
+      font-family: 'Outfit', system-ui, sans-serif;
+      font-size: clamp(2rem, 5vw, 3.25rem);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      color: hsl(var(--foreground));
+      margin-bottom: 1rem;
+    }
+
+    .hero h1 .accent {
+      background: linear-gradient(135deg, hsl(var(--accent-teal-light)), hsl(var(--accent-teal)));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      font-size: 1.0625rem;
+      color: hsl(var(--muted-foreground));
+      max-width: 520px;
+      margin: 0 auto;
+      line-height: 1.65;
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       STATS BAR
+       ═══════════════════════════════════════════════════════════ */
+
+    .stats-bar {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+
+    .stat-card {
+      display: flex;
+      align-items: center;
+      gap: 0.875rem;
+      padding: 1rem 1.25rem;
+      border-radius: 12px;
+      border: 1px solid hsl(var(--border));
+      background: hsl(var(--surface-1));
+      transition: border-color 0.2s ease;
+    }
+
+    .stat-card:hover { border-color: hsl(var(--accent-teal) / 0.3); }
+
+    .stat-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .stat-icon.teal { background: hsl(var(--accent-teal) / 0.12); }
+    .stat-icon.amber { background: hsl(var(--warning) / 0.12); }
+    .stat-icon.rose { background: hsl(var(--danger) / 0.12); }
+
+    .stat-value {
+      font-family: 'Outfit', system-ui, sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: hsl(var(--foreground));
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 0.8125rem;
+      color: hsl(var(--muted-foreground));
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       SECTION
+       ═══════════════════════════════════════════════════════════ */
+
+    .section {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem;
+    }
+
+    .section-header {
+      margin-bottom: 2rem;
+    }
+
+    .section-header h2 {
+      font-family: 'Outfit', system-ui, sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: hsl(var(--foreground));
+      letter-spacing: -0.02em;
+      margin-bottom: 0.375rem;
+    }
+
+    .section-header p {
+      font-size: 0.875rem;
+      color: hsl(var(--muted-foreground));
+    }
+
+    .section-divider {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    .section-divider hr {
+      border: none;
+      border-top: 1px solid hsl(var(--border));
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       GALLERY GRID
+       ═══════════════════════════════════════════════════════════ */
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 1rem;
+    }
+
+    .screenshot-card {
+      position: relative;
+      border-radius: 12px;
+      border: 1px solid hsl(var(--border));
+      background: hsl(var(--surface-1));
+      overflow: hidden;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+      group: true;
+    }
+
+    .screenshot-card:hover {
+      border-color: hsl(var(--accent-teal) / 0.35);
+      box-shadow: 0 8px 32px -8px hsl(var(--accent-teal) / 0.12), 0 4px 12px -2px hsl(0 0% 0% / 0.4);
+      transform: translateY(-2px);
+    }
+
+    .screenshot-card .thumb-wrap {
+      position: relative;
+      overflow: hidden;
+      aspect-ratio: 16 / 12.3;
+      background: hsl(var(--surface-0));
+    }
+
+    .screenshot-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .screenshot-card:hover img {
+      transform: scale(1.03);
+    }
+
+    .screenshot-card .thumb-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, hsl(240 10% 3.9% / 0.6) 0%, transparent 50%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 1rem;
+    }
+
+    .screenshot-card:hover .thumb-overlay { opacity: 1; }
+
+    .thumb-overlay .zoom-hint {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.6875rem;
+      font-weight: 500;
+      color: white;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: hsl(0 0% 0% / 0.6);
+      backdrop-filter: blur(8px);
+      border: 1px solid hsl(0 0% 100% / 0.1);
+    }
+
+    .screenshot-card .card-info {
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-info .card-title {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: hsl(var(--foreground));
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-info .card-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.625rem;
+      font-weight: 500;
+      color: hsl(var(--accent-teal-light));
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: hsl(var(--accent-teal) / 0.1);
+      border: 1px solid hsl(var(--accent-teal) / 0.15);
+      flex-shrink: 0;
+      margin-left: 0.5rem;
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       FEATURED (first card in each section spans full width)
+       ═══════════════════════════════════════════════════════════ */
+
+    .screenshot-card.featured {
+      grid-column: 1 / -1;
+    }
+
+    .screenshot-card.featured .thumb-wrap {
+      aspect-ratio: 16 / 9;
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       LIGHTBOX
+       ═══════════════════════════════════════════════════════════ */
+
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: hsl(240 10% 3.9% / 0.92);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+
+    .lightbox.open { opacity: 1; visibility: visible; }
+
+    .lightbox-inner {
+      position: relative;
+      max-width: 92vw;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      transform: scale(0.95);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .lightbox.open .lightbox-inner { transform: scale(1); }
+
+    .lightbox-inner img {
+      max-width: 100%;
+      max-height: 80vh;
+      border-radius: 12px;
+      border: 1px solid hsl(var(--border));
+      box-shadow: 0 24px 64px -16px hsl(0 0% 0% / 0.6);
+      object-fit: contain;
+    }
+
+    .lightbox-caption {
+      font-family: 'Outfit', system-ui, sans-serif;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: hsl(var(--muted-foreground));
+    }
+
+    .lightbox-close {
+      position: absolute;
+      top: -2.5rem;
+      right: 0;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid hsl(var(--border));
+      background: hsl(var(--surface-2));
+      color: hsl(var(--foreground));
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+
+    .lightbox-close:hover { background: hsl(var(--surface-3)); border-color: hsl(var(--accent-teal) / 0.3); }
+
+    .lightbox-nav {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1px solid hsl(var(--border));
+      background: hsl(var(--surface-1) / 0.8);
+      backdrop-filter: blur(8px);
+      color: hsl(var(--foreground));
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+
+    .lightbox-nav:hover { background: hsl(var(--surface-2)); border-color: hsl(var(--accent-teal) / 0.3); }
+    .lightbox-nav.prev { left: -60px; }
+    .lightbox-nav.next { right: -60px; }
+
+    /* ═══════════════════════════════════════════════════════════
+       FOOTER
+       ═══════════════════════════════════════════════════════════ */
+
+    .site-footer {
+      border-top: 1px solid hsl(var(--border));
+      padding: 2rem 1.5rem;
+      margin-top: 2rem;
+    }
+
+    .footer-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .footer-text {
+      font-size: 0.8125rem;
+      color: hsl(var(--muted-foreground));
+    }
+
+    .footer-text a {
+      color: hsl(var(--accent-teal-light));
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+
+    .footer-text a:hover { color: hsl(var(--foreground)); }
+
+    .footer-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.6875rem;
+      color: hsl(var(--muted-foreground));
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid hsl(var(--border));
+      background: hsl(var(--surface-1));
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       ANIMATIONS
+       ═══════════════════════════════════════════════════════════ */
+
+    .fade-up {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .fade-up.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       RESPONSIVE
+       ═══════════════════════════════════════════════════════════ */
+
+    @media (max-width: 768px) {
+      .hero-inner { padding: 2.5rem 1.25rem 2rem; }
+      .stats-bar { grid-template-columns: 1fr; gap: 0.75rem; }
+      .gallery-grid { grid-template-columns: 1fr; }
+      .lightbox-nav.prev { left: 0.5rem; }
+      .lightbox-nav.next { right: 0.5rem; }
+      .nav-links { gap: 0; }
+      .nav-link { padding: 6px 8px; font-size: 0.75rem; }
+      .logo-badge { display: none; }
+    }
+
+    @media (max-width: 480px) {
+      .header-inner { padding: 0 1rem; }
+      .hero-inner { padding: 2rem 1rem 1.5rem; }
+      .section { padding: 2rem 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═════════════ HEADER ═════════════ -->
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="#" class="logo-group">
+        <div class="logo-mark">⚡</div>
+        <span class="logo-text">Catalyst</span>
+        <span class="logo-badge">PANEL</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#auth" class="nav-link">Auth</a>
+        <a href="#user" class="nav-link">User</a>
+        <a href="#admin" class="nav-link">Admin</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ═════════════ HERO ═════════════ -->
+  <section class="hero">
+    <div class="hero-glow-1"></div>
+    <div class="hero-glow-2"></div>
+    <div class="hero-inner fade-up">
+      <div class="hero-tag">
+        <span class="hero-tag-dot"></span>
+        Catalyst Panel
+      </div>
+      <h1>Game Server Management<br/><span class="accent">Made Simple</span></h1>
+      <p>A modern, powerful control panel for managing game servers, nodes, and infrastructure — all from one beautiful interface.</p>
+    </div>
+  </section>
+
+  <!-- ═════════════ STATS BAR ═════════════ -->
+  <div class="stats-bar fade-up">
+    <div class="stat-card">
+      <div class="stat-icon teal">🖥️</div>
+      <div>
+        <div class="stat-value" id="count-total">0</div>
+        <div class="stat-label">Screenshots</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon amber">📂</div>
+      <div>
+        <div class="stat-value">3</div>
+        <div class="stat-label">Categories</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon rose">🎨</div>
+      <div>
+        <div class="stat-value">Obsidian</div>
+        <div class="stat-label">Design System</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════ AUTH SECTION ═════════════ -->
+  <div class="section-divider"><hr/></div>
+  <section class="section" id="auth">
+    <div class="section-header fade-up">
+      <h2>Authentication</h2>
+      <p>Login, registration, and password recovery flows</p>
+    </div>
+    <div class="gallery-grid" id="auth-grid"></div>
+  </section>
+
+  <!-- ═════════════ USER SECTION ═════════════ -->
+  <div class="section-divider"><hr/></div>
+  <section class="section" id="user">
+    <div class="section-header fade-up">
+      <h2>User Dashboard</h2>
+      <p>Server management, monitoring, and day-to-day operations</p>
+    </div>
+    <div class="gallery-grid" id="user-grid"></div>
+  </section>
+
+  <!-- ═════════════ ADMIN SECTION ═════════════ -->
+  <div class="section-divider"><hr/></div>
+  <section class="section" id="admin">
+    <div class="section-header fade-up">
+      <h2>Administration</h2>
+      <p>System-wide controls, node management, and platform configuration</p>
+    </div>
+    <div class="gallery-grid" id="admin-grid"></div>
+  </section>
+
+  <!-- ═════════════ FOOTER ═════════════ -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-text">
+        <a href="#">Catalyst</a> — Open-source game server management panel
+      </div>
+      <div class="footer-badge">v1.0 · 2026</div>
+    </div>
+  </footer>
+
+  <!-- ═════════════ LIGHTBOX ═════════════ -->
+  <div class="lightbox" id="lightbox">
+    <div class="lightbox-inner">
+      <button class="lightbox-close" id="lb-close" aria-label="Close">✕</button>
+      <button class="lightbox-nav prev" id="lb-prev" aria-label="Previous">‹</button>
+      <button class="lightbox-nav next" id="lb-next" aria-label="Next">›</button>
+      <img id="lb-img" src="" alt="" />
+      <div class="lightbox-caption" id="lb-caption"></div>
+    </div>
+  </div>
+
+  <script>
+    /* ═══════════════════════════════════════════════════════════
+       DATA
+       ═══════════════════════════════════════════════════════════ */
+    const BASE = 'screenshots';
+
+    const sections = {
+      auth: {
+        grid: 'auth-grid',
+        featured: 'login.png',
+        images: [
+          { file: 'login.png', title: 'Login', tag: 'Auth' },
+          { file: 'register.png', title: 'Register', tag: 'Auth' },
+          { file: 'forgot-password.png', title: 'Forgot Password', tag: 'Auth' },
+        ],
+      },
+      user: {
+        grid: 'user-grid',
+        featured: 'dashboard.png',
+        images: [
+          { file: 'dashboard.png', title: 'Dashboard', tag: 'User' },
+          { file: 'servers.png', title: 'Servers', tag: 'User' },
+          { file: 'server-console.png', title: 'Server Console', tag: 'Server' },
+          { file: 'server-files.png', title: 'File Manager', tag: 'Server' },
+          { file: 'server-databases.png', title: 'Databases', tag: 'Server' },
+          { file: 'server-backups.png', title: 'Backups', tag: 'Server' },
+          { file: 'server-metrics.png', title: 'Metrics', tag: 'Server' },
+          { file: 'server-configuration.png', title: 'Configuration', tag: 'Server' },
+          { file: 'server-settings.png', title: 'Settings', tag: 'Server' },
+          { file: 'server-alerts.png', title: 'Alerts', tag: 'Server' },
+          { file: 'server-users.png', title: 'Server Users', tag: 'Server' },
+          { file: 'server-sftp.png', title: 'SFTP', tag: 'Server' },
+          { file: 'server-tasks.png', title: 'Tasks', tag: 'Server' },
+          { file: 'server-admin.png', title: 'Server Admin', tag: 'Server' },
+          { file: 'server-modmanager.png', title: 'Mod Manager', tag: 'Server' },
+          { file: 'server-pluginmanager.png', title: 'Plugin Manager', tag: 'Server' },
+          { file: 'profile.png', title: 'Profile', tag: 'User' },
+        ],
+      },
+      admin: {
+        grid: 'admin-grid',
+        featured: 'admin-dashboard.png',
+        images: [
+          { file: 'admin-dashboard.png', title: 'Admin Dashboard', tag: 'Admin' },
+          { file: 'admin-servers.png', title: 'Servers', tag: 'Admin' },
+          { file: 'admin-nodes.png', title: 'Nodes', tag: 'Admin' },
+          { file: 'node-details.png', title: 'Node Details', tag: 'Node' },
+          { file: 'node-allocations.png', title: 'Node Allocations', tag: 'Node' },
+          { file: 'admin-users.png', title: 'Users', tag: 'Admin' },
+          { file: 'admin-roles.png', title: 'Roles & Permissions', tag: 'Admin' },
+          { file: 'admin-templates.png', title: 'Templates', tag: 'Admin' },
+          { file: 'template-1-details.png', title: 'Template 1', tag: 'Template' },
+          { file: 'template-2-details.png', title: 'Template 2', tag: 'Template' },
+          { file: 'template-3-details.png', title: 'Template 3', tag: 'Template' },
+          { file: 'template-4-details.png', title: 'Template 4', tag: 'Template' },
+          { file: 'admin-alerts.png', title: 'Alerts', tag: 'Admin' },
+          { file: 'admin-audit-logs.png', title: 'Audit Logs', tag: 'Admin' },
+          { file: 'admin-network.png', title: 'Network', tag: 'Admin' },
+          { file: 'admin-database.png', title: 'Database', tag: 'Admin' },
+          { file: 'admin-security.png', title: 'Security', tag: 'Admin' },
+          { file: 'admin-system.png', title: 'System', tag: 'Admin' },
+          { file: 'admin-theme-settings.png', title: 'Theme Settings', tag: 'Admin' },
+          { file: 'admin-plugins.png', title: 'Plugins', tag: 'Admin' },
+          { file: 'admin-api-keys.png', title: 'API Keys', tag: 'Admin' },
+        ],
+      },
+    };
+
+    /* ═══════════════════════════════════════════════════════════
+       RENDER GALLERY
+       ═══════════════════════════════════════════════════════════ */
+    let allImages = [];
+    let totalCount = 0;
+
+    function renderCard(sectionDir, img, featured) {
+      const path = `${BASE}/${sectionDir}/${img.file}`;
+      const classes = featured ? 'screenshot-card featured fade-up' : 'screenshot-card fade-up';
+      return `
+        <div class="${classes}" data-src="${path}" data-title="${img.title}">
+          <div class="thumb-wrap">
+            <img src="${path}" alt="${img.title}" loading="lazy" />
+            <div class="thumb-overlay">
+              <span class="zoom-hint">Click to expand</span>
+            </div>
+          </div>
+          <div class="card-info">
+            <span class="card-title">${img.title}</span>
+            <span class="card-tag">${img.tag}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    for (const [key, sec] of Object.entries(sections)) {
+      const grid = document.getElementById(sec.grid);
+      let html = '';
+      sec.images.forEach((img) => {
+        const featured = img.file === sec.featured;
+        html += renderCard(key, img, featured);
+        allImages.push({ path: `${BASE}/${key}/${img.file}`, title: img.title });
+      });
+      grid.innerHTML = html;
+      totalCount += sec.images.length;
+    }
+
+    document.getElementById('count-total').textContent = totalCount;
+
+    /* ═══════════════════════════════════════════════════════════
+       LIGHTBOX
+       ═══════════════════════════════════════════════════════════ */
+    const lightbox = document.getElementById('lightbox');
+    const lbImg = document.getElementById('lb-img');
+    const lbCaption = document.getElementById('lb-caption');
+    let currentIndex = 0;
+
+    function openLightbox(index) {
+      currentIndex = index;
+      updateLightbox();
+      lightbox.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox() {
+      lightbox.classList.remove('open');
+      document.body.style.overflow = '';
+    }
+
+    function updateLightbox() {
+      const img = allImages[currentIndex];
+      lbImg.src = img.path;
+      lbImg.alt = img.title;
+      lbCaption.textContent = img.title;
+    }
+
+    document.addEventListener('click', (e) => {
+      const card = e.target.closest('.screenshot-card');
+      if (card && !e.target.closest('.lightbox')) {
+        const src = card.dataset.src;
+        const idx = allImages.findIndex((i) => i.path === src);
+        if (idx !== -1) openLightbox(idx);
+      }
+    });
+
+    document.getElementById('lb-close').addEventListener('click', closeLightbox);
+    lightbox.addEventListener('click', (e) => { if (e.target === lightbox) closeLightbox(); });
+
+    document.getElementById('lb-prev').addEventListener('click', (e) => {
+      e.stopPropagation();
+      currentIndex = (currentIndex - 1 + allImages.length) % allImages.length;
+      updateLightbox();
+    });
+
+    document.getElementById('lb-next').addEventListener('click', (e) => {
+      e.stopPropagation();
+      currentIndex = (currentIndex + 1) % allImages.length;
+      updateLightbox();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (!lightbox.classList.contains('open')) return;
+      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'ArrowLeft') { currentIndex = (currentIndex - 1 + allImages.length) % allImages.length; updateLightbox(); }
+      if (e.key === 'ArrowRight') { currentIndex = (currentIndex + 1) % allImages.length; updateLightbox(); }
+    });
+
+    /* ═══════════════════════════════════════════════════════════
+       SCROLL REVEAL
+       ═══════════════════════════════════════════════════════════ */
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.08, rootMargin: '0px 0px -40px 0px' }
+    );
+
+    document.querySelectorAll('.fade-up').forEach((el) => observer.observe(el));
+
+    /* ═══════════════════════════════════════════════════════════
+       ACTIVE NAV HIGHLIGHT
+       ═══════════════════════════════════════════════════════════ */
+    const navLinks = document.querySelectorAll('.nav-link');
+    const sectionIds = ['auth', 'user', 'admin'];
+
+    const navObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            navLinks.forEach((l) => l.classList.remove('active'));
+            const link = document.querySelector(`.nav-link[href="#${entry.target.id}"]`);
+            if (link) link.classList.add('active');
+          }
+        });
+      },
+      { threshold: 0.2, rootMargin: '-80px 0px -60% 0px' }
+    );
+
+    sectionIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) navObserver.observe(el);
+    });
+  </script>
+</body>
+</html>
