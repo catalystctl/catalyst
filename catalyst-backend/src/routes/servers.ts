@@ -1298,6 +1298,7 @@ export async function serverRoutes(app: FastifyInstance) {
         portBindings,
         networkMode,
         environment,
+        ownerId: bodyOwnerId,
       } = request.body as {
         name: string;
         description?: string;
@@ -1315,31 +1316,30 @@ export async function serverRoutes(app: FastifyInstance) {
         portBindings?: Record<number, number>;
         networkMode?: string;
         environment: Record<string, string>;
+        ownerId?: string;
       };
 
       const userId = request.user.userId;
-
-      // Check if user can create servers - either admin or has node assignment
-      const canCreate = await isAdminUser(userId, "admin.write");
+      // For admin/API-key callers, allow specifying a different owner.
+      // Regular users can only create servers for themselves.
+      const canCreate = await isAdminUser(userId, 'admin.write');
       const hasNodeAccessResult = await hasNodeAccess(prisma, userId, nodeId);
 
       if (!canCreate && !hasNodeAccessResult) {
-        return reply.status(403).send({ error: "Admin access or node assignment required" });
+        return reply.status(403).send({ error: 'Admin access or node assignment required' });
+      }
+
+      const effectiveOwnerId = (canCreate || hasNodeAccessResult) && bodyOwnerId ? bodyOwnerId : userId;
+
+      // If ownerId is specified, verify the target user exists
+      if (effectiveOwnerId !== userId) {
+        const targetUser = await prisma.user.findUnique({ where: { id: effectiveOwnerId } });
+        if (!targetUser) {
+          return reply.status(400).send({ error: 'Specified owner does not exist' });
+        }
       }
 
       // Validate required fields
-      if (
-        !name ||
-        !templateId ||
-        !nodeId ||
-        !locationId ||
-        allocatedMemoryMb === undefined ||
-        allocatedCpuCores === undefined ||
-        allocatedDiskMb === undefined ||
-        primaryPort === undefined
-      ) {
-        return reply.status(400).send({ error: "Missing required fields" });
-      }
       const validatedPrimaryPort = parsePortValue(primaryPort);
       if (!validatedPrimaryPort) {
         return reply.status(400).send({ error: "Invalid primary port" });
@@ -1625,7 +1625,7 @@ export async function serverRoutes(app: FastifyInstance) {
               templateId,
               nodeId,
               locationId,
-              ownerId: userId,
+              ownerId: effectiveOwnerId,
               allocatedMemoryMb,
               allocatedCpuCores,
               allocatedDiskMb,
@@ -1702,7 +1702,7 @@ export async function serverRoutes(app: FastifyInstance) {
       // Grant owner full permissions
       await prisma.serverAccess.create({
         data: {
-          userId,
+          userId: effectiveOwnerId,
           serverId: server.id,
           permissions: [
             "server.start",
@@ -1725,6 +1725,12 @@ export async function serverRoutes(app: FastifyInstance) {
         success: true,
         data: withConnectionInfo(server, node),
       });
+
+      // Fire webhook for server creation
+      const webhookService: any = (app as any).webhookService;
+      if (webhookService) {
+        webhookService.serverCreated({ id: server.id, name: server.name, ownerId: effectiveOwnerId }, userId).catch(() => {});
+      }
     }
   );
 
@@ -4607,20 +4613,36 @@ export async function serverRoutes(app: FastifyInstance) {
       });
 
       // Tell the agent to clean up the container and firewall rules.
+      // If the agent is offline, log a warning — the DB record is already gone,
+      // and the agent-side cleanup will be skipped. When the agent reconnects,
+      // the state sync will not find this server, so no stale state remains.
+      // For a full safety net, a future enhancement could use a "pending_deletion"
+      // pattern that defers the DB delete until agent acknowledgment.
       if (server.nodeId) {
         const gateway = (app as any).wsGateway;
         if (gateway) {
-          gateway.sendToAgent(server.nodeId, {
+          const sent = await gateway.sendToAgent(server.nodeId, {
             type: "delete_server",
             serverId: server.id,
             serverUuid: server.uuid,
-          }).catch((err: any) => {
-            console.error(`Failed to send delete_server command to agent for ${server.id}:`, err);
           });
+          if (!sent) {
+            app.log.warn(
+              { serverId: server.id, nodeId: server.nodeId },
+              "Agent offline during delete — container/data cleanup will be skipped. " +
+              "Manual cleanup may be required on the node."
+            );
+          }
         }
       }
 
       reply.send({ success: true });
+
+      // Fire webhook for server deletion
+      const webhookService: any = (app as any).webhookService;
+      if (webhookService) {
+        webhookService.serverDeleted(serverId, server.name, userId).catch(() => {});
+      }
     }
   );
 
@@ -7179,7 +7201,7 @@ export async function serverRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
-      const { reason } = request.body as { reason?: string };
+      const { reason, stopServer } = request.body as { reason?: string; stopServer?: boolean };
 
       if (!(await ensureSuspendPermission(userId, reply))) {
         return;
@@ -7198,6 +7220,10 @@ export async function serverRoutes(app: FastifyInstance) {
         return reply.status(409).send({ error: "Server is already suspended" });
       }
 
+      // Determine whether to stop the server.
+      // Default is true (always stop). Set stopServer=false to suspend without stopping.
+      const shouldStop = stopServer !== false;
+
       // Update DB BEFORE sending stop command to avoid race condition
       const updated = await prisma.server.update({
         where: { id: serverId },
@@ -7209,7 +7235,7 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
-      if (server.status === "running" || server.status === "starting") {
+      if (shouldStop && (server.status === "running" || server.status === "starting")) {
         const gateway = (app as any).wsGateway;
         if (!gateway) {
           return reply.status(500).send({ error: "WebSocket gateway not available" });
@@ -7224,13 +7250,30 @@ export async function serverRoutes(app: FastifyInstance) {
         });
       }
 
+      // Disable all scheduled tasks for this server to prevent failed executions
+      const scheduler = (app as any).taskScheduler;
+      const disabledTasks = await prisma.scheduledTask.updateMany({
+        where: { serverId, enabled: true },
+        data: { enabled: false },
+      });
+      if (disabledTasks.count > 0) {
+        // Unschedule them in the in-memory scheduler
+        const tasks = await prisma.scheduledTask.findMany({
+          where: { serverId, enabled: false },
+          select: { id: true },
+        });
+        for (const task of tasks) {
+          if (scheduler) scheduler.unscheduleTask(task.id);
+        }
+      }
+
       await prisma.auditLog.create({
         data: {
           userId,
           action: "server.suspend",
           resource: "server",
           resourceId: serverId,
-          details: { reason: updated.suspensionReason ?? undefined },
+          details: { reason: updated.suspensionReason ?? undefined, stopServer: shouldStop, tasksDisabled: disabledTasks.count },
         },
       });
 
@@ -7238,9 +7281,15 @@ export async function serverRoutes(app: FastifyInstance) {
         data: {
           serverId,
           stream: "system",
-          data: `Server suspended${updated.suspensionReason ? `: ${updated.suspensionReason}` : ""}`,
+          data: `Server suspended${updated.suspensionReason ? `: ${updated.suspensionReason}` : ""}${disabledTasks.count > 0 ? ` (${disabledTasks.count} scheduled task(s) disabled)` : ""}`,
         },
       });
+
+      // Fire webhook for server suspension
+      const webhookService: any = (app as any).webhookService;
+      if (webhookService) {
+        webhookService.serverSuspended(serverId, server!.name, updated.suspensionReason, userId).catch(() => {});
+      }
 
       return reply.send({ success: true, data: updated });
     }
@@ -7280,13 +7329,28 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
+      // Re-enable all scheduled tasks that were disabled during suspension
+      const scheduler = (app as any).taskScheduler;
+      const reEnabledTasks = await prisma.scheduledTask.updateMany({
+        where: { serverId, enabled: false },
+        data: { enabled: true },
+      });
+      if (reEnabledTasks.count > 0) {
+        const tasks = await prisma.scheduledTask.findMany({
+          where: { serverId, enabled: true },
+        });
+        for (const task of tasks) {
+          if (scheduler) scheduler.scheduleTask(task);
+        }
+      }
+
       await prisma.auditLog.create({
         data: {
           userId,
           action: "server.unsuspend",
           resource: "server",
           resourceId: serverId,
-          details: {},
+          details: { tasksReEnabled: reEnabledTasks.count },
         },
       });
 
@@ -7294,9 +7358,15 @@ export async function serverRoutes(app: FastifyInstance) {
         data: {
           serverId,
           stream: "system",
-          data: "Server unsuspended",
+          data: `Server unsuspended${reEnabledTasks.count > 0 ? ` (${reEnabledTasks.count} scheduled task(s) re-enabled)` : ""}`,
         },
       });
+
+      // Fire webhook for server unsuspension
+      const webhookService: any = (app as any).webhookService;
+      if (webhookService) {
+        webhookService.serverUnsuspended(serverId, server!.name, userId).catch(() => {});
+      }
 
       return reply.send({ success: true, data: updated });
     }

@@ -74,14 +74,19 @@ curl -X POST http://localhost:3000/api/servers \
     "name": "Customer Server #12345",
     "templateId": "minecraft-template-id",
     "nodeId": "node-1-id",
+    "locationId": "location-id",
     "ownerId": "user-id-from-your-system",
     "allocatedMemoryMb": 4096,
     "allocatedCpuCores": 2,
     "allocatedDiskMb": 10240,
     "primaryPort": 25565,
-    "autoStart": false
+    "networkMode": "bridge"
   }'
 ```
+
+> **Note:** After creation, the server is in `stopped` state. You must call
+> `/install` (to run the install script) and then `/start` to activate it.
+> See the [Complete Order Provisioning Flow](#complete-order-provisioning-flow) for the full sequence.
 
 **Response:**
 ```json
@@ -130,13 +135,22 @@ curl -X POST http://localhost:3000/api/servers/server-abc123/stop \
 **Use Case:** Suspend server for non-payment or policy violation.
 
 ```bash
-# Suspend immediately
+# Suspend and stop the server
 curl -X POST http://localhost:3000/api/servers/server-abc123/suspend \
   -H "Content-Type: application/json" \
   -H "x-api-key: $API_KEY" \
   -d '{
     "reason": "Payment overdue - Invoice #12345",
     "stopServer": true
+  }'
+
+# Suspend without stopping (soft suspension)
+curl -X POST http://localhost:3000/api/servers/server-abc123/suspend \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $API_KEY" \
+  -d '{
+    "reason": "Account review pending",
+    "stopServer": false
   }'
 ```
 
@@ -177,12 +191,14 @@ curl -X DELETE http://localhost:3000/api/servers/server-abc123 \
 
 ### 7. Update Server Resources
 
-**Endpoint:** `PATCH /api/servers/:id`
+**Endpoint:** `PUT /api/servers/:id`
 
 **Use Case:** Upgrade/downgrade server resources when customer changes plan.
 
+> **Important:** The server must be in `stopped` state before resource changes.
+
 ```bash
-curl -X PATCH http://localhost:3000/api/servers/server-abc123 \
+curl -X PUT http://localhost:3000/api/servers/server-abc123 \
   -H "Content-Type: application/json" \
   -H "x-api-key: $API_KEY" \
   -d '{
@@ -191,6 +207,83 @@ curl -X PATCH http://localhost:3000/api/servers/server-abc123 \
     "allocatedDiskMb": 20480
   }'
 ```
+
+### Bulk Operations
+
+For billing panels managing many servers, use the bulk endpoints:
+
+**Bulk Suspend:**
+```bash
+curl -X POST http://localhost:3000/api/servers/bulk/suspend \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $API_KEY" \
+  -d '{
+    "serverIds": ["server-1", "server-2", "server-3"],
+    "reason": "Payment overdue"
+  }'
+```
+
+**Bulk Unsuspend:**
+```bash
+curl -X POST http://localhost:3000/api/servers/bulk/unsuspend \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $API_KEY" \
+  -d '{
+    "serverIds": ["server-1", "server-2", "server-3"]
+  }'
+```
+
+**Bulk Delete:**
+```bash
+curl -X DELETE http://localhost:3000/api/servers/bulk \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $API_KEY" \
+  -d '{
+    "serverIds": ["server-1", "server-2"]
+  }'
+```
+
+**Bulk Status Check:**
+```bash
+curl -X POST http://localhost:3000/api/servers/bulk/status \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $API_KEY" \
+  -d '{
+    "serverIds": ["server-1", "server-2", "server-3"]
+  }'
+```
+
+### Webhooks
+
+Configure outbound webhooks to receive real-time notifications for server lifecycle events.
+
+**Setup (env var):**
+```env
+WEBHOOK_URLS=https://your-billing-panel.com/webhooks/catalyst
+WEBHOOK_SECRET=your-shared-secret
+```
+
+**Events dispatched:**
+- `server.created` — New server provisioned
+- `server.deleted` — Server terminated
+- `server.suspended` — Server suspended (includes reason)
+- `server.unsuspended` — Server unsuspended
+- `server.bulk_suspended` — Multiple servers suspended
+- `server.bulk_deleted` — Multiple servers deleted
+
+**Webhook payload example:**
+```json
+{
+  "event": "server.suspended",
+  "serverId": "server-abc123",
+  "serverName": "Customer Server",
+  "userId": "admin-id",
+  "timestamp": "2026-04-14T12:00:00.000Z",
+  "data": { "reason": "Payment overdue" }
+}
+```
+
+**Signature verification:** Each webhook includes an `X-Webhook-Signature` header with an HMAC-SHA256 signature using the `WEBHOOK_SECRET`.
 
 ---
 
@@ -314,7 +407,6 @@ async function provisionGameServer(order) {
       allocatedCpuCores: order.package.cpu,
       allocatedDiskMb: order.package.disk,
       primaryPort: await allocatePort(order.game),
-      autoStart: false
     });
 
     const server = serverResponse.data.data;
@@ -335,7 +427,10 @@ async function provisionGameServer(order) {
       loginUrl: `https://panel.example.com/server/${server.id}`
     });
 
-    // 4. Start the server
+    // 4. Install the server (run install script)
+    await CATALYST_API.post(`/api/servers/${server.id}/install`);
+
+    // 5. Start the server
     await CATALYST_API.post(`/api/servers/${server.id}/start`);
 
     return { success: true, serverId: server.id };
@@ -427,7 +522,7 @@ async function handlePackageChange(serviceId, newPackage) {
   }
   
   // Update resources
-  await CATALYST_API.patch(`/api/servers/${server.id}`, {
+  await CATALYST_API.put(`/api/servers/${server.id}`, {
     allocatedMemoryMb: newPackage.memory,
     allocatedCpuCores: newPackage.cpu,
     allocatedDiskMb: newPackage.disk
@@ -780,7 +875,6 @@ function catalyst_CreateAccount($params) {
         'allocatedCpuCores' => (int)$params['configoption5'],
         'allocatedDiskMb' => (int)$params['configoption6'],
         'primaryPort' => 25565,
-        'autoStart' => true
     ];
     
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
@@ -916,7 +1010,6 @@ class CatalystBillingIntegration:
             'allocatedCpuCores': package['cpu'],
             'allocatedDiskMb': package['disk'],
             'primaryPort': self._get_default_port(package['game']),
-            'autoStart': True
         })
         
         if response.status_code == 200:
@@ -964,7 +1057,7 @@ class CatalystBillingIntegration:
             self._wait_for_status(server_id, 'stopped')
         
         # Update resources
-        response = self.session.patch(
+        response = self.session.put(
             f'{self.base_url}/api/servers/{server_id}',
             json={
                 'allocatedMemoryMb': new_package['memory'],

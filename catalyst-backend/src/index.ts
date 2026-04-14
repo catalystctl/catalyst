@@ -26,6 +26,8 @@ import { startSFTPServer } from "./sftp-server";
 import { adminRoutes } from "./routes/admin";
 import { roleRoutes } from "./routes/roles";
 import { taskRoutes } from "./routes/tasks";
+import { bulkServerRoutes } from "./routes/bulk-servers";
+import { WebhookService } from "./services/webhook-service";
 import { TaskScheduler } from "./services/task-scheduler";
 import { alertRoutes } from "./routes/alerts";
 import { dashboardRoutes } from "./routes/dashboard";
@@ -86,6 +88,7 @@ app.setErrorHandler((error, _request, reply) => {
 const wsGateway = new WebSocketGateway(prisma, logger);
 const rbac = new RbacMiddleware(prisma);
 const taskScheduler = new TaskScheduler(prisma, logger);
+const webhookService = new WebhookService(prisma, logger);
 const alertService = new AlertService(prisma, logger);
 const fileTunnel = new FileTunnelService(logger);
 const pluginLoader = new PluginLoader(
@@ -277,6 +280,7 @@ const authenticate = async (request: any, reply: any) => {
 (app as any).wsGateway = wsGateway;
 (app as any).fileTunnel = fileTunnel;
 (app as any).taskScheduler = taskScheduler;
+(app as any).webhookService = webhookService;
 (app as any).alertService = alertService;
 (app as any).auth = auth;
 (app as any).prisma = prisma;
@@ -534,6 +538,7 @@ async function bootstrap() {
     await app.register(adminRoutes, { prefix: "/api/admin" });
     await app.register(roleRoutes, { prefix: "/api/roles" });
     await app.register(taskRoutes, { prefix: "/api/servers" });
+    await app.register(bulkServerRoutes, { prefix: "/api/servers" });
     await app.register(alertRoutes, { prefix: "/api" });
     await app.register(dashboardRoutes, { prefix: "/api/dashboard" });
     await app.register(apiKeyRoutes);

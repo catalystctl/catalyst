@@ -64,15 +64,22 @@ export const serverNameSchema = z.string()
  */
 export const serverCreateSchema = z.object({
   name: serverNameSchema,
-  templateId: z.string().cuid('Invalid template ID'),
+  description: z.string().max(500).optional(),
+  templateId: z.string().min(1, 'Template ID is required'),
   nodeId: z.string().min(1, 'Node ID is required'),
   locationId: z.string().min(1, 'Location ID is required'),
+  ownerId: z.string().min(1, 'Owner ID is required'),
   environment: z.record(z.string(), z.string().min(1).max(4096)).optional().default({}),
   portBindings: z.record(z.string(), z.number().int().min(1).max(65535)).optional().default({}),
+  primaryPort: z.number().int().min(1).max(65535),
+  primaryIp: z.string().max(45).nullable().optional(),
+  allocationId: z.string().min(1).optional(),
   allocatedMemoryMb: z.number().int().min(512).max(131072),
   allocatedCpuCores: z.number().int().min(1).max(128),
   allocatedDiskMb: z.number().int().min(1024).max(1048576),
-  networkMode: z.enum(['bridge', 'macvlan', 'host']).default('bridge'),
+  backupAllocationMb: z.number().int().min(0).max(1048576).optional(),
+  databaseAllocation: z.number().int().min(0).max(1048576).optional(),
+  networkMode: z.enum(['bridge', 'macvlan', 'host', 'mc-lan-static', 'mc-lan-dynamic']).default('mc-lan-static'),
 });
 
 /**
