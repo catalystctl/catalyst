@@ -138,19 +138,30 @@ export async function authRoutes(app: FastifyInstance) {
       const { email, password } = loginValidation.data;
       const normalizedEmail = email;
 
+      // Always check brute-force protection before any user lookup to prevent
+      // email enumeration via timing differences and to rate-limit unknown emails.
+      await bruteForceProtection(prisma, normalizedEmail, request);
+
       // Resolve the actual email (case-insensitive lookup)
       const userRecord = await prisma.user.findFirst({
         where: { email: { equals: normalizedEmail, mode: "insensitive" } },
       });
 
       if (!userRecord) {
+        // Perform a constant-time dummy hash so the response latency is
+        // indistinguishable from a real password check.  This closes the
+        // timing side-channel that would otherwise let an attacker enumerate
+        // valid accounts.
+        try {
+          const crypto = await import('crypto');
+          crypto.scryptSync(password, 'dummy-salt-no-account', 64);
+        } catch { /* swallow – only purpose is to burn CPU time */ }
+
         await logAuthAttempt(normalizedEmail, false, request.ip, request.headers["user-agent"]);
         return reply.status(401).send({ error: "Invalid credentials" });
       }
 
       try {
-        // Check brute-force protection and account lockout
-        await bruteForceProtection(prisma, userRecord.email, request);
 
         const response = await auth.api.signInEmail({
           headers: getHeaders(request),
@@ -205,11 +216,10 @@ export async function authRoutes(app: FastifyInstance) {
         await handleFailedLogin(prisma, request);
         await logAuthAttempt(normalizedEmail, false, request.ip, request.headers["user-agent"]);
 
-        // Check if error is from brute-force protection (account locked)
-        if (err.message && err.message.includes('Account locked')) {
-          return reply.status(423).send({ error: err.message });
-        }
-
+        // Always return the same generic error regardless of failure reason.
+        // Returning 423 "Account locked" or any specific message would let an
+        // attacker confirm the account exists.  The brute-force lockout still
+        // works server-side — we just don't tell the caller about it.
         return reply.status(401).send({ error: "Invalid credentials" });
       }
     }
@@ -597,7 +607,10 @@ export async function authRoutes(app: FastifyInstance) {
         });
         reply.send({ success: true, message: "Password has been reset successfully" });
       } catch (error: any) {
-        reply.status(400).send({ error: error?.message || "Failed to reset password" });
+        // Sanitize error message — never forward better-auth internals to the
+        // client as they may reveal whether a token maps to a real account.
+        app.log.warn({ error: error?.message }, "Password reset failed");
+        reply.status(400).send({ error: "Failed to reset password. The link may be invalid or expired." });
       }
     }
   );
