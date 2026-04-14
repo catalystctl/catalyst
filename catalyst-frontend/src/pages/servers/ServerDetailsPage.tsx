@@ -1,4 +1,4 @@
-import React, {
+import {
   type FormEvent,
   type KeyboardEvent,
   useCallback,
@@ -298,32 +298,6 @@ const tabIcons: Record<keyof typeof tabLabels, React.ComponentType<{ className?:
   admin: Shield,
 };
 
-// ── Memoized Console Input (prevents parent re-render on keystroke) ──
-const MemoizedConsoleInput = React.memo(function MemoizedConsoleInput({
-  value,
-  onChange,
-  onKeyDown,
-  placeholder,
-  disabled,
-}: {
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-  placeholder: string;
-  disabled: boolean;
-}) {
-  return (
-    <input
-      className="w-full bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-      value={value}
-      onChange={onChange}
-      onKeyDown={onKeyDown}
-      placeholder={placeholder}
-      disabled={disabled}
-    />
-  );
-});
-
 // ── Animation Variants ──
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -394,7 +368,7 @@ function ServerDetailsPage() {
   });
   const [configFiles, setConfigFiles] = useState<ConfigFileState[]>([]);
   const [openConfigIndex, setOpenConfigIndex] = useState(-1);
-  const [command, setCommand] = useState('');
+  const consoleInputRef = useRef<HTMLInputElement>(null);
   const [consoleSearch, setConsoleSearch] = useState('');
   const [consoleScrollback, setConsoleScrollback] = useState(() => {
     if (typeof window === 'undefined') return 2000;
@@ -1688,15 +1662,16 @@ function ServerDetailsPage() {
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       if (!canSend) return;
-      const trimmed = command.trim();
+      const value = consoleInputRef.current?.value ?? '';
+      const trimmed = value.trim();
       if (!trimmed) return;
       send(trimmed);
       setConsoleCommandHistory((prev) => [...prev.slice(-49), trimmed]);
-      setCommand('');
+      if (consoleInputRef.current) consoleInputRef.current.value = '';
       setConsoleHistoryIndex(-1);
       setConsoleAutoScroll(true);
     },
-    [canSend, command, send],
+    [canSend, send],
   );
 
   const handleReinstall = useCallback(async () => {
@@ -2180,12 +2155,10 @@ function ServerDetailsPage() {
             className="flex items-center gap-3 border-t border-border bg-card px-4 py-2.5"
           >
             <span className="select-none text-sm font-bold text-primary-500">$</span>
-            <MemoizedConsoleInput
-              value={command}
-              onChange={(event) => {
-                setCommand(event.target.value);
-                setConsoleHistoryIndex(-1);
-              }}
+            <input
+              ref={consoleInputRef}
+              defaultValue=""
+              className="w-full bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
               onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
                 if (e.key === 'ArrowUp') {
                   e.preventDefault();
@@ -2195,17 +2168,17 @@ function ServerDetailsPage() {
                       ? consoleCommandHistory.length - 1
                       : Math.max(0, consoleHistoryIndex - 1);
                   setConsoleHistoryIndex(next);
-                  setCommand(consoleCommandHistory[next]);
+                  if (consoleInputRef.current) consoleInputRef.current.value = consoleCommandHistory[next];
                 } else if (e.key === 'ArrowDown') {
                   e.preventDefault();
                   if (consoleHistoryIndex === -1) return;
                   const next = consoleHistoryIndex + 1;
                   if (next >= consoleCommandHistory.length) {
                     setConsoleHistoryIndex(-1);
-                    setCommand('');
+                    if (consoleInputRef.current) consoleInputRef.current.value = '';
                   } else {
                     setConsoleHistoryIndex(next);
-                    setCommand(consoleCommandHistory[next]);
+                    if (consoleInputRef.current) consoleInputRef.current.value = consoleCommandHistory[next];
                   }
                 }
               }}
@@ -2217,7 +2190,7 @@ function ServerDetailsPage() {
             <button
               type="submit"
               className="rounded-lg bg-primary-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!canSend || !command.trim()}
+              disabled={!canSend}
             >
               Send
             </button>
