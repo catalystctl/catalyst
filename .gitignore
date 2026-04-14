@@ -1,4 +1,6 @@
+# Screenshot test artifacts (generated to docs/screenshots/ which IS committed)
 catalyst-frontend/screenshots/
+catalyst-frontend/playwright-report/
 catalyst-frontend/playwright-report/
 docs.md
 
@@ -47,3 +49,4 @@ catalyst-frontend/.vite/
 # Pi agent runtime state
 .pi/
 context.md
+test-results/.last-run.json
