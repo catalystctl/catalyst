@@ -100,6 +100,7 @@ export class WebSocketGateway {
   private clients = new Map<string, ClientConnection>();
   private logger: pino.Logger;
   private pendingAgentRequests = new Map<string, PendingAgentRequest>();
+  private activeBackupRelay: { sourceNodeId: string; targetNodeId: string; resolve: () => void; reject: (err: Error) => void } | null = null;
   private consoleOutputCounters = new Map<string, { count: number; resetAt: number; warned: boolean }>();
   private clientCommandCounters = new Map<string, { count: number; resetAt: number }>();
   private agentMessageCounters = new Map<string, { count: number; resetAt: number }>();
@@ -198,7 +199,7 @@ export class WebSocketGateway {
         authenticated: false,
         lastHeartbeat: Date.now(),
       };
-      const onMessage = (data: any) => this.handleAgentMessage(nodeId, socket, data);
+      const onMessage = (data: any, isBinary: boolean) => this.handleAgentMessage(nodeId, socket, data, isBinary);
       const onClose = () => {
         const current = this.agents.get(nodeId);
         if (!current || current.socket !== socket) {
@@ -504,8 +505,17 @@ export class WebSocketGateway {
     }
   }
 
-  private async handleAgentMessage(nodeId: string, socket: any, data: any) {
+  private async handleAgentMessage(nodeId: string, socket: any, data: any, isBinary?: boolean) {
     try {
+      // Binary frames: forward to active relay if one exists
+      if (isBinary && this.activeBackupRelay) {
+        const targetAgent = this.agents.get(this.activeBackupRelay.targetNodeId);
+        if (targetAgent && targetAgent.socket.readyState === 1) {
+          targetAgent.socket.send(data);
+        }
+        return;
+      }
+
       if (!this.allowAgentMessage(nodeId, this.agentMessageLimit)) {
         if (this.shouldWarnRateLimit(nodeId, this.agentMessageLimit.windowMs)) {
           this.logger.warn({ nodeId }, "Agent message rate limit exceeded");
@@ -600,6 +610,23 @@ export class WebSocketGateway {
 
       if (message.type === "backup_upload_chunk_response") {
         return;
+      }
+
+      if (message.type === "backup_stream_complete") {
+        this.resolveBackupRelay(nodeId);
+        return;
+      }
+
+      // Generic pending request resolver — any message with a requestId that
+      // matches a pending request will resolve it.
+      if (message.requestId) {
+        const pending = this.pendingAgentRequests.get(message.requestId);
+        if (pending && pending.kind === "json") {
+          clearTimeout(pending.timeout);
+          this.pendingAgentRequests.delete(message.requestId);
+          pending.resolve(message);
+          return;
+        }
       }
 
       if (message.type === "backup_download_chunk") {
@@ -1973,6 +2000,66 @@ export class WebSocketGateway {
     }
   }
 
+  /**
+   * Set up a transparent binary relay between two agents for backup streaming.
+   * Binary frames from sourceNodeId are forwarded directly to targetNodeId.
+   * Returns a promise that resolves when the source sends backup_stream_complete.
+   */
+  async relayBackupStream(
+    sourceNodeId: string,
+    targetNodeId: string,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const sourceAgent = this.agents.get(sourceNodeId);
+      const targetAgent = this.agents.get(targetNodeId);
+
+      if (!sourceAgent || sourceAgent.socket.readyState !== 1) {
+        return reject(new Error(`Source agent ${sourceNodeId} not connected`));
+      }
+      if (!targetAgent || targetAgent.socket.readyState !== 1) {
+        return reject(new Error(`Target agent ${targetNodeId} not connected`));
+      }
+
+      if (this.activeBackupRelay) {
+        return reject(new Error("A backup relay is already active"));
+      }
+
+      const timeout = setTimeout(() => {
+        this.activeBackupRelay = null;
+        reject(new Error("Backup stream relay timed out (5 min)"));
+      }, 5 * 60 * 1000);
+
+      this.activeBackupRelay = { sourceNodeId, targetNodeId, resolve, reject };
+
+      // The handleAgentMessage method will forward binary frames while this relay is active.
+      // The source agent sends a text frame "backup_stream_complete" when done,
+      // which is handled by the normal message path below.
+
+      // Store timeout reference for cleanup
+      (this.activeBackupRelay as any)._timeout = timeout;
+    });
+  }
+
+  /** Resolve an active backup relay (called when backup_stream_complete is received). */
+  resolveBackupRelay(sourceNodeId: string): void {
+    if (this.activeBackupRelay && this.activeBackupRelay.sourceNodeId === sourceNodeId) {
+      clearTimeout((this.activeBackupRelay as any)._timeout);
+      const { resolve } = this.activeBackupRelay;
+      this.activeBackupRelay = null;
+      resolve();
+    }
+  }
+
+  /** Reject and clean up an active backup relay. */
+  rejectBackupRelay(sourceNodeId: string, err: Error): void {
+    if (this.activeBackupRelay && this.activeBackupRelay.sourceNodeId === sourceNodeId) {
+      clearTimeout((this.activeBackupRelay as any)._timeout);
+      const { reject } = this.activeBackupRelay;
+      this.activeBackupRelay = null;
+      reject(err);
+    }
+  }
+
   async requestFromAgent(nodeId: string, message: any, timeoutMs = 15000): Promise<any> {
     const agent = this.agents.get(nodeId);
     if (!agent || !agent.authenticated || agent.socket.readyState !== 1) {
@@ -1982,7 +2069,7 @@ export class WebSocketGateway {
     if (this.pendingAgentRequests.size >= this.pendingAgentRequestLimit) {
       throw new Error("Too many pending agent requests");
     }
-    const requestId = crypto.randomUUID();
+    const requestId = message.requestId || crypto.randomUUID();
     const payload = { ...message, requestId };
 
     const response = new Promise((resolve, reject) => {
@@ -2006,7 +2093,7 @@ export class WebSocketGateway {
     if (this.pendingAgentRequests.size >= this.pendingAgentRequestLimit) {
       throw new Error("Too many pending agent requests");
     }
-    const requestId = crypto.randomUUID();
+    const requestId = message.requestId || crypto.randomUUID();
     const payload = { ...message, requestId };
 
     const response = new Promise<Buffer>((resolve, reject) => {
@@ -2041,7 +2128,7 @@ export class WebSocketGateway {
     if (this.pendingAgentRequests.size >= this.pendingAgentRequestLimit) {
       throw new Error("Too many pending agent requests");
     }
-    const requestId = crypto.randomUUID();
+    const requestId = message.requestId || crypto.randomUUID();
     const payload = { ...message, requestId };
 
     const response = new Promise<void>((resolve, reject) => {

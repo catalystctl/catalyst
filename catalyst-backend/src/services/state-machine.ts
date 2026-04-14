@@ -74,7 +74,7 @@ export class ServerStateMachine {
    * Check if server can be stopped
    */
   static canStop(currentState: ServerState): boolean {
-    return [ServerState.RUNNING, ServerState.STARTING, ServerState.ERROR].includes(currentState);
+    return [ServerState.RUNNING, ServerState.STARTING, ServerState.ERROR, ServerState.CRASHED].includes(currentState);
   }
 
   /**

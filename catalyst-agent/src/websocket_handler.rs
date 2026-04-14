@@ -301,6 +301,10 @@ pub struct WebSocketHandler {
     server_ports: Arc<RwLock<HashMap<String, (String, u16)>>>,
     /// Tracks per-server health state to avoid duplicate unhealthy/healthy emissions.
     server_health_state: Arc<RwLock<HashMap<String, bool>>>,
+    /// Active restore stream child processes keyed by requestId (for pipe relay transfer).
+    active_restore_streams: Arc<RwLock<HashMap<String, tokio::process::Child>>>,
+    /// The requestId of the currently active restore stream (at most one at a time).
+    active_restore_request_id: Arc<RwLock<Option<String>>>,
 }
 
 impl Clone for WebSocketHandler {
@@ -320,6 +324,8 @@ impl Clone for WebSocketHandler {
             start_server_messages: self.start_server_messages.clone(),
             server_ports: self.server_ports.clone(),
             server_health_state: self.server_health_state.clone(),
+            active_restore_streams: self.active_restore_streams.clone(),
+            active_restore_request_id: self.active_restore_request_id.clone(),
         }
     }
 }
@@ -357,6 +363,8 @@ impl WebSocketHandler {
             start_server_messages: Arc::new(RwLock::new(HashMap::new())),
             server_ports: Arc::new(RwLock::new(HashMap::new())),
             server_health_state: Arc::new(RwLock::new(HashMap::new())),
+            active_restore_streams: Arc::new(RwLock::new(HashMap::new())),
+            active_restore_request_id: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -578,10 +586,20 @@ impl WebSocketHandler {
                     }
                 }
                 Ok(Message::Binary(data)) => {
-                    // Binary frames are used for high-throughput backup streaming.
-                    // Protocol: first 16 bytes = requestId (UUID, UTF-8, zero-padded),
-                    //           remaining bytes = raw file data.
-                    if data.len() > 16 {
+                    // Binary frames are used for two purposes:
+                    // 1. Pipe relay: raw tar data when active_restore_request_id is set
+                    // 2. Upload backup chunks: first 16 bytes = requestId header
+                    if let Some(restore_id) = {
+                        self.active_restore_request_id.read().await.clone()
+                    } {
+                        // Active restore stream — route all binary frames to tar stdin
+                        if let Err(e) = self
+                            .write_restore_stream_chunk(&restore_id, &data)
+                            .await
+                        {
+                            error!("Error writing restore stream chunk: {}", e);
+                        }
+                    } else if data.len() > 16 {
                         let request_id = String::from_utf8_lossy(&data[..16])
                             .trim_end_matches('\0')
                             .to_string();
@@ -612,6 +630,16 @@ impl WebSocketHandler {
         // Drop any in-progress uploads on disconnect to avoid stale sessions accumulating across
         // reconnects and to release file descriptors.
         self.cleanup_all_uploads().await;
+
+        // Kill any active restore streams on disconnect
+        {
+            let mut streams = self.active_restore_streams.write().await;
+            for (rid, mut child) in streams.drain() {
+                child.stdin.take(); // close stdin
+                child.kill().await.ok();
+                warn!("Killed orphaned restore stream {} on disconnect", rid);
+            }
+        }
 
         {
             let mut guard = self.write.write().await;
@@ -720,6 +748,15 @@ impl WebSocketHandler {
             Some("upload_backup_chunk") => self.handle_upload_backup_chunk(&msg, write).await?,
             Some("upload_backup_complete") => {
                 self.handle_upload_backup_complete(&msg, write).await?
+            }
+            Some("start_backup_stream") => {
+                self.handle_start_backup_stream(&msg, write).await?
+            }
+            Some("prepare_restore_stream") => {
+                self.handle_prepare_restore_stream(&msg, write).await?
+            }
+            Some("finish_restore_stream") => {
+                self.handle_finish_restore_stream(&msg, write).await?
             }
             Some("resize_storage") => self.handle_resize_storage(&msg, write).await?,
             Some("resume_console") => self.resume_console(&msg).await?,
@@ -3457,6 +3494,282 @@ impl WebSocketHandler {
 
         result?;
 
+        Ok(())
+    }
+
+    /// Start streaming a tar backup as binary WebSocket frames.
+    /// Used during node transfer: the source agent tars the server data dir
+    /// and sends raw bytes. The backend relays them to the target agent.
+    async fn handle_start_backup_stream(
+        &self,
+        msg: &Value,
+        write: &Arc<tokio::sync::Mutex<WsWrite>>,
+    ) -> AgentResult<()> {
+        let request_id = msg["requestId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing requestId".to_string()))?;
+        let server_uuid = msg["serverUuid"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
+
+        validate_safe_path_segment(server_uuid, "serverUuid")?;
+        let server_dir = self.config.server.data_dir.join(server_uuid);
+
+        if !server_dir.exists() {
+            return Err(AgentError::NotFound(format!(
+                "Server directory not found: {}",
+                server_dir.display()
+            )));
+        }
+
+        info!(
+            "Starting backup stream for {} from {}",
+            server_uuid,
+            server_dir.display()
+        );
+
+        let mut child = tokio::process::Command::new("tar")
+            .arg("-cf")
+            .arg("-")
+            .arg("-C")
+            .arg(&server_dir)
+            .arg(".")
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| AgentError::IoError(format!("Failed to spawn tar: {}", e)))?;
+
+        let mut stdout = child.stdout.take().expect("stdout was piped");
+        let stderr = child.stderr.take().expect("stderr was piped");
+
+        // Read stderr in background to avoid deadlock
+        let stderr_task = tokio::spawn(async move {
+            let mut stderr = stderr;
+            let mut buf = Vec::new();
+            use tokio::io::AsyncReadExt;
+            let _ = stderr.read_to_end(&mut buf).await;
+            buf
+        });
+
+        let mut write_guard = write.lock().await;
+        let mut buf = vec![0u8; 64 * 1024]; // 64 KB read buffer
+
+        loop {
+            use tokio::io::AsyncReadExt;
+            match stdout.read(&mut buf).await {
+                Ok(0) => break,
+                Ok(n) => {
+                    if write_guard
+                        .send(Message::Binary(buf[..n].to_vec().into()))
+                        .await
+                        .is_err()
+                    {
+                        child.kill().await.ok();
+                        return Err(AgentError::NetworkError(
+                            "Failed to send backup chunk".to_string(),
+                        ));
+                    }
+                }
+                Err(e) => {
+                    child.kill().await.ok();
+                    return Err(AgentError::IoError(format!(
+                        "Failed to read tar output: {}",
+                        e
+                    )));
+                }
+            }
+        }
+
+        drop(write_guard);
+
+        let status = child
+            .wait()
+            .await
+            .map_err(|e| AgentError::IoError(format!("Failed to wait for tar: {}", e)))?;
+
+        let stderr_bytes = stderr_task.await.unwrap_or_default();
+
+        if !status.success() {
+            let code = status.code().unwrap_or(-1);
+            return Err(AgentError::IoError(format!(
+                "tar exited with code {}: {}",
+                code,
+                String::from_utf8_lossy(&stderr_bytes)
+            )));
+        }
+
+        info!("Backup stream complete for {}", server_uuid);
+
+        // Send completion signal as text frame
+        let event = json!({
+            "type": "backup_stream_complete",
+            "requestId": request_id,
+            "serverId": msg["serverId"],
+            "success": true,
+        });
+        let mut w = write.lock().await;
+        w.send(Message::Text(event.to_string().into()))
+            .await
+            .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Prepare to receive a streamed backup by spawning `tar -xf -`.
+    /// The agent stores the child process; binary frames will be written to its stdin.
+    async fn handle_prepare_restore_stream(
+        &self,
+        msg: &Value,
+        write: &Arc<tokio::sync::Mutex<WsWrite>>,
+    ) -> AgentResult<()> {
+        let request_id = msg["requestId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing requestId".to_string()))?;
+        let server_uuid = msg["serverUuid"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
+
+        validate_safe_path_segment(server_uuid, "serverUuid")?;
+        let server_dir = self.config.server.data_dir.join(server_uuid);
+
+        if let Some(provided) = msg["serverDir"].as_str() {
+            let derived = server_dir.to_string_lossy();
+            if provided != derived {
+                warn!(
+                    "Ignoring backend-provided serverDir for {}: '{}' (using '{}')",
+                    server_uuid, provided, derived
+                );
+            }
+        }
+
+        tokio::fs::create_dir_all(&server_dir).await.map_err(|e| {
+            AgentError::IoError(format!("Failed to create server directory: {}", e))
+        })?;
+
+        info!(
+            "Preparing restore stream for {} into {}",
+            server_uuid,
+            server_dir.display()
+        );
+
+        // Spawn tar with stdin piped. stdin stays in the Child so
+        // write_restore_stream_chunk can access it via child.stdin.as_mut().
+        let child = tokio::process::Command::new("tar")
+            .arg("-xf")
+            .arg("-")
+            .arg("-C")
+            .arg(&server_dir)
+            .stdin(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| AgentError::IoError(format!("Failed to spawn tar: {}", e)))?;
+
+        self.active_restore_streams
+            .write()
+            .await
+            .insert(request_id.to_string(), child);
+
+        *self.active_restore_request_id.write().await = Some(request_id.to_string());
+
+        let event = json!({
+            "type": "prepare_restore_stream_response",
+            "requestId": request_id,
+            "success": true,
+        });
+        let mut w = write.lock().await;
+        w.send(Message::Text(event.to_string().into()))
+            .await
+            .map_err(|e| AgentError::NetworkError(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Write a binary data chunk to the restore stream's stdin.
+    pub async fn write_restore_stream_chunk(
+        &self,
+        request_id: &str,
+        data: &[u8],
+    ) -> AgentResult<()> {
+        let mut streams = self.active_restore_streams.write().await;
+        if let Some(child) = streams.get_mut(request_id) {
+            if let Some(stdin) = child.stdin.as_mut() {
+                use tokio::io::AsyncWriteExt;
+                stdin.write_all(data).await.map_err(|e| {
+                    AgentError::IoError(format!("Failed to write to restore stdin: {}", e))
+                })?;
+            }
+            Ok(())
+        } else {
+            Err(AgentError::InvalidRequest(
+                "No active restore stream".to_string(),
+            ))
+        }
+    }
+
+    /// Close stdin and wait for tar to finish, then chown the restored data.
+    async fn handle_finish_restore_stream(
+        &self,
+        msg: &Value,
+        write: &Arc<tokio::sync::Mutex<WsWrite>>,
+    ) -> AgentResult<()> {
+        let request_id = msg["requestId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing requestId".to_string()))?;
+        let server_uuid = msg["serverUuid"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
+
+        let mut child = self
+            .active_restore_streams
+            .write()
+            .await
+            .remove(request_id)
+            .ok_or_else(|| AgentError::InvalidRequest("No active restore stream".to_string()))?;
+
+        *self.active_restore_request_id.write().await = None;
+
+        // Close stdin (drop sends EOF)
+        child.stdin.take();
+
+        let stderr = child.stderr.take();
+        let stderr_task = tokio::spawn(async move {
+            if let Some(mut stderr) = stderr {
+                let mut buf = Vec::new();
+                use tokio::io::AsyncReadExt;
+                let _ = stderr.read_to_end(&mut buf).await;
+                String::from_utf8_lossy(&buf).to_string()
+            } else {
+                String::new()
+            }
+        });
+
+        let status = child
+            .wait()
+            .await
+            .map_err(|e| AgentError::IoError(format!("Failed to wait for restore tar: {}", e)))?;
+
+        if !status.success() {
+            let stderr_output = stderr_task.await.unwrap_or_default();
+            return Err(AgentError::IoError(format!(
+                "Restore tar failed: {}",
+                stderr_output
+            )));
+        }
+
+        let server_dir = self.config.server.data_dir.join(server_uuid);
+        if let Err(e) = chown_to_container_user(&server_dir).await {
+            warn!("Failed to chown restored directory: {}", e);
+        }
+
+        info!("Restore stream complete for {}", server_uuid);
+
+        let event = json!({
+            "type": "finish_restore_stream_response",
+            "requestId": request_id,
+            "success": true,
+        });
+        let mut w = write.lock().await;
+        w.send(Message::Text(event.to_string().into()))
+            .await
+            .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         Ok(())
     }
 

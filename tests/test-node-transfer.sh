@@ -33,9 +33,8 @@ NODE1_NAME="transfer-test-node-1"
 NODE2_NAME="transfer-test-node-2"
 NS1="catalyst-transfer-test-1"
 NS2="catalyst-transfer-test-2"
-DATA_DIR_SHARED="/tmp/catalyst-transfer-shared"
-DATA_DIR1="$DATA_DIR_SHARED"
-DATA_DIR2="$DATA_DIR_SHARED"
+DATA_DIR1="/tmp/catalyst-transfer-node1"
+DATA_DIR2="/tmp/catalyst-transfer-node2"
 
 # Runtime paths for configs and PIDs
 CONFIG1="/tmp/catalyst-transfer-agent1.toml"
@@ -117,7 +116,7 @@ teardown() {
     rm -f "$CONFIG1" "$CONFIG2" "$PID1_FILE" "$PID2_FILE" "$LOG1" "$LOG2"
 
     # Clean up data directories (may be busy if containers linger)
-    rm -rf "$DATA_DIR_SHARED" 2>/dev/null || true
+    rm -rf "$DATA_DIR1" "$DATA_DIR2" 2>/dev/null || true
     echo -e "${DIM}  Cleaned up temp directories${RESET}"
 
     # Clean up containerd namespaces (remove any leftover containers)
@@ -199,19 +198,26 @@ echo ""
 # Pre-flight cleanup: remove any leftover state from previous runs
 log_info "Checking for leftover state from previous runs..."
 PRE_TOKEN=$(curl -s "${BACKEND_URL}/api/auth/login" \
-    -H 'Content-Type: application/json' -d '{"email":"admin@example.com","password":"admin123"}' | jq -r '.data.token // empty')
+    -H 'Content-Type: application/json' -d '{"email":"admin@example.com","password":"admin123"}' | jq -r '.data.token // empty') || PRE_TOKEN=""
 if [ -n "$PRE_TOKEN" ]; then
     # Force-delete any leftover servers via DB (bypasses all API validation)
+    # templateId is NOT NULL, so reassign to any existing template before deleting.
+    FALLBACK_TPL=$(podman exec catalyst-postgres psql -U catalyst -d catalyst_db -tAc "SELECT id FROM \"ServerTemplate\" LIMIT 1;" 2>/dev/null | tr -d '[:space:]') || FALLBACK_TPL=""
     for SID in $(curl -s "${BACKEND_URL}/api/servers" -H "Authorization: Bearer $PRE_TOKEN" | \
-        jq -r '.data[] | select(.name == "transfer-test-server") | .id'); do
+        jq -r '.data[] | select(.name == "transfer-test-server") | .id' 2>/dev/null || true); do
+        [ -z "$SID" ] && continue
+        if [ -n "$FALLBACK_TPL" ]; then
+            podman exec catalyst-postgres psql -U catalyst -d catalyst_db \
+                -c "UPDATE \"Server\" SET \"templateId\" = '${FALLBACK_TPL}' WHERE id='${SID}';" > /dev/null 2>&1 || true
+        fi
         podman exec catalyst-postgres psql -U catalyst -d catalyst_db \
-            -c "DELETE FROM \"Server\" WHERE id='${SID}' CASCADE;" > /dev/null 2>&1 || true
+            -c "DELETE FROM \"Server\" WHERE id='${SID}';" > /dev/null 2>&1 || true
         log_info "  Force-deleted leftover server $SID"
     done
     # Delete test nodes via API
     for name in "$NODE1_NAME" "$NODE2_NAME"; do
         NID=$(curl -s "${BACKEND_URL}/api/nodes" -H "Authorization: Bearer $PRE_TOKEN" | \
-            jq -r ".data[] | select(.name == \"$name\") | .id // empty")
+            jq -r ".data[] | select(.name == \"$name\") | .id // empty" 2>/dev/null) || NID=""
         if [ -n "$NID" ]; then
             curl -s -X DELETE "${BACKEND_URL}/api/nodes/${NID}" \
                 -H "Authorization: Bearer $PRE_TOKEN" > /dev/null 2>&1 || true
@@ -220,14 +226,14 @@ if [ -n "$PRE_TOKEN" ]; then
     # Delete test template via API, fallback to DB
     sleep 0.5
     TPL=$(curl -s "${BACKEND_URL}/api/templates" -H "Authorization: Bearer $PRE_TOKEN" | \
-        jq -r '.data[] | select(.name == "transfer-test-alpine") | .id // empty')
+        jq -r '.data[] | select(.name == "transfer-test-alpine") | .id // empty' 2>/dev/null) || TPL=""
     if [ -n "$TPL" ]; then
         curl -s -X DELETE "${BACKEND_URL}/api/templates/${TPL}" \
             -H "Authorization: Bearer $PRE_TOKEN" > /dev/null 2>&1 || true
         # Verify deletion, force via DB if still exists
         sleep 0.3
         STILL_TPL=$(curl -s "${BACKEND_URL}/api/templates" -H "Authorization: Bearer $PRE_TOKEN" | \
-            jq -r '.data[] | select(.name == "transfer-test-alpine") | .id // empty')
+            jq -r '.data[] | select(.name == "transfer-test-alpine") | .id // empty' 2>/dev/null) || STILL_TPL=""
         if [ -n "$STILL_TPL" ]; then
             podman exec catalyst-postgres psql -U catalyst -d catalyst_db \
                 -c "DELETE FROM \"ServerTemplate\" WHERE id='${STILL_TPL}';" > /dev/null 2>&1 || true
@@ -450,7 +456,7 @@ log_success "Node 2 API key: ${API_KEY2:0:20}..."
 # ── Step 6: Write agent configs and start agents ────────────────────
 step "Step 6: Start both agents"
 
-mkdir -p "$DATA_DIR_SHARED"
+mkdir -p "$DATA_DIR1" "$DATA_DIR2"
 
 # Write config for agent 1
 cat > "$CONFIG1" <<EOF
@@ -809,6 +815,12 @@ else
     ((TESTS_FAILED++)) || true
     log_error "Reverse transfer failed with HTTP $http_code"
     echo "$body" | jq '.error // .message' 2>/dev/null | sed 's/^/  /'
+    log_info ""
+    log_info "--- Agent 1 log (last 30 lines) ---"
+    tail -30 "$LOG1" | sed 's/^/  /'
+    log_info ""
+    log_info "--- Agent 2 log (last 30 lines) ---"
+    tail -30 "$LOG2" | sed 's/^/  /'
 fi
 
 # Wait for status

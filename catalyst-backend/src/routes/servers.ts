@@ -6116,6 +6116,15 @@ export async function serverRoutes(app: FastifyInstance) {
         });
       }
 
+      // If the server is crashed, the process is already dead — just set it to stopped directly
+      if (currentState === ServerState.CRASHED) {
+        await prisma.server.update({
+          where: { id: serverId },
+          data: { status: "stopped" },
+        });
+        return reply.send({ success: true, message: "Server marked as stopped" });
+      }
+
       // Check if node is online
       if (!server.node.isOnline) {
         return reply.status(503).send({ error: "Node is offline" });
@@ -6199,6 +6208,15 @@ export async function serverRoutes(app: FastifyInstance) {
         return reply.status(409).send({
           error: `Cannot kill server in ${server.status} state. Server must be running, starting, or stopping.`,
         });
+      }
+
+      // If the server is crashed, the process is already dead — just set it to stopped directly
+      if (currentState === ServerState.CRASHED) {
+        await prisma.server.update({
+          where: { id: serverId },
+          data: { status: "stopped" },
+        });
+        return reply.send({ success: true, message: "Server marked as stopped" });
       }
 
       if (!server.node.isOnline) {
@@ -6982,70 +7000,37 @@ export async function serverRoutes(app: FastifyInstance) {
         });
 
         const backupName = `transfer-${Date.now()}`;
-        const { buildBackupPaths, buildTransferBackupPath, uploadStreamToAgent } =
-          await import("../services/backup-storage");
-        const { agentPath } = buildBackupPaths(server.uuid, backupName, "local", server);
-        const transferPath = buildTransferBackupPath(server.uuid, backupName);
+        const requestId = crypto.randomUUID();
 
-        const backupRecord = await prisma.backup.create({
+        await prisma.backup.create({
           data: {
             serverId: server.id,
             name: backupName,
-            path: transferPath,
-            storageMode: "local",
+            path: `stream://${server.uuid}/${backupName}`,
+            storageMode: "stream",
             sizeMb: 0,
-            metadata: { agentPath, transferPath },
           },
         });
 
-        await wsGateway.sendToAgent(server.nodeId, {
-          type: "create_backup",
-          serverId: id,
-          serverUuid: server.uuid,
-          backupName,
-          backupPath: agentPath,
-          backupId: backupRecord.id,
-        });
-
-        // Wait for backup to be created
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-
-        await prisma.serverLog.create({
-          data: {
+        // Step 2: Prepare restore on target agent (spawn tar -xf -)
+        const prepareResult = await wsGateway.requestFromAgent(
+          targetNodeId,
+          {
+            type: "prepare_restore_stream",
+            requestId,
             serverId: id,
-            stream: "system",
-            data: `Backup created: ${backupName}`,
+            serverUuid: server.uuid,
+            serverDir: `${targetNode.serverDataDir || "/var/lib/catalyst/servers"}/${server.uuid}`,
           },
-        });
+          15000,
+        );
 
-        // Stream backup from source agent's filesystem to target agent via WebSocket
-        const { createReadStream } = await import("fs");
-        const backupFilePath = agentPath;
-        try {
-          const stream = createReadStream(backupFilePath);
-          await uploadStreamToAgent(
-            wsGateway,
-            targetNodeId,
-            id,
-            server.uuid,
-            transferPath,
-            stream,
-          );
-        } catch (err: any) {
+        if (!prepareResult?.success) {
           throw new Error(
-            `Failed to stream backup to target node: ${err.message}`,
+            prepareResult?.error || "Target agent failed to prepare restore stream",
           );
         }
 
-        await prisma.serverLog.create({
-          data: {
-            serverId: id,
-            stream: "system",
-            data: `Transferring backup to target node...`,
-          },
-        });
-
-        // Step 4: Restore on target node
         await prisma.serverLog.create({
           data: {
             serverId: id,
@@ -7054,13 +7039,55 @@ export async function serverRoutes(app: FastifyInstance) {
           },
         });
 
-        await wsGateway.sendToAgent(targetNodeId, {
-          type: "restore_backup",
+        // Step 3: Start backup stream on source agent and relay to target.
+        // Binary frames flow: Agent 1 → Backend → Agent 2 (zero-copy relay).
+        // Backend just forwards bytes — never touches the data.
+        const relayPromise = wsGateway.relayBackupStream(
+          server.nodeId,
+          targetNodeId,
+        );
+
+        // Tell source agent to start streaming tar output as binary frames.
+        // This is fire-and-forget — the relay promise resolves when
+        // the source sends backup_stream_complete.
+        wsGateway.sendToAgent(server.nodeId, {
+          type: "start_backup_stream",
+          requestId,
           serverId: id,
           serverUuid: server.uuid,
-          backupPath: transferPath,
-          backupId: backupRecord.id,
-          serverDir: `${targetNode.serverDataDir || "/var/lib/catalyst/servers"}/${server.uuid}`,
+        });
+
+        // Wait for the relay to complete (source finishes streaming)
+        try {
+          await relayPromise;
+        } catch (err: any) {
+          throw new Error(`Backup stream relay failed: ${err.message}`);
+        }
+
+        // Step 4: Tell target agent to close stdin and finish restore
+        const finishResult = await wsGateway.requestFromAgent(
+          targetNodeId,
+          {
+            type: "finish_restore_stream",
+            requestId,
+            serverId: id,
+            serverUuid: server.uuid,
+          },
+          30000,
+        );
+
+        if (!finishResult?.success) {
+          throw new Error(
+            finishResult?.error || "Target agent failed to finish restore stream",
+          );
+        }
+
+        await prisma.serverLog.create({
+          data: {
+            serverId: id,
+            stream: "system",
+            data: `Transfer complete`,
+          },
         });
 
         // Step 5: Update server's nodeId and reassign IP if using IPAM
