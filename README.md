@@ -242,6 +242,74 @@ Web-based file editor, SFTP access, upload/download with path validation, and au
 
 ---
 
+## Screenshots
+
+All screenshots are captured automatically at 1080p via Playwright. [See how to regenerate them](catalyst-frontend/e2e/README.md).
+
+### Authentication
+
+| |
+|---|
+| ![Login](docs/screenshots/auth/login.png) |
+| ![Register](docs/screenshots/auth/register.png) |
+| ![Forgot Password](docs/screenshots/auth/forgot-password.png) |
+
+### User Panel
+
+| |
+|---|
+| ![Dashboard](docs/screenshots/user/dashboard.png) |
+| ![Servers](docs/screenshots/user/servers.png) |
+| ![Server Console](docs/screenshots/user/server-console.png) |
+| ![Server Files](docs/screenshots/user/server-files.png) |
+| ![Server Metrics](docs/screenshots/user/server-metrics.png) |
+| ![Server Backups](docs/screenshots/user/server-backups.png) |
+| ![Server Databases](docs/screenshots/user/server-databases.png) |
+| ![Profile](docs/screenshots/user/profile.png) |
+
+### Admin Panel
+
+| |
+|---|
+| ![Admin Dashboard](docs/screenshots/admin/admin-dashboard.png) |
+| ![Admin Users](docs/screenshots/admin/admin-users.png) |
+| ![Admin Roles](docs/screenshots/admin/admin-roles.png) |
+| ![Admin Nodes](docs/screenshots/admin/admin-nodes.png) |
+| ![Admin Templates](docs/screenshots/admin/admin-templates.png) |
+| ![Admin System](docs/screenshots/admin/admin-system.png) |
+| ![Admin Security](docs/screenshots/admin/admin-security.png) |
+| ![Admin Alerts](docs/screenshots/admin/admin-alerts.png) |
+| ![Admin Audit Logs](docs/screenshots/admin/admin-audit-logs.png) |
+| ![Admin API Keys](docs/screenshots/admin/admin-api-keys.png) |
+| ![Admin Plugins](docs/screenshots/admin/admin-plugins.png) |
+
+<details>
+<summary>📁 View all screenshots (41 files)</summary>
+
+#### Auth (3)
+- [Login](docs/screenshots/auth/login.png) · [Register](docs/screenshots/auth/register.png) · [Forgot Password](docs/screenshots/auth/forgot-password.png)
+
+#### User (18)
+- [Dashboard](docs/screenshots/user/dashboard.png) · [Profile](docs/screenshots/user/profile.png) · [Servers](docs/screenshots/user/servers.png)
+- [Server Console](docs/screenshots/user/server-console.png) · [Files](docs/screenshots/user/server-files.png) · [SFTP](docs/screenshots/user/server-sftp.png)
+- [Backups](docs/screenshots/user/server-backups.png) · [Tasks](docs/screenshots/user/server-tasks.png) · [Databases](docs/screenshots/user/server-databases.png)
+- [Metrics](docs/screenshots/user/server-metrics.png) · [Alerts](docs/screenshots/user/server-alerts.png) · [Mod Manager](docs/screenshots/user/server-modmanager.png)
+- [Plugin Manager](docs/screenshots/user/server-pluginmanager.png) · [Configuration](docs/screenshots/user/server-configuration.png) · [Users](docs/screenshots/user/server-users.png)
+- [Settings](docs/screenshots/user/server-settings.png) · [Admin Tab](docs/screenshots/user/server-admin.png)
+
+#### Admin (20)
+- [Dashboard](docs/screenshots/admin/admin-dashboard.png) · [Users](docs/screenshots/admin/admin-users.png) · [Roles](docs/screenshots/admin/admin-roles.png)
+- [Servers](docs/screenshots/admin/admin-servers.png) · [Nodes](docs/screenshots/admin/admin-nodes.png) · [Templates](docs/screenshots/admin/admin-templates.png)
+- [Database](docs/screenshots/admin/admin-database.png) · [Network](docs/screenshots/admin/admin-network.png) · [System](docs/screenshots/admin/admin-system.png)
+- [Security](docs/screenshots/admin/admin-security.png) · [Theme Settings](docs/screenshots/admin/admin-theme-settings.png) · [Alerts](docs/screenshots/admin/admin-alerts.png)
+- [Audit Logs](docs/screenshots/admin/admin-audit-logs.png) · [API Keys](docs/screenshots/admin/admin-api-keys.png) · [Plugins](docs/screenshots/admin/admin-plugins.png)
+- [Node Details](docs/screenshots/admin/node-details.png) · [Node Allocations](docs/screenshots/admin/node-allocations.png)
+- [Template 1](docs/screenshots/admin/template-1-details.png) · [Template 2](docs/screenshots/admin/template-2-details.png) · [Template 3](docs/screenshots/admin/template-3-details.png) · [Template 4](docs/screenshots/admin/template-4-details.png)
+
+</details>
+
+---
+
 ## What Makes Catalyst Different?
 
 - **containerd** for superior performance (not Docker)

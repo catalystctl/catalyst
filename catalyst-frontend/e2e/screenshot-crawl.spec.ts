@@ -1,403 +1,277 @@
-import { test, expect } from '@playwright/test';
+import { test, type Page } from '@playwright/test';
 
-test.describe('Screenshot Crawl - Full Frontend Tour', () => {
-  let screenshotCount = 0;
-  const screenshotDir = 'screenshots';
+/**
+ * Route-driven screenshot crawler.
+ *
+ * Screenshots are saved to docs/screenshots/ organized by category:
+ *   auth/        — login, register, forgot-password
+ *   user/        — dashboard, profile, servers, server tabs
+ *   admin/       — admin pages, nodes, templates
+ *
+ * Keep the route arrays in sync with App.tsx <Routes>. Entity pages (servers,
+ * nodes, templates) are auto-discovered from the list views at runtime.
+ *
+ * Resolution: 1920×1080 (1080p) only.
+ */
 
-  // Helper function to take timestamped screenshots
-  const takeScreenshot = async (page: any, name: string) => {
-    screenshotCount++;
-    const filename = `${String(screenshotCount).padStart(3, '0')}-${name}.png`;
-    await page.screenshot({ path: `${screenshotDir}/${filename}`, fullPage: true });
-    console.log(`✓ Screenshot ${screenshotCount}: ${filename}`);
-  };
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 
-  // Helper to navigate and wait for load
-  const navigateTo = async (page: any, path: string) => {
-    await page.goto(path);
-    await page.waitForLoadState('networkidle');
-  };
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-  // Helper to click a tab and capture screenshot
-  const clickTabAndCapture = async (
-    page: any,
-    tabSelector: string,
-    screenshotName: string
-  ) => {
-    const tab = page.locator(tabSelector).first();
-    const isVisible = await tab.isVisible({ timeout: 3000 }).catch(() => false);
-    if (isVisible) {
-      await tab.click();
-      await page.waitForLoadState('networkidle');
-      await takeScreenshot(page, screenshotName);
-      return true;
-    }
+// ─── Configuration ──────────────────────────────────────────────────────────
+
+// Output everything under docs/screenshots/ at the repo root
+const BASE_DIR = path.resolve(__dirname, '../../docs/screenshots');
+const CREDS = { email: 'admin@example.com', password: 'admin123' };
+
+// ─── Route Map (single source of truth) ────────────────────────────────────
+// Keep this in sync with App.tsx <Routes>.
+
+interface RouteEntry {
+  path: string;
+  label: string;
+  /** Folder under docs/screenshots/ */
+  folder: 'auth' | 'user' | 'admin';
+}
+
+const ROUTES: RouteEntry[] = [
+  // Auth (public)
+  { path: '/login', label: 'login', folder: 'auth' },
+  { path: '/register', label: 'register', folder: 'auth' },
+  { path: '/forgot-password', label: 'forgot-password', folder: 'auth' },
+  // User-facing
+  { path: '/dashboard', label: 'dashboard', folder: 'user' },
+  { path: '/profile', label: 'profile', folder: 'user' },
+  { path: '/servers', label: 'servers', folder: 'user' },
+  // Admin
+  { path: '/admin', label: 'admin-dashboard', folder: 'admin' },
+  { path: '/admin/users', label: 'admin-users', folder: 'admin' },
+  { path: '/admin/roles', label: 'admin-roles', folder: 'admin' },
+  { path: '/admin/servers', label: 'admin-servers', folder: 'admin' },
+  { path: '/admin/nodes', label: 'admin-nodes', folder: 'admin' },
+  { path: '/admin/templates', label: 'admin-templates', folder: 'admin' },
+  { path: '/admin/database', label: 'admin-database', folder: 'admin' },
+  { path: '/admin/network', label: 'admin-network', folder: 'admin' },
+  { path: '/admin/system', label: 'admin-system', folder: 'admin' },
+  { path: '/admin/security', label: 'admin-security', folder: 'admin' },
+  { path: '/admin/theme-settings', label: 'admin-theme-settings', folder: 'admin' },
+  { path: '/admin/alerts', label: 'admin-alerts', folder: 'admin' },
+  { path: '/admin/audit-logs', label: 'admin-audit-logs', folder: 'admin' },
+  { path: '/admin/api-keys', label: 'admin-api-keys', folder: 'admin' },
+  { path: '/admin/plugins', label: 'admin-plugins', folder: 'admin' },
+];
+
+const SERVER_TABS = [
+  'console', 'files', 'sftp', 'backups', 'tasks',
+  'databases', 'metrics', 'alerts', 'modManager',
+  'pluginManager', 'configuration', 'users', 'settings', 'admin',
+] as const;
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+let screenshotCount = 0;
+
+function ensureDir(dir: string) {
+  fs.mkdirSync(dir, { recursive: true });
+}
+
+async function screenshot(page: Page, folder: string, name: string) {
+  screenshotCount++;
+  const dir = path.join(BASE_DIR, folder);
+  ensureDir(dir);
+  const file = `${slugify(name)}.png`;
+  await page.screenshot({ path: path.join(dir, file), fullPage: true });
+  console.log(`  ✓ [${String(screenshotCount).padStart(3, '0')}] ${folder}/${file}`);
+}
+
+function slugify(s: string) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+async function nav(page: Page, pathStr: string): Promise<boolean> {
+  try {
+    const resp = await page.goto(pathStr, {
+      waitUntil: 'domcontentloaded',
+      timeout: 15_000,
+    });
+    if (!resp) return false;
+    await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
+    await page.waitForTimeout(800);
+    return true;
+  } catch {
+    console.log(`  ⚠ Navigation to ${pathStr} timed out`);
+    await page.waitForTimeout(1000).catch(() => {});
     return false;
-  };
+  }
+}
 
-  test('Comprehensive frontend crawl with all pages and tabs', async ({ page }) => {
+async function login(page: Page) {
+  console.log('\n🔐 Logging in as admin…');
+  await nav(page, '/login');
+  await page.locator('input[id="email"]').fill(CREDS.email);
+  await page.locator('input[id="password"]').fill(CREDS.password);
+  await page.locator('button:has-text("Sign in")').first().click({ timeout: 10_000 });
+  await page.waitForURL(/\/(servers|dashboard)/, { timeout: 15_000 }).catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
+  await page.waitForTimeout(800);
+  console.log('  ✓ Logged in');
+}
 
-    // 1. Login page
-    console.log('\n📸 === LOGIN & AUTHENTICATION ===');
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    await takeScreenshot(page, '01-login-page');
+function isRealPage(page: Page): boolean {
+  return !page.url().includes('/login');
+}
 
-    // 2. Login as admin
-    console.log('🔐 Logging in as admin...');
-    const emailInput = page.locator('input[id="email"]');
-    const passwordInput = page.locator('input[id="password"]');
+async function resolveAllEntityIds(
+  page: Page,
+  listPath: string,
+  linkPattern: string,
+): Promise<string[]> {
+  await nav(page, listPath);
+  const links = page.locator(`a[href*="${linkPattern}"]`);
+  const count = await links.count();
+  const ids: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const href = await links.nth(i).getAttribute('href', { timeout: 3_000 }).catch(() => null);
+    if (!href) continue;
+    const escaped = linkPattern.replace(/\//g, '\\/');
+    const match = href.match(new RegExp(`${escaped}([^/?]+)`));
+    if (match && !ids.includes(match[1])) {
+      ids.push(match[1]);
+    }
+  }
+  return ids;
+}
 
-    await emailInput.fill('admin@example.com');
-    await passwordInput.fill('admin123');
+// ─── Tests ──────────────────────────────────────────────────────────────────
 
-    const signInButton = page.locator('button:has-text("Sign in")').first();
-    await signInButton.click({ timeout: 10000 });
+test.describe('Screenshot Crawl — All Pages @1080p', () => {
+  test.setTimeout(5 * 60 * 1000);
 
-    await page.waitForURL(/\/(servers|dashboard)/, { timeout: 15000 }).catch(() => {
-      console.log('Redirect check timed out, continuing anyway');
-    });
-    await page.waitForLoadState('networkidle');
+  test.beforeAll(() => {
+    // Clean previous output
+    if (fs.existsSync(BASE_DIR)) fs.rmSync(BASE_DIR, { recursive: true });
+    for (const folder of ['auth', 'user', 'admin']) {
+      ensureDir(path.join(BASE_DIR, folder));
+    }
+  });
 
-    // 3. Dashboard/Home page
-    console.log('\n📸 === DASHBOARD ===');
-    // Attempt to navigate to dashboard if not already there
-    await page.goto('/dashboard').catch(() => {
-      console.log('Dashboard not found, staying on current page');
-    });
-    await page.waitForLoadState('networkidle');
-    await takeScreenshot(page, '02-dashboard-home');
+  test('Capture every route in the application', async ({ page }) => {
+    screenshotCount = 0;
 
-    // 4. SERVERS SECTION
-    console.log('\n📸 === SERVERS SECTION ===');
-    await navigateTo(page, '/servers');
-    await takeScreenshot(page, '03-servers-list-page');
-
-    // Get all servers from the list (if any exist)
-    const serverCount = await page.locator('a[href*="/servers/"]').count();
-    console.log(`Found ${serverCount} servers`);
-
-    if (serverCount > 0) {
-      // Visit first server details
-      const firstServer = page.locator('a[href*="/servers/"]').first();
-      const serverId = await firstServer.getAttribute('href');
-      console.log(`Visiting first server: ${serverId}`);
-
-      await firstServer.click();
-      await page.waitForLoadState('networkidle');
-      await takeScreenshot(page, '04-server-details-overview');
-
-      // Capture all tabs on server details
-      const tabs = [
-        { selector: 'button:has-text("Details")', name: 'server-details-tab' },
-        { selector: 'button:has-text("Console")', name: 'server-console-tab' },
-        { selector: 'button:has-text("Files")', name: 'server-files-tab' },
-        { selector: 'button:has-text("Settings")', name: 'server-settings-tab' },
-        { selector: 'button:has-text("Backups")', name: 'server-backups-tab' },
-        { selector: 'button:has-text("Tasks")', name: 'server-tasks-tab' },
-        { selector: 'button:has-text("Logs")', name: 'server-logs-tab' },
-        { selector: 'button:has-text("Stats")', name: 'server-stats-tab' },
-      ];
-
-      let tabCount = 5;
-      for (const tab of tabs) {
-        const found = await clickTabAndCapture(page, tab.selector, `0${tabCount}-${tab.name}`);
-        if (found) {
-          tabCount++;
-        }
-      }
-
-      // Go back to servers list
-      await page.goBack();
-      await page.waitForLoadState('networkidle');
-
-      // Visit second server if available
-      const secondServerCount = await page.locator('a[href*="/servers/"]').count();
-      if (secondServerCount > 1) {
-        console.log('Visiting second server');
-        const secondServer = page.locator('a[href*="/servers/"]').nth(1);
-        await secondServer.click();
-        await page.waitForLoadState('networkidle');
-        await takeScreenshot(page, `13-server-details-overview-2`);
-
-        await page.goBack();
-        await page.waitForLoadState('networkidle');
-      }
+    // ── Public pages ────────────────────────────────────────────────
+    console.log('\n📸 === AUTH PAGES ===');
+    for (const route of ROUTES.filter(r => r.folder === 'auth')) {
+      await nav(page, route.path);
+      await screenshot(page, 'auth', route.label);
     }
 
-    // 5. NODES SECTION
-    console.log('\n📸 === NODES SECTION ===');
-    await navigateTo(page, '/nodes');
-    await takeScreenshot(page, '14-nodes-list-page');
+    // ── Login ───────────────────────────────────────────────────────
+    await login(page);
 
-    const nodeCount = await page.locator('a[href*="/nodes/"]').count();
-    console.log(`Found ${nodeCount} nodes`);
-
-    if (nodeCount > 0) {
-      // Visit first node details
-      const firstNode = page.locator('a[href*="/nodes/"]').first();
-      await firstNode.click();
-      await page.waitForLoadState('networkidle');
-      await takeScreenshot(page, '15-node-details-overview');
-
-      // Capture node tabs
-      const nodeTabs = [
-        { selector: 'button:has-text("Details")', name: 'node-details-tab' },
-        { selector: 'button:has-text("Metrics")', name: 'node-metrics-tab' },
-        { selector: 'button:has-text("Resources")', name: 'node-resources-tab' },
-        { selector: 'button:has-text("Settings")', name: 'node-settings-tab' },
-      ];
-
-      let nodeTabCount = 16;
-      for (const tab of nodeTabs) {
-        const found = await clickTabAndCapture(page, tab.selector, `${nodeTabCount}-${tab.name}`);
-        if (found) {
-          nodeTabCount++;
-        }
+    // ── User pages ──────────────────────────────────────────────────
+    console.log('\n📸 === USER PAGES ===');
+    for (const route of ROUTES.filter(r => r.folder === 'user')) {
+      await nav(page, route.path);
+      if (!isRealPage(page)) {
+        console.log(`  ⚠ ${route.path} redirected to login (skipped)`);
+        continue;
       }
-
-      await page.goBack();
-      await page.waitForLoadState('networkidle');
+      await screenshot(page, 'user', route.label);
     }
 
-    // 6. TEMPLATES SECTION
-    console.log('\n📸 === TEMPLATES SECTION ===');
-    await navigateTo(page, '/templates');
-    await takeScreenshot(page, `20-templates-list-page`);
-
-    const templateCount = await page.locator('a[href*="/templates/"]').count();
-    console.log(`Found ${templateCount} templates`);
-
-    if (templateCount > 0) {
-      // Visit first template
-      const firstTemplate = page.locator('a[href*="/templates/"]').first();
-      await firstTemplate.click();
-      await page.waitForLoadState('networkidle');
-      await takeScreenshot(page, '21-template-details-overview');
-
-      // Capture template tabs
-      const templateTabs = [
-        { selector: 'button:has-text("Details")', name: 'template-details-tab' },
-        { selector: 'button:has-text("Variables")', name: 'template-variables-tab' },
-        { selector: 'button:has-text("Settings")', name: 'template-settings-tab' },
-      ];
-
-      let templateTabCount = 22;
-      for (const tab of templateTabs) {
-        const found = await clickTabAndCapture(page, tab.selector, `${templateTabCount}-${tab.name}`);
-        if (found) {
-          templateTabCount++;
-        }
+    // ── Admin pages ─────────────────────────────────────────────────
+    console.log('\n📸 === ADMIN PAGES ===');
+    for (const route of ROUTES.filter(r => r.folder === 'admin')) {
+      await nav(page, route.path);
+      if (!isRealPage(page)) {
+        console.log(`  ⚠ ${route.path} redirected to login (skipped)`);
+        continue;
       }
-
-      await page.goBack();
-      await page.waitForLoadState('networkidle');
+      await screenshot(page, 'admin', route.label);
     }
 
-    // 7. TASKS SECTION
-    console.log('\n📸 === TASKS SECTION ===');
-    await navigateTo(page, '/tasks');
-    await takeScreenshot(page, '25-tasks-list-page');
+    // ── ALL servers with ALL tabs ──────────────────────────────────
+    console.log('\n📸 === SERVER DETAILS ===');
 
-    // Try to expand/click tasks if available
-    const taskCount = await page.locator('button, a').filter({ hasText: /task/i }).count();
-    if (taskCount > 0) {
-      await clickTabAndCapture(page, 'button:has-text("Active")', '26-tasks-active-tab');
-      await clickTabAndCapture(page, 'button:has-text("Completed")', '27-tasks-completed-tab');
+    const serverIds = await resolveAllEntityIds(page, '/servers', '/servers/');
+    console.log(`  Found ${serverIds.length} server(s)`);
+
+    if (serverIds.length === 0) {
+      console.log('  ⚠ No servers found — skipping server screenshots');
     }
 
-    // 8. ALERTS SECTION
-    console.log('\n📸 === ALERTS SECTION ===');
-    await navigateTo(page, '/admin/alerts');
-    await takeScreenshot(page, '28-alerts-list-page');
-
-    // Capture alert tabs if they exist
-    await clickTabAndCapture(page, 'button:has-text("Active")', '29-alerts-active-tab');
-    await clickTabAndCapture(page, 'button:has-text("History")', '30-alerts-history-tab');
-
-    // 9. ADMIN SECTION
-    console.log('\n📸 === ADMIN SECTION ===');
-
-    // Try to navigate directly to admin pages
-    const adminPages = [
-      { url: '/admin/users', screenshot: '31-admin-users-page' },
-      { url: '/admin/servers', screenshot: '32-admin-servers-page' },
-      { url: '/admin/templates', screenshot: '33-admin-templates-page' },
-      { url: '/admin/nodes', screenshot: '34-admin-nodes-page' },
-      { url: '/admin/audit-logs', screenshot: '35-admin-audit-logs-page' },
-      { url: '/admin/system', screenshot: '36-admin-system-page' },
-      { url: '/admin/settings', screenshot: '37-admin-settings-page' },
-    ];
-
-    for (const adminPage of adminPages) {
+    for (let si = 0; si < serverIds.length; si++) {
+      const serverId = serverIds[si];
+      await nav(page, '/servers');
+      const serverLink = page.locator(`a[href*="/servers/${serverId}"]`).first();
+      let serverName = serverId;
       try {
-        await navigateTo(page, adminPage.url);
-        await takeScreenshot(page, adminPage.screenshot);
-      } catch (e) {
-        console.log(`Admin page ${adminPage.url} not found, skipping...`);
+        const linkText = await serverLink.innerText({ timeout: 3_000 });
+        if (linkText.trim()) serverName = linkText.trim();
+      } catch { /* fall back to ID */ }
+
+      const prefix = serverIds.length === 1
+        ? 'server'
+        : `server-${si + 1}-${slugify(serverName)}`;
+
+      console.log(`\n  🖥️  Server: ${serverName} (${serverId})`);
+
+      for (const tab of SERVER_TABS) {
+        await nav(page, `/servers/${serverId}/${tab}`);
+        if (!isRealPage(page)) {
+          console.log(`    ⚠ tab "${tab}" redirected (skipped)`);
+          continue;
+        }
+        await screenshot(page, 'user', `${prefix}-${tab}`);
       }
     }
 
-    // 10. Try to find and click navigation items for more comprehensive coverage
-    console.log('\n📸 === ADDITIONAL NAVIGATION ===');
+    // ── ALL nodes ──────────────────────────────────────────────────
+    console.log('\n📸 === NODE DETAILS ===');
 
-    // Try to capture user menu/account page
-    try {
-      await navigateTo(page, '/account');
-      await takeScreenshot(page, '38-user-account-page');
-    } catch (e) {
-      console.log('Account page not found');
+    const nodeIds = await resolveAllEntityIds(page, '/admin/nodes', '/admin/nodes/');
+    console.log(`  Found ${nodeIds.length} node(s)`);
+
+    for (let ni = 0; ni < nodeIds.length; ni++) {
+      const nodeId = nodeIds[ni];
+      const prefix = nodeIds.length === 1 ? 'node' : `node-${ni + 1}`;
+
+      await nav(page, `/admin/nodes/${nodeId}`);
+      if (!isRealPage(page)) continue;
+      await screenshot(page, 'admin', `${prefix}-details`);
+
+      await nav(page, `/admin/nodes/${nodeId}/allocations`);
+      if (!isRealPage(page)) continue;
+      await screenshot(page, 'admin', `${prefix}-allocations`);
     }
 
-    // 11. Summary
-    console.log('\n✅ Screenshot crawl complete!');
-    console.log(`📊 Total screenshots captured: ${screenshotCount}`);
-    console.log(`📁 Screenshots saved to: ${screenshotDir}/`);
-    console.log(`🖥️  Resolution: 1920x1080 (1080P)`);
-  });
-
-  test('Responsive design validation at multiple resolutions', async ({ page }) => {
-    // Login first
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-
-    const emailInput = page.locator('input[id="email"]');
-    const passwordInput = page.locator('input[id="password"]');
-
-    await emailInput.fill('admin@example.com');
-    await passwordInput.fill('admin123');
-
-    const signInButton = page.locator('button:has-text("Sign in")').first();
-    await signInButton.click({ timeout: 10000 });
-
-    await page.waitForURL(/\/(servers|dashboard)/, { timeout: 15000 }).catch(() => {
-      console.log('Redirect check timed out, continuing');
-    });
-    await page.waitForLoadState('networkidle');
-
-    console.log('\n📱 === RESPONSIVE DESIGN TESTING ===');
-
-    // Test different resolutions
-    const resolutions = [
-      { width: 1920, height: 1080, name: 'desktop-1080p', label: '2K Desktop' },
-      { width: 1280, height: 720, name: 'desktop-720p', label: 'HD Desktop' },
-      { width: 1024, height: 768, name: 'tablet-landscape', label: 'Tablet Landscape' },
-      { width: 768, height: 1024, name: 'tablet-portrait', label: 'Tablet Portrait' },
-      { width: 428, height: 926, name: 'mobile-iphone', label: 'Mobile (iPhone)' },
-      { width: 375, height: 812, name: 'mobile-iphone-se', label: 'Mobile (iPhone SE)' },
-    ];
-
-    let resCount = 39;
-    for (const res of resolutions) {
-      console.log(`\n📏 Testing ${res.label} (${res.width}x${res.height})`);
-      await page.setViewportSize({ width: res.width, height: res.height });
-      await page.waitForLoadState('networkidle');
-
-      // Screenshot dashboard
-      const filename = `${String(resCount).padStart(3, '0')}-responsive-dashboard-${res.name}.png`;
-      await page.screenshot({
-        path: `${screenshotDir}/${filename}`,
-        fullPage: true,
-      });
-      console.log(`✓ Screenshot ${resCount}: ${filename}`);
-      resCount++;
-
-      // Screenshot servers list at this resolution
-      await navigateTo(page, '/servers');
-      const serverFilename = `${String(resCount).padStart(3, '0')}-responsive-servers-${res.name}.png`;
-      await page.screenshot({
-        path: `${screenshotDir}/${serverFilename}`,
-        fullPage: true,
-      });
-      console.log(`✓ Screenshot ${resCount}: ${serverFilename}`);
-      resCount++;
+    if (nodeIds.length === 0) {
+      console.log('  ⚠ No nodes found — skipping node screenshots');
     }
 
-    console.log('\n✅ Responsive design testing complete!');
-    console.log(`📊 Total screenshots in this test: ${resCount - 39}`);
-  });
+    // ── ALL templates ──────────────────────────────────────────────
+    console.log('\n📸 === TEMPLATE DETAILS ===');
 
-  test('Deep dive: Server management workflows', async ({ page }) => {
-    // Login
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    const templateIds = await resolveAllEntityIds(page, '/admin/templates', '/admin/templates/');
+    console.log(`  Found ${templateIds.length} template(s)`);
 
-    const emailInput = page.locator('input[id="email"]');
-    const passwordInput = page.locator('input[id="password"]');
+    for (let ti = 0; ti < templateIds.length; ti++) {
+      const templateId = templateIds[ti];
+      const prefix = templateIds.length === 1 ? 'template' : `template-${ti + 1}`;
 
-    await emailInput.fill('admin@example.com');
-    await passwordInput.fill('admin123');
-
-    const signInButton = page.locator('button:has-text("Sign in")').first();
-    await signInButton.click({ timeout: 10000 });
-
-    await page.waitForURL(/\/(servers|dashboard)/, { timeout: 15000 }).catch(() => {
-      console.log('Redirect check timed out, continuing');
-    });
-    await page.waitForLoadState('networkidle');
-
-    console.log('\n🎮 === SERVER MANAGEMENT WORKFLOWS ===');
-
-    // Navigate to servers
-    await navigateTo(page, '/servers');
-
-    // Take general servers overview screenshot
-    let workflowCount = 57;
-    let filename = `${String(workflowCount).padStart(3, '0')}-workflow-servers-overview.png`;
-    await page.screenshot({ path: `${screenshotDir}/${filename}`, fullPage: true });
-    console.log(`✓ Screenshot ${workflowCount}: ${filename}`);
-    workflowCount++;
-
-    // Check if any servers exist and interact with them
-    const serverCount = await page.locator('a[href*="/servers/"]').count();
-    if (serverCount > 0) {
-      // Get all servers and visit each one
-      const serverLinks = page.locator('a[href*="/servers/"]');
-      const count = await serverLinks.count();
-      console.log(`\nFound ${count} servers, capturing each one...`);
-
-      for (let i = 0; i < Math.min(count, 3); i++) {
-        // Click server
-        const servers = page.locator('a[href*="/servers/"]');
-        await servers.nth(i).click();
-        await page.waitForLoadState('networkidle');
-
-        filename = `${String(workflowCount).padStart(3, '0')}-workflow-server-${i + 1}-overview.png`;
-        await page.screenshot({ path: `${screenshotDir}/${filename}`, fullPage: true });
-        console.log(`✓ Screenshot ${workflowCount}: ${filename}`);
-        workflowCount++;
-
-        // Click Console tab
-        const consoleTab = page.locator('button:has-text("Console")').first();
-        if (await consoleTab.isVisible({ timeout: 3000 }).catch(() => false)) {
-          await consoleTab.click();
-          await page.waitForLoadState('networkidle');
-
-          filename = `${String(workflowCount).padStart(3, '0')}-workflow-server-${i + 1}-console.png`;
-          await page.screenshot({ path: `${screenshotDir}/${filename}`, fullPage: true });
-          console.log(`✓ Screenshot ${workflowCount}: ${filename}`);
-          workflowCount++;
-        }
-
-        // Click Files tab
-        const filesTab = page.locator('button:has-text("Files")').first();
-        if (await filesTab.isVisible({ timeout: 3000 }).catch(() => false)) {
-          await filesTab.click();
-          await page.waitForLoadState('networkidle');
-
-          filename = `${String(workflowCount).padStart(3, '0')}-workflow-server-${i + 1}-files.png`;
-          await page.screenshot({ path: `${screenshotDir}/${filename}`, fullPage: true });
-          console.log(`✓ Screenshot ${workflowCount}: ${filename}`);
-          workflowCount++;
-        }
-
-        // Go back to servers list
-        await page.goBack();
-        await page.waitForLoadState('networkidle');
-      }
+      await nav(page, `/admin/templates/${templateId}`);
+      if (!isRealPage(page)) continue;
+      await screenshot(page, 'admin', `${prefix}-details`);
     }
 
-    console.log('\n✅ Server management workflow testing complete!');
-    console.log(`📊 Total screenshots in this test: ${workflowCount - 57}`);
+    if (templateIds.length === 0) {
+      console.log('  ⚠ No templates found — skipping template screenshots');
+    }
+
+    // ── Summary ─────────────────────────────────────────────────────
+    console.log(`\n✅ Done! ${screenshotCount} screenshots → docs/screenshots/`);
+    console.log('🖥️  Resolution: 1920×1080 (1080p)');
   });
 });
