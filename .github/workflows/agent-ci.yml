@@ -3,53 +3,134 @@ name: CI/CD - Catalyst Agent
 on:
   push:
     branches: [main, develop]
+    paths:
+      - 'catalyst-agent/**'
+      - '.github/workflows/agent-ci.yml'
   pull_request:
     branches: [main, develop]
+    paths:
+      - 'catalyst-agent/**'
+      - '.github/workflows/agent-ci.yml'
 
 permissions:
   contents: read
 
+env:
+  CARGO_TERM_COLOR: always
+  PROTOC_VERSION: "25.1"
+  PROTOC_ARCH: "linux-x86_64"
+
 jobs:
-  test:
+  # ── Fast checks: fmt + check (no compilation needed for fmt) ──
+  lint:
     runs-on: blacksmith-2vcpu-ubuntu-2404
     container:
-      image: rust:1.75-bullseye
-
+      image: rust:1.93-bookworm
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install protoc
-        run: |
-          apt-get update && apt-get install -y unzip
-          curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v25.1/protoc-25.1-linux-x86_64.zip
-          unzip protoc-25.1-linux-x86_64.zip -d /usr/local
-          chmod +x /usr/local/bin/protoc
-          protoc --version
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - name: Cache protoc
+        id: cache-protoc
+        uses: actions/cache@v4
         with:
-          toolchain: stable
-          override: true
+          path: /usr/local/bin/protoc
+          key: protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}
+
+      - name: Install protoc
+        if: steps.cache-protoc.outputs.cache-hit != 'true'
+        run: |
+          apt-get update && apt-get install -y unzip ca-certificates
+          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
+          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d /usr/local
+          chmod +x /usr/local/bin/protoc
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
           components: rustfmt, clippy
+
+      - name: Cache cargo registry + git deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: agent-cargo-deps-${{ hashFiles('catalyst-agent/Cargo.lock') }}
+          restore-keys: agent-cargo-deps-
+
+      - name: Cache cargo build (check)
+        uses: actions/cache@v4
+        with:
+          path: catalyst-agent/target/
+          key: agent-check-${{ runner.os }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-${{ hashFiles('catalyst-agent/src/**') }}
+          restore-keys: |
+            agent-check-${{ runner.os }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-
+            agent-check-${{ runner.os }}-
+
+      - name: Run cargo fmt
+        run: cargo fmt --manifest-path catalyst-agent/Cargo.toml -- --check
 
       - name: Run cargo check
         run: cargo check --manifest-path catalyst-agent/Cargo.toml
 
-      - name: Run cargo fmt check
-        run: cargo fmt --manifest-path catalyst-agent/Cargo.toml -- --check
-
       - name: Run cargo clippy
         run: cargo clippy --manifest-path catalyst-agent/Cargo.toml -- -D warnings
+
+  # ── Tests (runs in parallel with lint) ──
+  test:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    container:
+      image: rust:1.93-bookworm
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Cache protoc
+        id: cache-protoc
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/protoc
+          key: protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}
+
+      - name: Install protoc
+        if: steps.cache-protoc.outputs.cache-hit != 'true'
+        run: |
+          apt-get update && apt-get install -y unzip ca-certificates
+          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
+          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d /usr/local
+          chmod +x /usr/local/bin/protoc
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + git deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: agent-cargo-deps-${{ hashFiles('catalyst-agent/Cargo.lock') }}
+          restore-keys: agent-cargo-deps-
+
+      - name: Cache cargo build (test)
+        uses: actions/cache@v4
+        with:
+          path: catalyst-agent/target/
+          key: agent-test-${{ runner.os }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-${{ hashFiles('catalyst-agent/src/**') }}
+          restore-keys: |
+            agent-test-${{ runner.os }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-
+            agent-test-${{ runner.os }}-
 
       - name: Run tests
         run: cargo test --manifest-path catalyst-agent/Cargo.toml
 
+  # ── Release builds (only after lint + test pass) ──
   build:
-    needs: test
+    needs: [lint, test]
     runs-on: blacksmith-2vcpu-ubuntu-2404
     container:
-      image: rust:1.75-bullseye
+      image: rust:1.93-bookworm
 
     strategy:
       matrix:
@@ -58,25 +139,48 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Cache protoc
+        id: cache-protoc
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/protoc
+          key: protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}
+
       - name: Install protoc
+        if: steps.cache-protoc.outputs.cache-hit != 'true'
         run: |
-          apt-get update && apt-get install -y unzip
-          curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v25.1/protoc-25.1-linux-x86_64.zip
-          unzip protoc-25.1-linux-x86_64.zip -d /usr/local
+          apt-get update && apt-get install -y unzip ca-certificates
+          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
+          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d /usr/local
           chmod +x /usr/local/bin/protoc
-          protoc --version
 
       - name: Install musl tools (for musl target)
         if: matrix.target == 'x86_64-unknown-linux-musl'
         run: apt-get update && apt-get install -y musl-tools musl-dev
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          override: true
-          target: ${{ matrix.target }}
-          components: rustfmt, clippy
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry + git deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: agent-cargo-deps-${{ hashFiles('catalyst-agent/Cargo.lock') }}
+          restore-keys: agent-cargo-deps-
+
+      - name: Cache cargo build (release ${{ matrix.target }})
+        uses: actions/cache@v4
+        with:
+          path: catalyst-agent/target/
+          key: agent-release-${{ matrix.target }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-${{ hashFiles('catalyst-agent/src/**') }}
+          restore-keys: |
+            agent-release-${{ matrix.target }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-
+            agent-release-${{ matrix.target }}-
 
       - name: Build release
         run: |
@@ -84,7 +188,9 @@ jobs:
           cargo build --release --target ${{ matrix.target }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: catalyst-agent-${{ matrix.target }}
           path: catalyst-agent/target/${{ matrix.target }}/release/catalyst-agent
+          retention-days: 7
+          if-no-files-found: error
