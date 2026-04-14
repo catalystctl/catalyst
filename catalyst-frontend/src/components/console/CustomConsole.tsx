@@ -213,17 +213,11 @@ function CustomConsole({
 }: CustomConsoleProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const programmaticScrollRef = useRef(false);
-  const [autoScroll, setAutoScroll] = useState(autoScrollProp);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
 
-  // Sync parent prop → local state
-  const prevPropRef = useRef(autoScrollProp);
-  useEffect(() => {
-    if (prevPropRef.current !== autoScrollProp) {
-      prevPropRef.current = autoScrollProp;
-      setAutoScroll(autoScrollProp);
-    }
-  }, [autoScrollProp]);
+  // Latest autoScroll prop ref so scroll handler always sees current value
+  const autoScrollRef = useRef(autoScrollProp);
+  autoScrollRef.current = autoScrollProp;
 
   // ── Filter ──
   const normalizedEntries = useMemo(() => {
@@ -245,6 +239,7 @@ function CustomConsole({
   );
 
   // ── Scroll handler: detect user scroll-away ──
+  // Uses ref to always read the latest prop without stale closures.
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el || programmaticScrollRef.current) return;
@@ -252,23 +247,18 @@ function CustomConsole({
     const nearBottom = scrollHeight - st - clientHeight < 40;
     if (nearBottom) {
       setShowScrollBtn(false);
-      if (!autoScroll) {
-        setAutoScroll(true);
-        onAutoScrollResume?.();
-      }
     } else {
-      if (autoScroll) {
-        setAutoScroll(false);
-        setShowScrollBtn(true);
+      setShowScrollBtn(true);
+      if (autoScrollRef.current) {
         onUserScroll?.();
       }
     }
-  }, [autoScroll, onUserScroll, onAutoScrollResume]);
+  }, [onUserScroll]);
 
   // ── When autoScroll is true and new entries arrive, scroll to bottom ──
   const prevLen = useRef(processedEntries.length);
   useEffect(() => {
-    if (autoScroll && processedEntries.length > prevLen.current) {
+    if (autoScrollProp && processedEntries.length > prevLen.current) {
       const el = scrollRef.current;
       if (el) {
         programmaticScrollRef.current = true;
@@ -279,21 +269,18 @@ function CustomConsole({
       }
     }
     prevLen.current = processedEntries.length;
-  }, [autoScroll, processedEntries.length]);
+  }, [autoScrollProp, processedEntries.length]);
 
   const scrollToBottom = useCallback(() => {
- setAutoScroll(true);
     setShowScrollBtn(false);
-    requestAnimationFrame(() => {
-      const el = scrollRef.current;
-      if (el) {
-        programmaticScrollRef.current = true;
-        el.scrollTop = el.scrollHeight;
-        setTimeout(() => {
-          programmaticScrollRef.current = false;
-        }, 100);
-      }
-    });
+    const el = scrollRef.current;
+    if (el) {
+      programmaticScrollRef.current = true;
+      el.scrollTop = el.scrollHeight;
+      setTimeout(() => {
+        programmaticScrollRef.current = false;
+      }, 100);
+    }
     onAutoScrollResume?.();
   }, [onAutoScrollResume]);
 
@@ -388,7 +375,7 @@ function CustomConsole({
 
       </div>
 
-      {showScrollBtn && !autoScroll ? (
+      {showScrollBtn && !autoScrollProp ? (
         <button
           type="button"
           onClick={scrollToBottom}
