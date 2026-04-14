@@ -687,6 +687,8 @@ async function bootstrap() {
             whmcs: !!(process.env.WHMCS_OIDC_CLIENT_ID && process.env.WHMCS_OIDC_CLIENT_SECRET && process.env.WHMCS_OIDC_DISCOVERY_URL),
             paymenter: !!(process.env.PAYMENTER_OIDC_CLIENT_ID && process.env.PAYMENTER_OIDC_CLIENT_SECRET && process.env.PAYMENTER_OIDC_DISCOVERY_URL),
           },
+          // Extended theme customization stored in metadata
+          themeColors: (settings.metadata as any)?.themeColors || null,
         },
       });
     });
