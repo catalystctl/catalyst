@@ -6,10 +6,17 @@ import { notifyError, notifySuccess } from '../../utils/notify';
 type Props = {
   nodeId: string;
   nodeName: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
-function NodeDeleteDialog({ nodeId, nodeName }: Props) {
-  const [open, setOpen] = useState(false);
+function NodeDeleteDialog({ nodeId, nodeName, open: controlledOpen, onOpenChange }: Props) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = (value: boolean) => {
+    setInternalOpen(value);
+    onOpenChange?.(value);
+  };
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: () => nodesApi.remove(nodeId),
@@ -26,12 +33,14 @@ function NodeDeleteDialog({ nodeId, nodeName }: Props) {
 
   return (
     <>
-      <button
-        className="w-full rounded-md bg-rose-600 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-rose-500/20 transition-all duration-300 hover:bg-rose-500"
-        onClick={() => setOpen(true)}
-      >
-        Delete
-      </button>
+      {controlledOpen === undefined && (
+        <button
+          className="w-full rounded-md bg-rose-600 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-rose-500/20 transition-all duration-300 hover:bg-rose-500"
+          onClick={() => setOpen(true)}
+        >
+          Delete
+        </button>
+      )}
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-xl border border-border bg-white p-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">

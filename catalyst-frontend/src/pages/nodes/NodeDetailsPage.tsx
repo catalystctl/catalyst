@@ -1,8 +1,27 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { motion, type Variants } from 'framer-motion';
+import {
+  Server,
+  Cpu,
+  HardDrive,
+  Activity,
+  ArrowLeft,
+  Key,
+  Terminal,
+  Settings,
+  Trash2,
+  ExternalLink,
+  Copy,
+  AlertTriangle,
+  RefreshCw,
+  Clock,
+  Shield,
+} from 'lucide-react';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
 import { useNode, useNodeStats } from '../../hooks/useNodes';
-import NodeStatusBadge from '../../components/nodes/NodeStatusBadge';
 import NodeUpdateModal from '../../components/nodes/NodeUpdateModal';
 import NodeDeleteDialog from '../../components/nodes/NodeDeleteDialog';
 import NodeMetricsCard from '../../components/nodes/NodeMetricsCard';
@@ -11,6 +30,81 @@ import NodeAssignmentModal from '../../components/nodes/NodeAssignmentModal';
 import { nodesApi } from '../../services/api/nodes';
 import { useAuthStore } from '../../stores/authStore';
 import { notifyError, notifySuccess } from '../../utils/notify';
+
+// ── Animation Variants ──
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.05, delayChildren: 0.05 },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { type: 'spring', stiffness: 300, damping: 24 },
+  },
+};
+
+// ── Inline Modal Shell ──
+function ModalShell({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  variant,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  variant?: 'default' | 'danger';
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+        className={`w-full max-w-2xl rounded-xl border bg-card shadow-xl ${
+          variant === 'danger'
+            ? 'border-rose-500/50'
+            : 'border-border'
+        }`}
+      >
+        <div
+          className={`flex items-center justify-between border-b px-6 py-4 ${
+            variant === 'danger'
+              ? 'border-rose-500/30 bg-rose-500/5'
+              : 'border-border'
+          }`}
+        >
+          <h2 className="text-lg font-semibold text-foreground dark:text-white">{title}</h2>
+          <button
+            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground dark:text-zinc-300"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+        <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300">
+          {children}
+        </div>
+        {footer && (
+          <div className="flex justify-end gap-2 border-t border-border px-6 py-4 text-xs">
+            {footer}
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+}
 
 function NodeDetailsPage() {
   const { nodeId } = useParams();
@@ -28,6 +122,8 @@ function NodeDetailsPage() {
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Check if API key exists for this node
   const { data: apiKeyStatus } = useQuery({
@@ -38,9 +134,7 @@ function NodeDetailsPage() {
 
   const deployMutation = useMutation({
     mutationFn: async () => {
-      if (!node?.id) {
-        throw new Error('Missing node id');
-      }
+      if (!node?.id) throw new Error('Missing node id');
       return nodesApi.deploymentToken(node.id);
     },
     onSuccess: (info) => {
@@ -55,15 +149,12 @@ function NodeDetailsPage() {
 
   const apiKeyMutation = useMutation({
     mutationFn: async (regenerate?: boolean) => {
-      if (!node?.id) {
-        throw new Error('Missing node id');
-      }
+      if (!node?.id) throw new Error('Missing node id');
       return nodesApi.generateApiKey(node.id, regenerate);
     },
     onSuccess: (info) => {
       setGeneratedApiKey(info?.apiKey ?? null);
       setShowRegenerateConfirm(false);
-      // Invalidate and refetch the API key status query
       queryClient.invalidateQueries({ queryKey: ['node-api-key', nodeId] });
       notifySuccess(info?.regenerated ? 'API key regenerated' : 'API key generated');
     },
@@ -75,10 +166,8 @@ function NodeDetailsPage() {
 
   const handleApiKeyClick = () => {
     if (apiKeyStatus?.exists) {
-      // Key exists - show info modal
       setShowApiKeyModal(true);
     } else {
-      // No key - generate one
       apiKeyMutation.mutate(false);
     }
   };
@@ -92,7 +181,12 @@ function NodeDetailsPage() {
     [user?.permissions],
   );
   const canAssignNodes = useMemo(
-    () => !!(user?.permissions?.includes('node.assign') || user?.permissions?.includes('*') || user?.permissions?.includes('admin.write')),
+    () =>
+      !!(
+        user?.permissions?.includes('node.assign') ||
+        user?.permissions?.includes('*') ||
+        user?.permissions?.includes('admin.write')
+      ),
     [user?.permissions],
   );
   const lastSeen = node?.lastSeenAt ? new Date(node.lastSeenAt).toLocaleString() : 'n/a';
@@ -100,17 +194,32 @@ function NodeDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-border bg-white px-4 py-6 text-muted-foreground shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-primary/30">
-        Loading node...
-      </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex items-center justify-center py-20"
+      >
+        <div className="text-sm text-muted-foreground">Loading node…</div>
+      </motion.div>
     );
   }
 
   if (isError || !node) {
     return (
-      <div className="rounded-xl border border-rose-200 bg-rose-100/60 px-4 py-6 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
-        Unable to load node details.
-      </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex items-center justify-center py-20"
+      >
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 px-6 py-4 text-center">
+          <p className="text-sm font-medium text-rose-600 dark:text-rose-400">
+            Unable to load node details.
+          </p>
+          <Link to="/admin/nodes" className="mt-2 inline-block text-xs text-muted-foreground hover:text-foreground">
+            ← Back to nodes
+          </Link>
+        </div>
+      </motion.div>
     );
   }
 
@@ -118,355 +227,494 @@ function NodeDetailsPage() {
   const serverCount = stats?.servers.total ?? node._count?.servers ?? serverList.length;
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-semibold text-foreground dark:text-white">
-                {node.name}
-              </h1>
-              <NodeStatusBadge isOnline={node.isOnline} />
-            </div>
-            <div className="text-sm text-muted-foreground dark:text-muted-foreground">
-              {node.hostname ?? 'hostname n/a'} · {node.publicAddress ?? 'address n/a'}
-            </div>
-            <div className="text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">Last seen: {lastSeen}</div>
-          </div>
-          {canWrite ? (
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <Link
-                to={`/admin/nodes/${node.id}/allocations`}
-                className="col-span-2 rounded-lg border-2 border-primary-500 bg-primary-600 px-4 py-2 text-center font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500"
-              >
-                Manage Allocations
-              </Link>
-              <button
-                className={`rounded-md border px-3 py-1 font-semibold transition-all duration-300 disabled:opacity-60 ${
-                  apiKeyStatus?.exists
-                    ? 'border-amber-300 text-amber-700 hover:border-amber-500 dark:border-amber-500/30 dark:text-amber-400 dark:hover:border-amber-500/50'
-                    : 'border-border text-muted-foreground hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30'
-                }`}
-                onClick={handleApiKeyClick}
-                disabled={apiKeyMutation.isPending}
-              >
-                {apiKeyMutation.isPending ? 'Processing...' : apiKeyStatus?.exists ? 'View API Key' : 'Generate API Key'}
-              </button>
-              <button
-                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground disabled:opacity-60 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                onClick={() => deployMutation.mutate()}
-                disabled={deployMutation.isPending}
-              >
-                {deployMutation.isPending ? 'Generating...' : 'Regenerate deploy script'}
-              </button>
-              <div className="contents">
-                <NodeUpdateModal node={node} />
-              </div>
-              <div className="contents">
-                <NodeDeleteDialog nodeId={node.id} nodeName={node.name} />
-              </div>
-            </div>
-          ) : null}
-        </div>
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="relative min-h-screen overflow-hidden"
+    >
+      {/* Ambient background */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-emerald-500/8 to-cyan-500/8 blur-3xl dark:from-emerald-500/15 dark:to-cyan-500/15" />
+        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-sky-500/8 to-violet-500/8 blur-3xl dark:from-sky-500/15 dark:to-violet-500/15" />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {stats ? <NodeMetricsCard stats={stats} /> : null}
-        <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30 lg:col-span-2">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="text-sm font-semibold text-foreground dark:text-white">Capacity</div>
-            <span className="text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
-              {serverCount} servers
-            </span>
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-xs text-muted-foreground dark:text-zinc-300">
-            <div className="rounded-md border border-border bg-surface-2 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-              <div className="text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">CPU cores</div>
-              <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
-                {node.maxCpuCores ?? 0}
-              </div>
-              {resourceSummary ? (
-                <div className="text-[11px] text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
-                  Allocated: {resourceSummary.allocatedCpuCores} · Available: {resourceSummary.availableCpuCores}
-                </div>
-              ) : null}
-            </div>
-            <div className="rounded-md border border-border bg-surface-2 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-              <div className="text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">Memory</div>
-              <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
-                {node.maxMemoryMb ?? 0} MB
-              </div>
-              {resourceSummary ? (
-                <div className="text-[11px] text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
-                  Allocated: {resourceSummary.allocatedMemoryMb} · Available: {resourceSummary.availableMemoryMb}
-                </div>
-              ) : null}
-            </div>
-            <div className="rounded-md border border-border bg-surface-2 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-              <div className="text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">Disk</div>
-              <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
-                {resourceSummary ? `${resourceSummary.actualDiskUsageMb} / ${resourceSummary.actualDiskTotalMb} MB` : 'n/a'}
-              </div>
-            </div>
-            <div className="rounded-md border border-border bg-surface-2 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-              <div className="text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">Uptime</div>
-              <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
-                {stats?.lastMetricsUpdate ? 'Active' : 'Unknown'}
-              </div>
-              <div className="text-[11px] text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
-                Metrics refresh every 30s
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-foreground dark:text-white">Servers on node</h2>
+      <div className="relative z-10 space-y-5">
+        {/* ── Breadcrumb ── */}
+        <motion.div variants={itemVariants}>
           <Link
-            to="/servers"
-            className="text-xs font-medium text-primary-600 transition-all duration-300 hover:text-primary-500 dark:text-primary-400"
+            to="/admin/nodes"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
-            View all servers
+            <ArrowLeft className="h-3 w-3" />
+            Back to Nodes
           </Link>
-          </div>
-        {serverList.length ? (
-          <ul className="space-y-2 text-sm text-muted-foreground dark:text-zinc-300">
-            {serverList.map((server) => (
-              <li
-                key={server.id}
-                className="flex items-center justify-between rounded-md border border-border bg-surface-2 px-3 py-2 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
-              >
-                <div>
-                  <div className="text-foreground dark:text-zinc-100">{server.name}</div>
-                  <div className="text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
-                    {server.status}
-                  </div>
+        </motion.div>
+
+        {/* ── Header ── */}
+        <motion.div variants={itemVariants}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <div
+                    className={`absolute -inset-1 rounded-lg opacity-20 blur-sm ${
+                      node.isOnline
+                        ? 'bg-gradient-to-r from-emerald-500 to-cyan-500'
+                        : 'bg-gradient-to-r from-zinc-400 to-zinc-500'
+                    }`}
+                  />
+                  <Server
+                    className={`relative h-7 w-7 ${
+                      node.isOnline
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-zinc-400 dark:text-zinc-500'
+                    }`}
+                  />
                 </div>
-                <Link
-                  to={`/servers/${server.id}`}
-                  className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+                  {node.name}
+                </h1>
+                <Badge
+                  variant={node.isOnline ? 'success' : 'secondary'}
+                  className="gap-1.5"
                 >
-                  Open
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="text-sm text-muted-foreground dark:text-muted-foreground">
-            No servers assigned yet.
+                  <span className="relative flex h-1.5 w-1.5">
+                    {node.isOnline && (
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    )}
+                    <span
+                      className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
+                        node.isOnline ? 'bg-emerald-500' : 'bg-zinc-400'
+                      }`}
+                    />
+                  </span>
+                  {node.isOnline ? 'Online' : 'Offline'}
+                </Badge>
+              </div>
+              <div className="ml-10 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                <span className="font-mono text-xs opacity-70">{node.hostname ?? 'hostname n/a'}</span>
+                <span className="text-zinc-300 dark:text-zinc-700">·</span>
+                <span>{node.publicAddress ?? 'address n/a'}</span>
+                {node.location && (
+                  <>
+                    <span className="text-zinc-300 dark:text-zinc-700">·</span>
+                    <span>{node.location.name}</span>
+                  </>
+                )}
+              </div>
+              <div className="ml-10 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                Last seen {lastSeen}
+              </div>
+            </div>
+
+            {canWrite && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button asChild size="sm">
+                  <Link to={`/admin/nodes/${node.id}/allocations`} className="gap-1.5">
+                    <Shield className="h-3.5 w-3.5" />
+                    Allocations
+                  </Link>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowUpdateModal(true)}
+                  className="gap-1.5"
+                >
+                  <Settings className="h-3.5 w-3.5" />
+                  Update
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDeleteModal(true)}
+                  className="gap-1.5 text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 dark:text-rose-400 dark:hover:bg-rose-950/30 dark:hover:border-rose-800"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
+                </Button>
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* ── Agent Actions ── */}
+        {canWrite && (
+          <motion.div variants={itemVariants} className="flex flex-wrap items-center gap-2">
+            <Button
+              variant={apiKeyStatus?.exists ? 'outline' : 'default'}
+              size="sm"
+              onClick={handleApiKeyClick}
+              disabled={apiKeyMutation.isPending}
+              className="gap-1.5"
+            >
+              <Key className="h-3.5 w-3.5" />
+              {apiKeyMutation.isPending
+                ? 'Processing…'
+                : apiKeyStatus?.exists
+                  ? 'View API Key'
+                  : 'Generate API Key'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => deployMutation.mutate()}
+              disabled={deployMutation.isPending}
+              className="gap-1.5"
+            >
+              <Terminal className="h-3.5 w-3.5" />
+              {deployMutation.isPending ? 'Generating…' : 'Deploy Script'}
+            </Button>
+          </motion.div>
+        )}
+
+        {/* ── Resource Grid ── */}
+        <motion.div
+          variants={itemVariants}
+          className="grid grid-cols-1 gap-4 lg:grid-cols-3"
+        >
+          {stats ? <NodeMetricsCard stats={stats} /> : null}
+
+          <div className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm lg:col-span-2">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-display text-sm font-semibold text-foreground dark:text-white">
+                Capacity
+              </h2>
+              <Badge variant="outline" className="text-xs">
+                {serverCount} servers
+              </Badge>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <CapacityBlock
+                icon={Cpu}
+                label="CPU cores"
+                value={String(node.maxCpuCores ?? 0)}
+                detail={
+                  resourceSummary
+                    ? `Allocated: ${resourceSummary.allocatedCpuCores} · Available: ${resourceSummary.availableCpuCores}`
+                    : undefined
+                }
+              />
+              <CapacityBlock
+                icon={HardDrive}
+                label="Memory"
+                value={`${node.maxMemoryMb ?? 0} MB`}
+                detail={
+                  resourceSummary
+                    ? `Allocated: ${resourceSummary.allocatedMemoryMb} MB · Available: ${resourceSummary.availableMemoryMb} MB`
+                    : undefined
+                }
+              />
+              <CapacityBlock
+                icon={HardDrive}
+                label="Disk"
+                value={
+                  resourceSummary
+                    ? `${resourceSummary.actualDiskUsageMb} / ${resourceSummary.actualDiskTotalMb} MB`
+                    : 'n/a'
+                }
+              />
+              <CapacityBlock
+                icon={Activity}
+                label="Uptime"
+                value={stats?.lastMetricsUpdate ? 'Active' : 'Unknown'}
+                detail="Metrics refresh every 30s"
+              />
+            </div>
+          </div>
+        </motion.div>
+
+        {/* ── Servers on Node ── */}
+        <motion.div variants={itemVariants}>
+          <div className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-display text-sm font-semibold text-foreground dark:text-white">
+                Servers on node
+              </h2>
+              <Link
+                to="/servers"
+                className="text-xs font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400"
+              >
+                View all
+              </Link>
+            </div>
+
+            {serverList.length > 0 ? (
+              <div className="divide-y divide-border/50">
+                {serverList.map((server) => (
+                  <div
+                    key={server.id}
+                    className="group flex items-center justify-between py-2.5 first:pt-0 last:pb-0"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        to={`/servers/${server.id}`}
+                        className="truncate text-sm font-medium text-foreground transition-colors hover:text-primary dark:text-zinc-100 dark:hover:text-primary-400"
+                      >
+                        {server.name}
+                      </Link>
+                      <div className="text-xs text-muted-foreground">{server.status}</div>
+                    </div>
+                    <Link
+                      to={`/servers/${server.id}`}
+                      className="ml-3 flex shrink-0 items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground opacity-0 transition-all hover:border-primary/50 hover:text-primary group-hover:opacity-100 dark:text-zinc-300 dark:hover:text-primary-400"
+                    >
+                      Open
+                      <ExternalLink className="h-3 w-3" />
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                No servers assigned yet.
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* ── Node Assignments ── */}
+        {canWrite || canAssignNodes ? (
+          <motion.div variants={itemVariants} className="space-y-4">
+            <NodeAssignmentsList nodeId={nodeId!} canManage={canAssignNodes} />
+            {canAssignNodes && (
+              <div className="flex justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAssignmentModal(true)}
+                  className="gap-1.5 border-dashed"
+                >
+                  <Shield className="h-3.5 w-3.5" />
+                  Assign Node to User or Role
+                </Button>
+              </div>
+            )}
+          </motion.div>
+        ) : null}
+      </div>
+
+      {/* ── Deploy Script Modal ── */}
+      <ModalShell
+        open={!!deployInfo}
+        onClose={() => setDeployInfo(null)}
+        title="Deploy agent"
+      >
+        <div>
+          Run this on the node to install and register the agent (valid for 24 hours).
+        </div>
+        <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 font-mono text-xs text-foreground dark:bg-zinc-950/40 dark:text-zinc-100">
+          <code className="whitespace-pre-wrap">
+            {deployInfo
+              ? `curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`
+              : ''}
+          </code>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Token expires: {deployInfo ? new Date(deployInfo.expiresAt).toLocaleString() : ''}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-border pt-4 text-xs">
+          <Button variant="outline" size="sm" onClick={() => setDeployInfo(null)}>
+            Done
+          </Button>
+        </div>
+      </ModalShell>
+
+      {/* ── Generated API Key Modal ── */}
+      <ModalShell
+        open={!!generatedApiKey}
+        onClose={() => setGeneratedApiKey(null)}
+        title="Agent API Key"
+      >
+        <div>
+          Add this API key to your agent's{' '}
+          <code className="rounded bg-surface-2 px-1 dark:bg-surface-2">config.toml</code> file:
+        </div>
+        <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 font-mono text-xs text-foreground dark:bg-zinc-950/40 dark:text-zinc-100">
+          <code className="whitespace-pre-wrap break-all">
+            api_key = &quot;{generatedApiKey}&quot;
+          </code>
+        </div>
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-amber-700 dark:text-amber-300">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <strong>Important:</strong> Save this key now. It will not be shown again.
+        </div>
+        <div className="flex justify-end gap-2 border-t border-border pt-4 text-xs">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (generatedApiKey) {
+                navigator.clipboard.writeText(generatedApiKey);
+                notifySuccess('API key copied to clipboard');
+              }
+            }}
+            className="gap-1.5"
+          >
+            <Copy className="h-3 w-3" />
+            Copy
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setGeneratedApiKey(null)}>
+            Done
+          </Button>
+        </div>
+      </ModalShell>
+
+      {/* ── Existing API Key Info Modal ── */}
+      <ModalShell
+        open={showApiKeyModal && !!apiKeyStatus?.apiKey}
+        onClose={() => setShowApiKeyModal(false)}
+        title="Existing Agent API Key"
+      >
+        <div>An API key already exists for this node's agent.</div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <span className="text-xs text-muted-foreground">Name</span>
+            <div className="mt-0.5 font-medium text-foreground dark:text-zinc-100">
+              {apiKeyStatus?.apiKey?.name}
+            </div>
+          </div>
+          <div>
+            <span className="text-xs text-muted-foreground">Created</span>
+            <div className="mt-0.5 font-medium text-foreground dark:text-zinc-100">
+              {apiKeyStatus?.apiKey?.createdAt
+                ? new Date(apiKeyStatus.apiKey.createdAt).toLocaleString()
+                : 'n/a'}
+            </div>
+          </div>
+        </div>
+        {apiKeyStatus?.apiKey?.preview && (
+          <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 font-mono text-xs text-foreground dark:bg-zinc-950/40 dark:text-zinc-100">
+            <code className="whitespace-pre-wrap break-all">{apiKeyStatus.apiKey.preview}</code>
           </div>
         )}
-      </div>
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-amber-700 dark:text-amber-300">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>
+            The full API key cannot be displayed as it was only shown once when created.
+            If you need to update the agent's key, you must regenerate it.
+          </span>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-border pt-4 text-xs">
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => {
+              setShowApiKeyModal(false);
+              setShowRegenerateConfirm(true);
+            }}
+            className="gap-1.5"
+          >
+            <RefreshCw className="h-3 w-3" />
+            Regenerate Key
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowApiKeyModal(false)}>
+            Done
+          </Button>
+        </div>
+      </ModalShell>
 
-      {/* Node Assignments Section */}
-      {canWrite || canAssignNodes ? (
-        <>
-          <NodeAssignmentsList nodeId={nodeId!} canManage={canAssignNodes} />
-          {canAssignNodes && (
-            <div className="flex justify-center">
-              <button
-                className="rounded-lg border-2 border-dashed border-border bg-white px-4 py-2 text-sm font-semibold text-muted-foreground shadow-surface-light transition-all duration-300 hover:border-primary-500 hover:text-primary-600 dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:shadow-surface-dark dark:hover:border-primary/30 dark:hover:text-primary-400"
-                onClick={() => setShowAssignmentModal(true)}
-              >
-                + Assign Node to User or Role
-              </button>
-            </div>
-          )}
-        </>
-      ) : null}
+      {/* ── Regenerate Confirmation Modal ── */}
+      <ModalShell
+        open={showRegenerateConfirm}
+        onClose={() => setShowRegenerateConfirm(false)}
+        title="⚠️ Regenerate API Key"
+        variant="danger"
+      >
+        <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 p-4">
+          <p className="mb-2 text-sm font-semibold text-rose-700 dark:text-rose-300">
+            This action will:
+          </p>
+          <ul className="list-inside list-disc space-y-1 text-sm text-rose-600 dark:text-rose-400">
+            <li>
+              <strong>Delete</strong> the current API key immediately
+            </li>
+            <li>
+              <strong>Disconnect</strong> the agent from Catalyst
+            </li>
+            <li>
+              Require <strong>manual reconfiguration</strong> of the agent with the new key
+            </li>
+          </ul>
+        </div>
+        <p>
+          The agent will be <strong>unable to communicate</strong> with Catalyst until you update
+          its <code className="mx-1 rounded bg-surface-2 px-1">config.toml</code> with the new API
+          key.
+        </p>
+        <div className="flex justify-end gap-2 border-t border-border pt-4 text-xs">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowRegenerateConfirm(false)}
+            disabled={apiKeyMutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleRegenerateConfirm}
+            disabled={apiKeyMutation.isPending}
+            className="gap-1.5"
+          >
+            <RefreshCw className="h-3 w-3" />
+            {apiKeyMutation.isPending ? 'Regenerating…' : 'Yes, Regenerate Key'}
+          </Button>
+        </div>
+      </ModalShell>
 
-      {deployInfo ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-xl border border-border bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
-            <div className="flex items-center justify-between border-b border-border px-6 py-4 dark:border-border">
-              <h2 className="text-lg font-semibold text-foreground dark:text-white">Deploy agent</h2>
-              <button
-                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                onClick={() => setDeployInfo(null)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300">
-              <div className="text-muted-foreground dark:text-zinc-300">
-                Run this on the node to install and register the agent (valid for 24 hours).
-              </div>
-              <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 text-xs text-foreground dark:border-border dark:bg-zinc-950/40 dark:text-zinc-100">
-                <code className="whitespace-pre-wrap">
-                  {`curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`}
-                </code>
-              </div>
-              <div className="text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
-                Token expires: {new Date(deployInfo.expiresAt).toLocaleString()}
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 border-t border-border px-6 py-4 text-xs dark:border-border">
-              <button
-                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                onClick={() => setDeployInfo(null)}
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      {generatedApiKey ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-xl border border-border bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
-            <div className="flex items-center justify-between border-b border-border px-6 py-4 dark:border-border">
-              <h2 className="text-lg font-semibold text-foreground dark:text-white">Agent API Key</h2>
-              <button
-                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                onClick={() => setGeneratedApiKey(null)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300">
-              <div className="text-muted-foreground dark:text-zinc-300">
-                Add this API key to your agent's <code className="rounded bg-surface-2 px-1 dark:bg-surface-2">config.toml</code> file:
-              </div>
-              <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 text-xs text-foreground dark:border-border dark:bg-zinc-950/40 dark:text-zinc-100">
-                <code className="whitespace-pre-wrap break-all">api_key = "{generatedApiKey}"</code>
-              </div>
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-                <strong>Important:</strong> Save this key now. It will not be shown again.
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 border-t border-border px-6 py-4 text-xs dark:border-border">
-              <button
-                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                onClick={() => {
-                  navigator.clipboard.writeText(generatedApiKey);
-                  notifySuccess('API key copied to clipboard');
-                }}
-              >
-                Copy to clipboard
-              </button>
-              <button
-                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                onClick={() => setGeneratedApiKey(null)}
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      {/* API Key Info Modal (when key exists) */}
-      {showApiKeyModal && apiKeyStatus?.apiKey ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-xl border border-border bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
-            <div className="flex items-center justify-between border-b border-border px-6 py-4 dark:border-border">
-              <h2 className="text-lg font-semibold text-foreground dark:text-white">Existing Agent API Key</h2>
-              <button
-                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                onClick={() => setShowApiKeyModal(false)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300">
-              <div className="text-muted-foreground dark:text-zinc-300">
-                An API key already exists for this node's agent.
-              </div>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-muted-foreground dark:text-muted-foreground">Name:</span>
-                  <div className="font-medium text-foreground dark:text-zinc-100">
-                    {apiKeyStatus.apiKey.name}
-                  </div>
-                </div>
-                <div>
-                  <span className="text-muted-foreground dark:text-muted-foreground">Created:</span>
-                  <div className="font-medium text-foreground dark:text-zinc-100">
-                    {new Date(apiKeyStatus.apiKey.createdAt).toLocaleString()}
-                  </div>
-                </div>
-              </div>
-              {apiKeyStatus.apiKey.preview && (
-                <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 text-xs text-foreground dark:border-border dark:bg-zinc-950/40 dark:text-zinc-100">
-                  <code className="whitespace-pre-wrap break-all">{apiKeyStatus.apiKey.preview}</code>
-                </div>
-              )}
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-                <strong>Note:</strong> The full API key cannot be displayed as it was only shown once when created.
-                If you need to update the agent's key, you must regenerate it.
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 border-t border-border px-6 py-4 text-xs dark:border-border">
-              <button
-                className="rounded-md border border-red-300 px-3 py-1 font-semibold text-red-600 transition-all duration-300 hover:border-red-500 hover:bg-red-50 dark:border-red-500/30 dark:text-red-400 dark:hover:border-red-500/50 dark:hover:bg-red-500/10"
-                onClick={() => {
-                  setShowApiKeyModal(false);
-                  setShowRegenerateConfirm(true);
-                }}
-              >
-                Regenerate Key
-              </button>
-              <button
-                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                onClick={() => setShowApiKeyModal(false)}
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      {/* Regenerate Confirmation Modal */}
-      {showRegenerateConfirm ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl border-2 border-red-500 bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:bg-surface-1">
-            <div className="flex items-center justify-between border-b border-red-200 bg-red-50 px-6 py-4 dark:border-red-500/30 dark:bg-red-500/10">
-              <h2 className="text-lg font-semibold text-red-900 dark:text-red-300">⚠️ Regenerate API Key</h2>
-            </div>
-            <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300">
-              <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-900/20">
-                <p className="text-sm font-semibold text-red-800 dark:text-red-300 mb-2">
-                  This action will:
-                </p>
-                <ul className="text-sm text-red-700 dark:text-red-400 list-disc list-inside space-y-1">
-                  <li><strong>Delete</strong> the current API key immediately</li>
-                  <li><strong>Disconnect</strong> the agent from Catalyst</li>
-                  <li>Require <strong>manual reconfiguration</strong> of the agent with the new key</li>
-                </ul>
-              </div>
-              <p className="text-muted-foreground dark:text-muted-foreground">
-                The agent will be <strong>unable to communicate</strong> with Catalyst until you update its
-                <code className="mx-1 rounded bg-surface-2 px-1 dark:bg-surface-2">config.toml</code>
-                with the new API key.
-              </p>
-            </div>
-            <div className="flex justify-end gap-2 border-t border-border px-6 py-4 text-xs dark:border-border">
-              <button
-                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                onClick={() => setShowRegenerateConfirm(false)}
-                disabled={apiKeyMutation.isPending}
-              >
-                Cancel
-              </button>
-              <button
-                className="rounded-md border border-red-500 bg-red-600 px-3 py-1 font-semibold text-white transition-all duration-300 hover:bg-red-700 disabled:opacity-60"
-                onClick={handleRegenerateConfirm}
-                disabled={apiKeyMutation.isPending}
-              >
-                {apiKeyMutation.isPending ? 'Regenerating...' : 'Yes, Regenerate Key'}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {/* ── Controlled Update & Delete Modals ── */}
+      {showUpdateModal && node && (
+        <NodeUpdateModal
+          node={node}
+          open
+          onOpenChange={(open) => { if (!open) setShowUpdateModal(false); }}
+        />
+      )}
+      {showDeleteModal && (
+        <NodeDeleteDialog
+          nodeId={node.id}
+          nodeName={node.name}
+          open
+          onOpenChange={(open) => { if (!open) setShowDeleteModal(false); }}
+        />
+      )}
 
-      {/* Node Assignment Modal */}
+      {/* ── Assignment Modal ── */}
       <NodeAssignmentModal
         nodeId={nodeId!}
         open={showAssignmentModal}
         onClose={() => setShowAssignmentModal(false)}
       />
+    </motion.div>
+  );
+}
+
+// ── Capacity Block ──
+function CapacityBlock({
+  icon: Icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+  detail?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-border/50 bg-surface-2/50 p-3 dark:bg-surface-2/30">
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Icon className="h-3 w-3" />
+        <span>{label}</span>
+      </div>
+      <div className="mt-1 text-sm font-semibold text-foreground dark:text-zinc-100">{value}</div>
+      {detail && (
+        <div className="mt-0.5 text-[11px] text-muted-foreground">{detail}</div>
+      )}
     </div>
   );
 }

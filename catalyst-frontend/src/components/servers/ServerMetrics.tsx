@@ -11,10 +11,10 @@ function ServerMetrics({ cpu = 0, memory = 0 }: { cpu?: number; memory?: number 
   ];
 
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-surface-light dark:shadow-surface-dark">
+    <div className="space-y-3 rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">Resource usage</h3>
-        <span className="rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
+        <span className="rounded-full bg-success-muted px-2 py-0.5 text-[11px] font-medium text-success">
           Live
         </span>
       </div>

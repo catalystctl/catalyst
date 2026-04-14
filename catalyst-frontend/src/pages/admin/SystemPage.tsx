@@ -1,15 +1,119 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion, type Variants } from 'framer-motion';
+import {
+  Settings,
+  Activity,
+  Server,
+  Mail,
+  ShieldCheck,
+  Lock,
+  Key,
+  Globe,
+  Hash,
+  User,
+  CheckCircle,
+  AlertTriangle,
+} from 'lucide-react';
 import { useAdminHealth, useAdminStats, useModManagerSettings, useSmtpSettings } from '../../hooks/useAdmin';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { Input } from '../../components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
+// ── Animation Variants ──
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.05 } },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
+};
+
+// ── Section Wrapper ──
+function Section({
+  title,
+  subtitle,
+  icon,
+  iconColor,
+  children,
+  footer,
+}: {
+  title: string;
+  subtitle?: string;
+  icon: React.ReactNode;
+  iconColor?: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+}) {
+  return (
+    <motion.div
+      variants={itemVariants}
+      className="overflow-hidden rounded-xl border border-border bg-card/80 backdrop-blur-sm"
+    >
+      <div className="border-b border-border/50 px-5 py-4">
+        <div className="flex items-center gap-2.5">
+          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${iconColor || 'bg-primary-100 dark:bg-primary-900/30'}`}>
+            {icon}
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-foreground dark:text-white">{title}</h2>
+            {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+          </div>
+        </div>
+      </div>
+      <div className="px-5 py-4">{children}</div>
+      {footer && (
+        <div className="flex items-center justify-end border-t border-border/50 px-5 py-3">
+          {footer}
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+// ── Health Stat Card ──
+function HealthStatCard({
+  label,
+  value,
+  sub,
+  icon,
+  iconColor,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  icon: React.ReactNode;
+  iconColor: string;
+}) {
+  return (
+    <motion.div
+      variants={itemVariants}
+      className="overflow-hidden rounded-xl border border-border bg-card/80 p-4 backdrop-blur-sm transition-all duration-300 hover:shadow-md"
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <div className={`flex h-7 w-7 items-center justify-center rounded-md ${iconColor}`}>
+          {icon}
+        </div>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+      </div>
+      <div className="text-xl font-bold tabular-nums text-foreground dark:text-zinc-100">{value}</div>
+      {sub && <div className="mt-1 text-[11px] text-muted-foreground">{sub}</div>}
+    </motion.div>
+  );
+}
+
+// ── Main Page ──
 function SystemPage() {
+  const queryClient = useQueryClient();
   const { data: stats } = useAdminStats();
   const { data: health } = useAdminHealth();
   const { data: smtpSettings } = useSmtpSettings();
   const { data: modManagerSettings } = useModManagerSettings();
-  const queryClient = useQueryClient();
+
   const [smtpHost, setSmtpHost] = useState('');
   const [smtpPort, setSmtpPort] = useState('587');
   const [smtpUsername, setSmtpUsername] = useState('');
@@ -43,10 +147,7 @@ function SystemPage() {
       notifySuccess('SMTP settings updated');
       queryClient.invalidateQueries({ queryKey: ['admin-smtp'] });
     },
-    onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to update SMTP settings';
-      notifyError(message);
-    },
+    onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update SMTP settings'),
   });
 
   const updateModManagerMutation = useMutation({
@@ -59,10 +160,7 @@ function SystemPage() {
       notifySuccess('Mod manager settings updated');
       queryClient.invalidateQueries({ queryKey: ['admin-mod-manager'] });
     },
-    onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to update mod manager settings';
-      notifyError(message);
-    },
+    onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update mod manager settings'),
   });
 
   useEffect(() => {
@@ -79,13 +177,11 @@ function SystemPage() {
     setSmtpPool(Boolean(smtpSettings.pool));
     setSmtpMaxConnections(
       smtpSettings.maxConnections !== null && smtpSettings.maxConnections !== undefined
-        ? String(smtpSettings.maxConnections)
-        : '',
+        ? String(smtpSettings.maxConnections) : '',
     );
     setSmtpMaxMessages(
       smtpSettings.maxMessages !== null && smtpSettings.maxMessages !== undefined
-        ? String(smtpSettings.maxMessages)
-        : '',
+        ? String(smtpSettings.maxMessages) : '',
     );
   }, [smtpSettings]);
 
@@ -96,231 +192,203 @@ function SystemPage() {
     setModrinthApiKey(modManagerSettings.modrinthApiKey ?? '');
   }, [modManagerSettings]);
 
+  const isHealthy = health?.status === 'healthy';
+  const dbStatus = health?.database ?? 'checking';
+
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl border border-border bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1/70 dark:shadow-surface-dark dark:hover:border-primary/30">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground dark:text-zinc-100">System</h1>
-            <p className="text-sm text-muted-foreground dark:text-muted-foreground">
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="relative min-h-screen overflow-hidden"
+    >
+      {/* Ambient background */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-indigo-500/8 to-violet-500/8 blur-3xl dark:from-indigo-500/15 dark:to-violet-500/15" />
+        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-teal-500/8 to-cyan-500/8 blur-3xl dark:from-teal-500/15 dark:to-cyan-500/15" />
+      </div>
+
+      <div className="relative z-10 space-y-5">
+        {/* ── Header ── */}
+        <motion.div variants={itemVariants} className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 opacity-20 blur-sm" />
+                <Settings className="relative h-7 w-7 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+                System
+              </h1>
+            </div>
+            <p className="ml-10 text-sm text-muted-foreground">
               Monitor platform health and manage global integrations.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground dark:text-muted-foreground">
-            <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs">
               {stats?.users ?? 0} users
-            </span>
-            <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
+            </Badge>
+            <Badge variant="outline" className="text-xs">
               {stats?.activeServers ?? 0} active
-            </span>
+            </Badge>
           </div>
-        </div>
-      </div>
+        </motion.div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="rounded-2xl border border-border dark:border-border bg-white dark:bg-surface-1/60 px-5 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:hover:border-primary/30">
-          <div className="text-xs uppercase text-muted-foreground dark:text-muted-foreground">Status</div>
-          <div className="mt-2 text-lg font-semibold text-foreground dark:text-zinc-100">
-            {health?.status ?? 'loading'}
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
-            Database: {health?.database ?? 'checking'}
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
-            Checked {health ? new Date(health.timestamp).toLocaleTimeString() : '...'}
-          </div>
+        {/* ── Health Stats ── */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <HealthStatCard
+            label="Status"
+            value={health?.status ?? 'loading'}
+            sub={`Database: ${dbStatus} · Checked ${health ? new Date(health.timestamp).toLocaleTimeString() : '…'}`}
+            icon={isHealthy
+              ? <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              : <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            }
+            iconColor={isHealthy ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-amber-100 dark:bg-amber-900/30'}
+          />
+          <HealthStatCard
+            label="Nodes"
+            value={`${health?.nodes.online ?? 0} / ${health?.nodes.total ?? 0}`}
+            sub={`Offline: ${health?.nodes.offline ?? 0} · Stale: ${health?.nodes.stale ?? 0}`}
+            icon={<Server className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
+            iconColor="bg-blue-100 dark:bg-blue-900/30"
+          />
+          <HealthStatCard
+            label="System totals"
+            value={stats?.servers ?? 0}
+            sub={`Users: ${stats?.users ?? 0} · Active: ${stats?.activeServers ?? 0} · Nodes: ${stats?.nodes ?? 0}`}
+            icon={<Activity className="h-4 w-4 text-violet-600 dark:text-violet-400" />}
+            iconColor="bg-violet-100 dark:bg-violet-900/30"
+          />
         </div>
-        <div className="rounded-2xl border border-border dark:border-border bg-white dark:bg-surface-1/60 px-5 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:hover:border-primary/30">
-          <div className="text-xs uppercase text-muted-foreground dark:text-muted-foreground">Nodes</div>
-          <div className="mt-2 text-lg font-semibold text-foreground dark:text-zinc-100">
-            {health?.nodes.online ?? 0} online / {health?.nodes.total ?? 0}
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
-            Offline: {health?.nodes.offline ?? 0} · Stale: {health?.nodes.stale ?? 0}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-border dark:border-border bg-white dark:bg-surface-1/60 px-5 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:hover:border-primary/30">
-          <div className="text-xs uppercase text-muted-foreground dark:text-muted-foreground">System totals</div>
-          <div className="mt-2 text-lg font-semibold text-foreground dark:text-zinc-100">
-            {stats?.servers ?? 0} servers
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
-            Users: {stats?.users ?? 0} · Active: {stats?.activeServers ?? 0}
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">Nodes: {stats?.nodes ?? 0}</div>
-        </div>
-      </div>
 
-      <div className="rounded-2xl border border-border bg-white px-6 py-5 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground dark:text-white">
-              SMTP Configuration
-            </h2>
-            <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-              Configure outbound email for invites, alerts, and system notifications.
-            </p>
-          </div>
-        </div>
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
-            Host
-            <input
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-              value={smtpHost}
-              onChange={(event) => setSmtpHost(event.target.value)}
-              placeholder="smtp.mailserver.com"
-            />
-          </label>
-          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
-            Port
-            <input
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-              value={smtpPort}
-              onChange={(event) => setSmtpPort(event.target.value)}
-              placeholder="587"
-            />
-          </label>
-          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
-            Username
-            <input
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-              value={smtpUsername}
-              onChange={(event) => setSmtpUsername(event.target.value)}
-              placeholder="user@example.com"
-            />
-          </label>
-          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
-            Password
-            <input
-              type="password"
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-              value={smtpPassword}
-              onChange={(event) => setSmtpPassword(event.target.value)}
-              placeholder="••••••••"
-            />
-          </label>
-          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
-            From address
-            <input
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-              value={smtpFrom}
-              onChange={(event) => setSmtpFrom(event.target.value)}
-              placeholder="no-reply@catalyst.local"
-            />
-          </label>
-          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
-            Reply-to
-            <input
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-              value={smtpReplyTo}
-              onChange={(event) => setSmtpReplyTo(event.target.value)}
-              placeholder="support@catalyst.local"
-            />
-          </label>
-          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
-            Max connections
-            <input
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-              value={smtpMaxConnections}
-              onChange={(event) => setSmtpMaxConnections(event.target.value)}
-              placeholder="5"
-            />
-          </label>
-          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
-            Max messages
-            <input
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-              value={smtpMaxMessages}
-              onChange={(event) => setSmtpMaxMessages(event.target.value)}
-              placeholder="100"
-            />
-          </label>
-        </div>
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-zinc-300">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
-              checked={smtpSecure}
-              onChange={(event) => setSmtpSecure(event.target.checked)}
-            />
-            Use SSL/TLS
-          </label>
-          <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-zinc-300">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
-              checked={smtpRequireTls}
-              onChange={(event) => setSmtpRequireTls(event.target.checked)}
-            />
-            Require STARTTLS
-          </label>
-          <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-zinc-300">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
-              checked={smtpPool}
-              onChange={(event) => setSmtpPool(event.target.checked)}
-            />
-            Use connection pool
-          </label>
-        </div>
-        <div className="mt-4 flex justify-end">
-          <button
-            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
-            onClick={() => updateSmtpMutation.mutate()}
-            disabled={updateSmtpMutation.isPending}
-          >
-            Save SMTP settings
-          </button>
-        </div>
-      </div>
+        {/* ── SMTP Configuration ── */}
+        <Section
+          title="SMTP Configuration"
+          subtitle="Configure outbound email for invites, alerts, and notifications."
+          icon={<Mail className="h-4 w-4 text-rose-600 dark:text-rose-400" />}
+          iconColor="bg-rose-100 dark:bg-rose-900/30"
+          footer={
+            <Button size="sm" disabled={updateSmtpMutation.isPending} onClick={() => updateSmtpMutation.mutate()}>
+              {updateSmtpMutation.isPending ? 'Saving…' : 'Save SMTP settings'}
+            </Button>
+          }
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <label className="block space-y-1">
+                <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                  <Globe className="h-3 w-3" /> Host
+                </span>
+                <Input value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="smtp.mailserver.com" />
+              </label>
+              <label className="block space-y-1">
+                <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                  <Hash className="h-3 w-3" /> Port
+                </span>
+                <Input value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} placeholder="587" />
+              </label>
+              <label className="block space-y-1">
+                <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                  <User className="h-3 w-3" /> Username
+                </span>
+                <Input value={smtpUsername} onChange={(e) => setSmtpUsername(e.target.value)} placeholder="user@example.com" />
+              </label>
+              <label className="block space-y-1">
+                <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                  <Lock className="h-3 w-3" /> Password
+                </span>
+                <Input type="password" value={smtpPassword} onChange={(e) => setSmtpPassword(e.target.value)} placeholder="••••••••" />
+              </label>
+              <label className="block space-y-1">
+                <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                  <Mail className="h-3 w-3" /> From address
+                </span>
+                <Input value={smtpFrom} onChange={(e) => setSmtpFrom(e.target.value)} placeholder="no-reply@catalyst.local" />
+              </label>
+              <label className="block space-y-1">
+                <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                  <Mail className="h-3 w-3" /> Reply-to
+                </span>
+                <Input value={smtpReplyTo} onChange={(e) => setSmtpReplyTo(e.target.value)} placeholder="support@catalyst.local" />
+              </label>
+            </div>
 
-      <div className="rounded-2xl border border-border bg-white px-6 py-5 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground dark:text-white">
-              Mod Manager API Keys
-            </h2>
-            <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-              Provide API keys for CurseForge and Modrinth to enable mod downloads.
-            </p>
+            {/* Pool settings */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">Max connections</span>
+                <Input value={smtpMaxConnections} onChange={(e) => setSmtpMaxConnections(e.target.value)} placeholder="5" />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">Max messages</span>
+                <Input value={smtpMaxMessages} onChange={(e) => setSmtpMaxMessages(e.target.value)} placeholder="100" />
+              </label>
+            </div>
+
+            {/* Checkboxes */}
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={smtpSecure}
+                  onChange={(e) => setSmtpSecure(e.target.checked)}
+                  className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-zinc-600 dark:bg-surface-1 dark:text-primary-400"
+                />
+                Use SSL/TLS
+              </label>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={smtpRequireTls}
+                  onChange={(e) => setSmtpRequireTls(e.target.checked)}
+                  className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-zinc-600 dark:bg-surface-1 dark:text-primary-400"
+                />
+                Require STARTTLS
+              </label>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={smtpPool}
+                  onChange={(e) => setSmtpPool(e.target.checked)}
+                  className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-zinc-600 dark:bg-surface-1 dark:text-primary-400"
+                />
+                Use connection pool
+              </label>
+            </div>
           </div>
-        </div>
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
-            CurseForge API Key
-            <input
-              type="password"
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-              value={curseforgeApiKey}
-              onChange={(event) => setCurseforgeApiKey(event.target.value)}
-              placeholder="••••••••"
-            />
-          </label>
-          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
-            Modrinth API Key
-            <input
-              type="password"
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-              value={modrinthApiKey}
-              onChange={(event) => setModrinthApiKey(event.target.value)}
-              placeholder="••••••••"
-            />
-          </label>
-        </div>
-        <div className="mt-4 flex justify-end">
-          <button
-            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
-            onClick={() => updateModManagerMutation.mutate()}
-            disabled={updateModManagerMutation.isPending}
-          >
-            Save mod manager keys
-          </button>
-        </div>
+        </Section>
+
+        {/* ── Mod Manager API Keys ── */}
+        <Section
+          title="Mod Manager API Keys"
+          subtitle="Provide API keys for CurseForge and Modrinth to enable mod downloads."
+          icon={<Key className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
+          iconColor="bg-amber-100 dark:bg-amber-900/30"
+          footer={
+            <Button size="sm" disabled={updateModManagerMutation.isPending} onClick={() => updateModManagerMutation.mutate()}>
+              {updateModManagerMutation.isPending ? 'Saving…' : 'Save mod manager keys'}
+            </Button>
+          }
+        >
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="block space-y-1">
+              <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                <ShieldCheck className="h-3 w-3" /> CurseForge API Key
+              </span>
+              <Input type="password" value={curseforgeApiKey} onChange={(e) => setCurseforgeApiKey(e.target.value)} placeholder="••••••••" />
+            </label>
+            <label className="block space-y-1">
+              <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                <ShieldCheck className="h-3 w-3" /> Modrinth API Key
+              </span>
+              <Input type="password" value={modrinthApiKey} onChange={(e) => setModrinthApiKey(e.target.value)} placeholder="••••••••" />
+            </label>
+          </div>
+        </Section>
       </div>
-    </div>
+    </motion.div>
   );
 }
 

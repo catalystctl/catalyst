@@ -8,10 +8,17 @@ type Props = {
   templateName: string;
   onDeleted?: () => void;
   buttonClassName?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
-function TemplateDeleteDialog({ templateId, templateName, onDeleted, buttonClassName }: Props) {
-  const [open, setOpen] = useState(false);
+function TemplateDeleteDialog({ templateId, templateName, onDeleted, buttonClassName, open: controlledOpen, onOpenChange }: Props) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = (value: boolean) => {
+    setInternalOpen(value);
+    onOpenChange?.(value);
+  };
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: () => templatesApi.remove(templateId),
@@ -29,16 +36,18 @@ function TemplateDeleteDialog({ templateId, templateName, onDeleted, buttonClass
   });
 
   return (
-    <div>
-      <button
-        className={
-          buttonClassName ||
-          'rounded-md bg-rose-600 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-rose-500/20 transition-all duration-300 hover:bg-rose-500'
-        }
-        onClick={() => setOpen(true)}
-      >
-        Delete
-      </button>
+    <>
+      {controlledOpen === undefined && (
+        <button
+          className={
+            buttonClassName ||
+            'rounded-md bg-rose-600 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-rose-500/20 transition-all duration-300 hover:bg-rose-500'
+          }
+          onClick={() => setOpen(true)}
+        >
+          Delete
+        </button>
+      )}
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-xl border border-border bg-white p-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
@@ -65,7 +74,7 @@ function TemplateDeleteDialog({ templateId, templateName, onDeleted, buttonClass
           </div>
         </div>
       ) : null}
-    </div>
+    </>
   );
 }
 

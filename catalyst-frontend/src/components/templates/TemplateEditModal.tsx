@@ -25,8 +25,19 @@ const createVariableDraft = (variable?: TemplateVariable): VariableDraft => ({
   rules: variable?.rules?.join('; ') ?? '',
 });
 
-function TemplateEditModal({ template }: { template: Template }) {
-  const [open, setOpen] = useState(false);
+type EditProps = {
+  template: Template;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+};
+
+function TemplateEditModal({ template, open: controlledOpen, onOpenChange }: EditProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = (value: boolean) => {
+    setInternalOpen(value);
+    onOpenChange?.(value);
+  };
   const importFileRef = useRef<HTMLInputElement | null>(null);
   const [name, setName] = useState(template.name);
   const [description, setDescription] = useState(template.description ?? '');
@@ -322,16 +333,18 @@ function TemplateEditModal({ template }: { template: Template }) {
   }, [name, author, version, image, startup, stopCommand, sendSignalTo, parsedPorts.length, allocatedMemoryMb, allocatedCpuCores]);
 
   return (
-    <div>
-      <button
-        className="rounded-md border border-border bg-white px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-primary/30"
-        onClick={() => {
-          resetFromTemplate();
-          setOpen(true);
-        }}
-      >
-        Edit
-      </button>
+    <>
+      {controlledOpen === undefined && (
+        <button
+          className="rounded-md border border-border bg-white px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-primary/30"
+          onClick={() => {
+            resetFromTemplate();
+            setOpen(true);
+          }}
+        >
+          Edit
+        </button>
+      )}
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10 backdrop-blur-sm">
           <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl transition-all duration-300 dark:border-border dark:bg-surface-1">
@@ -888,7 +901,7 @@ function TemplateEditModal({ template }: { template: Template }) {
           </div>
         </div>
       ) : null}
-    </div>
+    </>
   );
 }
 

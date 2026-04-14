@@ -1,16 +1,55 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { motion, type Variants } from 'framer-motion';
+import {
+  FileCode,
+  ArrowLeft,
+  Settings,
+  Trash2,
+} from 'lucide-react';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
 import { useTemplate } from '../../hooks/useTemplates';
 import TemplateVariablesList from '../../components/templates/TemplateVariablesList';
 import { useAuthStore } from '../../stores/authStore';
 import TemplateEditModal from '../../components/templates/TemplateEditModal';
 import TemplateDeleteDialog from '../../components/templates/TemplateDeleteDialog';
 
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.05, delayChildren: 0.05 },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { type: 'spring', stiffness: 300, damping: 24 },
+  },
+};
+
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-1.5">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="truncate text-right text-xs font-medium text-foreground dark:text-zinc-100">
+        {value}
+      </span>
+    </div>
+  );
+}
+
 function TemplateDetailsPage() {
   const { templateId } = useParams();
   const navigate = useNavigate();
   const { data: template, isLoading, isError } = useTemplate(templateId);
   const { user } = useAuthStore();
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const canWrite = useMemo(
     () => user?.permissions?.includes('admin.write') || user?.permissions?.includes('*'),
     [user?.permissions],
@@ -18,17 +57,32 @@ function TemplateDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-border bg-white px-4 py-6 text-muted-foreground shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-primary/30">
-        Loading template...
-      </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex items-center justify-center py-20"
+      >
+        <div className="text-sm text-muted-foreground">Loading template…</div>
+      </motion.div>
     );
   }
 
   if (isError || !template) {
     return (
-      <div className="rounded-xl border border-rose-200 bg-rose-100/60 px-4 py-6 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
-        Unable to load template details.
-      </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex items-center justify-center py-20"
+      >
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 px-6 py-4 text-center">
+          <p className="text-sm font-medium text-rose-600 dark:text-rose-400">
+            Unable to load template details.
+          </p>
+          <Link to="/admin/templates" className="mt-2 inline-block text-xs text-muted-foreground hover:text-foreground">
+            ← Back to templates
+          </Link>
+        </div>
+      </motion.div>
     );
   }
 
@@ -39,146 +93,188 @@ function TemplateDetailsPage() {
   const imageVariants = template.images ?? [];
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl border border-border bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="h-14 w-14 overflow-hidden rounded-xl border border-border bg-surface-2 text-muted-foreground dark:border-border dark:bg-zinc-950 dark:text-zinc-200">
-              {iconUrl ? (
-                <img src={iconUrl} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-sm font-semibold uppercase">
-                  {template.name.slice(0, 2)}
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="relative min-h-screen overflow-hidden"
+    >
+      {/* Ambient background */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-amber-500/8 to-rose-500/8 blur-3xl dark:from-amber-500/15 dark:to-rose-500/15" />
+        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-violet-500/8 to-cyan-500/8 blur-3xl dark:from-violet-500/15 dark:to-cyan-500/15" />
+      </div>
+
+      <div className="relative z-10 space-y-5">
+        {/* ── Breadcrumb ── */}
+        <motion.div variants={itemVariants}>
+          <Link
+            to="/admin/templates"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-3 w-3" />
+            Back to Templates
+          </Link>
+        </motion.div>
+
+        {/* ── Header ── */}
+        <motion.div variants={itemVariants}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-3">
+                <div className="h-14 w-14 overflow-hidden rounded-xl border border-border bg-surface-2">
+                  {iconUrl ? (
+                    <img src={iconUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-sm font-bold uppercase text-muted-foreground">
+                      {template.name.slice(0, 2)}
+                    </div>
+                  )}
                 </div>
+                <div>
+                  <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+                    {template.name}
+                  </h1>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <Badge variant="secondary" className="text-xs">
+                      {template.author}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      v{template.version}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+              {template.description && (
+                <p className="ml-[4.25rem] text-sm text-muted-foreground">
+                  {template.description}
+                </p>
               )}
             </div>
-            <div>
-              <h1 className="text-2xl font-semibold text-foreground dark:text-white">
-                {template.name}
-              </h1>
-              <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground dark:text-muted-foreground">
-                <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 dark:border-border dark:bg-zinc-950/60">
-                  {template.author}
-                </span>
-                <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 dark:border-border dark:bg-zinc-950/60">
-                  v{template.version}
-                </span>
+
+            {canWrite && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowEditModal(true)}
+                  className="gap-1.5"
+                >
+                  <Settings className="h-3.5 w-3.5" />
+                  Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDeleteModal(true)}
+                  className="gap-1.5 text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 dark:text-rose-400 dark:hover:bg-rose-950/30 dark:hover:border-rose-800"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
+                </Button>
               </div>
-            </div>
+            )}
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <Link
-              to="/admin/templates"
-              className="rounded-full border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-            >
-              Back
-            </Link>
-            {canWrite ? (
-              <>
-                <TemplateEditModal template={template} />
-                <TemplateDeleteDialog
-                  templateId={template.id}
-                  templateName={template.name}
-                  onDeleted={() => navigate('/admin/templates')}
-                  buttonClassName="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 transition-all duration-300 hover:border-rose-400 dark:border-rose-500/30 dark:text-rose-300"
+        </motion.div>
+
+        {/* ── Info Grid ── */}
+        <motion.div
+          variants={itemVariants}
+          className="grid grid-cols-1 gap-4 lg:grid-cols-2"
+        >
+          {/* Runtime card */}
+          <div className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm">
+            <h2 className="font-display text-sm font-semibold text-foreground dark:text-white">
+              Runtime
+            </h2>
+            <div className="mt-3 divide-y divide-border/50">
+              <DetailRow label="Image" value={template.defaultImage || template.image} />
+              {imageVariants.length > 0 && (
+                <DetailRow
+                  label="Image variants"
+                  value={imageVariants.map((o) => o.label ?? o.name).join(', ')}
                 />
-                <span className="rounded-full bg-surface-2 px-3 py-1 text-xs text-muted-foreground dark:bg-surface-2 dark:text-zinc-300">
-                  Admin
-                </span>
+              )}
+              {template.defaultImage && (
+                <DetailRow label="Default image" value={template.defaultImage} />
+              )}
+              <DetailRow label="Install image" value={template.installImage ?? 'n/a'} />
+              <DetailRow label="Stop command" value={template.stopCommand} />
+              <DetailRow label="Signal" value={template.sendSignalTo} />
+              <DetailRow label="Ports" value={portList} />
+              <DetailRow
+                label="Resources"
+                value={`${template.allocatedCpuCores} CPU · ${template.allocatedMemoryMb} MB`}
+              />
+              <DetailRow
+                label="Config file(s)"
+                value={
+                  template.features?.configFiles?.length
+                    ? template.features.configFiles.join(', ')
+                    : template.features?.configFile ?? 'n/a'
+                }
+              />
+            </div>
+          </div>
+
+          {/* Startup card */}
+          <div className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm">
+            <h2 className="font-display text-sm font-semibold text-foreground dark:text-white">
+              Startup
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Variables are substituted before container start.
+            </p>
+            <div className="mt-3 rounded-lg border border-border bg-surface-2 px-3 py-2.5 font-mono text-xs text-foreground dark:bg-zinc-950/40 dark:text-zinc-200">
+              {template.startup}
+            </div>
+            {template.installScript && (
+              <>
+                <h3 className="mt-5 font-display text-sm font-semibold text-foreground dark:text-white">
+                  Install script
+                </h3>
+                <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-border bg-surface-2 px-3 py-2.5 font-mono text-xs text-foreground whitespace-pre-wrap dark:bg-zinc-950/40 dark:text-zinc-200">
+                  {template.installScript}
+                </div>
               </>
-            ) : null}
+            )}
           </div>
-        </div>
-        {template.description ? (
-          <p className="mt-3 text-sm text-muted-foreground dark:text-zinc-300">{template.description}</p>
-        ) : null}
-      </div>
+        </motion.div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-          <div className="text-sm font-semibold text-foreground dark:text-zinc-100">Runtime</div>
-          <div className="mt-3 space-y-2 text-xs text-muted-foreground dark:text-zinc-300">
-            <div className="flex items-center justify-between gap-4">
-              <span>Image</span>
-              <span className="text-foreground dark:text-zinc-100">
-                {template.defaultImage || template.image}
-              </span>
-            </div>
-            {imageVariants.length ? (
-              <div className="flex items-center justify-between gap-4">
-                <span>Image variants</span>
-                <span className="text-foreground dark:text-zinc-100">
-                  {imageVariants.map((option) => option.label ?? option.name).join(', ')}
-                </span>
-              </div>
-            ) : null}
-            {template.defaultImage ? (
-              <div className="flex items-center justify-between gap-4">
-                <span>Default image</span>
-                <span className="text-foreground dark:text-zinc-100">{template.defaultImage}</span>
-              </div>
-            ) : null}
-            <div className="flex items-center justify-between gap-4">
-              <span>Install image</span>
-              <span className="text-foreground dark:text-zinc-100">{template.installImage ?? 'n/a'}</span>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span>Stop command</span>
-              <span className="text-foreground dark:text-zinc-100">{template.stopCommand}</span>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span>Signal</span>
-              <span className="text-foreground dark:text-zinc-100">{template.sendSignalTo}</span>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span>Ports</span>
-              <span className="text-foreground dark:text-zinc-100">{portList}</span>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span>Resources</span>
-              <span className="text-foreground dark:text-zinc-100">
-                {template.allocatedCpuCores} CPU · {template.allocatedMemoryMb} MB
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span>Config file(s)</span>
-              <span className="text-foreground dark:text-zinc-100">
-                {template.features?.configFiles?.length
-                  ? template.features.configFiles.join(', ')
-                  : template.features?.configFile ?? 'n/a'}
-              </span>
+        {/* ── Variables ── */}
+        <motion.div variants={itemVariants}>
+          <div className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm">
+            <h2 className="font-display text-sm font-semibold text-foreground dark:text-white">
+              Variables
+              <Badge variant="outline" className="ml-2 text-xs">
+                {template.variables?.length ?? 0}
+              </Badge>
+            </h2>
+            <div className="mt-3">
+              <TemplateVariablesList variables={template.variables ?? []} />
             </div>
           </div>
-        </div>
-
-        <div className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-          <div className="text-sm font-semibold text-foreground dark:text-zinc-100">Startup</div>
-          <p className="mt-2 text-xs text-muted-foreground dark:text-muted-foreground">
-            Variables are substituted before container start.
-          </p>
-          <div className="mt-3 rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground dark:border-border dark:bg-zinc-950 dark:text-zinc-200">
-            {template.startup}
-          </div>
-          {template.installScript ? (
-            <>
-              <div className="mt-4 text-sm font-semibold text-foreground dark:text-zinc-100">
-                Install script
-              </div>
-              <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground dark:border-border dark:bg-zinc-950 dark:text-zinc-200 whitespace-pre-wrap">
-                {template.installScript}
-              </div>
-            </>
-          ) : null}
-        </div>
+        </motion.div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-        <div className="text-sm font-semibold text-foreground dark:text-zinc-100">Variables</div>
-        <div className="mt-3">
-          <TemplateVariablesList variables={template.variables ?? []} />
-        </div>
-      </div>
-    </div>
+      {/* ── Controlled Edit & Delete Modals ── */}
+      {showEditModal && template && (
+        <TemplateEditModal
+          template={template}
+          open
+          onOpenChange={(open) => { if (!open) setShowEditModal(false); }}
+        />
+      )}
+      {showDeleteModal && (
+        <TemplateDeleteDialog
+          templateId={template.id}
+          templateName={template.name}
+          onDeleted={() => navigate('/admin/templates')}
+          open
+          onOpenChange={(open) => { if (!open) setShowDeleteModal(false); }}
+        />
+      )}
+    </motion.div>
   );
 }
 

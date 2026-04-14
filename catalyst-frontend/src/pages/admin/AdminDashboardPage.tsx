@@ -95,7 +95,6 @@ function AdminDashboardPage() {
   const runningServers = servers.filter((s) => s.status === 'running').length;
   const stoppedServers = servers.filter((s) => s.status === 'stopped').length;
 
-  // Simulated trend data (in real app, this would come from API)
   const trends = {
     users: { value: 12, isPositive: true },
     servers: { value: 5, isPositive: true },
@@ -109,40 +108,37 @@ function AdminDashboardPage() {
       animate="visible"
       className="relative min-h-screen overflow-hidden"
     >
-      {/* Ambient background effects */}
+      {/* Ambient background — uses primary scale */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-gradient-to-br from-cyan-500/10 to-violet-500/10 blur-3xl dark:from-cyan-500/20 dark:to-violet-500/20" />
-        <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-gradient-to-tr from-sky-500/10 to-indigo-500/10 blur-3xl dark:from-sky-500/20 dark:to-indigo-500/20" />
+        <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-gradient-to-br from-primary-500/10 to-primary-300/10 blur-3xl dark:from-primary-500/20 dark:to-primary-300/20" />
+        <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-gradient-to-tr from-primary-600/10 to-primary-400/10 blur-3xl dark:from-primary-600/20 dark:to-primary-400/20" />
       </div>
 
       <div className="relative z-10 space-y-8">
         {/* Header Section */}
         <motion.div variants={itemVariants} className="relative">
           <div className="absolute inset-0 -z-10">
-            <div className="absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-zinc-200 to-transparent dark:via-zinc-800" />
+            <div className="absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-border to-transparent" />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-3">
                 <div className="relative">
-                  <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-cyan-500 to-violet-500 opacity-20 blur-sm" />
-                  <Sparkles className="relative h-7 w-7 text-cyan-600 dark:text-cyan-400" />
+                  <div className="absolute -inset-1 rounded-lg bg-primary opacity-20 blur-sm" />
+                  <Sparkles className="relative h-7 w-7 text-primary-600 dark:text-primary-400" />
                 </div>
-                <h1 className="text-3xl font-bold tracking-tight text-foreground dark:text-white">
+                <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
                   Admin Command
                 </h1>
-                <Badge
-                  variant="outline"
-                  className="border-cyan-200/50 bg-cyan-50/50 text-cyan-700 dark:border-cyan-900/50 dark:bg-cyan-950/50 dark:text-cyan-400"
-                >
+                <Badge variant="outline" className="border-primary-200/50 bg-primary-50/50 text-primary-700 dark:border-primary-900/50 dark:bg-primary-950/50 dark:text-primary-400">
                   <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-75" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan-500" />
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary-400 opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-primary-500" />
                   </span>
                   <span className="ml-1.5">Live</span>
                 </Badge>
               </div>
-              <p className="ml-10 text-sm text-muted-foreground dark:text-muted-foreground">
+              <p className="ml-10 text-sm text-muted-foreground">
                 Platform health, resources, and system activity overview
               </p>
             </div>
@@ -165,7 +161,7 @@ function AdminDashboardPage() {
           </div>
         </motion.div>
 
-        {/* Primary Stats Grid - Bento Style */}
+        {/* Primary Stats Grid — Bento Style */}
         <motion.div
           variants={itemVariants}
           className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-8"
@@ -177,7 +173,7 @@ function AdminDashboardPage() {
             href="/admin/users"
             loading={statsLoading}
             trend={trends.users}
-            color="cyan"
+            color="primary"
             index={0}
           />
           <EnhancedMiniStat
@@ -187,7 +183,7 @@ function AdminDashboardPage() {
             href="/admin/servers"
             loading={statsLoading}
             trend={trends.servers}
-            color="violet"
+            color="primary"
             index={1}
           />
           <EnhancedMiniStat
@@ -197,14 +193,14 @@ function AdminDashboardPage() {
             href="/admin/nodes"
             loading={statsLoading}
             trend={trends.nodes}
-            color="sky"
+            color="primary"
             index={2}
           />
           <EnhancedMiniStat
             title="Running"
             value={stats?.activeServers ?? runningServers}
             icon={Play}
-            color="emerald"
+            color="success"
             loading={statsLoading}
             index={4}
           />
@@ -212,7 +208,7 @@ function AdminDashboardPage() {
             title="Stopped"
             value={stoppedServers}
             icon={Square}
-            color="slate"
+            color="muted"
             loading={statsLoading}
             index={5}
           />
@@ -220,7 +216,7 @@ function AdminDashboardPage() {
             title="Online"
             value={onlineNodes}
             icon={CheckCircle}
-            color="emerald"
+            color="success"
             loading={statsLoading}
             index={6}
           />
@@ -228,7 +224,7 @@ function AdminDashboardPage() {
             title="Offline"
             value={offlineNodes}
             icon={XCircle}
-            color={offlineNodes > 0 ? 'rose' : 'slate'}
+            color={offlineNodes > 0 ? 'danger' : 'muted'}
             loading={statsLoading}
             index={7}
           />
@@ -238,15 +234,14 @@ function AdminDashboardPage() {
         <motion.div variants={itemVariants} className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <ClusterResourcesChart data={clusterMetrics} isLoading={metricsLoading} />
 
-          <Card className="group relative overflow-hidden border-border/80 bg-gradient-to-br from-white to-zinc-50/50 shadow-sm transition-all hover:shadow-md dark:border-border/50 dark:from-zinc-900 dark:to-zinc-800/50">
-            <div className="pointer-events-none absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgNDBWMGg0MHYyMEgwTDIwIDBoMjBMMCA0MHoiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2U1ZTdlNyIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIiBvcGFjaXR5PSIwLjAyIi8+PC9zdmc+')] opacity-50 dark:opacity-20" />
+          <Card className="group relative overflow-hidden border-border/80 bg-card shadow-sm transition-all hover:shadow-md dark:border-border/50">
             <CardHeader className="relative pb-3">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center gap-2">
-                    <div className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950/50 dark:to-emerald-900/30">
-                      <Waves className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                      <div className="absolute inset-0 rounded-lg ring-1 ring-inset ring-emerald-200/50 dark:ring-emerald-800/50" />
+                    <div className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-success-muted">
+                      <Waves className="h-4 w-4 text-success" />
+                      <div className="absolute inset-0 rounded-lg ring-1 ring-inset ring-success/20" />
                     </div>
                     System Health
                   </CardTitle>
@@ -255,7 +250,7 @@ function AdminDashboardPage() {
                 {healthLoading ? (
                   <Skeleton className="h-8 w-20 rounded-full" />
                 ) : health?.status === 'healthy' ? (
-                  <Badge className="gap-1.5 bg-emerald-50 px-3 py-1.5 text-emerald-700 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:ring-emerald-900/50">
+                  <Badge className="gap-1.5 bg-success-muted px-3 py-1.5 text-success ring-1 ring-inset ring-success/20">
                     <CheckCircle className="h-3.5 w-3.5" />
                     <span className="font-semibold">Healthy</span>
                   </Badge>
@@ -295,12 +290,12 @@ function AdminDashboardPage() {
                 detail="Active"
                 icon={Globe}
               />
-              <div className="mt-4 flex items-center justify-between rounded-lg border border-border bg-surface-2/80 px-3 py-2.5 dark:border-border dark:bg-surface-1/50">
+              <div className="mt-4 flex items-center justify-between rounded-lg border border-border bg-surface-2/80 px-3 py-2.5 dark:bg-surface-1/50">
                 <div className="flex items-center gap-2">
                   <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">Last updated</span>
+                  <span className="text-xs font-medium text-muted-foreground">Last updated</span>
                 </div>
-                <span className="text-xs font-mono text-foreground dark:text-zinc-300">
+                <span className="text-xs font-mono text-foreground">
                   {new Date().toLocaleTimeString()}
                 </span>
               </div>
@@ -311,17 +306,17 @@ function AdminDashboardPage() {
         {/* Activity and Node Overview */}
         <motion.div variants={itemVariants} className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2 overflow-hidden border-border/80 shadow-sm dark:border-border/50">
-            <CardHeader className="border-b border-border/50 bg-gradient-to-r from-zinc-50/50 to-transparent dark:border-border/50 dark:from-zinc-800/30">
+            <CardHeader className="border-b border-border/50 bg-surface-2/30 dark:bg-surface-1/30">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center gap-2.5">
-                    <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-50 to-violet-100 dark:from-violet-950/50 dark:to-violet-900/30">
-                      <Activity className="h-5 w-5 text-violet-600 dark:text-violet-400" />
-                      <div className="absolute inset-0 rounded-xl ring-1 ring-inset ring-violet-200/50 dark:ring-violet-800/50" />
+                    <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-primary-100 dark:bg-primary-900/30">
+                      <Activity className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+                      <div className="absolute inset-0 rounded-xl ring-1 ring-inset ring-primary-200/50 dark:ring-primary-800/50" />
                     </div>
                     <div>
                       <span>Recent Activity</span>
-                      <p className="text-sm font-normal text-muted-foreground dark:text-muted-foreground">
+                      <p className="text-sm font-normal text-muted-foreground">
                         Latest platform events
                       </p>
                     </div>
@@ -349,7 +344,7 @@ function AdminDashboardPage() {
                   ))}
                 </div>
               ) : logs.length > 0 ? (
-                <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                <div className="divide-y divide-border">
                   {logs.slice(0, 6).map((log, idx) => (
                     <motion.div
                       key={log.id}
@@ -358,30 +353,27 @@ function AdminDashboardPage() {
                       transition={{ delay: idx * 0.05 }}
                       className="group flex items-center gap-4 px-6 py-4 transition-colors hover:bg-surface-2/50 dark:hover:bg-surface-2/30"
                     >
-                      <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-50 to-violet-100 dark:from-violet-950/30 dark:to-violet-900/20">
-                        <Zap className="h-5 w-5 text-violet-600 dark:text-violet-400" />
-                        <div className="absolute inset-0 rounded-full ring-1 ring-inset ring-violet-200/50 dark:ring-violet-800/50" />
+                      <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/20">
+                        <Zap className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+                        <div className="absolute inset-0 rounded-full ring-1 ring-inset ring-primary-200/50 dark:ring-primary-800/50" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2.5">
                           <span className="font-semibold text-foreground dark:text-white">
                             {log.action}
                           </span>
-                          <Badge
-                            variant="outline"
-                            className="border-border bg-surface-2 text-xs font-medium dark:border-border dark:bg-surface-2"
-                          >
+                          <Badge variant="outline" className="border-border bg-surface-2 text-xs font-medium dark:bg-surface-2">
                             {log.resource}
                           </Badge>
                         </div>
-                        <p className="mt-0.5 text-sm text-muted-foreground dark:text-muted-foreground">
+                        <p className="mt-0.5 text-sm text-muted-foreground">
                           by{' '}
                           <span className="font-medium text-foreground dark:text-white">
                             {log.user?.username ?? log.user?.email ?? 'System'}
                           </span>
                         </p>
                       </div>
-                      <div className="flex shrink-0 items-center gap-2 rounded-full bg-surface-2 px-3 py-1.5 text-xs font-medium text-muted-foreground dark:bg-surface-2/50 dark:text-muted-foreground">
+                      <div className="flex shrink-0 items-center gap-2 rounded-full bg-surface-2 px-3 py-1.5 text-xs font-medium text-muted-foreground dark:bg-surface-2/50">
                         <Clock className="h-3 w-3" />
                         <span>{formatTime(log.timestamp)}</span>
                       </div>
@@ -391,15 +383,15 @@ function AdminDashboardPage() {
               ) : (
                 <div className="py-16 text-center">
                   <div className="relative inline-flex">
-                    <div className="absolute inset-0 -m-2 rounded-full bg-gradient-to-br from-zinc-100 to-zinc-200 blur-xl dark:from-zinc-800 dark:to-zinc-700" />
-                    <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-zinc-50 to-zinc-100 shadow-sm dark:from-zinc-900 dark:to-zinc-800">
+                    <div className="absolute inset-0 -m-2 rounded-full bg-surface-2 blur-xl" />
+                    <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-surface-2 shadow-sm">
                       <Activity className="h-7 w-7 text-muted-foreground" />
                     </div>
                   </div>
-                  <p className="mt-4 text-sm font-medium text-muted-foreground dark:text-muted-foreground">
+                  <p className="mt-4 text-sm font-medium text-muted-foreground">
                     No recent activity
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     Activity will appear here as actions are performed
                   </p>
                 </div>
@@ -408,17 +400,17 @@ function AdminDashboardPage() {
           </Card>
 
           <Card className="overflow-hidden border-border/80 shadow-sm dark:border-border/50">
-            <CardHeader className="border-b border-border/50 bg-gradient-to-r from-zinc-50/50 to-transparent dark:border-border/50 dark:from-zinc-800/30">
+            <CardHeader className="border-b border-border/50 bg-surface-2/30 dark:bg-surface-1/30">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center gap-2.5">
-                    <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-sky-50 to-sky-100 dark:from-sky-950/50 dark:to-sky-900/30">
-                      <HardDrive className="h-5 w-5 text-sky-600 dark:text-sky-400" />
-                      <div className="absolute inset-0 rounded-xl ring-1 ring-inset ring-sky-200/50 dark:ring-sky-800/50" />
+                    <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-primary-100 dark:bg-primary-900/30">
+                      <HardDrive className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+                      <div className="absolute inset-0 rounded-xl ring-1 ring-inset ring-primary-200/50 dark:ring-primary-800/50" />
                     </div>
                     <div>
                       <span>Cluster Nodes</span>
-                      <p className="text-sm font-normal text-muted-foreground dark:text-muted-foreground">
+                      <p className="text-sm font-normal text-muted-foreground">
                         Infrastructure status
                       </p>
                     </div>
@@ -436,12 +428,12 @@ function AdminDashboardPage() {
               {nodes.length === 0 ? (
                 <div className="py-8 text-center">
                   <div className="relative inline-flex">
-                    <div className="absolute inset-0 -m-2 rounded-full bg-gradient-to-br from-zinc-100 to-zinc-200 blur-xl dark:from-zinc-800 dark:to-zinc-700" />
-                    <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-zinc-50 to-zinc-100 shadow-sm dark:from-zinc-900 dark:to-zinc-800">
+                    <div className="absolute inset-0 -m-2 rounded-full bg-surface-2 blur-xl" />
+                    <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-surface-2 shadow-sm">
                       <HardDrive className="h-6 w-6 text-muted-foreground" />
                     </div>
                   </div>
-                  <p className="mt-4 text-sm font-medium text-muted-foreground dark:text-muted-foreground">
+                  <p className="mt-4 text-sm font-medium text-muted-foreground">
                     No nodes configured
                   </p>
                   <Button variant="outline" size="sm" className="mt-4" asChild>
@@ -458,40 +450,37 @@ function AdminDashboardPage() {
                   >
                     <Link
                       to={`/admin/nodes/${node.id}`}
-                      className="group flex items-center justify-between gap-3 rounded-xl border border-border bg-gradient-to-r from-zinc-50/50 to-transparent px-4 py-3.5 transition-all hover:border-border hover:shadow-md dark:border-border dark:from-zinc-800/30 dark:hover:border-border"
+                      className="group flex items-center justify-between gap-3 rounded-xl border border-border bg-surface-2/30 px-4 py-3.5 transition-all hover:border-border hover:shadow-md dark:bg-surface-1/30"
                     >
                       <div className="flex items-center gap-3">
                         <div className="relative">
                           <span
                             className={cn(
-                              'flex h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-zinc-900',
+                              'flex h-2.5 w-2.5 rounded-full ring-2 ring-card',
                               node.isOnline
-                                ? 'bg-emerald-500 shadow-[0_0_8px_-1px_rgba(16,185,129,0.5)]'
-                                : 'bg-rose-500'
+                                ? 'bg-success shadow-[0_0_8px_-1px_hsl(var(--success))]'
+                                : 'bg-danger'
                             )}
                           />
                           {node.isOnline && (
-                            <span className="absolute inset-0 animate-ping rounded-full bg-emerald-400 opacity-75" />
+                            <span className="absolute inset-0 animate-ping rounded-full bg-success opacity-75" />
                           )}
                         </div>
                         <div className="space-y-0.5">
                           <span className="block text-sm font-semibold text-foreground dark:text-white">
                             {node.name}
                           </span>
-                          <span className="block text-xs text-muted-foreground dark:text-muted-foreground">
+                          <span className="block text-xs text-muted-foreground">
                             {node.isOnline ? 'Online' : 'Offline'}
                           </span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge
-                          variant="secondary"
-                          className="bg-surface-2 text-xs font-semibold dark:bg-surface-2"
-                        >
+                        <Badge variant="secondary" className="text-xs font-semibold">
                           <Cpu className="mr-1 h-3 w-3" />
                           {node._count?.servers ?? 0}
                         </Badge>
-                        <ArrowUpRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground dark:group-hover:text-zinc-300" />
+                        <ArrowUpRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
                       </div>
                     </Link>
                   </motion.div>
@@ -500,7 +489,7 @@ function AdminDashboardPage() {
               {nodes.length > 6 && (
                 <Link
                   to="/admin/nodes"
-                  className="block rounded-xl border border-dashed border-border py-3 text-center text-sm text-muted-foreground transition-colors hover:border-border hover:bg-surface-2 dark:border-border dark:text-muted-foreground dark:hover:bg-surface-2"
+                  className="block rounded-xl border border-dashed border-border py-3 text-center text-sm text-muted-foreground transition-colors hover:border-border hover:bg-surface-2"
                 >
                   +{nodes.length - 6} more node{nodes.length - 6 > 1 ? 's' : ''}
                 </Link>
@@ -508,8 +497,6 @@ function AdminDashboardPage() {
             </CardContent>
           </Card>
         </motion.div>
-
-
       </div>
     </motion.div>
   );
@@ -523,7 +510,7 @@ function EnhancedMiniStat({
   href,
   loading,
   trend,
-  color = 'cyan' as const,
+  color = 'primary' as const,
   index,
 }: {
   title: string;
@@ -532,74 +519,44 @@ function EnhancedMiniStat({
   href?: string;
   loading: boolean;
   trend?: { value: number; isPositive: boolean };
-  color?: 'cyan' | 'violet' | 'sky' | 'emerald' | 'rose' | 'amber' | 'indigo' | 'slate';
+  color?: 'primary' | 'success' | 'danger' | 'warning' | 'muted';
   index: number;
 }) {
-  const colorStyles: Record<
-    string,
-    {
-      bg: string;
-      icon: string;
-      glow: string;
-      border: string;
-      text: string;
-    }
-  > = {
-    cyan: {
-      bg: 'bg-cyan-50/80 dark:bg-cyan-950/30',
-      icon: 'bg-gradient-to-br from-cyan-100 to-cyan-200 dark:from-cyan-900/40 dark:to-cyan-800/40 text-cyan-700 dark:text-cyan-300',
-      glow: 'group-hover:shadow-cyan-200/50 dark:group-hover:shadow-cyan-900/20',
-      border: 'border-cyan-100 dark:border-cyan-900/30',
-      text: 'text-cyan-700 dark:text-cyan-400',
+  const colorStyles: Record<string, { bg: string; icon: string; glow: string; border: string; text: string }> = {
+    primary: {
+      bg: 'bg-primary-50/80 dark:bg-primary-950/30',
+      icon: 'bg-primary-100 dark:bg-primary-800/40 text-primary-700 dark:text-primary-300',
+      glow: 'group-hover:shadow-primary-200/50 dark:group-hover:shadow-primary-900/20',
+      border: 'border-primary-100 dark:border-primary-900/30',
+      text: 'text-primary-700 dark:text-primary-400',
     },
-    violet: {
-      bg: 'bg-violet-50/80 dark:bg-violet-950/30',
-      icon: 'bg-gradient-to-br from-violet-100 to-violet-200 dark:from-violet-900/40 dark:to-violet-800/40 text-violet-700 dark:text-violet-300',
-      glow: 'group-hover:shadow-violet-200/50 dark:group-hover:shadow-violet-900/20',
-      border: 'border-violet-100 dark:border-violet-900/30',
-      text: 'text-violet-700 dark:text-violet-400',
+    success: {
+      bg: 'bg-success-muted',
+      icon: 'bg-success-muted text-success',
+      glow: 'group-hover:shadow-success/20',
+      border: 'border-success/20',
+      text: 'text-success',
     },
-    sky: {
-      bg: 'bg-sky-50/80 dark:bg-sky-950/30',
-      icon: 'bg-gradient-to-br from-sky-100 to-sky-200 dark:from-sky-900/40 dark:to-sky-800/40 text-sky-700 dark:text-sky-300',
-      glow: 'group-hover:shadow-sky-200/50 dark:group-hover:shadow-sky-900/20',
-      border: 'border-sky-100 dark:border-sky-900/30',
-      text: 'text-sky-700 dark:text-sky-400',
+    danger: {
+      bg: 'bg-danger-muted',
+      icon: 'bg-danger-muted text-danger',
+      glow: 'group-hover:shadow-danger/20',
+      border: 'border-danger/20',
+      text: 'text-danger',
     },
-    emerald: {
-      bg: 'bg-emerald-50/80 dark:bg-emerald-950/30',
-      icon: 'bg-gradient-to-br from-emerald-100 to-emerald-200 dark:from-emerald-900/40 dark:to-emerald-800/40 text-emerald-700 dark:text-emerald-300',
-      glow: 'group-hover:shadow-emerald-200/50 dark:group-hover:shadow-emerald-900/20',
-      border: 'border-emerald-100 dark:border-emerald-900/30',
-      text: 'text-emerald-700 dark:text-emerald-400',
+    warning: {
+      bg: 'bg-warning-muted',
+      icon: 'bg-warning-muted text-warning',
+      glow: 'group-hover:shadow-warning/20',
+      border: 'border-warning/20',
+      text: 'text-warning',
     },
-    rose: {
-      bg: 'bg-rose-50/80 dark:bg-rose-950/30',
-      icon: 'bg-gradient-to-br from-rose-100 to-rose-200 dark:from-rose-900/40 dark:to-rose-800/40 text-rose-700 dark:text-rose-300',
-      glow: 'group-hover:shadow-rose-200/50 dark:group-hover:shadow-rose-900/20',
-      border: 'border-rose-100 dark:border-rose-900/30',
-      text: 'text-rose-700 dark:text-rose-400',
-    },
-    amber: {
-      bg: 'bg-amber-50/80 dark:bg-amber-950/30',
-      icon: 'bg-gradient-to-br from-amber-100 to-amber-200 dark:from-amber-900/40 dark:to-amber-800/40 text-amber-700 dark:text-amber-300',
-      glow: 'group-hover:shadow-amber-200/50 dark:group-hover:shadow-amber-900/20',
-      border: 'border-amber-100 dark:border-amber-900/30',
-      text: 'text-amber-700 dark:text-amber-400',
-    },
-    indigo: {
-      bg: 'bg-indigo-50/80 dark:bg-indigo-950/30',
-      icon: 'bg-gradient-to-br from-indigo-100 to-indigo-200 dark:from-indigo-900/40 dark:to-indigo-800/40 text-indigo-700 dark:text-indigo-300',
-      glow: 'group-hover:shadow-indigo-200/50 dark:group-hover:shadow-indigo-900/20',
-      border: 'border-indigo-100 dark:border-indigo-900/30',
-      text: 'text-indigo-700 dark:text-indigo-400',
-    },
-    slate: {
+    muted: {
       bg: 'bg-surface-2/80 dark:bg-surface-2/30',
-      icon: 'bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800/40 dark:to-zinc-700/40 text-foreground dark:text-zinc-300',
-      glow: 'group-hover:shadow-zinc-200/50 dark:group-hover:shadow-zinc-700/20',
+      icon: 'bg-surface-3 dark:bg-surface-2 text-muted-foreground dark:text-zinc-300',
+      glow: '',
       border: 'border-border dark:border-border/30',
-      text: 'text-foreground dark:text-muted-foreground',
+      text: 'text-muted-foreground',
     },
   };
 
@@ -634,7 +591,7 @@ function EnhancedMiniStat({
             {value ?? 0}
           </span>
         )}
-        <span className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
+        <span className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {title}
         </span>
       </div>
@@ -643,8 +600,8 @@ function EnhancedMiniStat({
           className={cn(
             'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
             trend.isPositive
-              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400'
-              : 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400'
+              ? 'bg-success-muted text-success'
+              : 'bg-danger-muted text-danger'
           )}
         >
           {trend.isPositive ? (
@@ -677,10 +634,10 @@ function EnhancedHealthRow({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-white px-4 py-3 shadow-sm transition-colors hover:bg-surface-2 dark:border-border dark:bg-surface-1/50 dark:hover:bg-surface-2/50">
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm transition-colors hover:bg-surface-2 dark:bg-surface-1/50 dark:hover:bg-surface-2/50">
       <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 dark:bg-surface-2">
-          <Icon className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2">
+          <Icon className="h-4 w-4 text-muted-foreground" />
         </div>
         <span className="text-sm font-semibold text-foreground dark:text-zinc-300">
           {label}
@@ -691,17 +648,17 @@ function EnhancedHealthRow({
       ) : (
         <div className="flex items-center gap-3">
           {detail && (
-            <span className="text-sm font-medium text-muted-foreground dark:text-muted-foreground">
+            <span className="text-sm font-medium text-muted-foreground">
               {detail}
             </span>
           )}
           {status ? (
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/50">
-              <CheckCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-success-muted">
+              <CheckCircle className="h-3.5 w-3.5 text-success" />
             </div>
           ) : (
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-950/50">
-              <XCircle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-danger-muted">
+              <XCircle className="h-3.5 w-3.5 text-danger" />
             </div>
           )}
         </div>
@@ -709,8 +666,6 @@ function EnhancedHealthRow({
     </div>
   );
 }
-
-
 
 // Quick Actions Menu
 function QuickActionsMenu() {

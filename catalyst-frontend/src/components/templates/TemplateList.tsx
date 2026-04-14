@@ -18,8 +18,8 @@ function TemplateList({ templates }: Props) {
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-      {templates.map((template) => (
-        <TemplateCard key={template.id} template={template} />
+      {templates.map((template, i) => (
+        <TemplateCard key={template.id} template={template} index={i} />
       ))}
     </div>
   );

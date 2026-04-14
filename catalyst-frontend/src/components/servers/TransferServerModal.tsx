@@ -4,6 +4,14 @@ import { serversApi } from '../../services/api/servers';
 import type { BackupStorageMode } from '../../types/server';
 import { useNodes } from '../../hooks/useNodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 type Props = {
   serverId: string;
@@ -34,75 +42,72 @@ function TransferServerModal({ serverId, disabled = false }: Props) {
 
   return (
     <div>
-      <button
-        className="rounded-md border border-border bg-white px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground disabled:opacity-60 dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-primary/30"
-        onClick={() => {
-          if (!disabled) setOpen(true);
-        }}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => { if (!disabled) setOpen(true); }}
         disabled={disabled}
       >
         Transfer
-      </button>
+      </Button>
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-border bg-white p-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-foreground dark:text-white">Transfer server</h2>
-              <button
-                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                onClick={() => setOpen(false)}
-              >
-                Close
-              </button>
+              <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>Close</Button>
             </div>
-            <div className="mt-4 space-y-3 text-sm text-muted-foreground dark:text-zinc-300">
+            <div className="mt-4 space-y-3 text-sm text-muted-foreground">
               <label className="block space-y-1">
-                <span className="text-muted-foreground dark:text-muted-foreground">Target node</span>
-                <select
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                <span className="text-xs font-medium">Target node</span>
+                <Select
                   value={selectedTargetNodeId}
-                  onChange={(e) => setTargetNodeId(e.target.value)}
+                  onValueChange={setTargetNodeId}
                   disabled={nodesLoading || !nodes.length}
                 >
-                  {!nodes.length ? <option value="">No nodes available</option> : null}
-                  {nodes.map((n) => (
-                    <option key={n.id} value={n.id}>
-                      {n.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select node" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {!nodes.length && <SelectItem value="__none" disabled>No nodes available</SelectItem>}
+                    {nodes.map((n) => (
+                      <SelectItem key={n.id} value={n.id}>{n.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </label>
               <label className="block space-y-1">
-                <span className="text-muted-foreground dark:text-muted-foreground">Transfer storage</span>
-                <select
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                <span className="text-xs font-medium">Transfer storage</span>
+                <Select
                   value={transferMode}
-                  onChange={(e) => setTransferMode(e.target.value as BackupStorageMode)}
+                  onValueChange={(v) => setTransferMode(v as BackupStorageMode)}
                   disabled={disabled}
                 >
-                  <option value="local">Shared filesystem</option>
-                  <option value="s3">S3</option>
-                  <option value="stream">Stream</option>
-                </select>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="local">Shared filesystem</SelectItem>
+                    <SelectItem value="s3">S3</SelectItem>
+                    <SelectItem value="stream">Stream</SelectItem>
+                  </SelectContent>
+                </Select>
               </label>
-              <p className="text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Transferring will reschedule workloads on the selected node.
               </p>
             </div>
             <div className="mt-4 flex justify-end gap-2 text-xs">
-              <button
-                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                onClick={() => setOpen(false)}
-              >
+              <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
                 Cancel
-              </button>
-                <button
-                  className="rounded-md bg-primary-600 px-4 py-2 font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
-                  onClick={() => mutation.mutate()}
-                  disabled={mutation.isPending || !selectedTargetNodeId || !nodes.length || disabled}
-                >
-                  Transfer
-                </button>
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => mutation.mutate()}
+                disabled={mutation.isPending || !selectedTargetNodeId || !nodes.length || disabled}
+              >
+                Transfer
+              </Button>
             </div>
           </div>
         </div>

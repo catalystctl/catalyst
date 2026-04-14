@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { serversApi } from '../../services/api/servers';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
+import { Button } from '@/components/ui/button';
 import type { ServerStatus } from '../../types/server';
 
 type Props = {
@@ -56,40 +57,43 @@ function ServerControls({ serverId, status, permissions }: Props) {
     <>
       <div className="flex flex-wrap gap-1.5 text-xs">
         {canStart && (
-          <button
-            className="rounded-lg bg-success px-3 py-1.5 font-semibold text-white transition-all duration-200 hover:opacity-90 disabled:opacity-40"
+          <Button
+            size="sm"
+            className="bg-success text-white hover:opacity-90"
             disabled={start.isPending || status === 'running' || isSuspended}
             onClick={() => start.mutate()}
           >
             Start
-          </button>
+          </Button>
         )}
         {canStop && (
-          <button
-            className="rounded-lg bg-zinc-700 px-3 py-1.5 font-semibold text-zinc-100 transition-all duration-200 hover:bg-zinc-600 disabled:opacity-40 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          <Button
+            size="sm"
+            variant="secondary"
             disabled={stop.isPending || status === 'stopped' || isSuspended}
             onClick={() => stop.mutate()}
           >
             Stop
-          </button>
+          </Button>
         )}
         {canRestart && (
-          <button
-            className="rounded-lg bg-primary px-3 py-1.5 font-semibold text-primary-foreground transition-all duration-200 hover:opacity-90 disabled:opacity-40"
+          <Button
+            size="sm"
             disabled={restart.isPending || isSuspended}
             onClick={() => restart.mutate()}
           >
             Restart
-          </button>
+          </Button>
         )}
         {canKill && (
-          <button
-            className="rounded-lg bg-danger px-3 py-1.5 font-semibold text-white transition-all duration-200 hover:opacity-90 disabled:opacity-40"
+          <Button
+            size="sm"
+            variant="destructive"
             disabled={kill.isPending || isSuspended || status === 'stopped'}
             onClick={() => setShowKillConfirm(true)}
           >
             Kill
-          </button>
+          </Button>
         )}
       </div>
 

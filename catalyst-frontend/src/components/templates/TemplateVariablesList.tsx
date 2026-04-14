@@ -1,3 +1,4 @@
+import { Badge } from '../../components/ui/badge';
 import type { TemplateVariable } from '../../types/template';
 
 type Props = {
@@ -6,40 +7,40 @@ type Props = {
 
 function TemplateVariablesList({ variables }: Props) {
   if (!variables.length) {
-    return <div className="text-sm text-muted-foreground dark:text-muted-foreground">No variables defined.</div>;
+    return (
+      <div className="py-4 text-center text-sm text-muted-foreground">
+        No variables defined.
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {variables.map((variable) => (
         <div
           key={variable.name}
-          className="rounded-lg border border-border bg-white px-3 py-2 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
+          className="rounded-lg border border-border/50 bg-surface-2/50 px-3 py-2.5 transition-colors hover:bg-surface-2 dark:bg-surface-2/30"
         >
           <div className="flex items-center justify-between gap-2">
-            <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
+            <div className="text-sm font-medium text-foreground dark:text-zinc-100">
               {variable.name}
-              {variable.required ? <span className="ml-1 text-xs text-rose-400">*</span> : null}
+              {variable.required && <span className="ml-1 text-xs text-rose-400">*</span>}
             </div>
-            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-muted-foreground dark:bg-surface-2 dark:text-zinc-300">
+            <Badge variant="outline" className="shrink-0 text-[11px]">
               {variable.input ?? 'text'}
-            </span>
+            </Badge>
           </div>
-          {variable.description ? (
-            <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
-              {variable.description}
-            </div>
-          ) : null}
-          <div className="mt-2 text-xs text-muted-foreground dark:text-muted-foreground">
-            Default:{' '}
-            <span className="text-foreground dark:text-zinc-300">{variable.default || '—'}</span>
+          {variable.description && (
+            <div className="mt-0.5 text-xs text-muted-foreground">{variable.description}</div>
+          )}
+          <div className="mt-1.5 text-xs text-muted-foreground">
+            Default: <span className="font-medium text-foreground dark:text-zinc-300">{variable.default || '—'}</span>
           </div>
-          {variable.rules?.length ? (
-            <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
-              Rules:{' '}
-              <span className="text-foreground dark:text-zinc-300">{variable.rules.join(', ')}</span>
+          {variable.rules && variable.rules.length > 0 && (
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              Rules: <span className="font-medium text-foreground dark:text-zinc-300">{variable.rules.join(', ')}</span>
             </div>
-          ) : null}
+          )}
         </div>
       ))}
     </div>

@@ -4,8 +4,19 @@ import type { NodeInfo } from '../../types/node';
 import { nodesApi } from '../../services/api/nodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
 
-function NodeUpdateModal({ node }: { node: NodeInfo }) {
-  const [open, setOpen] = useState(false);
+type Props = {
+  node: NodeInfo;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+};
+
+function NodeUpdateModal({ node, open: controlledOpen, onOpenChange }: Props) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = (value: boolean) => {
+    setInternalOpen(value);
+    onOpenChange?.(value);
+  };
   const [name, setName] = useState(node.name);
   const [description, setDescription] = useState(node.description ?? '');
   const [hostname, setHostname] = useState(node.hostname ?? '');
@@ -40,12 +51,14 @@ function NodeUpdateModal({ node }: { node: NodeInfo }) {
 
   return (
     <>
-      <button
-        className="w-full rounded-md border border-border bg-white px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-primary/30"
-        onClick={() => setOpen(true)}
-      >
-        Update
-      </button>
+      {controlledOpen === undefined && (
+        <button
+          className="w-full rounded-md border border-border bg-white px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-primary/30"
+          onClick={() => setOpen(true)}
+        >
+          Update
+        </button>
+      )}
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-xl border border-border bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">

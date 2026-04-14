@@ -2,14 +2,14 @@ import { Play, Square, Loader2, AlertTriangle, ArrowRightLeft, Ban } from 'lucid
 import type { ServerStatus } from '../../types/server';
 
 const colorMap: Record<ServerStatus, string> = {
-  stopped: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300',
-  installing: 'bg-primary/15 text-primary dark:bg-primary/20 dark:text-primary-400',
-  starting: 'bg-primary/15 text-primary dark:bg-primary/20 dark:text-primary-400',
-  running: 'bg-success/15 text-success dark:bg-success/20 dark:text-emerald-400',
-  stopping: 'bg-warning/15 text-warning dark:bg-warning/20 dark:text-amber-400',
-  crashed: 'bg-danger/15 text-danger dark:bg-danger/20 dark:text-rose-400',
-  transferring: 'bg-info/15 text-info dark:bg-info/20 dark:text-blue-400',
-  suspended: 'bg-danger/15 text-danger dark:bg-danger/20 dark:text-rose-400',
+  stopped: 'bg-surface-3 text-muted-foreground dark:bg-surface-2 dark:text-muted-foreground',
+  installing: 'bg-primary-muted text-primary',
+  starting: 'bg-primary-muted text-primary',
+  running: 'bg-success-muted text-success',
+  stopping: 'bg-warning-muted text-warning',
+  crashed: 'bg-danger-muted text-danger',
+  transferring: 'bg-info-muted text-info',
+  suspended: 'bg-danger-muted text-danger',
 };
 
 const iconMap: Record<ServerStatus, React.ReactNode> = {

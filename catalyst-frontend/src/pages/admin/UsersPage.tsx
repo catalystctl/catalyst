@@ -1,15 +1,185 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion, type Variants } from 'framer-motion';
+import {
+  Users,
+  Search,
+  UserPlus,
+  Settings,
+  Trash2,
+  Shield,
+  Mail,
+} from 'lucide-react';
 import EmptyState from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/input';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
 import { useAdminRoles, useAdminServers, useAdminUsers } from '../../hooks/useAdmin';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { NodeAssignmentsSelector } from '../../components/admin/NodeAssignmentsSelector';
 import type { NodeAssignmentWithExpiration } from '../../components/admin/NodeAssignmentsSelector';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
+import Pagination from '../../components/shared/Pagination';
 
 const pageSize = 20;
+
+// ── Animation Variants ──
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.05, delayChildren: 0.05 },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { type: 'spring', stiffness: 300, damping: 24 },
+  },
+};
+
+// ── Modal Shell ──
+function ModalShell({
+  open,
+  onClose,
+  title,
+  subtitle,
+  children,
+  footer,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+        className="flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl md:m-4 md:h-auto md:max-h-[90vh]"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-4">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground dark:text-white">{title}</h2>
+            {subtitle && (
+              <p className="text-xs text-muted-foreground">{subtitle}</p>
+            )}
+          </div>
+          <button
+            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground dark:text-zinc-300"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-5 text-sm text-foreground dark:text-zinc-100">
+          {children}
+        </div>
+        {footer && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-4 text-xs">
+            {footer}
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+
+// ── User Card ──
+function UserCard({
+  user,
+  onEdit,
+  onDelete,
+  isDeleting,
+  index,
+}: {
+  user: any;
+  onEdit: () => void;
+  onDelete: () => void;
+  isDeleting: boolean;
+  index: number;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        type: 'spring',
+        stiffness: 300,
+        damping: 24,
+        delay: index * 0.03,
+      }}
+      className="group relative overflow-hidden rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-100 dark:bg-primary-900/30">
+              <Users className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+            </div>
+            <div className="min-w-0">
+              <div className="truncate font-semibold text-foreground dark:text-zinc-100">
+                {user.username}
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Mail className="h-3 w-3 shrink-0" />
+                <span className="truncate">{user.email}</span>
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            {user.roles.length > 0 ? (
+              user.roles.map((role: any) => (
+                <Badge key={role.id} variant="outline" className="text-[11px]">
+                  <Shield className="mr-1 h-2.5 w-2.5" />
+                  {role.name}
+                </Badge>
+              ))
+            ) : (
+              <span className="text-xs text-muted-foreground">No roles</span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+          <button
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary disabled:pointer-events-none disabled:opacity-30"
+            onClick={onEdit}
+            title="Edit"
+          >
+            <Settings className="h-3.5 w-3.5" />
+          </button>
+          <button
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:pointer-events-none disabled:opacity-30"
+            onClick={onDelete}
+            disabled={isDeleting}
+            title="Delete"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center gap-3 text-[11px] text-muted-foreground">
+        <span>Created {new Date(user.createdAt).toLocaleDateString()}</span>
+        {user.banned && (
+          <Badge variant="destructive" className="text-[10px]">
+            Banned
+          </Badge>
+        )}
+      </div>
+    </motion.div>
+  );
+}
 
 function UsersPage() {
   const [page, setPage] = useState(1);
@@ -153,521 +323,326 @@ function UsersPage() {
   const toggleItem = (items: string[], value: string) =>
     items.includes(value) ? items.filter((item) => item !== value) : [...items, value];
 
+  const handleEditUser = async (user: any) => {
+    const nextId = user.id;
+    const requestId = editingRequestRef.current + 1;
+    editingRequestRef.current = requestId;
+    setEditingUserId(nextId);
+    setEditEmail(user.email);
+    setEditUsername(user.username);
+    setEditPassword('');
+    setEditRoleIds(user.roles.map((role: any) => role.id));
+    setEditServerIds([]);
+    setEditRoleSearch('');
+    setEditServerSearch('');
+
+    adminApi
+      .getUserServers(nextId)
+      .then((serverSelection) => {
+        if (editingRequestRef.current === requestId) {
+          setEditServerIds(serverSelection);
+        }
+      })
+      .catch(() => {
+        notifyError('Failed to load user servers');
+      });
+
+    try {
+      const response = await fetch(`/api/roles/users/${nextId}/nodes`, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json();
+      const nodes = data.data || [];
+      if (editingRequestRef.current === requestId) {
+        setSelectedNodeIds(nodes.map((n: any) => ({
+          nodeId: n.nodeId,
+          nodeName: n.name,
+          source: n.source || 'user',
+          roleName: n.roleName,
+          expiresAt: n.expiresAt,
+        })));
+      }
+    } catch {
+      setSelectedNodeIds([]);
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl border border-border bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1/70 dark:shadow-surface-dark dark:hover:border-primary/30">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground dark:text-white">User Management</h1>
-            <p className="text-sm text-muted-foreground dark:text-muted-foreground">
-              Create and manage administrator accounts with role-based access.
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="relative min-h-screen overflow-hidden"
+    >
+      {/* Ambient background */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-cyan-500/8 to-blue-500/8 blur-3xl dark:from-cyan-500/15 dark:to-blue-500/15" />
+        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-violet-500/8 to-rose-500/8 blur-3xl dark:from-violet-500/15 dark:to-rose-500/15" />
+      </div>
+
+      <div className="relative z-10 space-y-5">
+        {/* ── Header ── */}
+        <motion.div variants={itemVariants} className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 opacity-20 blur-sm" />
+                <Users className="relative h-7 w-7 text-cyan-600 dark:text-cyan-400" />
+              </div>
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+                User Management
+              </h1>
+            </div>
+            <p className="ml-10 text-sm text-muted-foreground">
+              Create and manage accounts with role-based access.
             </p>
           </div>
-          <button
-            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500"
-            onClick={() => {
-              setIsCreateOpen(true);
-              setRoleSearch('');
-              setServerSearch('');
-            }}
-          >
-            Create user
-          </button>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground dark:text-muted-foreground">
-          <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
-            {data?.pagination?.total ?? users.length} total users
-          </span>
-          <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
-            {roles.length} roles available
-          </span>
-          <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
-            {servers.length} servers assignable
-          </span>
-        </div>
-      </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-white px-4 py-3 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-        <label className="text-xs text-muted-foreground dark:text-zinc-300">
-          Search
-          <Input
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(1);
-            }}
-            placeholder="Search users"
-            className="mt-1 w-56"
-          />
-        </label>
-        <div className="text-xs text-muted-foreground dark:text-muted-foreground">
-          Showing {users.length} of {data?.pagination?.total ?? users.length}
-        </div>
-      </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" onClick={() => { setIsCreateOpen(true); setRoleSearch(''); setServerSearch(''); }} className="gap-1.5">
+              <UserPlus className="h-3.5 w-3.5" />
+              Create user
+            </Button>
+          </div>
+        </motion.div>
 
-      {isLoading ? (
-        <div className="rounded-xl border border-border bg-white px-4 py-6 text-muted-foreground shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-primary/30">
-          Loading users...
-        </div>
-      ) : users.length ? (
-        <div className="space-y-4">
-          <div className="grid gap-4 lg:grid-cols-2">
-            {users.map((user) => (
-              <div
-                key={user.id}
-                className="rounded-2xl border border-border bg-white p-5 shadow-surface-light transition-all duration-300 hover:-translate-y-1 hover:border-primary-500 dark:border-border dark:bg-zinc-950/60 dark:shadow-surface-dark dark:hover:border-primary/30"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <div className="text-lg font-semibold text-foreground dark:text-zinc-100">
-                      {user.username}
-                    </div>
-                    <div className="text-xs text-muted-foreground dark:text-muted-foreground">
-                      Created {new Date(user.createdAt).toLocaleDateString()}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      className="rounded-md border border-border px-2 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                      onClick={async () => {
-                        const nextId = user.id;
-                        const requestId = editingRequestRef.current + 1;
-                        editingRequestRef.current = requestId;
-                        setEditingUserId(nextId);
-                        setEditEmail(user.email);
-                        setEditUsername(user.username);
-                        setEditPassword('');
-                        setEditRoleIds(user.roles.map((role) => role.id));
-                        setEditServerIds([]);
-                        setEditRoleSearch('');
-                        setEditServerSearch('');
+        {/* ── Search Bar ── */}
+        <motion.div variants={itemVariants} className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[200px] flex-1 max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => { setSearch(event.target.value); setPage(1); }}
+              placeholder="Search users…"
+              className="pl-9"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs">
+              {data?.pagination?.total ?? users.length} users
+            </Badge>
+            <Badge variant="secondary" className="text-xs">
+              {roles.length} roles
+            </Badge>
+          </div>
+        </motion.div>
 
-                        // Load user's server selections
-                        adminApi
-                          .getUserServers(nextId)
-                          .then((serverSelection) => {
-                            if (editingRequestRef.current === requestId) {
-                              setEditServerIds(serverSelection);
-                            }
-                          })
-                          .catch(() => {
-                            notifyError('Failed to load user servers');
-                          });
-
-                        // Load user's node assignments
-                        try {
-                          const response = await fetch(`/api/roles/users/${nextId}/nodes`, {
-                            headers: { 'Content-Type': 'application/json' },
-                          });
-                          const data = await response.json();
-                          const nodes = data.data || [];
-
-                          if (editingRequestRef.current === requestId) {
-                            setSelectedNodeIds(nodes.map((n: any) => ({
-                              nodeId: n.nodeId,
-                              nodeName: n.name,
-                              source: n.source || 'user',
-                              roleName: n.roleName,
-                              expiresAt: n.expiresAt,
-                            })));
-                          }
-                        } catch {
-                          setSelectedNodeIds([]);
-                        }
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="rounded-md border border-rose-700 px-2 py-1 text-xs font-semibold text-rose-200 transition-all duration-300 hover:border-rose-500"
-                      onClick={() => setDeletingUser({ id: user.id, username: user.username })}
-                      disabled={deleteMutation.isPending}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-4 space-y-3 text-sm text-muted-foreground dark:text-zinc-300">
-                  <div className="rounded-xl border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground dark:border-border dark:bg-surface-1/60 dark:text-zinc-300">
-                    {user.email}
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                      Roles
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {user.roles.length ? (
-                        user.roles.map((role) => (
-                          <span
-                            key={role.id}
-                            className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground dark:border-border dark:text-zinc-300"
-                          >
-                            {role.name}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-muted-foreground dark:text-muted-foreground">No roles</span>
-                      )}
+        {/* ── User Grid ── */}
+        {isLoading ? (
+          <motion.div variants={itemVariants} className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="rounded-xl border border-border bg-card/80 p-5">
+                <div className="flex items-start gap-3">
+                  <div className="h-9 w-9 animate-pulse rounded-lg bg-surface-3" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-28 animate-pulse rounded bg-surface-3" />
+                    <div className="h-3 w-44 animate-pulse rounded bg-surface-2" />
+                    <div className="flex gap-1.5">
+                      <div className="h-5 w-16 animate-pulse rounded-full bg-surface-2" />
+                      <div className="h-5 w-20 animate-pulse rounded-full bg-surface-2" />
                     </div>
                   </div>
                 </div>
               </div>
             ))}
-          </div>
-          {pagination ? (
-            <div className="flex items-center justify-between rounded-xl border border-border bg-white px-4 py-3 text-xs text-muted-foreground shadow-surface-light dark:border-border dark:bg-zinc-950/60 dark:text-muted-foreground dark:shadow-surface-dark">
-              <span>
-                Page {pagination.page} of {pagination.totalPages}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-200 disabled:opacity-50"
-                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                  disabled={page <= 1}
-                >
-                  Previous
-                </button>
-                <button
-                  className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-200 disabled:opacity-50"
-                  onClick={() =>
-                    setPage((prev) => (pagination.page < pagination.totalPages ? prev + 1 : prev))
-                  }
-                  disabled={pagination.page >= pagination.totalPages}
-                >
-                  Next
-                </button>
-              </div>
+          </motion.div>
+        ) : users.length > 0 ? (
+          <>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {users.map((user, i) => (
+                <UserCard
+                  key={user.id}
+                  user={user}
+                  index={i}
+                  onEdit={() => handleEditUser(user)}
+                  onDelete={() => setDeletingUser({ id: user.id, username: user.username })}
+                  isDeleting={deleteMutation.isPending}
+                />
+              ))}
             </div>
-          ) : null}
-        </div>
-      ) : (
-        <EmptyState
-          title={search.trim() ? 'No users found' : 'No users'}
-          description={
-            search.trim()
-              ? 'Try a different username or email.'
-              : 'Create a user account to grant dashboard access.'
-          }
-        />
-      )}
-      {isCreateOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl dark:border-border dark:bg-zinc-950 md:m-4 md:h-auto md:max-h-[90vh]">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5 dark:border-border">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground dark:text-zinc-100">
-                  Create user
-                </h2>
-                <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-                  Assign credentials, roles, and server access.
-                </p>
-              </div>
-              <button
-                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                onClick={() => setIsCreateOpen(false)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto px-6 py-5 text-sm text-foreground dark:text-zinc-100">
-              <div className="space-y-6">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                    Account details
-                  </div>
-                  <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <label className="text-xs text-muted-foreground dark:text-zinc-300">
-                    Email
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      placeholder="user@example.com"
-                      className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
-                    />
-                  </label>
-                  <label className="text-xs text-muted-foreground dark:text-zinc-300">
-                    Username
-                    <input
-                      value={username}
-                      onChange={(event) => setUsername(event.target.value)}
-                      placeholder="username"
-                      className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
-                    />
-                  </label>
-                  <label className="text-xs text-muted-foreground dark:text-zinc-300">
-                    Password (min 8 chars)
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      placeholder="********"
-                      className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
-                    />
-                  </label>
-                </div>
-              </div>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-xl border border-border bg-surface-2 p-4 dark:border-border dark:bg-surface-1/60">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                    Roles
-                  </div>
-                  <Input
-                    value={roleSearch}
-                    onChange={(event) => setRoleSearch(event.target.value)}
-                    placeholder="Search roles"
-                    className="mt-2 w-full"
-                  />
-                  <div className="mt-3 flex max-h-36 flex-wrap gap-2 overflow-y-auto">
-                    {filteredRoles.map((role) => (
-                      <label
-                        key={role.id}
-                        className="flex items-center gap-2 rounded-md border border-border bg-white px-2 py-1 text-xs text-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-zinc-950 dark:text-zinc-200"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={roleIds.includes(role.id)}
-                          onChange={() => setRoleIds((prev) => toggleItem(prev, role.id))}
-                          className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
-                        />
-                        {role.name}
-                      </label>
-                    ))}
-                    {!filteredRoles.length ? (
-                      <span className="text-xs text-muted-foreground dark:text-muted-foreground">No roles match</span>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-border bg-surface-2 p-4 dark:border-border dark:bg-surface-1/60">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                    Server access
-                  </div>
-                  <Input
-                    value={serverSearch}
-                    onChange={(event) => setServerSearch(event.target.value)}
-                    placeholder="Search servers"
-                    className="mt-2 w-full"
-                  />
-                  <div className="mt-3 flex max-h-36 flex-col gap-2 overflow-y-auto">
-                    {filteredServers.map((server) => (
-                      <label
-                        key={server.id}
-                        className="flex items-center gap-2 rounded-md border border-border bg-white px-2 py-1 text-xs text-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-zinc-950 dark:text-zinc-200"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={serverIds.includes(server.id)}
-                          onChange={() => setServerIds((prev) => toggleItem(prev, server.id))}
-                          className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
-                        />
-                        <span>{server.name}</span>
-                        <span className="text-[10px] text-muted-foreground dark:text-muted-foreground">
-                          ({server.id})
-                        </span>
-                      </label>
-                    ))}
-                    {!filteredServers.length ? (
-                      <span className="text-xs text-muted-foreground dark:text-muted-foreground">
-                        No servers match
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-                {/* Node Assignments for new user */}
-                <NodeAssignmentsSelector
-                  selectedNodes={[]} // Empty for new user
-                  onSelectionChange={() => {}}
-                  disabled={false}
-                  label="Node Access (optional)"
+            {pagination && pagination.totalPages > 1 && (
+              <div className="flex justify-center">
+                <Pagination
+                  page={pagination.page}
+                  totalPages={pagination.totalPages}
+                  onPageChange={setPage}
                 />
               </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-4 text-xs dark:border-border">
-              <span className="text-xs text-muted-foreground dark:text-muted-foreground">
-                Passwords must be at least 8 characters.
-              </span>
-              <div className="flex gap-2">
-                <button
-                  className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                  onClick={() => {
-                    setIsCreateOpen(false);
-                    setRoleSearch('');
-                    setServerSearch('');
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="rounded-md bg-primary-600 px-4 py-2 font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
-                  disabled={!canSubmit || createMutation.isPending}
-                  onClick={() => createMutation.mutate()}
-                >
+            )}
+          </>
+        ) : (
+          <motion.div variants={itemVariants}>
+            <EmptyState
+              title={search.trim() ? 'No users found' : 'No users'}
+              description={
+                search.trim()
+                  ? 'Try a different username or email.'
+                  : 'Create a user account to grant dashboard access.'
+              }
+              action={
+                <Button size="sm" onClick={() => { setIsCreateOpen(true); setRoleSearch(''); setServerSearch(''); }} className="gap-1.5">
+                  <UserPlus className="h-3.5 w-3.5" />
                   Create user
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      {editingUserId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl dark:border-border dark:bg-zinc-950 md:m-4 md:h-auto md:max-h-[90vh]">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5 dark:border-border">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground dark:text-zinc-100">Edit user</h2>
-                <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-                  Update profile details, roles, and server access.
-                </p>
-              </div>
-              <button
-                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                onClick={() => setEditingUserId(null)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto px-6 py-5 text-sm text-foreground dark:text-zinc-100">
-              <div className="space-y-6">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                    Account details
-                  </div>
-                  <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <label className="text-xs text-muted-foreground dark:text-zinc-300">
-                      Email
-                      <input
-                        type="email"
-                        value={editEmail}
-                        onChange={(event) => setEditEmail(event.target.value)}
-                        className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
-                      />
-                    </label>
-                    <label className="text-xs text-muted-foreground dark:text-zinc-300">
-                      Username
-                      <input
-                        value={editUsername}
-                        onChange={(event) => setEditUsername(event.target.value)}
-                        className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
-                      />
-                    </label>
-                    <label className="text-xs text-muted-foreground dark:text-zinc-300">
-                      Password (leave blank to keep)
-                      <input
-                        type="password"
-                        value={editPassword}
-                        onChange={(event) => setEditPassword(event.target.value)}
-                        className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
-                      />
-                    </label>
-                  </div>
-                </div>
-                <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-xl border border-border bg-surface-2 p-4 dark:border-border dark:bg-surface-1/60">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                    Roles
-                  </div>
-                  <Input
-                    value={editRoleSearch}
-                    onChange={(event) => setEditRoleSearch(event.target.value)}
-                    placeholder="Search roles"
-                    className="mt-2 w-full"
-                  />
-                  <div className="mt-3 flex max-h-36 flex-wrap gap-2 overflow-y-auto">
-                    {filteredEditRoles.map((role) => (
-                      <label
-                        key={role.id}
-                        className="flex items-center gap-2 rounded-md border border-border bg-white px-2 py-1 text-xs text-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-zinc-950 dark:text-zinc-200"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={editRoleIds.includes(role.id)}
-                          onChange={() => setEditRoleIds((prev) => toggleItem(prev, role.id))}
-                          className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
-                        />
-                        {role.name}
-                      </label>
-                    ))}
-                    {!filteredEditRoles.length ? (
-                      <span className="text-xs text-muted-foreground dark:text-muted-foreground">No roles match</span>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-border bg-surface-2 p-4 dark:border-border dark:bg-surface-1/60">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                    Server access
-                  </div>
-                  <Input
-                    value={editServerSearch}
-                    onChange={(event) => setEditServerSearch(event.target.value)}
-                    placeholder="Search servers"
-                    className="mt-2 w-full"
-                  />
-                  <div className="mt-3 flex max-h-36 flex-col gap-2 overflow-y-auto">
-                    {filteredEditServers.map((server) => (
-                      <label
-                        key={server.id}
-                        className="flex items-center gap-2 rounded-md border border-border bg-white px-2 py-1 text-xs text-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-zinc-950 dark:text-zinc-200"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={editServerIds.includes(server.id)}
-                          onChange={() => setEditServerIds((prev) => toggleItem(prev, server.id))}
-                          className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
-                        />
-                        <span>{server.name}</span>
-                        <span className="text-[10px] text-muted-foreground dark:text-muted-foreground">
-                          ({server.id})
-                        </span>
-                      </label>
-                    ))}
-                    {!filteredEditServers.length ? (
-                      <span className="text-xs text-muted-foreground dark:text-muted-foreground">
-                        No servers match
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-                </div>
-                {/* Node Assignments */}
-                <NodeAssignmentsSelector
-                  userId={editingUserId}
-                  selectedNodes={selectedNodeIds}
-                  onSelectionChange={setSelectedNodeIds}
-                  disabled={updateMutation.isPending}
-                />
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-4 text-xs dark:border-border">
-              <span className="text-xs text-muted-foreground dark:text-muted-foreground">
-                Leave password blank to keep current credentials.
-              </span>
-              <div className="flex gap-2">
-                <button
-                  className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                  onClick={() => {
-                    setEditingUserId(null);
-                    setEditRoleSearch('');
-                    setEditServerSearch('');
-                    setSelectedNodeIds([]);
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="rounded-md bg-primary-600 px-4 py-2 font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
-                  onClick={() => editingUserId && updateMutation.mutate(editingUserId)}
-                  disabled={!canSubmitEdit || updateMutation.isPending}
-                >
-                  Save changes
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+                </Button>
+              }
+            />
+          </motion.div>
+        )}
+      </div>
 
-      {/* Delete user confirmation dialog */}
+      {/* ── Create User Modal ── */}
+      <ModalShell
+        open={isCreateOpen}
+        onClose={() => { setIsCreateOpen(false); setRoleSearch(''); setServerSearch(''); }}
+        title="Create user"
+        subtitle="Assign credentials, roles, and server access."
+        footer={
+          <>
+            <span className="text-muted-foreground">Passwords must be at least 8 characters.</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => { setIsCreateOpen(false); setRoleSearch(''); setServerSearch(''); }}>
+                Cancel
+              </Button>
+              <Button size="sm" disabled={!canSubmit || createMutation.isPending} onClick={() => createMutation.mutate()}>
+                {createMutation.isPending ? 'Creating…' : 'Create user'}
+              </Button>
+            </div>
+          </>
+        }
+      >
+        <div className="space-y-6">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Account details</div>
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+              <label className="block space-y-1">
+                <span className="text-xs text-muted-foreground">Email</span>
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs text-muted-foreground">Username</span>
+                <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="username" />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs text-muted-foreground">Password (min 8 chars)</span>
+                <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="********" />
+              </label>
+            </div>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border border-border/50 bg-surface-2/50 p-4 dark:bg-surface-2/30">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Roles</div>
+              <Input value={roleSearch} onChange={(e) => setRoleSearch(e.target.value)} placeholder="Search roles" className="mt-2 w-full" />
+              <div className="mt-3 flex max-h-36 flex-wrap gap-2 overflow-y-auto">
+                {filteredRoles.map((role) => (
+                  <label key={role.id} className="flex items-center gap-2 rounded-md border border-border bg-white px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/50 dark:border-border dark:bg-zinc-950 dark:text-zinc-200">
+                    <input type="checkbox" checked={roleIds.includes(role.id)} onChange={() => setRoleIds((prev) => toggleItem(prev, role.id))} className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400" />
+                    {role.name}
+                  </label>
+                ))}
+                {!filteredRoles.length && <span className="text-xs text-muted-foreground">No roles match</span>}
+              </div>
+            </div>
+            <div className="rounded-lg border border-border/50 bg-surface-2/50 p-4 dark:bg-surface-2/30">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Server access</div>
+              <Input value={serverSearch} onChange={(e) => setServerSearch(e.target.value)} placeholder="Search servers" className="mt-2 w-full" />
+              <div className="mt-3 flex max-h-36 flex-col gap-2 overflow-y-auto">
+                {filteredServers.map((server) => (
+                  <label key={server.id} className="flex items-center gap-2 rounded-md border border-border bg-white px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/50 dark:border-border dark:bg-zinc-950 dark:text-zinc-200">
+                    <input type="checkbox" checked={serverIds.includes(server.id)} onChange={() => setServerIds((prev) => toggleItem(prev, server.id))} className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400" />
+                    <span>{server.name}</span>
+                    <span className="text-[10px] text-muted-foreground">({server.id})</span>
+                  </label>
+                ))}
+                {!filteredServers.length && <span className="text-xs text-muted-foreground">No servers match</span>}
+              </div>
+            </div>
+            <NodeAssignmentsSelector
+              selectedNodes={[]}
+              onSelectionChange={() => {}}
+              disabled={false}
+              label="Node Access (optional)"
+            />
+          </div>
+        </div>
+      </ModalShell>
+
+      {/* ── Edit User Modal ── */}
+      <ModalShell
+        open={!!editingUserId}
+        onClose={() => { setEditingUserId(null); setEditRoleSearch(''); setEditServerSearch(''); setSelectedNodeIds([]); }}
+        title="Edit user"
+        subtitle="Update profile details, roles, and server access."
+        footer={
+          <>
+            <span className="text-muted-foreground">Leave password blank to keep current credentials.</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => { setEditingUserId(null); setEditRoleSearch(''); setEditServerSearch(''); setSelectedNodeIds([]); }}>
+                Cancel
+              </Button>
+              <Button size="sm" disabled={!canSubmitEdit || updateMutation.isPending} onClick={() => editingUserId && updateMutation.mutate(editingUserId)}>
+                {updateMutation.isPending ? 'Saving…' : 'Save changes'}
+              </Button>
+            </div>
+          </>
+        }
+      >
+        <div className="space-y-6">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Account details</div>
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+              <label className="block space-y-1">
+                <span className="text-xs text-muted-foreground">Email</span>
+                <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs text-muted-foreground">Username</span>
+                <Input value={editUsername} onChange={(e) => setEditUsername(e.target.value)} />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs text-muted-foreground">Password (leave blank to keep)</span>
+                <Input type="password" value={editPassword} onChange={(e) => setEditPassword(e.target.value)} />
+              </label>
+            </div>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border border-border/50 bg-surface-2/50 p-4 dark:bg-surface-2/30">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Roles</div>
+              <Input value={editRoleSearch} onChange={(e) => setEditRoleSearch(e.target.value)} placeholder="Search roles" className="mt-2 w-full" />
+              <div className="mt-3 flex max-h-36 flex-wrap gap-2 overflow-y-auto">
+                {filteredEditRoles.map((role) => (
+                  <label key={role.id} className="flex items-center gap-2 rounded-md border border-border bg-white px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/50 dark:border-border dark:bg-zinc-950 dark:text-zinc-200">
+                    <input type="checkbox" checked={editRoleIds.includes(role.id)} onChange={() => setEditRoleIds((prev) => toggleItem(prev, role.id))} className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400" />
+                    {role.name}
+                  </label>
+                ))}
+                {!filteredEditRoles.length && <span className="text-xs text-muted-foreground">No roles match</span>}
+              </div>
+            </div>
+            <div className="rounded-lg border border-border/50 bg-surface-2/50 p-4 dark:bg-surface-2/30">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Server access</div>
+              <Input value={editServerSearch} onChange={(e) => setEditServerSearch(e.target.value)} placeholder="Search servers" className="mt-2 w-full" />
+              <div className="mt-3 flex max-h-36 flex-col gap-2 overflow-y-auto">
+                {filteredEditServers.map((server) => (
+                  <label key={server.id} className="flex items-center gap-2 rounded-md border border-border bg-white px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/50 dark:border-border dark:bg-zinc-950 dark:text-zinc-200">
+                    <input type="checkbox" checked={editServerIds.includes(server.id)} onChange={() => setEditServerIds((prev) => toggleItem(prev, server.id))} className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400" />
+                    <span>{server.name}</span>
+                    <span className="text-[10px] text-muted-foreground">({server.id})</span>
+                  </label>
+                ))}
+                {!filteredEditServers.length && <span className="text-xs text-muted-foreground">No servers match</span>}
+              </div>
+            </div>
+          </div>
+          <NodeAssignmentsSelector
+            userId={editingUserId ?? undefined}
+            selectedNodes={selectedNodeIds}
+            onSelectionChange={setSelectedNodeIds}
+            disabled={updateMutation.isPending}
+          />
+        </div>
+      </ModalShell>
+
+      {/* ── Delete Confirmation ── */}
       <ConfirmDialog
         open={!!deletingUser}
         title="Delete user?"
@@ -685,7 +660,7 @@ function UsersPage() {
         }}
         onCancel={() => setDeletingUser(null)}
       />
-    </div>
+    </motion.div>
   );
 }
 

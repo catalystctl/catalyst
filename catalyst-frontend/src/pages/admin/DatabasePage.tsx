@@ -1,21 +1,165 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion, type Variants } from 'framer-motion';
+import {
+  Database,
+  Plus,
+  Settings,
+  Trash2,
+  Server,
+  Shield,
+  Globe,
+  Hash,
+  User,
+} from 'lucide-react';
 import EmptyState from '../../components/shared/EmptyState';
+import { Input } from '../../components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { useDatabaseHosts } from '../../hooks/useAdmin';
+import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
 
+// ── Animation Variants ──
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.05 } },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
+};
+
+// ── Modal Shell ──
+function ModalShell({
+  open, title, subtitle, children, footer,
+}: {
+  open: boolean;
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+        className="mx-4 w-full max-w-lg rounded-xl border border-border bg-card shadow-xl"
+      >
+        <div className="border-b border-border px-6 py-4">
+          <h2 className="text-lg font-semibold text-foreground dark:text-white">{title}</h2>
+          {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+        </div>
+        <div className="px-6 py-5">{children}</div>
+        {footer && (
+          <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-4">
+            {footer}
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+
+// ── Host Card ──
+function HostCard({
+  host,
+  onEdit,
+  onDelete,
+  isDeleting,
+  index,
+}: {
+  host: any;
+  onEdit: () => void;
+  onDelete: () => void;
+  isDeleting: boolean;
+  index: number;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 24, delay: index * 0.03 }}
+      className="group relative overflow-hidden rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+            <Server className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold text-foreground dark:text-zinc-100">{host.name}</div>
+            <div className="mt-0.5 text-xs text-muted-foreground font-mono">{host.host}:{host.port}</div>
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <User className="h-3 w-3" />
+                {host.username}
+              </span>
+              <span className="flex items-center gap-1">
+                <Hash className="h-3 w-3" />
+                Port {host.port}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+          <button
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
+            onClick={onEdit}
+            title="Edit"
+          >
+            <Settings className="h-3.5 w-3.5" />
+          </button>
+          <button
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:pointer-events-none disabled:opacity-30"
+            onClick={onDelete}
+            disabled={isDeleting}
+            title="Delete"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Main Page ──
 function DatabasePage() {
-  const [dbHostId, setDbHostId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const { data: databaseHosts = [], isLoading } = useDatabaseHosts();
+
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingHost, setEditingHost] = useState<any>(null);
+  const [deletingHost, setDeletingHost] = useState<any>(null);
+
+  // Form state (shared between create & edit)
   const [dbName, setDbName] = useState('');
   const [dbHost, setDbHost] = useState('');
   const [dbPort, setDbPort] = useState('3306');
   const [dbUsername, setDbUsername] = useState('');
   const [dbPassword, setDbPassword] = useState('');
-  const queryClient = useQueryClient();
-  const { data: databaseHosts = [], isLoading } = useDatabaseHosts();
 
-  const createHostMutation = useMutation({
+  const resetForm = () => {
+    setDbName('');
+    setDbHost('');
+    setDbPort('3306');
+    setDbUsername('');
+    setDbPassword('');
+  };
+
+  const canSubmit = useMemo(
+    () => dbName.trim() && dbHost.trim() && dbUsername.trim() && dbPassword.trim(),
+    [dbName, dbHost, dbUsername, dbPassword],
+  );
+
+  const createMutation = useMutation({
     mutationFn: () =>
       adminApi.createDatabaseHost({
         name: dbName.trim(),
@@ -27,19 +171,13 @@ function DatabasePage() {
     onSuccess: () => {
       notifySuccess('Database host created');
       queryClient.invalidateQueries({ queryKey: ['admin-database-hosts'] });
-      setDbName('');
-      setDbHost('');
-      setDbPort('3306');
-      setDbUsername('');
-      setDbPassword('');
+      resetForm();
+      setIsCreateOpen(false);
     },
-    onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to create database host';
-      notifyError(message);
-    },
+    onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to create database host'),
   });
 
-  const updateHostMutation = useMutation({
+  const updateMutation = useMutation({
     mutationFn: (payload: { hostId: string }) =>
       adminApi.updateDatabaseHost(payload.hostId, {
         name: dbName.trim(),
@@ -51,244 +189,217 @@ function DatabasePage() {
     onSuccess: () => {
       notifySuccess('Database host updated');
       queryClient.invalidateQueries({ queryKey: ['admin-database-hosts'] });
+      setEditingHost(null);
+      resetForm();
     },
-    onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to update database host';
-      notifyError(message);
-    },
+    onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update database host'),
   });
 
-  const deleteHostMutation = useMutation({
+  const deleteMutation = useMutation({
     mutationFn: (hostId: string) => adminApi.deleteDatabaseHost(hostId),
     onSuccess: () => {
       notifySuccess('Database host removed');
       queryClient.invalidateQueries({ queryKey: ['admin-database-hosts'] });
-      setDbHostId(null);
+      setDeletingHost(null);
     },
-    onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to delete database host';
-      notifyError(message);
-    },
+    onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to delete database host'),
   });
 
-  const canSubmitDbHost = useMemo(
-    () => dbName.trim() && dbHost.trim() && dbUsername.trim() && dbPassword.trim(),
-    [dbName, dbHost, dbUsername, dbPassword],
+  const startEdit = (host: any) => {
+    setEditingHost(host);
+    setDbName(host.name);
+    setDbHost(host.host);
+    setDbPort(String(host.port));
+    setDbUsername(host.username);
+    setDbPassword(host.password || '');
+  };
+
+  // Shared form fields
+  const formFields = (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="block space-y-1">
+          <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+            <Database className="h-3 w-3" /> Name
+          </span>
+          <Input value={dbName} onChange={(e) => setDbName(e.target.value)} placeholder="primary-mysql" />
+        </label>
+        <label className="block space-y-1">
+          <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+            <Globe className="h-3 w-3" /> Host
+          </span>
+          <Input value={dbHost} onChange={(e) => setDbHost(e.target.value)} placeholder="mysql.internal" />
+        </label>
+        <label className="block space-y-1">
+          <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+            <Hash className="h-3 w-3" /> Port
+          </span>
+          <Input value={dbPort} onChange={(e) => setDbPort(e.target.value)} placeholder="3306" />
+        </label>
+        <label className="block space-y-1">
+          <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+            <User className="h-3 w-3" /> Username
+          </span>
+          <Input value={dbUsername} onChange={(e) => setDbUsername(e.target.value)} placeholder="catalyst_admin" />
+        </label>
+      </div>
+      <label className="block space-y-1">
+        <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+          <Shield className="h-3 w-3" /> Password{editingHost ? ' (leave blank to keep)' : ''}
+        </span>
+        <Input type="password" value={dbPassword} onChange={(e) => setDbPassword(e.target.value)} placeholder="••••••••" />
+      </label>
+    </div>
   );
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl border border-border bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground dark:text-white">Database</h1>
-            <p className="text-sm text-muted-foreground dark:text-muted-foreground">
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="relative min-h-screen overflow-hidden"
+    >
+      {/* Ambient background */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-emerald-500/8 to-teal-500/8 blur-3xl dark:from-emerald-500/15 dark:to-teal-500/15" />
+        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-blue-500/8 to-indigo-500/8 blur-3xl dark:from-blue-500/15 dark:to-indigo-500/15" />
+      </div>
+
+      <div className="relative z-10 space-y-5">
+        {/* ── Header ── */}
+        <motion.div variants={itemVariants} className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 opacity-20 blur-sm" />
+                <Database className="relative h-7 w-7 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+                Database
+              </h1>
+            </div>
+            <p className="ml-10 text-sm text-muted-foreground">
               Manage database hosts for server provisioning.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground dark:text-muted-foreground">
-            <span className="rounded-full border border-border bg-surface-2 px-3 py-1 dark:border-border dark:bg-zinc-950/60">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs">
               {databaseHosts.length} hosts
-            </span>
+            </Badge>
+            <Button size="sm" onClick={() => { resetForm(); setIsCreateOpen(true); }} className="gap-1.5">
+              <Plus className="h-3.5 w-3.5" />
+              Add host
+            </Button>
           </div>
-        </div>
-      </div>
+        </motion.div>
 
-      <div className="rounded-2xl border border-border bg-white px-6 py-5 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground dark:text-white">Database Hosts</h2>
-            <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-              Register MySQL hosts used to provision per-server databases.
-            </p>
-          </div>
-        </div>
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
-            Name
-            <input
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-              value={dbName}
-              onChange={(event) => setDbName(event.target.value)}
-              placeholder="primary-mysql"
-            />
-          </label>
-          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
-            Host
-            <input
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-              value={dbHost}
-              onChange={(event) => setDbHost(event.target.value)}
-              placeholder="mysql.internal"
-            />
-          </label>
-          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
-            Port
-            <input
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-              value={dbPort}
-              onChange={(event) => setDbPort(event.target.value)}
-              placeholder="3306"
-            />
-          </label>
-          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
-            Username
-            <input
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-              value={dbUsername}
-              onChange={(event) => setDbUsername(event.target.value)}
-              placeholder="catalyst_admin"
-            />
-          </label>
-          <label className="block text-xs text-muted-foreground dark:text-zinc-300">
-            Password
-            <input
-              type="password"
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-              value={dbPassword}
-              onChange={(event) => setDbPassword(event.target.value)}
-              placeholder="secret"
-            />
-          </label>
-        </div>
-        <div className="mt-4 flex justify-end">
-          <button
-            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
-            disabled={!canSubmitDbHost || createHostMutation.isPending}
-            onClick={() => createHostMutation.mutate()}
-          >
-            Create host
-          </button>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground dark:text-white">Active hosts</h2>
-          <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-            View connection details and manage existing database hosts.
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* ── Host Grid ── */}
         {isLoading ? (
-          <div className="rounded-xl border border-border bg-white px-4 py-6 text-muted-foreground shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-primary/30">
-            Loading database hosts...
-          </div>
-        ) : databaseHosts.length === 0 ? (
-          <EmptyState
-            title="No database hosts yet"
-            description="Create a host to provision databases for servers."
-          />
-        ) : (
-          databaseHosts.map((dbHostEntry) => (
-            <div
-              key={dbHostEntry.id}
-              className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:-translate-y-1 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
-                    {dbHostEntry.name}
+          <motion.div variants={itemVariants} className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-xl border border-border bg-card/80 p-5">
+                <div className="flex items-start gap-3">
+                  <div className="h-9 w-9 animate-pulse rounded-lg bg-surface-3" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-28 animate-pulse rounded bg-surface-3" />
+                    <div className="h-3 w-40 animate-pulse rounded bg-surface-2 font-mono" />
+                    <div className="flex gap-3">
+                      <div className="h-3 w-20 animate-pulse rounded bg-surface-2" />
+                      <div className="h-3 w-16 animate-pulse rounded bg-surface-2" />
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
-                    {dbHostEntry.host}:{dbHostEntry.port}
-                  </div>
-                  <div className="mt-2 text-xs text-muted-foreground dark:text-muted-foreground">
-                    User: {dbHostEntry.username}
-                  </div>
-                </div>
-                <div className="flex gap-2 text-xs">
-                  <button
-                    className="rounded-md border border-border px-2 py-1 text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                    onClick={() => {
-                      setDbHostId(dbHostEntry.id);
-                      setDbName(dbHostEntry.name);
-                      setDbHost(dbHostEntry.host);
-                      setDbPort(String(dbHostEntry.port));
-                      setDbUsername(dbHostEntry.username);
-                      setDbPassword(dbHostEntry.password);
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    className="rounded-md border border-rose-200 px-2 py-1 text-rose-600 transition-all duration-300 hover:border-rose-400 disabled:opacity-60 dark:border-rose-500/30 dark:text-rose-400"
-                    onClick={() => deleteHostMutation.mutate(dbHostEntry.id)}
-                    disabled={deleteHostMutation.isPending}
-                  >
-                    Delete
-                  </button>
                 </div>
               </div>
-              {dbHostId === dbHostEntry.id ? (
-                <div className="mt-4 space-y-3 rounded-xl border border-border bg-surface-2 px-4 py-4 text-xs text-muted-foreground dark:border-border dark:bg-zinc-950/60 dark:text-zinc-300">
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <label className="block">
-                      Name
-                      <input
-                        className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                        value={dbName}
-                        onChange={(event) => setDbName(event.target.value)}
-                      />
-                    </label>
-                    <label className="block">
-                      Host
-                      <input
-                        className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                        value={dbHost}
-                        onChange={(event) => setDbHost(event.target.value)}
-                      />
-                    </label>
-                    <label className="block">
-                      Port
-                      <input
-                        className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                        value={dbPort}
-                        onChange={(event) => setDbPort(event.target.value)}
-                      />
-                    </label>
-                    <label className="block">
-                      Username
-                      <input
-                        className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                        value={dbUsername}
-                        onChange={(event) => setDbUsername(event.target.value)}
-                      />
-                    </label>
-                    <label className="block sm:col-span-2">
-                      Password
-                      <input
-                        type="password"
-                        className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                        value={dbPassword}
-                        onChange={(event) => setDbPassword(event.target.value)}
-                      />
-                    </label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="rounded-md bg-primary-600 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
-                      onClick={() => updateHostMutation.mutate({ hostId: dbHostEntry.id })}
-                      disabled={updateHostMutation.isPending}
-                    >
-                      Save
-                    </button>
-                    <button
-                      className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                      onClick={() => setDbHostId(null)}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ))
+            ))}
+          </motion.div>
+        ) : databaseHosts.length === 0 ? (
+          <motion.div variants={itemVariants}>
+            <EmptyState
+              title="No database hosts yet"
+              description="Create a host to provision databases for servers."
+              action={
+                <Button size="sm" onClick={() => { resetForm(); setIsCreateOpen(true); }} className="gap-1.5">
+                  <Plus className="h-3.5 w-3.5" />
+                  Add host
+                </Button>
+              }
+            />
+          </motion.div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {databaseHosts.map((host: any, i: number) => (
+              <HostCard
+                key={host.id}
+                host={host}
+                index={i}
+                onEdit={() => startEdit(host)}
+                onDelete={() => setDeletingHost(host)}
+                isDeleting={deleteMutation.isPending}
+              />
+            ))}
+          </div>
         )}
       </div>
-    </div>
+
+      {/* ── Create Modal ── */}
+      <ModalShell
+        open={isCreateOpen}
+        onClose={() => { resetForm(); setIsCreateOpen(false); }}
+        title="Add database host"
+        subtitle="Register a MySQL host used to provision per-server databases."
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => { resetForm(); setIsCreateOpen(false); }}>
+              Cancel
+            </Button>
+            <Button size="sm" disabled={!canSubmit || createMutation.isPending} onClick={() => createMutation.mutate()}>
+              {createMutation.isPending ? 'Creating…' : 'Create host'}
+            </Button>
+          </>
+        }
+      >
+        {formFields}
+      </ModalShell>
+
+      {/* ── Edit Modal ── */}
+      <ModalShell
+        open={!!editingHost}
+        onClose={() => { setEditingHost(null); resetForm(); }}
+        title="Edit database host"
+        subtitle="Update connection details for this database host."
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => { setEditingHost(null); resetForm(); }}>
+              Cancel
+            </Button>
+            <Button size="sm" disabled={updateMutation.isPending} onClick={() => editingHost && updateMutation.mutate({ hostId: editingHost.id })}>
+              {updateMutation.isPending ? 'Saving…' : 'Save changes'}
+            </Button>
+          </>
+        }
+      >
+        {formFields}
+      </ModalShell>
+
+      {/* ── Delete Confirmation ── */}
+      <ConfirmDialog
+        open={!!deletingHost}
+        title="Delete database host?"
+        message={`Are you sure you want to remove "${deletingHost?.name}"? Servers using this host for database provisioning may be affected.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deletingHost) {
+            deleteMutation.mutate(deletingHost.id, {
+              onSuccess: () => setDeletingHost(null),
+            });
+          }
+        }}
+        onCancel={() => setDeletingHost(null)}
+      />
+    </motion.div>
   );
 }
 

@@ -1,5 +1,6 @@
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { motion, type Variants } from 'framer-motion';
 import { ArrowDown, Check, Copy, Search, Trash2, X } from 'lucide-react';
 import ServerStatusBadge from '../../components/servers/ServerStatusBadge';
 import CustomConsole from '../../components/console/CustomConsole';
@@ -11,25 +12,35 @@ import EulaModal from '../../components/servers/EulaModal';
 const ALL_STREAMS = ['stdout', 'stderr', 'system', 'stdin'] as const;
 const STREAM_COLORS: Record<string, { dot: string; active: string; inactive: string }> = {
   stdout: {
-    dot: 'bg-emerald-400',
-    active: 'border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-    inactive: 'border-border text-muted-foreground hover:border-zinc-400 dark:border-border dark:hover:border-zinc-600',
+    dot: 'bg-success',
+    active: 'border-success/50 bg-success-muted text-success',
+    inactive: 'border-border text-muted-foreground hover:border-primary/30',
   },
   stderr: {
-    dot: 'bg-rose-400',
-    active: 'border-rose-500/50 bg-rose-500/10 text-rose-600 dark:text-rose-400',
-    inactive: 'border-border text-muted-foreground hover:border-zinc-400 dark:border-border dark:hover:border-zinc-600',
+    dot: 'bg-danger',
+    active: 'border-danger/50 bg-danger-muted text-danger',
+    inactive: 'border-border text-muted-foreground hover:border-primary/30',
   },
   system: {
-    dot: 'bg-sky-400',
-    active: 'border-sky-500/50 bg-sky-500/10 text-sky-600 dark:text-sky-400',
-    inactive: 'border-border text-muted-foreground hover:border-zinc-400 dark:border-border dark:hover:border-zinc-600',
+    dot: 'bg-info',
+    active: 'border-info/50 bg-info-muted text-info',
+    inactive: 'border-border text-muted-foreground hover:border-primary/30',
   },
   stdin: {
-    dot: 'bg-amber-400',
-    active: 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400',
-    inactive: 'border-border text-muted-foreground hover:border-zinc-400 dark:border-border dark:hover:border-zinc-600',
+    dot: 'bg-warning',
+    active: 'border-warning/50 bg-warning-muted text-warning',
+    inactive: 'border-border text-muted-foreground hover:border-primary/30',
   },
+};
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.05 } },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
 };
 
 function ServerConsolePage() {
@@ -136,198 +147,215 @@ function ServerConsolePage() {
   }, [searchOpen]);
 
   return (
-    <div className="flex h-[calc(100vh-10rem)] flex-col gap-4">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-semibold text-foreground dark:text-white">Console</h1>
-            <span className="text-lg text-zinc-300 dark:text-foreground">—</span>
-            <span className="text-lg font-medium text-muted-foreground dark:text-zinc-300">{title}</span>
-            {server?.status ? <ServerStatusBadge status={server.status} /> : null}
-          </div>
-          <p className="text-sm text-muted-foreground dark:text-muted-foreground">
-            Real-time output and command input
-          </p>
-          {isSuspended ? (
-            <div className="mt-2 rounded-md border border-rose-200 bg-rose-100/60 px-3 py-2 text-xs text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
-              Server suspended — console input disabled.
-            </div>
-          ) : null}
-        </div>
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="relative flex min-h-[calc(100vh-10rem)] flex-col gap-4 overflow-hidden"
+    >
+      {/* Ambient background */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-primary-500/8 to-primary-300/8 blur-3xl dark:from-primary-500/15 dark:to-primary-300/15" />
+        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-primary-400/8 to-primary-200/8 blur-3xl dark:from-primary-400/15 dark:to-primary-200/15" />
       </div>
 
-      {/* Console Container */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border shadow-surface-light dark:shadow-surface-dark dark:border-border">
-        {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-border bg-white px-3 py-2 dark:border-border dark:bg-surface-1">
-          {/* Connection Status */}
-          <span
-            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
-              isConnected
-                ? 'border-emerald-200 text-emerald-600 dark:border-emerald-500/30 dark:text-emerald-400'
-                : 'border-amber-200 text-amber-600 dark:border-amber-500/30 dark:text-amber-400'
-            }`}
-          >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'animate-pulse bg-emerald-500' : 'bg-amber-500'}`}
-            />
-            {isConnected ? 'Live' : 'Connecting'}
-          </span>
-
-          <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
-
-          {/* Stream Filters */}
-          <div className="flex items-center gap-1">
-            {ALL_STREAMS.map((stream) => {
-              const colors = STREAM_COLORS[stream];
-              const isActive = activeStreams.has(stream);
-              return (
-                <button
-                  key={stream}
-                  type="button"
-                  onClick={() => toggleStream(stream)}
-                  className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-all ${
-                    isActive ? colors.active : colors.inactive
-                  }`}
-                >
-                  <span className={`h-1.5 w-1.5 rounded-full ${isActive ? colors.dot : 'bg-zinc-300 dark:bg-zinc-600'}`} />
-                  {stream}
-                </button>
-              );
-            })}
+      <div className="relative z-10 flex flex-1 flex-col gap-4">
+        {/* ── Header ── */}
+        <motion.div variants={itemVariants} className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-primary-500 to-primary-400 opacity-20 blur-sm" />
+                <Search className="relative h-7 w-7 text-primary" />
+              </div>
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">Console</h1>
+              <span className="text-lg text-foreground">—</span>
+              <span className="text-lg font-medium text-muted-foreground">{title}</span>
+              {server?.status ? <ServerStatusBadge status={server.status} /> : null}
+            </div>
+            <p className="ml-10 text-sm text-muted-foreground">
+              Real-time output and command input
+            </p>
+            {isSuspended ? (
+              <div className="ml-10 mt-2 rounded-md border border-danger/30 bg-danger-muted px-3 py-2 text-xs text-danger">
+                Server suspended — console input disabled.
+              </div>
+            ) : null}
           </div>
+        </motion.div>
 
-          <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
-
-          {/* Search */}
-          {searchOpen ? (
-            <div className="flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1 dark:border-border dark:bg-surface-2">
-              <Search className="h-3 w-3 text-muted-foreground" />
-              <input
-                ref={searchRef}
-                className="w-40 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground dark:text-zinc-200"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Filter output…"
+        {/* ── Console Container ── */}
+        <motion.div variants={itemVariants} className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border">
+          {/* Toolbar */}
+          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-2">
+            {/* Connection Status */}
+            <span
+              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                isConnected
+                  ? 'border-success/50 text-success'
+                  : 'border-warning/30 text-warning'
+              }`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'animate-pulse bg-success' : 'bg-warning'}`}
               />
-              {searchQuery ? (
-                <span className="text-[10px] tabular-nums text-muted-foreground">
-                  {entries.filter((e) => activeStreams.has(e.stream) && e.data.toLowerCase().includes(searchQuery.toLowerCase())).length}
-                </span>
-              ) : null}
+              {isConnected ? 'Live' : 'Connecting'}
+            </span>
+
+            <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
+
+            {/* Stream Filters */}
+            <div className="flex items-center gap-1">
+              {ALL_STREAMS.map((stream) => {
+                const colors = STREAM_COLORS[stream];
+                const isActive = activeStreams.has(stream);
+                return (
+                  <button
+                    key={stream}
+                    type="button"
+                    onClick={() => toggleStream(stream)}
+                    className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-all ${
+                      isActive ? colors.active : colors.inactive
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${isActive ? colors.dot : 'bg-muted-foreground'}`} />
+                    {stream}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
+
+            {/* Search */}
+            {searchOpen ? (
+              <div className="flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1">
+                <Search className="h-3 w-3 text-muted-foreground" />
+                <input
+                  ref={searchRef}
+                  className="w-40 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Filter output…"
+                />
+                {searchQuery ? (
+                  <span className="text-[10px] tabular-nums text-muted-foreground">
+                    {entries.filter((e) => activeStreams.has(e.stream) && e.data.toLowerCase().includes(searchQuery.toLowerCase())).length}
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchOpen(false);
+                    setSearchQuery('');
+                  }}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ) : (
               <button
                 type="button"
                 onClick={() => {
-                  setSearchOpen(false);
-                  setSearchQuery('');
+                  setSearchOpen(true);
+                  setTimeout(() => searchRef.current?.focus(), 50);
                 }}
-                className="text-muted-foreground hover:text-muted-foreground dark:hover:text-zinc-200"
+                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-primary/30"
               >
-                <X className="h-3 w-3" />
+                <Search className="h-3 w-3" />
+                Search
               </button>
-            </div>
-          ) : (
+            )}
+
+            <div className="flex-1" />
+
+            {/* Right-side actions */}
+            <span className="text-[11px] tabular-nums text-muted-foreground">
+              {entries.length} lines
+            </span>
+
+            <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
+
             <button
               type="button"
-              onClick={() => {
-                setSearchOpen(true);
-                setTimeout(() => searchRef.current?.focus(), 50);
-              }}
-              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-border dark:border-border dark:hover:border-zinc-600"
+              onClick={() => setAutoScroll(!autoScroll)}
+              className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-all ${
+                autoScroll
+                  ? 'border-primary/30 bg-primary-muted text-primary'
+                  : 'border-border text-muted-foreground hover:border-primary/30'
+              }`}
             >
-              <Search className="h-3 w-3" />
-              Search
+              <ArrowDown className="h-3 w-3" />
+              Auto-scroll
             </button>
-          )}
 
-          <div className="flex-1" />
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-primary/30"
+            >
+              {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
+              {copied ? 'Copied' : 'Copy'}
+            </button>
 
-          {/* Right-side actions */}
-          <span className="text-[11px] tabular-nums text-muted-foreground dark:text-muted-foreground">
-            {entries.length} lines
-          </span>
+            <button
+              type="button"
+              onClick={handleClear}
+              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-danger/30 hover:text-danger"
+            >
+              <Trash2 className="h-3 w-3" />
+              Clear
+            </button>
+          </div>
 
-          <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
-
-          <button
-            type="button"
-            onClick={() => setAutoScroll(!autoScroll)}
-            className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-all ${
-              autoScroll
-                ? 'border-primary-500/30 bg-primary-500/10 text-primary-500 dark:text-primary-400'
-                : 'border-border text-muted-foreground hover:border-border dark:border-border dark:hover:border-zinc-600'
-            }`}
-          >
-            <ArrowDown className="h-3 w-3" />
-            Auto-scroll
-          </button>
-
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-border dark:border-border dark:hover:border-zinc-600"
-          >
-            {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-            {copied ? 'Copied' : 'Copy'}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleClear}
-            className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-rose-300 hover:text-rose-500 dark:border-border dark:hover:border-rose-500/30 dark:hover:text-rose-400"
-          >
-            <Trash2 className="h-3 w-3" />
-            Clear
-          </button>
-        </div>
-
-        {/* Console Output */}
-        <CustomConsole
-          entries={entries}
-          autoScroll={autoScroll}
-          searchQuery={searchQuery}
-          streamFilter={activeStreams}
-          isLoading={isLoading}
-          isError={isError}
-          onRetry={refetch}
-          onUserScroll={() => setAutoScroll(false)}
-          onAutoScrollResume={() => setAutoScroll(true)}
-          className="min-h-0 flex-1"
-        />
-
-        {/* Command Input */}
-        <form
-          onSubmit={handleSubmit}
-          className="flex items-center gap-3 border-t border-border bg-white px-4 py-2.5 dark:border-border dark:bg-surface-1"
-        >
-          <span className="select-none text-sm font-bold text-primary-500">$</span>
-          <input
-            ref={inputRef}
-            className="w-full bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200"
-            value={command}
-            onChange={(e) => {
-              setCommand(e.target.value);
-              setHistoryIndex(-1);
-            }}
-            onKeyDown={handleKeyDown}
-            placeholder={
-              isSuspended
-                ? 'Server suspended'
-                : canSend
-                  ? 'Type a command… (↑↓ for history)'
-                  : 'Connect to send commands'
-            }
-            disabled={!canSend}
+          {/* Console Output */}
+          <CustomConsole
+            entries={entries}
+            autoScroll={autoScroll}
+            searchQuery={searchQuery}
+            streamFilter={activeStreams}
+            isLoading={isLoading}
+            isError={isError}
+            onRetry={refetch}
+            onUserScroll={() => setAutoScroll(false)}
+            onAutoScrollResume={() => setAutoScroll(true)}
+            className="min-h-0 flex-1"
           />
-          <button
-            type="submit"
-            className="rounded-lg bg-primary-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!canSend || !command.trim()}
+
+          {/* Command Input */}
+          <form
+            onSubmit={handleSubmit}
+            className="flex items-center gap-3 border-t border-border bg-card px-4 py-2.5"
           >
-            Send
-          </button>
-        </form>
+            <span className="select-none text-sm font-bold text-primary">$</span>
+            <input
+              ref={inputRef}
+              className="w-full bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              value={command}
+              onChange={(e) => {
+                setCommand(e.target.value);
+                setHistoryIndex(-1);
+              }}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                isSuspended
+                  ? 'Server suspended'
+                  : canSend
+                    ? 'Type a command… (↑↓ for history)'
+                    : 'Connect to send commands'
+              }
+              disabled={!canSend}
+            />
+            <button
+              type="submit"
+              className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!canSend || !command.trim()}
+            >
+              Send
+            </button>
+          </form>
+        </motion.div>
       </div>
 
       {/* EULA Modal */}
@@ -339,7 +367,7 @@ function ServerConsolePage() {
           isLoading={eulaLoading}
         />
       )}
-    </div>
+    </motion.div>
   );
 }
 

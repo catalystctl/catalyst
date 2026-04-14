@@ -1,12 +1,66 @@
 import { useMemo, useState } from 'react';
 import { Server, Cpu, HardDrive, Activity, Search } from 'lucide-react';
+import { motion, type Variants } from 'framer-motion';
 import EmptyState from '../../components/shared/EmptyState';
 import NodeCreateModal from '../../components/nodes/NodeCreateModal';
-import { Skeleton } from '../../components/shared/Skeleton';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { useAdminNodes } from '../../hooks/useAdmin';
 import { useAuthStore } from '../../stores/authStore';
 import NodeCard from '../../components/nodes/NodeCard';
+
+// ── Animation Variants ──
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.04, delayChildren: 0.05 },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { type: 'spring', stiffness: 300, damping: 24 },
+  },
+};
+
+// ── Stat Mini Card ──
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  color,
+  loading,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string | number;
+  sub: string;
+  color: string;
+  loading?: boolean;
+}) {
+  return (
+    <motion.div variants={itemVariants} className="rounded-lg border border-border/50 bg-surface-2/50 p-4 dark:bg-surface-2/30">
+      <div className="flex items-center gap-2">
+        <Icon className={`h-4 w-4 ${color}`} />
+        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      </div>
+      <div className="mt-1 text-2xl font-bold tabular-nums text-foreground dark:text-zinc-100">
+        {loading ? (
+          <span className="inline-block h-7 w-16 animate-pulse rounded bg-surface-3" />
+        ) : (
+          value
+        )}
+      </div>
+      <div className="text-xs text-muted-foreground">{sub}</div>
+    </motion.div>
+  );
+}
 
 function AdminNodesPage() {
   const [search, setSearch] = useState('');
@@ -31,146 +85,164 @@ function AdminNodesPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl border border-border bg-gradient-to-br from-white to-zinc-50/50 p-6 shadow-surface-light dark:border-border dark:from-zinc-900 dark:to-zinc-900/50 dark:shadow-surface-dark">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="relative min-h-screen overflow-hidden"
+    >
+      {/* Ambient background */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-emerald-500/8 to-cyan-500/8 blur-3xl dark:from-emerald-500/15 dark:to-cyan-500/15" />
+        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-sky-500/8 to-violet-500/8 blur-3xl dark:from-sky-500/15 dark:to-violet-500/15" />
+      </div>
+
+      <div className="relative z-10 space-y-5">
+        {/* ── Header ── */}
+        <motion.div variants={itemVariants} className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-1.5">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100 dark:bg-primary-900/30">
-                <Server className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+              <div className="relative">
+                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 opacity-20 blur-sm" />
+                <Server className="relative h-7 w-7 text-emerald-600 dark:text-emerald-400" />
               </div>
-              <div>
-                <h1 className="text-2xl font-semibold text-foreground dark:text-zinc-100">Nodes</h1>
-                <p className="text-sm text-muted-foreground dark:text-muted-foreground">
-                  Manage infrastructure nodes and monitor availability
-                </p>
-              </div>
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+                Nodes
+              </h1>
             </div>
+            <p className="ml-10 text-sm text-muted-foreground">
+              Manage infrastructure nodes and monitor availability
+            </p>
           </div>
-          {canWrite && <NodeCreateModal locationId={locationId} />}
-        </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-xl border border-border bg-white/80 p-4 dark:border-border/50 dark:bg-surface-2/30">
-            <div className="flex items-center gap-2">
-              <Activity className="h-4 w-4 text-emerald-500" />
-              <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">Online</span>
-            </div>
-            <div className="mt-1 text-2xl font-semibold text-foreground dark:text-zinc-100">
-              {onlineNodes.length}
-            </div>
-            <div className="text-xs text-muted-foreground dark:text-muted-foreground">
-              of {nodes.length} nodes
-            </div>
-          </div>
-          <div className="rounded-xl border border-border bg-white/80 p-4 dark:border-border/50 dark:bg-surface-2/30">
-            <div className="flex items-center gap-2">
-              <Server className="h-4 w-4 text-primary-500" />
-              <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">Servers</span>
-            </div>
-            <div className="mt-1 text-2xl font-semibold text-foreground dark:text-zinc-100">
-              {totalServers}
-            </div>
-            <div className="text-xs text-muted-foreground dark:text-muted-foreground">
-              across all nodes
-            </div>
-          </div>
-          <div className="rounded-xl border border-border bg-white/80 p-4 dark:border-border/50 dark:bg-surface-2/30">
-            <div className="flex items-center gap-2">
-              <Cpu className="h-4 w-4 text-amber-500" />
-              <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">CPU Cores</span>
-            </div>
-            <div className="mt-1 text-2xl font-semibold text-foreground dark:text-zinc-100">
-              {totalCpu}
-            </div>
-            <div className="text-xs text-muted-foreground dark:text-muted-foreground">
-              total capacity
-            </div>
-          </div>
-          <div className="rounded-xl border border-border bg-white/80 p-4 dark:border-border/50 dark:bg-surface-2/30">
-            <div className="flex items-center gap-2">
-              <HardDrive className="h-4 w-4 text-violet-500" />
-              <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">Memory</span>
-            </div>
-            <div className="mt-1 text-2xl font-semibold text-foreground dark:text-zinc-100">
-              {formatMemory(totalMemory)}
-            </div>
-            <div className="text-xs text-muted-foreground dark:text-muted-foreground">
-              total capacity
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search nodes by name or hostname..."
-            className="pl-9"
-          />
-        </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground dark:text-muted-foreground">
-          {offlineNodes.length > 0 && (
-            <span className="flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-xs font-medium text-rose-600 dark:bg-rose-950/30 dark:text-rose-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-              {offlineNodes.length} offline
-            </span>
+          {canWrite && (
+            <NodeCreateModal locationId={locationId} />
           )}
-          <span className="text-xs">
-            {nodes.length} node{nodes.length !== 1 ? 's' : ''}
-          </span>
-        </div>
-      </div>
+        </motion.div>
 
-      {isLoading ? (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {[1, 2].map((i) => (
-            <div
-              key={i}
-              className="rounded-2xl border border-border bg-white p-5 shadow-surface-light dark:border-border dark:bg-surface-1 dark:shadow-surface-dark"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-6 w-32" rounded="sm" />
-                    <Skeleton className="h-5 w-16" rounded="full" />
+        {/* ── Summary Stats ── */}
+        <motion.div
+          variants={itemVariants}
+          className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+        >
+          <StatCard
+            icon={Activity}
+            label="Online"
+            value={onlineNodes.length}
+            sub={`of ${nodes.length} nodes`}
+            color="text-emerald-500"
+            loading={isLoading}
+          />
+          <StatCard
+            icon={Server}
+            label="Servers"
+            value={totalServers}
+            sub="across all nodes"
+            color="text-primary-500"
+            loading={isLoading}
+          />
+          <StatCard
+            icon={Cpu}
+            label="CPU Cores"
+            value={totalCpu}
+            sub="total capacity"
+            color="text-amber-500"
+            loading={isLoading}
+          />
+          <StatCard
+            icon={HardDrive}
+            label="Memory"
+            value={formatMemory(totalMemory)}
+            sub="total capacity"
+            color="text-violet-500"
+            loading={isLoading}
+          />
+        </motion.div>
+
+        {/* ── Search Bar ── */}
+        <motion.div
+          variants={itemVariants}
+          className="flex flex-wrap items-center gap-3"
+        >
+          <div className="relative min-w-[200px] flex-1 max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search nodes by name or hostname…"
+              className="pl-9"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            {offlineNodes.length > 0 && (
+              <Badge variant="destructive" className="gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+                {offlineNodes.length} offline
+              </Badge>
+            )}
+            {!isLoading && (
+              <span className="text-xs text-muted-foreground">
+                {nodes.length} node{nodes.length !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+        </motion.div>
+
+        {/* ── Node Grid ── */}
+        {isLoading ? (
+          <motion.div variants={itemVariants} className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="relative overflow-hidden rounded-xl border border-border bg-card/80"
+              >
+                <div className="absolute left-0 top-0 h-full w-1 bg-surface-3" />
+                <div className="p-5 pl-6">
+                  <div className="flex items-start gap-3">
+                    <div className="h-9 w-9 animate-pulse rounded-lg bg-surface-3" />
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="h-5 w-32 animate-pulse rounded bg-surface-3" />
+                        <div className="h-5 w-16 animate-pulse rounded-full bg-surface-3" />
+                      </div>
+                      <div className="h-3 w-48 animate-pulse rounded bg-surface-2" />
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Skeleton className="h-6 w-24" rounded="full" />
-                    <Skeleton className="h-6 w-32" rounded="full" />
+                  <div className="mt-4 grid grid-cols-3 gap-2.5">
+                    {[1, 2, 3].map((j) => (
+                      <div key={j} className="h-16 animate-pulse rounded-lg bg-surface-2/50" />
+                    ))}
                   </div>
                 </div>
-                <Skeleton className="h-7 w-20" rounded="full" />
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <Skeleton className="h-16 rounded-xl" />
-                <Skeleton className="h-16 rounded-xl" />
-                <Skeleton className="h-16 rounded-xl" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : nodes.length ? (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {nodes.map((node) => (
-            <NodeCard key={node.id} node={node} />
-          ))}
-        </div>
-      ) : (
-        <EmptyState
-          title={search.trim() ? 'No nodes found' : 'No nodes detected'}
-          description={
-            search.trim()
-              ? 'Try a different node name or hostname.'
-              : 'Install the Catalyst agent and register nodes to begin.'
-          }
-          action={canWrite ? <NodeCreateModal locationId={locationId} /> : null}
-        />
-      )}
-    </div>
+            ))}
+          </motion.div>
+        ) : nodes.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {nodes.map((node, i) => (
+              <NodeCard key={node.id} node={node} index={i} />
+            ))}
+          </div>
+        ) : (
+          <motion.div variants={itemVariants}>
+            <EmptyState
+              title={search.trim() ? 'No nodes found' : 'No nodes detected'}
+              description={
+                search.trim()
+                  ? 'Try a different node name or hostname.'
+                  : 'Install the Catalyst agent and register nodes to begin.'
+              }
+              action={
+                canWrite && !search.trim() ? (
+                  <NodeCreateModal locationId={locationId} />
+                ) : undefined
+              }
+            />
+          </motion.div>
+        )}
+      </div>
+    </motion.div>
   );
 }
 
