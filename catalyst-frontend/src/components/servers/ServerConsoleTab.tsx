@@ -85,6 +85,19 @@ export default function ServerConsoleTab({
     [entries, activeStreams],
   );
 
+  // Memoize search match count at top level (NOT inside conditional JSX).
+  const searchMatchCount = useMemo(
+    () =>
+      searchQuery
+        ? entries.filter(
+            (e) =>
+              activeStreams.has(e.stream) &&
+              e.data.toLowerCase().includes(searchQuery.toLowerCase()),
+          ).length
+        : 0,
+    [entries, activeStreams, searchQuery],
+  );
+
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(copyText);
     setCopied(true);
@@ -232,7 +245,7 @@ export default function ServerConsoleTab({
               />
               {searchQuery && (
                 <span className="text-[10px] tabular-nums text-muted-foreground">
-                  {useMemo(() => entries.filter((e) => activeStreams.has(e.stream) && e.data.toLowerCase().includes(searchQuery.toLowerCase())).length, [entries, activeStreams, searchQuery])}
+                  {searchMatchCount}
                 </span>
               )}
               <button type="button" onClick={() => { setSearchOpen(false); setSearchQuery(''); }} className="text-muted-foreground hover:text-foreground">
