@@ -1,15 +1,12 @@
 import {
-  type FormEvent,
-  type KeyboardEvent,
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, type Variants } from 'framer-motion';
-import { ArrowDown, ArrowUpCircle, Check, CheckSquare, Copy, Download, ExternalLink, Loader2, Package, Puzzle, RefreshCw, Search, Square, Trash2, X, Terminal, FolderOpen, HardDrive, Clock, Database, BarChart3, Bell, Wrench, Users, Settings, Shield, FolderSync } from 'lucide-react';
+import { ArrowUpCircle, CheckSquare, Download, ExternalLink, Loader2, Package, Puzzle, RefreshCw, Search, Square, Trash2, Terminal, FolderOpen, HardDrive, Clock, Database, BarChart3, Bell, Wrench, Users, Settings, Shield, FolderSync } from 'lucide-react';
 import { useServer } from '../../hooks/useServer';
 import { useServerMetrics } from '../../hooks/useServerMetrics';
 import {
@@ -19,6 +16,7 @@ import {
 import { formatBytes } from '../../utils/formatters';
 import { useWebSocketStore } from '../../stores/websocketStore';
 import ServerControls from '../../components/servers/ServerControls';
+import ServerConsoleTab from '../../components/servers/ServerConsoleTab';
 import ServerStatusBadge from '../../components/servers/ServerStatusBadge';
 import ServerMetrics from '../../components/servers/ServerMetrics';
 import ServerMetricsTrends from '../../components/servers/ServerMetricsTrends';
@@ -31,7 +29,6 @@ import SftpConnectionInfo from '../../components/files/SftpConnectionInfo';
 import BackupSection from '../../components/backups/BackupSection';
 import CreateTaskModal from '../../components/tasks/CreateTaskModal';
 import EditTaskModal from '../../components/tasks/EditTaskModal';
-import CustomConsole from '../../components/console/CustomConsole';
 import AlertsPage from '../alerts/AlertsPage';
 import EmptyState from '../../components/shared/EmptyState';
 import { useConsole } from '../../hooks/useConsole';
@@ -368,23 +365,7 @@ function ServerDetailsPage() {
   });
   const [configFiles, setConfigFiles] = useState<ConfigFileState[]>([]);
   const [openConfigIndex, setOpenConfigIndex] = useState(-1);
-  const consoleInputRef = useRef<HTMLInputElement>(null);
-  const [consoleSearch, setConsoleSearch] = useState('');
-  const [consoleScrollback, setConsoleScrollback] = useState(() => {
-    if (typeof window === 'undefined') return 2000;
-    const stored = window.localStorage.getItem('console.scrollback');
-    const parsed = stored ? Number(stored) : 2000;
-    return Number.isFinite(parsed) ? parsed : 2000;
-  });
-  const [consoleAutoScroll, setConsoleAutoScroll] = useState(true);
-  const [consoleActiveStreams, setConsoleActiveStreams] = useState<Set<string>>(
-    () => new Set(['stdout', 'stderr', 'system', 'stdin']),
-  );
-  const [consoleCommandHistory, setConsoleCommandHistory] = useState<string[]>([]);
-  const [consoleHistoryIndex, setConsoleHistoryIndex] = useState(-1);
-  const [consoleCopied, setConsoleCopied] = useState(false);
-  const consoleSearchRef = useRef<HTMLInputElement>(null);
-  const [consoleSearchOpen, setConsoleSearchOpen] = useState(false);
+  const consoleScrollback = 2000;
   const [configSearch, setConfigSearch] = useState('');
   const [databaseHostId, setDatabaseHostId] = useState('');
   const [databaseName, setDatabaseName] = useState('');
@@ -510,7 +491,7 @@ function ServerDetailsPage() {
     refetchConsole().catch(() => {
       // ignore refetch errors
     });
-  }, [consoleScrollback, refetchConsole, serverId]);
+  }, [refetchConsole, serverId]);
 
   const isSuspended = server?.status === 'suspended';
   const activeTab = useMemo(() => {
@@ -1658,22 +1639,6 @@ function ServerDetailsPage() {
     [],
   );
 
-  const handleSend = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      if (!canSend) return;
-      const value = consoleInputRef.current?.value ?? '';
-      const trimmed = value.trim();
-      if (!trimmed) return;
-      send(trimmed);
-      setConsoleCommandHistory((prev) => [...prev.slice(-49), trimmed]);
-      if (consoleInputRef.current) consoleInputRef.current.value = '';
-      setConsoleHistoryIndex(-1);
-      setConsoleAutoScroll(true);
-    },
-    [canSend, send],
-  );
-
   const handleReinstall = useCallback(async () => {
     if (!serverId) return;
     try {
@@ -1858,345 +1823,19 @@ function ServerDetailsPage() {
       {/* ── Tab Content ── */}
       <motion.div variants={itemVariants}>
         {activeTab === 'console' ? (
-        <div className="flex flex-col gap-3">
-          {/* Resource Stats */}
-          {liveMetrics && (
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              {/* CPU */}
-              <div className="overflow-hidden rounded-xl border border-border/50 bg-card/80 p-4 backdrop-blur-sm transition-all duration-300 hover:shadow-md">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">CPU</span>
-                  <span className="text-lg font-bold tabular-nums text-foreground">
-                    {liveMetrics.cpuPercent.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-surface-3">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all duration-300"
-                    style={{ width: `${Math.min(100, liveMetrics.cpuPercent)}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Memory */}
-              <div className="overflow-hidden rounded-xl border border-border/50 bg-card/80 p-4 backdrop-blur-sm transition-all duration-300 hover:shadow-md">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Memory</span>
-                  <span className="text-lg font-bold tabular-nums text-foreground">
-                    {liveMetrics.memoryPercent.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-surface-3">
-                  <div
-                    className="h-full rounded-full bg-success transition-all duration-300"
-                    style={{ width: `${Math.min(100, liveMetrics.memoryPercent)}%` }}
-                  />
-                </div>
-                <div className="mt-1.5 text-[10px] text-muted-foreground">
-                  {liveMetrics.memoryUsageMb} MB
-                </div>
-              </div>
-
-              {/* Disk */}
-              <div className="overflow-hidden rounded-xl border border-border/50 bg-card/80 p-4 backdrop-blur-sm transition-all duration-300 hover:shadow-md">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Disk</span>
-                  <span className="text-lg font-bold tabular-nums text-foreground">
-                    {liveDiskUsageMb != null && liveDiskTotalMb
-                      ? ((liveDiskUsageMb / liveDiskTotalMb) * 100).toFixed(1)
-                      : '0.0'}%
-                  </span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-surface-3">
-                  <div
-                    className="h-full rounded-full bg-warning transition-all duration-300"
-                    style={{ 
-                      width: `${liveDiskUsageMb != null && liveDiskTotalMb ? Math.min(100, (liveDiskUsageMb / liveDiskTotalMb) * 100) : 0}%` 
-                    }}
-                  />
-                </div>
-                <div className="mt-1.5 text-[10px] text-muted-foreground">
-                  {liveDiskUsageMb ?? 0} / {liveDiskTotalMb ?? 0} MB
-                </div>
-              </div>
-
-              {/* Network */}
-              <div className="overflow-hidden rounded-xl border border-border/50 bg-card/80 p-4 backdrop-blur-sm transition-all duration-300 hover:shadow-md">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Network</span>
-                  <span className="text-lg font-bold tabular-nums text-foreground">
-                    ↓↑
-                  </span>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between text-[10px]">
-                    <span className="text-muted-foreground">RX</span>
-                    <span className="font-medium text-foreground">
-                      {formatBytes(Number(liveMetrics.networkRxBytes ?? 0))}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-[10px]">
-                    <span className="text-muted-foreground">TX</span>
-                    <span className="font-medium text-foreground">
-                      {formatBytes(Number(liveMetrics.networkTxBytes ?? 0))}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Console */}
-        <div className="flex flex-col overflow-hidden rounded-xl border border-border " >
-          {/* Toolbar */}
-          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-2">
-            <span
-              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
-                isConnected
-                  ? 'border-success/50 text-success'
-                  : 'border-warning/30 text-warning'
-              }`}
-            >
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'animate-pulse bg-success' : 'bg-warning'}`}
-              />
-              {isConnected ? 'Live' : 'Connecting'}
-            </span>
-
-
-            <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
-
-            {/* Stream Filters */}
-            <div className="flex items-center gap-1">
-              {(['stdout', 'stderr', 'system', 'stdin'] as const).map((stream) => {
-                const isActive = consoleActiveStreams.has(stream);
-                const dotColors: Record<string, string> = {
-                  stdout: 'bg-success',
-                  stderr: 'bg-danger',
-                  system: 'bg-info',
-                  stdin: 'bg-warning',
-                };
-                const activeColors: Record<string, string> = {
-                  stdout: 'border-success/50 bg-success-muted text-success',
-                  stderr: 'border-danger/50 bg-danger-muted text-danger',
-                  system: 'border-info/50 bg-info-muted text-info',
-                  stdin: 'border-amber-500/50 bg-warning/10 text-warning',
-                };
-                return (
-                  <button
-                    key={stream}
-                    type="button"
-                    onClick={() =>
-                      setConsoleActiveStreams((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(stream)) {
-                          if (next.size > 1) next.delete(stream);
-                        } else next.add(stream);
-                        return next;
-                      })
-                    }
-                    className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-all ${
-                      isActive
-                        ? activeColors[stream]
-                        : 'border-border text-muted-foreground hover:border-primary/30'
-                    }`}
-                  >
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full ${isActive ? dotColors[stream] : 'bg-muted-foreground'}`}
-                    />
-                    {stream}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
-
-            {/* Search */}
-            {consoleSearchOpen ? (
-              <div className="flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1">
-                <Search className="h-3 w-3 text-muted-foreground" />
-                <input
-                  ref={consoleSearchRef}
-                  className="w-40 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
-                  value={consoleSearch}
-                  onChange={(e) => setConsoleSearch(e.target.value)}
-                  placeholder="Filter output…"
-                />
-                {consoleSearch ? (
-                  <span className="text-[10px] tabular-nums text-muted-foreground">
-                    {
-                      entries.filter(
-                        (e) =>
-                          consoleActiveStreams.has(e.stream) &&
-                          e.data.toLowerCase().includes(consoleSearch.toLowerCase()),
-                      ).length
-                    }
-                  </span>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConsoleSearchOpen(false);
-                    setConsoleSearch('');
-                  }}
-                  className="text-muted-foreground hover:text-muted-foreground dark:hover:text-foreground"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setConsoleSearchOpen(true);
-                  setTimeout(() => consoleSearchRef.current?.focus(), 50);
-                }}
-                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-border dark:hover:border-primary/30"
-              >
-                <Search className="h-3 w-3" />
-                Search
-              </button>
-            )}
-
-            {/* Scrollback selector */}
-            <div className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground">
-              <span>Buffer</span>
-              <select
-                className="bg-transparent text-[11px] text-muted-foreground outline-none"
-                value={consoleScrollback}
-                onChange={(event) => {
-                  const nextValue = Number(event.target.value);
-                  setConsoleScrollback(nextValue);
-                  if (typeof window !== 'undefined') {
-                    window.localStorage.setItem('console.scrollback', String(nextValue));
-                  }
-                }}
-              >
-                <option value={500}>500</option>
-                <option value={1000}>1K</option>
-                <option value={2000}>2K</option>
-                <option value={5000}>5K</option>
-              </select>
-            </div>
-
-            <div className="flex-1" />
-
-            <span className="text-[11px] tabular-nums text-muted-foreground">
-              {entries.length} lines
-            </span>
-            <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
-
-            <button
-              type="button"
-              onClick={() => setConsoleAutoScroll(!consoleAutoScroll)}
-              className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-all ${
-                consoleAutoScroll
-                  ? 'border-primary/30 bg-primary-muted text-primary'
-                  : 'border-border text-muted-foreground hover:border-border dark:hover:border-primary/30'
-              }`}
-            >
-              <ArrowDown className="h-3 w-3" />
-              Auto-scroll
-            </button>
-
-            <button
-              type="button"
-              onClick={async () => {
-                const text = entries
-                  .filter((e) => consoleActiveStreams.has(e.stream))
-                  .map((e) => e.data)
-                  .join('');
-                await navigator.clipboard.writeText(text);
-                setConsoleCopied(true);
-                setTimeout(() => setConsoleCopied(false), 2000);
-              }}
-              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-border dark:hover:border-primary/30"
-            >
-              {consoleCopied ? (
-                <Check className="h-3 w-3 text-success" />
-              ) : (
-                <Copy className="h-3 w-3" />
-              )}
-              {consoleCopied ? 'Copied' : 'Copy'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                clearConsole();
-                setConsoleAutoScroll(true);
-              }}
-              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-danger/30 hover:text-danger dark:hover:border-danger/30 dark:hover:text-danger"
-            >
-              <Trash2 className="h-3 w-3" />
-              Clear
-            </button>
-          </div>
-
-          {/* Console Output */}
-          <CustomConsole
-            entries={entries}
-            searchQuery={consoleSearch}
-            scrollback={consoleScrollback}
-            autoScroll={consoleAutoScroll}
-            streamFilter={consoleActiveStreams}
-            isLoading={consoleLoading}
-            isError={consoleError}
-            onRetry={refetchConsole}
-            onUserScroll={() => setConsoleAutoScroll(false)}
-            onAutoScrollResume={() => setConsoleAutoScroll(true)}
-            className="h-[50vh]"
-          />
-
-          {/* Command Input */}
-          <form
-            onSubmit={handleSend}
-            className="flex items-center gap-3 border-t border-border bg-card px-4 py-2.5"
-          >
-            <span className="select-none text-sm font-bold text-primary-500">$</span>
-            <input
-              ref={consoleInputRef}
-              defaultValue=""
-              className="w-full bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-                if (e.key === 'ArrowUp') {
-                  e.preventDefault();
-                  if (consoleCommandHistory.length === 0) return;
-                  const next =
-                    consoleHistoryIndex === -1
-                      ? consoleCommandHistory.length - 1
-                      : Math.max(0, consoleHistoryIndex - 1);
-                  setConsoleHistoryIndex(next);
-                  if (consoleInputRef.current) consoleInputRef.current.value = consoleCommandHistory[next];
-                } else if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  if (consoleHistoryIndex === -1) return;
-                  const next = consoleHistoryIndex + 1;
-                  if (next >= consoleCommandHistory.length) {
-                    setConsoleHistoryIndex(-1);
-                    if (consoleInputRef.current) consoleInputRef.current.value = '';
-                  } else {
-                    setConsoleHistoryIndex(next);
-                    if (consoleInputRef.current) consoleInputRef.current.value = consoleCommandHistory[next];
-                  }
-                }
-              }}
-              placeholder={
-                canSend ? 'Type a command… (↑↓ for history)' : 'Connect to send commands'
-              }
-              disabled={!canSend}
-            />
-            <button
-              type="submit"
-              className="rounded-lg bg-primary-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!canSend}
-            >
-              Send
-            </button>
-          </form>
-        </div>
-        </div>
+        <ServerConsoleTab
+          liveMetrics={liveMetrics}
+          liveDiskUsageMb={liveDiskUsageMb}
+          liveDiskTotalMb={liveDiskTotalMb}
+          isConnected={isConnected}
+          canSend={!!canSend}
+          entries={entries}
+          send={send}
+          clearConsole={clearConsole}
+          isLoading={consoleLoading}
+          isError={consoleError}
+          refetch={refetchConsole}
+        />
       ) : null}
 
       {activeTab === 'files' ? (
