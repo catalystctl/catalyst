@@ -17,7 +17,7 @@ const itemVariants: Variants = {
 
 function ServerFilesPage() {
   const { serverId } = useParams();
-  const { data: server, isLoading, isError } = useServer(serverId);
+  const { data: server, isLoading, isError, refetch } = useServer(serverId);
   const title = server?.name ?? serverId ?? 'Unknown server';
 
   if (!serverId) {
@@ -68,8 +68,16 @@ function ServerFilesPage() {
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
           ) : isError ? (
-            <div className="rounded-xl border border-danger/30 bg-danger-muted px-6 py-4 text-sm text-danger">
-              Unable to load server details.
+            <div className="rounded-xl border border-danger/30 bg-danger-muted px-6 py-4 text-center">
+              <p className="text-sm text-danger">
+                Unable to load server details.
+              </p>
+              <button
+                onClick={() => refetch()}
+                className="mt-2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Retry
+              </button>
             </div>
           ) : (
             <div className="overflow-hidden rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm transition-all duration-300 hover:shadow-md">

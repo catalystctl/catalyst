@@ -46,7 +46,7 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 function TemplateDetailsPage() {
   const { templateId } = useParams();
   const navigate = useNavigate();
-  const { data: template, isLoading, isError } = useTemplate(templateId);
+  const { data: template, isLoading, isError, refetch } = useTemplate(templateId);
   const { user } = useAuthStore();
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -78,9 +78,19 @@ function TemplateDetailsPage() {
           <p className="text-sm font-medium text-rose-600 dark:text-rose-400">
             Unable to load template details.
           </p>
-          <Link to="/admin/templates" className="mt-2 inline-block text-xs text-muted-foreground hover:text-foreground">
-            ← Back to templates
-          </Link>
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              className="gap-1.5 text-xs"
+            >
+              Retry
+            </Button>
+            <Link to="/admin/templates" className="text-xs text-muted-foreground hover:text-foreground">
+              ← Back to templates
+            </Link>
+          </div>
         </div>
       </motion.div>
     );

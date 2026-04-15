@@ -110,7 +110,7 @@ function NodeDetailsPage() {
   const { nodeId } = useParams();
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
-  const { data: node, isLoading, isError } = useNode(nodeId);
+  const { data: node, isLoading, isError, refetch } = useNode(nodeId);
   const { data: stats } = useNodeStats(nodeId);
   const [deployInfo, setDeployInfo] = useState<{
     deployUrl: string;
@@ -215,9 +215,19 @@ function NodeDetailsPage() {
           <p className="text-sm font-medium text-rose-600 dark:text-rose-400">
             Unable to load node details.
           </p>
-          <Link to="/admin/nodes" className="mt-2 inline-block text-xs text-muted-foreground hover:text-foreground">
-            ← Back to nodes
-          </Link>
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              className="gap-1.5 text-xs"
+            >
+              Retry
+            </Button>
+            <Link to="/admin/nodes" className="text-xs text-muted-foreground hover:text-foreground">
+              ← Back to nodes
+            </Link>
+          </div>
         </div>
       </motion.div>
     );

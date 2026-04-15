@@ -132,7 +132,7 @@ function ServerDetailsPage() {
   const { serverId, tab } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data: server, isLoading, isError } = useServer(serverId);
+  const { data: server, isLoading, isError, refetch } = useServer(serverId);
   const liveMetrics = useServerMetrics(serverId, server?.allocatedMemoryMb);
   const { isConnected } = useWebSocketStore();
   const { user } = useAuthStore();
@@ -809,8 +809,24 @@ function ServerDetailsPage() {
           <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-primary-500/8 to-primary-300/8 blur-3xl dark:from-primary-500/15 dark:to-primary-300/15" />
         </div>
         <div className="relative z-10 flex items-center justify-center p-8">
-          <div className="rounded-xl border border-danger/30 bg-danger-muted px-6 py-4 text-sm text-danger">
-            Unable to load server details.
+          <div className="rounded-xl border border-danger/30 bg-danger-muted px-6 py-4 text-center">
+            <p className="text-sm text-danger">
+              Unable to load server details.
+            </p>
+            <div className="mt-3 flex items-center justify-center gap-2">
+              <button
+                onClick={() => refetch()}
+                className="rounded-md border border-border px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+              >
+                Retry
+              </button>
+              <button
+                onClick={() => navigate('/servers')}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                ← Back to servers
+              </button>
+            </div>
           </div>
         </div>
       </div>
