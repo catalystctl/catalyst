@@ -1,0 +1,46 @@
+name: Deploy Screenshots Site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/screenshots/**'
+      - 'docs/screenshots-site/**'
+      - '.github/workflows/screenshots-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare site artifact
+        run: |
+          mkdir -p _site
+          cp docs/screenshots-site/index.html _site/index.html
+          cp -r docs/screenshots _site/screenshots
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
