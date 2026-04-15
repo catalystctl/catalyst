@@ -12,14 +12,14 @@ import {
   FileText,
   Bell,
   Database,
-  Globe,
-  Settings,
+    Settings,
   Key,
   Plug,
   Palette,
   Plus,
   Command,
   Loader2,
+  Activity,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { hasAnyPermission } from '../auth/ProtectedRoute';
@@ -53,7 +53,7 @@ const adminNavigationItems: Omit<SearchItem, 'category'>[] = [
   { id: 'nav-templates', label: 'Templates', icon: FileText, to: '/admin/templates', permissions: ['template.read', 'admin.read'] },
   { id: 'nav-alerts', label: 'Alerts', icon: Bell, to: '/admin/alerts', permissions: ['alert.read', 'admin.read'] },
   { id: 'nav-databases', label: 'Databases', icon: Database, to: '/admin/database', permissions: ['admin.read'] },
-  { id: 'nav-network', label: 'Network', icon: Globe, to: '/admin/network', permissions: ['admin.read'] },
+  { id: 'nav-network', label: 'Activity', icon: Activity, to: '/admin/network', permissions: ['admin.read'] },
   { id: 'nav-system', label: 'System', icon: Settings, to: '/admin/system', permissions: ['admin.write'] },
   { id: 'nav-security', label: 'Security', icon: Shield, to: '/admin/security', permissions: ['admin.read'] },
   { id: 'nav-audit-logs', label: 'Audit Logs', icon: FileText, to: '/admin/audit-logs', permissions: ['admin.read'] },

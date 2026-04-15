@@ -18,7 +18,7 @@ const baseTabs: TabConfig[] = [
   { to: '/admin/nodes', label: 'Nodes', requiredPermissions: ['node.read', 'node.create', 'node.update', 'node.delete', 'admin.read', 'admin.write'] },
   { to: '/admin/templates', label: 'Templates', requiredPermissions: ['template.read', 'template.create', 'template.update', 'template.delete', 'admin.read', 'admin.write'] },
   { to: '/admin/database', label: 'Database', requiredPermissions: ['admin.read', 'admin.write'] },
-  { to: '/admin/network', label: 'Network', requiredPermissions: ['admin.read', 'admin.write'] },
+  { to: '/admin/network', label: 'Activity', requiredPermissions: ['admin.read', 'admin.write'] },
   { to: '/admin/api-keys', label: 'API Keys', requiredPermissions: ['apikey.manage', 'admin.read', 'admin.write'] },
   { to: '/admin/system', label: 'System', requiredPermissions: ['admin.write'] },
   { to: '/admin/security', label: 'Security', requiredPermissions: ['admin.read', 'admin.write'] },

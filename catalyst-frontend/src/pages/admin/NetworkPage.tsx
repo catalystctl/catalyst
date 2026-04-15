@@ -1,685 +1,521 @@
-import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
-import EmptyState from '../../components/shared/EmptyState';
-import { adminApi } from '../../services/api/admin';
-import { useNodes } from '../../hooks/useNodes';
-import { notifyError, notifySuccess } from '../../utils/notify';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
-  Search,
-  Plus,
-  Trash2,
+  Activity,
   Server,
+  Shield,
+  User,
+  Key,
+  AlertTriangle,
+  HardDrive,
   Filter,
-  ChevronDown,
-  ChevronRight,
+  Search,
+  RefreshCw,
   ExternalLink,
-  AlertCircle,
+  Zap,
 } from 'lucide-react';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Skeleton } from '../../components/ui/skeleton';
+import EmptyState from '../../components/shared/EmptyState';
+import Pagination from '../../components/shared/Pagination';
+import { useAuditLogs } from '../../hooks/useAdmin';
+import type { AuditLogEntry } from '../../types/admin';
+import { Link } from 'react-router-dom';
 
-interface IpAllocation {
-  id: string;
-  ip: string;
-  serverId: string | null;
-  serverName?: string;
-  serverStatus?: string;
-  createdAt: string;
+// ── Constants ──
+const REFRESH_INTERVAL = 15_000;
+const PAGE_SIZE = 40;
+
+const RESOURCE_FILTERS = [
+  { value: '', label: 'All Events' },
+  { value: 'server', label: 'Servers' },
+  { value: 'node', label: 'Nodes' },
+  { value: 'user', label: 'Users' },
+  { value: 'role', label: 'Roles' },
+  { value: 'api_key', label: 'API Keys' },
+  { value: 'auth', label: 'Auth' },
+  { value: 'backup', label: 'Backups' },
+  { value: 'alert', label: 'Alerts' },
+  { value: 'template', label: 'Templates' },
+  { value: 'smtp', label: 'Email' },
+  { value: 'security', label: 'Security' },
+];
+
+// ── Animation ──
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.03, delayChildren: 0.08 },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 8 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { type: 'spring', stiffness: 400, damping: 28 },
+  },
+};
+
+// ── Helpers ──
+function formatAction(action: string): string {
+  const map: Record<string, string> = {
+    'server.start': 'Server started',
+    'server.stop': 'Server stopped',
+    'server.restart': 'Server restarted',
+    'server.create': 'Server created',
+    'server.delete': 'Server deleted',
+    'server.suspend': 'Server suspended',
+    'server.unsuspend': 'Server unsuspended',
+    'server.update': 'Server updated',
+    'server.bulk_start': 'Bulk servers started',
+    'server.bulk_stop': 'Bulk servers stopped',
+    'server.bulk_restart': 'Bulk servers restarted',
+    'server.bulk_delete': 'Bulk servers deleted',
+    'server.bulk_suspend': 'Bulk servers suspended',
+    'server.bulk_unsuspend': 'Bulk servers unsuspended',
+    'backup.create': 'Backup created',
+    'backup.restore': 'Backup restored',
+    'backup.delete': 'Backup deleted',
+    'node.create': 'Node created',
+    'node.update': 'Node updated',
+    'node.delete': 'Node deleted',
+    'node.connect': 'Node connected',
+    'node.disconnect': 'Node disconnected',
+    'user.create': 'User created',
+    'user.update': 'User updated',
+    'user.delete': 'User deleted',
+    'user.set_roles': 'User roles changed',
+    'user.ban': 'User banned',
+    'user.unban': 'User unbanned',
+    'role.create': 'Role created',
+    'role.update': 'Role updated',
+    'role.delete': 'Role deleted',
+    'login_success': 'Successful login',
+    'login_failed': 'Failed login attempt',
+    'logout': 'User logged out',
+    'api_key.create': 'API key created',
+    'api_key.delete': 'API key deleted',
+    'api_key.regenerate': 'API key regenerated',
+    'alert.create': 'Alert created',
+    'alert.resolve': 'Alert resolved',
+    'alert.delete': 'Alert deleted',
+    'template.create': 'Template created',
+    'template.update': 'Template updated',
+    'template.delete': 'Template deleted',
+    'smtp.update': 'Email settings updated',
+    'smtp.test': 'Email test sent',
+    'security.update': 'Security settings updated',
+    'theme.update': 'Theme settings updated',
+    'database.create': 'Database host created',
+    'database.update': 'Database host updated',
+    'database.delete': 'Database host deleted',
+  };
+
+  if (map[action]) return map[action];
+
+  return action
+    .split(/[._]/g)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
 }
 
-export interface IpPool {
-  id: string;
-  nodeId: string;
-  nodeName: string;
-  networkName: string;
-  cidr: string;
-  gateway?: string | null;
-  startIp?: string | null;
-  endIp?: string | null;
-  reserved?: string[];
-  rangeStart: string;
-  rangeEnd: string;
-  total: number;
-  reservedCount: number;
-  usedCount: number;
-  availableCount: number;
-  createdAt: string;
-  updatedAt: string;
-  allocations?: IpAllocation[];
+function getResourceIcon(resource: string) {
+  const icons: Record<string, React.ElementType> = {
+    server: Server,
+    node: HardDrive,
+    user: User,
+    role: Shield,
+    api_key: Key,
+    auth: User,
+    alert: AlertTriangle,
+    backup: HardDrive,
+    template: Server,
+    smtp: Zap,
+    security: Shield,
+    database: HardDrive,
+  };
+  return icons[resource] || Activity;
 }
 
-const parseReserved = (value: string) =>
-  value
-    .split(/[\s,]+/)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
+function getResourceColor(resource: string) {
+  const colors: Record<string, string> = {
+    server: 'text-indigo-500 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800/50',
+    node: 'text-emerald-500 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/50',
+    user: 'text-sky-500 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 border-sky-200 dark:border-sky-800/50',
+    role: 'text-violet-500 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-800/50',
+    api_key: 'text-amber-500 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/50',
+    auth: 'text-rose-500 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800/50',
+    alert: 'text-orange-500 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-800/50',
+    backup: 'text-cyan-500 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800/50',
+    template: 'text-fuchsia-500 dark:text-fuchsia-400 bg-fuchsia-50 dark:bg-fuchsia-950/40 border-fuchsia-200 dark:border-fuchsia-800/50',
+    smtp: 'text-pink-500 dark:text-pink-400 bg-pink-50 dark:bg-pink-950/40 border-pink-200 dark:border-pink-800/50',
+    security: 'text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800/50',
+    database: 'text-teal-500 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800/50',
+  };
+  return colors[resource] || 'text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-950/40 border-zinc-200 dark:border-zinc-800/50';
+}
 
-function NetworkPage() {
-  const [nodeId, setNodeId] = useState('');
-  const [networkName, setNetworkName] = useState('mc-lan');
-  const [cidr, setCidr] = useState('');
-  const [gateway, setGateway] = useState('');
-  const [startIp, setStartIp] = useState('');
-  const [endIp, setEndIp] = useState('');
-  const [reserved, setReserved] = useState('');
-  const [autoFillIp, setAutoFillIp] = useState('');
-  const queryClient = useQueryClient();
-  const { data: nodes = [] } = useNodes();
+function getActionTone(action: string): 'success' | 'warning' | 'danger' | 'neutral' {
+  if (action.includes('delete') || action.includes('ban') || action.includes('failed') || action.includes('disconnect')) return 'danger';
+  if (action.includes('suspend') || action.includes('alert')) return 'warning';
+  if (action.includes('start') || action.includes('create') || action.includes('resolve') || action.includes('connect') || action.includes('unsuspend') || action.includes('unban') || action.includes('success')) return 'success';
+  return 'neutral';
+}
 
-  const [filterNode, setFilterNode] = useState('');
-  const [filterCidr, setFilterCidr] = useState('');
-  const [searchIp, setSearchIp] = useState('');
-  const [expandedPools, setExpandedPools] = useState<Set<string>>(new Set());
+function getDotColor(tone: 'success' | 'warning' | 'danger' | 'neutral') {
+  switch (tone) {
+    case 'success': return 'bg-emerald-500';
+    case 'warning': return 'bg-amber-500';
+    case 'danger': return 'bg-rose-500';
+    case 'neutral': return 'bg-zinc-400 dark:bg-zinc-500';
+  }
+}
 
-  const { data: pools = [], isLoading } = useQuery<IpPool[]>({
-    queryKey: ['ip-pools'],
-    queryFn: adminApi.listIpPools,
+function formatTimeAgo(date: string): string {
+  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+function formatFullTime(date: string): string {
+  return new Date(date).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
   });
+}
 
-  const selectedNode = useMemo(
-    () => nodes.find((node) => node.id === nodeId),
-    [nodes, nodeId],
-  );
+function formatDetails(details: unknown): string | null {
+  if (details === null || details === undefined) return null;
+  if (typeof details === 'string') return details;
+  if (typeof details === 'number' || typeof details === 'boolean') return String(details);
+  try {
+    const json = JSON.stringify(details);
+    return json.length > 200 ? `${json.slice(0, 197)}...` : json;
+  } catch {
+    return String(details);
+  }
+}
 
-  const poolStats = useMemo(
-    () =>
-      pools.reduce(
-        (acc, pool) => {
-          acc.available += pool.availableCount;
-          acc.used += pool.usedCount;
-          acc.reserved += pool.reservedCount;
-          acc.total += pool.total;
-          return acc;
-        },
-        { available: 0, used: 0, reserved: 0, total: 0 },
-      ),
-    [pools],
-  );
+function isToday(date: string): boolean {
+  const d = new Date(date);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+}
 
-  const filteredPools = useMemo(() => {
-    return pools.filter((pool) => {
-      if (filterNode && pool.nodeId !== filterNode) return false;
-      if (filterCidr && !pool.cidr.toLowerCase().includes(filterCidr.toLowerCase())) return false;
-      return true;
-    });
-  }, [pools, filterNode, filterCidr]);
+function isYesterday(date: string): boolean {
+  const d = new Date(date);
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  return d.getFullYear() === yesterday.getFullYear() && d.getMonth() === yesterday.getMonth() && d.getDate() === yesterday.getDate();
+}
 
-  const allAllocations = useMemo(() => {
-    const allocs: Array<IpAllocation & { poolId: string; poolCidr: string; nodeName: string }> = [];
-    filteredPools.forEach((pool) => {
-      pool.allocations?.forEach((alloc) => {
-        allocs.push({ ...alloc, poolId: pool.id, poolCidr: pool.cidr, nodeName: pool.nodeName });
-      });
-    });
-    if (searchIp.trim()) {
-      const query = searchIp.toLowerCase();
-      return allocs.filter(
-        (a) =>
-          a.ip.toLowerCase().includes(query) ||
-          a.serverName?.toLowerCase().includes(query) ||
-          a.nodeName.toLowerCase().includes(query),
-      );
+function getDateLabel(date: string): string {
+  if (isToday(date)) return 'Today';
+  if (isYesterday(date)) return 'Yesterday';
+  return new Date(date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+}
+
+// ── Component ──
+function ActivityPage() {
+  const [page, setPage] = useState(1);
+  const [resourceFilter, setResourceFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [livePoll, setLivePoll] = useState(true);
+
+  const queryParams = useMemo(() => ({
+    page: Number.isFinite(page) ? page : 1,
+    limit: PAGE_SIZE,
+    ...(resourceFilter ? { resource: resourceFilter } : {}),
+  }), [page, resourceFilter]);
+
+  const { data, isLoading, isError, refetch, isFetching } = useAuditLogs(queryParams);
+
+  const logs = data?.logs ?? [];
+  const pagination = data?.pagination;
+  const totalLogs = pagination?.total ?? 0;
+
+  // Live poll
+  useEffect(() => {
+    if (!livePoll) return;
+    const interval = setInterval(() => refetch(), REFRESH_INTERVAL);
+    return () => clearInterval(interval);
+  }, [livePoll, refetch]);
+
+  const grouped = useMemo(() => {
+    const groups = new Map<string, AuditLogEntry[]>();
+    for (const log of logs) {
+      const label = getDateLabel(log.timestamp);
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label)!.push(log);
     }
-    return allocs;
-  }, [filteredPools, searchIp]);
-
-  const uniqueNodes = useMemo(() => {
-    const nodeMap = new Map<string, string>();
-    pools.forEach((pool) => nodeMap.set(pool.nodeId, pool.nodeName));
-    return Array.from(nodeMap.entries()).map(([id, name]) => ({ id, name }));
-  }, [pools]);
-
-  const uniqueCidrs = useMemo(() => {
-    return Array.from(new Set(pools.map((p) => p.cidr))).sort();
-  }, [pools]);
-
-  const canSubmit = useMemo(
-    () => nodeId && networkName && cidr,
-    [nodeId, networkName, cidr],
-  );
-
-  const createMutation = useMutation({
-    mutationFn: () =>
-      adminApi.createIpPool({
-        nodeId,
-        networkName,
-        cidr,
-        gateway: gateway || undefined,
-        startIp: startIp || undefined,
-        endIp: endIp || undefined,
-        reserved: reserved ? parseReserved(reserved) : undefined,
-      }),
-    onSuccess: () => {
-      notifySuccess('IP pool created');
-      queryClient.invalidateQueries({ queryKey: ['ip-pools'] });
-      setCidr('');
-      setGateway('');
-      setStartIp('');
-      setEndIp('');
-      setReserved('');
-    },
-    onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to create IP pool';
-      notifyError(message);
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (poolId: string) => adminApi.deleteIpPool(poolId),
-    onSuccess: () => {
-      notifySuccess('IP pool removed');
-      queryClient.invalidateQueries({ queryKey: ['ip-pools'] });
-    },
-    onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to remove IP pool';
-      notifyError(message);
-    },
-  });
-
-  const handleAutoFill = () => {
-    if (!autoFillIp) return;
-    const parts = autoFillIp.trim().split('.');
-    if (parts.length < 3) return;
-    const base = `${parts[0]}.${parts[1]}.${parts[2]}`;
-    setCidr(`${base}.0/24`);
-    setGateway(`${base}.1`);
-    setStartIp(`${base}.10`);
-    setEndIp(`${base}.250`);
-  };
-
-  const togglePoolExpand = (poolId: string) => {
-    setExpandedPools((prev) => {
-      const next = new Set(prev);
-      if (next.has(poolId)) next.delete(poolId);
-      else next.add(poolId);
-      return next;
-    });
-  };
+    return groups;
+  }, [logs]);
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardContent className="px-6 py-4">
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="space-y-5"
+    >
+      {/* ── Header ── */}
+      <motion.div variants={itemVariants}>
+        <div className="rounded-xl border border-border bg-card/80 px-6 py-4 shadow-sm backdrop-blur-sm">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground dark:text-white">Network</h1>
-              <p className="mt-1 text-sm text-muted-foreground dark:text-muted-foreground">
-                Manage IP pools for macvlan network allocations
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary" className="text-xs">
-                {pools.length} pools
-              </Badge>
-              <Badge variant="secondary" className="text-xs">
-                {nodes.length} nodes
-              </Badge>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Card className="border-border/80 bg-sky-50/50 dark:bg-sky-900/10">
-          <CardContent className="p-4">
-            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-              Total IPs
-            </div>
-            <div className="mt-2 text-2xl font-bold text-foreground dark:text-white">
-              {poolStats.total}
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">Across all pools</div>
-          </CardContent>
-        </Card>
-        <Card className="border-emerald-200/80 bg-emerald-50/50 dark:bg-emerald-900/10">
-          <CardContent className="p-4">
-            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-              Available
-            </div>
-            <div className="mt-2 text-2xl font-bold text-emerald-700 dark:text-emerald-400">
-              {poolStats.available}
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">Open for allocation</div>
-          </CardContent>
-        </Card>
-        <Card className="border-indigo-200/80 bg-indigo-50/50 dark:bg-indigo-900/10">
-          <CardContent className="p-4">
-            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-              Used
-            </div>
-            <div className="mt-2 text-2xl font-bold text-indigo-700 dark:text-indigo-400">
-              {poolStats.used}
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">Assigned to servers</div>
-          </CardContent>
-        </Card>
-        <Card className="border-amber-200/80 bg-amber-50/50 dark:bg-amber-900/10">
-          <CardContent className="p-4">
-            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-              Reserved
-            </div>
-            <div className="mt-2 text-2xl font-bold text-amber-700 dark:text-amber-400">
-              {poolStats.reserved}
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">Held for static use</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="border-b border-border dark:border-border">
-          <CardTitle className="text-lg">Create IP Pool</CardTitle>
-          <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-            Allocate static macvlan IPs per node. Pools map to network names (e.g. mc-lan).
-          </p>
-        </CardHeader>
-        <CardContent className="p-6">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <div className="space-y-4 lg:col-span-2">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <label className="block">
-                  <span className="text-xs font-medium text-foreground dark:text-zinc-300">Node</span>
-                  <select
-                    className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-100"
-                    value={nodeId}
-                    onChange={(e) => setNodeId(e.target.value)}
-                  >
-                    <option value="">Select node</option>
-                    {nodes.map((node) => (
-                      <option key={node.id} value={node.id}>
-                        {node.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-xs font-medium text-foreground dark:text-zinc-300">Network Name</span>
-                  <input
-                    type="text"
-                    className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-100"
-                    value={networkName}
-                    onChange={(e) => setNetworkName(e.target.value)}
-                    placeholder="mc-lan"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-medium text-foreground dark:text-zinc-300">CIDR</span>
-                  <input
-                    type="text"
-                    className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-100"
-                    value={cidr}
-                    onChange={(e) => setCidr(e.target.value)}
-                    placeholder="192.168.50.0/24"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-medium text-foreground dark:text-zinc-300">Gateway</span>
-                  <input
-                    type="text"
-                    className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-100"
-                    value={gateway}
-                    onChange={(e) => setGateway(e.target.value)}
-                    placeholder="192.168.50.1"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-medium text-foreground dark:text-zinc-300">Start IP (optional)</span>
-                  <input
-                    type="text"
-                    className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-100"
-                    value={startIp}
-                    onChange={(e) => setStartIp(e.target.value)}
-                    placeholder="192.168.50.10"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-medium text-foreground dark:text-zinc-300">End IP (optional)</span>
-                  <input
-                    type="text"
-                    className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-100"
-                    value={endIp}
-                    onChange={(e) => setEndIp(e.target.value)}
-                    placeholder="192.168.50.200"
-                  />
-                </label>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <div className="absolute -inset-1 rounded-lg bg-gradient-to-br from-indigo-500/20 to-violet-500/20 blur-sm" />
+                <Activity className="relative h-6 w-6 text-indigo-600 dark:text-indigo-400" />
               </div>
-              <label className="block">
-                <span className="text-xs font-medium text-foreground dark:text-zinc-300">
-                  Reserved IPs (comma or space separated)
-                </span>
-                <textarea
-                  className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-100"
-                  value={reserved}
-                  onChange={(e) => setReserved(e.target.value)}
-                  rows={2}
-                  placeholder="192.168.50.20, 192.168.50.21"
-                />
-              </label>
-              <div className="flex justify-end">
-                <Button onClick={() => createMutation.mutate()} disabled={!canSubmit || createMutation.isPending}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Pool
-                </Button>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <div className="rounded-xl border border-border bg-surface-2 p-4 dark:border-border dark:bg-surface-2/50">
-                <h4 className="text-xs font-semibold text-foreground dark:text-white">Quick Setup</h4>
-                <p className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
-                  Paste a host IP to autofill a /24 pool configuration.
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-foreground dark:text-white">
+                  Activity
+                </h1>
+                <p className="text-sm text-muted-foreground dark:text-muted-foreground">
+                  Live event stream across your entire cluster
                 </p>
-                <div className="mt-3 flex gap-2">
-                  <input
-                    type="text"
-                    className="flex-1 rounded-lg border border-border bg-white px-3 py-1.5 text-sm text-foreground dark:border-border dark:bg-surface-2 dark:text-zinc-100"
-                    value={autoFillIp}
-                    onChange={(e) => setAutoFillIp(e.target.value)}
-                    placeholder={selectedNode?.publicAddress || '0.0.0.0'}
-                  />
-                  <Button variant="outline" size="sm" onClick={handleAutoFill} disabled={!autoFillIp.trim()}>
-                    Fill
-                  </Button>
-                </div>
-              </div>
-              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900/30 dark:bg-blue-900/20">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600 dark:text-blue-400" />
-                  <div className="text-xs text-blue-900 dark:text-blue-200">
-                    <strong>How this works:</strong> IP pools assign dedicated MACVLAN addresses to servers.
-                    Each server gets one IP from the pool automatically.
-                  </div>
-                </div>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="border-b border-border dark:border-border">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-lg">IP Address Pools</CardTitle>
-              <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-                {filteredPools.length} of {pools.length} pools shown
-              </p>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-4">
-          <div className="mb-4 flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <select
-                className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm text-foreground dark:border-border dark:bg-surface-2 dark:text-zinc-100"
-                value={filterNode}
-                onChange={(e) => setFilterNode(e.target.value)}
-              >
-                <option value="">All Nodes</option>
-                {uniqueNodes.map((node) => (
-                  <option key={node.id} value={node.id}>
-                    {node.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm text-foreground dark:border-border dark:bg-surface-2 dark:text-zinc-100"
-                value={filterCidr}
-                onChange={(e) => setFilterCidr(e.target.value)}
-              >
-                <option value="">All CIDRs</option>
-                {uniqueCidrs.map((cidr) => (
-                  <option key={cidr} value={cidr}>
-                    {cidr}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="relative ml-auto">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                className="w-64 rounded-lg border border-border bg-white py-1.5 pl-9 pr-3 text-sm text-foreground dark:border-border dark:bg-surface-2 dark:text-zinc-100"
-                placeholder="Search IPs or servers..."
-                value={searchIp}
-                onChange={(e) => setSearchIp(e.target.value)}
-              />
+              {livePoll && (
+                <Badge variant="outline" className="gap-1.5 border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-400">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  </span>
+                  Live
+                </Badge>
+              )}
+              <Badge variant="secondary" className="text-xs">
+                {totalLogs.toLocaleString()} events
+              </Badge>
             </div>
           </div>
+        </div>
+      </motion.div>
 
-          {isLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-24 w-full" />
+      {/* ── Filters ── */}
+      <motion.div variants={itemVariants}>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-white px-3 py-1.5 dark:border-border dark:bg-surface-1">
+            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+            <select
+              className="appearance-none bg-transparent text-sm font-medium text-foreground outline-none dark:text-zinc-200"
+              value={resourceFilter}
+              onChange={(e) => { setResourceFilter(e.target.value); setPage(1); }}
+            >
+              {RESOURCE_FILTERS.map((f) => (
+                <option key={f.value} value={f.value}>{f.label}</option>
               ))}
-            </div>
-          ) : filteredPools.length === 0 ? (
-            <EmptyState
-              title={pools.length === 0 ? 'No IP pools yet' : 'No pools match filters'}
-              description={
-                pools.length === 0
-                  ? 'Create a pool to allocate static macvlan IPs.'
-                  : 'Try adjusting your filters.'
-              }
+            </select>
+          </div>
+
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              className="w-full rounded-lg border border-border bg-white py-1.5 pl-9 pr-3 text-sm text-foreground transition-colors focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
+              placeholder="Search actions, users, resources…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
-          ) : (
-            <div className="space-y-3">
-              {filteredPools.map((pool) => {
-                const isExpanded = expandedPools.has(pool.id);
-                const utilizationPercent = pool.total > 0 ? Math.round((pool.usedCount / pool.total) * 100) : 0;
-                return (
-                  <div
-                    key={pool.id}
-                    className="rounded-xl border border-border bg-white dark:border-border dark:bg-surface-2"
-                  >
-                    <div
-                      className="flex cursor-pointer items-center gap-4 p-4 hover:bg-surface-2 dark:hover:bg-surface-2/50"
-                      onClick={() => togglePoolExpand(pool.id)}
-                    >
-                      <button className="text-muted-foreground">
-                        {isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-                      </button>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-foreground dark:text-white">{pool.nodeName}</span>
-                          <Badge variant="outline" className="text-xs">
-                            {pool.networkName}
-                          </Badge>
-                        </div>
-                        <div className="mt-1 flex items-center gap-4 text-xs text-muted-foreground dark:text-muted-foreground">
-                          <span className="font-mono">{pool.cidr}</span>
-                          <span>Range: {pool.rangeStart} - {pool.rangeEnd}</span>
-                          {pool.gateway && <span>Gateway: {pool.gateway}</span>}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="hidden gap-4 sm:flex">
-                          <div className="text-center">
-                            <div className="text-lg font-bold text-foreground dark:text-white">{pool.total}</div>
-                            <div className="text-xs text-muted-foreground dark:text-muted-foreground">Total</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                              {pool.availableCount}
-                            </div>
-                            <div className="text-xs text-muted-foreground dark:text-muted-foreground">Free</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{pool.usedCount}</div>
-                            <div className="text-xs text-muted-foreground dark:text-muted-foreground">Used</div>
-                          </div>
-                        </div>
-                        <div className="w-20">
-                          <div className="h-2 overflow-hidden rounded-full bg-surface-3 dark:bg-surface-2">
-                            <div
-                              className={`h-full transition-all ${
-                                utilizationPercent > 90
-                                  ? 'bg-rose-500'
-                                  : utilizationPercent > 70
-                                    ? 'bg-amber-500'
-                                    : 'bg-emerald-500'
-                              }`}
-                              style={{ width: `${utilizationPercent}%` }}
-                            />
-                          </div>
-                          <div className="mt-1 text-center text-xs text-muted-foreground dark:text-muted-foreground">
-                            {utilizationPercent}%
-                          </div>
-                        </div>
-                        <button
-                          className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/20 dark:hover:text-rose-400"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteMutation.mutate(pool.id);
-                          }}
-                          disabled={deleteMutation.isPending}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
+          </div>
 
-                    {isExpanded && pool.allocations && pool.allocations.length > 0 && (
-                      <div className="border-t border-border bg-surface-2/50 dark:border-border dark:bg-surface-1/50">
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="border-b border-border dark:border-border">
-                                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                                  IP Address
-                                </th>
-                                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                                  Server
-                                </th>
-                                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                                  Status
-                                </th>
-                                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                                  Assigned
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-                              {pool.allocations.map((alloc) => (
-                                <tr key={alloc.id} className="hover:bg-white dark:hover:bg-surface-2">
-                                  <td className="px-4 py-2 font-mono text-foreground dark:text-white">{alloc.ip}</td>
-                                  <td className="px-4 py-2">
-                                    {alloc.serverId ? (
-                                      <Link
-                                        to={`/servers/${alloc.serverId}`}
-                                        className="inline-flex items-center gap-1 text-primary-600 hover:text-primary-500 dark:text-primary-400"
-                                      >
-                                        <Server className="h-3 w-3" />
-                                        {alloc.serverName || 'Unknown'}
-                                        <ExternalLink className="h-3 w-3" />
-                                      </Link>
-                                    ) : (
-                                      <span className="text-muted-foreground dark:text-muted-foreground">-</span>
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-2">
-                                    {alloc.serverStatus ? (
-                                      <Badge
-                                        variant={
-                                          alloc.serverStatus === 'running'
-                                            ? 'default'
-                                            : alloc.serverStatus === 'stopped'
-                                              ? 'secondary'
-                                              : 'outline'
-                                        }
-                                        className="text-xs"
-                                      >
-                                        {alloc.serverStatus}
-                                      </Badge>
-                                    ) : (
-                                      <span className="text-muted-foreground dark:text-muted-foreground">-</span>
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-2 text-xs text-muted-foreground dark:text-muted-foreground">
-                                    {new Date(alloc.createdAt).toLocaleDateString()}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setLivePoll(!livePoll)}
+              className={`gap-1.5 text-xs ${livePoll ? 'border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-400' : ''}`}
+            >
+              <RefreshCw className={`h-3 w-3 ${livePoll && isFetching ? 'animate-spin' : ''}`} />
+              {livePoll ? 'Auto-refresh' : 'Paused'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              className="gap-1.5 text-xs"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Refresh
+            </Button>
+          </div>
+        </div>
+      </motion.div>
 
-                    {isExpanded && (!pool.allocations || pool.allocations.length === 0) && (
-                      <div className="border-t border-border px-4 py-6 text-center text-sm text-muted-foreground dark:border-border dark:text-muted-foreground">
-                        No IPs allocated yet
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* ── Feed ── */}
+      <motion.div variants={itemVariants}>
+        {isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex gap-3 rounded-xl border border-border bg-white p-4 dark:border-border dark:bg-surface-1">
+                <Skeleton className="h-8 w-8 rounded-lg" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-64" />
+                  <Skeleton className="h-3 w-40" />
+                </div>
+                <Skeleton className="h-4 w-16" />
+              </div>
+            ))}
+          </div>
+        ) : isError ? (
+          <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-8 text-center">
+            <p className="text-sm text-rose-600 dark:text-rose-400">Failed to load activity feed.</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-3 text-xs">
+              Retry
+            </Button>
+          </div>
+        ) : logs.length === 0 ? (
+          <EmptyState
+            title="No activity yet"
+            description="Events will appear here as actions are performed across the cluster."
+          />
+        ) : (
+          <div className="space-y-6">
+            {Array.from(grouped.entries()).map(([dateLabel, entries]) => (
+              <div key={dateLabel}>
+                {/* Date divider */}
+                <div className="mb-3 flex items-center gap-3">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground dark:text-zinc-500">
+                    {dateLabel}
+                  </h3>
+                  <div className="h-px flex-1 bg-border dark:bg-zinc-800" />
+                  <Badge variant="outline" className="text-[10px]">
+                    {entries.length}
+                  </Badge>
+                </div>
 
-      {allAllocations.length > 0 && searchIp && (
-        <Card>
-          <CardHeader className="border-b border-border dark:border-border">
-            <CardTitle className="text-lg">Search Results</CardTitle>
-            <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-              {allAllocations.length} allocation{allAllocations.length !== 1 ? 's' : ''} found
-            </p>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-surface-2 dark:bg-surface-2/50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                      IP Address
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                      Node
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                      Pool
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                      Server
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                  {allAllocations.map((alloc) => (
-                    <tr key={alloc.id} className="hover:bg-surface-2 dark:hover:bg-surface-2/50">
-                      <td className="px-4 py-3 font-mono text-foreground dark:text-white">{alloc.ip}</td>
-                      <td className="px-4 py-3 text-muted-foreground dark:text-zinc-300">{alloc.nodeName}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground dark:text-muted-foreground">
-                        {alloc.poolCidr}
-                      </td>
-                      <td className="px-4 py-3">
-                        {alloc.serverId ? (
-                          <Link
-                            to={`/servers/${alloc.serverId}`}
-                            className="inline-flex items-center gap-1 text-primary-600 hover:text-primary-500 dark:text-primary-400"
+                {/* Entries */}
+                <div className="space-y-2">
+                  <AnimatePresence mode="popLayout">
+                    {entries
+                      .filter((log) => {
+                        if (!searchQuery.trim()) return true;
+                        const q = searchQuery.toLowerCase();
+                        return (
+                          log.action.toLowerCase().includes(q) ||
+                          log.resource.toLowerCase().includes(q) ||
+                          log.user?.username?.toLowerCase().includes(q) ||
+                          log.resourceId?.toLowerCase().includes(q) ||
+                          formatDetails(log.details)?.toLowerCase().includes(q)
+                        );
+                      })
+                      .map((log) => {
+                        const Icon = getResourceIcon(log.resource);
+                        const colorClass = getResourceColor(log.resource);
+                        const tone = getActionTone(log.action);
+                        const actionLabel = formatAction(log.action);
+                        const details = log.details ? formatDetails(log.details) : null;
+                        const resourceId = log.resourceId;
+                        const resourceType = log.resource;
+
+                        // Determine if we can link to the resource
+                        let resourceLink: string | null = null;
+                        if (resourceType === 'server' && resourceId) resourceLink = `/servers/${resourceId}`;
+                        if (resourceType === 'node' && resourceId) resourceLink = `/admin/nodes/${resourceId}`;
+
+                        return (
+                          <motion.div
+                            key={log.id}
+                            variants={itemVariants}
+                            initial="hidden"
+                            animate="visible"
+                            layout
+                            className={`group flex items-start gap-3 rounded-xl border border-border/60 bg-white px-4 py-3 transition-all hover:border-border hover:shadow-sm dark:border-zinc-800/60 dark:bg-surface-1/80 dark:hover:border-zinc-700`}
                           >
-                            {alloc.serverName || 'Unknown'}
-                            <ExternalLink className="h-3 w-3" />
-                          </Link>
-                        ) : (
-                          <span className="text-muted-foreground dark:text-muted-foreground">Unassigned</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                            {/* Icon */}
+                            <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${colorClass}`}>
+                              <Icon className="h-4 w-4" />
+                            </div>
+
+                            {/* Content */}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-foreground dark:text-zinc-100">
+                                  {actionLabel}
+                                </span>
+                                <span className={`h-1.5 w-1.5 rounded-full ${getDotColor(tone)}`} />
+                              </div>
+
+                              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground dark:text-zinc-400">
+                                {/* User */}
+                                {log.user?.username && (
+                                  <span className="font-medium text-foreground/70 dark:text-zinc-300">
+                                    {log.user.username}
+                                  </span>
+                                )}
+
+                                {/* Resource link */}
+                                {resourceLink && resourceId ? (
+                                  <Link
+                                    to={resourceLink}
+                                    className="inline-flex items-center gap-1 font-mono text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+                                  >
+                                    {resourceType}:{resourceId.slice(0, 8)}
+                                    <ExternalLink className="h-2.5 w-2.5" />
+                                  </Link>
+                                ) : resourceId ? (
+                                  <span className="font-mono">
+                                    {resourceType}:{resourceId.slice(0, 8)}
+                                  </span>
+                                ) : (
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                    {log.resource}
+                                  </Badge>
+                                )}
+
+                                {/* Details */}
+                                {details && details !== '{}' && (
+                                  <span className="truncate max-w-xs font-mono text-[11px] opacity-60">
+                                    {details}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Time */}
+                            <div className="flex shrink-0 flex-col items-end gap-0.5">
+                              <span
+                                className="text-[11px] text-muted-foreground dark:text-zinc-500"
+                                title={formatFullTime(log.timestamp)}
+                              >
+                                {formatTimeAgo(log.timestamp)}
+                              </span>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                  </AnimatePresence>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </motion.div>
+
+      {/* ── Pagination ── */}
+      {pagination && pagination.totalPages > 1 && (
+        <motion.div variants={itemVariants}>
+          <Pagination
+            page={page}
+            totalPages={pagination.totalPages}
+            onPageChange={setPage}
+          />
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 }
 
-export default NetworkPage;
+export default ActivityPage;

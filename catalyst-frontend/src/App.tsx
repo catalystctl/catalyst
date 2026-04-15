@@ -23,7 +23,7 @@ import TemplateDetailsPage from './pages/templates/TemplateDetailsPage';
 import AdminNodesPage from './pages/admin/NodesPage';
 import AdminServersPage from './pages/admin/ServersPage';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
-import NetworkPage from './pages/admin/NetworkPage';
+import ActivityPage from './pages/admin/NetworkPage';
 import DatabasePage from './pages/admin/DatabasePage';
 import AdminAlertsPage from './pages/admin/AlertsPage';
 import UsersPage from './pages/admin/UsersPage';
@@ -202,7 +202,7 @@ function App() {
               path="admin/network"
               element={
                 <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                  <NetworkPage />
+                  <ActivityPage />
                 </ProtectedRoute>
               }
             />

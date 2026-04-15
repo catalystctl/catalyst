@@ -53,7 +53,7 @@ const ROUTES: RouteEntry[] = [
   { path: '/admin/nodes', label: 'admin-nodes', folder: 'admin' },
   { path: '/admin/templates', label: 'admin-templates', folder: 'admin' },
   { path: '/admin/database', label: 'admin-database', folder: 'admin' },
-  { path: '/admin/network', label: 'admin-network', folder: 'admin' },
+  { path: '/admin/network', label: 'admin-activity', folder: 'admin' },
   { path: '/admin/system', label: 'admin-system', folder: 'admin' },
   { path: '/admin/security', label: 'admin-security', folder: 'admin' },
   { path: '/admin/theme-settings', label: 'admin-theme-settings', folder: 'admin' },

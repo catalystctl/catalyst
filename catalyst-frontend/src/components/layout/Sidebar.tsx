@@ -135,8 +135,8 @@ const adminSections = [
       },
       {
         to: '/admin/network',
-        label: 'Network',
-        icon: Globe,
+        label: 'Activity',
+        icon: Activity,
         permissions: ['admin.read', 'admin.write'],
       },
       { to: '/admin/system', label: 'System', icon: Settings, permissions: ['admin.write'] },
