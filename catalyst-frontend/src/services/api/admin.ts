@@ -77,7 +77,7 @@ export const adminApi = {
     return data.serverIds;
   },
   deleteUser: async (userId: string) => {
-    const { data } = await apiClient.delete<{ success: boolean }>(`/api/admin/users/${userId}`);
+    const { data } = await apiClient.post<{ success: boolean }>(`/api/admin/users/${userId}/delete`);
     return data;
   },
   listServers: async (params?: {
