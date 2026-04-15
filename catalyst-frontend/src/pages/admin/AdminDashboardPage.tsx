@@ -104,7 +104,7 @@ function AdminDashboardPage() {
   return (
     <motion.div
       variants={containerVariants}
-      initial="hidden"
+      initial={false}
       animate="visible"
       className="relative min-h-screen overflow-hidden"
     >
@@ -564,7 +564,7 @@ function EnhancedMiniStat({
   const content = (
     <motion.div
       variants={scaleVariants}
-      initial="hidden"
+      initial={false}
       animate="visible"
       transition={{ delay: index * 0.03 }}
       className={cn(

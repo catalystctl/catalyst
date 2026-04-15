@@ -255,7 +255,7 @@ function DatabasePage() {
   return (
     <motion.div
       variants={containerVariants}
-      initial="hidden"
+      initial={false}
       animate="visible"
       className="relative min-h-screen overflow-hidden"
     >

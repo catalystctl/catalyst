@@ -16,7 +16,7 @@ function ServerList({ servers }: { servers: Server[] }) {
   return (
     <motion.div
       variants={containerVariants}
-      initial="hidden"
+      initial={false}
       animate="visible"
       className="grid grid-cols-1 gap-4 xl:grid-cols-2"
     >

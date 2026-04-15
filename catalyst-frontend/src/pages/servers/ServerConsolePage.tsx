@@ -149,7 +149,7 @@ function ServerConsolePage() {
   return (
     <motion.div
       variants={containerVariants}
-      initial="hidden"
+      initial={false}
       animate="visible"
       className="relative flex min-h-[calc(100vh-10rem)] flex-col gap-4 overflow-hidden"
     >
