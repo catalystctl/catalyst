@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import type { Template, TemplateImageOption, TemplateVariable } from '../../types/template';
 import { templatesApi } from '../../services/api/templates';
 import { notifyError, notifySuccess } from '../../utils/notify';
@@ -88,7 +90,6 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange }: Edi
   const [pluginProviders, setPluginProviders] = useState<string[]>(
     extractProviderIds(template.features?.pluginManager?.providers),
   );
-  const queryClient = useQueryClient();
 
   const parsedPorts = useMemo(
     () =>
@@ -290,8 +291,8 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange }: Edi
         },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
-      queryClient.invalidateQueries({ queryKey: ['template', template.id] });
+      queryClient.invalidateQueries({ queryKey: qk.templates() });
+      queryClient.invalidateQueries({ queryKey: qk.template(template.id) });
       notifySuccess('Template updated');
       setOpen(false);
     },

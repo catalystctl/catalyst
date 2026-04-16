@@ -1,4 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { apiKeyService, CreateApiKeyRequest, UpdateApiKeyRequest } from '../services/apiKeys';
 import { toast } from 'sonner';
 
@@ -46,7 +48,7 @@ export function useCreateApiKey() {
   return useMutation({
     mutationFn: (data: CreateApiKeyRequest) => apiKeyService.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: qk.apiKeys() });
       toast.success('API key created successfully');
     },
     onError: (error: any) => {
@@ -65,8 +67,8 @@ export function useUpdateApiKey() {
     mutationFn: ({ id, data }: { id: string; data: UpdateApiKeyRequest }) =>
       apiKeyService.update(id, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY_KEY });
-      queryClient.invalidateQueries({ queryKey: [...API_KEYS_QUERY_KEY, variables.id] });
+      queryClient.invalidateQueries({ queryKey: qk.apiKeys() });
+      queryClient.invalidateQueries({ queryKey: qk.apiKeyVariable(variables.id) });
       toast.success('API key updated successfully');
     },
     onError: (error: any) => {
@@ -84,7 +86,7 @@ export function useDeleteApiKey() {
   return useMutation({
     mutationFn: (id: string) => apiKeyService.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: qk.apiKeys() });
       toast.success('API key revoked successfully');
     },
     onError: (error: any) => {

@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import type { NodeInfo } from '../../types/node';
 import { nodesApi } from '../../services/api/nodes';
+import { qk } from '../../lib/queryKeys';
+import { queryClient } from '../../lib/queryClient';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
@@ -25,7 +27,6 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange }: Props) {
   const [memory, setMemory] = useState(String(node.maxMemoryMb ?? 0));
   const [cpu, setCpu] = useState(String(node.maxCpuCores ?? 0));
   const [serverDataDir, setServerDataDir] = useState(node.serverDataDir ?? '/var/lib/catalyst/servers');
-  const queryClient = useQueryClient();
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -39,8 +40,8 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange }: Props) {
         serverDataDir: serverDataDir || undefined,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nodes'] });
-      queryClient.invalidateQueries({ queryKey: ['node', node.id] });
+      queryClient.invalidateQueries({ queryKey: qk.nodes() });
+      queryClient.invalidateQueries({ queryKey: qk.node(node.id) });
       notifySuccess('Node updated');
       setOpen(false);
     },

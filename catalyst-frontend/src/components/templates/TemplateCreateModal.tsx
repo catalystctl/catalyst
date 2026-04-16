@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import type { TemplateImageOption, TemplateVariable } from '../../types/template';
 import { templatesApi } from '../../services/api/templates';
 import { notifyError, notifySuccess } from '../../utils/notify';
@@ -59,7 +61,6 @@ function TemplateCreateModal() {
   const [modProviders, setModProviders] = useState<string[]>([]);
   const [pluginManagerEnabled, setPluginManagerEnabled] = useState(false);
   const [pluginProviders, setPluginProviders] = useState<string[]>([]);
-  const queryClient = useQueryClient();
 
   const parsedPorts = useMemo(
     () =>
@@ -206,7 +207,7 @@ function TemplateCreateModal() {
         },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
+      queryClient.invalidateQueries({ queryKey: qk.templates() });
       notifySuccess('Template created');
       setOpen(false);
       setName('');
@@ -361,7 +362,7 @@ function TemplateCreateModal() {
     const failureCount = results.length - successCount;
     if (successCount) {
       notifySuccess(`Imported ${successCount} template${successCount === 1 ? '' : 's'}`);
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
+      queryClient.invalidateQueries({ queryKey: qk.templates() });
     }
     if (failureCount) {
       notifyError(`${failureCount} template${failureCount === 1 ? '' : 's'} failed to import`);

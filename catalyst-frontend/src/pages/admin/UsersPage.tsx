@@ -1,5 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
   Users,
@@ -192,7 +194,6 @@ function UsersPage() {
   const [unbanTargets, setUnbanTargets] = useState<{ userIds: string[]; label: string } | null>(null);
   const [banReason, setBanReason] = useState('');
 
-  const queryClient = useQueryClient();
 
   const { data, isLoading } = useAdminUsers({
     page,
@@ -334,7 +335,7 @@ function UsersPage() {
       }),
     onSuccess: () => {
       notifySuccess('User created');
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
       setCreateEmail('');
       setCreateUsername('');
       setCreatePassword('');
@@ -365,7 +366,7 @@ function UsersPage() {
       }),
     onSuccess: () => {
       notifySuccess('User updated');
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
       setEditingUserId(null);
       setEditRoleSearch('');
       setEditServerSearch('');
@@ -384,7 +385,7 @@ function UsersPage() {
     mutationFn: (userId: string) => adminApi.deleteUser(userId),
     onSuccess: () => {
       notifySuccess('User deleted');
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
     },
     onError: (error: any) => {
       const rawError = error?.response?.data?.error;
@@ -408,7 +409,7 @@ function UsersPage() {
       notifySuccess(
         `${variables.userIds.length} user${variables.userIds.length === 1 ? '' : 's'} banned`,
       );
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
       setSelectedIds([]);
       setBanTargets(null);
       setBanReason('');
@@ -428,7 +429,7 @@ function UsersPage() {
       notifySuccess(
         `${userIds.length} user${userIds.length === 1 ? '' : 's'} unbanned`,
       );
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
       setSelectedIds([]);
       setUnbanTargets(null);
     },
@@ -447,7 +448,7 @@ function UsersPage() {
       notifySuccess(
         `${userIds.length} user${userIds.length === 1 ? '' : 's'} deleted`,
       );
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
       setSelectedIds([]);
       setDeletingUser(null);
     },

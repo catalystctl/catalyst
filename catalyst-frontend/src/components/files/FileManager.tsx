@@ -1,5 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import {
   ArrowUp,
   ChevronRight,
@@ -176,7 +178,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
   const allSelected = sortedFiles.length > 0 && selectedPaths.size === sortedFiles.length;
 
   const invalidateFiles = () => {
-    queryClient.invalidateQueries({ queryKey: ['files', serverId] });
+    queryClient.invalidateQueries({ queryKey: qk.files(serverId) });
   };
 
   const createMutation = useMutation({

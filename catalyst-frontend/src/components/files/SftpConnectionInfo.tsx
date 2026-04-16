@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Copy, Check, Eye, EyeOff, RefreshCw, AlertTriangle, Info, Trash2, Shield, Users } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { serversApi } from '../../services/api/servers';
 import { notifySuccess, notifyError } from '../../utils/notify';
 
@@ -45,7 +47,6 @@ function formatTimeAgo(timestamp: number): string {
 }
 
 export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnectionInfoProps) {
-  const queryClient = useQueryClient();
   const [showPassword, setShowPassword] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [selectedTtl, setSelectedTtl] = useState<number | undefined>(undefined);
@@ -68,8 +69,8 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
     mutationFn: (ttlMs?: number) => serversApi.rotateSftpToken(serverId, ttlMs),
     onSuccess: () => {
       notifySuccess('SFTP password rotated');
-      queryClient.invalidateQueries({ queryKey: ['sftp-connection-info', serverId] });
-      queryClient.invalidateQueries({ queryKey: ['sftp-tokens', serverId] });
+      queryClient.invalidateQueries({ queryKey: qk.sftpConnectionInfo(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.sftpTokens(serverId) });
       setShowPassword(false);
     },
     onError: (error: any) => {
@@ -82,8 +83,8 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
     mutationFn: (targetUserId: string) => serversApi.revokeSftpToken(serverId, targetUserId),
     onSuccess: (_data, targetUserId) => {
       notifySuccess('SFTP session revoked');
-      queryClient.invalidateQueries({ queryKey: ['sftp-tokens', serverId] });
-      queryClient.invalidateQueries({ queryKey: ['sftp-connection-info', serverId] });
+      queryClient.invalidateQueries({ queryKey: qk.sftpTokens(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.sftpConnectionInfo(serverId) });
       if (tokens.some(t => t.userId === targetUserId && t.isSelf)) {
         setShowPassword(false);
       }
@@ -98,8 +99,8 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
     mutationFn: () => serversApi.revokeAllSftpTokens(serverId),
     onSuccess: (data) => {
       notifySuccess(`Revoked ${data.revoked} SFTP session${data.revoked !== 1 ? 's' : ''}`);
-      queryClient.invalidateQueries({ queryKey: ['sftp-tokens', serverId] });
-      queryClient.invalidateQueries({ queryKey: ['sftp-connection-info', serverId] });
+      queryClient.invalidateQueries({ queryKey: qk.sftpTokens(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.sftpConnectionInfo(serverId) });
       setShowPassword(false);
     },
     onError: (error: any) => {

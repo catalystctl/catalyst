@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { motion, type Variants } from 'framer-motion';
 import {
   Settings,
@@ -108,7 +110,6 @@ function HealthStatCard({
 
 // ── Main Page ──
 function SystemPage() {
-  const queryClient = useQueryClient();
   const { data: stats } = useAdminStats();
   const { data: health } = useAdminHealth();
   const { data: smtpSettings } = useSmtpSettings();
@@ -145,7 +146,7 @@ function SystemPage() {
       }),
     onSuccess: () => {
       notifySuccess('SMTP settings updated');
-      queryClient.invalidateQueries({ queryKey: ['admin-smtp'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminSmtp() });
     },
     onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update SMTP settings'),
   });
@@ -158,7 +159,7 @@ function SystemPage() {
       }),
     onSuccess: () => {
       notifySuccess('Mod manager settings updated');
-      queryClient.invalidateQueries({ queryKey: ['admin-mod-manager'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminModManager() });
     },
     onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update mod manager settings'),
   });

@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { useParams, Link } from 'react-router-dom';
 import apiClient from '../../services/api/client';
 import { notifyError, notifySuccess } from '../../utils/notify';
@@ -50,7 +52,6 @@ const parseReserved = (value: string) =>
 
 function NodeAllocationsPage() {
   const { nodeId } = useParams<{ nodeId: string }>();
-  const queryClient = useQueryClient();
 
   // Tab state
   const [activeTab, setActiveTab] = useState<'ports' | 'ips'>('ports');
@@ -105,7 +106,7 @@ function NodeAllocationsPage() {
     onSuccess: (response) => {
       const created = response.data?.data?.created || 0;
       notifySuccess(`Created ${created} port allocation${created !== 1 ? 's' : ''}`);
-      queryClient.invalidateQueries({ queryKey: ['node-allocations', nodeId] });
+      queryClient.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId) });
       setShowCreatePortModal(false);
       setIpInput('');
       setPortsInput('');
@@ -123,7 +124,7 @@ function NodeAllocationsPage() {
     },
     onSuccess: () => {
       notifySuccess('Port allocation deleted');
-      queryClient.invalidateQueries({ queryKey: ['node-allocations', nodeId] });
+      queryClient.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId) });
     },
     onError: (error: any) => {
       const message = error?.response?.data?.error || 'Failed to delete port allocation';
@@ -145,7 +146,7 @@ function NodeAllocationsPage() {
       }),
     onSuccess: () => {
       notifySuccess('IP pool created');
-      queryClient.invalidateQueries({ queryKey: ['ip-pools'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminIpPools(nodeId) });
       setShowCreatePoolModal(false);
       setCidr('');
       setGateway('');
@@ -163,7 +164,7 @@ function NodeAllocationsPage() {
     mutationFn: (poolId: string) => adminApi.deleteIpPool(poolId),
     onSuccess: () => {
       notifySuccess('IP pool deleted');
-      queryClient.invalidateQueries({ queryKey: ['ip-pools'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminIpPools(nodeId) });
     },
     onError: (error: any) => {
       const message = error?.response?.data?.error || 'Failed to delete IP pool';

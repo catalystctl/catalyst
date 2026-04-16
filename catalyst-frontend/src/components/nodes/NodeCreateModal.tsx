@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { nodesApi } from '../../services/api/nodes';
+import { qk } from '../../lib/queryKeys';
+import { queryClient } from '../../lib/queryClient';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
@@ -23,7 +25,6 @@ function NodeCreateModal({ locationId }: Props) {
     apiKey: string;
     expiresAt: string;
   } | null>(null);
-  const queryClient = useQueryClient();
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -41,7 +42,7 @@ function NodeCreateModal({ locationId }: Props) {
       return info;
     },
     onSuccess: (info) => {
-      queryClient.invalidateQueries({ queryKey: ['nodes'] });
+      queryClient.invalidateQueries({ queryKey: qk.nodes() });
       notifySuccess('Node registered');
       setDeployInfo(info ?? null);
       setOpen(false);
@@ -214,7 +215,7 @@ function NodeCreateModal({ locationId }: Props) {
                   {`curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`}
                 </code>
               </div>
-              <div className="text-xs text-muted-foreground dark:text-muted-foreground dark:text-muted-foreground">
+              <div className="text-xs text-muted-foreground dark:text-muted-foreground">
                 Token expires: {new Date(deployInfo.expiresAt).toLocaleString()}
               </div>
             </div>

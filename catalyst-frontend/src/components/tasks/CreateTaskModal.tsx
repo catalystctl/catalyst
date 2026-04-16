@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { tasksApi } from '../../services/api/tasks';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import type { Task } from '../../types/task';
@@ -26,7 +28,6 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
   const [weekday, setWeekday] = useState('0');
   const [action, setAction] = useState<Task['action']>('restart');
   const [command, setCommand] = useState('');
-  const queryClient = useQueryClient();
 
   const timezoneLabel = useMemo(() => {
     try {
@@ -69,7 +70,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', serverId] });
+      queryClient.invalidateQueries({ queryKey: qk.tasks(serverId) });
       notifySuccess('Task created');
       setOpen(false);
       setName('');

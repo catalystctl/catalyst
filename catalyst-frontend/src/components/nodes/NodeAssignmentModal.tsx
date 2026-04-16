@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { nodesApi } from '../../services/api/nodes';
 import { adminApi } from '../../services/api/admin';
 import { rolesApi } from '../../services/api/roles';
@@ -15,7 +17,6 @@ type Props = {
 type AssignmentTarget = 'user' | 'role';
 
 function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
-  const queryClient = useQueryClient();
   const [targetType, setTargetType] = useState<AssignmentTarget>('user');
   const [targetId, setTargetId] = useState('');
   const [search, setSearch] = useState('');
@@ -48,7 +49,7 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nodes', nodeId, 'assignments'] });
+      queryClient.invalidateQueries({ queryKey: qk.nodeAssignments(nodeId) });
       notifySuccess('Node assigned successfully');
       handleClose();
     },

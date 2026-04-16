@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { backupsApi } from '../../services/api/backups';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { ModalPortal } from '@/components/ui/modal-portal';
@@ -7,12 +9,11 @@ import { ModalPortal } from '@/components/ui/modal-portal';
 function CreateBackupModal({ serverId, disabled = false }: { serverId: string; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
-  const queryClient = useQueryClient();
 
   const mutation = useMutation({
     mutationFn: () => backupsApi.create(serverId, { name: name.trim() || undefined }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['backups', serverId] });
+      queryClient.invalidateQueries({ queryKey: qk.backups(serverId) });
       notifySuccess('Backup creation started');
       setOpen(false);
       setName('');

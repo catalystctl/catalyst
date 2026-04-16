@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { motion, type Variants } from 'framer-motion';
 import {
   Database,
@@ -135,7 +137,6 @@ function HostCard({
 
 // ── Main Page ──
 function DatabasePage() {
-  const queryClient = useQueryClient();
   const { data: databaseHosts = [], isLoading } = useDatabaseHosts();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -173,7 +174,7 @@ function DatabasePage() {
       }),
     onSuccess: () => {
       notifySuccess('Database host created');
-      queryClient.invalidateQueries({ queryKey: ['admin-database-hosts'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminDatabaseHosts() });
       resetForm();
       setIsCreateOpen(false);
     },
@@ -191,7 +192,7 @@ function DatabasePage() {
       }),
     onSuccess: () => {
       notifySuccess('Database host updated');
-      queryClient.invalidateQueries({ queryKey: ['admin-database-hosts'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminDatabaseHosts() });
       setEditingHost(null);
       resetForm();
     },
@@ -202,7 +203,7 @@ function DatabasePage() {
     mutationFn: (hostId: string) => adminApi.deleteDatabaseHost(hostId),
     onSuccess: () => {
       notifySuccess('Database host removed');
-      queryClient.invalidateQueries({ queryKey: ['admin-database-hosts'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminDatabaseHosts() });
       setDeletingHost(null);
     },
     onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to delete database host'),

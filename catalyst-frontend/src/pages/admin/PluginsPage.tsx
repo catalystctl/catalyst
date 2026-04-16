@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { motion, type Variants } from 'framer-motion';
 import {
   Puzzle,
@@ -194,7 +196,6 @@ function PluginSettingsModal({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const queryClient = useQueryClient();
   const [localConfig, setLocalConfig] = useState<PluginConfig | null>(null);
 
   const { data: pluginDetails, isLoading } = useQuery({
@@ -221,8 +222,8 @@ function PluginSettingsModal({
   const updateMutation = useMutation({
     mutationFn: (newConfig: PluginConfig) => updatePluginConfig(pluginName, newConfig),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['plugins'] });
-      queryClient.invalidateQueries({ queryKey: ['plugin', pluginName] });
+      queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
+      queryClient.invalidateQueries({ queryKey: qk.adminPlugin(pluginName) });
       toast.success('Plugin configuration updated');
       onOpenChange(false);
     },
@@ -342,7 +343,6 @@ function PluginSettingsModal({
 
 // ── Main Page ──
 export default function PluginsPage() {
-  const queryClient = useQueryClient();
   const { reloadPlugins } = usePluginContext();
   const [processingPlugin, setProcessingPlugin] = useState<string | null>(null);
   const [settingsPlugin, setSettingsPlugin] = useState<string | null>(null);
@@ -356,7 +356,7 @@ export default function PluginsPage() {
     mutationFn: ({ name, enabled }: { name: string; enabled: boolean }) => togglePlugin(name, enabled),
     onMutate: ({ name }) => setProcessingPlugin(name),
     onSuccess: (_, { enabled }) => {
-      queryClient.invalidateQueries({ queryKey: ['plugins'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
       reloadPlugins();
       toast.success(`Plugin ${enabled ? 'enabled' : 'disabled'} successfully`);
     },
@@ -368,7 +368,7 @@ export default function PluginsPage() {
     mutationFn: (name: string) => reloadPlugin(name),
     onMutate: (name) => setProcessingPlugin(name),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['plugins'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
       reloadPlugins();
       toast.success('Plugin reloaded successfully');
     },

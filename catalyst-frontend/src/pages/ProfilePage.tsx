@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { useProfile, useProfileSsoAccounts } from '../hooks/useProfile';
 import { type Passkey, profileApi } from '../services/api/profile';
 import { notifyError, notifySuccess } from '../utils/notify';
@@ -12,7 +14,6 @@ import { useThemeStore } from '../stores/themeStore';
 import { BrandFooter } from '../components/shared/BrandFooter';
 
 function ProfilePage() {
-  const queryClient = useQueryClient();
   const { data: profile, isLoading } = useProfile();
   const { data: ssoAccounts } = useProfileSsoAccounts();
   const [currentPassword, setCurrentPassword] = useState('');
@@ -82,7 +83,7 @@ function ProfilePage() {
     onSuccess: () => {
       notifySuccess('Password set');
       setSetPasswordValue('');
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.invalidateQueries({ queryKey: qk.profile() });
     },
     onError: (error: any) => {
       notifyError(error?.response?.data?.error || error?.message || 'Failed to set password');
@@ -104,7 +105,7 @@ function ProfilePage() {
       setTwoFactorModalOpen(true);
       notifySuccess('Two-factor enabled');
       setTwoFactorPassword('');
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.invalidateQueries({ queryKey: qk.profile() });
     },
     onError: (error: any) => {
       notifyError(error?.response?.data?.error || error?.message || 'Failed to enable two-factor');
@@ -117,7 +118,7 @@ function ProfilePage() {
       notifySuccess('Two-factor disabled');
       setTwoFactorPassword('');
       setBackupCodes([]);
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.invalidateQueries({ queryKey: qk.profile() });
     },
     onError: (error: any) => {
       notifyError(error?.response?.data?.error || error?.message || 'Failed to disable two-factor');
@@ -188,8 +189,8 @@ function ProfilePage() {
       profileApi.unlinkSso(payload.providerId, payload.accountId),
     onSuccess: () => {
       notifySuccess('SSO unlinked');
-      queryClient.invalidateQueries({ queryKey: ['profile-sso-accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.invalidateQueries({ queryKey: qk.profileSsoAccounts() });
+      queryClient.invalidateQueries({ queryKey: qk.profile() });
     },
     onError: (error: any) => {
       notifyError(error?.response?.data?.error || error?.message || 'Failed to unlink SSO');

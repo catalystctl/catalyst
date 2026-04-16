@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { rolesApi } from '../../services/api/roles';
 import type { Role } from '../../types/admin';
 
@@ -55,7 +57,7 @@ export default function RoleSelector({
 
   // Fetch available roles
   const { data: roles = [], isLoading } = useQuery({
-    queryKey: ['roles'],
+    queryKey: qk.adminRoles(),
     queryFn: rolesApi.list,
   });
 

@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { tasksApi } from '../../services/api/tasks';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import type { Task } from '../../types/task';
@@ -23,7 +25,6 @@ function EditTaskModal({
   const [command, setCommand] = useState(
     typeof task.payload?.command === 'string' ? task.payload.command : '',
   );
-  const queryClient = useQueryClient();
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -35,7 +36,7 @@ function EditTaskModal({
         payload: action === 'command' && command.trim() ? { command: command.trim() } : {},
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', serverId] });
+      queryClient.invalidateQueries({ queryKey: qk.tasks(serverId) });
       notifySuccess('Task updated');
       setOpen(false);
     },

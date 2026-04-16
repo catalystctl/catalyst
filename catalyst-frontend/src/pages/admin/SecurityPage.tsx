@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { motion, type Variants } from 'framer-motion';
 import {
   ShieldCheck,
@@ -185,7 +187,6 @@ const MAX_CONSOLE_OUTPUT_BYTES_PER_SECOND = 10 * 1024 * 1024;
 
 // ── Main Page ──
 function SecurityPage() {
-  const queryClient = useQueryClient();
   const { data: settings } = useSecuritySettings();
   const [search, setSearch] = useState('');
   const [lockoutPage, setLockoutPage] = useState(1);
@@ -291,7 +292,7 @@ function SecurityPage() {
       }),
     onSuccess: () => {
       notifySuccess('Security settings updated');
-      queryClient.invalidateQueries({ queryKey: ['admin-security-settings'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminSecuritySettings() });
     },
     onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update security settings'),
   });
@@ -300,7 +301,7 @@ function SecurityPage() {
     mutationFn: (lockoutId: string) => adminApi.clearAuthLockout(lockoutId),
     onSuccess: () => {
       notifySuccess('Lockout cleared');
-      queryClient.invalidateQueries({ queryKey: ['admin-auth-lockouts'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminAuthLockouts() });
     },
     onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to clear lockout'),
   });

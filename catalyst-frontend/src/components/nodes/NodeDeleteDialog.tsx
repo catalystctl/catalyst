@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { nodesApi } from '../../services/api/nodes';
+import { qk } from '../../lib/queryKeys';
+import { queryClient } from '../../lib/queryClient';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
@@ -18,17 +20,29 @@ function NodeDeleteDialog({ nodeId, nodeName, open: controlledOpen, onOpenChange
     setInternalOpen(value);
     onOpenChange?.(value);
   };
-  const queryClient = useQueryClient();
+
   const mutation = useMutation({
     mutationFn: () => nodesApi.remove(nodeId),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: qk.nodes() });
+      const prev = queryClient.getQueryData(qk.nodes());
+      queryClient.setQueriesData(
+        { predicate: (q: any) => Array.isArray(q.queryKey) && q.queryKey[0] === 'nodes' },
+        (nodes: any[]) => Array.isArray(nodes) ? nodes.filter((n: any) => n.id !== nodeId) : nodes,
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(qk.nodes(), ctx.prev);
+      const message = _err?.response?.data?.error || 'Failed to delete node';
+      notifyError(message);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: qk.nodes() });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nodes'] });
       notifySuccess('Node deleted');
       setOpen(false);
-    },
-    onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to delete node';
-      notifyError(message);
     },
   });
 

@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { motion, type Variants } from 'framer-motion';
 import {
   Bell,
@@ -233,7 +235,6 @@ type Props = {
 };
 
 function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Props) {
-  const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const [showRuleModal, setShowRuleModal] = useState(false);
   const [editingRule, setEditingRule] = useState<AlertRule | null>(null);
@@ -364,7 +365,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['alert-rules'] });
+      queryClient.invalidateQueries({ queryKey: qk.alertRules() });
       notifySuccess('Alert rule created');
       setShowRuleModal(false);
       resetRuleForm();
@@ -375,7 +376,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
   const updateRuleMutation = useMutation({
     mutationFn: (payload: { rule: AlertRule; updates: any }) => alertsApi.updateRule(payload.rule.id, payload.updates),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['alert-rules'] });
+      queryClient.invalidateQueries({ queryKey: qk.alertRules() });
       notifySuccess('Alert rule updated');
       setShowRuleModal(false);
       setEditingRule(null);
@@ -387,16 +388,16 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
   const deleteRuleMutation = useMutation({
     mutationFn: (ruleId: string) => alertsApi.deleteRule(ruleId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['alert-rules'] });
+      queryClient.invalidateQueries({ queryKey: qk.alertRules() });
       notifySuccess('Alert rule deleted');
     },
     onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to delete alert rule'),
   });
 
   const invalidateAlerts = () => {
-    queryClient.invalidateQueries({ queryKey: ['alerts'] });
-    queryClient.invalidateQueries({ queryKey: ['alerts-stats'] });
-    queryClient.invalidateQueries({ queryKey: ['alert-rules'] });
+    queryClient.invalidateQueries({ queryKey: qk.alerts() });
+    queryClient.invalidateQueries({ queryKey: qk.alertStats() });
+    queryClient.invalidateQueries({ queryKey: qk.alertRules() });
   };
 
   const resolveAlertMutation = useMutation({

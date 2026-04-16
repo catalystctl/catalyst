@@ -1,5 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { motion, type Variants } from 'framer-motion';
 import {
   Shield,
@@ -484,7 +486,6 @@ function PermissionSelector({
 
 // ── Main Page ──
 function RolesPage() {
-  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<any>(null);
@@ -515,7 +516,7 @@ function RolesPage() {
     mutationFn: (data: { name: string; description?: string; permissions: string[] }) => rolesApi.create(data),
     onSuccess: () => {
       notifySuccess('Role created');
-      queryClient.invalidateQueries({ queryKey: ['roles'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
       resetForm();
       setIsCreateOpen(false);
     },
@@ -527,7 +528,7 @@ function RolesPage() {
       rolesApi.update(roleId, data),
     onSuccess: () => {
       notifySuccess('Role updated');
-      queryClient.invalidateQueries({ queryKey: ['roles'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
       resetForm();
       setEditingRole(null);
     },
@@ -538,7 +539,7 @@ function RolesPage() {
     mutationFn: (roleId: string) => rolesApi.delete(roleId),
     onSuccess: () => {
       notifySuccess('Role deleted');
-      queryClient.invalidateQueries({ queryKey: ['roles'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
       setViewingRole(null);
     },
     onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to delete role'),

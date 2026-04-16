@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { toast } from 'sonner';
 import { useThemeSettings } from '../../hooks/useAdmin';
 import { generatePalette, hexToHSL, type HarmonyMode } from '../../utils/generatePalette';
@@ -135,7 +137,6 @@ function ColorPicker({
 
 function ThemeSettingsPage() {
   const { data: settings, isLoading } = useThemeSettings();
-  const queryClient = useQueryClient();
   const { setThemeSettings: applyThemeSettings, applyTheme, previewColors, cancelPreview } = useThemeStore();
 
   // ── Branding ──
@@ -256,7 +257,7 @@ function ThemeSettingsPage() {
   const updateMutation = useMutation({
     mutationFn: (payload: any) => adminApi.updateThemeSettings(payload),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['admin-theme-settings'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminThemeSettings() });
 
       // Admin PATCH returns the raw Prisma record — themeColors are in metadata.
       const savedColors = (data.metadata as any)?.themeColors as ThemeColors | undefined;

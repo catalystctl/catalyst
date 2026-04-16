@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
   ArrowRightLeft,
@@ -743,7 +745,6 @@ function BackupSlotWarnings({ serversList }: { serversList?: Array<{ id: number;
 
 // ── Main Component ──
 export default function MigrationPage() {
-  const queryClient = useQueryClient();
 
   // State
   const [activeTab, setActiveTab] = useState<'new' | 'progress' | 'history'>('new');
@@ -867,7 +868,7 @@ export default function MigrationPage() {
     onSuccess: (data) => {
       setActiveJobId(data.jobId);
       setActiveTab('progress');
-      queryClient.invalidateQueries({ queryKey: ['migration-jobs'] });
+      queryClient.invalidateQueries({ queryKey: qk.migrationJobs() });
       notifySuccess('Migration started');
     },
     onError: (err: any) => {
@@ -878,8 +879,8 @@ export default function MigrationPage() {
   const pauseMutation = useMutation({
     mutationFn: () => migrationApi.pause(activeJobId!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['migration-job'] });
-      queryClient.invalidateQueries({ queryKey: ['migration-jobs'] });
+      queryClient.invalidateQueries({ queryKey: qk.migrationJob() });
+      queryClient.invalidateQueries({ queryKey: qk.migrationJobs() });
       notifyInfo('Migration paused');
     },
     onError: (err: any) => notifyError(err.response?.data?.error || 'Failed to pause'),
@@ -888,8 +889,8 @@ export default function MigrationPage() {
   const resumeMutation = useMutation({
     mutationFn: () => migrationApi.resume(activeJobId!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['migration-job'] });
-      queryClient.invalidateQueries({ queryKey: ['migration-jobs'] });
+      queryClient.invalidateQueries({ queryKey: qk.migrationJob() });
+      queryClient.invalidateQueries({ queryKey: qk.migrationJobs() });
       notifySuccess('Migration resumed');
     },
     onError: (err: any) => notifyError(err.response?.data?.error || 'Failed to resume'),
@@ -898,8 +899,8 @@ export default function MigrationPage() {
   const cancelMutation = useMutation({
     mutationFn: () => migrationApi.cancel(activeJobId!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['migration-job'] });
-      queryClient.invalidateQueries({ queryKey: ['migration-jobs'] });
+      queryClient.invalidateQueries({ queryKey: qk.migrationJob() });
+      queryClient.invalidateQueries({ queryKey: qk.migrationJobs() });
       notifyInfo('Migration cancelled');
     },
     onError: (err: any) => notifyError(err.response?.data?.error || 'Failed to cancel'),
@@ -908,8 +909,8 @@ export default function MigrationPage() {
   const retryMutation = useMutation({
     mutationFn: (stepId: string) => migrationApi.retryStep(activeJobId!, stepId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['migration-job'] });
-      queryClient.invalidateQueries({ queryKey: ['migration-steps'] });
+      queryClient.invalidateQueries({ queryKey: qk.migrationJob() });
+      queryClient.invalidateQueries({ queryKey: qk.migrationSteps() });
       notifySuccess('Step queued for retry');
     },
     onError: (err: any) => notifyError(err.response?.data?.error || 'Retry failed'),

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { serversApi } from '../../services/api/servers';
 import type { UpdateServerPayload } from '../../types/server';
 import { useServer } from '../../hooks/useServer';
@@ -36,7 +38,6 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
   const [availableIps, setAvailableIps] = useState<string[]>([]);
   const [ipLoadError, setIpLoadError] = useState<string | null>(null);
   const { data: server } = useServer(serverId);
-  const queryClient = useQueryClient();
   const [resizeDone, setResizeDone] = useState(false);
 
   useSseResizeComplete(serverId, () => setResizeDone(true));
@@ -89,8 +90,8 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
       return undefined;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['server', serverId] });
-      queryClient.invalidateQueries({ queryKey: ['servers'] });
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.servers() });
       if (diskValue !== existingDiskMb) {
         notifySuccess('Storage resize initiated');
         setResizeDone(false); // Wait for SSE event to close modal

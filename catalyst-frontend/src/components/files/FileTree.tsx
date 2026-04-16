@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { ChevronDown, ChevronRight, Folder, FolderOpen } from 'lucide-react';
 import { filesApi } from '../../services/api/files';
 import type { FileEntry } from '../../types/file';
@@ -28,7 +30,7 @@ function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, 
   const isExpanded = expanded.has(entry.path);
   const isActive = normalizePath(activePath) === entry.path;
   const { data, isLoading } = useQuery({
-    queryKey: ['files', serverId, entry.path],
+    queryKey: qk.files(serverId, entry.path),
     queryFn: () => filesApi.list(serverId, entry.path),
     enabled: Boolean(serverId) && isExpanded,
     refetchOnWindowFocus: false,
@@ -106,7 +108,7 @@ function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, 
 function FileTree({ serverId, activePath, onNavigate }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['/']));
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['files', serverId, '/'],
+    queryKey: qk.files(serverId, '/'),
     queryFn: () => filesApi.list(serverId, '/'),
     enabled: Boolean(serverId),
     refetchOnWindowFocus: false,

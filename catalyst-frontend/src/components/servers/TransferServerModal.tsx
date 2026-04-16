@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { serversApi } from '../../services/api/servers';
 import type { BackupStorageMode } from '../../types/server';
 import { useNodes } from '../../hooks/useNodes';
@@ -23,7 +25,6 @@ function TransferServerModal({ serverId, disabled = false }: Props) {
   const [open, setOpen] = useState(false);
   const [targetNodeId, setTargetNodeId] = useState('');
   const [transferMode, setTransferMode] = useState<BackupStorageMode>('local');
-  const queryClient = useQueryClient();
   const { data: nodes = [], isLoading: nodesLoading } = useNodes();
   const selectedTargetNodeId = targetNodeId || nodes[0]?.id || '';
 
@@ -33,8 +34,8 @@ function TransferServerModal({ serverId, disabled = false }: Props) {
       transferMode,
     }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['server', serverId] });
-      queryClient.invalidateQueries({ queryKey: ['servers'] });
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.servers() });
       notifySuccess('Transfer started');
       setOpen(false);
     },

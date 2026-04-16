@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import {
   Play,
   Square,
@@ -175,7 +177,6 @@ function AdminServersPage() {
   const [suspendReason, setSuspendReason] = useState('');
   const [updateServerId, setUpdateServerId] = useState<string | null>(null);
   const [deleteServer, setDeleteServer] = useState<{ id: string; name: string } | null>(null);
-  const queryClient = useQueryClient();
   const { data, isLoading } = useAdminServers({
     page,
     limit: pageSize,
@@ -271,7 +272,7 @@ function AdminServersPage() {
           `${failedCount} server${failedCount === 1 ? '' : 's'} failed to ${variables.action}.`,
         );
       }
-      queryClient.invalidateQueries({ queryKey: ['admin-servers'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminServers() });
       setSelectedIds([]);
       setSuspendTargets(null);
       setDeleteTargets(null);

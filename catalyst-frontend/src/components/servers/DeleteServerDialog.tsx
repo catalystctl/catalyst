@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { serversApi } from '../../services/api/servers';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { Button } from '@/components/ui/button';
@@ -20,11 +22,10 @@ function DeleteServerDialog({ serverId, serverName, disabled = false, open: cont
     setInternalOpen(value);
     onOpenChange?.(value);
   };
-  const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: () => serversApi.delete(serverId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['servers'] });
+      queryClient.invalidateQueries({ queryKey: qk.servers() });
       notifySuccess('Server deleted');
       setOpen(false);
     },

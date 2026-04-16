@@ -39,6 +39,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useConsole } from '../../hooks/useConsole';
 import { useEulaPrompt } from '../../hooks/useEulaPrompt';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { qk } from '../../lib/queryKeys';
 import { serversApi } from '../../services/api/servers';
 import { databasesApi } from '../../services/api/databases';
 import { tasksApi } from '../../services/api/tasks';
@@ -241,19 +242,19 @@ function ServerDetailsPage() {
 
   // ── Permissions / Users ──
   const { data: permissionsData } = useQuery<ServerPermissionsResponse>({
-    queryKey: ['server-permissions', serverId],
+    queryKey: qk.serverPermissions(serverId ?? ''),
     queryFn: () => serversApi.permissions(serverId ?? ''),
     enabled: Boolean(serverId),
   });
   const { data: invites = [] } = useQuery<ServerInvite[]>({
-    queryKey: ['server-invites', serverId],
+    queryKey: qk.serverInvites(serverId ?? ''),
     queryFn: () => serversApi.listInvites(serverId ?? ''),
     enabled: Boolean(serverId),
   });
 
   // ── Allocations (admin) ──
   const allocationsQuery = useQuery({
-    queryKey: ['server-allocations', serverId],
+    queryKey: qk.serverAllocations(serverId ?? ''),
     queryFn: () => serversApi.allocations(serverId ?? ''),
     enabled: Boolean(serverId),
   });
@@ -389,7 +390,7 @@ function ServerDetailsPage() {
     },
     onSuccess: () => {
       if (server?.id)
-        queryClient.invalidateQueries({ queryKey: ['tasks', server.id] });
+        queryClient.invalidateQueries({ queryKey: qk.tasks(server.id) });
       notifySuccess('Task updated');
     },
     onError: (error: any) =>
@@ -403,7 +404,7 @@ function ServerDetailsPage() {
     },
     onSuccess: () => {
       if (server?.id)
-        queryClient.invalidateQueries({ queryKey: ['tasks', server.id] });
+        queryClient.invalidateQueries({ queryKey: qk.tasks(server.id) });
       notifySuccess('Task deleted');
     },
     onError: (error: any) =>
@@ -422,7 +423,7 @@ function ServerDetailsPage() {
     onSuccess: () => {
       if (server?.id)
         queryClient.invalidateQueries({
-          queryKey: ['server-databases', server.id],
+          queryKey: qk.serverDatabases(server.id),
         });
       setDatabaseName('');
       notifySuccess('Database created');
@@ -439,7 +440,7 @@ function ServerDetailsPage() {
     onSuccess: () => {
       if (server?.id)
         queryClient.invalidateQueries({
-          queryKey: ['server-databases', server.id],
+          queryKey: qk.serverDatabases(server.id),
         });
       notifySuccess('Database password rotated');
     },
@@ -457,7 +458,7 @@ function ServerDetailsPage() {
     onSuccess: () => {
       if (server?.id)
         queryClient.invalidateQueries({
-          queryKey: ['server-databases', server.id],
+          queryKey: qk.serverDatabases(server.id),
         });
       notifySuccess('Database deleted');
     },
@@ -471,8 +472,8 @@ function ServerDetailsPage() {
       return serversApi.suspend(server.id, reason);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['server', server?.id] });
-      queryClient.invalidateQueries({ queryKey: ['servers'] });
+      queryClient.invalidateQueries({ queryKey: qk.server(server?.id) });
+      queryClient.invalidateQueries({ queryKey: qk.servers() });
       notifySuccess('Server suspended');
       setSuspendReason('');
     },
@@ -488,8 +489,8 @@ function ServerDetailsPage() {
       return serversApi.unsuspend(server.id);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['server', server?.id] });
-      queryClient.invalidateQueries({ queryKey: ['servers'] });
+      queryClient.invalidateQueries({ queryKey: qk.server(server?.id) });
+      queryClient.invalidateQueries({ queryKey: qk.servers() });
       notifySuccess('Server unsuspended');
     },
     onError: (error: any) =>
@@ -516,8 +517,8 @@ function ServerDetailsPage() {
       notifySuccess('Allocation added');
       setNewContainerPort('');
       setNewHostPort('');
-      queryClient.invalidateQueries({ queryKey: ['server-allocations', serverId] });
-      queryClient.invalidateQueries({ queryKey: ['server', serverId] });
+      queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
     },
     onError: (error: any) =>
       notifyError(
@@ -534,8 +535,8 @@ function ServerDetailsPage() {
     },
     onSuccess: () => {
       notifySuccess('Allocation removed');
-      queryClient.invalidateQueries({ queryKey: ['server-allocations', serverId] });
-      queryClient.invalidateQueries({ queryKey: ['server', serverId] });
+      queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
     },
     onError: (error: any) =>
       notifyError(
@@ -550,8 +551,8 @@ function ServerDetailsPage() {
     },
     onSuccess: () => {
       notifySuccess('Primary allocation updated');
-      queryClient.invalidateQueries({ queryKey: ['server-allocations', serverId] });
-      queryClient.invalidateQueries({ queryKey: ['server', serverId] });
+      queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
     },
     onError: (error: any) =>
       notifyError(
@@ -583,8 +584,8 @@ function ServerDetailsPage() {
     },
     onSuccess: () => {
       notifySuccess('Restart policy updated');
-      queryClient.invalidateQueries({ queryKey: ['server', serverId] });
-      queryClient.invalidateQueries({ queryKey: ['servers'] });
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.servers() });
     },
     onError: (error: any) =>
       notifyError(
@@ -601,8 +602,8 @@ function ServerDetailsPage() {
     },
     onSuccess: () => {
       notifySuccess('Crash count reset');
-      queryClient.invalidateQueries({ queryKey: ['server', serverId] });
-      queryClient.invalidateQueries({ queryKey: ['servers'] });
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.servers() });
     },
     onError: (error: any) =>
       notifyError(
@@ -621,8 +622,8 @@ function ServerDetailsPage() {
     },
     onSuccess: () => {
       notifySuccess('Server name updated');
-      queryClient.invalidateQueries({ queryKey: ['server', serverId] });
-      queryClient.invalidateQueries({ queryKey: ['servers'] });
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.servers() });
     },
     onError: (error: any) =>
       notifyError(
@@ -643,7 +644,7 @@ function ServerDetailsPage() {
     },
     onSuccess: () => {
       notifySuccess('Startup command updated');
-      queryClient.invalidateQueries({ queryKey: ['server', serverId] });
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
     },
     onError: (error: any) =>
       notifyError(
@@ -666,7 +667,7 @@ function ServerDetailsPage() {
     onSuccess: () => {
       notifySuccess('Environment variables updated');
       setEnvDirty(false);
-      queryClient.invalidateQueries({ queryKey: ['server', serverId] });
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
     },
     onError: (error: any) =>
       notifyError(
@@ -691,7 +692,7 @@ function ServerDetailsPage() {
       notifySuccess('Invite sent');
       setInviteEmail('');
       queryClient.invalidateQueries({
-        queryKey: ['server-invites', serverId],
+        queryKey: qk.serverInvites(serverId),
       });
     },
     onError: (error: any) =>
@@ -706,7 +707,7 @@ function ServerDetailsPage() {
     onSuccess: () => {
       notifySuccess('Invite cancelled');
       queryClient.invalidateQueries({
-        queryKey: ['server-invites', serverId],
+        queryKey: qk.serverInvites(serverId),
       });
     },
     onError: (error: any) =>
@@ -727,7 +728,7 @@ function ServerDetailsPage() {
     onSuccess: () => {
       notifySuccess('Permissions updated');
       queryClient.invalidateQueries({
-        queryKey: ['server-permissions', serverId],
+        queryKey: qk.serverPermissions(serverId),
       });
     },
     onError: (error: any) =>
@@ -744,7 +745,7 @@ function ServerDetailsPage() {
     onSuccess: () => {
       notifySuccess('Access removed');
       queryClient.invalidateQueries({
-        queryKey: ['server-permissions', serverId],
+        queryKey: qk.serverPermissions(serverId),
       });
     },
     onError: (error: any) =>
@@ -760,7 +761,7 @@ function ServerDetailsPage() {
       .update(serverId, { startupCommand: null })
       .then(() => {
         notifySuccess('Reset to template default');
-        queryClient.invalidateQueries({ queryKey: ['server', serverId] });
+        queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
       })
       .catch(() => notifyError('Failed to reset startup command'));
   };

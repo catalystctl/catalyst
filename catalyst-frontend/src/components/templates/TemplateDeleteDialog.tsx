@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { templatesApi } from '../../services/api/templates';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { ModalPortal } from '@/components/ui/modal-portal';
@@ -20,12 +22,11 @@ function TemplateDeleteDialog({ templateId, templateName, onDeleted, buttonClass
     setInternalOpen(value);
     onOpenChange?.(value);
   };
-  const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: () => templatesApi.remove(templateId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
-      queryClient.invalidateQueries({ queryKey: ['template', templateId] });
+      queryClient.invalidateQueries({ queryKey: qk.templates() });
+      queryClient.invalidateQueries({ queryKey: qk.template(templateId) });
       notifySuccess('Template deleted');
       setOpen(false);
       onDeleted?.();

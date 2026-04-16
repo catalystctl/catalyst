@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import {
   Server,
   Cpu,
@@ -113,7 +115,6 @@ function AdminNodesPage() {
 
   const { data, isLoading } = useAdminNodes({ search: search.trim() || undefined });
   const { user } = useAuthStore();
-  const queryClient = useQueryClient();
 
   const canWrite = useMemo(
     () => user?.permissions?.includes('admin.write') || user?.permissions?.includes('*'),
@@ -216,7 +217,7 @@ function AdminNodesPage() {
       notifySuccess(
         `${nodeIds.length} node${nodeIds.length === 1 ? '' : 's'} deleted`,
       );
-      queryClient.invalidateQueries({ queryKey: ['admin-nodes'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminNodes() });
       setSelectedIds([]);
       setDeleteTargets(null);
     },

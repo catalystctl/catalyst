@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { nodesApi } from '../../services/api/nodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
@@ -31,7 +33,6 @@ export function NodeAssignmentsSelector({
   disabled = false,
   label = 'Node Access',
 }: Props) {
-  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [expirationNodeId, setExpirationNodeId] = useState<string | null>(null);
   const [expirationDate, setExpirationDate] = useState('');
@@ -143,8 +144,8 @@ export function NodeAssignmentsSelector({
         notifySuccess('All nodes assigned (wildcard)');
       }
       // Invalidate queries after successful API call
-      queryClient.invalidateQueries({ queryKey: ['roles', roleId, 'nodes'] });
-      queryClient.invalidateQueries({ queryKey: ['users', userId, 'nodes'] });
+      queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId) });
+      queryClient.invalidateQueries({ queryKey: qk.userNodes(userId) });
     } catch (error: unknown) {
       // Revert on error
       notifyError(getErrorMessage(error, 'Failed to update wildcard assignment'));
@@ -161,8 +162,8 @@ export function NodeAssignmentsSelector({
         setHasWildcard(true);
       } else {
         // We tried to add but failed - restore previous selection
-        queryClient.invalidateQueries({ queryKey: ['roles', roleId, 'nodes'] });
-        queryClient.invalidateQueries({ queryKey: ['users', userId, 'nodes'] });
+        queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId) });
+        queryClient.invalidateQueries({ queryKey: qk.userNodes(userId) });
       }
     }
   };
@@ -211,8 +212,8 @@ export function NodeAssignmentsSelector({
       });
 
       notifySuccess('Node assigned');
-      queryClient.invalidateQueries({ queryKey: ['roles', roleId, 'nodes'] });
-      queryClient.invalidateQueries({ queryKey: ['users', userId, 'nodes'] });
+      queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId) });
+      queryClient.invalidateQueries({ queryKey: qk.userNodes(userId) });
       return true;
     } catch (error: unknown) {
       notifyError(getErrorMessage(error, 'Failed to assign node'));
@@ -234,8 +235,8 @@ export function NodeAssignmentsSelector({
       if (assignment) {
         await nodesApi.removeAssignment(nodeId, assignment.id);
         notifySuccess('Node unassigned');
-        queryClient.invalidateQueries({ queryKey: ['roles', roleId, 'nodes'] });
-        queryClient.invalidateQueries({ queryKey: ['users', userId, 'nodes'] });
+        queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId) });
+        queryClient.invalidateQueries({ queryKey: qk.userNodes(userId) });
         return true;
       }
       return false;

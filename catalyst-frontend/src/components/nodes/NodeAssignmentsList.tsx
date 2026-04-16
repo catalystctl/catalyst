@@ -1,5 +1,7 @@
 import { motion } from 'framer-motion';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import { Shield, User, X } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -12,7 +14,6 @@ type Props = {
 };
 
 function NodeAssignmentsList({ nodeId, canManage }: Props) {
-  const queryClient = useQueryClient();
 
   const { data: assignments = [], isLoading } = useQuery({
     queryKey: ['nodes', nodeId, 'assignments'],
@@ -24,7 +25,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
       return nodesApi.removeAssignment(nodeId, assignmentId);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nodes', nodeId, 'assignments'] });
+      queryClient.invalidateQueries({ queryKey: qk.nodeAssignments(nodeId) });
       notifySuccess('Assignment removed');
     },
     onError: (error: any) => {
