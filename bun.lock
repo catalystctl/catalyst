@@ -42,6 +42,7 @@
         "ssh2": "~1.17.0",
         "uuid": "~13.0.0",
         "zod": "~4.3.6",
+        "zod-to-json-schema": "^3.25.2",
       },
       "devDependencies": {
         "@eslint/js": "~10.0.1",
@@ -106,6 +107,7 @@
         "zustand": "~5.0.11",
       },
       "devDependencies": {
+        "@eslint/js": "~10.0.1",
         "@playwright/test": "~1.58.1",
         "@radix-ui/react-compose-refs": "~1.1.2",
         "@radix-ui/react-slot": "~1.2.4",
@@ -1703,6 +1705,8 @@
     "zeptomatch": ["zeptomatch@2.1.0", "", { "dependencies": { "grammex": "^3.1.11", "graphmatch": "^1.1.0" } }, "sha512-KiGErG2J0G82LSpniV0CtIzjlJ10E04j02VOudJsPyPwNZgGnRKQy7I1R7GMyg/QswnE4l7ohSGrQbQbjXPPDA=="],
 
     "zod": ["zod@4.3.6", "", {}, "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="],
+
+    "zod-to-json-schema": ["zod-to-json-schema@3.25.2", "", { "peerDependencies": { "zod": "^3.25.28 || ^4" } }, "sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA=="],
 
     "zod-validation-error": ["zod-validation-error@4.0.2", "", { "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-Q6/nZLe6jxuU80qb/4uJ4t5v2VEZ44lzQjPDhYJNztRQ4wyWc6VF3D3Kb/fAuPetZQnhS3hnajCf9CsWesghLQ=="],
 
