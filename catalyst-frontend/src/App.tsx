@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import AppLayout from './components/layout/AppLayout';
 import ProtectedRoute, { hasAnyAdminPermission } from './components/auth/ProtectedRoute';
 import { ToastProvider } from './components/providers/ToastProvider';
@@ -14,34 +15,65 @@ import RegisterPage from './pages/auth/RegisterPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import TwoFactorPage from './pages/auth/TwoFactorPage';
-import DashboardPage from './pages/dashboard/DashboardPage';
-import ServersPage from './pages/servers/ServersPage';
-import ServerDetailsPage from './pages/servers/ServerDetailsPage';
-import NodeDetailsPage from './pages/nodes/NodeDetailsPage';
-import TemplatesPage from './pages/templates/TemplatesPage';
-import TemplateDetailsPage from './pages/templates/TemplateDetailsPage';
-import AdminNodesPage from './pages/admin/NodesPage';
-import AdminServersPage from './pages/admin/ServersPage';
-import AdminDashboardPage from './pages/admin/AdminDashboardPage';
-import ActivityPage from './pages/admin/NetworkPage';
-import DatabasePage from './pages/admin/DatabasePage';
-import AdminAlertsPage from './pages/admin/AlertsPage';
-import UsersPage from './pages/admin/UsersPage';
-import RolesPage from './pages/admin/RolesPage';
-import SystemPage from './pages/admin/SystemPage';
-import AuditLogsPage from './pages/admin/AuditLogsPage';
-import SecurityPage from './pages/admin/SecurityPage';
-import ThemeSettingsPage from './pages/admin/ThemeSettingsPage';
-import PluginsPage from './pages/admin/PluginsPage';
 import InvitesPage from './pages/InvitesPage';
-import ProfilePage from './pages/ProfilePage';
 import NotFoundPage from './pages/NotFoundPage';
-import { ApiKeysPage } from './pages/ApiKeysPage';
-import PluginTabPage from './pages/PluginTabPage';
-import PluginRoutePage from './pages/PluginRoutePage';
 import { PluginProvider } from './plugins/PluginProvider';
-import NodeAllocationsPage from './pages/admin/NodeAllocationsPage';
-import MigrationPage from './pages/admin/MigrationPage';
+import PluginRoutePage from './pages/PluginRoutePage';
+import { ApiKeysPage } from './pages/ApiKeysPage';
+
+// Lazy-loaded pages for code splitting — reduces initial bundle size
+// Auth pages stay eager so the login screen renders instantly
+const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'));
+const ServersPage = lazy(() => import('./pages/servers/ServersPage'));
+const ServerDetailsPage = lazy(() => import('./pages/servers/ServerDetailsPage'));
+const NodeDetailsPage = lazy(() => import('./pages/nodes/NodeDetailsPage'));
+const TemplatesPage = lazy(() => import('./pages/templates/TemplatesPage'));
+const TemplateDetailsPage = lazy(() => import('./pages/templates/TemplateDetailsPage'));
+const AdminNodesPage = lazy(() => import('./pages/admin/NodesPage'));
+const AdminServersPage = lazy(() => import('./pages/admin/ServersPage'));
+const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
+const ActivityPage = lazy(() => import('./pages/admin/NetworkPage'));
+const DatabasePage = lazy(() => import('./pages/admin/DatabasePage'));
+const AdminAlertsPage = lazy(() => import('./pages/admin/AlertsPage'));
+const UsersPage = lazy(() => import('./pages/admin/UsersPage'));
+const RolesPage = lazy(() => import('./pages/admin/RolesPage'));
+const SystemPage = lazy(() => import('./pages/admin/SystemPage'));
+const AuditLogsPage = lazy(() => import('./pages/admin/AuditLogsPage'));
+const SecurityPage = lazy(() => import('./pages/admin/SecurityPage'));
+const ThemeSettingsPage = lazy(() => import('./pages/admin/ThemeSettingsPage'));
+const PluginsPage = lazy(() => import('./pages/admin/PluginsPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+
+const PluginTabPage = lazy(() => import('./pages/PluginTabPage'));
+const NodeAllocationsPage = lazy(() => import('./pages/admin/NodeAllocationsPage'));
+const MigrationPage = lazy(() => import('./pages/admin/MigrationPage'));
+
+/** Minimal page-level loading skeleton */
+function PageFallback() {
+  return (
+    <div className="flex h-full items-center justify-center p-8">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
+    </div>
+  );
+}
+
+/** Smooth page transition wrapper */
+function PageTransition({ children }: { children: React.ReactNode }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -6 }}
+      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+      className="h-full"
+    >
+      {children}
+    </motion.div>
+  );
+}
 
 function App() {
   useAuthInit();
@@ -96,192 +128,222 @@ function App() {
     <ErrorBoundary>
       <ToastProvider />
       <PluginProvider>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
-        <Route path="/two-factor" element={<TwoFactorPage />} />
-        <Route path="/invites/:token" element={<InvitesPage />} />
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <AppLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="profile" element={<ProfilePage />} />
-          <Route path="servers" element={<ServersPage />} />
-          <Route path="servers/:serverId/:tab?" element={<ServerDetailsPage />} />
-          <Route path="tickets" element={<ProtectedRoute><PluginRoutePage /></ProtectedRoute>} />
+        <AnimatePresence mode="wait">
+          <Routes>
+            {/* Auth pages — rendered immediately for fast login */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/two-factor" element={<TwoFactorPage />} />
+            <Route path="/invites/:token" element={<InvitesPage />} />
+
+            {/* Protected app shell — auth pages are NOT wrapped here */}
             <Route
-              path="admin/nodes/:nodeId"
+              path="/"
               element={
-                <ProtectedRoute requireAdmin>
-                  <NodeDetailsPage />
+                <ProtectedRoute>
+                  <AppLayout />
                 </ProtectedRoute>
               }
-            />
-            <Route
-              path="admin/nodes/:nodeId/allocations"
-              element={
-                <ProtectedRoute requireAdmin>
-                  <NodeAllocationsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/templates/:templateId"
-              element={
-                <ProtectedRoute requirePermissions={['template.read', 'template.create', 'template.update', 'template.delete', 'admin.read', 'admin.write']}>
-                  <TemplateDetailsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin"
-              element={
-                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                  <AdminDashboardPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/users"
-              element={
-                <ProtectedRoute requirePermissions={['user.read', 'user.create', 'user.update', 'user.delete', 'user.set_roles', 'admin.read', 'admin.write']}>
-                  <UsersPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/roles"
-              element={
-                <ProtectedRoute requirePermissions={['role.read', 'role.create', 'role.update', 'role.delete', 'admin.read', 'admin.write']}>
-                  <RolesPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/servers"
-              element={
-                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']} redirectTo="/servers">
-                  <AdminServersPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/nodes"
-              element={
-                <ProtectedRoute requirePermissions={['node.read', 'node.create', 'node.update', 'node.delete', 'admin.read', 'admin.write']}>
-                  <AdminNodesPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/templates"
-              element={
-                <ProtectedRoute requirePermissions={['template.read', 'template.create', 'template.update', 'template.delete', 'admin.read', 'admin.write']}>
-                  <div className="space-y-6">
-                    <TemplatesPage />
-                  </div>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/database"
-              element={
-                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                  <DatabasePage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/network"
-              element={
-                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                  <ActivityPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/system"
-              element={
-                <ProtectedRoute requireAdminWrite>
-                  <SystemPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/security"
-              element={
-                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                  <SecurityPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/theme-settings"
-              element={
-                <ProtectedRoute requireAdminWrite>
-                  <ThemeSettingsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/alerts"
-              element={
-                <ProtectedRoute requirePermissions={['alert.read', 'alert.create', 'alert.update', 'alert.delete', 'admin.read', 'admin.write']}>
-                  <AdminAlertsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/audit-logs"
-              element={
-                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                  <AuditLogsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/api-keys"
-              element={
-                <ProtectedRoute requirePermissions={['apikey.manage', 'admin.read', 'admin.write']}>
-                  <ApiKeysPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/migration"
-              element={
-                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                  <MigrationPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/plugins"
-              element={
-                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                  <PluginsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/plugin/:pluginTabId"
-              element={
-                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                  <PluginTabPage location="admin" />
-                </ProtectedRoute>
-              }
-            />
-        </Route>
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+            >
+              <Route index element={<Navigate to="/dashboard" replace />} />
+
+              <Route
+                path="dashboard"
+                element={<Suspense fallback={<PageFallback />}><PageTransition><DashboardPage /></PageTransition></Suspense>}
+              />
+              <Route
+                path="profile"
+                element={<Suspense fallback={<PageFallback />}><PageTransition><ProfilePage /></PageTransition></Suspense>}
+              />
+              <Route
+                path="servers"
+                element={<Suspense fallback={<PageFallback />}><PageTransition><ServersPage /></PageTransition></Suspense>}
+              />
+              <Route
+                path="servers/:serverId/:tab?"
+                element={<Suspense fallback={<PageFallback />}><PageTransition><ServerDetailsPage /></PageTransition></Suspense>}
+              />
+              <Route
+                path="tickets"
+                element={
+                  <ProtectedRoute>
+                    <Suspense fallback={<PageFallback />}><PageTransition><PluginRoutePage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/nodes/:nodeId"
+                element={
+                  <ProtectedRoute requireAdmin>
+                    <Suspense fallback={<PageFallback />}><PageTransition><NodeDetailsPage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/nodes/:nodeId/allocations"
+                element={
+                  <ProtectedRoute requireAdmin>
+                    <Suspense fallback={<PageFallback />}><PageTransition><NodeAllocationsPage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/templates/:templateId"
+                element={
+                  <ProtectedRoute requirePermissions={['template.read', 'template.create', 'template.update', 'template.delete', 'admin.read', 'admin.write']}>
+                    <Suspense fallback={<PageFallback />}><PageTransition><TemplateDetailsPage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin"
+                element={
+                  <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
+                    <Suspense fallback={<PageFallback />}><PageTransition><AdminDashboardPage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/users"
+                element={
+                  <ProtectedRoute requirePermissions={['user.read', 'user.create', 'user.update', 'user.delete', 'user.set_roles', 'admin.read', 'admin.write']}>
+                    <Suspense fallback={<PageFallback />}><PageTransition><UsersPage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/roles"
+                element={
+                  <ProtectedRoute requirePermissions={['role.read', 'role.create', 'role.update', 'role.delete', 'admin.read', 'admin.write']}>
+                    <Suspense fallback={<PageFallback />}><PageTransition><RolesPage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/servers"
+                element={
+                  <ProtectedRoute requirePermissions={['admin.read', 'admin.write']} redirectTo="/servers">
+                    <Suspense fallback={<PageFallback />}><PageTransition><AdminServersPage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/nodes"
+                element={
+                  <ProtectedRoute requirePermissions={['node.read', 'node.create', 'node.update', 'node.delete', 'admin.read', 'admin.write']}>
+                    <Suspense fallback={<PageFallback />}><PageTransition><AdminNodesPage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/templates"
+                element={
+                  <ProtectedRoute requirePermissions={['template.read', 'template.create', 'template.update', 'template.delete', 'admin.read', 'admin.write']}>
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <div className="space-y-6">
+                          <TemplatesPage />
+                        </div>
+                      </PageTransition>
+                    </Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/database"
+                element={
+                  <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
+                    <Suspense fallback={<PageFallback />}><PageTransition><DatabasePage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/network"
+                element={
+                  <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
+                    <Suspense fallback={<PageFallback />}><PageTransition><ActivityPage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/system"
+                element={
+                  <ProtectedRoute requireAdminWrite>
+                    <Suspense fallback={<PageFallback />}><PageTransition><SystemPage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/security"
+                element={
+                  <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
+                    <Suspense fallback={<PageFallback />}><PageTransition><SecurityPage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/theme-settings"
+                element={
+                  <ProtectedRoute requireAdminWrite>
+                    <Suspense fallback={<PageFallback />}><PageTransition><ThemeSettingsPage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/alerts"
+                element={
+                  <ProtectedRoute requirePermissions={['alert.read', 'alert.create', 'alert.update', 'alert.delete', 'admin.read', 'admin.write']}>
+                    <Suspense fallback={<PageFallback />}><PageTransition><AdminAlertsPage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/audit-logs"
+                element={
+                  <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
+                    <Suspense fallback={<PageFallback />}><PageTransition><AuditLogsPage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/api-keys"
+                element={
+                  <ProtectedRoute requirePermissions={['apikey.manage', 'admin.read', 'admin.write']}>
+                    <Suspense fallback={<PageFallback />}><PageTransition><ApiKeysPage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/migration"
+                element={
+                  <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
+                    <Suspense fallback={<PageFallback />}><PageTransition><MigrationPage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/plugins"
+                element={
+                  <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
+                    <Suspense fallback={<PageFallback />}><PageTransition><PluginsPage /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/plugin/:pluginTabId"
+                element={
+                  <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
+                    <Suspense fallback={<PageFallback />}><PageTransition><PluginTabPage location="admin" /></PageTransition></Suspense>
+                  </ProtectedRoute>
+                }
+              />
+            </Route>
+
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </AnimatePresence>
       </PluginProvider>
     </ErrorBoundary>
   );

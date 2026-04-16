@@ -33,7 +33,7 @@ export interface Passkey {
 
 export const profileApi = {
   async getProfile(): Promise<ProfileSummary> {
-    const { data } = await apiClient.get<{ success: boolean; data: ProfileSummary }>('/api/auth/profile');
+    const data = await apiClient.get<{ success: boolean; data: ProfileSummary }>('/api/auth/profile');
     if (!data?.success) {
       throw new Error('Failed to load profile');
     }

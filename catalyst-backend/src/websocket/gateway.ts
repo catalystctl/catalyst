@@ -120,7 +120,10 @@ export class WebSocketGateway {
   private readonly agentConsoleBytesLimit = { maxBytes: resolveConsoleOutputByteLimit() };
   private readonly pendingAgentRequestLimit = 2000;
   private readonly autoRestartingServers = new Set<string>();
-  
+
+  // SSE console stream subscribers — maps serverId → subscriberId → push function
+  private readonly sseSubscribers = new Map<string, Map<string, (event: string, data: any) => void>>();
+
   // Connection limits
   private readonly MAX_AGENT_CONNECTIONS = 1000;  // Max agent connections
   private readonly MAX_CLIENT_CONNECTIONS = 5000; // Max client connections
@@ -1879,6 +1882,68 @@ export class WebSocketGateway {
         }
       }
     }
+
+    // Also push to SSE subscribers (HTTP/2 streaming)
+    const sseSubs = this.sseSubscribers.get(serverId);
+    if (sseSubs) {
+      const event = message.type === 'console_output'
+        ? 'console_output'
+        : message.type === 'error'
+          ? 'error'
+          : message.type === 'eula_required'
+            ? 'eula_required'
+            : 'message';
+
+      const eventData = event === 'message'
+        ? JSON.stringify(message)
+        : JSON.stringify({
+          serverId: message.serverId,
+          stream: message.stream ?? 'stdout',
+          data: message.data ?? '',
+          timestamp: message.timestamp ?? new Date().toISOString(),
+          type: message.type,
+          eulaText: message.eulaText,
+          eulaServerUuid: message.serverUuid,
+          error: message.error,
+        });
+
+      for (const [, push] of sseSubs) {
+        push(event, eventData);
+      }
+    }
+  }
+
+  // ── SSE Subscriber Management ────────────────────────────────────────────────
+
+  /**
+   * Register an SSE subscriber for a server's console output.
+   * Returns an unsubscribe function to call when the SSE connection closes.
+   */
+  addSseSubscriber(serverId: string, push: (event: string, data: string) => void): () => void {
+    if (!this.sseSubscribers.has(serverId)) {
+      this.sseSubscribers.set(serverId, new Map());
+    }
+    const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    this.sseSubscribers.get(serverId)!.set(subscriberId, push);
+    this.logger.debug({ serverId, subscriberId }, 'SSE subscriber added');
+
+    return () => {
+      const subs = this.sseSubscribers.get(serverId);
+      if (subs) {
+        subs.delete(subscriberId);
+        if (subs.size === 0) {
+          this.sseSubscribers.delete(serverId);
+        }
+        this.logger.debug({ serverId, subscriberId }, 'SSE subscriber removed');
+      }
+    };
+  }
+
+  /**
+   * Check how many SSE subscribers are active for a server.
+   */
+  getSseSubscriberCount(serverId: string): number {
+    return this.sseSubscribers.get(serverId)?.size ?? 0;
   }
 
   private allowConsoleCommand(clientId: string) {
@@ -2190,4 +2255,81 @@ export class WebSocketGateway {
     }
     return closed;
   }
+
+  /**
+   * Send a console command from an HTTP request (via SSE console route).
+   * This is the HTTP-path equivalent of the WebSocket console_input handler.
+   * Validates permissions and rate limits, then forwards to the agent.
+   */
+  async sendConsoleCommand(serverId: string, userId: string, command: string): Promise<void> {
+    const server = await this.prisma.server.findUnique({
+      where: { id: serverId },
+    });
+
+    if (!server) {
+      throw new Error('Server not found');
+    }
+
+    // Permission check
+    const access = await this.prisma.serverAccess.findUnique({
+      where: { userId_serverId: { userId, serverId } },
+    });
+    const isAdmin = await this.userHasAdminRead(userId);
+    const consoleNodeAccess = await hasNodeAccess(this.prisma, userId, server.nodeId);
+
+    if (!access && server.ownerId !== userId && !isAdmin && !consoleNodeAccess) {
+      throw Object.assign(new Error('Permission denied'), { code: 403 });
+    }
+    if (!access?.permissions?.includes('console.write') && server.ownerId !== userId && !isAdmin && !consoleNodeAccess) {
+      throw Object.assign(new Error('Permission denied'), { code: 403 });
+    }
+
+    // Suspension check
+    if (process.env.SUSPENSION_ENFORCED !== 'false' && server.suspendedAt) {
+      throw new Error('Server is suspended');
+    }
+
+    // Rate limit — check client-side rate limit (we don't have clientId in HTTP context,
+    // so we use userId as the key for per-user rate limiting)
+    const userCommandCount = this.userCommandCounters.get(userId);
+    const now = Date.now();
+    if (!userCommandCount || now >= userCommandCount.resetAt) {
+      this.userCommandCounters.set(userId, { count: 1, resetAt: now + this.consoleInputLimit.windowMs });
+    } else {
+      if (userCommandCount.count >= this.consoleInputLimit.max) {
+        throw new Error('Rate limit exceeded — too many commands. Please wait before sending more.');
+      }
+      userCommandCount.count += 1;
+    }
+
+    // Also apply server-side rate limit
+    if (!this.allowServerCommand(serverId)) {
+      throw new Error('Server rate limit exceeded — please wait.');
+    }
+
+    // Get the agent for this server's node
+    const agent = this.agents.get(server.nodeId);
+    if (!agent) {
+      throw new Error('Node agent is not connected');
+    }
+
+    // Forward to agent
+    const agentMessage = JSON.stringify({
+      type: 'console_input',
+      serverId,
+      serverUuid: server.uuid,
+      data: command,
+    });
+
+    try {
+      agent.socket.send(agentMessage);
+    } catch (err) {
+      this.logger.error({ err, serverId, userId }, 'Failed to forward console command to agent');
+      throw new Error('Failed to communicate with node agent');
+    }
+
+    this.logger.debug({ serverId, userId, commandLength: command.length }, 'Console command forwarded via HTTP/SSE route');
+  }
+
+  private userCommandCounters = new Map<string, { count: number; resetAt: number }>();
 }

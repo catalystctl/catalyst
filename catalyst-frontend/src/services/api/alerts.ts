@@ -19,11 +19,11 @@ export const alertsApi = {
     resolved?: boolean;
     scope?: 'mine' | 'all';
   }) => {
-    const { data } = await apiClient.get<{ alerts: Alert[]; pagination: any }>('/api/alerts', { params });
+    const data = await apiClient.get<{ alerts: Alert[]; pagination: any }>('/api/alerts', { params });
     return data;
   },
   stats: async () => {
-    const { data } = await apiClient.get<{
+    const data = await apiClient.get<{
       total: number;
       unresolved: number;
       bySeverity: Record<string, number>;
@@ -32,7 +32,7 @@ export const alertsApi = {
     return data;
   },
   statsScoped: async (params?: { scope?: 'mine' | 'all' }) => {
-    const { data } = await apiClient.get<{
+    const data = await apiClient.get<{
       total: number;
       unresolved: number;
       bySeverity: Record<string, number>;
@@ -41,19 +41,19 @@ export const alertsApi = {
     return data;
   },
   get: async (alertId: string) => {
-    const { data } = await apiClient.get<{ alert: Alert }>(`/api/alerts/${alertId}`);
+    const data = await apiClient.get<{ alert: Alert }>(`/api/alerts/${alertId}`);
     return data.alert;
   },
   resolve: async (alertId: string) => {
-    const { data } = await apiClient.post<ApiResponse<void>>(`/api/alerts/${alertId}/resolve`);
+    const data = await apiClient.post<ApiResponse<void>>(`/api/alerts/${alertId}/resolve`);
     return data;
   },
   bulkResolve: async (alertIds: string[]) => {
-    const { data } = await apiClient.post<ApiResponse<void>>('/api/alerts/bulk-resolve', { alertIds });
+    const data = await apiClient.post<ApiResponse<void>>('/api/alerts/bulk-resolve', { alertIds });
     return data;
   },
   deliveries: async (alertId: string) => {
-    const { data } = await apiClient.get<{ deliveries: AlertDelivery[] }>(`/api/alerts/${alertId}/deliveries`);
+    const data = await apiClient.get<{ deliveries: AlertDelivery[] }>(`/api/alerts/${alertId}/deliveries`);
     return data.deliveries;
   },
   listRules: async (params?: {
@@ -63,7 +63,7 @@ export const alertsApi = {
     targetId?: string;
     scope?: 'mine' | 'all';
   }) => {
-    const { data } = await apiClient.get<{ rules: AlertRule[] }>('/api/alert-rules', { params });
+    const data = await apiClient.get<{ rules: AlertRule[] }>('/api/alert-rules', { params });
     return data.rules;
   },
   createRule: async (payload: {
@@ -76,7 +76,7 @@ export const alertsApi = {
     actions: Record<string, unknown>;
     enabled?: boolean;
   }) => {
-    const { data } = await apiClient.post<{ success: boolean; rule: AlertRule }>('/api/alert-rules', payload);
+    const data = await apiClient.post<{ success: boolean; rule: AlertRule }>('/api/alert-rules', payload);
     return data.rule;
   },
   updateRule: async (
@@ -89,14 +89,14 @@ export const alertsApi = {
       enabled: boolean;
     }>,
   ) => {
-    const { data } = await apiClient.put<{ success: boolean; rule: AlertRule }>(
+    const data = await apiClient.put<{ success: boolean; rule: AlertRule }>(
       `/api/alert-rules/${ruleId}`,
       payload,
     );
     return data.rule;
   },
   deleteRule: async (ruleId: string) => {
-    const { data } = await apiClient.delete<ApiResponse<void>>(`/api/alert-rules/${ruleId}`);
+    const data = await apiClient.delete<ApiResponse<void>>(`/api/alert-rules/${ruleId}`);
     return data;
   },
 };

@@ -36,7 +36,6 @@ import { useTasks } from '../../hooks/useTasks';
 import { useServerDatabases } from '../../hooks/useServerDatabases';
 import { useDatabaseHosts } from '../../hooks/useAdmin';
 import { useAuthStore } from '../../stores/authStore';
-import { useWebSocketStore } from '../../stores/websocketStore';
 import { useConsole } from '../../hooks/useConsole';
 import { useEulaPrompt } from '../../hooks/useEulaPrompt';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -134,7 +133,6 @@ function ServerDetailsPage() {
   const queryClient = useQueryClient();
   const { data: server, isLoading, isError, refetch } = useServer(serverId);
   const liveMetrics = useServerMetrics(serverId, server?.allocatedMemoryMb);
-  const { isConnected } = useWebSocketStore();
   const { user } = useAuthStore();
 
   // ── Metrics ──
@@ -153,6 +151,8 @@ function ServerDetailsPage() {
   const {
     entries,
     send,
+    isConnected,
+    streamStatus,
     isLoading: consoleLoading,
     isError: consoleError,
     refetch: refetchConsole,
@@ -204,8 +204,9 @@ function ServerDetailsPage() {
     return key in tabLabels ? (key as keyof typeof tabLabels) : 'console';
   }, [tab]);
 
+  // canSend: allow commands when SSE is connected (or reconnecting) AND server is running
   const canSend =
-    isConnected &&
+    (isConnected || streamStatus === 'reconnecting') &&
     Boolean(serverId) &&
     server?.status === 'running' &&
     !isSuspended &&

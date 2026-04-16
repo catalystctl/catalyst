@@ -1,51 +1,157 @@
-import { test, type Page } from '@playwright/test';
-
-/**
- * Route-driven screenshot crawler.
- *
- * Screenshots are saved to docs/screenshots/ organized by category:
- *   auth/        — login, register, forgot-password
- *   user/        — dashboard, profile, servers, server tabs
- *   admin/       — admin pages, nodes, templates
- *
- * Keep the route arrays in sync with App.tsx <Routes>. Entity pages (servers,
- * nodes, templates) are auto-discovered from the list views at runtime.
- *
- * Resolution: 1920×1080 (1080p) only.
- */
-
+import { test, type Page, type Browser, type BrowserContext } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 
+/**
+ * Concurrent screenshot crawler.
+ *
+ * Architecture:
+ *   - Auth pages run in their own worker (no login needed)
+ *   - User pages run in their own worker (single login + screenshot one entity per type)
+ *   - Admin pages run in their own worker (single login + screenshot one entity per type)
+ *
+ * Each worker discovers its own entities and screenshots exactly ONE per type.
+ * This dramatically speeds up the crawl (3x fewer browser actions) while
+ * still covering every route and entity type.
+ *
+ * Screenshots saved to docs/screenshots/ organized by category:
+ *   auth/   — login, register, forgot-password
+ *   user/   — dashboard, profile, servers, server tabs
+ *   admin/  — admin pages + one server/node/template/role/plugin detail
+ *
+ * Resolution: 1920×1080 (1080p).
+ */
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// ─── Configuration ──────────────────────────────────────────────────────────
-
-// Output everything under docs/screenshots/ at the repo root
+// ─── Configuration ────────────────────────────────────────────────────────────
 const BASE_DIR = path.resolve(__dirname, '../../docs/screenshots');
 const CREDS = { email: 'admin@example.com', password: 'admin123' };
+const RESOLUTION = { width: 1920, height: 1080 };
 
-// ─── Route Map (single source of truth) ────────────────────────────────────
-// Keep this in sync with App.tsx <Routes>.
+// ─── Shared helpers ──────────────────────────────────────────────────────────
+
+function ensureDir(dir: string) {
+  fs.mkdirSync(dir, { recursive: true });
+}
+
+function slugify(s: string) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+async function navAndWait(page: Page, pathStr: string): Promise<boolean> {
+  try {
+    const resp = await page.goto(pathStr, { waitUntil: 'domcontentloaded', timeout: 15_000 });
+    if (!resp) return false;
+    await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
+    await page.waitForTimeout(800);
+    return true;
+  } catch {
+    await page.waitForTimeout(1_000).catch(() => {});
+    return false;
+  }
+}
+
+async function login(page: Page) {
+  await navAndWait(page, '/login');
+  await page.locator('input[id="email"]').fill(CREDS.email);
+  await page.locator('input[id="password"]').fill(CREDS.password);
+  await page.locator('button:has-text("Sign in")').first().click({ timeout: 10_000 });
+  await page.waitForURL(/\/(servers|dashboard)/, { timeout: 15_000 }).catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
+  await page.waitForTimeout(800);
+}
+
+function isAuthed(page: Page) {
+  return !page.url().includes('/login');
+}
+
+async function screenshot(
+  ctx: BrowserContext,
+  folder: string,
+  name: string,
+  url: string,
+): Promise<void> {
+  const page = await ctx.newPage();
+  try {
+    await page.setViewportSize(RESOLUTION);
+    await navAndWait(page, url);
+    const dir = path.join(BASE_DIR, folder);
+    ensureDir(dir);
+    const file = `${slugify(name)}.png`;
+    await page.screenshot({ path: path.join(dir, file), fullPage: true });
+    console.log(`  ✓ ${folder}/${file}`);
+  } finally {
+    await page.close();
+  }
+}
+
+async function screenshotPage(
+  page: Page,
+  folder: string,
+  name: string,
+): Promise<void> {
+  const dir = path.join(BASE_DIR, folder);
+  ensureDir(dir);
+  const file = `${slugify(name)}.png`;
+  await page.screenshot({ path: path.join(dir, file), fullPage: true });
+  console.log(`  ✓ ${folder}/${file}`);
+}
+
+/**
+ * Discover up to `maxItems` entity IDs from a list page.
+ * Stops after the first one is found if `maxItems` is 1.
+ */
+async function discoverFirst(
+  page: Page,
+  listPath: string,
+  linkPattern: string,
+): Promise<{ id: string; name: string } | null> {
+  await navAndWait(page, listPath);
+
+  const links = page.locator(`a[href*="${linkPattern}"]`);
+  const count = await links.count();
+  if (count === 0) return null;
+
+  // Only ever look at the first link
+  const href = await links.first().getAttribute('href', { timeout: 3_000 }).catch(() => null);
+  if (!href) return null;
+
+  const escaped = linkPattern.replace(/\//g, '\\/');
+  const match = href.match(new RegExp(`${escaped}([^/?#]+)`));
+  if (!match) return null;
+
+  let name = match[1];
+  try {
+    const text = (await links.first().innerText({ timeout: 2_000 })).trim();
+    if (text && text.length < 100) name = text;
+  } catch { /* noop */ }
+
+  return { id: match[1], name };
+}
+
+// ─── Route definitions ────────────────────────────────────────────────────────
 
 interface RouteEntry {
   path: string;
   label: string;
-  /** Folder under docs/screenshots/ */
   folder: 'auth' | 'user' | 'admin';
 }
 
-const ROUTES: RouteEntry[] = [
-  // Auth (public)
+const AUTH_ROUTES: RouteEntry[] = [
   { path: '/login', label: 'login', folder: 'auth' },
   { path: '/register', label: 'register', folder: 'auth' },
   { path: '/forgot-password', label: 'forgot-password', folder: 'auth' },
-  // User-facing
+];
+
+const USER_ROUTES: RouteEntry[] = [
   { path: '/dashboard', label: 'dashboard', folder: 'user' },
   { path: '/profile', label: 'profile', folder: 'user' },
   { path: '/servers', label: 'servers', folder: 'user' },
-  // Admin
+];
+
+const ADMIN_ROUTES: RouteEntry[] = [
   { path: '/admin', label: 'admin-dashboard', folder: 'admin' },
   { path: '/admin/users', label: 'admin-users', folder: 'admin' },
   { path: '/admin/roles', label: 'admin-roles', folder: 'admin' },
@@ -64,215 +170,184 @@ const ROUTES: RouteEntry[] = [
   { path: '/admin/plugins', label: 'admin-plugins', folder: 'admin' },
 ];
 
-const SERVER_TABS = [
-  'console', 'files', 'sftp', 'backups', 'tasks',
-  'databases', 'metrics', 'alerts', 'modManager',
-  'pluginManager', 'configuration', 'users', 'settings', 'admin',
-] as const;
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-let screenshotCount = 0;
-
-function ensureDir(dir: string) {
-  fs.mkdirSync(dir, { recursive: true });
+// Entity discovery config — screenshot ONE per type
+interface EntityConfig {
+  listPath: string;
+  linkPattern: string;
+  detailPrefix: string;
+  detailTabs?: Array<{ suffix: string; label: string }>;
+  folder: 'user' | 'admin';
+  label: string;
 }
 
-async function screenshot(page: Page, folder: string, name: string) {
-  screenshotCount++;
-  const dir = path.join(BASE_DIR, folder);
-  ensureDir(dir);
-  const file = `${slugify(name)}.png`;
-  await page.screenshot({ path: path.join(dir, file), fullPage: true });
-  console.log(`  ✓ [${String(screenshotCount).padStart(3, '0')}] ${folder}/${file}`);
+const ENTITY_CONFIGS: EntityConfig[] = [
+  {
+    listPath: '/servers',
+    linkPattern: '/servers/',
+    detailPrefix: '/servers/',
+    detailTabs: [
+      { suffix: '', label: 'console' },
+      { suffix: '/files', label: 'files' },
+      { suffix: '/sftp', label: 'sftp' },
+      { suffix: '/backups', label: 'backups' },
+      { suffix: '/tasks', label: 'tasks' },
+      { suffix: '/databases', label: 'databases' },
+      { suffix: '/metrics', label: 'metrics' },
+      { suffix: '/alerts', label: 'alerts' },
+      { suffix: '/modManager', label: 'modManager' },
+      { suffix: '/pluginManager', label: 'pluginManager' },
+      { suffix: '/configuration', label: 'configuration' },
+      { suffix: '/users', label: 'users' },
+      { suffix: '/settings', label: 'settings' },
+      { suffix: '/admin', label: 'admin' },
+    ],
+    folder: 'user',
+    label: 'server',
+  },
+  {
+    listPath: '/admin/nodes',
+    linkPattern: '/admin/nodes/',
+    detailPrefix: '/admin/nodes/',
+    detailTabs: [
+      { suffix: '', label: 'details' },
+      { suffix: '/allocations', label: 'allocations' },
+    ],
+    folder: 'admin',
+    label: 'node',
+  },
+  {
+    listPath: '/admin/templates',
+    linkPattern: '/admin/templates/',
+    detailPrefix: '/admin/templates/',
+    folder: 'admin',
+    label: 'template',
+  },
+  {
+    listPath: '/admin/roles',
+    linkPattern: '/admin/roles/',
+    detailPrefix: '/admin/roles/',
+    folder: 'admin',
+    label: 'role',
+  },
+  {
+    listPath: '/admin/plugins',
+    linkPattern: '/admin/plugin/',
+    detailPrefix: '/admin/plugin/',
+    folder: 'admin',
+    label: 'plugin',
+  },
+];
+
+// ─── Setup ────────────────────────────────────────────────────────────────────
+
+async function setupScreenshots() {
+  if (fs.existsSync(BASE_DIR)) fs.rmSync(BASE_DIR, { recursive: true });
+  for (const folder of ['auth', 'user', 'admin']) {
+    ensureDir(path.join(BASE_DIR, folder));
+  }
 }
 
-function slugify(s: string) {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-}
+// ─── Worker 1: Auth pages (no login needed, runs in parallel) ───────────────
 
-async function nav(page: Page, pathStr: string): Promise<boolean> {
-  try {
-    const resp = await page.goto(pathStr, {
-      waitUntil: 'domcontentloaded',
-      timeout: 15_000,
+test.describe('📸 Auth Pages', () => {
+  test.setTimeout(2 * 60 * 1000);
+
+  test.beforeAll(async () => {
+    await setupScreenshots();
+  });
+
+  for (const route of AUTH_ROUTES) {
+    test(`${route.label}`, async ({ page }) => {
+      await page.setViewportSize(RESOLUTION);
+      await navAndWait(page, route.path);
+      await screenshotPage(page, route.folder, route.label);
     });
-    if (!resp) return false;
-    await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
-    await page.waitForTimeout(800);
-    return true;
-  } catch {
-    console.log(`  ⚠ Navigation to ${pathStr} timed out`);
-    await page.waitForTimeout(1000).catch(() => {});
-    return false;
   }
-}
+});
 
-async function login(page: Page) {
-  console.log('\n🔐 Logging in as admin…');
-  await nav(page, '/login');
-  await page.locator('input[id="email"]').fill(CREDS.email);
-  await page.locator('input[id="password"]').fill(CREDS.password);
-  await page.locator('button:has-text("Sign in")').first().click({ timeout: 10_000 });
-  await page.waitForURL(/\/(servers|dashboard)/, { timeout: 15_000 }).catch(() => {});
-  await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
-  await page.waitForTimeout(800);
-  console.log('  ✓ Logged in');
-}
+// ─── Worker 2: User pages (login + user entity screenshots) ──────────────────
 
-function isRealPage(page: Page): boolean {
-  return !page.url().includes('/login');
-}
+test.describe('📸 User Pages', () => {
+  test.setTimeout(3 * 60 * 1000);
 
-async function resolveAllEntityIds(
-  page: Page,
-  listPath: string,
-  linkPattern: string,
-): Promise<string[]> {
-  await nav(page, listPath);
-  const links = page.locator(`a[href*="${linkPattern}"]`);
-  const count = await links.count();
-  const ids: string[] = [];
-  for (let i = 0; i < count; i++) {
-    const href = await links.nth(i).getAttribute('href', { timeout: 3_000 }).catch(() => null);
-    if (!href) continue;
-    const escaped = linkPattern.replace(/\//g, '\\/');
-    const match = href.match(new RegExp(`${escaped}([^/?]+)`));
-    if (match && !ids.includes(match[1])) {
-      ids.push(match[1]);
-    }
-  }
-  return ids;
-}
+  test('Login + static pages', async ({ page }) => {
+    await page.setViewportSize(RESOLUTION);
+    await login(page);
 
-// ─── Tests ──────────────────────────────────────────────────────────────────
-
-test.describe('Screenshot Crawl — All Pages @1080p', () => {
-  test.setTimeout(5 * 60 * 1000);
-
-  test.beforeAll(() => {
-    // Clean previous output
-    if (fs.existsSync(BASE_DIR)) fs.rmSync(BASE_DIR, { recursive: true });
-    for (const folder of ['auth', 'user', 'admin']) {
-      ensureDir(path.join(BASE_DIR, folder));
+    for (const route of USER_ROUTES) {
+      if (!isAuthed(page)) {
+        console.log(`  ⚠ ${route.path} — not authenticated (skipped)`);
+        continue;
+      }
+      await navAndWait(page, route.path);
+      await screenshotPage(page, route.folder, route.label);
     }
   });
 
-  test('Capture every route in the application', async ({ page }) => {
-    screenshotCount = 0;
-
-    // ── Public pages ────────────────────────────────────────────────
-    console.log('\n📸 === AUTH PAGES ===');
-    for (const route of ROUTES.filter(r => r.folder === 'auth')) {
-      await nav(page, route.path);
-      await screenshot(page, 'auth', route.label);
-    }
-
-    // ── Login ───────────────────────────────────────────────────────
+  test('Server detail (one server, every tab)', async ({ page }) => {
+    await page.setViewportSize(RESOLUTION);
     await login(page);
+    if (!isAuthed(page)) return;
 
-    // ── User pages ──────────────────────────────────────────────────
-    console.log('\n📸 === USER PAGES ===');
-    for (const route of ROUTES.filter(r => r.folder === 'user')) {
-      await nav(page, route.path);
-      if (!isRealPage(page)) {
-        console.log(`  ⚠ ${route.path} redirected to login (skipped)`);
+    const server = await discoverFirst(page, '/servers', '/servers/');
+    if (!server) {
+      console.log('  ⚠ No server found — skipped');
+      return;
+    }
+    console.log(`  🖥️  Server: ${server.name}`);
+
+    const base = `/servers/${encodeURIComponent(server.id)}`;
+
+    // Screenshot every tab available for the server
+    const serverConfig = ENTITY_CONFIGS.find(e => e.label === 'server')!;
+    for (const tab of serverConfig.detailTabs) {
+      await navAndWait(page, base + tab.suffix);
+      await screenshotPage(page, 'user', `server-details-${tab.label}`);
+    }
+  });
+});
+
+// ─── Worker 3: Admin pages (login + admin entity screenshots) ────────────────
+
+test.describe('📸 Admin Pages', () => {
+  test.setTimeout(4 * 60 * 1000);
+
+  test('Login + static admin pages', async ({ page }) => {
+    await page.setViewportSize(RESOLUTION);
+    await login(page);
+    if (!isAuthed(page)) return;
+
+    for (const route of ADMIN_ROUTES) {
+      await navAndWait(page, route.path);
+      await screenshotPage(page, route.folder, route.label);
+    }
+  });
+
+  test('Admin entity details (one per type)', async ({ page }) => {
+    await page.setViewportSize(RESOLUTION);
+    await login(page);
+    if (!isAuthed(page)) return;
+
+    for (const entity of ENTITY_CONFIGS) {
+      console.log(`\n  ── ${entity.label} ──`);
+      const item = await discoverFirst(page, entity.listPath, entity.linkPattern);
+      if (!item) {
+        console.log(`  ⚠ No ${entity.label} found — skipped`);
         continue;
       }
-      await screenshot(page, 'user', route.label);
-    }
+      console.log(`  🖥️  ${item.name}`);
 
-    // ── Admin pages ─────────────────────────────────────────────────
-    console.log('\n📸 === ADMIN PAGES ===');
-    for (const route of ROUTES.filter(r => r.folder === 'admin')) {
-      await nav(page, route.path);
-      if (!isRealPage(page)) {
-        console.log(`  ⚠ ${route.path} redirected to login (skipped)`);
-        continue;
-      }
-      await screenshot(page, 'admin', route.label);
-    }
+      const base = `${entity.detailPrefix}${encodeURIComponent(item.id)}`;
 
-    // ── ALL servers with ALL tabs ──────────────────────────────────
-    console.log('\n📸 === SERVER DETAILS ===');
-
-    const serverIds = await resolveAllEntityIds(page, '/servers', '/servers/');
-    console.log(`  Found ${serverIds.length} server(s)`);
-
-    if (serverIds.length === 0) {
-      console.log('  ⚠ No servers found — skipping server screenshots');
-    }
-
-    for (let si = 0; si < serverIds.length; si++) {
-      const serverId = serverIds[si];
-      await nav(page, '/servers');
-      const serverLink = page.locator(`a[href*="/servers/${serverId}"]`).first();
-      let serverName = serverId;
-      try {
-        const linkText = await serverLink.innerText({ timeout: 3_000 });
-        if (linkText.trim()) serverName = linkText.trim();
-      } catch { /* fall back to ID */ }
-
-      const prefix = serverIds.length === 1
-        ? 'server'
-        : `server-${si + 1}-${slugify(serverName)}`;
-
-      console.log(`\n  🖥️  Server: ${serverName} (${serverId})`);
-
-      for (const tab of SERVER_TABS) {
-        await nav(page, `/servers/${serverId}/${tab}`);
-        if (!isRealPage(page)) {
-          console.log(`    ⚠ tab "${tab}" redirected (skipped)`);
-          continue;
+      if (entity.detailTabs && entity.detailTabs.length > 0) {
+        for (const tab of entity.detailTabs) {
+          await navAndWait(page, base + tab.suffix);
+          await screenshotPage(page, entity.folder, `${entity.label}-${tab.label}`);
         }
-        await screenshot(page, 'user', `${prefix}-${tab}`);
+      } else {
+        await navAndWait(page, base);
+        await screenshotPage(page, entity.folder, `${entity.label}-details`);
       }
     }
-
-    // ── ALL nodes ──────────────────────────────────────────────────
-    console.log('\n📸 === NODE DETAILS ===');
-
-    const nodeIds = await resolveAllEntityIds(page, '/admin/nodes', '/admin/nodes/');
-    console.log(`  Found ${nodeIds.length} node(s)`);
-
-    for (let ni = 0; ni < nodeIds.length; ni++) {
-      const nodeId = nodeIds[ni];
-      const prefix = nodeIds.length === 1 ? 'node' : `node-${ni + 1}`;
-
-      await nav(page, `/admin/nodes/${nodeId}`);
-      if (!isRealPage(page)) continue;
-      await screenshot(page, 'admin', `${prefix}-details`);
-
-      await nav(page, `/admin/nodes/${nodeId}/allocations`);
-      if (!isRealPage(page)) continue;
-      await screenshot(page, 'admin', `${prefix}-allocations`);
-    }
-
-    if (nodeIds.length === 0) {
-      console.log('  ⚠ No nodes found — skipping node screenshots');
-    }
-
-    // ── ALL templates ──────────────────────────────────────────────
-    console.log('\n📸 === TEMPLATE DETAILS ===');
-
-    const templateIds = await resolveAllEntityIds(page, '/admin/templates', '/admin/templates/');
-    console.log(`  Found ${templateIds.length} template(s)`);
-
-    for (let ti = 0; ti < templateIds.length; ti++) {
-      const templateId = templateIds[ti];
-      const prefix = templateIds.length === 1 ? 'template' : `template-${ti + 1}`;
-
-      await nav(page, `/admin/templates/${templateId}`);
-      if (!isRealPage(page)) continue;
-      await screenshot(page, 'admin', `${prefix}-details`);
-    }
-
-    if (templateIds.length === 0) {
-      console.log('  ⚠ No templates found — skipping template screenshots');
-    }
-
-    // ── Summary ─────────────────────────────────────────────────────
-    console.log(`\n✅ Done! ${screenshotCount} screenshots → docs/screenshots/`);
-    console.log('🖥️  Resolution: 1920×1080 (1080p)');
   });
 });

@@ -1,4 +1,3 @@
-import apiClient from './client';
 import type { FileEntry, FileListing } from '../../types/file';
 import { joinPath, normalizePath } from '../../utils/filePaths';
 
@@ -100,22 +99,66 @@ const normalizeListing = (payload: FileListingPayload | undefined, requestedPath
   };
 };
 
+// Helper for authenticated file download using native fetch
+async function downloadFile(
+  url: string,
+  params?: Record<string, string | number | boolean | undefined | null>,
+): Promise<Blob> {
+  let fetchUrl = url;
+  if (params) {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        searchParams.set(key, String(value));
+      }
+    });
+    const queryString = searchParams.toString();
+    if (queryString) fetchUrl += `?${queryString}`;
+  }
+
+  const response = await fetch(fetchUrl, {
+    method: 'GET',
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  return response.blob();
+}
+
+// Helper for authenticated file upload using native fetch
+async function uploadFile(
+  url: string,
+  body: FormData,
+): Promise<void> {
+  const response = await fetch(url, {
+    method: 'POST',
+    credentials: 'include',
+    body,
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+}
+
 export const filesApi = {
   list: async (serverId: string, path = '/') => {
     const normalizedPath = normalizePath(path);
-    const { data } = await apiClient.get<ApiResponse<FileListingPayload>>(
-      `/api/servers/${serverId}/files`,
-      { params: { path: normalizedPath } },
-    );
+    const data = await (async () => {
+      const res = await fetch(`/api/servers/${serverId}/files?path=${encodeURIComponent(normalizedPath)}`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<ApiResponse<FileListingPayload>>;
+    })();
     return normalizeListing(data.data, normalizedPath);
   },
   download: async (serverId: string, path: string) => {
     const normalizedPath = normalizePath(path);
-    const response = await apiClient.get<Blob>(`/api/servers/${serverId}/files/download`, {
-      params: { path: normalizedPath },
-      responseType: 'blob',
-    });
-    return response.data;
+    return downloadFile(`/api/servers/${serverId}/files/download`, { path: normalizedPath });
   },
   readText: async (serverId: string, path: string) => {
     const blob = await filesApi.download(serverId, path);
@@ -128,18 +171,7 @@ export const filesApi = {
         const formData = new FormData();
         formData.append('path', normalizedPath);
         formData.append('file', file);
-        return apiClient.post<ApiResponse<void>>(
-          `/api/servers/${serverId}/files/upload`,
-          formData,
-          {
-            transformRequest: (data, headers) => {
-              if (headers) {
-                delete headers['Content-Type'];
-              }
-              return data;
-            },
-          },
-        );
+        return uploadFile(`/api/servers/${serverId}/files/upload`, formData);
       }),
     );
   },
@@ -148,45 +180,73 @@ export const filesApi = {
     payload: { path: string; isDirectory: boolean; content?: string },
   ) => {
     const normalizedPath = normalizePath(payload.path);
-    const { data } = await apiClient.post<ApiResponse<void>>(
-      `/api/servers/${serverId}/files/create`,
-      { ...payload, path: normalizedPath },
-    );
+    const data = await (async () => {
+      const res = await fetch(`/api/servers/${serverId}/files/create`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, path: normalizedPath }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<ApiResponse<void>>;
+    })();
     return data;
   },
   write: async (serverId: string, path: string, content: string) => {
     const normalizedPath = normalizePath(path);
-    const { data } = await apiClient.post<ApiResponse<void>>(
-      `/api/servers/${serverId}/files/write`,
-      { path: normalizedPath, content },
-    );
+    const data = await (async () => {
+      const res = await fetch(`/api/servers/${serverId}/files/write`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: normalizedPath, content }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<ApiResponse<void>>;
+    })();
     return data;
   },
   updatePermissions: async (serverId: string, path: string, mode: number) => {
     const normalizedPath = normalizePath(path);
-    const { data } = await apiClient.post<ApiResponse<void>>(
-      `/api/servers/${serverId}/files/permissions`,
-      { path: normalizedPath, mode },
-    );
+    const data = await (async () => {
+      const res = await fetch(`/api/servers/${serverId}/files/permissions`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: normalizedPath, mode }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<ApiResponse<void>>;
+    })();
     return data;
   },
   remove: async (serverId: string, path: string) => {
     const normalizedPath = normalizePath(path);
-    const { data } = await apiClient.delete<ApiResponse<void>>(
-      `/api/servers/${serverId}/files/delete`,
-      { params: { path: normalizedPath } },
-    );
+    const data = await (async () => {
+      const res = await fetch(`/api/servers/${serverId}/files/delete?path=${encodeURIComponent(normalizedPath)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<ApiResponse<void>>;
+    })();
     return data;
   },
   compress: async (
     serverId: string,
     payload: { paths: string[]; archiveName: string },
   ) => {
-    const normalizedPaths = payload.paths.map((path) => normalizePath(path));
-    const { data } = await apiClient.post<ApiResponse<{ archivePath?: string }>>(
-      `/api/servers/${serverId}/files/compress`,
-      { ...payload, paths: normalizedPaths },
-    );
+    const normalizedPaths = payload.paths.map((p) => normalizePath(p));
+    const data = await (async () => {
+      const res = await fetch(`/api/servers/${serverId}/files/compress`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, paths: normalizedPaths }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<ApiResponse<{ archivePath?: string }>>;
+    })();
     return data.data;
   },
   decompress: async (
@@ -195,28 +255,44 @@ export const filesApi = {
   ) => {
     const normalizedArchive = normalizePath(payload.archivePath);
     const normalizedTarget = normalizePath(payload.targetPath);
-    const { data } = await apiClient.post<ApiResponse<void>>(
-      `/api/servers/${serverId}/files/decompress`,
-      { archivePath: normalizedArchive, targetPath: normalizedTarget },
-    );
+    const data = await (async () => {
+      const res = await fetch(`/api/servers/${serverId}/files/decompress`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archivePath: normalizedArchive, targetPath: normalizedTarget }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<ApiResponse<void>>;
+    })();
     return data;
   },
   rename: async (serverId: string, from: string, to: string) => {
     const normalizedFrom = normalizePath(from);
     const normalizedTo = normalizePath(to);
-    const { data } = await apiClient.post<ApiResponse<void>>(
-      `/api/servers/${serverId}/files/rename`,
-      { from: normalizedFrom, to: normalizedTo },
-    );
+    const data = await (async () => {
+      const res = await fetch(`/api/servers/${serverId}/files/rename`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: normalizedFrom, to: normalizedTo }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<ApiResponse<void>>;
+    })();
     return data;
   },
   listArchiveContents: async (serverId: string, archivePath: string) => {
-    const { data } = await apiClient.post<
-      ApiResponse<Array<{ name: string; size: number; isDirectory: boolean; modified?: string }>>
-    >(
-      `/api/servers/${serverId}/files/archive-contents`,
-      { archivePath: normalizePath(archivePath) },
-    );
+    const data = await (async () => {
+      const res = await fetch(`/api/servers/${serverId}/files/archive-contents`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archivePath: normalizePath(archivePath) }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<ApiResponse<Array<{ name: string; size: number; isDirectory: boolean; modified?: string }>>>;
+    })();
     return data.data ?? [];
   },
 };

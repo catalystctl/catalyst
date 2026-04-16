@@ -23,19 +23,19 @@ export type NodeAssignment = {
 
 export const nodesApi = {
   list: async () => {
-    const { data } = await apiClient.get<ApiResponse<NodeInfo[]>>('/api/nodes');
+    const data = await apiClient.get<ApiResponse<NodeInfo[]>>('/api/nodes');
     return data.data || [];
   },
   get: async (nodeId: string) => {
-    const { data } = await apiClient.get<ApiResponse<NodeInfo>>(`/api/nodes/${nodeId}`);
+    const data = await apiClient.get<ApiResponse<NodeInfo>>(`/api/nodes/${nodeId}`);
     return data.data;
   },
   stats: async (nodeId: string) => {
-    const { data } = await apiClient.get<ApiResponse<NodeStats>>(`/api/nodes/${nodeId}/stats`);
+    const data = await apiClient.get<ApiResponse<NodeStats>>(`/api/nodes/${nodeId}/stats`);
     return data.data;
   },
   metrics: async (nodeId: string, params?: { hours?: number; limit?: number }) => {
-    const { data } = await apiClient.get<ApiResponse<NodeMetricsResponse>>(
+    const data = await apiClient.get<ApiResponse<NodeMetricsResponse>>(
       `/api/nodes/${nodeId}/metrics`,
       { params },
     );
@@ -51,7 +51,7 @@ export const nodesApi = {
     maxCpuCores: number;
     serverDataDir?: string;
   }) => {
-    const { data } = await apiClient.post<ApiResponse<NodeInfo>>('/api/nodes', payload);
+    const data = await apiClient.post<ApiResponse<NodeInfo>>('/api/nodes', payload);
     return data.data;
   },
   update: async (
@@ -66,15 +66,15 @@ export const nodesApi = {
       serverDataDir?: string;
     },
   ) => {
-    const { data } = await apiClient.put<ApiResponse<NodeInfo>>(`/api/nodes/${nodeId}`, payload);
+    const data = await apiClient.put<ApiResponse<NodeInfo>>(`/api/nodes/${nodeId}`, payload);
     return data.data;
   },
   remove: async (nodeId: string) => {
-    const { data } = await apiClient.delete<ApiResponse<void>>(`/api/nodes/${nodeId}`);
+    const data = await apiClient.delete<ApiResponse<void>>(`/api/nodes/${nodeId}`);
     return data;
   },
   deploymentToken: async (nodeId: string) => {
-    const { data } = await apiClient.post<
+    const data = await apiClient.post<
       ApiResponse<{
         deploymentToken: string;
         apiKey: string;
@@ -85,20 +85,20 @@ export const nodesApi = {
     return data.data;
   },
   ipPools: async (nodeId: string) => {
-    const { data } = await apiClient.get<
+    const data = await apiClient.get<
       ApiResponse<Array<{ id: string; networkName: string; cidr: string; availableCount: number }>>
     >(`/api/nodes/${nodeId}/ip-pools`);
     return data.data || [];
   },
   availableIps: async (nodeId: string, networkName: string, limit = 200) => {
-    const { data } = await apiClient.get<ApiResponse<string[]>>(
+    const data = await apiClient.get<ApiResponse<string[]>>(
       `/api/nodes/${nodeId}/ip-availability`,
       { params: { networkName, limit } },
     );
     return data.data || [];
   },
   allocations: async (nodeId: string, params?: { search?: string; serverId?: string }) => {
-    const { data } = await apiClient.get<ApiResponse<NodeAllocation[]>>(
+    const data = await apiClient.get<ApiResponse<NodeAllocation[]>>(
       `/api/nodes/${nodeId}/allocations`,
       { params },
     );
@@ -108,7 +108,7 @@ export const nodesApi = {
     nodeId: string,
     payload: { ip: string; ports: string; alias?: string; notes?: string },
   ) => {
-    const { data } = await apiClient.post<ApiResponse<{ created: number }>>(
+    const data = await apiClient.post<ApiResponse<{ created: number }>>(
       `/api/nodes/${nodeId}/allocations`,
       payload,
     );
@@ -119,20 +119,20 @@ export const nodesApi = {
     allocationId: string,
     payload: { alias?: string; notes?: string },
   ) => {
-    const { data } = await apiClient.patch<ApiResponse<NodeAllocation>>(
+    const data = await apiClient.patch<ApiResponse<NodeAllocation>>(
       `/api/nodes/${nodeId}/allocations/${allocationId}`,
       payload,
     );
     return data.data;
   },
   deleteAllocation: async (nodeId: string, allocationId: string) => {
-    const { data } = await apiClient.delete<ApiResponse<void>>(
+    const data = await apiClient.delete<ApiResponse<void>>(
       `/api/nodes/${nodeId}/allocations/${allocationId}`,
     );
     return data;
   },
   checkApiKey: async (nodeId: string) => {
-    const { data } = await apiClient.get<
+    const data = await apiClient.get<
       ApiResponse<{
         exists: boolean;
         apiKey: {
@@ -147,7 +147,7 @@ export const nodesApi = {
     return data.data;
   },
   generateApiKey: async (nodeId: string, regenerate?: boolean) => {
-    const { data } = await apiClient.post<
+    const data = await apiClient.post<
       ApiResponse<{
         apiKey: string;
         nodeId: string;
@@ -159,7 +159,7 @@ export const nodesApi = {
 
   // Node Assignment APIs
   getAssignments: async (nodeId: string) => {
-    const { data } = await apiClient.get<ApiResponse<NodeAssignment[]>>(
+    const data = await apiClient.get<ApiResponse<NodeAssignment[]>>(
       `/api/nodes/${nodeId}/assignments`,
     );
     return data.data || [];
@@ -173,7 +173,7 @@ export const nodesApi = {
       expiresAt?: string;
     },
   ) => {
-    const { data } = await apiClient.post<ApiResponse<NodeAssignment>>(
+    const data = await apiClient.post<ApiResponse<NodeAssignment>>(
       `/api/nodes/${nodeId}/assign`,
       payload,
     );
@@ -181,14 +181,14 @@ export const nodesApi = {
   },
 
   removeAssignment: async (nodeId: string, assignmentId: string) => {
-    const { data } = await apiClient.delete<ApiResponse<void>>(
+    const data = await apiClient.delete<ApiResponse<void>>(
       `/api/nodes/${nodeId}/assignments/${assignmentId}`,
     );
     return data;
   },
 
   getAccessibleNodes: async () => {
-    const { data } = await apiClient.get<ApiResponse<NodeInfo[]>>('/api/nodes/accessible');
+    const data = await apiClient.get<ApiResponse<NodeInfo[]>>('/api/nodes/accessible');
     return data.data || [];
   },
 
@@ -198,7 +198,7 @@ export const nodesApi = {
     targetId: string;
     expiresAt?: string;
   }) => {
-    const { data } = await apiClient.post<ApiResponse<NodeAssignment>>(
+    const data = await apiClient.post<ApiResponse<NodeAssignment>>(
       '/api/nodes/assign-wildcard',
       payload,
     );
@@ -207,7 +207,7 @@ export const nodesApi = {
 
   // Remove wildcard assignment
   removeWildcard: async (targetType: 'user' | 'role', targetId: string) => {
-    const { data } = await apiClient.delete<ApiResponse<void>>(
+    const data = await apiClient.delete<ApiResponse<void>>(
       `/api/nodes/assign-wildcard/${targetType}/${targetId}`,
     );
     return data;

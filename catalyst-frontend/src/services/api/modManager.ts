@@ -34,7 +34,7 @@ export const modManagerApi = {
       page?: number;
     },
   ) => {
-    const { data } = await apiClient.get<{ success: boolean; data?: ModManagerSearchResponse }>(
+    const data = await apiClient.get<{ success: boolean; data?: ModManagerSearchResponse }>(
       `/api/servers/${serverId}/mod-manager/search`,
       { params },
     );
@@ -44,7 +44,7 @@ export const modManagerApi = {
     serverId: string,
     params: { provider: string; game?: string; projectId: string },
   ) => {
-    const { data } = await apiClient.get<{ success: boolean; data?: any }>(
+    const data = await apiClient.get<{ success: boolean; data?: any }>(
       `/api/servers/${serverId}/mod-manager/versions`,
       { params },
     );
@@ -61,35 +61,35 @@ export const modManagerApi = {
       projectName?: string;
     },
   ) => {
-    const { data } = await apiClient.post<{ success: boolean; data?: { path: string } }>(
+    const data = await apiClient.post<{ success: boolean; data?: { path: string } }>(
       `/api/servers/${serverId}/mod-manager/install`,
       payload,
     );
     return data.data;
   },
   installed: async (serverId: string, target?: string) => {
-    const { data } = await apiClient.get<{ success: boolean; data: InstalledMod[] }>(
+    const data = await apiClient.get<{ success: boolean; data: InstalledMod[] }>(
       `/api/servers/${serverId}/mod-manager/installed`,
       { params: { target } },
     );
     return data.data ?? [];
   },
   uninstall: async (serverId: string, filename: string, target?: string) => {
-    const { data } = await apiClient.post<{ success: boolean }>(
+    const data = await apiClient.post<{ success: boolean }>(
       `/api/servers/${serverId}/mod-manager/uninstall`,
       { filename, target },
     );
     return data;
   },
   checkUpdates: async (serverId: string) => {
-    const { data } = await apiClient.post<{
+    const data = await apiClient.post<{
       success: boolean;
       data: { checked: number; updatesAvailable: number };
     }>(`/api/servers/${serverId}/mod-manager/check-updates`);
     return data.data;
   },
   update: async (serverId: string, filenames: string[]) => {
-    const { data } = await apiClient.post<{
+    const data = await apiClient.post<{
       success: boolean;
       data: { filename: string; success: boolean; error?: string }[];
     }>(`/api/servers/${serverId}/mod-manager/update`, { filenames });

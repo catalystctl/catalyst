@@ -116,8 +116,8 @@ export const authApi = {
           } satisfies User),
       };
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { code?: string } }; code?: string };
-      if (err.response?.data?.code === 'PASSKEY_REQUIRED' || err.code === 'PASSKEY_REQUIRED') {
+      const err = error as { response?: { data?: { code?: string } }; code?: string; message?: string };
+      if (err.response?.data?.code === 'PASSKEY_REQUIRED' || err.code === 'PASSKEY_REQUIRED' || err.message === 'Passkey required') {
         throw createPasskeyRequiredError();
       }
       throw error;
@@ -166,8 +166,7 @@ export const authApi = {
   },
 
   async refresh(): Promise<{ user: User }> {
-    const response = await apiClient.get<{ success: boolean; data?: { id: string; email: string; username: string; role?: string; permissions?: string[] }; error?: string }>('/api/auth/me');
-    const data = response.data;
+    const data = await apiClient.get<{ success: boolean; data?: { id: string; email: string; username: string; role?: string; permissions?: string[] }; error?: string }>('/api/auth/me');
     if (!data?.success || !data?.data) {
       throw new Error(data?.error || 'Refresh failed');
     }
@@ -234,16 +233,14 @@ export const authApi = {
   },
 
   async forgotPassword(email: string): Promise<void> {
-    const response = await apiClient.post<{ success: boolean; error?: string }>('/api/auth/forgot-password', { email });
-    const data = response.data;
+    const data = await apiClient.post<{ success: boolean; error?: string }>('/api/auth/forgot-password', { email });
     if (!data?.success) {
       throw new Error(data?.error || 'Failed to send reset email');
     }
   },
 
   async validateResetToken(token: string): Promise<boolean> {
-    const response = await apiClient.get<{ success: boolean; valid?: boolean; error?: string }>(`/api/auth/reset-password/validate?token=${encodeURIComponent(token)}`);
-    const data = response.data;
+    const data = await apiClient.get<{ success: boolean; valid?: boolean; error?: string }>(`/api/auth/reset-password/validate?token=${encodeURIComponent(token)}`);
     if (!data?.success || !data?.valid) {
       throw new Error('Invalid or expired token');
     }
@@ -251,8 +248,7 @@ export const authApi = {
   },
 
   async resetPassword(token: string, password: string): Promise<void> {
-    const response = await apiClient.post<{ success: boolean; error?: string }>('/api/auth/reset-password', { token, password });
-    const data = response.data;
+    const data = await apiClient.post<{ success: boolean; error?: string }>('/api/auth/reset-password', { token, password });
     if (!data?.success) {
       throw new Error(data?.error || 'Failed to reset password');
     }

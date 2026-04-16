@@ -7,6 +7,12 @@ type Callbacks = {
   onError?: (error: Event) => void;
 };
 
+type PendingSend = {
+  type: 'command' | 'subscribe' | 'unsubscribe';
+  serverId?: string;
+  data?: string;
+};
+
 export class WebSocketManager {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
@@ -14,41 +20,45 @@ export class WebSocketManager {
   private readonly subscriptions = new Set<string>();
   private candidateUrls: string[] = [];
   private candidateIndex = 0;
+  private pendingSends: PendingSend[] = [];
 
   private buildWsUrl() {
     const envUrl = import.meta.env.VITE_WS_URL as string | undefined;
-    
+
     // Build URL from env or use same origin as page
     let wsUrl: URL;
     if (envUrl) {
-      // Handle absolute URLs with scheme normalization
-      if (envUrl.startsWith('http://') || envUrl.startsWith('https://') || 
-          envUrl.startsWith('ws://') || envUrl.startsWith('wss://')) {
+      if (
+        envUrl.startsWith('http://') ||
+        envUrl.startsWith('https://') ||
+        envUrl.startsWith('ws://') ||
+        envUrl.startsWith('wss://')
+      ) {
         const normalized = envUrl
           .replace(/^http:\/\//, 'ws://')
           .replace(/^https:\/\//, 'wss://');
         wsUrl = new URL(normalized);
       } else {
-        // Relative path like "/ws" - use same origin
         wsUrl = new URL(envUrl, window.location.origin);
       }
     } else {
       wsUrl = new URL('/ws', window.location.origin);
     }
-    
-    // Ensure WebSocket protocol
+
     wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-    
-    // Ensure path is set
+
     if (!wsUrl.pathname || wsUrl.pathname === '/') {
       wsUrl.pathname = '/ws';
     }
-    
+
     return wsUrl.toString();
   }
 
   connect(callbacks?: Callbacks) {
-    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+    if (
+      this.ws &&
+      (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)
+    ) {
       return;
     }
 
@@ -85,12 +95,33 @@ export class WebSocketManager {
 
     this.ws.onopen = () => {
       console.log('[WebSocket] Connection opened to:', url);
-      // Send handshake without token - auth is done via cookies on the upgrade request
-      this.ws?.send(JSON.stringify({ type: 'client_handshake' }));
       opened = true;
       this.reconnectAttempts = 0;
+
+      // Send handshake — auth is handled via cookies on the HTTP upgrade request
+      this.ws?.send(JSON.stringify({ type: 'client_handshake' }));
+
+      // Re-subscribe to all previously subscribed servers
+      this.subscriptions.forEach((serverId) => {
+        this.ws?.send(JSON.stringify({ type: 'subscribe', serverId }));
+      });
+
+      // Flush any commands/subscriptions that were queued while connecting
+      // (e.g., from React StrictMode remount or rapid user actions)
+      const pending = this.pendingSends.splice(0);
+      pending.forEach((p) => {
+        if (p.type === 'command' && p.serverId && p.data !== undefined) {
+          this.ws?.send(
+            JSON.stringify({ type: 'console_input', serverId: p.serverId, data: p.data }),
+          );
+        } else if (p.type === 'subscribe' && p.serverId) {
+          this.ws?.send(JSON.stringify({ type: 'subscribe', serverId: p.serverId }));
+        } else if (p.type === 'unsubscribe' && p.serverId) {
+          this.ws?.send(JSON.stringify({ type: 'unsubscribe', serverId: p.serverId }));
+        }
+      });
+
       callbacks?.onOpen?.();
-      this.subscriptions.forEach((serverId) => this.subscribe(serverId));
     };
 
     this.ws.onclose = () => {
@@ -115,26 +146,36 @@ export class WebSocketManager {
 
   subscribe(serverId: string) {
     this.subscriptions.add(serverId);
-    this.send({ type: 'subscribe', serverId });
+    this.sendOrBuffer({ type: 'subscribe', serverId });
   }
 
   unsubscribe(serverId: string) {
     this.subscriptions.delete(serverId);
-    this.send({ type: 'unsubscribe', serverId });
+    this.sendOrBuffer({ type: 'unsubscribe', serverId });
   }
 
   sendCommand(serverId: string, command: string) {
     console.log('[WebSocketManager] sendCommand', { serverId, command, wsState: this.ws?.readyState });
-    this.send({ type: 'console_input', serverId, data: command });
+    this.sendOrBuffer({ type: 'command', serverId, data: command });
   }
 
-  private send(data: unknown) {
+  /**
+   * Send immediately if the WebSocket is open, otherwise buffer the message
+   * and send it once the connection opens. This handles StrictMode remounts
+   * and rapid user actions that fire while the socket is still connecting.
+   */
+  private sendOrBuffer(pending: PendingSend) {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      const payload = JSON.stringify(data);
-      console.log('[WebSocketManager] Sending:', payload);
-      this.ws.send(payload);
+      if (pending.type === 'command' && pending.serverId && pending.data !== undefined) {
+        this.ws.send(JSON.stringify({ type: 'console_input', serverId: pending.serverId, data: pending.data }));
+      } else if (pending.type === 'subscribe' && pending.serverId) {
+        this.ws.send(JSON.stringify({ type: 'subscribe', serverId: pending.serverId }));
+      } else if (pending.type === 'unsubscribe' && pending.serverId) {
+        this.ws.send(JSON.stringify({ type: 'unsubscribe', serverId: pending.serverId }));
+      }
     } else {
-      console.warn('[WebSocketManager] Cannot send - WebSocket not open', { readyState: this.ws?.readyState });
+      // Buffer the message — it will be flushed when the socket opens
+      this.pendingSends.push(pending);
     }
   }
 
@@ -150,6 +191,8 @@ export class WebSocketManager {
       this.ws.close();
       this.ws = null;
     }
+    // Clear buffered sends on explicit disconnect
+    this.pendingSends = [];
   }
 
   reconnect(callbacks?: Callbacks) {

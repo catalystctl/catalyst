@@ -3,26 +3,26 @@ import type { BackupListResponse, Backup } from '../../types/backup';
 
 export const backupsApi = {
   list: async (serverId: string, params?: { page?: number; limit?: number }) => {
-    const { data } = await apiClient.get<BackupListResponse>(`/api/servers/${serverId}/backups`, {
+    const data = await apiClient.get<BackupListResponse>(`/api/servers/${serverId}/backups`, {
       params,
     });
     return data;
   },
   create: async (serverId: string, payload: { name?: string }) => {
-    const { data } = await apiClient.post<{ success: boolean; message?: string; backupName?: string }>(
+    const data = await apiClient.post<{ success: boolean; message?: string; backupName?: string }>(
       `/api/servers/${serverId}/backups`,
       payload,
     );
     return data;
   },
   restore: async (serverId: string, backupId: string) => {
-    const { data } = await apiClient.post<{ success: boolean; message?: string }>(
+    const data = await apiClient.post<{ success: boolean; message?: string }>(
       `/api/servers/${serverId}/backups/${backupId}/restore`,
     );
     return data;
   },
   remove: async (serverId: string, backupId: string) => {
-    const { data } = await apiClient.delete<{ success: boolean; message?: string }>(
+    const data = await apiClient.delete<{ success: boolean; message?: string }>(
       `/api/servers/${serverId}/backups/${backupId}`,
     );
     return data;
@@ -46,7 +46,7 @@ export const backupsApi = {
     return response.data;
   },
   get: async (serverId: string, backupId: string) => {
-    const { data } = await apiClient.get<Backup>(`/api/servers/${serverId}/backups/${backupId}`);
+    const data = await apiClient.get<Backup>(`/api/servers/${serverId}/backups/${backupId}`);
     return data;
   },
 };

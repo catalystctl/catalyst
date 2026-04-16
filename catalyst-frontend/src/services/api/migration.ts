@@ -8,7 +8,7 @@ import type {
 
 export const migrationApi = {
   testConnection: async (url: string, key: string, clientApiKey?: string) => {
-    const { data } = await apiClient.post<PterodactylTestResult>('/api/admin/migration/test', { url, key, clientApiKey });
+    const data = await apiClient.post<PterodactylTestResult>('/api/admin/migration/test', { url, key, clientApiKey });
     return data;
   },
 
@@ -20,22 +20,22 @@ export const migrationApi = {
     nodeMappings: Record<string, string>;
     serverMappings: Record<string, string>;
   }) => {
-    const { data } = await apiClient.post<{ jobId: string }>('/api/admin/migration/start', payload);
+    const data = await apiClient.post<{ jobId: string }>('/api/admin/migration/start', payload);
     return data;
   },
 
   getStatus: async (jobId: string) => {
-    const { data } = await apiClient.get<MigrationJob>(`/api/admin/migration/${jobId}`);
+    const data = await apiClient.get<MigrationJob>(`/api/admin/migration/${jobId}`);
     return data;
   },
 
   listJobs: async () => {
-    const { data } = await apiClient.get<MigrationJob[]>('/api/admin/migration');
+    const data = await apiClient.get<MigrationJob[]>('/api/admin/migration');
     return data;
   },
 
   getCatalystNodes: async () => {
-    const { data } = await apiClient.get<CatalystNodeOption[]>('/api/admin/migration/catalyst-nodes');
+    const data = await apiClient.get<CatalystNodeOption[]>('/api/admin/migration/catalyst-nodes');
     return data;
   },
 
@@ -58,7 +58,7 @@ export const migrationApi = {
     jobId: string,
     params?: { phase?: string; status?: string; page?: number; limit?: number }
   ) => {
-    const { data } = await apiClient.get<MigrationStepsResponse>(
+    const data = await apiClient.get<MigrationStepsResponse>(
       `/api/admin/migration/${jobId}/steps`,
       { params }
     );

@@ -10,11 +10,11 @@ type ApiResponse<T> = {
 
 export const templatesApi = {
   list: async () => {
-    const { data } = await apiClient.get<ApiResponse<Template[]>>('/api/templates');
+    const data = await apiClient.get<ApiResponse<Template[]>>('/api/templates');
     return data.data || [];
   },
   get: async (templateId: string) => {
-    const { data } = await apiClient.get<ApiResponse<Template>>(`/api/templates/${templateId}`);
+    const data = await apiClient.get<ApiResponse<Template>>(`/api/templates/${templateId}`);
     return data.data;
   },
   create: async (payload: {
@@ -36,7 +36,7 @@ export const templatesApi = {
     allocatedCpuCores: number;
     features?: Template['features'];
   }) => {
-    const { data } = await apiClient.post<ApiResponse<Template>>('/api/templates', payload);
+    const data = await apiClient.post<ApiResponse<Template>>('/api/templates', payload);
     return data.data;
   },
   update: async (
@@ -61,11 +61,11 @@ export const templatesApi = {
       features?: Template['features'];
     }>,
   ) => {
-    const { data } = await apiClient.put<ApiResponse<Template>>(`/api/templates/${templateId}`, payload);
+    const data = await apiClient.put<ApiResponse<Template>>(`/api/templates/${templateId}`, payload);
     return data.data;
   },
   remove: async (templateId: string) => {
-    const { data } = await apiClient.delete<ApiResponse<void>>(`/api/templates/${templateId}`);
+    const data = await apiClient.delete<ApiResponse<void>>(`/api/templates/${templateId}`);
     return data;
   },
 };

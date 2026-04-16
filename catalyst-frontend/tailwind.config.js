@@ -10,9 +10,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['DM Sans', 'system-ui', 'sans-serif'],
-        display: ['Outfit', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        sans: ['"DM Sans Variable"', 'system-ui', 'sans-serif'],
+        display: ['"Outfit Variable"', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono Variable"', 'Fira Code', 'monospace'],
       },
       colors: {
         background: 'hsl(var(--background))',

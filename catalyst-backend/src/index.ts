@@ -1,5 +1,5 @@
-import "dotenv/config";
 import Fastify from "fastify";
+import fastifyCompress from "@fastify/compress";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -27,6 +27,7 @@ import { adminRoutes } from "./routes/admin";
 import { roleRoutes } from "./routes/roles";
 import { taskRoutes } from "./routes/tasks";
 import { bulkServerRoutes } from "./routes/bulk-servers";
+import { consoleStreamRoutes } from "./routes/console-stream";
 import { WebhookService } from "./services/webhook-service";
 import { TaskScheduler } from "./services/task-scheduler";
 import { alertRoutes } from "./routes/alerts";
@@ -295,6 +296,16 @@ const authenticate = async (request: any, reply: any) => {
 async function bootstrap() {
   try {
     // Register security plugins
+    // Response compression — gzip/br/deflate for smaller payloads
+    // Disabled by default (nginx handles it); set ENABLE_COMPRESSION=true to enable.
+    if (process.env.ENABLE_COMPRESSION === 'true') {
+      await app.register(fastifyCompress, {
+        global: true,
+        encodings: ['gzip', 'br', 'deflate'],
+        threshold: 1024, // Only compress responses > 1KB
+      });
+    }
+
     await app.register(fastifyHelmet, {
       contentSecurityPolicy: {
         directives: {
@@ -532,6 +543,8 @@ async function bootstrap() {
     await app.register(serverRoutes, {
       prefix: "/api/servers",
     });
+    // SSE console streaming — GET stream + POST command
+    await app.register((app) => consoleStreamRoutes(app, wsGateway), { prefix: "/api/servers" });
     await app.register(templateRoutes, { prefix: "/api/templates" });
     await app.register(nestRoutes, { prefix: "/api/nests" });
     await app.register(metricsRoutes, { prefix: "/api" });

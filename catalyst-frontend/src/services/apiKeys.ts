@@ -66,32 +66,32 @@ export const apiKeyService = {
    * List all API keys (admin only)
    */
   async list(): Promise<ApiKey[]> {
-    const response = await apiClient.get<{ data: ApiKey[] }>('/api/admin/api-keys');
-    return response.data.data;
+    const data = await apiClient.get<{ data: ApiKey[] }>('/api/admin/api-keys');
+    return data.data;
   },
 
   /**
    * Get a specific API key by ID
    */
   async get(id: string): Promise<ApiKey> {
-    const response = await apiClient.get<{ data: ApiKey }>(`/api/admin/api-keys/${id}`);
-    return response.data.data;
+    const data = await apiClient.get<{ data: ApiKey }>(`/api/admin/api-keys/${id}`);
+    return data.data;
   },
 
   /**
    * Create a new API key
    */
-  async create(data: CreateApiKeyRequest): Promise<CreateApiKeyResponse> {
-    const response = await apiClient.post<{ data: CreateApiKeyResponse }>('/api/admin/api-keys', data);
-    return response.data.data;
+  async create(payload: CreateApiKeyRequest): Promise<CreateApiKeyResponse> {
+    const result = await apiClient.post<{ data: CreateApiKeyResponse }>('/api/admin/api-keys', payload);
+    return result.data;
   },
 
   /**
    * Update an API key (name, enabled status)
    */
-  async update(id: string, data: UpdateApiKeyRequest): Promise<ApiKey> {
-    const response = await apiClient.patch<{ data: ApiKey }>(`/api/admin/api-keys/${id}`, data);
-    return response.data.data;
+  async update(id: string, payload: UpdateApiKeyRequest): Promise<ApiKey> {
+    const result = await apiClient.patch<{ data: ApiKey }>(`/api/admin/api-keys/${id}`, payload);
+    return result.data;
   },
 
   /**
@@ -105,7 +105,7 @@ export const apiKeyService = {
    * Get usage statistics for an API key
    */
   async getUsage(id: string): Promise<ApiKeyUsage> {
-    const response = await apiClient.get<{ data: ApiKeyUsage }>(`/api/admin/api-keys/${id}/usage`);
-    return response.data.data;
+    const data = await apiClient.get<{ data: ApiKeyUsage }>(`/api/admin/api-keys/${id}/usage`);
+    return data.data;
   },
 };

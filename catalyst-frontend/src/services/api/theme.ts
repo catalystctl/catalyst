@@ -60,7 +60,7 @@ type ApiResponse<T> = {
 
 export const themeApi = {
   getPublicSettings: async () => {
-    const { data } = await apiClient.get<ApiResponse<PublicThemeSettings>>(
+    const data = await apiClient.get<ApiResponse<PublicThemeSettings>>(
       '/api/theme-settings/public'
     );
     return data.data!;

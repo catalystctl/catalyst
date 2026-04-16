@@ -29,14 +29,14 @@ export const pluginManagerApi = {
       page?: number;
     },
   ) => {
-    const { data } = await apiClient.get<{ success: boolean; data?: PluginManagerSearchResponse }>(
+    const data = await apiClient.get<{ success: boolean; data?: PluginManagerSearchResponse }>(
       `/api/servers/${serverId}/plugin-manager/search`,
       { params },
     );
     return data.data;
   },
   versions: async (serverId: string, params: { provider: string; projectId: string }) => {
-    const { data } = await apiClient.get<{ success: boolean; data?: any }>(
+    const data = await apiClient.get<{ success: boolean; data?: any }>(
       `/api/servers/${serverId}/plugin-manager/versions`,
       { params },
     );
@@ -51,34 +51,34 @@ export const pluginManagerApi = {
       projectName?: string;
     },
   ) => {
-    const { data } = await apiClient.post<{ success: boolean; data?: { path: string } }>(
+    const data = await apiClient.post<{ success: boolean; data?: { path: string } }>(
       `/api/servers/${serverId}/plugin-manager/install`,
       payload,
     );
     return data.data;
   },
   installed: async (serverId: string) => {
-    const { data } = await apiClient.get<{ success: boolean; data: InstalledPlugin[] }>(
+    const data = await apiClient.get<{ success: boolean; data: InstalledPlugin[] }>(
       `/api/servers/${serverId}/plugin-manager/installed`,
     );
     return data.data ?? [];
   },
   uninstall: async (serverId: string, filename: string) => {
-    const { data } = await apiClient.post<{ success: boolean }>(
+    const data = await apiClient.post<{ success: boolean }>(
       `/api/servers/${serverId}/plugin-manager/uninstall`,
       { filename },
     );
     return data;
   },
   checkUpdates: async (serverId: string) => {
-    const { data } = await apiClient.post<{
+    const data = await apiClient.post<{
       success: boolean;
       data: { checked: number; updatesAvailable: number };
     }>(`/api/servers/${serverId}/plugin-manager/check-updates`);
     return data.data;
   },
   update: async (serverId: string, filenames: string[]) => {
-    const { data } = await apiClient.post<{
+    const data = await apiClient.post<{
       success: boolean;
       data: { filename: string; success: boolean; error?: string }[];
     }>(`/api/servers/${serverId}/plugin-manager/update`, { filenames });

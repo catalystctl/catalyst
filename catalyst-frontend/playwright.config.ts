@@ -3,7 +3,8 @@ import path from 'path';
 
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: false,
+  fullyParallel: true,
+  workers: 3,
   reporter: [
     ['list'],
     ['html', { outputFolder: 'playwright-report' }],

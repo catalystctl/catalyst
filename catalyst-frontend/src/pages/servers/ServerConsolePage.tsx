@@ -46,7 +46,7 @@ const itemVariants: Variants = {
 function ServerConsolePage() {
   const { serverId } = useParams();
   const { data: server } = useServer(serverId);
-  const { entries, send, isConnected, isLoading, isError, refetch, clear } = useConsole(serverId);
+  const { entries, send, isConnected, isConnecting, isLoading, isError, refetch, clear, streamStatus } = useConsole(serverId);
   const { eulaPrompt, isLoading: eulaLoading, respond: respondEula } = useEulaPrompt(serverId);
 
   const [command, setCommand] = useState('');
@@ -63,7 +63,8 @@ function ServerConsolePage() {
 
   const title = server?.name ?? serverId ?? 'Unknown server';
   const isSuspended = server?.status === 'suspended';
-  const canSend = Boolean(serverId) && isConnected && server?.status === 'running' && !isSuspended;
+  // canSend: allow commands when SSE is connected (or reconnecting) AND server is running
+  const canSend = Boolean(serverId) && (isConnected || streamStatus === 'reconnecting') && server?.status === 'running' && !isSuspended;
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -191,15 +192,23 @@ function ServerConsolePage() {
             {/* Connection Status */}
             <span
               className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
-                isConnected
+                streamStatus === 'connected'
                   ? 'border-success/50 text-success'
-                  : 'border-warning/30 text-warning'
+                  : streamStatus === 'reconnecting'
+                    ? 'border-warning/30 text-warning'
+                    : 'border-muted/30 text-muted-foreground'
               }`}
             >
               <span
-                className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'animate-pulse bg-success' : 'bg-warning'}`}
+                className={`h-1.5 w-1.5 rounded-full ${
+                  streamStatus === 'connected'
+                    ? 'animate-pulse bg-success'
+                    : streamStatus === 'reconnecting'
+                      ? 'animate-pulse bg-warning'
+                      : 'bg-muted'
+                }`}
               />
-              {isConnected ? 'Live' : 'Connecting'}
+              {streamStatus === 'connected' ? 'Live' : streamStatus === 'reconnecting' ? 'Reconnecting' : streamStatus === 'closed' ? 'Disconnected' : 'Connecting'}
             </span>
 
             <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />

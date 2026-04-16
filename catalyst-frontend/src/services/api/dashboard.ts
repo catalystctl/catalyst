@@ -25,20 +25,20 @@ export interface ResourceStats {
 
 const dashboardApi = {
   getStats: async (): Promise<DashboardStats> => {
-    const response = await apiClient.get('/api/dashboard/stats');
-    return response.data?.data ?? response.data;
+    const data = await apiClient.get<{ success?: boolean; data?: DashboardStats }>('/api/dashboard/stats');
+    return data.data ?? (data as unknown as DashboardStats);
   },
 
   getActivity: async (limit = 5): Promise<DashboardActivity[]> => {
-    const response = await apiClient.get('/api/dashboard/activity', {
+    const data = await apiClient.get<{ success?: boolean; data?: DashboardActivity[] }>('/api/dashboard/activity', {
       params: { limit },
     });
-    return response.data?.data ?? response.data;
+    return data.data ?? (data as unknown as DashboardActivity[]);
   },
 
   getResourceStats: async (): Promise<ResourceStats> => {
-    const response = await apiClient.get('/api/dashboard/resources');
-    return response.data?.data ?? response.data;
+    const data = await apiClient.get<{ success?: boolean; data?: ResourceStats }>('/api/dashboard/resources');
+    return data.data ?? (data as unknown as ResourceStats);
   },
 };
 
