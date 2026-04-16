@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { nodesApi } from '../../services/api/nodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 export type NodeAssignmentWithExpiration = {
   nodeId: string | null; // null for wildcard (*)
@@ -495,6 +496,7 @@ export function NodeAssignmentsSelector({
 
           {/* Expiration date modal */}
           {expirationNodeId && (
+            <ModalPortal>
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
               <div className="w-full max-w-sm rounded-xl border border-border bg-white p-4 shadow-surface-light dark:shadow-surface-dark dark:border-border dark:bg-surface-1">
                 <h3 className="text-sm font-semibold text-foreground dark:text-white mb-3">
@@ -526,6 +528,7 @@ export function NodeAssignmentsSelector({
                 </div>
               </div>
             </div>
+            </ModalPortal>
           )}
         </>
       )}

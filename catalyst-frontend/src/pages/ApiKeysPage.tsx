@@ -19,6 +19,7 @@ import EmptyState from '../components/shared/EmptyState';
 import { Input } from '../components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 // ── Animation Variants ──
 const containerVariants = {
@@ -432,6 +433,7 @@ export function ApiKeysPage() {
 
       {/* ── Delete Confirmation ── */}
       {deleteKey && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -492,6 +494,7 @@ export function ApiKeysPage() {
             </div>
           </motion.div>
         </div>
+        </ModalPortal>
       )}
     </motion.div>
   );

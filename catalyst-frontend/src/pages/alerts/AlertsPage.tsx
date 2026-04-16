@@ -25,6 +25,7 @@ import { useAuthStore } from '../../stores/authStore';
 import type { AlertRule, AlertSeverity, AlertType } from '../../types/alert';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 // ── Animation Variants ──
 const containerVariants = {
@@ -626,6 +627,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
 
       {/* ── Rule Create/Edit Modal ── */}
       {showRuleModal && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -843,6 +845,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
             </div>
           </motion.div>
         </div>
+        </ModalPortal>
       )}
 
       {/* ── Delete Rule Confirmation ── */}

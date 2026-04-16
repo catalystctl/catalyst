@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { tasksApi } from '../../services/api/tasks';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import type { Task } from '../../types/task';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 export const actionOptions: Array<{ value: Task['action']; label: string }> = [
   { value: 'restart', label: 'Restart server' },
@@ -109,6 +110,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
         Create task
       </button>
       {open ? (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-xl border border-border bg-white p-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
             <div className="flex items-center justify-between">
@@ -219,6 +221,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
     </div>
   );

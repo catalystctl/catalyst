@@ -30,6 +30,7 @@ import NodeAssignmentModal from '../../components/nodes/NodeAssignmentModal';
 import { nodesApi } from '../../services/api/nodes';
 import { useAuthStore } from '../../stores/authStore';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 // ── Animation Variants ──
 const containerVariants = {
@@ -67,6 +68,7 @@ function ModalShell({
 }) {
   if (!open) return null;
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -103,6 +105,7 @@ function ModalShell({
         )}
       </motion.div>
     </div>
+    </ModalPortal>
   );
 }
 

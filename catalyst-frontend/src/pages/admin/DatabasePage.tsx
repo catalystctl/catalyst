@@ -20,6 +20,7 @@ import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { useDatabaseHosts } from '../../hooks/useAdmin';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 // ── Animation Variants ──
 const containerVariants = {
@@ -44,6 +45,7 @@ function ModalShell({
 }) {
   if (!open) return null;
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -63,6 +65,7 @@ function ModalShell({
         )}
       </motion.div>
     </div>
+    </ModalPortal>
   );
 }
 

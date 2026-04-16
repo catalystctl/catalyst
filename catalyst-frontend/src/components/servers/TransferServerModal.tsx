@@ -5,6 +5,7 @@ import type { BackupStorageMode } from '../../types/server';
 import { useNodes } from '../../hooks/useNodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { Button } from '@/components/ui/button';
+import { ModalPortal } from '@/components/ui/modal-portal';
 import {
   Select,
   SelectContent,
@@ -51,6 +52,7 @@ function TransferServerModal({ serverId, disabled = false }: Props) {
         Transfer
       </Button>
       {open ? (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
             <div className="flex items-center justify-between">
@@ -111,6 +113,7 @@ function TransferServerModal({ serverId, disabled = false }: Props) {
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
     </div>
   );

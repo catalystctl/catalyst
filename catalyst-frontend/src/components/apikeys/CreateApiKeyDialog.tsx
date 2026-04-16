@@ -6,6 +6,7 @@ import { CreateApiKeyRequest } from '../../services/apiKeys';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 interface CreateApiKeyDialogProps {
   open: boolean;
@@ -67,6 +68,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
   if (!open) return null;
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -196,5 +198,6 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
         </div>
       </motion.div>
     </div>
+    </ModalPortal>
   );
 }

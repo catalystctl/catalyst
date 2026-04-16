@@ -6,6 +6,7 @@ import { templatesApi } from '../../services/api/templates';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { normalizeTemplateImport, parseEggContent } from '../../utils/pterodactylImport';
 import TemplateProviderEditor, { extractProviderIds } from './TemplateProviderEditor';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 type VariableDraft = {
   name: string;
@@ -428,6 +429,7 @@ function TemplateCreateModal() {
         />
       </div>
       {open ? (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10 backdrop-blur-sm">
           <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl transition-all duration-300 dark:border-border dark:bg-surface-1">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5 dark:border-border">
@@ -996,6 +998,7 @@ function TemplateCreateModal() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
     </div>
   );

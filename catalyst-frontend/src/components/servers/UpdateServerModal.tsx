@@ -6,6 +6,7 @@ import { useServer } from '../../hooks/useServer';
 import { useWebSocketStore } from '../../stores/websocketStore';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { nodesApi } from '../../services/api/nodes';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 type Props = {
   serverId: string;
@@ -205,6 +206,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
         </button>
       )}
       {open ? (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
           <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
             <div className="flex items-center justify-between">
@@ -354,6 +356,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
     </>
   );

@@ -29,6 +29,7 @@ import type { FileEntry } from '../../types/file';
 import { formatFileMode } from '../../utils/formatters';
 import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
 import { buildBreadcrumbs, getParentPath, joinPath, normalizePath } from '../../utils/filePaths';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 type CreatePayload = {
   name: string;
@@ -898,6 +899,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
 
       {/* File editor overlay */}
       {activeFile && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6">
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -921,10 +923,12 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
               />
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Permissions modal */}
       {permissionsEntry && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -979,10 +983,12 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
             </div>
           </form>
         </div>
+        </ModalPortal>
       )}
 
       {/* Archive browser modal */}
       {archiveBrowsePath && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6">
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -1065,9 +1071,11 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {bufferError && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -1106,6 +1114,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
             </button>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

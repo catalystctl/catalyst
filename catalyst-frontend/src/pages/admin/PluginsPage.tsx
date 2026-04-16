@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { usePluginContext } from '../../plugins/PluginProvider';
 import type { PluginManifest } from '../../plugins/types';
 import EmptyState from '../../components/shared/EmptyState';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 // ── Animation Variants ──
 const containerVariants = {
@@ -231,6 +232,7 @@ function PluginSettingsModal({
   if (!open) return null;
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -334,6 +336,7 @@ function PluginSettingsModal({
         </div>
       </motion.div>
     </div>
+    </ModalPortal>
   );
 }
 

@@ -40,6 +40,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatsCard } from '@/components/ui/stats-card';
 import { cn } from '@/lib/utils';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 // ═══════════════════════════════════════════════════════════════
 //  CONSTANTS & HELPERS

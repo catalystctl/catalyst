@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { serversApi } from '../../services/api/servers';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { Button } from '@/components/ui/button';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 type Props = {
   serverId: string;
@@ -43,6 +44,7 @@ function DeleteServerDialog({ serverId, serverName, disabled = false, open: cont
         </Button>
       )}
       {open ? (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-xl">
             <div className="text-lg font-semibold text-foreground dark:text-white">Delete server</div>
@@ -65,6 +67,7 @@ function DeleteServerDialog({ serverId, serverName, disabled = false, open: cont
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
     </>
   );

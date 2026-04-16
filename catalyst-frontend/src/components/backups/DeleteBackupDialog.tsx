@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { backupsApi } from '../../services/api/backups';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import type { Backup } from '../../types/backup';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 function DeleteBackupDialog({
   serverId,
@@ -41,6 +42,7 @@ function DeleteBackupDialog({
         Delete
       </button>
       {open ? (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
           <div className="w-full max-w-sm rounded-xl border border-border dark:border-border bg-white dark:bg-zinc-950 p-6 shadow-xl">
             <div className="text-lg font-semibold text-foreground dark:text-zinc-100">Delete backup</div>
@@ -64,6 +66,7 @@ function DeleteBackupDialog({
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
     </div>
   );

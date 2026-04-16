@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ModalPortal } from '@/components/ui/modal-portal';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { serversApi } from '../../services/api/servers';
@@ -331,6 +332,7 @@ function CreateServerModal() {
         New Server
       </button>
       {open ? (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
           <div className="w-full max-w-4xl max-h-[90vh] rounded-2xl border border-border bg-card shadow-2xl flex flex-col dark:border-border dark:bg-card">
             {/* Header */}
@@ -849,6 +851,7 @@ function CreateServerModal() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
     </>
   );

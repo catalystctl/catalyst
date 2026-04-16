@@ -4,6 +4,7 @@ import { tasksApi } from '../../services/api/tasks';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import type { Task } from '../../types/task';
 import { actionOptions } from './CreateTaskModal';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 function EditTaskModal({
   serverId,
@@ -62,6 +63,7 @@ function EditTaskModal({
         Edit
       </button>
       {open ? (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-xl border border-border bg-white p-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
             <div className="flex items-center justify-between">
@@ -140,6 +142,7 @@ function EditTaskModal({
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
     </div>
   );

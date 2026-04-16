@@ -28,6 +28,7 @@ import { useAuditLogs } from '../../hooks/useAdmin';
 import { adminApi } from '../../services/api/admin';
 import type { AuditLogEntry } from '../../types/admin';
 import Pagination from '../../components/shared/Pagination';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 const pageSize = 50;
 
@@ -88,6 +89,7 @@ function LogDetailModal({
   const hasMetadata = metadataEntries.length > 0;
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -222,6 +224,7 @@ function LogDetailModal({
         </div>
       </motion.div>
     </div>
+    </ModalPortal>
   );
 }
 

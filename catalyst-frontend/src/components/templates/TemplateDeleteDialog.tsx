@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { templatesApi } from '../../services/api/templates';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 type Props = {
   templateId: string;
@@ -49,6 +50,7 @@ function TemplateDeleteDialog({ templateId, templateName, onDeleted, buttonClass
         </button>
       )}
       {open ? (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-xl border border-border bg-white p-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
             <div className="text-lg font-semibold text-foreground dark:text-white">Delete template</div>
@@ -73,6 +75,7 @@ function TemplateDeleteDialog({ templateId, templateName, onDeleted, buttonClass
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
     </>
   );

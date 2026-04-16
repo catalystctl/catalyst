@@ -42,6 +42,7 @@ import { notifyError, notifySuccess } from '../../utils/notify';
 import { NodeAssignmentsSelector } from '../../components/admin/NodeAssignmentsSelector';
 import type { NodeAssignmentWithExpiration } from '../../components/admin/NodeAssignmentsSelector';
 import type { AdminUser } from '../../types/admin';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 const pageSize = 20;
 
@@ -117,6 +118,7 @@ function ModalShell({
 }) {
   if (!open) return null;
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -148,6 +150,7 @@ function ModalShell({
         )}
       </motion.div>
     </div>
+    </ModalPortal>
   );
 }
 

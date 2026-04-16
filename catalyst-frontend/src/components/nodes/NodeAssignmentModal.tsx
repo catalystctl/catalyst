@@ -4,6 +4,7 @@ import { nodesApi } from '../../services/api/nodes';
 import { adminApi } from '../../services/api/admin';
 import { rolesApi } from '../../services/api/roles';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 type Props = {
   nodeId: string;
@@ -90,6 +91,7 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
   if (!open) return null;
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
       <div className="w-full max-w-lg rounded-xl border border-border bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
         {/* Header */}
@@ -260,6 +262,7 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 

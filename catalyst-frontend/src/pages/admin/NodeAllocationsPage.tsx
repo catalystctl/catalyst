@@ -5,6 +5,7 @@ import apiClient from '../../services/api/client';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { useNodes } from '../../hooks/useNodes';
 import { adminApi } from '../../services/api/admin';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 interface NodeAllocation {
   id: string;
@@ -576,6 +577,7 @@ function NodeAllocationsPage() {
 
       {/* Create Port Allocations Modal */}
       {showCreatePortModal && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-2xl rounded-2xl border border-border bg-white p-6 shadow-xl dark:border-border dark:bg-surface-1">
             <h2 className="text-xl font-semibold text-foreground dark:text-white">
@@ -655,10 +657,12 @@ function NodeAllocationsPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Create IP Pool Modal */}
       {showCreatePoolModal && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-2xl rounded-2xl border border-border bg-white p-6 shadow-xl dark:border-border dark:bg-surface-1">
             <h2 className="text-xl font-semibold text-foreground dark:text-white">
@@ -783,6 +787,7 @@ function NodeAllocationsPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );
