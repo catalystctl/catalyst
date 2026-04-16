@@ -41,6 +41,7 @@ import PluginTabPage from './pages/PluginTabPage';
 import PluginRoutePage from './pages/PluginRoutePage';
 import { PluginProvider } from './plugins/PluginProvider';
 import NodeAllocationsPage from './pages/admin/NodeAllocationsPage';
+import MigrationPage from './pages/admin/MigrationPage';
 
 function App() {
   useAuthInit();
@@ -251,6 +252,14 @@ function App() {
               element={
                 <ProtectedRoute requirePermissions={['apikey.manage', 'admin.read', 'admin.write']}>
                   <ApiKeysPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="admin/migration"
+              element={
+                <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
+                  <MigrationPage />
                 </ProtectedRoute>
               }
             />

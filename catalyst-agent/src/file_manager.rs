@@ -5,7 +5,7 @@ use tracing::{debug, info, warn};
 
 use crate::{AgentError, AgentResult};
 
-const MAX_FILE_SIZE: u64 = 100 * 1024 * 1024; // 100MB
+const MAX_FILE_SIZE: u64 = 500 * 1024 * 1024; // 500MB
 
 pub struct FileManager {
     data_dir: PathBuf,
@@ -35,9 +35,27 @@ impl FileManager {
             )));
         }
 
-        let canonical_base = server_base
-            .canonicalize()
-            .map_err(|_| AgentError::PermissionDenied("Server directory missing".to_string()))?;
+        // Try to canonicalize the server base. If it doesn't exist (e.g. server was
+        // just created or migrated), fall back to a logical path check using the
+        // data_dir (which must exist) as the trust anchor.
+        let canonical_base = match server_base.canonicalize() {
+            Ok(p) => p,
+            Err(_) => {
+                let data_dir_canon = self.data_dir.canonicalize().map_err(|_| {
+                    AgentError::FileSystemError(format!(
+                        "Data directory does not exist: {:?}",
+                        self.data_dir
+                    ))
+                })?;
+                let resolved = data_dir_canon.join(server_id);
+                if !resolved.starts_with(&data_dir_canon) {
+                    return Err(AgentError::PermissionDenied(
+                        "Server ID escapes data directory".to_string(),
+                    ));
+                }
+                resolved
+            }
+        };
 
         let normalized = if requested.is_absolute() {
             canonical_base.join(requested_path.trim_start_matches('/'))
@@ -347,6 +365,42 @@ impl FileManager {
             .map_err(|e| AgentError::FileSystemError(format!("Failed to chmod: {}", e)))?;
 
         info!("Permissions set: {:?} -> {:o}", full_path, mode);
+        Ok(())
+    }
+
+    /// Create a directory within a server's data directory.
+    /// Unlike other operations, this creates the server base dir if it doesn't exist.
+    pub async fn mkdir(&self, server_id: &str, path: &str) -> AgentResult<()> {
+        // Validate server_id for traversal
+        if server_id.contains('/') || server_id.contains('\\') {
+            return Err(AgentError::InvalidRequest("Invalid server id".to_string()));
+        }
+        let requested = PathBuf::from(path);
+        if requested
+            .components()
+            .any(|component| matches!(component, std::path::Component::ParentDir))
+        {
+            return Err(AgentError::PermissionDenied(format!(
+                "Path traversal attempt detected: {}",
+                path
+            )));
+        }
+
+        // Build the full path: data_dir / server_id / path
+        let server_base = self.data_dir.join(server_id);
+        let normalized = if requested.is_absolute() {
+            server_base.join(path.trim_start_matches('/'))
+        } else {
+            server_base.join(path)
+        };
+
+        debug!("Creating directory: {:?}", normalized);
+
+        fs::create_dir_all(&normalized)
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("Failed to create directory: {}", e)))?;
+
+        info!("Directory created: {:?}", normalized);
         Ok(())
     }
 

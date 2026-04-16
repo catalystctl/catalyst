@@ -313,7 +313,9 @@ pub struct ContainerConfig<'a> {
     pub startup_command: &'a str,
     pub env: &'a HashMap<String, String>,
     pub memory_mb: u64,
+    pub swap_mb: u64,
     pub cpu_cores: u64,
+    pub io_weight: u64,
     pub data_dir: &'a str,
     pub port: u16,
     pub port_bindings: &'a HashMap<u16, u16>,
@@ -1923,6 +1925,13 @@ impl ContainerdRuntime {
         };
 
         let mem_limit = (config.memory_mb as i64) * 1024 * 1024;
+        // Swap: memory + swap (0 means no swap limit). OCI spec uses
+        // memory.swap as the total (memory + swap), not swap alone.
+        let mem_swap = if config.swap_mb > 0 {
+            Some(((config.memory_mb + config.swap_mb) as i64) * 1024 * 1024)
+        } else {
+            None
+        };
         let cpu_quota = (config.cpu_cores as i64) * 100_000;
         let cgroup_path = format!("/{}/{}", self.namespace, config.container_id);
         // Runtime containers run as non-root (1000:1000) and need minimal capabilities.
@@ -1987,7 +1996,9 @@ impl ContainerdRuntime {
                 "capabilities":{"bounding":caps,"effective":caps,"permitted":caps,"ambient":caps},
                 "noNewPrivileges":true,"rlimits":[{"type":"RLIMIT_NOFILE","hard":65536u64,"soft":65536u64}]},
             "root":{"path":"rootfs","readonly":false},"hostname":config.container_id,"mounts":mounts,
-            "linux":{"cgroupsPath":cgroup_path,"resources":{"memory":{"limit":mem_limit},"cpu":{"quota":cpu_quota,"period":100000u64},
+            "linux":{"cgroupsPath":cgroup_path,"resources":{"memory":{"limit":mem_limit,
+                "swap":mem_swap},"cpu":{"quota":cpu_quota,"period":100000u64},
+                "blockIO":{"weight":config.io_weight},
                 "devices":devices},
                 "namespaces":ns,"maskedPaths":masked_paths(),"readonlyPaths":readonly_paths(),
                 "seccomp": default_seccomp_profile()}

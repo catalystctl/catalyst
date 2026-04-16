@@ -117,52 +117,23 @@ export function validateAndNormalizePath(
   const normalized = normalizeRequestPath(resolvedPath);
   const fullPath = path.join(serverBase, normalized);
 
-  // Canonical validation (resolves symlinks)
-  try {
-    // Check if server base directory exists
-    let canonicalBase: string;
-    try {
-      canonicalBase = fs.realpathSync(serverBase);
-    } catch (error) {
-      throw new Error('Server directory does not exist');
-    }
+  // Logical path traversal check (no filesystem access — files live on the agent,
+  // not necessarily on this backend machine)
+  const resolved = path.resolve(fullPath);
+  const resolvedBase = path.resolve(serverBase);
 
-    // For the full path, we need to handle the case where the file doesn't exist yet
-    // In that case, we check the parent directory
-    let canonicalPath: string;
-    try {
-      canonicalPath = fs.realpathSync(fullPath);
-    } catch (error) {
-      // File doesn't exist, check parent directory
-      const parentDir = path.dirname(fullPath);
-      try {
-        const canonicalParent = fs.realpathSync(parentDir);
-        // Ensure parent is within server base
-        if (!canonicalParent.startsWith(canonicalBase)) {
-          throw new Error('Parent directory is outside server directory');
-        }
-        // For new files, we can't resolve the full path, so we use the normalized path
-        canonicalPath = fullPath;
-      } catch (parentError) {
-        throw new Error('Cannot resolve parent directory');
-      }
-    }
-
-    // Validate that canonical path is within server base
-    if (!canonicalPath.startsWith(canonicalBase)) {
-      logSecurityEvent(userId, serverId, resolvedPath, 'Canonical path is outside server directory');
-      throw new Error('Path traversal attempt detected');
-    }
-
-    return normalized;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('Path traversal')) {
-      throw error;
-    }
-    // Log security event for other errors
-    logSecurityEvent(userId, serverId, resolvedPath, error instanceof Error ? error.message : 'Path validation failed');
-    throw new Error('Path validation failed');
+  if (!resolved.startsWith(resolvedBase + path.sep) && resolved !== resolvedBase) {
+    logSecurityEvent(userId, serverId, resolvedPath, 'Path traversal attempt detected');
+    throw new Error('Path traversal attempt detected');
   }
+
+  // Block null bytes
+  if (resolvedPath.includes('\0')) {
+    logSecurityEvent(userId, serverId, resolvedPath, 'Null byte in path');
+    throw new Error('Invalid path');
+  }
+
+  return normalized;
 }
 
 /**

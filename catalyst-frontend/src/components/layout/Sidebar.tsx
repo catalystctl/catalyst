@@ -26,6 +26,7 @@ import {
   Plug,
   Activity,
   Lock,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { useState, MouseEvent, useMemo } from 'react';
 import { cn } from '@/lib/utils';
@@ -144,6 +145,12 @@ const adminSections = [
         to: '/admin/security',
         label: 'Security',
         icon: Lock,
+        permissions: ['admin.read', 'admin.write'],
+      },
+      {
+        to: '/admin/migration',
+        label: 'Migration',
+        icon: ArrowRightLeft,
         permissions: ['admin.read', 'admin.write'],
       },
     ],

@@ -283,6 +283,76 @@ const syncPortEnvironmentVariables = (
   return syncedEnv;
 };
 
+/**
+ * Inject Pterodactyl-compatible environment variables for migrated servers.
+ * Many Pterodactyl eggs reference these variables in install scripts
+ * and startup commands (e.g. server.properties, MOTD, Java heap sizing).
+ *
+ * These are injected ONLY if the egg already defines them (i.e. they exist
+ * as keys in the template's variable list or server's environment), so
+ * non-Pterodactyl servers are unaffected.
+ */
+const injectPterodactylCompatibilityVars = (
+  environment: Record<string, string>,
+  server: { uuid: string; name: string; primaryIp: string | null; primaryPort: number; allocatedMemoryMb: number; allocatedDiskMb: number },
+  portBindings?: Record<number, number>
+): Record<string, string> => {
+  const env = { ...environment };
+
+  // SERVER_IP — primary IP (many eggs use this for server-ip= in properties)
+  if ("SERVER_IP" in env && server.primaryIp) {
+    env.SERVER_IP = server.primaryIp;
+  }
+
+  // SERVER_UUID — server identifier (some eggs use for logging/identification)
+  if ("SERVER_UUID" in env) {
+    env.SERVER_UUID = server.uuid;
+  }
+
+  // SERVER_NAME — used in MOTD, server.properties, etc.
+  if ("SERVER_NAME" in env) {
+    env.SERVER_NAME = server.name;
+  }
+
+  // SERVER_TOTAL_MEMORY — Java heap sizing: ${SERVER_TOTAL_MEMORY}M
+  if ("SERVER_TOTAL_MEMORY" in env) {
+    env.SERVER_TOTAL_MEMORY = String(server.allocatedMemoryMb);
+  }
+
+  // SERVER_TOTAL_DISK — some eggs check available disk space
+  if ("SERVER_TOTAL_DISK" in env) {
+    env.SERVER_TOTAL_DISK = String(server.allocatedDiskMb);
+  }
+
+  // SERVER_PRIMARY_PORT — distinguish primary from additional ports
+  if ("SERVER_PRIMARY_PORT" in env) {
+    env.SERVER_PRIMARY_PORT = String(server.primaryPort);
+  }
+
+  // SERVER_PRIMARY_IP — same as SERVER_IP but explicit
+  if ("SERVER_PRIMARY_IP" in env && server.primaryIp) {
+    env.SERVER_PRIMARY_IP = server.primaryIp;
+  }
+
+  // SERVER_DESCRIPTION — used by some eggs for MOTD
+  if ("SERVER_DESCRIPTION" in env && server.name) {
+    env.SERVER_DESCRIPTION = server.name;
+  }
+
+  // SERVER_PORT_{port} — multi-port games (voice servers, query ports)
+  // Only inject for ports that are already referenced in the environment
+  if (portBindings) {
+    for (const [containerPort] of Object.entries(portBindings)) {
+      const key = `SERVER_PORT_${containerPort}`;
+      if (key in env) {
+        env[key] = containerPort;
+      }
+    }
+  }
+
+  return env;
+};
+
 const resolveHostNetworkIp = (server: any, fallbackNode?: { publicAddress?: string }) => {
   if (server?.networkMode !== "host") {
     return null;
@@ -6061,9 +6131,16 @@ export async function serverRoutes(app: FastifyInstance) {
 
       // Sync port environment variables with primaryPort
       const portBindings = parseStoredPortBindings(server.portBindings);
-      const syncedEnvironment = syncPortEnvironmentVariables(
+      let syncedEnvironment = syncPortEnvironmentVariables(
         environment,
         server.primaryPort,
+        portBindings
+      );
+
+      // Inject Pterodactyl-compatible env vars for migrated servers
+      syncedEnvironment = injectPterodactylCompatibilityVars(
+        syncedEnvironment,
+        server,
         portBindings
       );
 
@@ -6076,6 +6153,8 @@ export async function serverRoutes(app: FastifyInstance) {
         allocatedMemoryMb: server.allocatedMemoryMb,
         allocatedCpuCores: server.allocatedCpuCores,
         allocatedDiskMb: server.allocatedDiskMb,
+        allocatedSwapMb: server.allocatedSwapMb,
+        ioWeight: server.ioWeight,
         primaryPort: server.primaryPort,
         portBindings: portBindings,
         networkMode: server.networkMode,

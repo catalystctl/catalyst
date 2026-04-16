@@ -83,6 +83,8 @@ export interface Server {
   allocatedMemoryMb?: number;
   allocatedCpuCores?: number;
   allocatedDiskMb?: number;
+  allocatedSwapMb?: number;
+  ioWeight?: number;
   backupStorageMode?: BackupStorageMode;
   backupRetentionCount?: number;
   backupRetentionDays?: number;

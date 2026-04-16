@@ -46,6 +46,7 @@ import { PluginLoader } from "./plugins/loader";
 import { pluginRoutes } from "./routes/plugins";
 import { FileTunnelService } from "./services/file-tunnel";
 import { fileTunnelRoutes } from "./routes/file-tunnel";
+import { migrationRoutes } from "./routes/migration";
 import { verifyAgentApiKey } from "./lib/agent-auth";
 
 const logger = pino(
@@ -551,6 +552,9 @@ async function bootstrap() {
       Math.min(initialSecuritySettings.fileTunnelMaxUploadMb * 1024 * 1024, 500 * 1024 * 1024), // 500MB hard cap
     );
     await app.register((app) => fileTunnelRoutes(app, prisma, logger, fileTunnel), { bodyLimit: fileTunnelBodyLimit });
+
+    // Migration routes (Pterodactyl → Catalyst)
+    await app.register((app) => migrationRoutes(app));
 
     // Agent binary download endpoint (public)
     app.get("/api/agent/download", async (request, reply) => {

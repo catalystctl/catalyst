@@ -23,6 +23,8 @@ model User {
   banReason        String?
   banExpires       DateTime?
   username         String    @unique
+  firstName        String?
+  lastName         String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -477,6 +479,8 @@ model Server {
   allocatedMemoryMb Int
   allocatedCpuCores Int
   allocatedDiskMb   Int            @default(10240)
+  allocatedSwapMb  Int            @default(0)
+  ioWeight          Int            @default(500)
 
   // Container info
   containerId   String?
@@ -612,6 +616,8 @@ model ScheduledTask {
   action      String // restart, stop, start, backup, command
   payload     Json? // Additional data (e.g., command to run)
   schedule    String // Cron expression (e.g., "0 3 * * *" for 3 AM daily)
+  timeOffset  Int     @default(0) // Seconds to delay before executing (Pterodactyl schedule task sequencing)
+  sequenceId  Int?           // Execution order within a schedule (from Pterodactyl)
   enabled     Boolean   @default(true)
   lastRunAt   DateTime?
   nextRunAt   DateTime?
@@ -808,4 +814,46 @@ model PluginStorage {
 
   @@unique([pluginName, key])
   @@index([pluginName])
+}
+
+// ============================================================================
+// MIGRATION
+// ============================================================================
+
+model MigrationJob {
+  id            String   @id @default(cuid())
+  status        String   @default("pending") // pending, validating, running, paused, completed, failed, cancelled
+  sourceUrl     String
+  sourceKey     String
+  sourceVersion String?
+  config        Json     @default("{}") // { scope: "full"|"node"|"server", nodeMapping: "hybrid"|"create"|"map", dryRun: bool, phases: string[], selectedNodes: string[], selectedServers: string[] }
+  bypassToken   String?  // Cryptographic token authorising file-tunnel size-limit bypass for this migration
+  currentPhase  String?
+  progress      Json     @default("{}") // { phase, total, completed, failed, skipped }
+  error         String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  steps         MigrationStep[]
+}
+
+model MigrationStep {
+  id          String   @id @default(cuid())
+  jobId       String
+  job         MigrationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  phase       String   // locations, nodes, templates, users, servers, databases, schedules, backups, files
+  action      String   // e.g., "import_location", "import_node", "import_template", etc.
+  sourceId    String?  // Pterodactyl entity ID
+  targetId    String?  // Catalyst entity ID
+  status      String   @default("pending") // pending, running, completed, failed, skipped
+  error       String?
+  durationMs  Int?
+  metadata    Json?    // step-specific data for resume
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  @@index([jobId, phase, status])
+  @@index([jobId, status])
 }

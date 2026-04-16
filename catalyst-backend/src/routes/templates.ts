@@ -300,6 +300,22 @@ export async function templateRoutes(app: FastifyInstance) {
       if (egg.config?.logs) {
         eggFeatures.logDetection = egg.config.logs;
       }
+      // Store Pterodactyl config file definitions for the config editor
+      if (egg.config?.files) {
+        try {
+          const configFiles = typeof egg.config.files === 'string'
+            ? JSON.parse(egg.config.files)
+            : egg.config.files;
+          if (typeof configFiles === 'object' && configFiles !== null) {
+            const keys = Object.keys(configFiles);
+            if (keys.length > 0) {
+              eggFeatures.pterodactylConfigFiles = configFiles;
+              eggFeatures.configFile = keys[0];
+              eggFeatures.configFiles = keys;
+            }
+          }
+        } catch { /* ignore invalid config files */ }
+      }
 
       const template = await prisma.serverTemplate.create({
         data: {

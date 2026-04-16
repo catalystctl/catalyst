@@ -1881,6 +1881,8 @@ impl WebSocketHandler {
                 AgentError::InvalidRequest("Missing allocatedCpuCores".to_string())
             })?;
 
+            let swap_mb = msg["allocatedSwapMb"].as_u64().unwrap_or(0);
+            let io_weight = msg["ioWeight"].as_u64().unwrap_or(500);
             let disk_mb = msg["allocatedDiskMb"].as_u64().unwrap_or(10240);
 
             let primary_port = msg["primaryPort"]
@@ -2026,6 +2028,8 @@ impl WebSocketHandler {
                     env: &env_map,
                     memory_mb,
                     cpu_cores,
+                    swap_mb,
+                    io_weight,
                     data_dir: &host_server_dir,
                     port: primary_port,
                     port_bindings: &port_bindings,
@@ -2527,6 +2531,12 @@ impl WebSocketHandler {
                 .list_dir(server_uuid, path)
                 .await
                 .map(|entries| Some(json!({ "entries": entries }))),
+            "mkdir" => {
+                self.file_manager
+                    .mkdir(server_uuid, path)
+                    .await
+                    .map(|_| None)
+            }
             _ => {
                 return Err(AgentError::InvalidRequest(format!(
                     "Unknown file operation: {}",

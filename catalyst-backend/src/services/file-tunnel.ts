@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { Logger } from "pino";
 import { getSecuritySettings } from "./mailer";
+import { prisma } from "../db.js";
 
 export interface FileTunnelRequest {
   requestId: string;
@@ -68,7 +69,8 @@ export class FileTunnelService {
     serverUuid: string,
     filePath: string,
     data?: Record<string, unknown>,
-    uploadData?: Buffer
+    uploadData?: Buffer,
+    options?: { bypassToken?: string }
   ): Promise<FileTunnelResponse> {
     const settings = await getSecuritySettings();
 
@@ -83,7 +85,27 @@ export class FileTunnelService {
     if (uploadData) {
       const maxSizeBytes = settings.fileTunnelMaxUploadMb * 1024 * 1024;
       if (uploadData.length > maxSizeBytes) {
-        throw new Error(`Upload size ${uploadData.length} exceeds limit ${maxSizeBytes}`);
+        // Allow bypass only with a valid migration token
+        if (options?.bypassToken) {
+          const valid = await prisma.migrationJob.findFirst({
+            where: {
+              bypassToken: options.bypassToken,
+              status: { in: ["running", "validating"] },
+            },
+            select: { id: true },
+          });
+          if (!valid) {
+            throw new Error(
+              `Upload size ${uploadData.length} exceeds limit ${maxSizeBytes} and migration bypass token is invalid or expired`
+            );
+          }
+          this.logger.warn(
+            { nodeId, sizeBytes: uploadData.length, maxSizeBytes, jobId: valid.id },
+            "File tunnel upload bypassing size limit (active migration job)"
+          );
+        } else {
+          throw new Error(`Upload size ${uploadData.length} exceeds limit ${maxSizeBytes}`);
+        }
       }
     }
 
