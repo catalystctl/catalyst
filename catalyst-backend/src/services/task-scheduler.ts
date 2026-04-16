@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import cronParser from 'cron-parser';
+import { CronExpressionParser } from 'cron-parser';
 import type { PrismaClient } from '@prisma/client';
 import type pino from 'pino';
 
@@ -217,7 +217,7 @@ export class TaskScheduler {
    * Simple next run calculation (approximation)
    */
   calculateNextRun(schedule: string, baseDate = new Date()): Date {
-    const interval = (cronParser as any).parseExpression(schedule, {
+    const interval = CronExpressionParser.parse(schedule, {
       currentDate: baseDate,
       tz: process.env.TZ || 'UTC',
     });
