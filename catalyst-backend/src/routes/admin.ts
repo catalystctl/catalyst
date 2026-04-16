@@ -314,6 +314,17 @@ export async function adminRoutes(app: FastifyInstance) {
         },
       });
 
+      // Broadcast user_created event to all global SSE subscribers
+      const wsGateway = (app as any).wsGateway;
+      if (wsGateway?.pushToGlobalSubscribers) {
+        wsGateway.pushToGlobalSubscribers('user_created', {
+          type: 'user_created',
+          user: createdUser,
+          createdBy: user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       return reply.status(201).send({ ...createdUser, warning: emailWarning });
     }
   );
@@ -657,6 +668,18 @@ export async function adminRoutes(app: FastifyInstance) {
       const webhookService: any = (app as any).webhookService;
       if (webhookService) {
         webhookService.userDeleted(userId, existingUser.email, existingUser.username, user.userId).catch(() => {});
+      }
+
+      // Broadcast user_deleted event to all global SSE subscribers
+      if (wsGateway?.pushToGlobalSubscribers) {
+        wsGateway.pushToGlobalSubscribers('user_deleted', {
+          type: 'user_deleted',
+          userId,
+          email: existingUser.email,
+          username: existingUser.username,
+          deletedBy: user.userId,
+          timestamp: new Date().toISOString(),
+        });
       }
 
       return reply.send({ success: true });
@@ -1196,6 +1219,11 @@ export async function adminRoutes(app: FastifyInstance) {
                   details: {},
                 },
               });
+
+              const wsGateway = (app as any).wsGateway;
+              if (wsGateway?.pushToAdminSubscribers) {
+                wsGateway.pushToAdminSubscribers('server_deleted', { type: 'server_deleted', serverId: server.id, serverName: server.name, deletedBy: user.userId, timestamp: new Date().toISOString() });
+              }
               return { serverId: server.id, status: 'success' };
             }
 

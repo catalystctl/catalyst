@@ -20,6 +20,7 @@ import { serverRoutes } from "./routes/servers";
 import { templateRoutes } from "./routes/templates";
 import { nestRoutes } from "./routes/nests";
 import { metricsRoutes } from "./routes/metrics";
+import { adminEventsRoutes } from "./routes/admin-events";
 import { metricsStreamRoutes } from "./routes/metrics-stream";
 import { backupRoutes } from "./routes/backups";
 import { RbacMiddleware } from "./middleware/rbac";
@@ -555,6 +556,7 @@ async function bootstrap() {
     await app.register(metricsRoutes, { prefix: "/api" });
     await app.register(backupRoutes, { prefix: "/api/servers" });
     await app.register(adminRoutes, { prefix: "/api/admin" });
+    await app.register((app) => adminEventsRoutes(app, wsGateway), { prefix: "/api/admin/events" });
     await app.register(roleRoutes, { prefix: "/api/roles" });
     await app.register(taskRoutes, { prefix: "/api/servers" });
     await app.register(bulkServerRoutes, { prefix: "/api/servers" });

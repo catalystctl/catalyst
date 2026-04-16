@@ -1,0 +1,79 @@
+/**
+ * SSE service for admin entity events.
+ *
+ * Connects to /api/admin/events and receives real-time create/update/delete
+ * events for users, templates, alerts, servers, and nodes.
+ *
+ * This is a separate stream from the server-scoped SSE (which is for server state updates).
+ * Admin events are broadcast to all admin SSE subscribers globally.
+ */
+export type AdminEventType =
+  | 'user_created'
+  | 'user_deleted'
+  | 'user_updated'
+  | 'server_created'
+  | 'server_deleted'
+  | 'node_created'
+  | 'node_deleted'
+  | 'template_created'
+  | 'template_deleted'
+  | 'template_updated'
+  | 'alert_rule_created'
+  | 'alert_rule_deleted'
+  | 'alert_rule_updated';
+
+const ADMIN_EVENT_TYPES: AdminEventType[] = [
+  'user_created',
+  'user_deleted',
+  'user_updated',
+  'server_created',
+  'server_deleted',
+  'node_created',
+  'node_deleted',
+  'template_created',
+  'template_deleted',
+  'template_updated',
+  'alert_rule_created',
+  'alert_rule_deleted',
+  'alert_rule_updated',
+];
+
+type AdminEventHandler = (type: AdminEventType, data: Record<string, unknown>) => void;
+
+/**
+ * Creates an SSE connection to /api/admin/events.
+ * Returns a disconnect function. Multiple calls can coexist (one per admin page).
+ *
+ * @param onEvent - Called for each matching event
+ * @param onStatus - Called on connection status changes
+ */
+export function createAdminEventsStream(
+  onEvent: AdminEventHandler,
+  onStatus: (status: 'connecting' | 'connected' | 'reconnecting' | 'closed' | 'error') => void,
+): () => void {
+  const url = '/api/admin/events';
+  const es = new EventSource(url, { withCredentials: true });;
+
+  es.onopen = () => onStatus('connected');
+  es.onerror = () => {
+    if (es.readyState === EventSource.CONNECTING) onStatus('reconnecting');
+    else if (es.readyState === EventSource.CLOSED) onStatus('closed');
+    else onStatus('error');
+  };
+
+  for (const type of ADMIN_EVENT_TYPES) {
+    es.addEventListener(type, (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data) as Record<string, unknown>;
+        onEvent(type, data);
+      } catch {
+        // ignore parse errors
+      }
+    });
+  }
+
+  return () => {
+    es.close();
+    onStatus('closed');
+  };
+}

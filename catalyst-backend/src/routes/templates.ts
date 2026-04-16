@@ -126,6 +126,10 @@ export async function templateRoutes(app: FastifyInstance) {
       });
 
       reply.status(201).send({ success: true, data: template });
+      const wsGateway = (app as any).wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('template_created', { type: 'template_created', template, createdBy: request.user.userId, timestamp: new Date().toISOString() });
+      }
     }
   );
 
@@ -202,6 +206,11 @@ export async function templateRoutes(app: FastifyInstance) {
       });
 
       reply.send(serialize({ success: true, data: updated }));
+
+      const wsGateway = (app as any).wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('template_updated', { type: 'template_updated', templateId, updatedBy: request.user.userId, timestamp: new Date().toISOString() });
+      }
     }
   );
 
@@ -228,6 +237,10 @@ export async function templateRoutes(app: FastifyInstance) {
       await prisma.serverTemplate.delete({ where: { id: templateId } });
 
       reply.send({ success: true });
+      const wsGateway = (app as any).wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('template_deleted', { type: 'template_deleted', templateId, deletedBy: request.user.userId, timestamp: new Date().toISOString() });
+      }
     }
   );
 
@@ -341,6 +354,10 @@ export async function templateRoutes(app: FastifyInstance) {
       });
 
       reply.status(201).send({ success: true, data: template });
+      const wsGateway = (app as any).wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('template_created', { type: 'template_created', template, createdBy: request.user.userId, timestamp: new Date().toISOString() });
+      }
     }
   );
 }

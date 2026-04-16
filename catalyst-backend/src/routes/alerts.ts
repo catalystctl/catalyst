@@ -153,7 +153,12 @@ export async function alertRoutes(app: FastifyInstance) {
       });
 
       reply.send(serialize({ success: true, rule }));
-    }
+
+
+      const wsGateway = (app as any).wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('alert_rule_created', { type: 'alert_rule_created', rule, createdBy: user.userId, timestamp: new Date().toISOString() });
+      }    }
   );
 
   // List alert rules
@@ -303,6 +308,10 @@ export async function alertRoutes(app: FastifyInstance) {
       await prisma.alertRule.delete({ where: { id: ruleId } });
 
       reply.send({ success: true, message: 'Alert rule deleted' });
+      const wsGateway = (app as any).wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('alert_rule_deleted', { type: 'alert_rule_deleted', ruleId: existing.id, deletedBy: user.userId, timestamp: new Date().toISOString() });
+      }
     }
   );
 

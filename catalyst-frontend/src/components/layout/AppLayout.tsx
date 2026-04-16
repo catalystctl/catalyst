@@ -3,6 +3,8 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Breadcrumbs from './Breadcrumbs';
 import { useServerStateUpdates } from '../../hooks/useServerStateUpdates';
+import { useSseUserEvents } from '../../hooks/useSseUserEvents';
+import { useSseTemplateEvents } from '../../hooks/useSseTemplateEvents';
 import { useThemeStore } from '../../stores/themeStore';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { useCmdK } from '../../hooks/useKeyboardShortcut';
@@ -12,6 +14,8 @@ import { cn } from '@/lib/utils';
 
 function AppLayout() {
   useServerStateUpdates();
+  useSseUserEvents();
+  useSseTemplateEvents();
   const { sidebarCollapsed } = useThemeStore();
   const { panelName } = usePanelBranding();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -61,7 +65,7 @@ function AppLayout() {
       <aside
         className={cn(
           'fixed inset-y-0 left-0 z-50 transform transition-all duration-300 ease-in-out lg:static lg:transform-none',
-          isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
       >
         <button
@@ -79,7 +83,7 @@ function AppLayout() {
       <main
         className={cn(
           'flex-1 overflow-y-auto px-4 py-4 pt-16 transition-all duration-300 lg:px-6 lg:py-6 lg:pt-6',
-          sidebarCollapsed ? 'lg:pl-4' : 'lg:pl-6'
+          sidebarCollapsed ? 'lg:pl-4' : 'lg:pl-6',
         )}
       >
         <div className="space-y-4">

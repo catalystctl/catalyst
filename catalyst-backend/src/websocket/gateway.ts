@@ -128,6 +128,8 @@ export class WebSocketGateway {
   private readonly sseEventSubscribers = new Map<string, Map<string, { eventTypes: string[]; push: (event: string, data: any) => void }>>();
   // Global SSE event subscribers — receive ALL events across all servers (for AppLayout)
   private readonly globalSseSubscribers = new Map<string, { eventTypes: string[]; push: (event: string, data: any) => void; serverIds?: Set<string> }>();
+  // Admin SSE event subscribers — receive entity-level admin events (users, nodes, templates, alerts)
+  private readonly adminEventSubscribers = new Map<string, { eventTypes: string[]; push: (event: string, data: any) => void }>();
 
   // Connection limits
   private readonly MAX_AGENT_CONNECTIONS = 1000;  // Max agent connections
@@ -1825,7 +1827,11 @@ export class WebSocketGateway {
     }
   }
 
-  private async routeToClients(serverId: string, message: any) {
+  /**
+   * Route a message to all subscribed clients (WebSocket + SSE).
+   * Used for server-scoped events (state changes, backups, alerts).
+   */
+  private async routeToClients(serverId: string, message: any): Promise<void> {
     const server = await this.prisma.server.findUnique({
       where: { id: serverId },
       include: {
@@ -1839,17 +1845,13 @@ export class WebSocketGateway {
       return;
     }
 
-    // Build set of allowed users: owner + explicit access entries
     const allowedUsers = new Set([
       server.ownerId,
       ...server.access.map((a) => a.userId),
     ]);
 
     for (const [, client] of this.clients) {
-      // Only send to clients who have explicitly subscribed (respect least-privilege)
-      if (!client.subscriptions.has(serverId)) {
-        continue;
-      }
+      if (!client.subscriptions.has(serverId)) continue;
       if (allowedUsers.has(client.userId)) {
         if (client.socket.readyState === 1) {
           client.socket.send(JSON.stringify(message));
@@ -1857,27 +1859,37 @@ export class WebSocketGateway {
       }
     }
 
-    // Also push to SSE event subscribers (server → client via HTTP/2)
     const eventType = message.type;
     const sseEventSubs = this.sseEventSubscribers.get(serverId);
     if (sseEventSubs) {
       const eventData = JSON.stringify(message);
       for (const [, sub] of sseEventSubs) {
         if (sub.eventTypes.includes(eventType)) {
-          try {
-            sub.push(eventType, eventData);
-          } catch {
-            // subscriber connection closed — will be cleaned up
-          }
+          try { sub.push(eventType, eventData); } catch {}
         }
       }
     }
 
-    // Also push to global SSE subscribers (AppLayout-level subscriptions)
+    // Also push to global SSE subscribers (serverIds filter applies)
     const eventData = JSON.stringify(message);
     for (const [, sub] of this.globalSseSubscribers) {
-      // Filter: if serverIds is set, only send events for matching servers
       if (sub.serverIds && !sub.serverIds.has(serverId)) continue;
+      if (sub.eventTypes.includes(eventType)) {
+        try { sub.push(eventType, eventData); } catch {}
+      }
+    }
+  }
+
+  /**
+   * Push an event to all global SSE subscribers listening for that event type.
+   * Used for user-level events (user_created, user_deleted) that don't belong to a server.
+   *
+   * @param eventType - The event type (e.g. 'user_created')
+   * @param data - Event payload
+   */
+  pushToGlobalSubscribers(eventType: string, data: unknown): void {
+    const eventData = JSON.stringify(data);
+    for (const [, sub] of this.globalSseSubscribers) {
       if (sub.eventTypes.includes(eventType)) {
         try {
           sub.push(eventType, eventData);
@@ -1886,6 +1898,41 @@ export class WebSocketGateway {
         }
       }
     }
+  }
+
+
+  /**
+   * Push an event to all admin SSE subscribers listening for that event type.
+   * Used for entity-level events (users, nodes, templates, alerts) in admin context.
+   */
+  pushToAdminSubscribers(eventType: string, data: unknown): void {
+    const eventData = JSON.stringify(data);
+    for (const [, sub] of this.adminEventSubscribers) {
+      if (sub.eventTypes.includes(eventType)) {
+        try {
+          sub.push(eventType, eventData);
+        } catch {
+          // subscriber connection closed — will be cleaned up
+        }
+      }
+    }
+  }
+
+  /**
+   * Register an SSE subscriber for admin entity events.
+   * Returns an unsubscribe function.
+   */
+  addAdminEventSubscriber(
+    eventTypes: string[],
+    push: (event: string, data: any) => void,
+  ): () => void {
+    const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    this.adminEventSubscribers.set(subscriberId, { eventTypes, push });
+    this.logger.debug({ subscriberId, eventTypes }, 'Admin SSE subscriber added');
+    return () => {
+      this.adminEventSubscribers.delete(subscriberId);
+      this.logger.debug({ subscriberId }, 'Admin SSE subscriber removed');
+    };
   }
 
   private async routeConsoleToSubscribers(serverId: string, message: any) {

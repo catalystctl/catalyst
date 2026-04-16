@@ -39,6 +39,7 @@ import {
   DropdownMenuTrigger,
 } from '../../components/ui/dropdown-menu';
 import { useAdminRoles, useAdminServers, useAdminUsers } from '../../hooks/useAdmin';
+import { useSseUserEvents } from '../../hooks/useSseUserEvents';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { NodeAssignmentsSelector } from '../../components/admin/NodeAssignmentsSelector';
@@ -158,6 +159,8 @@ function ModalShell({
 
 // ── Main Component ──
 function UsersPage() {
+  useSseUserEvents();
+
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('username-asc');
