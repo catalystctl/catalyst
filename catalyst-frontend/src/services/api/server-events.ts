@@ -2,7 +2,7 @@
  * SSE (Server-Sent Events) service for server → client real-time events.
  *
  * Uses per-instance EventSource (one per server) rather than a global singleton.
- * Each hook creates its own SSE connection for the server it manages.
+ * Each hook gets its own connection for the server it manages.
  *
  * Handles:
  *   - server_state_update / server_state — status changes
@@ -11,6 +11,7 @@
  *   - alert
  *   - server_log
  *   - task_progress / task_complete
+ *   - resource_stats — real-time CPU, memory, disk metrics
  */
 export type ServerEventType =
   | 'server_state_update'
@@ -22,7 +23,9 @@ export type ServerEventType =
   | 'alert'
   | 'server_log'
   | 'task_progress'
-  | 'task_complete';
+  | 'task_complete'
+  | 'resource_stats'
+  | 'storage_resize_complete';
 
 export type StreamStatus = 'connecting' | 'connected' | 'reconnecting' | 'closed' | 'error';
 
@@ -39,6 +42,8 @@ const EVENT_TYPES: ServerEventType[] = [
   'server_log',
   'task_progress',
   'task_complete',
+  'resource_stats',
+  'storage_resize_complete',
 ];
 
 /**

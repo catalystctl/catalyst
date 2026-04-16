@@ -1,35 +1,40 @@
+/**
+ * SSE-based EULA prompt hook.
+ *
+ * Listens for `eula_required` events via SSE and provides
+ * an `accept` / `decline` callback that calls the backend API.
+ */
 import { useCallback, useEffect, useState } from 'react';
 import { serversApi } from '../services/api/servers';
-import { useWebSocketStore } from '../stores/websocketStore';
+import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
 
 type EulaPrompt = {
   serverId: string;
   eulaText: string;
 };
 
-/**
- * Listens for `eula_required` WebSocket messages and provides
- * an `accept` / `decline` callback that calls the backend API.
- */
 export function useEulaPrompt(serverId?: string) {
   const [eulaPrompt, setEulaPrompt] = useState<EulaPrompt | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const { onMessage } = useWebSocketStore();
 
   useEffect(() => {
     if (!serverId) return;
 
-    const unsubscribe = onMessage((message) => {
-      if (message.type === 'eula_required' && message.serverId === serverId) {
-        setEulaPrompt({
-          serverId: message.serverId,
-          eulaText: message.eulaText ?? '',
-        });
-      }
-    });
+    const disconnect = createServerEventsStream(
+      serverId,
+      (type: ServerEventType, data: Record<string, unknown>) => {
+        if (type === 'eula_required' && String(data.serverId) === serverId) {
+          setEulaPrompt({
+            serverId: String(data.serverId),
+            eulaText: String(data.eulaText ?? ''),
+          });
+        }
+      },
+      () => {},
+    );
 
-    return unsubscribe;
-  }, [serverId, onMessage]);
+    return disconnect;
+  }, [serverId]);
 
   const respond = useCallback(
     async (accepted: boolean) => {

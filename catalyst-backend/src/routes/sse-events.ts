@@ -66,6 +66,8 @@ const EVENT_TYPES = [
   'server_log',
   'task_progress',
   'task_complete',
+  'resource_stats',
+  'storage_resize_complete',
 ];
 
 export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGateway) {

@@ -20,6 +20,7 @@ import { serverRoutes } from "./routes/servers";
 import { templateRoutes } from "./routes/templates";
 import { nestRoutes } from "./routes/nests";
 import { metricsRoutes } from "./routes/metrics";
+import { metricsStreamRoutes } from "./routes/metrics-stream";
 import { backupRoutes } from "./routes/backups";
 import { RbacMiddleware } from "./middleware/rbac";
 import { startSFTPServer } from "./sftp-server";
@@ -548,6 +549,7 @@ async function bootstrap() {
     await app.register((app) => consoleStreamRoutes(app, wsGateway), { prefix: "/api/servers" });
     // SSE events: server → client real-time push (state, backups, alerts, EULA)
     await app.register((app) => sseEventsRoutes(app, wsGateway), { prefix: "/api/servers" });
+    await app.register((app) => metricsStreamRoutes(app, wsGateway), { prefix: "/api/servers" });
     await app.register(templateRoutes, { prefix: "/api/templates" });
     await app.register(nestRoutes, { prefix: "/api/nests" });
     await app.register(metricsRoutes, { prefix: "/api" });

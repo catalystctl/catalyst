@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Breadcrumbs from './Breadcrumbs';
-import { useWebSocketConnection } from '../../hooks/useWebSocketConnection';
 import { useServerStateUpdates } from '../../hooks/useServerStateUpdates';
 import { useThemeStore } from '../../stores/themeStore';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
@@ -12,7 +11,6 @@ import SearchPalette from '../search/SearchPalette';
 import { cn } from '@/lib/utils';
 
 function AppLayout() {
-  useWebSocketConnection();
   useServerStateUpdates();
   const { sidebarCollapsed } = useThemeStore();
   const { panelName } = usePanelBranding();

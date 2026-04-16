@@ -1,55 +1,61 @@
+/**
+ * SSE-based backup hook.
+ *
+ * Loads backups via REST API (TanStack Query).
+ * Listens for backup_complete / backup_restore_complete / backup_delete_complete
+ * via SSE to trigger query invalidation without polling.
+ */
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { backupsApi } from '../services/api/backups';
-import { useWebSocketStore } from '../stores/websocketStore';
+import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
 
 export function useBackups(serverId?: string, options?: { page?: number; limit?: number }) {
   const queryClient = useQueryClient();
-  const { onMessage } = useWebSocketStore();
+  const { page = 1, limit = 10 } = options ?? {};
 
+  // SSE listener — invalidates backup queries when completions arrive
   useEffect(() => {
     if (!serverId) return;
-    const unsubscribe = onMessage((message) => {
-      if (!('serverId' in message) || message.serverId !== serverId) return;
-      if (message.type === 'backup_complete') {
-        queryClient.invalidateQueries({
-          predicate: (query) =>
-            Array.isArray(query.queryKey) &&
-            query.queryKey[0] === 'backups' &&
-            query.queryKey[1] === serverId,
-        });
-        // follow-up fetch to pick up updated size/metadata after remote upload
-        setTimeout(() => {
-          queryClient.invalidateQueries({
-            predicate: (query) =>
-              Array.isArray(query.queryKey) &&
-              query.queryKey[0] === 'backups' &&
-              query.queryKey[1] === serverId,
-          });
-        }, 1500);
-      }
-      if (
-        message.type === 'backup_restore_complete' ||
-        message.type === 'backup_delete_complete'
-      ) {
-        queryClient.invalidateQueries({
-          predicate: (query) =>
-            Array.isArray(query.queryKey) &&
-            query.queryKey[0] === 'backups' &&
-            query.queryKey[1] === serverId,
-        });
-      }
-    });
 
-    return unsubscribe;
-  }, [serverId, onMessage, queryClient]);
+    const disconnect = createServerEventsStream(
+      serverId,
+      (type: ServerEventType, data: Record<string, unknown>) => {
+        if (String(data.serverId) !== serverId) return;
+        if (
+          type !== 'backup_complete' &&
+          type !== 'backup_restore_complete' &&
+          type !== 'backup_delete_complete'
+        ) return;
+
+        queryClient.invalidateQueries({
+          predicate: (query) =>
+            Array.isArray(query.queryKey) &&
+            query.queryKey[0] === 'backups' &&
+            query.queryKey[1] === serverId,
+        });
+
+        // Follow-up fetch to pick up updated size/metadata after remote upload
+        if (type === 'backup_complete') {
+          setTimeout(() => {
+            queryClient.invalidateQueries({
+              predicate: (query) =>
+                Array.isArray(query.queryKey) &&
+                query.queryKey[0] === 'backups' &&
+                query.queryKey[1] === serverId,
+            });
+          }, 1500);
+        }
+      },
+      () => {},
+    );
+
+    return disconnect;
+  }, [serverId, queryClient]);
 
   return useQuery({
-    queryKey: ['backups', serverId, options?.page ?? 1, options?.limit ?? 50],
-    queryFn: () => {
-      if (!serverId) throw new Error('missing server id');
-      return backupsApi.list(serverId, options);
-    },
+    queryKey: ['backups', serverId, { page, limit }],
+    queryFn: () => backupsApi.list(serverId!, { page, limit }),
     enabled: Boolean(serverId),
   });
 }

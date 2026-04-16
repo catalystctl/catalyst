@@ -1,6 +1,17 @@
+/**
+ * SSE-based live server event log hook.
+ *
+ * Loads the last 20 events via REST API on mount.
+ * Subscribes to /api/servers/:serverId/events for live updates:
+ *   - console_output — server console output lines
+ *   - server_log — structured server log lines
+ *   - server_state_update / server_state — status change notifications
+ *
+ * Displays up to 8 most recent entries.
+ */
 import { useEffect, useMemo, useState } from 'react';
 import { serversApi } from '../services/api/servers';
-import { useWebSocketStore } from '../stores/websocketStore';
+import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
 import type { ServerLogEntry } from '../types/server';
 
 type ServerEvent = {
@@ -28,7 +39,6 @@ const logToEvent = (log: ServerLogEntry, index: number): ServerEvent => ({
 
 export function useServerEvents(serverId?: string) {
   const [events, setEvents] = useState<ServerEvent[]>([]);
-  const { isConnected, subscribe, unsubscribe, onMessage } = useWebSocketStore();
   const serverKey = useMemo(() => serverId ?? '', [serverId]);
 
   useEffect(() => {
@@ -55,52 +65,40 @@ export function useServerEvents(serverId?: string) {
   }, [serverKey]);
 
   useEffect(() => {
-    if (!serverKey || !isConnected) return;
+    if (!serverKey) return;
 
-    subscribe(serverKey);
+    const disconnect = createServerEventsStream(
+      serverKey,
+      (type: ServerEventType, data: Record<string, unknown>) => {
+        if (String(data.serverId) !== serverKey) return;
 
-    const unsubscribeHandler = onMessage((message) => {
-      if (!('serverId' in message) || message.serverId !== serverKey) return;
+        if (type === 'server_log') {
+          if (!data.line) return;
+          const entry: ServerEvent = {
+            id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            message: String(data.line),
+            timestamp: toIsoString(data.timestamp),
+            stream: 'system',
+          };
+          setEvents((prev) => [entry, ...prev].slice(0, MAX_EVENTS));
+        }
 
-      if (message.type === 'console_output') {
-        if (!message.data) return;
-        const entry: ServerEvent = {
-          id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          message: message.data,
-          timestamp: toIsoString(message.timestamp),
-          stream: message.stream ?? 'stdout',
-        };
-        setEvents((previous) => [entry, ...previous].slice(0, MAX_EVENTS));
-      }
+        if (type === 'server_state_update' || type === 'server_state') {
+          const detail = data.reason ? ` (${data.reason})` : '';
+          const entry: ServerEvent = {
+            id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            message: `Status changed to ${data.state}${detail}`,
+            timestamp: toIsoString(data.timestamp),
+            stream: 'system',
+          };
+          setEvents((prev) => [entry, ...prev].slice(0, MAX_EVENTS));
+        }
+      },
+      () => {},
+    );
 
-      if (message.type === 'server_log') {
-        if (!message.line) return;
-        const entry: ServerEvent = {
-          id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          message: message.line,
-          timestamp: toIsoString(message.timestamp),
-          stream: 'system',
-        };
-        setEvents((previous) => [entry, ...previous].slice(0, MAX_EVENTS));
-      }
-
-      if (message.type === 'server_state_update' || message.type === 'server_state') {
-        const detail = message.reason ? ` (${message.reason})` : '';
-        const entry: ServerEvent = {
-          id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          message: `Status changed to ${message.state}${detail}`,
-          timestamp: toIsoString(message.timestamp),
-          stream: 'system',
-        };
-        setEvents((previous) => [entry, ...previous].slice(0, MAX_EVENTS));
-      }
-    });
-
-    return () => {
-      unsubscribeHandler();
-      unsubscribe(serverKey);
-    };
-  }, [serverKey, isConnected, subscribe, unsubscribe, onMessage]);
+    return disconnect;
+  }, [serverKey]);
 
   return events;
 }

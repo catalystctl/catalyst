@@ -3,8 +3,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { serversApi } from '../../services/api/servers';
 import type { UpdateServerPayload } from '../../types/server';
 import { useServer } from '../../hooks/useServer';
-import { useWebSocketStore } from '../../stores/websocketStore';
-import { notifyError, notifySuccess } from '../../utils/notify';
+import { useSseResizeComplete } from '../../hooks/useSseResizeComplete';
+import { notifyError } from '../../utils/notify';
 import { nodesApi } from '../../services/api/nodes';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
@@ -35,9 +35,11 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
   const [allocLoadError, setAllocLoadError] = useState<string | null>(null);
   const [availableIps, setAvailableIps] = useState<string[]>([]);
   const [ipLoadError, setIpLoadError] = useState<string | null>(null);
-  const queryClient = useQueryClient();
   const { data: server } = useServer(serverId);
-  const { onMessage } = useWebSocketStore();
+  const queryClient = useQueryClient();
+  const [resizeDone, setResizeDone] = useState(false);
+
+  useSseResizeComplete(serverId, () => setResizeDone(true));
 
   const isRunning = server?.status !== 'stopped';
   const isIpamNetwork = server?.networkMode && !['bridge', 'host'].includes(server.networkMode);
@@ -89,8 +91,13 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['server', serverId] });
       queryClient.invalidateQueries({ queryKey: ['servers'] });
-      notifySuccess(diskValue !== existingDiskMb ? 'Storage resize initiated' : 'Server updated');
-      setOpen(false);
+      if (diskValue !== existingDiskMb) {
+        notifySuccess('Storage resize initiated');
+        setResizeDone(false); // Wait for SSE event to close modal
+      } else {
+        notifySuccess('Server updated');
+        setOpen(false);
+      }
     },
     onError: () => notifyError('Failed to update server'),
   });
@@ -176,21 +183,13 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
     };
   }, [server?.nodeId, server?.networkMode, server?.id, isBridgeNetwork]);
 
+  // When SSE fires storage_resize_complete, close the modal
   useEffect(() => {
-    const unsubscribe = onMessage((message) => {
-      if (message.type !== 'storage_resize_complete' || message.serverId !== serverId) {
-        return;
-      }
-      if (message.success) {
-        notifySuccess('Storage resized');
-      } else {
-        notifyError(message.error || 'Storage resize failed');
-      }
-      queryClient.invalidateQueries({ queryKey: ['server', serverId] });
-      queryClient.invalidateQueries({ queryKey: ['servers'] });
-    });
-    return unsubscribe;
-  }, [onMessage, queryClient, serverId]);
+    if (resizeDone) {
+      setResizeDone(false);
+      setOpen(false);
+    }
+  }, [resizeDone]);
 
   return (
     <>

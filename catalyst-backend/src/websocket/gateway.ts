@@ -127,7 +127,7 @@ export class WebSocketGateway {
   // Used for non-console events (state updates, backups, alerts, etc.)
   private readonly sseEventSubscribers = new Map<string, Map<string, { eventTypes: string[]; push: (event: string, data: any) => void }>>();
   // Global SSE event subscribers — receive ALL events across all servers (for AppLayout)
-  private readonly globalSseSubscribers = new Map<string, { eventTypes: string[]; push: (event: string, data: any) => void }>();
+  private readonly globalSseSubscribers = new Map<string, { eventTypes: string[]; push: (event: string, data: any) => void; serverIds?: Set<string> }>();
 
   // Connection limits
   private readonly MAX_AGENT_CONNECTIONS = 1000;  // Max agent connections
@@ -1876,6 +1876,8 @@ export class WebSocketGateway {
     // Also push to global SSE subscribers (AppLayout-level subscriptions)
     const eventData = JSON.stringify(message);
     for (const [, sub] of this.globalSseSubscribers) {
+      // Filter: if serverIds is set, only send events for matching servers
+      if (sub.serverIds && !sub.serverIds.has(serverId)) continue;
       if (sub.eventTypes.includes(eventType)) {
         try {
           sub.push(eventType, eventData);
@@ -2019,21 +2021,25 @@ export class WebSocketGateway {
   }
 
   /**
-   * Register a global SSE subscriber that receives ALL events for the user.
-   * Used by AppLayout to handle state updates across all servers without per-server subscriptions.
+   * Register a global SSE subscriber that receives events for specific servers.
+   * Used by SSE endpoints (events stream, metrics stream) to avoid per-WS subscriptions.
    *
-   * @param eventTypes - Array of event types to receive (e.g. ['server_state_update', 'backup_complete'])
+   * @param eventTypes - Array of event types to receive (e.g. ['server_state_update', 'resource_stats'])
    * @param push - Function called with (eventType, eventData) when matching messages arrive
    * @param serverIds - Optional list of server IDs to filter events to (if non-empty, events from other servers are ignored)
    */
   addGlobalSseSubscriber(
     eventTypes: string[],
     push: (event: string, data: any) => void,
-    _serverIds?: string[],
+    serverIds?: string[],
   ): () => void {
     const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    this.globalSseSubscribers.set(subscriberId, { eventTypes, push });
-    this.logger.debug({ subscriberId, eventTypes }, 'Global SSE subscriber added');
+    this.globalSseSubscribers.set(subscriberId, {
+      eventTypes,
+      push,
+      serverIds: serverIds?.length ? new Set(serverIds) : undefined,
+    });
+    this.logger.debug({ subscriberId, eventTypes, serverIds }, 'Global SSE subscriber added');
 
 
     return () => {

@@ -1,7 +1,7 @@
 /**
  * SSE-based real-time server state update hook.
  *
- * Connects to /api/servers/events (global endpoint) and updates
+ * Connects to /api/servers/all-servers/events (global endpoint) and updates
  * TanStack Query caches when server state changes.
  *
  * Use this in AppLayout to handle state updates for all servers globally.
@@ -14,10 +14,7 @@ export function useServerStateUpdates() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    // Subscribe to a wildcard serverId to receive all state updates.
-    // The SSE server routes ALL events for the user regardless of serverId.
     const disconnect = createServerEventsStream(
-      // Use a sentinel serverId — the SSE endpoint broadcasts to all authorized servers
       'all-servers',
       (type: ServerEventType, data: Record<string, unknown>) => {
         const q = queryClient as any;
@@ -29,7 +26,6 @@ export function useServerStateUpdates() {
           const matchesId = (srv: any) =>
             srv?.id === serverId || srv?.uuid === serverId;
 
-          // Update cached server detail
           q.setQueriesData(
             { predicate: (query: Query) =>
               Array.isArray(query.queryKey) && query.queryKey[0] === 'server' },
@@ -48,7 +44,6 @@ export function useServerStateUpdates() {
             },
           );
 
-          // Update cached server lists
           q.setQueriesData(
             { predicate: (query: Query) =>
               Array.isArray(query.queryKey) && query.queryKey[0] === 'servers' },
@@ -60,7 +55,6 @@ export function useServerStateUpdates() {
             },
           );
 
-          // Invalidate for fresh fetch
           q.invalidateQueries({
             predicate: (query: any) =>
               Array.isArray(query.queryKey) &&
