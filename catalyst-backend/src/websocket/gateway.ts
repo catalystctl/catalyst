@@ -1865,7 +1865,7 @@ export class WebSocketGateway {
       const eventData = JSON.stringify(message);
       for (const [, sub] of sseEventSubs) {
         if (sub.eventTypes.includes(eventType)) {
-          try { sub.push(eventType, eventData); } catch {}
+          try { sub.push(eventType, eventData); } catch { /* ignore */ }
         }
       }
     }
@@ -1875,7 +1875,7 @@ export class WebSocketGateway {
     for (const [, sub] of this.globalSseSubscribers) {
       if (sub.serverIds && !sub.serverIds.has(serverId)) continue;
       if (sub.eventTypes.includes(eventType)) {
-        try { sub.push(eventType, eventData); } catch {}
+        try { sub.push(eventType, eventData); } catch { /* ignore */ }
       }
     }
   }

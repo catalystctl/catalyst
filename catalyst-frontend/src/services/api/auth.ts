@@ -149,7 +149,7 @@ export const authApi = {
     try {
       hydratedUser = (await authApi.refresh()).user;
     } catch {
-      hydratedUser = null;
+      // Use null to fall back to data.user below
     }
     const userData = data.user;
     return {
@@ -200,7 +200,7 @@ export const authApi = {
     try {
       hydratedUser = (await authApi.refresh()).user;
     } catch {
-      hydratedUser = null;
+      // Use null to fall back to data.user below
     }
     const userData = data.user;
     return {

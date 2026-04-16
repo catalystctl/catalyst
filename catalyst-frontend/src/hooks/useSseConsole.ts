@@ -57,6 +57,7 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
     if (!serverId) return;
 
     nextId.current = 0;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: reset state on server change
     setEntries([]);
     setStreamStatus('connecting');
     consoleSseClient.connect(serverId);

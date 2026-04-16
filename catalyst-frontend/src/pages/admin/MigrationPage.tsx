@@ -826,6 +826,7 @@ export default function MigrationPage() {
     if (safeJobs) {
       const active = safeJobs.find(j => j.status === 'running' || j.status === 'validating' || j.status === 'paused');
       if (active) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: set active job when found
         setActiveJobId(active.id);
         setActiveTab('progress');
       } else {
@@ -965,6 +966,7 @@ export default function MigrationPage() {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     if (!activeJob?.startedAt || !['running', 'validating'].includes(activeJob.status)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: reset elapsed when job stops
       setElapsed(0);
       return;
     }

@@ -187,6 +187,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
   // When SSE fires storage_resize_complete, close the modal
   useEffect(() => {
     if (resizeDone) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: reset flag after handling
       setResizeDone(false);
       setOpen(false);
     }

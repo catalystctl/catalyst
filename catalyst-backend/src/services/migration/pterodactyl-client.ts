@@ -6,6 +6,7 @@
 import * as http2 from "node:http2";
 import * as http from "node:http";
 import * as https from "node:https";
+import { Readable } from "node:stream";
 import type { URL as URLType } from "node:url";
 import { EventEmitter } from "node:events";
 import crypto from "node:crypto";
@@ -949,7 +950,7 @@ export class PterodactylClient extends EventEmitter<ClientEvents> {
   async downloadBackup(
     serverUuid: string,
     backupUuid: string
-  ): Promise<NodeJS.ReadableStream> {
+  ): Promise<Readable> {
     if (!this.clientApiKey) {
       throw new PterodactylClientError(
         "NO_CLIENT_KEY",
@@ -986,7 +987,7 @@ export class PterodactylClient extends EventEmitter<ClientEvents> {
         (res) => {
           const status = res.statusCode || 0;
           if (status >= 200 && status < 300) {
-            resolve(res as unknown as NodeJS.ReadableStream);
+            resolve(res as unknown as Readable);
           } else {
             const chunks: Buffer[] = [];
             res.on("data", (chunk: Buffer) => chunks.push(chunk));

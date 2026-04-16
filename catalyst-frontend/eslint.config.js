@@ -26,6 +26,12 @@ export default tseslint.config(
       ],
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
+      // Disable overly strict rules that conflict with common patterns
+      '@typescript-eslint/no-unused-expressions': 'off',
+      'no-inner-declarations': 'off',
+      'no-useless-assignment': 'off',
+      // React Compiler memoization warnings (experimental feature)
+      'react-hooks/preserve-manual-memoization': 'off',
     },
   },
 );

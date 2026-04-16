@@ -94,7 +94,7 @@ class ApiClient {
 
     // Handle errors — read body once, then throw with full error info
     if (!response.ok) {
-      let errorData: { code?: string; message?: string; error?: string } = {};
+      let errorData: { code?: string; message?: string; error?: string };
       try {
         errorData = await response.json();
       } catch {
