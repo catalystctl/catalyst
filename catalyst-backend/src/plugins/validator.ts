@@ -1,4 +1,11 @@
 import { z } from 'zod';
+import type { Logger } from 'pino';
+
+// Config key validation - must be alphanumeric with hyphens/underscores, max 50 chars
+const CONFIG_KEY_REGEX = /^[a-zA-Z][a-zA-Z0-9_-]{0,50}$/;
+
+// Dependency version validation - must be valid semver
+const VERSION_REGEX = /^\d+\.\d+\.\d+$/;
 
 /**
  * Zod schema for plugin manifest validation
@@ -25,8 +32,11 @@ export const PluginManifestSchema = z.object({
       entry: z.string(),
     })
     .optional(),
-  dependencies: z.any().optional(), // Zod v4 has issues with z.record
-  config: z.any().optional(), // Simplified for Zod v4 compatibility
+  dependencies: z.record(z.string(), z.string().regex(/^\d+\.\d+\.\d+$/, 'Dependency versions must follow semver format (e.g., 1.0.0)')).optional(),
+  config: z.record(
+    z.string().regex(CONFIG_KEY_REGEX, 'Config keys must be alphanumeric with optional hyphens/underscores, max 50 chars'),
+    z.any()
+  ).optional(),
 });
 
 /**
@@ -39,6 +49,14 @@ export function validateManifest(data: unknown): z.infer<typeof PluginManifestSc
     console.error('Manifest validation error:', error);
     throw error;
   }
+}
+
+/**
+ * Validate config key format
+ * Keys must be alphanumeric with optional hyphens/underscores, max 50 chars
+ */
+export function validateConfigKey(key: string): boolean {
+  return CONFIG_KEY_REGEX.test(key);
 }
 
 /**
@@ -106,4 +124,58 @@ function compareVersions(a: string, b: string): number {
   }
   
   return 0;
+}
+
+/**
+ * Validate plugin dependencies
+ * Ensures all dependencies exist in registry and versions are compatible
+ */
+export function validateDependencies(
+  dependencies: Record<string, string> | undefined,
+  registryPlugins: string[],
+  registryVersions: Map<string, string>
+): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  
+  if (!dependencies) {
+    return { valid: true, errors: [] };
+  }
+  
+  for (const [name, version] of Object.entries(dependencies)) {
+    // Check dependency exists
+    if (!registryPlugins.includes(name)) {
+      errors.push(`Missing dependency: ${name}@${version} (plugin not found)`);
+      continue;
+    }
+    
+    // Check version compatibility
+    const installedVersion = registryVersions.get(name);
+    if (installedVersion && !isVersionCompatible(version, installedVersion)) {
+      errors.push(`Dependency version mismatch: ${name} requires ${version}, found ${installedVersion}`);
+    }
+    
+    // Validate version format
+    if (!VERSION_REGEX.test(version)) {
+      errors.push(`Invalid dependency version format: ${name}@${version} (must be semver)`);
+    }
+  }
+  
+  return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Log warning when plugin uses API not declared in permissions
+ */
+export function warnUndeclaredPermissionUsage(
+  pluginName: string,
+  declaredPermissions: string[],
+  attemptedAccess: string,
+  logger: Logger
+): void {
+  if (!declaredPermissions.includes('*') && !declaredPermissions.includes(attemptedAccess)) {
+    logger.warn(
+      { plugin: pluginName, attemptedAccess, declaredPermissions },
+      'Plugin attempted to use API not declared in manifest permissions'
+    );
+  }
 }

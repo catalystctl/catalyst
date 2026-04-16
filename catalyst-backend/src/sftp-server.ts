@@ -17,6 +17,9 @@ type SFTPStream = ssh2.SFTPStream;
 const SFTP_PORT = parseInt(process.env.SFTP_PORT || '2022');
 const SERVER_FILES_ROOT = process.env.SERVER_DATA_DIR || '/var/lib/catalyst/servers';
 
+/** Maximum file size for SFTP write operations (default 100MB) */
+const SFTP_MAX_FILE_SIZE = parseInt(process.env.SFTP_MAX_FILE_SIZE || String(100 * 1024 * 1024));
+
 // Generate or load host key
 const HOST_KEY_PATH = process.env.SFTP_HOST_KEY || './sftp_host_key';
 let hostKey: Buffer;
@@ -24,21 +27,36 @@ let hostKey: Buffer;
 try {
   hostKey = readFileSync(HOST_KEY_PATH);
 } catch {
-  // Generate a new RSA key if none exists
-  const keyPair = generateKeyPairSync('rsa', {
-    modulusLength: 2048,
-    privateKeyEncoding: {
-      type: 'pkcs1',
-      format: 'pem',
-    },
-    publicKeyEncoding: {
-      type: 'spki',
-      format: 'pem',
-    },
-  });
-  fsSync.writeFileSync(HOST_KEY_PATH, keyPair.privateKey);
-  hostKey = Buffer.from(keyPair.privateKey);
-  // Logger not available at module init time, will log when server starts
+  // Check if base64-encoded key is provided via environment variable
+  const base64Key = process.env.SFTP_HOST_KEY_BASE64;
+  if (base64Key) {
+    hostKey = Buffer.from(base64Key, 'base64');
+  } else {
+    // Generate a new RSA key if none exists
+    // Use 4096-bit key for security (was 2048)
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('[SFTP SECURITY] Auto-generated RSA key in production! Set SFTP_HOST_KEY or SFTP_HOST_KEY_BASE64 environment variable.');
+    }
+    const keyPair = generateKeyPairSync('rsa', {
+      modulusLength: 4096, // Increased from 2048 for security
+      privateKeyEncoding: {
+        type: 'pkcs1',
+        format: 'pem',
+      },
+      publicKeyEncoding: {
+        type: 'spki',
+        format: 'pem',
+      },
+    });
+    fsSync.writeFileSync(HOST_KEY_PATH, keyPair.privateKey);
+    // Set secure file permissions (chmod 600)
+    try {
+      fsSync.chmodSync(HOST_KEY_PATH, 0o600);
+    } catch {
+      // chmod may fail on some filesystems
+    }
+    hostKey = Buffer.from(keyPair.privateKey);
+  }
 }
 
 interface SFTPSession {
@@ -63,7 +81,7 @@ async function validateTokenAndGetServer(username: string, password: string): Pr
       }
     }
 
-    // Fallback: try bearer token auth
+    // Fallback: try bearer token auth (legacy compatibility)
     if (!userId) {
       try {
         const session = await auth.api.getSession({
@@ -73,23 +91,14 @@ async function validateTokenAndGetServer(username: string, password: string): Pr
           userId = session.user.id;
         }
       } catch {
-        // Bearer auth failed, try direct session token lookup
+        // Bearer auth failed - SFTP requires dedicated tokens, not session tokens
+        // Note: Database session token fallback was removed for security
       }
     }
 
-    // Fallback: look up session token directly in database
-    if (!userId) {
-      const dbSession = await prisma.session.findFirst({
-        where: {
-          token: password,
-          expiresAt: { gt: new Date() },
-        },
-        select: { userId: true },
-      });
-      if (dbSession) {
-        userId = dbSession.userId;
-      }
-    }
+    // NOTE: Removed database session token fallback for SFTP authentication
+    // SFTP now requires dedicated SFTP tokens (sftp_ prefix) for security.
+    // This prevents long-lived session tokens from being valid SFTP credentials.
 
     if (!userId) {
       return null;
@@ -280,11 +289,22 @@ function startSFTPServer(logger: Logger) {
                 return;
               }
 
-              // Reset idle timer on any SFTP activity
-              const origEmit = sftpStream.emit.bind(sftpStream);
-              sftpStream.emit = (...args: any[]) => {
-                resetIdleTimer();
-                return origEmit(...args);
+              // Reset idle timer ONLY on actual file operations (read, write, delete)
+              // Not on all events to prevent background operations from keeping sessions alive
+              const origOn = sftpStream.on.bind(sftpStream);
+              sftpStream.on = function(
+                event: string,
+                listener: (...args: any[]) => void
+              ) {
+                const operationEvents = ['READ', 'WRITE', 'OPEN', 'REMOVE', 'RMDIR', 'MKDIR', 'RENAME'];
+                if (operationEvents.includes(event)) {
+                  const wrappedListener = (...args: any[]) => {
+                    resetIdleTimer();
+                    return listener(...args);
+                  };
+                  return origOn(event, wrappedListener);
+                }
+                return origOn(event, listener);
               };
 
               handleSFTPSession(sftpStream, session);
@@ -417,6 +437,12 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
 
           if (!hasPermission(session, 'file.write')) {
             return sftpStream.status(reqid, utils.sftp.STATUS_CODE.PERMISSION_DENIED);
+          }
+
+          // Check file size limit to prevent disk exhaustion attacks
+          if (data.length > SFTP_MAX_FILE_SIZE) {
+            sftpStream.status(reqid, utils.sftp.STATUS_CODE.FAILURE);
+            return;
           }
 
           const fd = await fs.open(handleData.path, 'r+');

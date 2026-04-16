@@ -6,6 +6,9 @@
  * - 5 failed attempts = 5 minute lockout
  * - 10 failed attempts = 30 minute lockout
  * - 15 failed attempts = 1 hour lockout
+ *
+ * Also implements IP-based rate limiting for non-existent users to prevent
+ * account enumeration attacks.
  */
 
 import type { FastifyRequest, FastifyReply } from "fastify";
@@ -16,6 +19,71 @@ const LOCKOUT_THRESHOLDS = [
   { attempts: 10, lockout: 30 * 60 * 1000 },   // 10 attempts = 30 min lockout
   { attempts: 15, lockout: 60 * 60 * 1000 },   // 15 attempts = 1 hr lockout
 ];
+
+/** IP-based rate limiting for non-existent user attempts */
+const ipAttemptCache = new Map<string, { count: number; resetAt: number }>();
+
+/** IP rate limit: max attempts per window */
+const IP_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const IP_RATE_LIMIT_MAX_ATTEMPTS = 20; // 20 attempts per 15 minutes for unknown users
+
+/**
+ * Get client IP from request, handling proxies
+ */
+function getClientIp(request: FastifyRequest): string {
+  // Check X-Forwarded-For header first (for proxied requests)
+  const forwarded = request.headers['x-forwarded-for'];
+  if (forwarded) {
+    const ips = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+    return ips.split(',')[0].trim();
+  }
+  // Fall back to direct IP
+  return request.ip || request.socket.remoteAddress || 'unknown';
+}
+
+/**
+ * Check and enforce IP-based rate limiting for non-existent users.
+ * This prevents attackers from rapidly probing for valid email addresses.
+ */
+function checkIpRateLimit(request: FastifyRequest): void {
+  const ip = getClientIp(request);
+  const now = Date.now();
+  
+  const ipData = ipAttemptCache.get(ip);
+  
+  if (ipData) {
+    // Check if window has expired
+    if (now > ipData.resetAt) {
+      // Reset the window
+      ipAttemptCache.set(ip, { count: 1, resetAt: now + IP_RATE_LIMIT_WINDOW_MS });
+      return;
+    }
+    
+    // Check if rate limit exceeded
+    if (ipData.count >= IP_RATE_LIMIT_MAX_ATTEMPTS) {
+      const minutesRemaining = Math.ceil((ipData.resetAt - now) / 60000);
+      throw new Error(`Too many login attempts. Try again in ${minutesRemaining} minute${minutesRemaining !== 1 ? 's' : ''}.`);
+    }
+    
+    // Increment counter
+    ipData.count++;
+  } else {
+    // First attempt from this IP in the window
+    ipAttemptCache.set(ip, { count: 1, resetAt: now + IP_RATE_LIMIT_WINDOW_MS });
+  }
+}
+
+/**
+ * Clean up expired IP entries periodically
+ */
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, data] of ipAttemptCache) {
+    if (now > data.resetAt) {
+      ipAttemptCache.delete(ip);
+    }
+  }
+}, 5 * 60 * 1000); // Clean up every 5 minutes
 
 /**
  * Check if user account is locked and apply lockout if needed
@@ -30,6 +98,10 @@ export const bruteForceProtection = async (
   email: string,
   request: FastifyRequest
 ): Promise<void> => {
+  // Check IP-based rate limit FIRST, before checking user existence
+  // This protects against account enumeration attacks on non-existent users
+  checkIpRateLimit(request);
+  
   const user = await prisma.user.findUnique({ where: { email } });
 
   if (!user) return; // Don't reveal if user exists
@@ -57,7 +129,11 @@ export const handleFailedLogin = async (
   request: FastifyRequest
 ): Promise<void> => {
   const user = request.userForLockout as User | undefined;
-  if (!user) return;
+  if (!user) {
+    // Failed login for non-existent user - the IP rate limit in bruteForceProtection
+    // will handle this, but we don't need to do anything else here
+    return;
+  }
 
   // Use atomic increment to avoid race conditions with parallel login attempts.
   // This ensures the counter is always accurate even under concurrent load.

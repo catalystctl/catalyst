@@ -82,14 +82,18 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
         }
       }
 
-      // Build SSE response
+      // Build SSE response with proper CORS headers using origin whitelist
+      const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
+      const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').filter(Boolean);
+      if (allowedOrigins.includes(origin)) {
+        reply.raw.setHeader('Access-Control-Allow-Origin', origin);
+        reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no', // Disable nginx buffering for SSE
-        'Access-Control-Allow-Origin': request.headers.origin || '*',
-        'Access-Control-Allow-Credentials': 'true',
       });
 
       // Send initial heartbeat to establish connection

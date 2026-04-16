@@ -286,12 +286,7 @@ export async function isAdminUser(
     if (!requireWrite && permissions.includes("admin.read")) return true;
   }
 
-  // Check for Administrator role name (legacy support)
-  const hasAdminRole = userRoles.some(
-    (role) => role.name.toLowerCase() === "administrator"
-  );
-
-  return hasAdminRole;
+  return false;
 }
 
 /**

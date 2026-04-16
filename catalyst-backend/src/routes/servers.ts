@@ -26,7 +26,7 @@ import {
   normalizeHostIp,
   shouldUseIpam,
 } from "../utils/ipam";
-import { hasNodeAccess, getUserAccessibleNodes } from "../lib/permissions";
+import { hasNodeAccess, getUserAccessibleNodes, hasPermission } from "../lib/permissions";
 import { serverCreateSchema, validateRequestBody } from "../lib/validation";
 import {
   DatabaseProvisioningError,
@@ -1401,8 +1401,14 @@ export async function serverRoutes(app: FastifyInstance) {
 
       const effectiveOwnerId = (canCreate || hasNodeAccessResult) && bodyOwnerId ? bodyOwnerId : userId;
 
-      // If ownerId is specified, verify the target user exists
+      // If ownerId is specified, verify the target user exists and requester has permission
       if (effectiveOwnerId !== userId) {
+        // Check if user has permission to create resources for other users
+        const hasUserCreatePermission = await hasPermission(prisma, userId, 'user.create');
+        if (!hasUserCreatePermission) {
+          return reply.status(403).send({ error: 'Insufficient permissions to create server for other user' });
+        }
+
         const targetUser = await prisma.user.findUnique({ where: { id: effectiveOwnerId } });
         if (!targetUser) {
           return reply.status(400).send({ error: 'Specified owner does not exist' });
@@ -1491,11 +1497,32 @@ export async function serverRoutes(app: FastifyInstance) {
               if (pattern.startsWith("/") && pattern.endsWith("/")) {
                 pattern = pattern.slice(1, -1);
               }
+              // Validate regex pattern for ReDoS protection
+              // Block dangerous patterns that could cause catastrophic backtracking
+              const dangerousPatterns = [
+                /\(.*\)\{/,     // Nested quantifiers like (a+)+ or (a*)+
+                /\(\?[=:!]/,    // Lookahead/behind assertions
+                /\*.*\+|\+.*\*|\{.*,.*\}/, // Complex quantifiers
+              ];
+              const isUnsafeRegex = dangerousPatterns.some(p => p.test(pattern));
+              if (isUnsafeRegex) {
+                return reply.status(400).send({
+                  error: `Invalid regex pattern for variable ${variable.name}: pattern contains potentially unsafe constructs`,
+                });
+              }
               try {
                 const regex = new RegExp(pattern);
-                if (!regex.test(value)) {
+                // Test with timeout protection
+                const startTime = Date.now();
+                const result = regex.test(value);
+                if (Date.now() - startTime > 1000) {
                   return reply.status(400).send({
-                    error: `Variable ${variable.name} does not match required pattern: ${pattern}`,
+                    error: `Variable ${variable.name} regex validation timeout`,
+                  });
+                }
+                if (!result) {
+                  return reply.status(400).send({
+                    error: `Variable ${variable.name} does not match required pattern`,
                   });
                 }
               } catch {
@@ -2413,6 +2440,11 @@ export async function serverRoutes(app: FastifyInstance) {
         });
         if (!access) {
           return reply.status(403).send({ error: "Forbidden" });
+        }
+        // Check that the access entry includes write permissions for storage resize
+        const accessPermissions = access.permissions as string[];
+        if (!accessPermissions.includes('file.write') && !accessPermissions.includes('server.update')) {
+          return reply.status(403).send({ error: "Insufficient permissions for storage resize" });
         }
       }
 

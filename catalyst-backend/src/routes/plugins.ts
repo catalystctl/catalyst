@@ -247,8 +247,13 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
    * GET /api/plugins/:name/frontend-manifest
    * Get plugin frontend manifest
    */
-  app.get('/api/plugins/:name/frontend-manifest', async (request, reply) => {
-    const { name } = request.params as { name: string };
+  app.get(
+    '/api/plugins/:name/frontend-manifest',
+    {
+      onRequest: [app.authenticate],
+    },
+    async (request, reply) => {
+      const { name } = request.params as { name: string };
     const registry = pluginLoader.getRegistry();
     const plugin = registry.get(name);
     

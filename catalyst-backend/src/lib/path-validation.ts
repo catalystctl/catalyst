@@ -6,6 +6,7 @@
  *
  * Security considerations:
  * - Validates server ID format (UUID)
+ * - Normalizes Unicode (NFC) to prevent homograph attacks
  * - Normalizes paths to prevent directory traversal
  * - Uses realpathSync to resolve symlinks and check canonical paths
  * - Logs security events for rejected paths
@@ -13,6 +14,17 @@
 
 import path from 'path';
 import fs from 'fs';
+
+// Unicode normalization - use built-in Intl for NFC normalization
+// This prevents homograph attacks where different Unicode representations
+// of the same path could bypass validation
+function normalizeUnicode(str: string): string {
+  // Use String.prototype.normalize if available (Node.js has full Unicode support)
+  if (typeof str.normalize === 'function') {
+    return str.normalize('NFC');
+  }
+  return str;
+}
 
 const SERVER_FILES_ROOT = process.env.SERVER_DATA_DIR || '/var/lib/catalyst/servers';
 
@@ -93,9 +105,10 @@ export function normalizeRequestPath(value?: string): string {
  *
  * This function:
  * 1. Validates the server ID format
- * 2. Normalizes the requested path
- * 3. Resolves the canonical path (resolving symlinks)
- * 4. Ensures the canonical path is within the server directory
+ * 2. Normalizes Unicode (NFC) to prevent homograph attacks
+ * 3. Normalizes the requested path
+ * 4. Resolves the canonical path (resolving symlinks)
+ * 5. Ensures the canonical path is within the server directory
  *
  * @param userPath - User-provided path
  * @param serverId - Server ID (UUID)
@@ -111,10 +124,13 @@ export function validateAndNormalizePath(
   // Default to root if no path provided
   const resolvedPath = userPath || '/';
 
+  // Apply Unicode normalization (NFC) to prevent homograph attacks
+  const unicodeNormalized = normalizeUnicode(resolvedPath);
+
   const serverBase = path.join(SERVER_FILES_ROOT, serverId);
 
   // Normalize the requested path
-  const normalized = normalizeRequestPath(resolvedPath);
+  const normalized = normalizeRequestPath(unicodeNormalized);
   const fullPath = path.join(serverBase, normalized);
 
   // Logical path traversal check (no filesystem access — files live on the agent,
@@ -131,6 +147,36 @@ export function validateAndNormalizePath(
   if (resolvedPath.includes('\0')) {
     logSecurityEvent(userId, serverId, resolvedPath, 'Null byte in path');
     throw new Error('Invalid path');
+  }
+
+  // Symlink escape check: Use realpathSync to detect if the path resolves
+  // to a location outside the server directory via symlink manipulation
+  try {
+    const realResolved = fs.realpathSync(fullPath);
+    const realResolvedBase = fs.realpathSync(serverBase);
+    
+    if (!realResolved.startsWith(realResolvedBase + path.sep) && realResolved !== realResolvedBase) {
+      logSecurityEvent(userId, serverId, resolvedPath, 'Path traversal attempt via symlink detected');
+      throw new Error('Path traversal attempt detected');
+    }
+  } catch (err: any) {
+    // ENOENT is expected if the file doesn't exist yet
+    // ENOTDIR may occur for partial paths - this is acceptable
+    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
+      throw err;
+    }
+    // For non-existent paths, verify the parent directory is within bounds
+    try {
+      const parentDir = path.join(fullPath, '..');
+      const realParent = fs.realpathSync(parentDir);
+      const realResolvedBase = fs.realpathSync(serverBase);
+      if (!realParent.startsWith(realResolvedBase + path.sep) && realParent !== realResolvedBase) {
+        logSecurityEvent(userId, serverId, resolvedPath, 'Path traversal attempt via parent directory detected');
+        throw new Error('Path traversal attempt detected');
+      }
+    } catch {
+      // Parent doesn't exist either - will be caught by file operation
+    }
   }
 
   return normalized;

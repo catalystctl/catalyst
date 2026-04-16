@@ -8,7 +8,7 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { serialize } from '../utils/serialize';
-import { hasNodeAccess } from '../lib/permissions';
+import { hasNodeAccess, getUserAccessibleNodes } from '../lib/permissions';
 
 interface BulkResult {
   success: string[];
@@ -37,6 +37,60 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       return true;
     }
     reply.status(403).send({ error: 'Admin access required for bulk operations' });
+    return false;
+  };
+
+  /**
+   * Helper: check if user has access to a specific server for bulk operations.
+   * Returns true if user is admin, server owner, or has specific server permission.
+   */
+  const hasServerAccess = async (
+    prismaClient: typeof prisma,
+    userId: string,
+    serverId: string,
+    requiredPermissions: string[]
+  ): Promise<boolean> => {
+    // Get user roles and permissions
+    const roles = await prismaClient.role.findMany({
+      where: { users: { some: { id: userId } } },
+      select: { permissions: true },
+    });
+    const userPermissions = new Set(roles.flatMap((r) => r.permissions));
+
+    // Admins have access
+    if (userPermissions.has('*') || userPermissions.has('admin.write') || userPermissions.has('admin.read')) {
+      return true;
+    }
+
+    // Check if user has any of the required permissions
+    for (const perm of requiredPermissions) {
+      if (userPermissions.has(perm)) return true;
+    }
+
+    // Check server access table
+    const access = await prismaClient.serverAccess.findUnique({
+      where: { userId_serverId: { userId, serverId } },
+      select: { permissions: true },
+    });
+
+    if (access) {
+      const accessPerms = new Set(access.permissions as string[]);
+      for (const perm of requiredPermissions) {
+        if (accessPerms.has(perm)) return true;
+      }
+    }
+
+    // Check node access
+    const server = await prismaClient.server.findUnique({
+      where: { id: serverId },
+      select: { nodeId: true, ownerId: true },
+    });
+
+    if (server) {
+      const nodeAccess = await hasNodeAccess(prismaClient, userId, server.nodeId);
+      if (nodeAccess) return true;
+    }
+
     return false;
   };
 
@@ -77,7 +131,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       // Fetch all servers in one query
       const servers = await prisma.server.findMany({
         where: { id: { in: serverIds } },
-        select: { id: true, name: true, suspendedAt: true, status: true, nodeId: true, uuid: true, node: { select: { isOnline: true } } },
+        select: { id: true, name: true, suspendedAt: true, status: true, nodeId: true, uuid: true, ownerId: true, node: { select: { isOnline: true } } },
       });
 
       const serverMap = new Map(servers.map((s) => [s.id, s]));
@@ -91,6 +145,14 @@ export async function bulkServerRoutes(app: FastifyInstance) {
 
         if (server.suspendedAt) {
           result.failed.push({ id: serverId, error: 'Already suspended' });
+          continue;
+        }
+
+        // Check if user has permission for this specific server
+        const hasServerPermission = server.ownerId === userId || 
+          await hasServerAccess(prisma, userId, serverId, ['server.suspend', 'server.update']);
+        if (!hasServerPermission) {
+          result.failed.push({ id: serverId, error: 'Not authorized' });
           continue;
         }
 
@@ -190,7 +252,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
 
       const servers = await prisma.server.findMany({
         where: { id: { in: serverIds } },
-        select: { id: true, name: true, suspendedAt: true },
+        select: { id: true, name: true, suspendedAt: true, ownerId: true },
       });
       const serverMap = new Map(servers.map((s) => [s.id, s]));
 
@@ -203,6 +265,14 @@ export async function bulkServerRoutes(app: FastifyInstance) {
 
         if (!server.suspendedAt) {
           result.failed.push({ id: serverId, error: 'Not suspended' });
+          continue;
+        }
+
+        // Check if user has permission for this specific server
+        const hasServerPermission = server.ownerId === userId || 
+          await hasServerAccess(prisma, userId, serverId, ['server.suspend', 'server.update']);
+        if (!hasServerPermission) {
+          result.failed.push({ id: serverId, error: 'Not authorized' });
           continue;
         }
 
@@ -289,7 +359,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
 
       const servers = await prisma.server.findMany({
         where: { id: { in: serverIds } },
-        select: { id: true, name: true, status: true, nodeId: true, uuid: true, suspendedAt: true, node: { select: { isOnline: true } } },
+        select: { id: true, name: true, status: true, nodeId: true, uuid: true, suspendedAt: true, ownerId: true, node: { select: { isOnline: true } } },
       });
       const serverMap = new Map(servers.map((s) => [s.id, s]));
 
@@ -302,6 +372,14 @@ export async function bulkServerRoutes(app: FastifyInstance) {
 
         if (!deletableStates.has(server.status)) {
           result.failed.push({ id: serverId, error: `Server must be stopped (current: ${server.status})` });
+          continue;
+        }
+
+        // Check if user has permission for this specific server
+        const hasServerPermission = server.ownerId === userId || 
+          await hasServerAccess(prisma, userId, serverId, ['server.delete', 'server.update']);
+        if (!hasServerPermission) {
+          result.failed.push({ id: serverId, error: 'Not authorized' });
           continue;
         }
 
@@ -382,6 +460,11 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'Maximum 200 servers per status check' });
       }
 
+      // Get user's accessible nodes for filtering
+      const accessibleNodes = await getUserAccessibleNodes(prisma, userId);
+      const hasAccessToAllNodes = accessibleNodes.hasWildcard;
+      const allowedNodeIds = accessibleNodes.nodeIds;
+
       const servers = await prisma.server.findMany({
         where: { id: { in: serverIds } },
         select: {
@@ -396,11 +479,43 @@ export async function bulkServerRoutes(app: FastifyInstance) {
           primaryIp: true,
           nodeId: true,
           createdAt: true,
+          ownerId: true,
         },
       });
 
-      const serverMap = new Map(servers.map((s) => [s.id, s]));
-      const data = serverIds.map((id) => serverMap.get(id) || { id, status: 'not_found' });
+      // Check if user has admin permissions (can see all servers)
+      const roles = await prisma.role.findMany({
+        where: { users: { some: { id: userId } } },
+        select: { permissions: true },
+      });
+      const permissions = roles.flatMap((r) => r.permissions);
+      const isAdmin = permissions.includes('*') || permissions.includes('admin.write') || permissions.includes('admin.read');
+
+      // Filter servers based on authorization
+      const filteredServers = servers.filter((server) => {
+        // Admins can see all servers
+        if (isAdmin) return true;
+
+        // Users can see their own servers
+        if (server.ownerId === userId) return true;
+
+        // Check if user has access via node assignment
+        if (hasAccessToAllNodes || allowedNodeIds.includes(server.nodeId)) return true;
+
+        // Check server access table
+        return false; // Will be filtered out
+      });
+
+      const serverMap = new Map(filteredServers.map((s) => [s.id, s]));
+      const data = serverIds.map((id) => {
+        const server = serverMap.get(id);
+        if (!server) {
+          // Return minimal info for unauthorized servers
+          return { id, status: 'not_found' };
+        }
+        // Return full data for authorized servers
+        return server;
+      });
 
       reply.send(serialize({ success: true, data }));
     }

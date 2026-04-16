@@ -502,7 +502,56 @@ export class AlertService {
     };
   }
 
+  /**
+   * Check if a URL points to a private/internal network address.
+   * Prevents SSRF attacks by blocking access to internal services.
+   */
+  private isPrivateUrl(url: URL): boolean {
+    const hostname = url.hostname;
+    return (
+      hostname === 'localhost' ||
+      /^127\./.test(hostname) ||
+      /^10\./.test(hostname) ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname) ||
+      /^192\.168\./.test(hostname) ||
+      /^169\.254\./.test(hostname) ||
+      url.protocol !== 'https:'
+    );
+  }
+
   private async dispatchWebhook(alertId: string, webhookUrl: string, context: any) {
+    // Validate webhook URL before fetching to prevent SSRF
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(webhookUrl);
+    } catch {
+      this.logger.warn({ webhookUrl }, 'Invalid webhook URL format');
+      await this.prisma.alertDelivery.create({
+        data: {
+          alertId,
+          channel: 'webhook',
+          target: webhookUrl,
+          status: 'failed',
+          lastError: 'Invalid webhook URL format',
+        },
+      });
+      return;
+    }
+
+    if (this.isPrivateUrl(parsedUrl)) {
+      this.logger.warn({ webhookUrl }, 'Webhook URL blocked: private network or non-HTTPS');
+      await this.prisma.alertDelivery.create({
+        data: {
+          alertId,
+          channel: 'webhook',
+          target: webhookUrl,
+          status: 'failed',
+          lastError: 'Webhook URL must be HTTPS and cannot point to private networks',
+        },
+      });
+      return;
+    }
+
     const delivery = await this.prisma.alertDelivery.create({
       data: { alertId, channel: 'webhook', target: webhookUrl, status: 'pending' },
     });

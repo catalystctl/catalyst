@@ -1446,8 +1446,8 @@ export async function adminRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
 
-      if (!(await hasPermission(prisma, user.userId, 'admin.read'))) {
-        return reply.status(403).send({ error: 'Admin read permission required' });
+      if (!(await hasPermission(prisma, user.userId, 'admin.write'))) {
+        return reply.status(403).send({ error: 'Admin write permission required' });
       }
 
       const {

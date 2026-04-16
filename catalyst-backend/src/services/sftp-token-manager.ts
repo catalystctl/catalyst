@@ -12,6 +12,22 @@ import crypto from "crypto";
 
 const sftpTokenCache = new Map<string, SftpTokenEntry>();
 
+/** Indexed lookup by token hash for O(1) validation */
+const tokenIndex = new Map<string, string>(); // tokenHash -> `${userId}:${serverId}`
+
+
+/** Add token to index (internal helper) */
+function indexToken(token: string, userId: string, serverId: string) {
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  tokenIndex.set(tokenHash, `${userId}:${serverId}`);
+}
+
+/** Remove token from index (internal helper) */
+function unindexToken(token: string) {
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  tokenIndex.delete(tokenHash);
+}
+
 interface SftpTokenEntry {
   token: string;
   userId: string;
@@ -62,17 +78,24 @@ export function generateSftpToken(
   userId: string,
   serverId: string,
   ttlMs?: number,
+  options?: { forceRenewal?: boolean },
 ): { token: string; expiresAt: number; ttlMs: number } {
   const resolvedTtl = resolveSftpTtl(ttlMs);
+  const key = `${userId}:${serverId}`;
 
-  // Check for an existing unexpired token
-  const existing = sftpTokenCache.get(`${userId}:${serverId}`);
-  if (existing && existing.expiresAt > Date.now()) {
+  // Check for an existing unexpired token (unless forceRenewal is set)
+  const existing = sftpTokenCache.get(key);
+  if (existing && existing.expiresAt > Date.now() && !options?.forceRenewal) {
     return {
       token: existing.token,
       expiresAt: existing.expiresAt,
       ttlMs: existing.ttlMs,
     };
+  }
+
+  // Remove old token from index if exists
+  if (existing) {
+    unindexToken(existing.token);
   }
 
   // Generate a new dedicated SFTP token
@@ -88,7 +111,8 @@ export function generateSftpToken(
     ttlMs: resolvedTtl,
   };
 
-  sftpTokenCache.set(`${userId}:${serverId}`, entry);
+  sftpTokenCache.set(key, entry);
+  indexToken(token, userId, serverId);
 
   return {
     token,
@@ -105,26 +129,7 @@ export function rotateSftpToken(
   serverId: string,
   ttlMs?: number,
 ): { token: string; expiresAt: number; ttlMs: number } {
-  const resolvedTtl = resolveSftpTtl(ttlMs);
-  const token = `sftp_${crypto.randomBytes(32).toString("hex")}`;
-  const now = Date.now();
-
-  const entry: SftpTokenEntry = {
-    token,
-    userId,
-    serverId,
-    createdAt: now,
-    expiresAt: now + resolvedTtl,
-    ttlMs: resolvedTtl,
-  };
-
-  sftpTokenCache.set(`${userId}:${serverId}`, entry);
-
-  return {
-    token,
-    expiresAt: entry.expiresAt,
-    ttlMs: resolvedTtl,
-  };
+  return generateSftpToken(userId, serverId, ttlMs, { forceRenewal: true });
 }
 
 /**
@@ -135,11 +140,25 @@ export function validateSftpToken(
   token: string,
   serverId: string,
 ): { userId: string; serverId: string } | null {
-  for (const entry of sftpTokenCache.values()) {
-    if (entry.token === token && entry.serverId === serverId && entry.expiresAt > Date.now()) {
-      return { userId: entry.userId, serverId: entry.serverId };
-    }
+  // O(1) lookup using token hash index
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const key = tokenIndex.get(tokenHash);
+  if (!key) {
+    return null;
   }
+
+  const entry = sftpTokenCache.get(key);
+  if (!entry) {
+    // Index stale, clean it up
+    unindexToken(token);
+    return null;
+  }
+
+  // Verify serverId matches and token not expired
+  if (entry.serverId === serverId && entry.expiresAt > Date.now()) {
+    return { userId: entry.userId, serverId: entry.serverId };
+  }
+
   return null;
 }
 
@@ -166,6 +185,10 @@ export function getSftpTokenInfo(
  * Invalidate (delete) the SFTP token for a user+server pair.
  */
 export function invalidateSftpToken(userId: string, serverId: string): void {
+  const entry = sftpTokenCache.get(`${userId}:${serverId}`);
+  if (entry) {
+    unindexToken(entry.token);
+  }
   sftpTokenCache.delete(`${userId}:${serverId}`);
 }
 
@@ -228,6 +251,10 @@ export function revokeSftpToken(
   }
   const key = `${userId}:${serverId}`;
   const existed = sftpTokenCache.has(key);
+  const entry = sftpTokenCache.get(key);
+  if (entry) {
+    unindexToken(entry.token);
+  }
   sftpTokenCache.delete(key);
   return existed;
 }
@@ -240,6 +267,7 @@ export function revokeAllSftpTokensForServer(serverId: string): number {
   let count = 0;
   for (const [key, entry] of sftpTokenCache) {
     if (entry.serverId === serverId) {
+      unindexToken(entry.token);
       sftpTokenCache.delete(key);
       count++;
     }
@@ -257,6 +285,7 @@ export function revokeSftpTokensForUser(userId: string, serverId?: string): numb
   for (const [key, entry] of sftpTokenCache) {
     if (entry.userId === userId) {
       if (serverId && entry.serverId !== serverId) continue;
+      unindexToken(entry.token);
       sftpTokenCache.delete(key);
       count++;
     }
@@ -272,6 +301,7 @@ export function pruneExpiredSftpTokens(): number {
   let pruned = 0;
   for (const [key, entry] of sftpTokenCache) {
     if (entry.expiresAt <= now) {
+      unindexToken(entry.token);
       sftpTokenCache.delete(key);
       pruned++;
     }

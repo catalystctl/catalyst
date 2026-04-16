@@ -122,13 +122,29 @@ const _auth = betterAuth({
           providerId: "whmcs",
           clientId: process.env.WHMCS_OIDC_CLIENT_ID || "",
           clientSecret: process.env.WHMCS_OIDC_CLIENT_SECRET || "",
-          discoveryUrl: process.env.WHMCS_OIDC_DISCOVERY_URL || "",
+          discoveryUrl: (() => {
+            const url = process.env.WHMCS_OIDC_DISCOVERY_URL || "";
+            // Validate URL is from expected domain
+            if (url && !url.match(/^https?:\/\/[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/)) {
+              console.warn('[SECURITY] WHMCS_OIDC_DISCOVERY_URL has invalid format, skipping OAuth provider');
+              return "";
+            }
+            return url;
+          })(),
         },
         {
           providerId: "paymenter",
           clientId: process.env.PAYMENTER_OIDC_CLIENT_ID || "",
           clientSecret: process.env.PAYMENTER_OIDC_CLIENT_SECRET || "",
-          discoveryUrl: process.env.PAYMENTER_OIDC_DISCOVERY_URL || "",
+          discoveryUrl: (() => {
+            const url = process.env.PAYMENTER_OIDC_DISCOVERY_URL || "";
+            // Validate URL is from expected domain
+            if (url && !url.match(/^https?:\/\/[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/)) {
+              console.warn('[SECURITY] PAYMENTER_OIDC_DISCOVERY_URL has invalid format, skipping OAuth provider');
+              return "";
+            }
+            return url;
+          })(),
         },
       ].filter((provider) => provider.clientId && provider.clientSecret && provider.discoveryUrl),
     }),

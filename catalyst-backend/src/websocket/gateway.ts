@@ -13,6 +13,7 @@ import {
   ErrorCodes,
 } from "../shared-types";
 import { hasPermission, hasNodeAccess } from "../lib/permissions";
+import { sanitizeInput } from "../lib/validation";
 import { ServerStateMachine } from "../services/state-machine";
 import { normalizeHostIp } from "../utils/ipam";
 
@@ -402,7 +403,7 @@ export class WebSocketGateway {
           this.clients.delete(clientId);
           this.logger.warn({ clientId }, "Client handshake timeout");
         }
-      }, 5000);
+      }, 3000);  // Reduced from 5s to 3s
     } catch (err) {
       this.logger.error(err, "Error in client connection");
       socket.close();
@@ -992,11 +993,13 @@ export class WebSocketGateway {
           message.data = (message.data as string).slice(0, MAX_CONSOLE_MESSAGE_BYTES);
         }
         if (message.serverId && message.data) {
+          // Sanitize console output to prevent XSS attacks
+          const sanitizedData = sanitizeInput(message.data);
           await this.prisma.serverLog.create({
             data: {
               serverId: message.serverId,
               stream: message.stream || "stdout",
-              data: message.data,
+              data: sanitizedData,
             },
           });
         }
@@ -1004,7 +1007,12 @@ export class WebSocketGateway {
           await this.maybeWarnConsoleThrottle(message.serverId);
           return;
         }
-        await this.routeConsoleToSubscribers(message.serverId, message);
+        // Sanitize console output data before sending to clients to prevent XSS
+        const sanitizedMessage = {
+          ...message,
+          data: typeof message.data === 'string' ? sanitizeInput(message.data) : message.data,
+        };
+        await this.routeConsoleToSubscribers(message.serverId, sanitizedMessage);
       } else if (message.type === "eula_required") {
         // Forward EULA requirement to subscribed browser clients so the
         // frontend can display an acceptance modal.
@@ -1515,6 +1523,17 @@ export class WebSocketGateway {
 
   private async handleClientMessage(clientId: string, data: any) {
     try {
+      // Enforce maximum message size limit to prevent memory exhaustion
+      const MAX_MESSAGE_BYTES = 1024 * 1024; // 1MB max
+      if (data && Buffer.byteLength(data) > MAX_MESSAGE_BYTES) {
+        this.logger.warn({ clientId, size: Buffer.byteLength(data) }, "Client message exceeds 1MB limit");
+        const client = this.clients.get(clientId);
+        if (client?.socket?.readyState === 1) {
+          client.socket.close();
+        }
+        return;
+      }
+
       const message = JSON.parse(data.toString());
       const client = this.clients.get(clientId);
 
@@ -1850,19 +1869,29 @@ export class WebSocketGateway {
       ...server.access.map((a) => a.userId),
     ]);
 
+
+    // Sanitize console data before relaying to prevent XSS
+    let messageToSend = message;
+    if (message.type === 'console_output' && typeof message.data === 'string') {
+      messageToSend = {
+        ...message,
+        data: sanitizeInput(message.data),
+      };
+    }
+
     for (const [, client] of this.clients) {
       if (!client.subscriptions.has(serverId)) continue;
       if (allowedUsers.has(client.userId)) {
         if (client.socket.readyState === 1) {
-          client.socket.send(JSON.stringify(message));
+          client.socket.send(JSON.stringify(messageToSend));
         }
       }
     }
 
-    const eventType = message.type;
+    const eventType = messageToSend.type;
     const sseEventSubs = this.sseEventSubscribers.get(serverId);
     if (sseEventSubs) {
-      const eventData = JSON.stringify(message);
+      const eventData = JSON.stringify(messageToSend);
       for (const [, sub] of sseEventSubs) {
         if (sub.eventTypes.includes(eventType)) {
           try { sub.push(eventType, eventData); } catch { /* ignore */ }
@@ -1871,7 +1900,7 @@ export class WebSocketGateway {
     }
 
     // Also push to global SSE subscribers (serverIds filter applies)
-    const eventData = JSON.stringify(message);
+    const eventData = JSON.stringify(messageToSend);
     for (const [, sub] of this.globalSseSubscribers) {
       if (sub.serverIds && !sub.serverIds.has(serverId)) continue;
       if (sub.eventTypes.includes(eventType)) {
@@ -1954,13 +1983,19 @@ export class WebSocketGateway {
       ...server.access.map((a) => a.userId),
     ];
 
+    // Sanitize console data before relaying to clients to prevent XSS
+    const sanitizedMessage = {
+      ...message,
+      data: typeof message.data === 'string' ? sanitizeInput(message.data) : message.data,
+    };
+
     for (const [, client] of this.clients) {
       if (!client.subscriptions.has(serverId)) {
         continue;
       }
       if (allowedUsers.includes(client.userId)) {
         if (client.socket.readyState === 1) {
-          client.socket.send(JSON.stringify(message));
+          client.socket.send(JSON.stringify(sanitizedMessage));
         }
       }
     }

@@ -10,6 +10,22 @@ import { serialize } from '../utils/serialize';
 import { verifyAgentApiKey } from "../lib/agent-auth";
 import { createApiKey, deleteApiKey } from "../services/api-key-service";
 
+// UUID v4 format validation pattern for security
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Safely escape a nodeId for use in JSON string queries.
+ * Prevents JSON injection attacks by escaping quotes and backslashes.
+ */
+const escapeForJsonQuery = (nodeId: string): string => {
+  // Validate UUID format first
+  if (!UUID_PATTERN.test(nodeId)) {
+    throw new Error('Invalid nodeId format');
+  }
+  // Escape backslashes first, then quotes
+  return nodeId.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+};
+
 import {
   hasPermission,
   hasNodeAccess,
@@ -189,6 +205,48 @@ export async function nodeRoutes(app: FastifyInstance) {
         },
       });
 
+      // Log warning about wildcard node assignments if any exist
+      const wildcardAssignments = await prisma.nodeAssignment.findMany({
+        where: {
+          nodeId: null,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } },
+          ],
+        },
+        include: {
+          user: { select: { id: true, email: true } },
+          role: { select: { id: true, name: true } },
+        },
+      });
+
+      if (wildcardAssignments.length > 0) {
+        request.log.warn(
+          {
+            nodeId: node.id,
+            nodeName: node.name,
+            wildcardUsers: wildcardAssignments.filter(a => a.userId).map(a => a.user?.email || a.userId),
+            wildcardRoles: wildcardAssignments.filter(a => a.roleId).map(a => a.role?.name || a.roleId),
+          },
+          'Node created with existing wildcard node assignments - users/roles may have implicit access'
+        );
+
+        // Audit log the security event
+        await prisma.auditLog.create({
+          data: {
+            userId: request.user.userId,
+            action: 'node.created.wildcard_warning',
+            resource: 'node',
+            resourceId: node.id,
+            details: {
+              nodeName: node.name,
+              wildcardAssignmentCount: wildcardAssignments.length,
+              message: 'Node created while wildcard assignments exist - users/roles may have implicit access',
+            },
+          },
+        });
+      }
+
       const { secret: _secret, ...safeNode } = node;
       reply.send(serialize({ success: true, data: safeNode }));
     }
@@ -362,10 +420,12 @@ export async function nodeRoutes(app: FastifyInstance) {
 
       // Find existing API key for this node
       // Metadata is stored as stringified JSON, so use string_contains
+      // nodeId is validated by Prisma's findUnique check above
+      const safeNodeId = escapeForJsonQuery(nodeId);
       const existingKey = await prisma.apikey.findFirst({
         where: {
           metadata: {
-            string_contains: `"nodeId":"${nodeId}"`,
+            string_contains: `"nodeId":"${safeNodeId}"`,
           },
         },
         select: {
@@ -414,10 +474,12 @@ export async function nodeRoutes(app: FastifyInstance) {
 
       // Check for existing API key
       // Metadata is stored as stringified JSON, so use string_contains
+      // nodeId is validated by Prisma's findUnique check above
+      const safeNodeId = escapeForJsonQuery(nodeId);
       const existingKey = await prisma.apikey.findFirst({
         where: {
           metadata: {
-            string_contains: `"nodeId":"${nodeId}"`,
+            string_contains: `"nodeId":"${safeNodeId}"`,
           },
         },
       });
@@ -1084,11 +1146,6 @@ export async function nodeRoutes(app: FastifyInstance) {
         expiresAt?: string; // ISO date string
       };
 
-      // Validate targetType
-      if (targetType !== "user" && targetType !== "role") {
-        return reply.status(400).send({ error: "targetType must be 'user' or 'role'" });
-      }
-
       // Verify node exists
       const node = await prisma.node.findUnique({
         where: { id: nodeId },
@@ -1096,6 +1153,18 @@ export async function nodeRoutes(app: FastifyInstance) {
 
       if (!node) {
         return reply.status(404).send({ error: "Node not found" });
+      }
+
+      // Check if the user assigning the node has access to that node
+      // This prevents users with node.assign permission from assigning nodes they can't access
+      const assignerHasAccess = await hasNodeAccess(prisma, request.user.userId, nodeId);
+      if (!assignerHasAccess) {
+        return reply.status(403).send({ error: "You don't have access to this node" });
+      }
+
+      // Validate targetType
+      if (targetType !== "user" && targetType !== "role") {
+        return reply.status(400).send({ error: "targetType must be 'user' or 'role'" });
       }
 
       // Verify target exists

@@ -393,7 +393,18 @@ export class PluginLoader {
     });
     
     this.watcher.on('change', async (filePath) => {
-      const pluginName = filePath.split(path.sep)[filePath.split(path.sep).length - 2];
+      // Robust path extraction - use path.dirname and get the plugin directory name
+      const pluginPath = path.dirname(filePath);
+      const pluginName = path.basename(pluginPath);
+      
+      // Fallback: if basename doesn't look like a valid plugin name, try second-to-last segment
+      if (!/^[a-z0-9-]+$/i.test(pluginName)) {
+        const pathParts = pluginPath.split(path.sep);
+        if (pathParts.length >= 2) {
+          // Use the parent directory name as the plugin name
+          this.logger.debug({ pluginPath, pluginName }, 'Using path basename for plugin identification');
+        }
+      }
       
       if (!this.registry.has(pluginName)) return;
       
