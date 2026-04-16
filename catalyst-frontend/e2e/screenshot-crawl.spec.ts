@@ -57,6 +57,7 @@ const ROUTES: RouteEntry[] = [
   { path: '/admin/system', label: 'admin-system', folder: 'admin' },
   { path: '/admin/security', label: 'admin-security', folder: 'admin' },
   { path: '/admin/theme-settings', label: 'admin-theme-settings', folder: 'admin' },
+  { path: '/admin/migration', label: 'admin-migration', folder: 'admin' },
   { path: '/admin/alerts', label: 'admin-alerts', folder: 'admin' },
   { path: '/admin/audit-logs', label: 'admin-audit-logs', folder: 'admin' },
   { path: '/admin/api-keys', label: 'admin-api-keys', folder: 'admin' },
