@@ -1,41 +1,42 @@
 /**
  * SSE-based real-time server state update hook.
  *
- * Connects to /api/servers/events (global endpoint) and updates
- * TanStack Query caches when server state changes.
+ * Connects to /api/servers/:serverId/events and handles:
+ *   - server_state_update / server_state — live status changes
+ *   - backup_* — live backup notifications
+ *   - eula_required — EULA prompts
  *
- * Use this in AppLayout to handle state updates for all servers globally.
+ * EventSource API handles reconnection automatically.
  */
 import { useEffect } from 'react';
 import { useQueryClient, type Query } from '@tanstack/react-query';
 import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
 
-export function useServerStateUpdates() {
+export function useSseServerEvents(serverId?: string) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    // Subscribe to a wildcard serverId to receive all state updates.
-    // The SSE server routes ALL events for the user regardless of serverId.
+    if (!serverId) return;
+
     const disconnect = createServerEventsStream(
-      // Use a sentinel serverId — the SSE endpoint broadcasts to all authorized servers
-      'all-servers',
+      serverId,
       (type: ServerEventType, data: Record<string, unknown>) => {
         const q = queryClient as any;
-        const serverId = String(data.serverId ?? '');
-        if (!serverId) return;
+        const sid = String(data.serverId ?? serverId);
 
         if (type === 'server_state_update' || type === 'server_state') {
           const nextState = String(data.state ?? '');
-          const matchesId = (srv: any) =>
-            srv?.id === serverId || srv?.uuid === serverId;
 
-          // Update cached server detail
+          const matchesServerId = (srv: any) =>
+            srv?.id === sid || srv?.uuid === sid;
+
+          // Update server detail cache
           q.setQueriesData(
             { predicate: (query: Query) =>
               Array.isArray(query.queryKey) && query.queryKey[0] === 'server' },
             (prev: any) => {
               if (!prev || typeof prev !== 'object') return prev;
-              if (!matchesId(prev)) return prev;
+              if (!matchesServerId(prev)) return prev;
               return {
                 ...prev,
                 status: nextState,
@@ -48,25 +49,27 @@ export function useServerStateUpdates() {
             },
           );
 
-          // Update cached server lists
+          // Update server list cache
           q.setQueriesData(
             { predicate: (query: Query) =>
               Array.isArray(query.queryKey) && query.queryKey[0] === 'servers' },
             (prev: any) => {
               if (!Array.isArray(prev)) return prev;
               return prev.map((srv: any) =>
-                matchesId(srv) ? { ...srv, status: nextState } : srv,
+                matchesServerId(srv)
+                  ? { ...srv, status: nextState }
+                  : srv,
               );
             },
           );
 
-          // Invalidate for fresh fetch
+          // Invalidate to fetch fresh data
           q.invalidateQueries({
             predicate: (query: any) =>
               Array.isArray(query.queryKey) &&
               query.queryKey[0] === 'server' &&
               query.state?.data &&
-              matchesId(query.state.data),
+              matchesServerId(query.state.data),
           });
           q.invalidateQueries({
             predicate: (query: any) =>
@@ -83,13 +86,13 @@ export function useServerStateUpdates() {
             predicate: (query: any) =>
               Array.isArray(query.queryKey) &&
               query.queryKey[0] === 'backups' &&
-              query.queryKey[1] === serverId,
+              query.queryKey[1] === sid,
           });
         }
       },
-      () => {},
+      () => {}, // status changes handled separately if needed
     );
 
     return disconnect;
-  }, [queryClient]);
+  }, [serverId, queryClient]);
 }

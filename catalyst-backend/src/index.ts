@@ -28,6 +28,7 @@ import { roleRoutes } from "./routes/roles";
 import { taskRoutes } from "./routes/tasks";
 import { bulkServerRoutes } from "./routes/bulk-servers";
 import { consoleStreamRoutes } from "./routes/console-stream";
+import { sseEventsRoutes } from "./routes/sse-events";
 import { WebhookService } from "./services/webhook-service";
 import { TaskScheduler } from "./services/task-scheduler";
 import { alertRoutes } from "./routes/alerts";
@@ -545,6 +546,8 @@ async function bootstrap() {
     });
     // SSE console streaming — GET stream + POST command
     await app.register((app) => consoleStreamRoutes(app, wsGateway), { prefix: "/api/servers" });
+    // SSE events: server → client real-time push (state, backups, alerts, EULA)
+    await app.register((app) => sseEventsRoutes(app, wsGateway), { prefix: "/api/servers" });
     await app.register(templateRoutes, { prefix: "/api/templates" });
     await app.register(nestRoutes, { prefix: "/api/nests" });
     await app.register(metricsRoutes, { prefix: "/api" });
