@@ -4,48 +4,97 @@
  * Implements API key creation, verification, and deletion directly against
  * the `apikey` Prisma model. This replaces the better-auth `apiKey` plugin
  * which is not available in v1.6.2.
+ *
+ * Permission model:
+ *   - `allPermissions: true`  → key inherits all creator's permissions (snapshot at creation time)
+ *   - `allPermissions: false` → key only has the specific permissions in the `permissions` array
+ *   - An API key can NEVER have more permissions than its creator had at creation time
  */
 
 import { prisma } from "../db";
-import { Prisma } from "@prisma/client";
 import { createHash, randomBytes } from "crypto";
 
 const DEFAULT_PREFIX = "catalyst";
 const KEY_LENGTH = 32; // bytes of randomness
 
-/**
- * Hash an API key using SHA-256 → base64url (same format better-auth uses).
- */
+/** Hash an API key using SHA-256 → base64url (same format better-auth uses). */
 export function hashApiKey(key: string): string {
   const hash = createHash("sha256").update(key).digest();
   return hash.toString("base64url");
 }
 
-/**
- * Create a new API key. Returns the full key (only shown once) and the DB record.
- */
-export async function createApiKey(params: {
+export interface CreateApiKeyParams {
   userId: string;
   name?: string;
   prefix?: string;
   expiresIn?: number; // seconds
-  permissions?: Record<string, string[]>;
+  allPermissions?: boolean;
+  permissions?: string[];
   metadata?: Record<string, unknown>;
   rateLimitEnabled?: boolean;
   rateLimitMax?: number;
   rateLimitTimeWindow?: number;
-}) {
+}
+
+export interface ApiKeyRecord {
+  id: string;
+  key: string; // Full key — only returned once at creation
+  name: string | null;
+  prefix: string | null;
+  start: string | null;
+  enabled: boolean;
+  expiresAt: Date | null;
+  allPermissions: boolean;
+  permissions: string[];
+  metadata: unknown;
+  rateLimitEnabled: boolean;
+  rateLimitMax: number;
+  rateLimitTimeWindow: number;
+  userId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface VerifiedApiKey {
+  valid: true;
+  key: {
+    id: string;
+    name: string | null;
+    allPermissions: boolean;
+    permissions: string[];
+    metadata: unknown;
+    userId: string;
+  };
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    username: string;
+    emailVerified: boolean;
+    role: string;
+  };
+}
+
+/**
+ * Create a new API key. Returns the full key (only shown once) and the DB record.
+ */
+export async function createApiKey(params: CreateApiKeyParams): Promise<ApiKeyRecord> {
   const {
     userId,
     name,
     prefix = DEFAULT_PREFIX,
     expiresIn,
-    permissions,
+    allPermissions = false,
+    permissions = [],
     metadata,
     rateLimitEnabled = true,
     rateLimitMax = 100,
     rateLimitTimeWindow = 60000,
   } = params;
+
+  if (!userId) {
+    throw new Error("userId is required to create an API key");
+  }
 
   // Generate random key
   const random = randomBytes(KEY_LENGTH).toString("base64url");
@@ -64,13 +113,14 @@ export async function createApiKey(params: {
     data: {
       name: name || null,
       key: hashedKey,
-      start: fullKey.slice(0, prefix.length + 3) + "...", // first few chars for display
+      start: fullKey.slice(0, prefix.length + 3) + "...",
       prefix,
       userId,
       enabled: true,
       expiresAt,
-      ...(permissions ? { permissions: permissions as Prisma.InputJsonValue } : {}),
-      ...(metadata ? { metadata: metadata as Prisma.InputJsonValue } : {}),
+      allPermissions,
+      permissions,
+      ...(metadata ? { metadata: metadata as any } : {}),
       rateLimitEnabled,
       rateLimitTimeWindow,
       rateLimitMax,
@@ -81,7 +131,6 @@ export async function createApiKey(params: {
     },
   });
 
-  // Return the full key alongside the record (full key is only shown once)
   return {
     id: record.id,
     key: fullKey,
@@ -90,6 +139,7 @@ export async function createApiKey(params: {
     start: record.start,
     enabled: record.enabled,
     expiresAt: record.expiresAt,
+    allPermissions: record.allPermissions,
     permissions: record.permissions,
     metadata: record.metadata,
     rateLimitEnabled: record.rateLimitEnabled,
@@ -104,31 +154,7 @@ export async function createApiKey(params: {
 /**
  * Verify an API key. Returns the key record and associated user if valid.
  */
-export async function verifyApiKey(fullKey: string): Promise<{
-  valid: boolean;
-  key?: {
-    id: string;
-    name: string | null;
-    permissions: unknown;
-    metadata: unknown;
-    userId: string;
-    rateLimitEnabled: boolean;
-    rateLimitMax: number;
-    rateLimitTimeWindow: number;
-    remaining: number | null;
-    lastRefillAt: Date;
-    refillInterval: number | null;
-    refillAmount: number | null;
-  };
-  user?: {
-    id: string;
-    email: string;
-    name: string;
-    username: string;
-    emailVerified: boolean;
-    role: string;
-  };
-} | null> {
+export async function verifyApiKey(fullKey: string): Promise<VerifiedApiKey | null> {
   const hashedKey = hashApiKey(fullKey);
 
   const apiKeyRecord = await prisma.apikey.findUnique({
@@ -143,8 +169,7 @@ export async function verifyApiKey(fullKey: string): Promise<{
           emailVerified: true,
           role: true,
           roles: {
-            select: { name: true },
-            take: 1,
+            select: { name: true, permissions: true },
           },
         },
       },
@@ -170,17 +195,13 @@ export async function verifyApiKey(fullKey: string): Promise<{
       apiKeyRecord.refillAmount &&
       elapsed >= apiKeyRecord.refillInterval
     ) {
-      // Refill
       const refilled = Math.min(
         (apiKeyRecord.remaining ?? 0) + apiKeyRecord.refillAmount,
-        apiKeyRecord.rateLimitMax
+        apiKeyRecord.rateLimitMax,
       );
       await prisma.apikey.update({
         where: { id: apiKeyRecord.id },
-        data: {
-          remaining: refilled,
-          lastRefillAt: now,
-        },
+        data: { remaining: refilled, lastRefillAt: now },
       });
       apiKeyRecord.remaining = refilled;
     }
@@ -189,7 +210,6 @@ export async function verifyApiKey(fullKey: string): Promise<{
       return null; // Rate limited
     }
 
-    // Decrement
     await prisma.apikey.update({
       where: { id: apiKeyRecord.id },
       data: {
@@ -199,7 +219,6 @@ export async function verifyApiKey(fullKey: string): Promise<{
       },
     });
   } else {
-    // Just track usage
     await prisma.apikey.update({
       where: { id: apiKeyRecord.id },
       data: {
@@ -216,16 +235,10 @@ export async function verifyApiKey(fullKey: string): Promise<{
     key: {
       id: apiKeyRecord.id,
       name: apiKeyRecord.name,
+      allPermissions: apiKeyRecord.allPermissions,
       permissions: apiKeyRecord.permissions,
       metadata: apiKeyRecord.metadata,
       userId: apiKeyRecord.userId,
-      rateLimitEnabled: apiKeyRecord.rateLimitEnabled,
-      rateLimitMax: apiKeyRecord.rateLimitMax,
-      rateLimitTimeWindow: apiKeyRecord.rateLimitTimeWindow,
-      remaining: apiKeyRecord.remaining,
-      lastRefillAt: apiKeyRecord.lastRefillAt || new Date(),
-      refillInterval: apiKeyRecord.refillInterval,
-      refillAmount: apiKeyRecord.refillAmount,
     },
     user: {
       id: apiKeyRecord.user.id,

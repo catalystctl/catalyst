@@ -26,7 +26,7 @@ import {
   normalizeHostIp,
   shouldUseIpam,
 } from "../utils/ipam";
-import { hasNodeAccess, getUserAccessibleNodes, hasPermission } from "../lib/permissions";
+import { hasNodeAccess, getUserAccessibleNodes } from "../lib/permissions";
 import { serverCreateSchema, validateRequestBody } from "../lib/validation";
 import {
   DatabaseProvisioningError,
@@ -1129,28 +1129,37 @@ export async function serverRoutes(app: FastifyInstance) {
     return false;
   };
 
-  const ensureSuspendPermission = async (
-    userId: string,
+  // Check permissions from request.user.permissions (populated by auth middleware)
+  const checkPerm = (request: any, permission: string): boolean => {
+    const perms: string[] = request.user?.permissions ?? [];
+    return perms.includes('*') || perms.includes(permission);
+  };
+
+  const checkAnyPerm = (request: any, permissions: string[]): boolean => {
+    const perms: string[] = request.user?.permissions ?? [];
+    if (perms.includes('*')) return true;
+    return permissions.some((p) => perms.includes(p));
+  };
+
+  const checkIsAdmin = (request: any, required: "admin.read" | "admin.write" = "admin.read"): boolean => {
+    const perms: string[] = request.user?.permissions ?? [];
+    return perms.includes('*') || perms.includes('admin.write') || (required === 'admin.read' && perms.includes('admin.read'));
+  };
+
+  const ensureSuspendPermission = (
+    request: any,
     reply: FastifyReply,
     message?: string
   ) => {
-    const roles = await prisma.role.findMany({
-      where: { users: { some: { id: userId } } },
-      select: { permissions: true },
-    });
-    const permissions = roles.flatMap((role) => role.permissions);
-    if (
-      permissions.includes("*") ||
-      permissions.includes("admin.write") ||
-      permissions.includes("admin.read") ||
-      permissions.includes("server.suspend")
-    ) {
+    if (checkAnyPerm(request, ['*', 'admin.write', 'admin.read', 'server.suspend'])) {
       return true;
     }
     reply.status(403).send({ error: message || "Admin access required" });
     return false;
   };
 
+  // isAdminUser remains DB-based — used by canAccessServer for per-server access checks
+  // where request may not be available in the same context
   const isAdminUser = async (userId: string, required: "admin.read" | "admin.write" = "admin.read") => {
     const roles = await prisma.role.findMany({
       where: { users: { some: { id: userId } } },
@@ -1183,62 +1192,55 @@ export async function serverRoutes(app: FastifyInstance) {
 
   // Compute the effective permissions a user has on a specific server.
   // Returns a string[] of permission identifiers (e.g. ['server.read', 'server.start', ...]).
+  const ALL_SERVER_PERMISSIONS = [
+    'server.read', 'server.start', 'server.stop', 'server.install',
+    'server.transfer', 'server.delete', 'server.schedule',
+    'console.read', 'console.write',
+    'file.read', 'file.write',
+    'backup.read', 'backup.create', 'backup.restore', 'backup.delete',
+    'database.read', 'database.create', 'database.rotate', 'database.delete',
+    'alert.read', 'alert.create', 'alert.update', 'alert.delete',
+  ];
+
   const getEffectiveServerPermissions = async (
     userId: string,
     server: { ownerId: string; nodeId: string },
     serverAccess?: Array<{ userId: string; permissions: string[] }>,
+    preComputedOwner?: boolean,
+    preComputedExplicitAccess?: boolean,
+    preComputedNodeAccess?: boolean,
   ): Promise<string[]> => {
     // Owner gets all server-scoped permissions
-    if (server.ownerId === userId) {
-      return [
-        'server.read', 'server.start', 'server.stop', 'server.install',
-        'server.transfer', 'server.delete', 'server.schedule',
-        'console.read', 'console.write',
-        'file.read', 'file.write',
-        'backup.read', 'backup.create', 'backup.restore', 'backup.delete',
-        'database.read', 'database.create', 'database.rotate', 'database.delete',
-        'alert.read', 'alert.create', 'alert.update', 'alert.delete',
-      ];
+    if (preComputedOwner ?? server.ownerId === userId) {
+      return ALL_SERVER_PERMISSIONS;
     }
 
-    // Admin / wildcard users get everything
+    // Explicit server access entry — return their granted permissions
+    if (preComputedExplicitAccess) {
+      const access = serverAccess?.find((a) => a.userId === userId);
+      return access ? [...access.permissions] : [];
+    }
+
+    // Pre-computed node access (already verified by caller)
+    if (preComputedNodeAccess) {
+      return ALL_SERVER_PERMISSIONS;
+    }
+
+    // Fallback: admin / wildcard role check (single DB query)
     const roles = await prisma.role.findMany({
       where: { users: { some: { id: userId } } },
       select: { permissions: true },
     });
     const rolePermissions = roles.flatMap((r) => r.permissions);
     if (rolePermissions.includes('*')) {
-      return [
-        'server.read', 'server.start', 'server.stop', 'server.install',
-        'server.transfer', 'server.delete', 'server.schedule',
-        'console.read', 'console.write',
-        'file.read', 'file.write',
-        'backup.read', 'backup.create', 'backup.restore', 'backup.delete',
-        'database.read', 'database.create', 'database.rotate', 'database.delete',
-        'alert.read', 'alert.create', 'alert.update', 'alert.delete',
-      ];
+      return ALL_SERVER_PERMISSIONS;
     }
 
-    // Node-assigned users get full access (same as owners on that node)
+    // Last resort: check node access (expensive, up to 6 DB queries)
     if (await hasNodeAccess(prisma, userId, server.nodeId)) {
-      return [
-        'server.read', 'server.start', 'server.stop', 'server.install',
-        'server.transfer', 'server.delete', 'server.schedule',
-        'console.read', 'console.write',
-        'file.read', 'file.write',
-        'backup.read', 'backup.create', 'backup.restore', 'backup.delete',
-        'database.read', 'database.create', 'database.rotate', 'database.delete',
-        'alert.read', 'alert.create', 'alert.update', 'alert.delete',
-      ];
+      return ALL_SERVER_PERMISSIONS;
     }
 
-    // Explicit server access entry
-    const access = serverAccess?.find((a) => a.userId === userId);
-    if (access) {
-      return [...access.permissions];
-    }
-
-    // No access — but shouldn't reach here if canAccessServer was checked first.
     return [];
   };
 
@@ -1392,7 +1394,7 @@ export async function serverRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
       // For admin/API-key callers, allow specifying a different owner.
       // Regular users can only create servers for themselves.
-      const canCreate = await isAdminUser(userId, 'admin.write');
+      const canCreate = checkIsAdmin(request, "admin.write");
       const hasNodeAccessResult = await hasNodeAccess(prisma, userId, nodeId);
 
       if (!canCreate && !hasNodeAccessResult) {
@@ -1404,8 +1406,7 @@ export async function serverRoutes(app: FastifyInstance) {
       // If ownerId is specified, verify the target user exists and requester has permission
       if (effectiveOwnerId !== userId) {
         // Check if user has permission to create resources for other users
-        const hasUserCreatePermission = await hasPermission(prisma, userId, 'user.create');
-        if (!hasUserCreatePermission) {
+        if (!checkPerm(request, 'user.create')) {
           return reply.status(403).send({ error: 'Insufficient permissions to create server for other user' });
         }
 
@@ -1879,7 +1880,7 @@ export async function serverRoutes(app: FastifyInstance) {
       // Owners get all permissions, node-assigned users get all,
       // explicit access users get their stored permissions.
       // For the list, we compute this from the already-loaded data.
-      const isUserAdmin = await isAdminUser(userId, "admin.write");
+      const isUserAdmin = checkIsAdmin(request, "admin.write");
       const allServerPermissions = [
         'server.read', 'server.start', 'server.stop', 'server.install',
         'server.transfer', 'server.delete', 'server.schedule',
@@ -1944,20 +1945,30 @@ export async function serverRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Server not found" });
       }
 
-      // Check if user has access - owner, explicit access, or node assignment
-      const hasAccess =
-        server.ownerId === userId ||
-        server.access.some((a) => a.userId === userId) ||
-        (await hasNodeAccess(prisma, userId, server.nodeId));
+      // Determine access level with minimal DB queries:
+      //   1. Owner → skip hasNodeAccess entirely
+      //   2. Explicit access → skip hasNodeAccess entirely
+      //   3. Otherwise → call hasNodeAccess once and reuse result for permissions
+      let nodeAccessGranted = false;
+      const isOwner = server.ownerId === userId;
+      const hasExplicitAccess = server.access.some((a) => a.userId === userId);
 
-      if (!hasAccess) {
-        return reply.status(403).send({ error: "Forbidden" });
+      if (!isOwner && !hasExplicitAccess) {
+        nodeAccessGranted = await hasNodeAccess(prisma, userId, server.nodeId);
+        if (!nodeAccessGranted) {
+          return reply.status(403).send({ error: "Forbidden" });
+        }
       }
 
+      // Compute effective permissions — reuse the nodeAccessGranted result
+      // instead of calling hasNodeAccess a second time inside getEffectiveServerPermissions
       const effectivePermissions = await getEffectiveServerPermissions(
         userId,
         { ownerId: server.ownerId, nodeId: server.nodeId },
         server.access.map((a) => ({ userId: a.userId, permissions: a.permissions as string[] })),
+        isOwner,
+        hasExplicitAccess,
+        nodeAccessGranted,
       );
 
       const { access, ...serverData } = server;
@@ -4693,7 +4704,7 @@ export async function serverRoutes(app: FastifyInstance) {
       }
 
       // Check permission - owner, admin, node-assigned, or server.delete permission
-      if (server.ownerId !== userId && !(await isAdminUser(userId, "admin.read"))) {
+      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
         const access = await prisma.serverAccess.findFirst({
           where: { serverId, userId, permissions: { has: "server.delete" } },
         });
@@ -5630,7 +5641,7 @@ export async function serverRoutes(app: FastifyInstance) {
       }
 
       // Check permissions
-      if (server.ownerId !== userId && !(await isAdminUser(userId, "admin.read"))) {
+      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
         const access = await prisma.serverAccess.findFirst({
           where: {
             userId,
@@ -5764,7 +5775,7 @@ export async function serverRoutes(app: FastifyInstance) {
       }
 
       // Check permissions
-      if (server.ownerId !== userId && !(await isAdminUser(userId, "admin.read"))) {
+      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
         const access = await prisma.serverAccess.findFirst({
           where: {
             userId,
@@ -5954,7 +5965,7 @@ export async function serverRoutes(app: FastifyInstance) {
       }
 
       // Check permissions
-      if (server.ownerId !== userId && !(await isAdminUser(userId, "admin.read"))) {
+      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
         const access = await prisma.serverAccess.findFirst({
           where: {
             userId,
@@ -6092,7 +6103,7 @@ export async function serverRoutes(app: FastifyInstance) {
       }
 
       // Check permissions
-      if (server.ownerId !== userId && !(await isAdminUser(userId, "admin.read"))) {
+      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
         const access = await prisma.serverAccess.findFirst({
           where: {
             userId,
@@ -6237,7 +6248,7 @@ export async function serverRoutes(app: FastifyInstance) {
       }
 
       // Check permissions
-      if (server.ownerId !== userId && !(await isAdminUser(userId, "admin.read"))) {
+      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
         const access = await prisma.serverAccess.findFirst({
           where: {
             userId,
@@ -6330,7 +6341,7 @@ export async function serverRoutes(app: FastifyInstance) {
         return;
       }
 
-      if (server.ownerId !== userId && !(await isAdminUser(userId, "admin.read"))) {
+      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
         const access = await prisma.serverAccess.findFirst({
           where: {
             userId,
@@ -6420,7 +6431,7 @@ export async function serverRoutes(app: FastifyInstance) {
       }
 
       // Check permissions - restart requires both server.start and server.stop
-      if (server.ownerId !== userId && !(await isAdminUser(userId, "admin.read"))) {
+      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
         const [startAccess, stopAccess] = await Promise.all([
           prisma.serverAccess.findFirst({
             where: { userId, serverId, permissions: { has: "server.start" } },
@@ -6546,8 +6557,7 @@ export async function serverRoutes(app: FastifyInstance) {
       }
 
       // Admin bypass - admins can access any server
-      const isAdmin = await hasPermission(prisma, userId, 'admin.read');
-      if (isAdmin) {
+      if (checkIsAdmin(request, 'admin.read')) {
         // Admin bypass - proceed to return allocations
       } else {
         // Check if user is owner OR has server.read permission via access entry
@@ -7328,7 +7338,7 @@ export async function serverRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
       const { reason, stopServer } = request.body as { reason?: string; stopServer?: boolean };
 
-      if (!(await ensureSuspendPermission(userId, reply))) {
+      if (!(ensureSuspendPermission(request, reply))) {
         return;
       }
 
@@ -7428,7 +7438,7 @@ export async function serverRoutes(app: FastifyInstance) {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
 
-      if (!(await ensureSuspendPermission(userId, reply))) {
+      if (!(ensureSuspendPermission(request, reply))) {
         return;
       }
 
@@ -7520,7 +7530,7 @@ export async function serverRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Server not found" });
       }
 
-      const isAdmin = await isAdminUser(userId, "admin.write");
+      const isAdmin = checkIsAdmin(request, "admin.write");
       if (server.ownerId !== userId && !isAdmin) {
         return reply.status(403).send({ error: "Only the server owner or an admin can transfer ownership" });
       }
@@ -7593,7 +7603,7 @@ export async function serverRoutes(app: FastifyInstance) {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
 
-      if (!(await ensureSuspendPermission(userId, reply, "Admin access required"))) {
+      if (!(ensureSuspendPermission(request, reply, "Admin access required"))) {
         return;
       }
 
@@ -7657,7 +7667,7 @@ export async function serverRoutes(app: FastifyInstance) {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
 
-      if (!(await ensureSuspendPermission(userId, reply, "Admin access required"))) {
+      if (!(ensureSuspendPermission(request, reply, "Admin access required"))) {
         return;
       }
 

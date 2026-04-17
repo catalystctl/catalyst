@@ -245,12 +245,21 @@ const authenticate = async (request: any, reply: any) => {
           return;
         }
 
-        // Attach user info from verification
+        // Attach user info and resolved permissions from the API key
+        let permissions: string[];
+        if (verification.key.allPermissions) {
+          const { resolveUserPermissions } = await import("./lib/permissions-catalog");
+          permissions = await resolveUserPermissions(verification.key.userId);
+        } else {
+          permissions = verification.key.permissions;
+        }
+
         request.user = {
           userId: verification.user.id,
           email: verification.user.email,
           username: verification.user.username,
           apiKeyId: verification.key.id,
+          permissions,
         };
         return; // API key auth successful
       } catch (error: any) {
@@ -270,10 +279,14 @@ const authenticate = async (request: any, reply: any) => {
       reply.status(401).send({ error: "Unauthorized" });
       return;
     }
+    // Resolve permissions from roles for session auth too
+    const { resolveUserPermissions } = await import("./lib/permissions-catalog");
+    const permissions = await resolveUserPermissions(session.user.id);
     request.user = {
       userId: session.user.id,
       email: session.user.email,
       username: (session.user as any).username,
+      permissions,
     };
   } catch {
     reply.status(401).send({ error: "Unauthorized" });

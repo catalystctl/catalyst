@@ -21,18 +21,13 @@ export async function bulkServerRoutes(app: FastifyInstance) {
   /**
    * Helper: check if user has admin/suspend permission.
    */
-  const ensureBulkPermission = async (userId: string, reply: FastifyReply) => {
-    const { prisma: p } = await import('../db.js');
-    const roles = await p.role.findMany({
-      where: { users: { some: { id: userId } } },
-      select: { permissions: true },
-    });
-    const permissions = roles.flatMap((r) => r.permissions);
+  const ensureBulkPermission = (request: any, reply: FastifyReply) => {
+    const perms: string[] = request.user?.permissions ?? [];
     if (
-      permissions.includes('*') ||
-      permissions.includes('admin.write') ||
-      permissions.includes('admin.read') ||
-      permissions.includes('server.suspend')
+      perms.includes('*') ||
+      perms.includes('admin.write') ||
+      perms.includes('admin.read') ||
+      perms.includes('server.suspend')
     ) {
       return true;
     }
@@ -46,16 +41,12 @@ export async function bulkServerRoutes(app: FastifyInstance) {
    */
   const hasServerAccess = async (
     prismaClient: typeof prisma,
-    userId: string,
+    request: any,
     serverId: string,
     requiredPermissions: string[]
   ): Promise<boolean> => {
-    // Get user roles and permissions
-    const roles = await prismaClient.role.findMany({
-      where: { users: { some: { id: userId } } },
-      select: { permissions: true },
-    });
-    const userPermissions = new Set(roles.flatMap((r) => r.permissions));
+    // Check permissions from request.user.permissions
+    const userPermissions = new Set(request.user?.permissions ?? []);
 
     // Admins have access
     if (userPermissions.has('*') || userPermissions.has('admin.write') || userPermissions.has('admin.read')) {
@@ -69,7 +60,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
 
     // Check server access table
     const access = await prismaClient.serverAccess.findUnique({
-      where: { userId_serverId: { userId, serverId } },
+      where: { userId_serverId: { userId: request.user.userId, serverId } },
       select: { permissions: true },
     });
 
@@ -87,7 +78,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
     });
 
     if (server) {
-      const nodeAccess = await hasNodeAccess(prismaClient, userId, server.nodeId);
+      const nodeAccess = await hasNodeAccess(prismaClient, request.user.userId, server.nodeId);
       if (nodeAccess) return true;
     }
 
@@ -119,7 +110,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'Maximum 100 servers per bulk operation' });
       }
 
-      if (!(await ensureBulkPermission(userId, reply))) return;
+      if (!(ensureBulkPermission(request, reply))) return;
 
       const webhookService = (app as any).webhookService as import('../services/webhook-service').WebhookService | undefined;
       const scheduler = (app as any).taskScheduler;
@@ -150,7 +141,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
 
         // Check if user has permission for this specific server
         const hasServerPermission = server.ownerId === userId || 
-          await hasServerAccess(prisma, userId, serverId, ['server.suspend', 'server.update']);
+          await hasServerAccess(prisma, request, serverId, ['server.suspend', 'server.update']);
         if (!hasServerPermission) {
           result.failed.push({ id: serverId, error: 'Not authorized' });
           continue;
@@ -245,7 +236,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'Maximum 100 servers per bulk operation' });
       }
 
-      if (!(await ensureBulkPermission(userId, reply))) return;
+      if (!(ensureBulkPermission(request, reply))) return;
 
       const scheduler = (app as any).taskScheduler;
       const result: BulkResult = { success: [], failed: [] };
@@ -270,7 +261,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
 
         // Check if user has permission for this specific server
         const hasServerPermission = server.ownerId === userId || 
-          await hasServerAccess(prisma, userId, serverId, ['server.suspend', 'server.update']);
+          await hasServerAccess(prisma, request, serverId, ['server.suspend', 'server.update']);
         if (!hasServerPermission) {
           result.failed.push({ id: serverId, error: 'Not authorized' });
           continue;
@@ -348,7 +339,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'Maximum 100 servers per bulk operation' });
       }
 
-      if (!(await ensureBulkPermission(userId, reply))) return;
+      if (!(ensureBulkPermission(request, reply))) return;
 
       const webhookService = (app as any).webhookService as import('../services/webhook-service').WebhookService | undefined;
       const gateway = (app as any).wsGateway;
@@ -377,7 +368,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
 
         // Check if user has permission for this specific server
         const hasServerPermission = server.ownerId === userId || 
-          await hasServerAccess(prisma, userId, serverId, ['server.delete', 'server.update']);
+          await hasServerAccess(prisma, request, serverId, ['server.delete', 'server.update']);
         if (!hasServerPermission) {
           result.failed.push({ id: serverId, error: 'Not authorized' });
           continue;
@@ -484,12 +475,8 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       });
 
       // Check if user has admin permissions (can see all servers)
-      const roles = await prisma.role.findMany({
-        where: { users: { some: { id: userId } } },
-        select: { permissions: true },
-      });
-      const permissions = roles.flatMap((r) => r.permissions);
-      const isAdmin = permissions.includes('*') || permissions.includes('admin.write') || permissions.includes('admin.read');
+      const perms: string[] = request.user?.permissions ?? [];
+      const isAdmin = perms.includes('*') || perms.includes('admin.write') || perms.includes('admin.read');
 
       // Filter servers based on authorization
       const filteredServers = servers.filter((server) => {

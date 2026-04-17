@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { nodesApi } from '../services/api/nodes';
 import { useAdminNodes } from './useAdmin';
+import { useRef } from 'react';
 
 export interface NodeMetricData {
   nodeId: string;
@@ -8,8 +9,8 @@ export interface NodeMetricData {
   isOnline: boolean;
   cpu: number;
   memory: number;
-  networkRx: number;
-  networkTx: number;
+  networkRx: number; // MB/s delta rate
+  networkTx: number; // MB/s delta rate
   timestamp: string;
 }
 
@@ -19,8 +20,8 @@ export interface NodeMetricHistoryPoint {
   isOnline: boolean;
   cpu: number | null;
   memory: number | null;
-  networkRx: number | null;
-  networkTx: number | null;
+  networkRx: number | null; // MB/s rate (from backend deltas)
+  networkTx: number | null; // MB/s rate (from backend deltas)
   timestamp: string;
 }
 
@@ -28,8 +29,8 @@ export interface ClusterMetrics {
   nodes: NodeMetricData[];
   totalCpu: number;
   totalMemory: number;
-  avgNetworkRx: number;
-  avgNetworkTx: number;
+  avgNetworkRx: number; // MB/s
+  avgNetworkTx: number; // MB/s
   onlineCount: number;
   offlineCount: number;
   lastUpdated: string;
@@ -45,8 +46,6 @@ export interface ClusterHistoricalMetrics {
   }>;
   /**
    * A unified timeline of data-points keyed by node name.
-   * Each point stores CPU, memory, and network per node so the chart
-   * component can pick the right field based on the selected metric.
    * Node keys are formatted as `{nodeName}_cpu`, `{nodeName}_memory`,
    * `{nodeName}_network` so recharts can bind them directly as `dataKey`.
    */
@@ -78,11 +77,13 @@ const TIME_RANGE_LIMITS: Record<TimeRange, number> = {
 
 /**
  * Fetches live (latest-only) cluster metrics. Polls at `refreshInterval`.
- * Used for the live badge, summary stats, and real-time overlay.
+ * Computes network RX/TX as per-second delta rates between polls.
  */
 export function useClusterMetrics(refreshInterval = 5000) {
   const { data: nodesData } = useAdminNodes();
   const nodes = nodesData?.nodes ?? [];
+  // Track previous cumulative byte values to compute deltas
+  const prevBytesRef = useRef<Map<string, { rx: bigint; tx: bigint; ts: number }>>(new Map());
 
   return useQuery({
     queryKey: ['cluster-metrics', nodes.map((n) => n.id)],
@@ -95,16 +96,38 @@ export function useClusterMetrics(refreshInterval = 5000) {
             const metrics = await nodesApi.metrics(node.id, { hours: 1, limit: 1 });
             const latest = metrics?.latest;
 
+            const cpu = latest?.cpuPercent ?? 0;
+            const memory = latest?.memoryTotalMb
+              ? Math.round((latest.memoryUsageMb / latest.memoryTotalMb) * 100)
+              : 0;
+
+            // Network: compute delta rate (MB/s) from cumulative bytes
+            const currentRx = BigInt(latest?.networkRxBytes ?? '0');
+            const currentTx = BigInt(latest?.networkTxBytes ?? '0');
+            const now = Date.now();
+            const prev = prevBytesRef.current.get(node.id);
+            let networkRx = 0;
+            let networkTx = 0;
+
+            if (prev && prev.rx > 0n) {
+              const elapsedSec = Math.max(1, (now - prev.ts) / 1000);
+              const rxDelta = Number(currentRx - prev.rx) / elapsedSec / (1024 * 1024);
+              const txDelta = Number(currentTx - prev.tx) / elapsedSec / (1024 * 1024);
+              // Ignore negative deltas (counter reset)
+              networkRx = Math.max(0, Math.round(rxDelta * 100) / 100);
+              networkTx = Math.max(0, Math.round(txDelta * 100) / 100);
+            }
+
+            prevBytesRef.current.set(node.id, { rx: currentRx, tx: currentTx, ts: now });
+
             nodeMetrics.push({
               nodeId: node.id,
               nodeName: node.name,
               isOnline: node.isOnline,
-              cpu: latest?.cpuPercent ?? 0,
-              memory: latest?.memoryTotalMb
-                ? Math.round((latest.memoryUsageMb / latest.memoryTotalMb) * 100)
-                : 0,
-              networkRx: parseInt(latest?.networkRxBytes ?? '0') / (1024 * 1024),
-              networkTx: parseInt(latest?.networkTxBytes ?? '0') / (1024 * 1024),
+              cpu,
+              memory,
+              networkRx,
+              networkTx,
               timestamp: latest?.timestamp ?? new Date().toISOString(),
             });
           } catch {
@@ -160,6 +183,8 @@ export function useClusterMetrics(refreshInterval = 5000) {
  * Returns per-node histories and a unified timeline with keys
  * `{nodeName}_cpu`, `{nodeName}_memory`, `{nodeName}_network`
  * so recharts can bind the right `dataKey` per selected metric.
+ *
+ * Backend returns network values as MB/s delta rates in history points.
  */
 export function useClusterHistoricalMetrics(range: TimeRange = '1h') {
   const { data: nodesData } = useAdminNodes();
@@ -183,8 +208,13 @@ export function useClusterHistoricalMetrics(range: TimeRange = '1h') {
               memory: p.memoryTotalMb
                 ? Math.round((p.memoryUsageMb / p.memoryTotalMb) * 100)
                 : null,
-              networkRx: parseInt(p.networkRxBytes ?? '0') / (1024 * 1024),
-              networkTx: parseInt(p.networkTxBytes ?? '0') / (1024 * 1024),
+              // Backend history now returns MB/s rates (numeric) for network
+              networkRx: typeof p.networkRxBytes === 'number'
+                ? p.networkRxBytes
+                : parseInt(String(p.networkRxBytes ?? '0')) / (1024 * 1024),
+              networkTx: typeof p.networkTxBytes === 'number'
+                ? p.networkTxBytes
+                : parseInt(String(p.networkTxBytes ?? '0')) / (1024 * 1024),
               timestamp: p.timestamp,
             }));
             return {
@@ -233,11 +263,10 @@ export function useClusterHistoricalMetrics(range: TimeRange = '1h') {
           }
 
           const entry = timestampMap.get(bucketKey)!;
-          // Store all three metrics so the chart can pick the right one
           entry[`${nodeKey}_cpu`] = nodeResult.isOnline ? point.cpu : null;
           entry[`${nodeKey}_memory`] = nodeResult.isOnline ? point.memory : null;
           entry[`${nodeKey}_network`] = nodeResult.isOnline
-            ? Math.round((point.networkRx ?? 0) + (point.networkTx ?? 0))
+            ? Math.round(((point.networkRx ?? 0) + (point.networkTx ?? 0)) * 100) / 100
             : null;
         }
       }

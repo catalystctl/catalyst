@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
-import { queryClient } from '@/lib/queryClient';
 import { apiKeyService, CreateApiKeyRequest, UpdateApiKeyRequest } from '../services/apiKeys';
 import { toast } from 'sonner';
 
@@ -35,7 +34,29 @@ export function useApiKeyUsage(id: string | undefined) {
     queryKey: [...API_KEYS_QUERY_KEY, id, 'usage'],
     queryFn: () => apiKeyService.getUsage(id!),
     enabled: !!id,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 30000,
+  });
+}
+
+/**
+ * Hook to fetch the permissions catalog (categories + permissions).
+ */
+export function usePermissionsCatalog() {
+  return useQuery({
+    queryKey: ['permissions-catalog'] as const,
+    queryFn: () => apiKeyService.getPermissionsCatalog(),
+    staleTime: 10 * 60 * 1000, // Catalog rarely changes
+  });
+}
+
+/**
+ * Hook to fetch the current user's effective permissions.
+ */
+export function useMyPermissions() {
+  return useQuery({
+    queryKey: ['my-permissions'] as const,
+    queryFn: () => apiKeyService.getMyPermissions(),
+    staleTime: 60 * 1000, // Refresh every minute
   });
 }
 

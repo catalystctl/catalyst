@@ -789,26 +789,13 @@ function ServerDetailsPage() {
     pluginManagerConfig,
   ]);
 
-  // ── Loading / Error states ──
-  if (isLoading) {
+  // ── Error state (fatal — don't render anything) ──
+  if (isError) {
     return (
       <div className="relative min-h-screen overflow-hidden">
         <div className="pointer-events-none fixed inset-0 overflow-hidden">
           <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-primary-500/8 to-primary-300/8 blur-3xl dark:from-primary-500/15 dark:to-primary-300/15" />
           <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-primary-400/8 to-primary-200/8 blur-3xl dark:from-primary-400/15 dark:to-primary-200/15" />
-        </div>
-        <div className="relative z-10 flex items-center justify-center p-8">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </div>
-    );
-  }
-
-  if (isError || !server) {
-    return (
-      <div className="relative min-h-screen overflow-hidden">
-        <div className="pointer-events-none fixed inset-0 overflow-hidden">
-          <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-primary-500/8 to-primary-300/8 blur-3xl dark:from-primary-500/15 dark:to-primary-300/15" />
         </div>
         <div className="relative z-10 flex items-center justify-center p-8">
           <div className="rounded-xl border border-danger/30 bg-danger-muted px-6 py-4 text-center">
@@ -835,16 +822,16 @@ function ServerDetailsPage() {
     );
   }
 
-  // ── Derived values ──
-  const nodeLabel = server.node?.name ?? server.nodeName ?? server.nodeId;
+  // ── Derived values (nullable while server is loading) ──
+  const nodeLabel = server?.node?.name ?? server?.nodeName ?? server?.nodeId ?? '…';
   const nodeIp =
-    server.connection?.host ??
-    server.primaryIp ??
-    server.node?.publicAddress ??
-    server.node?.hostname ??
+    server?.connection?.host ??
+    server?.primaryIp ??
+    server?.node?.publicAddress ??
+    server?.node?.hostname ??
     'n/a';
-  const nodePort = server.primaryPort ?? 'n/a';
-  const diskLimitMb = server.allocatedDiskMb ?? 0;
+  const nodePort = server?.primaryPort ?? 'n/a';
+  const diskLimitMb = server?.allocatedDiskMb ?? 0;
   const liveDiskUsageMb = liveMetrics?.diskUsageMb;
   const liveDiskTotalMb = liveMetrics?.diskTotalMb;
 
@@ -874,20 +861,30 @@ function ServerDetailsPage() {
                   <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-primary-500 to-primary-400 opacity-20 blur-sm" />
                   <Terminal className="relative h-7 w-7 text-primary" />
                 </div>
-                <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">
-                  {server.name}
-                </h1>
-                <ServerStatusBadge status={server.status} />
+                {isLoading ? (
+                  <div className="h-8 w-48 animate-pulse rounded-md bg-muted" />
+                ) : (
+                  <>
+                    <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">
+                      {server.name}
+                    </h1>
+                    <ServerStatusBadge status={server.status} />
+                  </>
+                )}
               </div>
               <p className="ml-10 text-sm text-muted-foreground">
-                Node: {nodeLabel} (IP: {nodeIp}, Port: {nodePort})
+                {isLoading ? 'Loading…' : `Node: ${nodeLabel} (IP: ${nodeIp}, Port: ${nodePort})`}
               </p>
             </div>
-            <ServerControls
-              serverId={server.id}
-              status={server.status}
-              permissions={server.effectivePermissions}
-            />
+            {server ? (
+              <ServerControls
+                serverId={server.id}
+                status={server.status}
+                permissions={server.effectivePermissions}
+              />
+            ) : (
+              <div className="h-9 w-32 animate-pulse rounded-md bg-muted" />
+            )}
           </div>
           {isSuspended ? (
             <div className="mt-4 rounded-lg border border-danger/30 bg-danger-muted px-4 py-3 text-xs text-danger">
@@ -919,7 +916,7 @@ function ServerDetailsPage() {
                     ? 'bg-primary-600 text-white shadow-sm'
                     : 'text-muted-foreground hover:bg-surface-2/70 hover:text-foreground'
                 }`}
-                onClick={() => navigate(`/servers/${server.id}/${key}`)}
+                onClick={() => server && navigate(`/servers/${server.id}/${key}`)}
               >
                 <Icon className="h-4 w-4" />
                 <span className="font-medium">{label}</span>
@@ -946,7 +943,7 @@ function ServerDetailsPage() {
             />
           )}
 
-          {activeTab === 'files' && (
+          {activeTab === 'files' && server && (
             <ServerTabCard>
               <FileManager
                 serverId={server.id}
@@ -955,7 +952,7 @@ function ServerDetailsPage() {
             </ServerTabCard>
           )}
 
-          {activeTab === 'sftp' && (
+          {activeTab === 'sftp' && server && (
             <ServerSftpTab
               serverId={server.id}
               ownerId={server.ownerId}
@@ -963,7 +960,7 @@ function ServerDetailsPage() {
             />
           )}
 
-          {activeTab === 'backups' && (
+          {activeTab === 'backups' && server && (
             <ServerTabCard>
               <BackupSection
                 serverId={server.id}
@@ -973,7 +970,7 @@ function ServerDetailsPage() {
             </ServerTabCard>
           )}
 
-          {activeTab === 'tasks' && (
+          {activeTab === 'tasks' && server && (
             <ServerTasksTab
               serverId={server.id}
               isSuspended={isSuspended}
@@ -986,7 +983,7 @@ function ServerDetailsPage() {
             />
           )}
 
-          {activeTab === 'databases' && (
+          {activeTab === 'databases' && server && (
             <ServerDatabasesTab
               serverId={server.id}
               isSuspended={isSuspended}
@@ -1009,7 +1006,7 @@ function ServerDetailsPage() {
             />
           )}
 
-          {activeTab === 'metrics' && (
+          {activeTab === 'metrics' && server && (
             <ServerMetricsTab
               serverCpuPercent={server.cpuPercent ?? 0}
               serverMemoryPercent={server.memoryPercent ?? 0}
@@ -1023,7 +1020,7 @@ function ServerDetailsPage() {
             />
           )}
 
-          {activeTab === 'alerts' && (
+          {activeTab === 'alerts' && server && (
             <div className="space-y-4">
               <AlertsPage serverId={server.id} />
             </div>
@@ -1045,7 +1042,7 @@ function ServerDetailsPage() {
             />
           )}
 
-          {activeTab === 'users' && (
+          {activeTab === 'users' && server && (
             <ServerUsersTab
               serverId={server.id}
               ownerId={server.ownerId}
@@ -1076,7 +1073,7 @@ function ServerDetailsPage() {
             />
           )}
 
-          {activeTab === 'configuration' && (
+          {activeTab === 'configuration' && server && (
             <ServerConfigurationTab
               serverId={serverId}
               isSuspended={isSuspended}
@@ -1096,7 +1093,7 @@ function ServerDetailsPage() {
             />
           )}
 
-          {activeTab === 'admin' && (
+          {activeTab === 'admin' && server && (
             <ServerAdminTab
               serverId={server.id}
               serverName={server.name}
@@ -1139,7 +1136,7 @@ function ServerDetailsPage() {
             />
           )}
 
-          {activeTab === 'settings' && (
+          {activeTab === 'settings' && server && (
             <ServerSettingsTab
               serverId={server.id}
               serverName={serverName}

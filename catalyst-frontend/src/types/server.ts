@@ -195,8 +195,8 @@ export interface ServerMetricsPoint {
   memoryUsageMb: number;
   diskIoMb?: number;
   diskUsageMb: number;
-  networkRxBytes: string;
-  networkTxBytes: string;
+  networkRxBytes: string | number | null;
+  networkTxBytes: string | number | null;
   timestamp: string;
 }
 

@@ -12,7 +12,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
-use sysinfo::{Disks, System};
+use sysinfo::{Disks, Networks, System};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::RwLock;
 use tokio_tungstenite::connect_async;
@@ -4068,6 +4068,16 @@ impl WebSocketHandler {
                 disk.total_space().saturating_sub(disk.available_space()) / (1024 * 1024);
         }
 
+        // Collect aggregate network stats across all interfaces
+        let mut networks = Networks::new_with_refreshed_list();
+        networks.refresh(true);
+        let mut total_network_rx_bytes: u64 = 0;
+        let mut total_network_tx_bytes: u64 = 0;
+        for (_name, data) in networks.list() {
+            total_network_rx_bytes += data.total_received();
+            total_network_tx_bytes += data.total_transmitted();
+        }
+
         let health = json!({
             "type": "health_report",
             "nodeId": self.config.server.node_id,
@@ -4079,6 +4089,8 @@ impl WebSocketHandler {
             "diskTotalMb": disk_total_mb,
             "containerCount": containers.iter().filter(|c| c.managed).count(),
             "uptimeSeconds": get_uptime(),
+            "networkRxBytes": total_network_rx_bytes,
+            "networkTxBytes": total_network_tx_bytes,
         });
 
         debug!("Health report: {}", health);
@@ -4391,11 +4403,9 @@ impl WebSocketHandler {
 
             let cpu_percent = parse_percent(&stats.cpu_percent).unwrap_or(0.0);
             let memory_usage_mb = parse_memory_usage_mb(&stats.memory_usage).unwrap_or(0);
-            let (network_rx_bytes, network_tx_bytes) =
-                parse_io_pair_bytes(&stats.net_io).unwrap_or((0, 0));
-            let (disk_read_bytes, disk_write_bytes) =
-                parse_io_pair_bytes(&stats.block_io).unwrap_or((0, 0));
-            let disk_io_mb = (disk_read_bytes + disk_write_bytes) / (1024 * 1024);
+            let network_rx_bytes = stats.network_rx_bytes;
+            let network_tx_bytes = stats.network_tx_bytes;
+            let disk_io_mb = (stats.block_read_bytes + stats.block_write_bytes) / (1024 * 1024);
             let (disk_usage_mb, disk_total_mb) = match self
                 .runtime
                 .exec(&container.id, vec!["df", "-m", "/data"])
@@ -4523,15 +4533,6 @@ fn parse_percent(value: &str) -> Option<f64> {
 fn parse_memory_usage_mb(value: &str) -> Option<u64> {
     let first = value.split('/').next()?.trim();
     parse_size_to_bytes(first).map(|bytes| bytes / (1024 * 1024))
-}
-
-fn parse_io_pair_bytes(value: &str) -> Option<(u64, u64)> {
-    let mut parts = value.split('/');
-    let left = parts.next()?.trim();
-    let right = parts.next()?.trim();
-    let left_bytes = parse_size_to_bytes(left)?;
-    let right_bytes = parse_size_to_bytes(right)?;
-    Some((left_bytes, right_bytes))
 }
 
 fn parse_size_to_bytes(value: &str) -> Option<u64> {

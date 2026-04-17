@@ -1,10 +1,8 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { PrismaClient } from "@prisma/client";
 import { v4 as uuidv4 } from "uuid";
 import { randomBytes } from "crypto";
 import { listAvailableIps, summarizePool } from "../utils/ipam";
-import { Prisma } from "@prisma/client";
 import { auth } from "../auth";
 import { serialize } from '../utils/serialize';
 import { verifyAgentApiKey } from "../lib/agent-auth";
@@ -27,28 +25,18 @@ const escapeForJsonQuery = (nodeId: string): string => {
 };
 
 import {
-  hasPermission,
   hasNodeAccess,
   getUserAccessibleNodes,
   getNodeAssignments,
   assignNode,
   removeNodeAssignment,
-  isAdminUser,
 } from "../lib/permissions";
 
-const ensurePermission = async (
-  prisma: PrismaClient,
-  userId: string,
-  reply: FastifyReply,
-  requiredPermission: string,
-  nodeId?: string
-) => {
-  const has = await hasPermission(prisma, userId, requiredPermission, nodeId);
-  if (!has) {
-    reply.status(403).send({ error: "Insufficient permissions" });
-    return false;
-  }
-  return true;
+const ensurePermission = (request: any, reply: FastifyReply, requiredPermission: string): boolean => {
+  const perms: string[] = request.user?.permissions ?? [];
+  if (perms.includes('*') || perms.includes(requiredPermission)) return true;
+  reply.status(403).send({ error: "Insufficient permissions" });
+  return false;
 };
 
 const PORT_FLOOR = 1024;
@@ -144,8 +132,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.create");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.create")) return;
       const { name, description, locationId, hostname, publicAddress, maxMemoryMb, maxCpuCores, serverDataDir } =
         request.body as {
           name: string;
@@ -257,13 +244,13 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.read");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.read")) return;
 
       const userId = request.user.userId;
 
       // Check if user is admin - admins see all nodes
-      const isAdmin = await isAdminUser(prisma, userId, true);
+      const perms: string[] = request.user?.permissions ?? [];
+      const isAdmin = perms.includes('*') || perms.includes('admin.write') || perms.includes('admin.read');
 
       let nodes;
       if (isAdmin) {
@@ -303,8 +290,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.read");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.read")) return;
       const { nodeId } = request.params as { nodeId: string };
       const userId = request.user.userId;
 
@@ -342,8 +328,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/deployment-token",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.create");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.create")) return;
       const { nodeId } = request.params as { nodeId: string };
 
       const node = await prisma.node.findUnique({
@@ -406,8 +391,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/api-key",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.read");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.read")) return;
       const { nodeId } = request.params as { nodeId: string };
 
       const node = await prisma.node.findUnique({
@@ -459,8 +443,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/api-key",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.create");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.create")) return;
       const { nodeId } = request.params as { nodeId: string };
       const { regenerate } = (request.body as { regenerate?: boolean }) || {};
 
@@ -539,8 +522,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.update");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.update")) return;
       const { nodeId } = request.params as { nodeId: string };
       const { name, description, hostname, publicAddress, maxMemoryMb, maxCpuCores, serverDataDir } =
         request.body as {
@@ -602,8 +584,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/stats",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.view_stats");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.view_stats")) return;
       const { nodeId } = request.params as { nodeId: string };
       const userId = request.user.userId;
 
@@ -698,6 +679,8 @@ export async function nodeRoutes(app: FastifyInstance) {
           diskUsageMb?: number;
           diskTotalMb?: number;
           containerCount: number;
+          networkRxBytes?: number;
+          networkTxBytes?: number;
         };
       };
 
@@ -738,6 +721,8 @@ export async function nodeRoutes(app: FastifyInstance) {
       const diskUsageMb = Number(health?.diskUsageMb ?? 0);
       const diskTotalMb = Number(health?.diskTotalMb ?? 0);
       const containerCount = Number(health?.containerCount);
+      const networkRxBytes = BigInt(Math.max(0, Number(health?.networkRxBytes ?? 0)));
+      const networkTxBytes = BigInt(Math.max(0, Number(health?.networkTxBytes ?? 0)));
 
       if (
         !Number.isFinite(cpuPercent) ||
@@ -766,8 +751,8 @@ export async function nodeRoutes(app: FastifyInstance) {
           memoryTotalMb: Math.round(memoryTotalMb),
           diskUsageMb: Math.round(diskUsageMb),
           diskTotalMb: Math.round(diskTotalMb),
-          networkRxBytes: BigInt(0),
-          networkTxBytes: BigInt(0),
+          networkRxBytes,
+          networkTxBytes,
           containerCount: Math.max(0, Math.round(containerCount)),
         },
       });
@@ -781,8 +766,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.delete");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.delete")) return;
       const { nodeId } = request.params as { nodeId: string };
 
       const node = await prisma.node.findUnique({
@@ -815,8 +799,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/ip-pools",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.read");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.read")) return;
       const { nodeId } = request.params as { nodeId: string };
       const userId = request.user.userId;
 
@@ -859,8 +842,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/ip-availability",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.read");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.read")) return;
       const { nodeId } = request.params as { nodeId: string };
       const userId = request.user.userId;
 
@@ -904,8 +886,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/allocations",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.manage_allocation");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.manage_allocation")) return;
       const { nodeId } = request.params as { nodeId: string };
       const userId = request.user.userId;
 
@@ -971,8 +952,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/allocations",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.manage_allocation");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.manage_allocation")) return;
       const { nodeId } = request.params as { nodeId: string };
       const userId = request.user.userId;
 
@@ -1035,8 +1015,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/allocations/:allocationId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.manage_allocation");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.manage_allocation")) return;
       const { nodeId, allocationId } = request.params as {
         nodeId: string;
         allocationId: string;
@@ -1074,8 +1053,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/allocations/:allocationId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.manage_allocation");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.manage_allocation")) return;
       const { nodeId, allocationId } = request.params as {
         nodeId: string;
         allocationId: string;
@@ -1112,8 +1090,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/assignments",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.assign");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.assign")) return;
 
       const { nodeId } = request.params as { nodeId: string };
 
@@ -1136,8 +1113,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/assign",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.assign");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.assign")) return;
 
       const { nodeId } = request.params as { nodeId: string };
       const { targetType, targetId, expiresAt } = request.body as {
@@ -1246,8 +1222,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/:nodeId/assignments/:assignmentId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.assign");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.assign")) return;
 
       const { nodeId, assignmentId } = request.params as {
         nodeId: string;
@@ -1298,8 +1273,7 @@ export async function nodeRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
 
       // Check if user has node.read permission
-      const hasPerm = await ensurePermission(prisma, userId, reply, "node.read");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.read")) return;
 
       // Get accessible node IDs
       const accessibleResult = await getUserAccessibleNodes(prisma, userId);
@@ -1341,8 +1315,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/assign-wildcard",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.assign");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.assign")) return;
 
       const { targetType, targetId, expiresAt } = request.body as {
         targetType: "user" | "role";
@@ -1434,8 +1407,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     "/assign-wildcard/:targetType/:targetId",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const hasPerm = await ensurePermission(prisma, request.user.userId, reply, "node.assign");
-      if (!hasPerm) return;
+      if (!ensurePermission(request, reply, "node.assign")) return;
 
       const { targetType, targetId } = request.params as {
         targetType: "user" | "role";

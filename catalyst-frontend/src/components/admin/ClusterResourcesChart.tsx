@@ -128,7 +128,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
       case 'memory':
         return 'Memory Usage (%)';
       case 'network':
-        return 'Network I/O (MB)';
+        return 'Network I/O (MB/s)';
     }
   };
 
@@ -138,7 +138,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
       case 'memory':
         return '%';
       case 'network':
-        return 'MB';
+        return ' MB/s';
     }
   };
 
@@ -413,7 +413,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
                 )}
                 {metric === 'network' && (
                   <span className="rounded-full bg-surface-2 px-2 py-0.5 font-medium text-foreground dark:text-zinc-300">
-                    RX: {data.avgNetworkRx.toFixed(1)} MB | TX: {data.avgNetworkTx.toFixed(1)} MB
+                    RX: {data.avgNetworkRx.toFixed(1)} MB/s | TX: {data.avgNetworkTx.toFixed(1)} MB/s
                   </span>
                 )}
               </>

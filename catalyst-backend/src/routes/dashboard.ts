@@ -1,6 +1,5 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { hasPermission, hasAnyPermission } from '../lib/permissions';
 
 export async function dashboardRoutes(app: FastifyInstance) {
   const authenticate = (app as any).authenticate;
@@ -11,12 +10,13 @@ export async function dashboardRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
+      const perms: string[] = user?.permissions ?? [];
 
       // Check if user has any relevant permission
-      const canReadServers = await hasPermission(prisma, user.userId, 'server.read');
-      const canReadNodes = await hasPermission(prisma, user.userId, 'node.read');
-      const canReadAlerts = await hasPermission(prisma, user.userId, 'alert.read');
-      const isAdmin = await hasAnyPermission(prisma, user.userId, ['admin.read', 'admin.write']);
+      const canReadServers = perms.includes('*') || perms.includes('server.read');
+      const canReadNodes = perms.includes('*') || perms.includes('node.read');
+      const canReadAlerts = perms.includes('*') || perms.includes('alert.read');
+      const isAdmin = perms.includes('*') || perms.some(p => ['admin.read', 'admin.write'].includes(p));
 
       // Get server count - for non-admins, only count their own servers
       const serverWhere = isAdmin || canReadServers ? {} : { ownerId: user.userId };
@@ -53,8 +53,8 @@ export async function dashboardRoutes(app: FastifyInstance) {
     async (request: FastifyRequest<{ Querystring: { limit?: string } }>, reply: FastifyReply) => {
       const user = request.user;
       const limit = Math.min(20, parseInt(request.query.limit || '5', 10));
-
-      const isAdmin = await hasAnyPermission(prisma, user.userId, ['admin.read', 'admin.write']);
+      const perms: string[] = user?.permissions ?? [];
+      const isAdmin = perms.includes('*') || perms.some(p => ['admin.read', 'admin.write'].includes(p));
 
       // Get recent audit logs as activity
       const auditWhere = isAdmin ? {} : { userId: user.userId };
@@ -92,9 +92,10 @@ export async function dashboardRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
+      const perms: string[] = user?.permissions ?? [];
 
-      const canReadNodes = await hasPermission(prisma, user.userId, 'node.read');
-      const isAdmin = await hasAnyPermission(prisma, user.userId, ['admin.read', 'admin.write']);
+      const canReadNodes = perms.includes('*') || perms.includes('node.read');
+      const isAdmin = perms.includes('*') || perms.some(p => ['admin.read', 'admin.write'].includes(p));
 
       if (!canReadNodes && !isAdmin) {
         return reply.send({

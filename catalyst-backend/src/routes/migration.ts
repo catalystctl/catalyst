@@ -6,7 +6,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { randomUUID } from "crypto";
 import { prisma } from "../db.js";
 import { MigrationService } from "../services/migration/index.js";
-import { hasPermission } from "../lib/permissions.js";
+
 import { serialize } from "../utils/serialize.js";
 
 // Singleton migration service
@@ -28,14 +28,9 @@ export async function migrationRoutes(app: FastifyInstance) {
   const authenticate = (app as any).authenticate;
 
   // Helper to check admin permission (runs after authenticate preHandler)
-  const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-    const userId = (request as any).user?.userId;
-    if (!userId) {
-      reply.status(401).send({ error: "Not authenticated" });
-      return false;
-    }
-    const isAdmin = await hasPermission(prisma, userId, "admin.write");
-    if (!isAdmin) {
+  const requireAdmin = (request: FastifyRequest, reply: FastifyReply) => {
+    const perms: string[] = (request as any).user?.permissions ?? [];
+    if (!perms.includes('*') && !perms.includes('admin.write')) {
       reply.status(403).send({ error: "Admin permission required" });
       return false;
     }
@@ -50,7 +45,7 @@ export async function migrationRoutes(app: FastifyInstance) {
    * List Catalyst nodes available as migration targets (online only)
    */
   app.get("/api/admin/migration/catalyst-nodes", { ...withAuth }, async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!(await requireAdmin(request, reply))) return;
+    if (!(requireAdmin(request, reply))) return;
 
     try {
       const nodes = await prisma.node.findMany({
@@ -100,7 +95,7 @@ export async function migrationRoutes(app: FastifyInstance) {
    * Test Pterodactyl connection
    */
   app.post("/api/admin/migration/test", { ...withAuth }, async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!(await requireAdmin(request, reply))) return;
+    if (!(requireAdmin(request, reply))) return;
 
     const body = request.body as any;
     const { url, key, clientApiKey } = body;
@@ -134,7 +129,7 @@ export async function migrationRoutes(app: FastifyInstance) {
    *     Required for "server" scope. Maps individual Ptero servers to Catalyst nodes.
    */
   app.post("/api/admin/migration/start", { ...withAuth }, async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!(await requireAdmin(request, reply))) return;
+    if (!(requireAdmin(request, reply))) return;
 
     const body = request.body as any;
     const { url, key, clientApiKey, scope, nodeMappings, serverMappings } = body;
@@ -257,7 +252,7 @@ export async function migrationRoutes(app: FastifyInstance) {
    * List all migration jobs
    */
   app.get("/api/admin/migration", { ...withAuth }, async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!(await requireAdmin(request, reply))) return;
+    if (!(requireAdmin(request, reply))) return;
 
     try {
       const service = getMigrationService(logger);
@@ -273,7 +268,7 @@ export async function migrationRoutes(app: FastifyInstance) {
    * Get migration job status
    */
   app.get("/api/admin/migration/:jobId", { ...withAuth }, async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!(await requireAdmin(request, reply))) return;
+    if (!(requireAdmin(request, reply))) return;
 
     const { jobId } = request.params as any;
 
@@ -294,7 +289,7 @@ export async function migrationRoutes(app: FastifyInstance) {
    * POST /api/admin/migration/:jobId/pause
    */
   app.post("/api/admin/migration/:jobId/pause", { ...withAuth }, async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!(await requireAdmin(request, reply))) return;
+    if (!(requireAdmin(request, reply))) return;
 
     const { jobId } = request.params as any;
 
@@ -311,7 +306,7 @@ export async function migrationRoutes(app: FastifyInstance) {
    * POST /api/admin/migration/:jobId/resume
    */
   app.post("/api/admin/migration/:jobId/resume", { ...withAuth }, async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!(await requireAdmin(request, reply))) return;
+    if (!(requireAdmin(request, reply))) return;
 
     const { jobId } = request.params as any;
 
@@ -328,7 +323,7 @@ export async function migrationRoutes(app: FastifyInstance) {
    * POST /api/admin/migration/:jobId/cancel
    */
   app.post("/api/admin/migration/:jobId/cancel", { ...withAuth }, async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!(await requireAdmin(request, reply))) return;
+    if (!(requireAdmin(request, reply))) return;
 
     const { jobId } = request.params as any;
 
@@ -346,7 +341,7 @@ export async function migrationRoutes(app: FastifyInstance) {
    * Get steps for a migration job
    */
   app.get("/api/admin/migration/:jobId/steps", { ...withAuth }, async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!(await requireAdmin(request, reply))) return;
+    if (!(requireAdmin(request, reply))) return;
 
     const { jobId } = request.params as any;
     const query = request.query as any;
@@ -385,7 +380,7 @@ export async function migrationRoutes(app: FastifyInstance) {
    * Retry a failed step
    */
   app.post("/api/admin/migration/:jobId/retry/:stepId", { ...withAuth }, async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!(await requireAdmin(request, reply))) return;
+    if (!(requireAdmin(request, reply))) return;
 
     const { jobId, stepId } = request.params as any;
 

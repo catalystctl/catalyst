@@ -181,11 +181,11 @@ export default function ServerConsoleTab({
             </div>
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between text-[10px]">
-                <span className="text-muted-foreground">RX</span>
+                <span className="text-muted-foreground">RX (total)</span>
                 <span className="font-medium text-foreground">{formatBytes(Number(liveMetrics.networkRxBytes ?? 0))}</span>
               </div>
               <div className="flex items-center justify-between text-[10px]">
-                <span className="text-muted-foreground">TX</span>
+                <span className="text-muted-foreground">TX (total)</span>
                 <span className="font-medium text-foreground">{formatBytes(Number(liveMetrics.networkTxBytes ?? 0))}</span>
               </div>
             </div>

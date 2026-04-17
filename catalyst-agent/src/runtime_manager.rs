@@ -117,8 +117,9 @@ async fn get_container_pids(cgroup_path: &str) -> Option<Vec<u32>> {
     }
 }
 
-/// Read network I/O stats for a container via /proc/{pid}/net/dev
-async fn read_network_io(cgroup_path: &str) -> Option<String> {
+/// Read network I/O stats for a container via /proc/{pid}/net/dev.
+/// Returns (rx_bytes, tx_bytes, display_string).
+async fn read_network_io(cgroup_path: &str) -> Option<(u64, u64, String)> {
     let pids = get_container_pids(cgroup_path).await?;
     let content = tokio::fs::read_to_string(format!("/proc/{}/net/dev", pids[0]))
         .await
@@ -136,15 +137,20 @@ async fn read_network_io(cgroup_path: &str) -> Option<String> {
             }
         }
     }
-    Some(format!(
-        "↓ {} / ↑ {}",
-        format_bytes(total_rx),
-        format_bytes(total_tx)
+    Some((
+        total_rx,
+        total_tx,
+        format!(
+            "↓ {} / ↑ {}",
+            format_bytes(total_rx),
+            format_bytes(total_tx)
+        ),
     ))
 }
 
-/// Read block I/O stats from cgroup v2 io.stat
-async fn read_block_io(cgroup_path: &str) -> Option<String> {
+/// Read block I/O stats from cgroup v2 io.stat.
+/// Returns (read_bytes, write_bytes, display_string).
+async fn read_block_io(cgroup_path: &str) -> Option<(u64, u64, String)> {
     let content = tokio::fs::read_to_string(format!("{}/io.stat", cgroup_path))
         .await
         .ok()?;
@@ -163,10 +169,14 @@ async fn read_block_io(cgroup_path: &str) -> Option<String> {
             }
         }
     }
-    Some(format!(
-        "↓ {} / ↑ {}",
-        format_bytes(read_bytes),
-        format_bytes(write_bytes)
+    Some((
+        read_bytes,
+        write_bytes,
+        format!(
+            "↓ {} / ↑ {}",
+            format_bytes(read_bytes),
+            format_bytes(write_bytes)
+        ),
     ))
 }
 
@@ -348,6 +358,12 @@ pub struct ContainerStats {
     pub memory_usage: String,
     pub net_io: String,
     pub block_io: String,
+    /// Raw network bytes (rx, tx) — cumulative counters.
+    pub network_rx_bytes: u64,
+    pub network_tx_bytes: u64,
+    /// Raw block I/O bytes (read, write) — cumulative counters.
+    pub block_read_bytes: u64,
+    pub block_write_bytes: u64,
 }
 
 /// Log stream providing async file handles for stdout/stderr
@@ -1418,19 +1434,19 @@ impl ContainerdRuntime {
         } else {
             format!("{}MiB / 0MiB", mem / (1024 * 1024))
         };
-        let net_io = if !cg.is_empty() {
+        let (net_rx, net_tx, net_io) = if !cg.is_empty() {
             read_network_io(&cg)
                 .await
-                .unwrap_or_else(|| "0B / 0B".to_string())
+                .unwrap_or_else(|| (0, 0, "0B / 0B".to_string()))
         } else {
-            "0B / 0B".to_string()
+            (0, 0, "0B / 0B".to_string())
         };
-        let block_io = if !cg.is_empty() {
+        let (blk_read, blk_write, block_io) = if !cg.is_empty() {
             read_block_io(&cg)
                 .await
-                .unwrap_or_else(|| "0B / 0B".to_string())
+                .unwrap_or_else(|| (0, 0, "0B / 0B".to_string()))
         } else {
-            "0B / 0B".to_string()
+            (0, 0, "0B / 0B".to_string())
         };
         Ok(ContainerStats {
             container_id: container_id.to_string(),
@@ -1439,6 +1455,10 @@ impl ContainerdRuntime {
             memory_usage: memory_display,
             net_io,
             block_io,
+            network_rx_bytes: net_rx,
+            network_tx_bytes: net_tx,
+            block_read_bytes: blk_read,
+            block_write_bytes: blk_write,
         })
     }
 
@@ -1500,11 +1520,15 @@ impl ContainerdRuntime {
         container_id: &str,
     ) -> AgentResult<EventStream> {
         let mut client = EventsClient::new(self.channel.clone());
+        // Containerd's filter parser requires quoting values that contain
+        // special characters like '/'.  Without quotes the '/' in topic
+        // paths (e.g. /tasks/exit) is misinterpreted as a filter delimiter
+        // and causes a parse error.
         let req = SubscribeRequest {
             filters: vec![
-                format!("topic==/tasks/exit,container=={}", container_id),
-                format!("topic==/tasks/start,container=={}", container_id),
-                format!("topic==/tasks/delete,container=={}", container_id),
+                format!("topic==\"/tasks/exit\",container=={}", container_id),
+                format!("topic==\"/tasks/start\",container=={}", container_id),
+                format!("topic==\"/tasks/delete\",container=={}", container_id),
             ],
         };
         let req = with_namespace!(req, &self.namespace);
@@ -1518,8 +1542,8 @@ impl ContainerdRuntime {
         let mut client = EventsClient::new(self.channel.clone());
         let req = SubscribeRequest {
             filters: vec![
-                "topic~=/tasks/".to_string(),
-                "topic~=/containers/".to_string(),
+                "topic~=\"/tasks/\"".to_string(),
+                "topic~=\"/containers/\"".to_string(),
             ],
         };
         let req = with_namespace!(req, &self.namespace);

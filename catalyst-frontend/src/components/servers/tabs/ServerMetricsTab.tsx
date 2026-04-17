@@ -1,4 +1,3 @@
-import { formatBytes } from '../../../utils/formatters';
 import ServerMetrics from '../ServerMetrics';
 import ServerMetricsTrends from '../ServerMetricsTrends';
 import MetricsTimeRangeSelector from '../MetricsTimeRangeSelector';
@@ -107,15 +106,22 @@ export default function ServerMetricsTab({
               },
               {
                 label: 'Network RX',
-                value: formatBytes(
-                  Number(metricsHistory?.latest?.networkRxBytes ?? 0),
-                ),
+                value: (() => {
+                  // Use the last history point's rate (MB/s) if available
+                  const lastPoint = metricsHistory?.history?.[metricsHistory.history.length - 1];
+                  const rate = lastPoint?.networkRxBytes;
+                  if (rate != null && typeof rate === 'number') return `${rate.toFixed(2)} MB/s`;
+                  return 'n/a';
+                })(),
               },
               {
                 label: 'Network TX',
-                value: formatBytes(
-                  Number(metricsHistory?.latest?.networkTxBytes ?? 0),
-                ),
+                value: (() => {
+                  const lastPoint = metricsHistory?.history?.[metricsHistory.history.length - 1];
+                  const rate = lastPoint?.networkTxBytes;
+                  if (rate != null && typeof rate === 'number') return `${rate.toFixed(2)} MB/s`;
+                  return 'n/a';
+                })(),
               },
             ]}
           />

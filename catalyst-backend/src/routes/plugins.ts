@@ -1,4 +1,3 @@
-import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { PluginLoader } from '../plugins/loader';
 import { z } from 'zod';
@@ -11,29 +10,17 @@ const UpdatePluginConfigSchema = z.object({
   config: z.record(z.string(), z.any()),
 });
 
-const ensureAdmin = async (
-  userId: string,
+const ensureAdmin = (
+  request: any,
   reply: FastifyReply,
   requiredPermission: 'admin.read' | 'admin.write' = 'admin.read',
 ) => {
-  const roles = await prisma.role.findMany({
-    where: {
-      users: {
-        some: { id: userId },
-      },
-    },
-    select: {
-      name: true,
-      permissions: true,
-    },
-  });
-  const permissions = roles.flatMap((role) => role.permissions);
+  const perms: string[] = request.user?.permissions ?? [];
   const isAdmin =
-    permissions.includes('*') ||
-    permissions.includes('admin.write') ||
-    (requiredPermission === 'admin.read' && permissions.includes('admin.read'));
-  const hasRole = roles.some((role) => role.name.toLowerCase() === 'administrator');
-  if (!isAdmin && !hasRole) {
+    perms.includes('*') ||
+    perms.includes('admin.write') ||
+    (requiredPermission === 'admin.read' && perms.includes('admin.read'));
+  if (!isAdmin) {
     reply.status(403).send({
       success: false,
       error: 'Admin access required',
@@ -57,7 +44,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       onRequest: [app.authenticate],
     },
     async (request, reply) => {
-      const isAdmin = await ensureAdmin(request.user.userId, reply, 'admin.read');
+      const isAdmin = ensureAdmin(request, reply, 'admin.read');
       if (!isAdmin) return;
       const registry = pluginLoader.getRegistry();
       const plugins = registry.getAll();
@@ -95,7 +82,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       onRequest: [app.authenticate],
     },
     async (request, reply) => {
-      const isAdmin = await ensureAdmin(request.user.userId, reply, 'admin.read');
+      const isAdmin = ensureAdmin(request, reply, 'admin.read');
       if (!isAdmin) return;
       const { name } = request.params as { name: string };
       const registry = pluginLoader.getRegistry();
@@ -144,7 +131,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       onRequest: [app.authenticate],
     },
     async (request, reply) => {
-      const isAdmin = await ensureAdmin(request.user.userId, reply, 'admin.write');
+      const isAdmin = ensureAdmin(request, reply, 'admin.write');
       if (!isAdmin) return;
       const { name } = request.params as { name: string };
       const body = EnablePluginSchema.parse(request.body);
@@ -179,7 +166,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       onRequest: [app.authenticate],
     },
     async (request, reply) => {
-      const isAdmin = await ensureAdmin(request.user.userId, reply, 'admin.write');
+      const isAdmin = ensureAdmin(request, reply, 'admin.write');
       if (!isAdmin) return;
       const { name } = request.params as { name: string };
       
@@ -209,7 +196,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       onRequest: [app.authenticate],
     },
     async (request, reply) => {
-      const isAdmin = await ensureAdmin(request.user.userId, reply, 'admin.write');
+      const isAdmin = ensureAdmin(request, reply, 'admin.write');
       if (!isAdmin) return;
       const { name } = request.params as { name: string };
       const body = UpdatePluginConfigSchema.parse(request.body);

@@ -17,13 +17,11 @@ type TrendCard = {
   formatTooltip?: (value: number) => string;
 };
 
-const toNumber = (value?: string | number) => {
-  const parsed = typeof value === 'string' ? Number(value) : value ?? 0;
+const toNumber = (value?: string | number | null) => {
+  if (value == null) return 0;
+  const parsed = typeof value === 'string' ? Number(value) : value;
   return Number.isFinite(parsed) ? parsed : 0;
 };
-
-const toDeltas = (values: number[]) =>
-  values.map((value, index) => (index === 0 ? 0 : Math.max(0, value - values[index - 1])));
 
 const toChartData = (values: number[]) => values.map((value, index) => ({ index, value }));
 
@@ -42,9 +40,10 @@ function ServerMetricsTrends({
   const memoryHistory = history.map((point) => point.memoryUsageMb);
   const diskHistory = history.map((point) => point.diskUsageMb);
   const diskIoHistory = history.map((point) => point.diskIoMb ?? 0);
+  // Network values from backend are now MB/s delta rates (numeric)
   const netRxHistory = history.map((point) => toNumber(point.networkRxBytes));
   const netTxHistory = history.map((point) => toNumber(point.networkTxBytes));
-  const throughput = toDeltas(netRxHistory.map((value, index) => value + netTxHistory[index]));
+  const throughput = netRxHistory.map((rx, i) => Math.round((rx + netTxHistory[i]) * 100) / 100);
 
   const cards: TrendCard[] = [
     {
@@ -82,11 +81,11 @@ function ServerMetricsTrends({
     },
     {
       label: 'Network',
-      value: formatBytes(throughput[throughput.length - 1] ?? 0),
+      value: `${(throughput[throughput.length - 1] ?? 0).toFixed(2)} MB/s`,
       color: 'text-info',
       stroke: 'hsl(var(--info))',
       data: toChartData(throughput),
-      formatTooltip: (value) => formatBytes(value),
+      formatTooltip: (value) => `${value.toFixed(2)} MB/s`,
     },
   ];
 

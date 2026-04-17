@@ -109,6 +109,11 @@ export class WebSocketGateway {
   private serverMetricsCounters = new Map<string, { count: number; resetAt: number }>();
   private agentLimitWarnings = new Map<string, { resetAt: number }>();
   private serverCommandCounters = new Map<string, { count: number; resetAt: number }>();
+
+  // Cache server access lists to avoid DB query on every routeToClients call.
+  // Refreshed every 30 seconds per server.
+  private serverAccessCache = new Map<string, { allowedUsers: Set<string>; expiresAt: number }>();
+  private static readonly SERVER_ACCESS_TTL_MS = 30_000;
   private serverConsoleBytes = new Map<string, { count: number; resetAt: number }>();
   private consoleResumeTimestamps = new Map<string, number>();
   private lastConsoleLimitRefreshAt = 0;
@@ -712,6 +717,8 @@ export class WebSocketGateway {
         const diskUsageMb = Number(message.diskUsageMb ?? 0);
         const diskTotalMb = Number(message.diskTotalMb ?? 0);
         const containerCount = Number(message.containerCount);
+        const networkRxBytes = BigInt(Math.max(0, Number(message.networkRxBytes ?? 0)));
+        const networkTxBytes = BigInt(Math.max(0, Number(message.networkTxBytes ?? 0)));
         if (
           !Number.isFinite(cpuPercent) ||
           !Number.isFinite(memoryUsageMb) ||
@@ -735,8 +742,8 @@ export class WebSocketGateway {
             memoryTotalMb: Math.round(memoryTotalMb),
             diskUsageMb: Math.round(diskUsageMb),
             diskTotalMb: Math.round(diskTotalMb),
-            networkRxBytes: BigInt(0),
-            networkTxBytes: BigInt(0),
+            networkRxBytes,
+            networkTxBytes,
             containerCount: Math.max(0, Math.round(containerCount)),
           },
         });
@@ -777,26 +784,28 @@ export class WebSocketGateway {
         if (!this.allowServerMetrics(server.id)) {
           return;
         }
-        await this.prisma.serverMetrics.create({
-          data: {
-            serverId: server.id,
-            cpuPercent: Number.isFinite(cpuPercent) ? Math.min(Math.max(cpuPercent, 0), 100) : 0,
-            memoryUsageMb: Math.round(Number.isFinite(memoryUsageMb) ? Math.max(memoryUsageMb, 0) : 0),
-            networkRxBytes,
-            networkTxBytes,
-            diskIoMb: Math.round(Number.isFinite(diskIoMb) ? Math.max(diskIoMb, 0) : 0),
-            diskUsageMb: Math.round(Number.isFinite(diskUsageMb) ? Math.max(diskUsageMb, 0) : 0),
-          },
+        // Persist metrics to DB — fire-and-forget to avoid blocking SSE broadcast
+        const metricsData = {
+          serverId: server.id,
+          cpuPercent: Number.isFinite(cpuPercent) ? Math.min(Math.max(cpuPercent, 0), 100) : 0,
+          memoryUsageMb: Math.round(Number.isFinite(memoryUsageMb) ? Math.max(memoryUsageMb, 0) : 0),
+          networkRxBytes,
+          networkTxBytes,
+          diskIoMb: Math.round(Number.isFinite(diskIoMb) ? Math.max(diskIoMb, 0) : 0),
+          diskUsageMb: Math.round(Number.isFinite(diskUsageMb) ? Math.max(diskUsageMb, 0) : 0),
+        };
+        this.prisma.serverMetrics.create({ data: metricsData }).catch((err) => {
+          this.logger.warn({ err, serverId: server.id }, 'Failed to persist serverMetrics');
         });
 
         // Persist to historical ServerStat table (fire-and-forget)
         this.prisma.serverStat.create({
           data: {
             serverId: server.id,
-            cpuPercent: Number.isFinite(cpuPercent) ? Math.min(Math.max(cpuPercent, 0), 100) : 0,
-            memoryUsed: Math.round((Number.isFinite(memoryUsageMb) ? Math.max(memoryUsageMb, 0) : 0) * 1024 * 1024),
+            cpuPercent: metricsData.cpuPercent,
+            memoryUsed: Math.round(metricsData.memoryUsageMb * 1024 * 1024),
             memoryLimit: server.allocatedMemoryMb * 1024 * 1024,
-            diskUsed: Number.isFinite(diskUsageMb) ? Math.round(diskUsageMb * 1024 * 1024) : null,
+            diskUsed: metricsData.diskUsageMb ? Math.round(metricsData.diskUsageMb * 1024 * 1024) : null,
             netRx: Number(networkRxBytes) || null,
             netTx: Number(networkTxBytes) || null,
             blockRead: Number.isFinite(diskIoMb) ? Math.round(diskIoMb * 1024 * 1024) : null,
@@ -1851,23 +1860,25 @@ export class WebSocketGateway {
    * Used for server-scoped events (state changes, backups, alerts).
    */
   private async routeToClients(serverId: string, message: any): Promise<void> {
-    const server = await this.prisma.server.findUnique({
-      where: { id: serverId },
-      include: {
-        access: {
-          select: { userId: true },
-        },
-      },
-    });
+    // Use cached server access list
+    const now = Date.now();
+    let cached = this.serverAccessCache.get(serverId);
+    let allowedUsers: Set<string>;
 
-    if (!server) {
-      return;
+    if (cached && cached.expiresAt > now) {
+      allowedUsers = cached.allowedUsers;
+    } else {
+      const server = await this.prisma.server.findUnique({
+        where: { id: serverId },
+        include: { access: { select: { userId: true } } },
+      });
+      if (!server) return;
+      allowedUsers = new Set([
+        server.ownerId,
+        ...server.access.map((a) => a.userId),
+      ]);
+      this.serverAccessCache.set(serverId, { allowedUsers, expiresAt: now + WebSocketGateway.SERVER_ACCESS_TTL_MS });
     }
-
-    const allowedUsers = new Set([
-      server.ownerId,
-      ...server.access.map((a) => a.userId),
-    ]);
 
 
     // Sanitize console data before relaying to prevent XSS
@@ -2003,11 +2014,25 @@ export class WebSocketGateway {
     // Also push to SSE subscribers (HTTP/2 streaming)
     const sseSubs = this.sseSubscribers.get(serverId);
     if (sseSubs) {
-      const event = message.type === 'console_output'
+      const msgType = message.type;
+
+      // Console SSE subscribers only need console_output, eula_required, error, and connected.
+      // Skip high-frequency non-console events (resource_stats, server_state_update, etc.)
+      // to avoid flooding the SSE connection with irrelevant data.
+      if (
+        msgType !== 'console_output' &&
+        msgType !== 'eula_required' &&
+        msgType !== 'error' &&
+        msgType !== 'connected'
+      ) {
+        return;
+      }
+
+      const event = msgType === 'console_output'
         ? 'console_output'
-        : message.type === 'error'
+        : msgType === 'error'
           ? 'error'
-          : message.type === 'eula_required'
+          : msgType === 'eula_required'
             ? 'eula_required'
             : 'message';
 

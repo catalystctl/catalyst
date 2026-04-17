@@ -11,9 +11,13 @@ import {
   Activity,
   Clock,
   Zap,
+  Shield,
+  ShieldCheck,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
-import { useApiKeys, useDeleteApiKey } from '../hooks/useApiKeys';
-import { ApiKey } from '../services/apiKeys';
+import { useApiKeys, useDeleteApiKey, usePermissionsCatalog } from '../hooks/useApiKeys';
+import { ApiKey, PermissionCategory, getPermissionLabel } from '../services/apiKeys';
 import { CreateApiKeyDialog } from '../components/apikeys/CreateApiKeyDialog';
 import EmptyState from '../components/shared/EmptyState';
 import { Input } from '../components/ui/input';
@@ -49,6 +53,85 @@ const formatDate = (dateString: string | null) => {
   return new Date(dateString).toLocaleString();
 };
 
+// ── Permissions Display ──
+function PermissionsDisplay({
+  apiKey,
+  catalog,
+  collapsed,
+  onToggle,
+}: {
+  apiKey: ApiKey;
+  catalog: PermissionCategory[];
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  if (apiKey.allPermissions) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+        <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+          All creator permissions
+        </span>
+      </div>
+    );
+  }
+
+  const perms = apiKey.permissions || [];
+  if (perms.length === 0) {
+    return <span className="text-xs text-muted-foreground italic">No permissions</span>;
+  }
+
+  // Group permissions by category
+  const grouped = new Map<string, { cat: PermissionCategory; perms: string[] }>();
+  for (const perm of perms) {
+    const cat = catalog.find((c) => c.permissions.some((p) => p.value === perm));
+    const catId = cat?.id || 'other';
+    if (!grouped.has(catId)) grouped.set(catId, { cat: cat || { id: 'other', label: 'Other', description: '', permissions: [] }, perms: [] });
+    grouped.get(catId)!.perms.push(perm);
+  }
+
+  const maxShow = collapsed ? 3 : grouped.size;
+  const entries = [...grouped.entries()].slice(0, maxShow);
+
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap gap-1">
+        {entries.map(([catId, { cat, perms: catPerms }]) => (
+          <div key={catId} className="flex items-center gap-1">
+            <Badge variant="outline" className="text-[10px] border-primary-300/40 text-primary-700 dark:border-primary-500/30 dark:text-primary-400">
+              <Shield className="mr-1 h-2.5 w-2.5" />
+              {cat.label}
+              <span className="ml-1 text-[9px] opacity-60">{catPerms.length}</span>
+            </Badge>
+          </div>
+        ))}
+        {grouped.size > maxShow && (
+          <button
+            onClick={onToggle}
+            className="text-[10px] text-primary-600 hover:underline dark:text-primary-400 flex items-center gap-0.5"
+          >
+            +{grouped.size - maxShow} more
+          </button>
+        )}
+      </div>
+
+      {/* Expanded permission list */}
+      {!collapsed && (
+        <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5 pl-1">
+          {entries.map(([catId, { perms: catPerms }]) =>
+            catPerms.map((perm) => (
+              <div key={perm} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className="h-1 w-1 rounded-full bg-primary-400/60" />
+                <span>{getPermissionLabel(perm, catalog)}</span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Stat Card ──
 function StatCard({ label, value, variant = 'default' }: { label: string; value: number; variant?: 'default' | 'active' | 'agent' | 'expired' }) {
   const colorMap = {
@@ -76,14 +159,17 @@ function ApiKeyRow({
   apiKey,
   onDelete,
   index,
+  catalog,
 }: {
   apiKey: ApiKey;
   onDelete: () => void;
   index: number;
+  catalog: PermissionCategory[];
 }) {
   const agent = isAgentKey(apiKey);
   const expired = isExpired(apiKey.expiresAt);
   const nodeId = getNodeId(apiKey);
+  const [permsExpanded, setPermsExpanded] = useState(false);
 
   return (
     <motion.div
@@ -157,6 +243,16 @@ function ApiKeyRow({
             </div>
           )}
 
+          {/* Permissions */}
+          <div className="mt-3">
+            <PermissionsDisplay
+              apiKey={apiKey}
+              catalog={catalog}
+              collapsed={!permsExpanded}
+              onToggle={() => setPermsExpanded(!permsExpanded)}
+            />
+          </div>
+
           {/* Metadata grid */}
           <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-[11px]">
             <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -204,6 +300,7 @@ function ApiKeyRow({
 // ── Main Page ──
 export function ApiKeysPage() {
   const { data: apiKeys, isLoading } = useApiKeys();
+  const { data: catalog = [] } = usePermissionsCatalog();
   const deleteApiKey = useDeleteApiKey();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [deleteKey, setDeleteKey] = useState<ApiKey | null>(null);
@@ -402,6 +499,7 @@ export function ApiKeysPage() {
                 key={apiKey.id}
                 apiKey={apiKey}
                 index={i}
+                catalog={catalog}
                 onDelete={() => { setDeleteKey(apiKey); setConfirmAgentDelete(false); }}
               />
             ))}

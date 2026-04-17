@@ -5,10 +5,12 @@ declare module "fastify" {
   interface FastifyRequest {
     user: {
       userId: string;
+      id?: string;
       email?: string;
       username?: string;
       isApiKeyAuth?: boolean;
-      apiKeyPermissions?: Record<string, string[]>;
+      apiKeyId?: string;
+      permissions?: string[];
     };
     userForLockout?: {
       id: string;

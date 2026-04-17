@@ -152,7 +152,8 @@ model apikey {
   remaining           Int?
   lastRequest         DateTime?
   expiresAt           DateTime?
-  permissions         Json?
+  allPermissions      Boolean   @default(false)
+  permissions         String[]
   metadata            Json?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
