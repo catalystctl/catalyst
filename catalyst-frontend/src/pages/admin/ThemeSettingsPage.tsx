@@ -133,6 +133,139 @@ function ColorPicker({
   );
 }
 
+// ─── OIDC Provider Section ───
+
+function OidcProviderSection() {
+  const [configs, setConfigs] = useState<Record<string, { clientId: string; clientSecret: string; discoveryUrl: string; source: string }>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    adminApi.getOidcConfig().then((data) => {
+      setConfigs(data);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const updateField = (provider: string, field: string, value: string) => {
+    setConfigs((prev) => ({
+      ...prev,
+      [provider]: { ...prev[provider], [field]: value },
+    }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await adminApi.updateOidcConfig(configs);
+      toast.success('OAuth configuration saved. A server restart may be required for changes to take effect.');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to save OAuth configuration');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-4 text-xs text-zinc-400">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-transparent" />
+        Loading OAuth configuration…
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {(['paymenter', 'whmcs'] as const).map((provider) => {
+        const cfg = configs[provider] || { clientId: '', clientSecret: '', discoveryUrl: '', source: 'none' };
+        const isConfigured = cfg.source !== 'none';
+
+        return (
+          <div key={provider} className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  {provider.charAt(0).toUpperCase() + provider.slice(1)}
+                </span>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  isConfigured
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                    : 'bg-zinc-100 text-zinc-500 dark:bg-surface-3 dark:text-zinc-400'
+                }`}>
+                  {isConfigured ? `Configured (${cfg.source})` : 'Not configured'}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Client ID
+                </label>
+                <input
+                  type="text"
+                  value={cfg.clientId}
+                  onChange={(e) => updateField(provider, 'clientId', e.target.value)}
+                  placeholder={`${provider.toUpperCase()}_OIDC_CLIENT_ID`}
+                  className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-zinc-700 dark:bg-surface-2 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Client Secret
+                </label>
+                <input
+                  type="password"
+                  value={cfg.clientSecret}
+                  onChange={(e) => updateField(provider, 'clientSecret', e.target.value)}
+                  placeholder={cfg.clientSecret ? 'Leave unchanged to keep current secret' : `${provider.toUpperCase()}_OIDC_CLIENT_SECRET`}
+                  className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-zinc-700 dark:bg-surface-2 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                />
+                {cfg.source === 'database' && cfg.clientSecret && (
+                  <p className="mt-1 text-[10px] text-zinc-400 dark:text-zinc-500">
+                    Secret is masked. Enter a new value to update, or leave as-is to keep.
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Discovery URL
+                </label>
+                <input
+                  type="url"
+                  value={cfg.discoveryUrl}
+                  onChange={(e) => updateField(provider, 'discoveryUrl', e.target.value)}
+                  placeholder="https://example.com/.well-known/openid-configuration"
+                  className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-zinc-700 dark:bg-surface-2 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                />
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+        >
+          {saving ? (
+            <><div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Saving…</>
+          ) : (
+            <><Save className="h-3.5 w-3.5" />Save OAuth Config</>
+          )}
+        </button>
+        <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+          Values are stored in the database and override environment variables. A server restart may be required.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ───
 
 function ThemeSettingsPage() {
@@ -1122,6 +1255,16 @@ function ThemeSettingsPage() {
             Maximum 100 KB. Custom CSS overrides all defaults — use with caution as it can break the UI.
           </p>
         </div>
+      </SectionCard>
+
+      {/* ── OAuth / OIDC Providers ── */}
+      <SectionCard
+        title="OAuth Providers"
+        description="Configure OIDC/SSO login providers (WHMCS, Paymenter)"
+        icon={Shield}
+        defaultOpen={false}
+      >
+        <OidcProviderSection />
       </SectionCard>
 
       {/* ── Action Buttons ── */}

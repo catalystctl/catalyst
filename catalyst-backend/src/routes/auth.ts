@@ -93,6 +93,15 @@ export async function authRoutes(app: FastifyInstance) {
       const tokenHeader = forwardAuthHeaders(response, reply);
       const permissions = await loadUserPermissions(user.id);
 
+      // Fetch role + profile fields from DB (same rationale as login).
+      const profile = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: {
+          name: true, firstName: true, lastName: true, image: true,
+          roles: { select: { name: true } },
+        },
+      });
+
       // Send welcome email (non-blocking)
       try {
         const { sendEmail } = await import('../services/mailer');
@@ -114,6 +123,11 @@ export async function authRoutes(app: FastifyInstance) {
           userId: user.id,
           email: user.email,
           username: user.username ?? username,
+          name: profile?.name ?? null,
+          firstName: profile?.firstName ?? null,
+          lastName: profile?.lastName ?? null,
+          image: profile?.image ?? null,
+          role: profile?.roles[0]?.name || 'user',
           permissions,
           token: tokenHeader ?? null,
         },
@@ -202,12 +216,29 @@ export async function authRoutes(app: FastifyInstance) {
         const tokenHeader = forwardAuthHeaders(response, reply);
         const permissions = await loadUserPermissions(user.id);
 
+        // Fetch role + profile fields from DB.  better-auth's signInEmail
+        // response only includes fields it manages (id, email, username, …);
+        // custom Prisma fields like firstName, lastName, image, and the
+        // role (from the roles table) are NOT included.
+        const profile = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: {
+            name: true, firstName: true, lastName: true, image: true,
+            roles: { select: { name: true } },
+          },
+        });
+
         reply.send({
           success: true,
           data: {
             userId: user.id,
             email: user.email,
             username: user.username ?? userRecord.username,
+            name: profile?.name ?? null,
+            firstName: profile?.firstName ?? null,
+            lastName: profile?.lastName ?? null,
+            image: profile?.image ?? null,
+            role: profile?.roles[0]?.name || 'user',
             permissions,
             token: tokenHeader ?? null,
           },
@@ -721,16 +752,27 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.send(serialize({ success: true, message: 'Email already verified' }));
       }
       try {
-        const { sendEmail } = await import('../services/mailer');
-        const panelName = (await import('../db').then(m => m.prisma.themeSettings.findUnique({ where: { id: 'default' } })))?.panelName || process.env.APP_NAME || 'Catalyst';
-        await sendEmail({
-          to: user.email,
-          subject: `Verify your ${panelName} email`,
-          html: `<p>Click the link below to verify your email address.</p>`,
-          text: `Verify your email for ${panelName}.`,
+        // Use better-auth's built-in verification email sender which generates
+        // a signed token and includes the proper verification URL.
+        await auth.api.sendVerificationEmail({
+          headers: getHeaders(request),
+          body: { email: user.email },
         });
-      } catch {
-        // Log but don't fail
+      } catch (baErr: any) {
+        // Fallback: if better-auth's method fails (e.g. misconfigured), send
+        // a generic email instructing the user to try again from settings.
+        try {
+          const { sendEmail } = await import('../services/mailer');
+          const panelName = (await import('../db').then(m => m.prisma.themeSettings.findUnique({ where: { id: 'default' } })))?.panelName || process.env.APP_NAME || 'Catalyst';
+          await sendEmail({
+            to: user.email,
+            subject: `Verify your ${panelName} email`,
+            html: `<p>Hello,</p><p>Please log out and back in, then check your account settings to request a new verification email.</p>`,
+            text: `Verify your email for ${panelName}.`,
+          });
+        } catch {
+          // Swallow — don't expose internal errors to the client
+        }
       }
       reply.send(serialize({ success: true, message: 'Verification email sent' }));
     }

@@ -486,6 +486,13 @@ async function bootstrap() {
         // Routes handled by custom authRoutes above — skip the catch-all proxy.
         // Fastify's route matching already prioritises specific routes over wildcards,
         // but this guard prevents accidentally reaching the proxy on edge cases.
+        // Safety net: Fastify already prioritises specific routes registered by
+        // the authRoutes plugin over this wildcard catch-all.  This guard is a
+        // redundant backstop — if a request somehow reaches the proxy for a path
+        // that has a custom handler, return 404 instead of forwarding it to
+        // better-auth (which would produce confusing errors).
+        // NOTE: This list does NOT need to be exhaustive.  Missing a path here
+        // won't cause a bug — Fastify will route to the correct handler anyway.
         const customAuthPaths = [
           '/api/auth/login',
           '/api/auth/register',
@@ -867,6 +874,17 @@ async function bootstrap() {
       }
 
       // Return only public fields
+      const oidcMeta = (settings.metadata as Record<string, any>) || {};
+      const oidcDb = (oidcMeta.oidcProviders as Record<string, Record<string, string>>) || {};
+      const isProviderConfigured = (p: string) => {
+        const db = oidcDb[p];
+        return !!(
+          (db?.clientId || process.env[`${p.toUpperCase()}_OIDC_CLIENT_ID`]) &&
+          (db?.clientSecret || process.env[`${p.toUpperCase()}_OIDC_CLIENT_SECRET`]) &&
+          (db?.discoveryUrl || process.env[`${p.toUpperCase()}_OIDC_DISCOVERY_URL`])
+        );
+      };
+
       reply.send({
         success: true,
         data: {
@@ -881,8 +899,8 @@ async function bootstrap() {
           // Expose which OAuth/SSO providers are configured so the frontend
           // can hide login buttons and profile linking UI when not set up.
           authProviders: {
-            whmcs: !!(process.env.WHMCS_OIDC_CLIENT_ID && process.env.WHMCS_OIDC_CLIENT_SECRET && process.env.WHMCS_OIDC_DISCOVERY_URL),
-            paymenter: !!(process.env.PAYMENTER_OIDC_CLIENT_ID && process.env.PAYMENTER_OIDC_CLIENT_SECRET && process.env.PAYMENTER_OIDC_DISCOVERY_URL),
+            whmcs: isProviderConfigured('whmcs'),
+            paymenter: isProviderConfigured('paymenter'),
           },
           // Extended theme customization stored in metadata
           themeColors: (settings.metadata as any)?.themeColors || null,
@@ -903,6 +921,29 @@ async function bootstrap() {
         logger.error({ plugin: plugin.name, error: error.message }, 'Failed to auto-enable plugin');
       }
     }
+
+    // Bootstrap OIDC config from DB (falls back to env vars already set)
+    try {
+      const dbSettings = await prisma.themeSettings.findUnique({ where: { id: 'default' } });
+      const meta = dbSettings?.metadata as Record<string, unknown> | null;
+      if (meta?.oidcProviders && typeof meta.oidcProviders === 'object') {
+        const providers = meta.oidcProviders as Record<string, Record<string, string>>;
+        for (const [key, cfg] of Object.entries(providers)) {
+          const prefix = key.toUpperCase();
+          if (cfg.clientId && !process.env[`${prefix}_OIDC_CLIENT_ID`]) process.env[`${prefix}_OIDC_CLIENT_ID`] = cfg.clientId;
+          if (cfg.clientSecret && !process.env[`${prefix}_OIDC_CLIENT_SECRET`]) process.env[`${prefix}_OIDC_CLIENT_SECRET`] = cfg.clientSecret;
+          if (cfg.discoveryUrl && !process.env[`${prefix}_OIDC_DISCOVERY_URL`]) process.env[`${prefix}_OIDC_DISCOVERY_URL`] = cfg.discoveryUrl;
+        }
+        logger.info('OIDC config bootstrapped from database');
+      }
+    } catch (err: any) {
+      logger.warn({ error: err.message }, 'Failed to bootstrap OIDC config from DB, using env vars');
+    }
+
+    // Initialize auth after OIDC env vars have been bootstrapped from DB
+    const { initAuth } = await import('./auth');
+    initAuth();
+    logger.info('Auth initialized');
 
     // Start server
     await app.listen({ port: parseInt(process.env.PORT || "3000"), host: "0.0.0.0" });

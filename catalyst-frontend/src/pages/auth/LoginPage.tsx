@@ -1,7 +1,7 @@
-import { type BaseSyntheticEvent, useState } from 'react';
+import { type BaseSyntheticEvent, useEffect, useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { authApi } from '../../services/api/auth';
 import type { LoginSchema } from '../../validators/auth';
@@ -28,7 +28,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { login, verifyTwoFactor, isLoading, error, setSession } = useAuthStore();
+  const { login, verifyTwoFactor, isLoading, error, setSession, isAuthenticated, isReady } = useAuthStore();
   const [authStep, setAuthStep] = useState<'passkey' | 'totp' | null>(null);
   const [passkeySubmitting, setPasskeySubmitting] = useState(false);
   const [allowPasskeyFallback, setAllowPasskeyFallback] = useState(false);
@@ -47,7 +47,22 @@ function LoginPage() {
   
 
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const ssoError = searchParams.get('error');
+  const ssoProvider = searchParams.get('provider');
   const from = (location.state as { from?: { pathname?: string } } | undefined)?.from?.pathname;
+
+  // Redirect away from /login if already authenticated.
+  // Only triggers once isReady is true (after init() completes) to avoid
+  // racing with the initial session check.  The ref prevents re-triggering
+  // on every re-render.
+  const redirectedRef = useRef(false);
+  useEffect(() => {
+    if (isAuthenticated && isReady && !redirectedRef.current) {
+      redirectedRef.current = true;
+      navigate(from || '/servers', { replace: true });
+    }
+  }, [isAuthenticated, isReady]);
 
   const syncPasskeySession = async () => {
     try {
@@ -183,6 +198,14 @@ function LoginPage() {
           {error && !authStep && (
             <Alert variant="destructive" className="mt-4">
               <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {ssoError === 'login_required' && !authStep && (
+            <Alert className="mt-4 border-blue-500 bg-blue-50 text-blue-900 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-800">
+              <AlertDescription>
+                Please log in to your {ssoProvider === 'whmcs' ? 'WHMCS' : 'Paymenter'} account first, then click &quot;{ssoProvider === 'whmcs' ? 'Continue with WHMCS' : 'Continue with Paymenter'}&quot; again.
+              </AlertDescription>
             </Alert>
           )}
 

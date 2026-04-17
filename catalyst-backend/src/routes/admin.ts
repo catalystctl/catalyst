@@ -2410,4 +2410,123 @@ export async function adminRoutes(app: FastifyInstance) {
       reply.send({ success: true });
     }
   );
+
+  // ── OIDC Provider Configuration ─────────────────────────────────────
+  app.get(
+    '/oidc-config',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!checkPerm(request, 'admin.read')) {
+        return reply.status(403).send({ error: 'Admin read permission required' });
+      }
+
+      const settings = await prisma.themeSettings.findUnique({ where: { id: 'default' } });
+      const meta = (settings?.metadata as Record<string, any>) || {};
+      const stored = (meta.oidcProviders as Record<string, { clientId?: string; clientSecret?: string; discoveryUrl?: string }>) || {};
+
+      // Merge: env vars as defaults, DB overrides, mask secrets
+      const result: Record<string, { clientId: string; clientSecret: string; discoveryUrl: string; source: string }> = {};
+      for (const provider of ['whmcs', 'paymenter'] as const) {
+        const envClientId = process.env[`${provider.toUpperCase()}_OIDC_CLIENT_ID`] || '';
+        const envSecret = process.env[`${provider.toUpperCase()}_OIDC_CLIENT_SECRET`] || '';
+        const envDiscovery = process.env[`${provider.toUpperCase()}_OIDC_DISCOVERY_URL`] || '';
+        const db = stored[provider] || {};
+        const clientId = db.clientId || envClientId;
+        const clientSecret = db.clientSecret || envSecret;
+        const discoveryUrl = db.discoveryUrl || envDiscovery;
+
+        result[provider] = {
+          clientId,
+          clientSecret: clientSecret
+            ? clientSecret.slice(0, 4) + '•'.repeat(Math.max(0, clientSecret.length - 4))
+            : '',
+          discoveryUrl,
+          source: db.clientId ? 'database' : (envClientId ? 'env' : 'none'),
+        };
+      }
+
+      reply.send(serialize({ success: true, data: result }));
+    }
+  );
+
+  app.patch(
+    '/oidc-config',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!checkPerm(request, 'admin.write')) {
+        return reply.status(403).send({ error: 'Admin write permission required' });
+      }
+
+      const { whmcs, paymenter } = request.body as {
+        whmcs?: { clientId?: string; clientSecret?: string; discoveryUrl?: string };
+        paymenter?: { clientId?: string; clientSecret?: string; discoveryUrl?: string };
+      };
+
+      const settings = await prisma.themeSettings.findUnique({ where: { id: 'default' } });
+      const meta = { ...(settings?.metadata as Record<string, any> || {}) };
+      meta.oidcProviders = { ...(meta.oidcProviders || {}) };
+
+      // Validate and update each provider
+      for (const [provider, config] of Object.entries({ whmcs, paymenter })) {
+        if (!config) continue;
+        const existing = (meta.oidcProviders[provider] as Record<string, string>) || {};
+
+        if (config.clientId !== undefined) {
+          if (config.clientId.trim().length === 0) {
+            // Empty string = clear DB value, fall back to env
+            delete existing.clientId;
+          } else {
+            existing.clientId = config.clientId.trim();
+          }
+        }
+
+        if (config.clientSecret !== undefined) {
+          if (config.clientSecret.trim().length === 0) {
+            delete existing.clientSecret;
+          } else if (!config.clientSecret.includes('•')) {
+            // Only update if not masked
+            existing.clientSecret = config.clientSecret.trim();
+          }
+          // If it contains •, user didn't change it — keep existing
+        }
+
+        if (config.discoveryUrl !== undefined) {
+          if (config.discoveryUrl.trim().length === 0) {
+            delete existing.discoveryUrl;
+          } else {
+            // Validate URL format
+            if (!config.discoveryUrl.match(/^https?:\/\/[^\s]+$/)) {
+              return reply.status(400).send({ error: `Invalid discovery URL for ${provider}` });
+            }
+            existing.discoveryUrl = config.discoveryUrl.trim();
+          }
+        }
+
+        meta.oidcProviders[provider] = existing;
+      }
+
+      await prisma.themeSettings.upsert({
+        where: { id: 'default' },
+        update: { metadata: meta },
+        create: { id: 'default', metadata: meta },
+      });
+
+      // Bootstrap env vars for current process
+      for (const [key, cfg] of Object.entries(meta.oidcProviders as Record<string, Record<string, string>>)) {
+        const prefix = key.toUpperCase();
+        if (cfg.clientId) process.env[`${prefix}_OIDC_CLIENT_ID`] = cfg.clientId;
+        if (cfg.clientSecret) process.env[`${prefix}_OIDC_CLIENT_SECRET`] = cfg.clientSecret;
+        if (cfg.discoveryUrl) process.env[`${prefix}_OIDC_DISCOVERY_URL`] = cfg.discoveryUrl;
+      }
+
+      await createAuditLog(request.user.userId, {
+        action: 'oidc_config.update',
+        resource: 'oidc_config',
+        details: { providers: Object.keys(meta.oidcProviders) },
+      });
+
+      reply.send(serialize({ success: true, message: 'OIDC configuration updated. Restart required for changes to take full effect.' }));
+    }
+  );
 }
+

@@ -103,6 +103,8 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
       }
     },
     register: async (values) => {
+      const { loginGuard } = await import('../services/api/client');
+      loginGuard.active = true;
       (set as AuthSet)({ isLoading: true, error: null });
       try {
         const { user } = await authApi.register(values);
@@ -113,7 +115,10 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         const rawError = error.response?.data?.error;
         const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || error.message || 'Registration failed';
         (set as AuthSet)({ isLoading: false, error: message as string });
+        loginGuard.active = false;
         throw err;
+      } finally {
+        setTimeout(() => { loginGuard.active = false; }, 3_000);
       }
     },
     refresh: async () => {
@@ -130,6 +135,13 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
           error: null,
         });
       } catch (error: unknown) {
+        // If login is in-flight, the 401 is from the OLD session being replaced.
+        // Do NOT clear auth state — login() will set it once it completes.
+        const { loginGuard } = await import('../services/api/client');
+        if (loginGuard.active) {
+          (set as AuthSet)({ isRefreshing: false, isReady: true });
+          return; // silently swallow — login() owns the auth state now
+        }
         const err = error as { response?: { data?: { error?: unknown } }; message?: string };
         const rawError = err.response?.data?.error;
         const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || err.message || 'Session expired';
@@ -155,6 +167,14 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
     init: async () => {
       // Don't set isReady until refresh completes to prevent flashing authenticated
       // content with a potentially expired server-side session.
+      // Guard: if login is in-flight (loginGuard.active), skip the refresh
+      // entirely — login() will set isAuthenticated once it completes, and
+      // we must not overwrite that with a stale 401 from the old session.
+      const { loginGuard } = await import('../services/api/client');
+      if (loginGuard.active) {
+        (set as AuthSet)({ isReady: true });
+        return;
+      }
       try {
         await (get as AuthGet)().refresh();
       } finally {
@@ -186,6 +206,8 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
       });
     },
     verifyTwoFactor: async (payload) => {
+      const { loginGuard } = await import('../services/api/client');
+      loginGuard.active = true;
       (set as AuthSet)({ isLoading: true, error: null });
       try {
         const { user } = await authApi.verifyTwoFactor(payload);
@@ -203,7 +225,10 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         const rawError = error.response?.data?.error;
         const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || error.message || 'Two-factor verification failed';
         (set as AuthSet)({ isLoading: false, error: message as string });
+        loginGuard.active = false;
         throw err;
+      } finally {
+        setTimeout(() => { loginGuard.active = false; }, 3_000);
       }
     },
   };

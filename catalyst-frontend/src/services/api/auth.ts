@@ -49,73 +49,73 @@ function extractResponse(response: unknown): BetterAuthResponse {
 }
 
 export const authApi = {
+  /**
+   * Sign in via the custom /api/auth/login route (NOT the built-in
+   * better-auth /sign-in/email route). The custom route provides:
+   *   - brute-force protection & account lockout
+   *   - audit logging
+   *   - case-insensitive email lookup
+   *   - anti-enumeration (constant-time dummy hash for unknown accounts)
+   *   - Catalyst permissions in the response
+   *   - full user profile (firstName, lastName, name, image)
+   */
   async login(
     values: LoginSchema,
     options?: { forcePasskeyFallback?: boolean },
   ): Promise<{ token: string; user: User; rememberMe?: boolean }> {
-    let token = '';
     try {
-      const forceFallback = Boolean(options?.forcePasskeyFallback);
-      const response = await authClient.signIn.email(
-        {
-          email: values.email,
-          password: values.password,
-          callbackURL: window.location.origin,
-        },
-        {
-          fetchOptions: {
-            headers: forceFallback || values.allowPasskeyFallback
-              ? { 'X-Allow-Passkey-Fallback': 'true' }
-              : undefined,
-          },
-          onSuccess(context) {
-            token = context.response?.headers?.get?.('set-auth-token') || '';
-          },
-        },
-      );
-      const data = extractResponse(response);
-      token = token || data.token || data.session?.token || '';
-      if (data.twoFactorRedirect) {
-        const error = Object.assign(new Error('Two-factor authentication required'), {
-          code: 'TWO_FACTOR_REQUIRED' as const,
-          token,
-        }) satisfies TwoFactorRequiredError;
-        throw error;
-      }
-      if (data.code === 'PASSKEY_REQUIRED') {
-        throw createPasskeyRequiredError();
-      }
-      if (!data.user) {
-        const errorMsg = typeof data.error === 'string'
-          ? data.error
-          : data.error?.message || data.error?.error || null;
-        throw new Error(errorMsg || 'Login failed');
-      }
-
-      // better-auth's sign-in response does not include Catalyst role permissions.
-      // Immediately fetch the canonical user profile (with permissions) so admin UI
-      // and ProtectedRoute checks work without requiring a full page refresh.
-      let hydratedUser: User | null = null;
-      try {
-        hydratedUser = (await authApi.refresh()).user;
-      } catch {
-        hydratedUser = null;
-      }
-
-      const userData = data.user;
-      return {
-        token,
+      const response = await apiClient.post<{
+        success: boolean;
+        data?: {
+          userId: string;
+          email: string;
+          username: string;
+          name?: string | null;
+          firstName?: string | null;
+          lastName?: string | null;
+          image?: string | null;
+          role?: string;
+          permissions: string[];
+          token: string | null;
+          twoFactorRequired?: boolean;
+        };
+        error?: string;
+      }>('/api/auth/login', {
+        email: values.email,
+        password: values.password,
         rememberMe: values.rememberMe,
-        user:
-          hydratedUser ?? ({
-            id: String(userData.id),
-            email: String(userData.email),
-            username: String(userData.username),
-            role: 'user',
-            permissions: (Array.isArray(userData.permissions) ? userData.permissions : []) as string[],
-          } satisfies User),
+      });
+
+      // HTTP 202 — two-factor required (apiClient doesn't throw for 2xx)
+      if (!response.success && response.data?.twoFactorRequired) {
+        throw Object.assign(new Error('Two-factor authentication required'), {
+          code: 'TWO_FACTOR_REQUIRED' as const,
+          token: response.data.token,
+        }) satisfies TwoFactorRequiredError;
+      }
+
+      if (!response.success || !response.data) {
+        throw new Error(response.error || 'Login failed');
+      }
+
+      const d = response.data;
+      return {
+        token: d.token || '',
+        rememberMe: values.rememberMe,
+        user: {
+          id: d.userId,
+          email: d.email,
+          username: d.username,
+          name: d.name ?? undefined,
+          firstName: d.firstName ?? undefined,
+          lastName: d.lastName ?? undefined,
+          image: d.image ?? undefined,
+          role: (d.role as User['role']) || 'user',
+          permissions: d.permissions ?? [],
+        },
       };
     } catch (error: unknown) {
+      // Passkey-required errors come as HTTP 403 from the custom route.
       const err = error as { response?: { data?: { code?: string } }; code?: string; message?: string };
       if (err.response?.data?.code === 'PASSKEY_REQUIRED' || err.code === 'PASSKEY_REQUIRED' || err.message === 'Passkey required') {
         throw createPasskeyRequiredError();
@@ -124,44 +124,60 @@ export const authApi = {
     }
   },
 
+  /**
+   * Register via the custom /api/auth/register route (NOT the built-in
+   * better-auth /sign-up/email route). The custom route provides:
+   *   - Zod validation with detailed error messages
+   *   - duplicate email/username check (409)
+   *   - welcome email
+   *   - Catalyst permissions in the response
+   *   - full user profile (firstName, lastName, name, image)
+   *   - auto-sign-in (session cookie set via set-cookie header)
+   */
   async register(values: RegisterSchema): Promise<{ token: string; user: User }> {
-    let token = '';
-    const response = await authClient.signUp.email({
+    const response = await apiClient.post<{
+      success: boolean;
+      data?: {
+        userId: string;
+        email: string;
+        username: string;
+        name?: string | null;
+        firstName?: string | null;
+        lastName?: string | null;
+        image?: string | null;
+        role?: string;
+        permissions: string[];
+        token: string | null;
+      };
+      error?: string;
+      details?: Array<{ field: string; message: string }>;
+    }>('/api/auth/register', {
       email: values.email,
       password: values.password,
-      name: values.username,
       username: values.username,
-    }, {
-      onSuccess(context) {
-        token = context.response?.headers?.get?.('set-auth-token') || '';
-      },
     });
-    const data = extractResponse(response);
-    token = token || data.token || data.session?.token || '';
-    if (!data.user) {
-      const errorMsg = typeof data.error === 'string'
-        ? data.error
-        : data.error?.message || data.error?.error || null;
-      throw new Error(errorMsg || 'Registration failed');
+
+    if (!response.success || !response.data) {
+      const msg = response.details
+        ? response.details.map(d => `${d.field}: ${d.message}`).join(', ')
+        : response.error || 'Registration failed';
+      throw new Error(msg);
     }
 
-    let hydratedUser: User | null = null;
-    try {
-      hydratedUser = (await authApi.refresh()).user;
-    } catch {
-      // Use null to fall back to data.user below
-    }
-    const userData = data.user;
+    const d = response.data;
     return {
-      token,
-      user:
-        hydratedUser ?? ({
-          id: String(userData.id),
-          email: String(userData.email),
-          username: String(userData.username),
-          role: 'user',
-          permissions: (Array.isArray(userData.permissions) ? userData.permissions : []) as string[],
-        } satisfies User),
+      token: d.token || '',
+      user: {
+        id: d.userId,
+        email: d.email,
+        username: d.username,
+        name: d.name ?? undefined,
+        firstName: d.firstName ?? undefined,
+        lastName: d.lastName ?? undefined,
+        image: d.image ?? undefined,
+        role: (d.role as User['role']) || 'user',
+        permissions: d.permissions ?? [],
+      },
     };
   },
 
@@ -222,7 +238,11 @@ export const authApi = {
   },
 
   async signInWithProvider(providerId: 'whmcs' | 'paymenter') {
-    const response = await authClient.signIn.oauth2({ providerId });
+    const frontendOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+    const response = await authClient.signIn.oauth2({
+      providerId,
+      callbackURL: `${frontendOrigin}/servers`,
+    });
     const data = extractResponse(response);
     if (data.redirect && data.url) {
       window.location.href = data.url;

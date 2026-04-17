@@ -236,6 +236,15 @@ export const adminApi = {
     const data = await apiClient.patch<ApiResponse<any>>('/api/admin/theme-settings', payload);
     return data.data;
   },
+  // OIDC provider configuration
+  getOidcConfig: async () => {
+    const data = await apiClient.get<ApiResponse<Record<string, { clientId: string; clientSecret: string; discoveryUrl: string; source: string }>>>('/api/admin/oidc-config');
+    return data.data;
+  },
+  updateOidcConfig: async (payload: { whmcs?: { clientId?: string; clientSecret?: string; discoveryUrl?: string }; paymenter?: { clientId?: string; clientSecret?: string; discoveryUrl?: string } }) => {
+    const data = await apiClient.patch<ApiResponse<{ message: string }>>('/api/admin/oidc-config', payload);
+    return data;
+  },
   // Ban a user
   banUser: async (userId: string, reason?: string) => {
     const data = await apiClient.post<ApiResponse<void>>(
