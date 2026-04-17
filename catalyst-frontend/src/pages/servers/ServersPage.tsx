@@ -6,10 +6,10 @@ import CreateServerModal from '../../components/servers/CreateServerModal';
 import { useServers } from '../../hooks/useServers';
 import type { Server } from '../../types/server';
 import { useAuthStore } from '../../stores/authStore';
+import { useThemeStore } from '../../stores/themeStore';
 import { StatsCard } from '@/components/ui/stats-card';
 import { ServerIcon, Play, Square, AlertTriangle, Loader2, LayoutGrid, List, Shield, Users, Globe } from 'lucide-react';
 
-type ViewMode = 'card' | 'list';
 type AccessFilter = 'all' | 'owned' | 'other';
 
 const containerVariants = {
@@ -24,10 +24,10 @@ const itemVariants: Variants = {
 
 function ServersPage() {
   const [filters, setFilters] = useState<Record<string, any>>({});
-  const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [accessFilter, setAccessFilter] = useState<AccessFilter>('all');
   const { data, isLoading } = useServers(filters);
   const { user } = useAuthStore();
+  const { serverViewMode, setServerViewMode } = useThemeStore();
   const canCreateServer =
     user?.permissions?.includes('*') ||
     user?.permissions?.includes('admin.write') ||
@@ -195,9 +195,9 @@ function ServersPage() {
             <div className="flex items-center gap-1 rounded-lg border border-border/50 bg-surface-2/40 p-1">
               <button
                 type="button"
-                onClick={() => setViewMode('card')}
+                onClick={() => setServerViewMode('card')}
                 className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
-                  viewMode === 'card'
+                  serverViewMode === 'card'
                     ? 'bg-primary-600 text-white shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
@@ -207,9 +207,9 @@ function ServersPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setViewMode('list')}
+                onClick={() => setServerViewMode('list')}
                 className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
-                  viewMode === 'list'
+                  serverViewMode === 'list'
                     ? 'bg-primary-600 text-white shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
@@ -232,7 +232,7 @@ function ServersPage() {
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </motion.div>
         ) : (
-          <ServerList servers={filtered} viewMode={viewMode} />
+          <ServerList servers={filtered} viewMode={serverViewMode} />
         )}
       </div>
     </motion.div>

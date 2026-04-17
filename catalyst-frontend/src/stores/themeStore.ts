@@ -7,10 +7,12 @@ type Theme = 'light' | 'dark';
 interface ThemeState {
   theme: Theme;
   sidebarCollapsed: boolean;
-  themeSettings: PublicThemeSettings | null;
+ serverViewMode: 'card' | 'list';
+ themeSettings: PublicThemeSettings | null;
   customCssElement: HTMLStyleElement | null;
 
   setTheme: (theme: Theme) => void;
+  setServerViewMode: (mode: 'card' | 'list') => void;
   toggleSidebar: () => void;
   setThemeSettings: (settings: PublicThemeSettings, customCss?: string | null) => void;
   applyTheme: () => void;
@@ -278,6 +280,7 @@ export const useThemeStore = create<ThemeState>()(
     (set, get) => ({
       theme: 'dark',
       sidebarCollapsed: false,
+      serverViewMode: 'card' as const,
       themeSettings: null,
       customCssElement: null,
 
@@ -285,6 +288,8 @@ export const useThemeStore = create<ThemeState>()(
         set({ theme });
         get().applyTheme();
       },
+
+      setServerViewMode: (mode) => set({ serverViewMode: mode }),
 
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
@@ -362,7 +367,7 @@ export const useThemeStore = create<ThemeState>()(
     }),
     {
       name: 'catalyst-theme',
-      partialize: (state) => ({ theme: state.theme, sidebarCollapsed: state.sidebarCollapsed }),
+      partialize: (state) => ({ theme: state.theme, sidebarCollapsed: state.sidebarCollapsed, serverViewMode: state.serverViewMode }),
     }
   )
 );
