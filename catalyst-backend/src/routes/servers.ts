@@ -6545,10 +6545,18 @@ export async function serverRoutes(app: FastifyInstance) {
         return;
       }
 
-      const hasAccess =
-        server.ownerId === userId || server.access.some((access) => access.userId === userId);
-      if (!hasAccess) {
-        return reply.status(403).send({ error: "Forbidden" });
+      // Admin bypass - admins can access any server
+      const isAdmin = await hasPermission(prisma, userId, 'admin.read');
+      if (isAdmin) {
+        // Admin bypass - proceed to return allocations
+      } else {
+        // Check if user is owner OR has server.read permission via access entry
+        const hasAccess = server.ownerId === userId || server.access.some(
+          (access) => access.userId === userId && access.permissions.includes("server.read")
+        );
+        if (!hasAccess) {
+          return reply.status(403).send({ error: "Forbidden" });
+        }
       }
 
       const bindings = parseStoredPortBindings(server.portBindings);

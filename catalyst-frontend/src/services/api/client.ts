@@ -78,15 +78,23 @@ class ApiClient {
       authHeaders['Authorization'] = `Bearer ${token}`;
     }
 
+    // Only set Content-Type when there's a body to send.
+    // Fastify 5 rejects POST/PUT/PATCH with Content-Type: application/json
+    // but no body (FST_ERR_CTP_EMPTY_JSON_BODY → 400).
+    const hasBody = body !== undefined && method !== 'GET' && method !== 'HEAD';
+    const finalHeaders: Record<string, string> = {
+      ...authHeaders,
+      ...headers,
+    };
+    if (hasBody && !finalHeaders['Content-Type']) {
+      finalHeaders['Content-Type'] = 'application/json';
+    }
+
     const response = await fetch(url, {
       method,
-      headers: {
-        'Content-Type': headers['Content-Type'] || 'application/json',
-        ...authHeaders,
-        ...headers,
-      },
+      headers: finalHeaders,
       credentials,
-      body: body !== undefined && method !== 'GET' && method !== 'HEAD'
+      body: hasBody
         ? (typeof body === 'string' ? body : JSON.stringify(body))
         : undefined,
       signal,

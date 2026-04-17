@@ -840,7 +840,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
         )}
 
         {/* File list */}
-        <div className="rounded-xl border border-border bg-white dark:border-border dark:bg-surface-1">
+        <div className="rounded-xl border border-border bg-white dark:border-border dark:bg-surface-1 h-[calc(100vh-280px)] min-h-[200px]">
           <FileList
             files={sortedFiles}
             selectedPaths={selectedPaths}

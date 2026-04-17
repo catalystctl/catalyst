@@ -1,4 +1,4 @@
-// Catalyst Service Worker — caches static assets for faster loads
+// Catalyst Service Worker v2 — caches static assets for faster loads
 // API/WebSocket requests are NEVER intercepted (pass through directly)
 
 const CACHE_NAME = 'catalyst-v1';
@@ -28,6 +28,12 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+  
+  // Skip non-http/https requests (chrome-extension://, blob://, data:, etc.)
+  if (!request.url.startsWith('http://') && !request.url.startsWith('https://')) {
+    return;
+  }
+  
   const url = new URL(request.url);
 
   // NEVER intercept — pass through to network directly

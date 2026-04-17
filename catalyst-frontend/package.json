@@ -43,6 +43,7 @@
     "@radix-ui/react-tooltip": "~1.2.8",
     "@tanstack/react-query": "~5.90.20",
     "@tanstack/react-query-devtools": "^5.99.0",
+    "@tanstack/react-virtual": "^3.13.23",
     "ansi-to-html": "~0.7.2",
     "better-auth": "~1.4.18",
     "class-variance-authority": "~0.7.1",

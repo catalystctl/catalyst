@@ -1,17 +1,136 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import AnsiToHtml from 'ansi-to-html';
-import DOMPurify from 'dompurify';
-import { ArrowDown, Download, Trash2 } from 'lucide-react';
+/**
+ * CustomConsole — High-performance virtualized console output component.
+ *
+ * Architecture:
+ *   1. Custom spacer-based virtualizer (no library) — a top spacer div and bottom
+ *      spacer div create the scrollable height. Visible items sit in normal document
+ *      flow between them. No absolute positioning, no transforms, no measureElement.
+ *   2. Pre-computed Float64Array of cumulative heights — binary search (O(log n))
+ *      to find the visible range on every scroll. Total size is a single array lookup.
+ *   3. React.memo on ConsoleRow — rows that remain visible during scroll NEVER re-render.
+ *      Only newly mounted/unmounted rows do work.
+ *   4. requestAnimationFrame-throttled scroll handler — one range calculation per frame.
+ *   5. ResizeObserver tracks container width for accurate chars-per-line calculation.
+ *   6. Two-tier processing cache:
+ *        Tier 1 (base): ANSI→HTML + syntax highlighting — computed once per entry ID
+ *        Tier 2 (search): Cheap text-node-only regex applied on top of cached base HTML
+ *   7. useLayoutEffect for auto-scroll — scroll position set before browser paints.
+ */
 
-type ConsoleEntry = {
-  id: string;
-  stream: string;
-  data: string;
-  timestamp?: string;
+import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ArrowDown, Download, Trash2 } from 'lucide-react';
+import type { RawEntry, ProcessedEntry } from './types';
+import { processEntry } from './processEntry';
+
+// ── Constants ──
+
+const LINE_HEIGHT = 22; // 13px × 1.7 line-height
+const ROW_PAD = 4; // border + vertical breathing room
+const MIN_ROW_HEIGHT = LINE_HEIGHT + ROW_PAD; // 26px
+const OVERSCAN = 200; // rows rendered outside viewport in each direction (~5200px)
+
+const STREAM_BORDER: Record<string, string> = {
+  stdout: 'border-l-emerald-400/60',
+  stderr: 'border-l-rose-400/60',
+  system: 'border-l-sky-400/60',
+  stdin: 'border-l-amber-400/60',
 };
 
+// ── One-time monospace char width measurement ──
+
+const CHAR_WIDTH = (() => {
+  try {
+    const c = document.createElement('canvas');
+    const ctx = c.getContext('2d');
+    if (!ctx) return 7.8;
+    ctx.font = '13px "JetBrains Mono", "Fira Code", ui-monospace, monospace';
+    return ctx.measureText('M').width;
+  } catch {
+    return 7.8;
+  }
+})();
+
+/**
+ * Calculate how many monospace characters fit per visual line in the text area.
+ * Conservative estimate (3-char safety margin) so we slightly overestimate row
+ * count — tiny gap at the bottom of wrapped lines is far better than overlap.
+ */
+function calcCharsPerLine(containerWidth: number, showLineNumbers: boolean): number {
+  const textAreaWidth =
+    containerWidth -
+    2 - // border-l-2
+    (showLineNumbers ? 60 : 0) - // w-12 + pr-3
+    80 - // timestamp column
+    16; // pr-4
+  return Math.max(20, Math.floor(textAreaWidth / CHAR_WIDTH) - 3);
+}
+
+// ── Search highlighting (text-nodes only, never touches HTML tags) ──
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function highlightSearchInHtml(html: string, query: string): string {
+  if (!query) return html;
+  const regex = new RegExp(escapeRegex(query), 'gi');
+  let result = '';
+  let inTag = false;
+  let i = 0;
+  while (i < html.length) {
+    if (html[i] === '<') { inTag = true; result += '<'; i++; continue; }
+    if (html[i] === '>') { inTag = false; result += '>'; i++; continue; }
+    if (inTag) { result += html[i]; i++; continue; }
+    const textEnd = html.indexOf('<', i);
+    if (textEnd === -1) {
+      result += html.slice(i).replace(regex, '<mark class="console-search-match">$&</mark>');
+      break;
+    }
+    result += html.slice(i, textEnd).replace(regex, '<mark class="console-search-match">$&</mark>');
+    i = textEnd;
+  }
+  return result;
+}
+
+// ── Row component (memoized — skips re-render if entry object is the same) ──
+
+const ConsoleRow = memo(function ConsoleRow({
+  entry,
+  index,
+  showLineNumbers,
+}: {
+  entry: ProcessedEntry;
+  index: number;
+  showLineNumbers: boolean;
+}) {
+  return (
+    <div
+      className={`console-line flex border-l-2 ${STREAM_BORDER[entry.stream] ?? 'border-l-zinc-300 dark:border-l-zinc-700'}`}
+    >
+      {showLineNumbers && (
+        <span className="flex w-12 shrink-0 select-none items-start justify-end pr-3 pt-px text-[11px] text-muted-foreground group-hover:text-muted-foreground dark:text-foreground dark:group-hover:text-muted-foreground">
+          {index + 1}
+        </span>
+      )}
+      {entry.timestamp ? (
+        <span className="flex shrink-0 select-none items-start px-3 pt-px text-[11px] text-muted-foreground">
+          {entry.timestamp}
+        </span>
+      ) : (
+        <span className="w-3 shrink-0" />
+      )}
+      <div
+        className="min-w-0 flex-1 whitespace-pre-wrap break-all pr-4"
+        dangerouslySetInnerHTML={{ __html: entry.html }}
+      />
+    </div>
+  );
+}, (prev, next) => prev.entry === next.entry && prev.showLineNumbers === next.showLineNumbers);
+
+// ── Types ──
+
 type CustomConsoleProps = {
-  entries: ConsoleEntry[];
+  entries: RawEntry[];
   autoScroll?: boolean;
   scrollback?: number;
   searchQuery?: string;
@@ -27,179 +146,13 @@ type CustomConsoleProps = {
   serverId?: string;
 };
 
-const streamBorderColors: Record<string, string> = {
-  stdout: 'border-l-emerald-400/60',
-  stderr: 'border-l-rose-400/60',
-  system: 'border-l-sky-400/60',
-  stdin: 'border-l-amber-400/60',
-};
+// ── Main Component ──
 
-const ensureLineEnding = (value: string) =>
-  value.endsWith('\n') || value.endsWith('\r') ? value : `${value}\n`;
-const normalizeLineEndings = (value: string) =>
-  value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-
-const ansiConverter = new AnsiToHtml({
-  escapeXML: true,
-  newline: true,
-  stream: true,
-});
-
-const timestampPattern =
-  /^\s*(?:\\x07)?(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\s*/;
-const padTwo = (value: number) => String(value).padStart(2, '0');
-const formatTime = (value?: string) => {
-  if (!value) return '';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  return `${padTwo(parsed.getHours())}:${padTwo(parsed.getMinutes())}:${padTwo(parsed.getSeconds())}`;
-};
-
-function escapeRegex(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-const syntaxRules: Array<{ pattern: RegExp; cls: string }> = [
-  { pattern: /\b(ERROR|FATAL|SEVERE|EXCEPTION|PANIC|FAIL(?:ED|URE)?)\b/gi, cls: 'chl-error' },
-  { pattern: /\b(WARN(?:ING)?|CAUTION|DEPRECATED)\b/gi, cls: 'chl-warn' },
-  { pattern: /\b(INFO|DEBUG|TRACE|NOTICE)\b/gi, cls: 'chl-info' },
-  { pattern: /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, cls: 'chl-uuid' },
-  { pattern: /\b\d{1,2}:\d{2}(?::\d{2})(?:\.\d+)?\b/g, cls: 'chl-time' },
-  { pattern: /\b\d{4}[-/]\d{2}[-/]\d{2}[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?Z?\b/g, cls: 'chl-time' },
-  { pattern: /\b(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?\b/g, cls: 'chl-ip' },
-  { pattern: /https?:\/\/[^\s)>\]]+/gi, cls: 'chl-url' },
-];
-
-function processTextSegments(html: string, fn: (text: string) => string): string {
-  let result = '';
-  let inTag = false;
-  let i = 0;
-  while (i < html.length) {
-    if (html[i] === '<') {
-      inTag = true;
-      result += '<';
-      i++;
-      continue;
-    }
-    if (html[i] === '>') {
-      inTag = false;
-      result += '>';
-      i++;
-      continue;
-    }
-    if (inTag) {
-      result += html[i];
-      i++;
-      continue;
-    }
-    const textEnd = html.indexOf('<', i);
-    if (textEnd === -1) {
-      result += fn(html.slice(i));
-      break;
-    }
-    result += fn(html.slice(i, textEnd));
-    i = textEnd;
-  }
-  return result;
-}
-
-function applySyntaxHighlighting(html: string): string {
-  return processTextSegments(html, (text) => {
-    let result = text;
-    for (const rule of syntaxRules) {
-      result = result.replace(
-        rule.pattern,
-        (m) => `<span class="${rule.cls}">${m}</span>`,
-      );
-    }
-    return result;
-  });
-}
-
-function highlightSearchInHtml(html: string, query: string): string {
-  if (!query) return html;
-  const escaped = escapeRegex(query);
-  const regex = new RegExp(escaped, 'gi');
-  return processTextSegments(html, (text) =>
-    text.replace(regex, '<mark class="console-search-match">$&</mark>'),
-  );
-}
-
-type ProcessedEntry = {
-  id: string;
-  stream: string;
-  timestamp: string;
-  html: string;
-};
-
-function processEntry(entry: ConsoleEntry, searchQuery: string): ProcessedEntry {
-  const message = normalizeLineEndings(ensureLineEnding(entry.data));
-  const tsMatch = message.match(timestampPattern);
-  const displayTs = entry.timestamp ?? tsMatch?.[1];
-  const cleaned = tsMatch ? message.replace(timestampPattern, '') : message;
-  const lines = cleaned
-    .split('\n')
-    .filter((l, i, a) => !(i === a.length - 1 && l === ''));
-
-  const htmlParts: string[] = [];
-  for (const line of lines) {
-    const isLong = line.length > 800;
-    const display = isLong ? line.slice(0, 800) : line;
-    let html = ansiConverter.toHtml(display || ' ');
-    html = applySyntaxHighlighting(html);
-    if (searchQuery) html = highlightSearchInHtml(html, searchQuery);
-    html = DOMPurify.sanitize(html);
-    htmlParts.push(html);
-  }
-
-  return {
-    id: entry.id,
-    stream: entry.stream,
-    timestamp: displayTs ?? '',
-    html: htmlParts.join(''),
-  };
-}
-
-// ── ConsoleRow ──
-function ConsoleRow({
-  entry,
-  index,
-  showLineNumbers,
-}: {
-  entry: ProcessedEntry;
-  index: number;
-  showLineNumbers: boolean;
-}) {
-  return (
-    <div
-      className={`console-line group flex border-l-2 ${streamBorderColors[entry.stream] ?? 'border-l-zinc-300 dark:border-l-zinc-700'}`}
-    >
-      {showLineNumbers ? (
-        <span className="flex w-12 shrink-0 select-none items-start justify-end pr-3 pt-px text-[11px] text-muted-foreground group-hover:text-muted-foreground dark:text-foreground dark:group-hover:text-muted-foreground">
-          {index + 1}
-        </span>
-      ) : null}
-      {entry.timestamp ? (
-        <span className="shrink-0 select-none px-3 pt-px text-[11px] text-muted-foreground group-hover:text-muted-foreground dark:text-muted-foreground dark:group-hover:text-muted-foreground">
-          {formatTime(entry.timestamp)}
-        </span>
-      ) : (
-        <span className="w-3 shrink-0" />
-      )}
-      <div
-        className="min-w-0 flex-1 pr-4"
-        dangerouslySetInnerHTML={{ __html: entry.html }}
-      />
-    </div>
-  );
-}
-
-// ── Main component ──
 function CustomConsole({
   entries,
   autoScroll: autoScrollProp = true,
   scrollback = 2000,
-  searchQuery,
+  searchQuery: searchQueryProp = '',
   streamFilter,
   showLineNumbers = false,
   onUserScroll,
@@ -211,102 +164,208 @@ function CustomConsole({
   onClear,
   serverId,
 }: CustomConsoleProps) {
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const programmaticScrollRef = useRef(false);
+  const parentRef = useRef<HTMLDivElement | null>(null);
+  const isProgrammaticScroll = useRef(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
 
-  // Latest autoScroll prop ref so scroll handler always sees current value
-  const autoScrollRef = useRef(autoScrollProp);
-  useEffect(() => {
-    autoScrollRef.current = autoScrollProp;
-  });
+  // Keep callback refs in sync to avoid stale closures in the scroll handler
+  const onUserScrollRef = useRef(onUserScroll);
+  onUserScrollRef.current = onUserScroll;
+  const onAutoScrollResumeRef = useRef(onAutoScrollResume);
+  onAutoScrollResumeRef.current = onAutoScrollResume;
 
-  // ── Filter ──
-  const normalizedEntries = useMemo(() => {
-    let filtered = entries.slice(-scrollback);
+  // ── Container width → chars-per-line (via ResizeObserver) ──
+  const [charsPerLine, setCharsPerLine] = useState(100);
+
+  useEffect(() => {
+    const el = parentRef.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.clientWidth;
+      if (w > 0) setCharsPerLine(calcCharsPerLine(w, showLineNumbers));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [showLineNumbers]);
+
+  // ── Deferred search for responsive typing ──
+  const deferredSearch = useDeferredValue(searchQueryProp);
+
+  // ── Step 1: Filter entries (scrollback + stream) ──
+  const filteredEntries = useMemo(() => {
+    let result = entries.slice(-scrollback);
     if (streamFilter && streamFilter.size > 0) {
-      filtered = filtered.filter((e) => streamFilter.has(e.stream));
+      result = result.filter((e) => streamFilter.has(e.stream));
     }
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter((e) => e.data.toLowerCase().includes(q));
+    return result;
+  }, [entries, scrollback, streamFilter]);
+
+  // ── Step 2: Search filter (deferred so typing isn't blocked) ──
+  const searchableEntries = useMemo(() => {
+    if (!deferredSearch) return filteredEntries;
+    const q = deferredSearch.toLowerCase();
+    return filteredEntries.filter((e) => e.data.toLowerCase().includes(q));
+  }, [filteredEntries, deferredSearch]);
+
+  // ── Step 3: Process entries with stable two-tier cache ──
+  const baseCacheRef = useRef<Map<string, ProcessedEntry>>(new Map());
+
+  const processedEntries = useMemo(() => {
+    const cache = baseCacheRef.current;
+    for (const entry of searchableEntries) {
+      if (!cache.has(entry.id)) cache.set(entry.id, processEntry(entry, ''));
     }
-    return filtered;
-  }, [entries, scrollback, searchQuery, streamFilter]);
-
-  // ── Process into HTML (memoized) ──
-  const processedEntries = useMemo(
-    () => normalizedEntries.map((entry) => processEntry(entry, searchQuery ?? '')),
-    [normalizedEntries, searchQuery],
-  );
-
-  // ── Scroll handler: detect user scroll-away ──
-  // Uses ref to always read the latest prop without stale closures.
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el || programmaticScrollRef.current) return;
-    const { scrollTop: st, scrollHeight, clientHeight } = el;
-    const nearBottom = scrollHeight - st - clientHeight < 40;
-    if (nearBottom) {
-      setShowScrollBtn(false);
-    } else {
-      setShowScrollBtn(true);
-      if (autoScrollRef.current) {
-        onUserScroll?.();
+    if (cache.size > scrollback * 2) {
+      const activeIds = new Set(searchableEntries.map((e) => e.id));
+      for (const key of cache.keys()) {
+        if (!activeIds.has(key)) cache.delete(key);
       }
     }
-  }, [onUserScroll]);
+    if (!deferredSearch) {
+      return searchableEntries.map((e) => cache.get(e.id)!);
+    }
+    return searchableEntries.map((e) => {
+      const base = cache.get(e.id)!;
+      return { ...base, html: highlightSearchInHtml(base.html, deferredSearch) };
+    });
+  }, [searchableEntries, deferredSearch, scrollback]);
 
-  // ── When autoScroll is true and new entries arrive, scroll to bottom ──
-  const prevLen = useRef(processedEntries.length);
+  // ── Step 4: Pre-compute heights as Float64Array + cumulative prefix sums ──
+  const { cumulative, totalSize } = useMemo(() => {
+    const n = processedEntries.length;
+    const c = new Float64Array(n + 1); // c[0]=0, c[i]=sum of heights 0..i-1
+    for (let i = 0; i < n; i++) {
+      const entry = processedEntries[i];
+      const wrappedLines = Math.max(1, Math.ceil((entry?.textLength ?? 0) / charsPerLine));
+      c[i + 1] = c[i] + wrappedLines * MIN_ROW_HEIGHT;
+    }
+    return { cumulative: c, totalSize: c[n] };
+  }, [processedEntries, charsPerLine]);
+
+  // ── Step 5: Visible range (binary search + RAF throttle) ──
+  const [range, setRange] = useState({ start: 0, end: 0 });
+  const showScrollBtnRef = useRef(false);
+
   useEffect(() => {
-    if (autoScrollProp && processedEntries.length > prevLen.current) {
-      const el = scrollRef.current;
+    const el = parentRef.current;
+    if (!el || cumulative.length <= 1) return;
+
+    let rafId = 0;
+
+    const update = () => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        const scrollTop = el.scrollTop;
+        const viewBottom = scrollTop + el.clientHeight;
+        const bufferPx = OVERSCAN * MIN_ROW_HEIGHT;
+
+        // Binary search: first index where cumulative[i] > scrollTop
+        let lo = 0;
+        let hi = cumulative.length - 1;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if (cumulative[mid] <= scrollTop) lo = mid + 1;
+          else hi = mid;
+        }
+        // lo-1 is the item containing scrollTop (or 0 if at very top)
+        const anchorIdx = lo > 0 ? lo - 1 : 0;
+
+        const start = Math.max(0, anchorIdx - OVERSCAN);
+
+        // Walk forward to find end of visible range + overscan
+        let end = anchorIdx + 1;
+        while (end < cumulative.length - 1 && cumulative[end] < viewBottom + bufferPx) {
+          end++;
+        }
+
+        setRange((prev) =>
+          prev.start === start && prev.end === end ? prev : { start, end },
+        );
+
+        // Scroll-to-bottom button logic
+        if (isProgrammaticScroll.current) return;
+        const nearBottom = totalSize - scrollTop - el.clientHeight < 40;
+        if (nearBottom) {
+          if (showScrollBtnRef.current) {
+            showScrollBtnRef.current = false;
+            setShowScrollBtn(false);
+            onAutoScrollResumeRef.current?.();
+          }
+        } else {
+          if (!showScrollBtnRef.current) {
+            showScrollBtnRef.current = true;
+            setShowScrollBtn(true);
+            onUserScrollRef.current?.();
+          }
+        }
+      });
+    };
+
+    // Initial calculation + listen
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', update);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [cumulative, totalSize]);
+
+  // ── Auto-scroll (useLayoutEffect — fires before browser paints) ──
+  const prevCountRef = useRef(processedEntries.length);
+
+  useLayoutEffect(() => {
+    if (autoScrollProp && processedEntries.length > prevCountRef.current) {
+      const el = parentRef.current;
       if (el) {
-        programmaticScrollRef.current = true;
+        isProgrammaticScroll.current = true;
         el.scrollTop = el.scrollHeight;
-        setTimeout(() => {
-          programmaticScrollRef.current = false;
-        }, 100);
+        requestAnimationFrame(() => {
+          isProgrammaticScroll.current = false;
+        });
       }
     }
-    prevLen.current = processedEntries.length;
+    prevCountRef.current = processedEntries.length;
   }, [autoScrollProp, processedEntries.length]);
 
+  // ── Scroll to bottom (user-initiated) ──
   const scrollToBottom = useCallback(() => {
+    showScrollBtnRef.current = false;
     setShowScrollBtn(false);
-    const el = scrollRef.current;
+    const el = parentRef.current;
     if (el) {
-      programmaticScrollRef.current = true;
+      isProgrammaticScroll.current = true;
       el.scrollTop = el.scrollHeight;
-      setTimeout(() => {
-        programmaticScrollRef.current = false;
-      }, 100);
+      requestAnimationFrame(() => {
+        isProgrammaticScroll.current = false;
+      });
     }
-    onAutoScrollResume?.();
-  }, [onAutoScrollResume]);
+    onAutoScrollResumeRef.current?.();
+  }, []);
 
   // ── Export ──
   const handleExport = useCallback(() => {
-    const lines = normalizedEntries.map((entry) => {
+    const lines = filteredEntries.map((entry) => {
       const timestamp = entry.timestamp ? `[${entry.timestamp}] ` : '';
-      const stream =
-        entry.stream !== 'stdout' ? `[${entry.stream.toUpperCase()}] ` : '';
+      const stream = entry.stream !== 'stdout' ? `[${entry.stream.toUpperCase()}] ` : '';
       return `${timestamp}${stream}${entry.data}`;
     });
-    const content = lines.join('\n');
-    const blob = new Blob([content], { type: 'text/plain' });
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `console-${serverId || 'output'}-${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.log`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `console-${serverId || 'output'}-${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.log`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
     URL.revokeObjectURL(url);
-  }, [normalizedEntries, serverId]);
+  }, [filteredEntries, serverId]);
 
-  const hasContent = normalizedEntries.length > 0;
+  const hasContent = processedEntries.length > 0;
+  const topSpacer = cumulative[range.start] ?? 0;
+  const bottomSpacer = totalSize - (cumulative[range.end] ?? totalSize);
 
   return (
     <div className={`relative ${className}`}>
@@ -321,7 +380,7 @@ function CustomConsole({
         >
           <Download className="h-3.5 w-3.5" />
         </button>
-        {onClear ? (
+        {onClear && (
           <button
             type="button"
             onClick={onClear}
@@ -331,21 +390,22 @@ function CustomConsole({
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
-        ) : null}
+        )}
       </div>
 
+      {/* Console output */}
       <div
-        ref={scrollRef}
-        onScroll={handleScroll}
+        ref={parentRef}
         className="console-output h-full overflow-y-auto font-mono text-[13px] leading-[1.7] text-foreground dark:text-zinc-300"
       >
-        {isLoading && !hasContent ? (
+        {isLoading && !hasContent && (
           <div className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
             <div className="h-3 w-3 animate-spin rounded-full border-2 border-border border-t-primary-400 dark:border-zinc-600" />
             Loading recent logs…
           </div>
-        ) : null}
-        {isError && !hasContent ? (
+        )}
+
+        {isError && !hasContent && (
           <div className="mx-4 my-3 flex items-center justify-between rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">
             <span>Unable to load historical logs.</span>
             <button
@@ -356,28 +416,33 @@ function CustomConsole({
               Retry
             </button>
           </div>
-        ) : null}
-        {!isLoading && !hasContent ? (
-          <div className="flex h-full items-center justify-center text-xs text-muted-foreground dark:text-muted-foreground">
+        )}
+
+        {!isLoading && !hasContent && (
+          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
             No console output yet.
           </div>
-        ) : null}
+        )}
 
-        {hasContent &&
-          processedEntries.map((entry, index) => (
-            <ConsoleRow
-              key={entry.id}
-              entry={entry}
-              index={index}
-              showLineNumbers={showLineNumbers}
-            />
-          ))}
-
-        {/* Sentinel for IntersectionObserver auto-scroll detection */}
-
+        {/* ── Spacer-based virtualizer ── */}
+        {hasContent && (
+          <>
+            <div style={{ height: topSpacer }} aria-hidden="true" />
+            {processedEntries.slice(range.start, range.end).map((entry, i) => (
+              <ConsoleRow
+                key={entry.id}
+                entry={entry}
+                index={range.start + i}
+                showLineNumbers={showLineNumbers}
+              />
+            ))}
+            <div style={{ height: bottomSpacer }} aria-hidden="true" />
+          </>
+        )}
       </div>
 
-      {showScrollBtn && !autoScrollProp ? (
+      {/* Scroll-to-bottom button */}
+      {showScrollBtn && !autoScrollProp && (
         <button
           type="button"
           onClick={scrollToBottom}
@@ -386,7 +451,7 @@ function CustomConsole({
           <ArrowDown className="h-3 w-3" />
           New output below
         </button>
-      ) : null}
+      )}
     </div>
   );
 }

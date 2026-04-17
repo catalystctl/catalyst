@@ -2314,4 +2314,92 @@ export async function adminRoutes(app: FastifyInstance) {
       reply.send(serialize({ success: true, data: settings }));
     }
   );
+
+  // ── Auth Lockouts ────────────────────────────────────────────────────────────
+  // List auth lockouts
+  app.get(
+    '/auth-lockouts',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const user = request.user;
+      if (!(await hasPermission(prisma, user.userId, 'admin.read'))) {
+        return reply.status(403).send({ error: 'Admin read permission required' });
+      }
+
+      const {
+        page = 1,
+        limit = 20,
+        search,
+      } = request.query as {
+        page?: number;
+        limit?: number;
+        search?: string;
+      };
+
+      const skip = (Number(page) - 1) * Number(limit);
+      const where: any = {};
+
+      if (search) {
+        where.OR = [
+          { email: { contains: search, mode: 'insensitive' } },
+          { ipAddress: { contains: search, mode: 'insensitive' } },
+        ];
+      }
+
+      const [lockouts, total] = await Promise.all([
+        prisma.authLockout.findMany({
+          where,
+          skip,
+          take: Number(limit),
+          orderBy: { lastFailedAt: 'desc' },
+        }),
+        prisma.authLockout.count({ where }),
+      ]);
+
+      reply.send({
+        lockouts,
+        pagination: {
+          page: Number(page),
+          limit: Number(limit),
+          total,
+          totalPages: Math.ceil(total / Number(limit)),
+        },
+      });
+    }
+  );
+
+  // Delete a specific auth lockout
+  app.delete(
+    '/auth-lockouts/:lockoutId',
+    { preHandler: authenticate },
+    async (request: FastifyRequest<{ Params: { lockoutId: string } }>, reply: FastifyReply) => {
+      const user = request.user;
+      if (!(await hasPermission(prisma, user.userId, 'admin.write'))) {
+        return reply.status(403).send({ error: 'Admin write permission required' });
+      }
+
+      const { lockoutId } = request.params;
+
+      const lockout = await prisma.authLockout.findUnique({
+        where: { id: lockoutId },
+      });
+
+      if (!lockout) {
+        return reply.status(404).send({ error: 'Lockout not found' });
+      }
+
+      await prisma.authLockout.delete({
+        where: { id: lockoutId },
+      });
+
+      await createAuditLog(user.userId, {
+        action: 'auth_lockout.delete',
+        resource: 'auth_lockout',
+        resourceId: lockoutId,
+        details: { email: lockout.email, ipAddress: lockout.ipAddress },
+      });
+
+      reply.send({ success: true });
+    }
+  );
 }

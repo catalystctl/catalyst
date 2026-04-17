@@ -643,6 +643,27 @@ model ServerLog {
 }
 
 // ============================================================================
+// AUTH LOCKOUT (Brute-force protection tracking)
+// ============================================================================
+
+model AuthLockout {
+  id            String    @id @default(cuid())
+  email         String
+  ipAddress     String
+  userAgent     String?
+  failureCount  Int       @default(0)
+  firstFailedAt DateTime  @default(now())
+  lastFailedAt DateTime  @default(now())
+  lockedUntil   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([email, ipAddress])
+  @@index([email])
+  @@index([lockedUntil])
+}
+
+// ============================================================================
 // AUDIT LOG
 // ============================================================================
 
