@@ -7,8 +7,11 @@ function Header() {
   const { user, logout } = useAuthStore();
   const { toggleSidebar, sidebarCollapsed, themeSettings } = useThemeStore();
 
+  const displayName = user?.firstName || user?.lastName
+    ? [user.firstName, user.lastName].filter(Boolean).join(' ')
+    : user?.username || 'User';
   const initials =
-    user?.username?.slice(0, 2).toUpperCase() ||
+    displayName.slice(0, 2).toUpperCase() ||
     user?.email?.slice(0, 2).toUpperCase() ||
     'U';
 
@@ -40,15 +43,21 @@ function Header() {
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 bg-white text-xs font-semibold text-zinc-700 shadow-sm transition-all duration-300 hover:border-zinc-300 hover:text-zinc-900 dark:border-zinc-800 dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:text-zinc-100"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 bg-white text-xs font-semibold text-zinc-700 shadow-sm transition-all duration-300 hover:border-zinc-300 hover:text-zinc-900 dark:border-zinc-800 dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:text-zinc-100 overflow-hidden"
             >
-              {initials}
+              {user?.image
+                ? <img src={user.image} alt="" className="h-full w-full object-cover" />
+                : initials
+              }
             </button>
           </PopoverTrigger>
           <PopoverContent align="end" sideOffset={8} className="w-56">
             <div className="space-y-1">
-              <div className="px-2 pb-2 pt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                {user?.email ?? 'demo@catalyst.local'}
+              <div className="px-2 pb-2 pt-1">
+                <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{displayName}</div>
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {user?.email ?? 'demo@catalyst.local'}
+                </div>
               </div>
               <Link
                 to="/profile"

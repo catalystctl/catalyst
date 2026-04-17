@@ -330,8 +330,13 @@ function Sidebar() {
     return sections;
   }, [userPermissions, pluginTabs]);
 
+  const displayName = user?.firstName || user?.lastName
+    ? [user.firstName, user.lastName].filter(Boolean).join(' ')
+    : user?.username || 'User';
   const initials =
-    user?.username?.slice(0, 2).toUpperCase() || user?.email?.slice(0, 2).toUpperCase() || 'U';
+    displayName.slice(0, 2).toUpperCase() ||
+    user?.email?.slice(0, 2).toUpperCase() ||
+    'U';
   const panelName = themeSettings?.panelName || 'Catalyst';
   const logoUrl = themeSettings?.logoUrl || '/logo.png';
 
@@ -407,13 +412,16 @@ function Sidebar() {
             sidebarCollapsed && 'justify-center',
           )}
         >
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground">
-            {initials}
+          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground overflow-hidden">
+            {user?.image
+              ? <img src={user.image} alt="" className="h-full w-full object-cover" />
+              : initials
+            }
           </div>
           {!sidebarCollapsed && (
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-zinc-100">
-                {user?.username || 'User'}
+                {displayName}
               </div>
               <div className="truncate text-xs text-zinc-500">
                 {user?.role || 'Member'}

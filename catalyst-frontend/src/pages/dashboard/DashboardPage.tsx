@@ -129,7 +129,9 @@ function DashboardPage() {
                 <span className="text-sm font-medium">Dashboard</span>
               </div>
               <h1 className="mt-2 font-display text-3xl font-bold text-foreground">
-                {getGreeting()}, {user?.username || 'there'}
+                {getGreeting()}, {user?.firstName || user?.lastName
+                  ? [user.firstName, user.lastName].filter(Boolean).join(' ')
+                  : user?.username || 'there'}
               </h1>
               <p className="mt-2 max-w-lg text-sm text-muted-foreground">
                 Welcome back. Here's an overview of your infrastructure at a glance.

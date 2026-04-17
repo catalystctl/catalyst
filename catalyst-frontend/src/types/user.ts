@@ -7,4 +7,8 @@ export interface User {
   role: Role;
   permissions?: string[];
   twoFactorEnabled?: boolean;
+  image?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  name?: string | null;
 }

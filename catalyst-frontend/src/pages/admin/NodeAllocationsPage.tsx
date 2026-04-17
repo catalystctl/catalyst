@@ -81,7 +81,7 @@ function NodeAllocationsPage() {
     queryKey: ['node-allocations', nodeId],
     queryFn: async () => {
       const response = await apiClient.get(`/api/nodes/${nodeId}/allocations`);
-      return response.data.data;
+      return response.data ?? [];
     },
     enabled: !!nodeId,
   });

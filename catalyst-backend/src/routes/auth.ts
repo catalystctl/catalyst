@@ -234,7 +234,8 @@ export async function authRoutes(app: FastifyInstance) {
       const user = await prisma.user.findUnique({
         where: { id: request.user.userId },
         select: {
-          id: true, email: true, username: true, createdAt: true,
+          id: true, email: true, username: true, name: true, firstName: true, lastName: true,
+          image: true, createdAt: true,
           roles: { select: { name: true, permissions: true } },
         },
       });
@@ -247,6 +248,8 @@ export async function authRoutes(app: FastifyInstance) {
         success: true,
         data: {
           id: user.id, email: user.email, username: user.username,
+          name: user.name, firstName: user.firstName, lastName: user.lastName,
+          image: user.image,
           role: user.roles[0]?.name || 'user',
           permissions: user.roles.flatMap((role) => role.permissions),
           createdAt: user.createdAt,
@@ -263,7 +266,10 @@ export async function authRoutes(app: FastifyInstance) {
       const userRecord = await prisma.user.findUnique({
         where: { id: request.user.userId },
         select: {
-          id: true, email: true, username: true, twoFactorEnabled: true, createdAt: true,
+          id: true, email: true, username: true, name: true, firstName: true, lastName: true,
+          image: true, emailVerified: true, twoFactorEnabled: true, createdAt: true,
+          failedLoginAttempts: true, lastFailedLogin: true, lastSuccessfulLogin: true,
+          preferences: true,
           accounts: { select: { id: true, providerId: true, accountId: true, createdAt: true, updatedAt: true } },
         },
       });
@@ -276,9 +282,15 @@ export async function authRoutes(app: FastifyInstance) {
         success: true,
         data: {
           id: userRecord.id, email: userRecord.email, username: userRecord.username,
+          name: userRecord.name, firstName: userRecord.firstName, lastName: userRecord.lastName,
+          image: userRecord.image, emailVerified: userRecord.emailVerified,
           twoFactorEnabled: userRecord.twoFactorEnabled,
           hasPassword: userRecord.accounts.some((a) => a.providerId === "credential"),
           createdAt: userRecord.createdAt,
+          failedLoginAttempts: userRecord.failedLoginAttempts,
+          lastFailedLogin: userRecord.lastFailedLogin,
+          lastSuccessfulLogin: userRecord.lastSuccessfulLogin,
+          preferences: userRecord.preferences,
           accounts: userRecord.accounts,
         },
       });
@@ -530,6 +542,287 @@ export async function authRoutes(app: FastifyInstance) {
         body: { providerId, accountId },
       });
       reply.send(serialize({ success: true, data: response }));
+    }
+  );
+
+  // ── List active sessions ──────────────────────────────────────────
+  app.get(
+    "/profile/sessions",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const sessions = await prisma.session.findMany({
+        where: { userId: request.user.userId },
+        select: {
+          id: true, expiresAt: true, createdAt: true, updatedAt: true,
+          ipAddress: true, userAgent: true, token: true,
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
+      reply.send(serialize({ success: true, data: sessions }));
+    }
+  );
+
+  // ── Revoke a specific session ────────────────────────────────────────
+  app.delete(
+    "/profile/sessions/:id",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const session = await prisma.session.findFirst({
+        where: { id, userId: request.user.userId },
+      });
+      if (!session) {
+        return reply.status(404).send({ success: false, error: 'Session not found' });
+      }
+      await prisma.session.delete({ where: { id } });
+      reply.send({ success: true, message: 'Session revoked' });
+    }
+  );
+
+  // ── Revoke all other sessions ───────────────────────────────────────
+  app.delete(
+    "/profile/sessions",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      // Get the current session token from cookie
+      const cookieHeader = request.headers.cookie || '';
+      const sessionMatch = cookieHeader.match(/better-auth\.session_token=([^;]+)/);
+      const currentToken = sessionMatch?.[1];
+
+      const result = await prisma.session.deleteMany({
+        where: {
+          userId: request.user.userId,
+          ...(currentToken ? { token: { not: currentToken } } : {}),
+        },
+      });
+      reply.send(serialize({ success: true, message: `Revoked ${result.count} session(s)`, revoked: result.count }));
+    }
+  );
+
+  // ── Update profile ──────────────────────────────────────────────────
+  app.patch(
+    "/profile",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { username, firstName, lastName } = request.body as {
+        username?: string; firstName?: string; lastName?: string;
+      };
+
+      // Build update payload
+      const data: Record<string, string> = {};
+      if (firstName !== undefined) data.firstName = firstName;
+      if (lastName !== undefined) data.lastName = lastName;
+      if (username !== undefined) {
+        if (!username || username.length < 2 || username.length > 32) {
+          return reply.status(400).send({ error: 'Username must be 2-32 characters' });
+        }
+        // Check uniqueness
+        const existing = await prisma.user.findFirst({ where: { username, id: { not: request.user.userId } } });
+        if (existing) {
+          return reply.status(409).send({ error: 'Username already taken' });
+        }
+        data.username = username;
+      }
+
+      if (Object.keys(data).length === 0) {
+        return reply.status(400).send({ error: 'No fields to update' });
+      }
+
+      const user = await prisma.user.update({
+        where: { id: request.user.userId },
+        data,
+        select: { id: true, username: true, firstName: true, lastName: true },
+      });
+
+      reply.send(serialize({ success: true, data: user }));
+    }
+  );
+
+  // ── Update user preferences ─────────────────────────────────────────
+  app.patch(
+    "/profile/preferences",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const prefs = request.body as Record<string, unknown>;
+      if (!prefs || typeof prefs !== 'object') {
+        return reply.status(400).send({ error: 'Invalid preferences' });
+      }
+      await prisma.user.update({
+        where: { id: request.user.userId },
+        data: { preferences: prefs },
+      });
+      reply.send(serialize({ success: true }));
+    }
+  );
+
+  // ── Avatar upload ───────────────────────────────────────────────────
+  app.post(
+    "/profile/avatar",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const data = await request.file();
+      if (!data) {
+        return reply.status(400).send({ error: 'No file uploaded' });
+      }
+
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+      if (!allowedTypes.includes(data.mimetype)) {
+        return reply.status(400).send({ error: 'Only JPEG, PNG, GIF, WebP, and SVG images are allowed' });
+      }
+
+      // Validate file size (max 2MB)
+      const MAX_SIZE = 2 * 1024 * 1024;
+      const buffer = await data.toBuffer();
+      if (buffer.length > MAX_SIZE) {
+        return reply.status(400).send({ error: 'Image must be under 2MB' });
+      }
+
+      // Store as data URI in the user record
+      const ext = data.mimetype.split('/')[1]?.replace('svg+xml', 'svg') || 'png';
+      const base64 = buffer.toString('base64');
+      const dataUri = `data:${data.mimetype};base64,${base64}`;
+
+      await prisma.user.update({
+        where: { id: request.user.userId },
+        data: { image: dataUri },
+      });
+
+      reply.send(serialize({ success: true, data: { image: dataUri } }));
+    }
+  );
+
+  // ── Remove avatar ───────────────────────────────────────────────────
+  app.delete(
+    "/profile/avatar",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      await prisma.user.update({
+        where: { id: request.user.userId },
+        data: { image: null },
+      });
+      reply.send(serialize({ success: true, message: 'Avatar removed' }));
+    }
+  );
+
+  // ── Resend email verification ────────────────────────────────────────
+  app.post(
+    "/profile/resend-verification",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const user = await prisma.user.findUnique({
+        where: { id: request.user.userId },
+        select: { email: true, emailVerified: true },
+      });
+      if (!user) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+      if (user.emailVerified) {
+        return reply.send(serialize({ success: true, message: 'Email already verified' }));
+      }
+      try {
+        const { sendEmail } = await import('../services/mailer');
+        const panelName = (await import('../db').then(m => m.prisma.themeSettings.findUnique({ where: { id: 'default' } })))?.panelName || process.env.APP_NAME || 'Catalyst';
+        await sendEmail({
+          to: user.email,
+          subject: `Verify your ${panelName} email`,
+          html: `<p>Click the link below to verify your email address.</p>`,
+          text: `Verify your email for ${panelName}.`,
+        });
+      } catch {
+        // Log but don't fail
+      }
+      reply.send(serialize({ success: true, message: 'Verification email sent' }));
+    }
+  );
+
+  // ── Personal audit log ──────────────────────────────────────────────
+  app.get(
+    "/profile/audit-log",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { limit = 50, offset = 0 } = request.query as { limit?: string; offset?: string };
+      const [logs, total] = await Promise.all([
+        prisma.auditLog.findMany({
+          where: { userId: request.user.userId },
+          orderBy: { timestamp: 'desc' },
+          take: Math.min(Number(limit) || 50, 200),
+          skip: Number(offset) || 0,
+          select: { id: true, action: true, resource: true, resourceId: true, details: true, timestamp: true },
+        }),
+        prisma.auditLog.count({ where: { userId: request.user.userId } }),
+      ]);
+      reply.send(serialize({ success: true, data: { logs, total } }));
+    }
+  );
+
+  // ── Export account data (GDPR) ──────────────────────────────────────
+  app.get(
+    "/profile/export",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user.userId;
+      const [user, sessions, accounts, apiKeys, auditLogs, serverAccess] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: userId },
+          select: { id: true, email: true, username: true, name: true, firstName: true, lastName: true, image: true, createdAt: true, updatedAt: true },
+        }),
+        prisma.session.findMany({
+          where: { userId },
+          select: { id: true, createdAt: true, updatedAt: true, ipAddress: true, userAgent: true },
+        }),
+        prisma.account.findMany({
+          where: { userId },
+          select: { id: true, providerId: true, accountId: true, createdAt: true },
+        }),
+        prisma.apikey.findMany({
+          where: { userId },
+          select: { id: true, name: true, prefix: true, createdAt: true, lastRequest: true, requestCount: true, expiresAt: true },
+        }),
+        prisma.auditLog.findMany({
+          where: { userId },
+          orderBy: { timestamp: 'desc' },
+          select: { id: true, action: true, resource: true, resourceId: true, details: true, timestamp: true },
+          take: 500,
+        }),
+        prisma.serverAccess.findMany({
+          where: { userId },
+          select: { id: true, serverId: true, permissions: true, createdAt: true },
+        }),
+      ]);
+
+      const exportData = {
+        exportedAt: new Date().toISOString(),
+        user,
+        sessions: sessions.map(s => ({ ...s, id: undefined })), // don't expose session IDs
+        accounts,
+        apiKeys: apiKeys.map(k => ({ ...k, id: undefined })),
+        auditLogs,
+        serverAccess,
+      };
+
+      reply
+        .header('Content-Type', 'application/json')
+        .header('Content-Disposition', 'attachment; filename="catalyst-account-export.json"')
+        .send(JSON.stringify(exportData, null, 2));
+    }
+  );
+
+  // ── User's API keys overview ────────────────────────────────────────
+  app.get(
+    "/profile/api-keys",
+    { onRequest: [app.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const keys = await prisma.apikey.findMany({
+        where: { userId: request.user.userId },
+        select: {
+          id: true, name: true, prefix: true, start: true, enabled: true,
+          allPermissions: true, permissions: true,
+          lastRequest: true, requestCount: true, expiresAt: true, createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      reply.send(serialize({ success: true, data: keys }));
     }
   );
 

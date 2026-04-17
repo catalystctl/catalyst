@@ -25,6 +25,7 @@ model User {
   username         String    @unique
   firstName        String?
   lastName         String?
+  preferences      Json      @default("{}")
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
