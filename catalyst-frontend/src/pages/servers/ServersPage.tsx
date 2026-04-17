@@ -6,9 +6,11 @@ import CreateServerModal from '../../components/servers/CreateServerModal';
 import { useServers } from '../../hooks/useServers';
 import type { Server } from '../../types/server';
 import { useAuthStore } from '../../stores/authStore';
-import { Badge } from '@/components/ui/badge';
 import { StatsCard } from '@/components/ui/stats-card';
-import { ServerIcon, Play, Square, AlertTriangle, Loader2 } from 'lucide-react';
+import { ServerIcon, Play, Square, AlertTriangle, Loader2, LayoutGrid, List, Shield, Users, Globe } from 'lucide-react';
+
+type ViewMode = 'card' | 'list';
+type AccessFilter = 'all' | 'owned' | 'other';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -21,7 +23,9 @@ const itemVariants: Variants = {
 };
 
 function ServersPage() {
-  const [filters, setFilters] = useState({});
+  const [filters, setFilters] = useState<Record<string, any>>({});
+  const [viewMode, setViewMode] = useState<ViewMode>('card');
+  const [accessFilter, setAccessFilter] = useState<AccessFilter>('all');
   const { data, isLoading } = useServers(filters);
   const { user } = useAuthStore();
   const canCreateServer =
@@ -29,10 +33,30 @@ function ServersPage() {
     user?.permissions?.includes('admin.write') ||
     user?.permissions?.includes('server.create');
 
-  const filtered = useMemo(() => {
+  const isAdmin = useMemo(
+    () =>
+      user?.permissions?.includes('*') ||
+      user?.permissions?.includes('admin.read') ||
+      user?.permissions?.includes('admin.write'),
+    [user?.permissions],
+  );
+
+  // Filter servers by access level
+  const accessFiltered = useMemo(() => {
     if (!data) return [] as Server[];
-    const { search, status } = filters as { search?: string; status?: string };
+    if (accessFilter === 'all') return data;
     return data.filter((server) => {
+      const isOwner = server.ownerId === user?.id;
+      if (accessFilter === 'owned') return isOwner;
+      if (accessFilter === 'other') return !isOwner;
+      return true;
+    });
+  }, [data, accessFilter, user?.id]);
+
+  // Apply text/status filters on top of access filter
+  const filtered = useMemo(() => {
+    const { search, status } = filters as { search?: string; status?: string };
+    return accessFiltered.filter((server) => {
       const matchesStatus = status ? server.status === status : true;
       const matchesSearch = search
         ? server.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -40,7 +64,7 @@ function ServersPage() {
         : true;
       return matchesStatus && matchesSearch;
     });
-  }, [data, filters]);
+  }, [accessFiltered, filters]);
 
   const statusCounts = useMemo(() => {
     const counts = { running: 0, stopped: 0, transitioning: 0, issues: 0 };
@@ -52,6 +76,15 @@ function ServersPage() {
     });
     return counts;
   }, [data]);
+
+  const accessCounts = useMemo(() => {
+    const counts = { owned: 0, other: 0 };
+    data?.forEach((server) => {
+      if (server.ownerId === user?.id) counts.owned += 1;
+      else counts.other += 1;
+    });
+    return counts;
+  }, [data, user?.id]);
 
   const totalServers = data?.length ?? 0;
   const filteredServers = filtered.length;
@@ -81,15 +114,15 @@ function ServersPage() {
               <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
                 Servers
               </h1>
+              <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                {totalServers}
+              </span>
             </div>
             <p className="ml-10 text-sm text-muted-foreground">
               Manage your game servers, monitor resources, and control power states.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">
-              {totalServers} server{totalServers === 1 ? '' : 's'}
-            </Badge>
             {canCreateServer && <CreateServerModal />}
           </div>
         </motion.div>
@@ -128,9 +161,69 @@ function ServersPage() {
           />
         </motion.div>
 
-        {/* ── Filters ── */}
-        <motion.div variants={itemVariants} className="overflow-hidden rounded-xl border border-border/50 bg-card/60 p-4 backdrop-blur-sm">
-          <ServerFilters onChange={setFilters} />
+        {/* ── Toolbar: Access filter + View toggle + Search/Status ── */}
+        <motion.div variants={itemVariants} className="space-y-3">
+          {/* Access filter tabs + View toggle */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-1 rounded-xl border border-border/50 bg-surface-2/40 p-1">
+              <AccessTab
+                active={accessFilter === 'all'}
+                onClick={() => setAccessFilter('all')}
+                icon={<Globe className="h-3.5 w-3.5" />}
+                label="All"
+                count={totalServers}
+              />
+              <AccessTab
+                active={accessFilter === 'owned'}
+                onClick={() => setAccessFilter('owned')}
+                icon={<Users className="h-3.5 w-3.5" />}
+                label="Owned"
+                count={accessCounts.owned}
+              />
+              {(isAdmin || accessCounts.other > 0) && (
+                <AccessTab
+                  active={accessFilter === 'other'}
+                  onClick={() => setAccessFilter('other')}
+                  icon={<Shield className="h-3.5 w-3.5" />}
+                  label="Other"
+                  count={accessCounts.other}
+                />
+              )}
+            </div>
+
+            {/* View mode toggle */}
+            <div className="flex items-center gap-1 rounded-lg border border-border/50 bg-surface-2/40 p-1">
+              <button
+                type="button"
+                onClick={() => setViewMode('card')}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
+                  viewMode === 'card'
+                    ? 'bg-primary-600 text-white shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Cards
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
+                  viewMode === 'list'
+                    ? 'bg-primary-600 text-white shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <List className="h-3.5 w-3.5" />
+                List
+              </button>
+            </div>
+          </div>
+
+          {/* Filters bar */}
+          <div className="overflow-hidden rounded-xl border border-border/50 bg-card/60 px-4 py-3 backdrop-blur-sm">
+            <ServerFilters onChange={setFilters} />
+          </div>
         </motion.div>
 
         {/* ── Server List ── */}
@@ -139,10 +232,50 @@ function ServersPage() {
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </motion.div>
         ) : (
-          <ServerList servers={filtered} />
+          <ServerList servers={filtered} viewMode={viewMode} />
         )}
       </div>
     </motion.div>
+  );
+}
+
+/* ── Access Tab Button ── */
+
+function AccessTab({
+  active,
+  onClick,
+  icon,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+        active
+          ? 'bg-primary-600 text-white shadow-sm'
+          : 'text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      {icon}
+      <span>{label}</span>
+      <span
+        className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+          active
+            ? 'bg-white/20 text-white'
+            : 'bg-surface-2 text-muted-foreground'
+        }`}
+      >
+        {count}
+      </span>
+    </button>
   );
 }
 
