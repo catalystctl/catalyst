@@ -256,4 +256,48 @@ export const serversApi = {
     });
     return data;
   },
+
+  rebuild: async (id: string) => {
+    const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/rebuild`);
+    return data;
+  },
+
+  kill: async (id: string) => {
+    const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/kill`);
+    return data;
+  },
+
+  transferOwnership: async (id: string, payload: { newOwnerId: string }) => {
+    const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/transfer-ownership`, payload);
+    return data;
+  },
+
+  archive: async (id: string) => {
+    const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/archive`);
+    return data;
+  },
+
+  restore: async (id: string) => {
+    const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/restore`);
+    return data;
+  },
+
+  getBackupSettings: async (id: string) => {
+    const data = await apiClient.get<ApiResponse<any>>(`/api/servers/${id}/backup-settings`);
+    return data.data;
+  },
+
+  updateBackupSettings: async (
+    id: string,
+    payload: {
+      storageMode?: string;
+      retentionCount?: number;
+      retentionDays?: number;
+      s3Config?: Record<string, unknown>;
+      sftpConfig?: Record<string, unknown>;
+    },
+  ) => {
+    const data = await apiClient.patch<ApiResponse<void>>(`/api/servers/${id}/backup-settings`, payload);
+    return data;
+  },
 };

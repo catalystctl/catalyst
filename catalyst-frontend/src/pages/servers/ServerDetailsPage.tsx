@@ -1100,10 +1100,8 @@ function ServerDetailsPage() {
             <ServerAdminTab
               serverId={server.id}
               serverName={server.name}
-              ownerId={server.ownerId}
-              serverStatus={server.status}
+              server={server}
               isSuspended={isSuspended}
-              suspensionReason={server.suspensionReason}
               canAdminWrite={canAdminWrite}
               suspendReason={suspendReason}
               onSuspendReasonChange={setSuspendReason}
