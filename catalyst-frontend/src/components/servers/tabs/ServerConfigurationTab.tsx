@@ -284,7 +284,6 @@ export default function ServerConfigurationTab({
     },
     onError: (error: any) => {
       const message =
-        error?.response?.data?.error ||
         error?.message ||
         'Failed to save config';
       notifyError(message);

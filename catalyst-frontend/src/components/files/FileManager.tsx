@@ -46,11 +46,16 @@ const isArchive = (name: string) =>
   name.endsWith('.tar.gz') || name.endsWith('.tgz') || name.endsWith('.zip');
 
 const isBufferError = (error: any): { currentMaxBufferMb: number; recommendedMaxBufferMb: number } | null => {
-  const data = error?.response?.data;
-  if (data?.code === 'MAX_BUFFER_EXCEEDED') {
+  // The backend returns { code: 'MAX_BUFFER_EXCEEDED', ... } in the response body.
+  // Our fetch helpers now throw Error with the message, so we check the message text.
+  const msg = error?.message ?? '';
+  if (msg.includes('MAX_BUFFER_EXCEEDED') || msg.includes('buffer limit')) {
+    // Try to extract numeric values from the error message
+    const currentMatch = msg.match(/(\d+)\s*MB/i);
+    const recommendedMatch = msg.match(/(\d+)\s*MB/gi);
     return {
-      currentMaxBufferMb: data.currentMaxBufferMb ?? 50,
-      recommendedMaxBufferMb: data.recommendedMaxBufferMb ?? 100,
+      currentMaxBufferMb: currentMatch ? parseInt(currentMatch[1], 10) : 50,
+      recommendedMaxBufferMb: recommendedMatch?.[1] ? parseInt(recommendedMatch[1], 10) : 100,
     };
   }
   return null;
@@ -206,7 +211,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
       }
     },
     onError: (error: any) => {
-      const msg = error?.response?.data?.error || error?.message || 'Failed to create item';
+      const msg = error?.message || 'Failed to create item';
       notifyError(msg);
     },
   });
@@ -222,7 +227,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
       invalidateFiles();
     },
     onError: (error: any) => {
-      const msg = error?.response?.data?.error || error?.message || 'Failed to save file';
+      const msg = error?.message || 'Failed to save file';
       notifyError(msg);
     },
   });
@@ -241,7 +246,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
       notifySuccess('Deleted selection');
     },
     onError: (error: any) => {
-      const msg = error?.response?.data?.error || error?.message || 'Failed to delete selection';
+      const msg = error?.message || 'Failed to delete selection';
       notifyError(msg);
     },
   });
@@ -256,7 +261,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
       notifySuccess('Upload complete');
     },
     onError: (error: any) => {
-      const msg = error?.response?.data?.error || error?.message || 'Failed to upload files';
+      const msg = error?.message || 'Failed to upload files';
       notifyError(msg);
     },
   });
@@ -272,7 +277,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
     onError: (error: any) => {
       const bufErr = isBufferError(error);
       if (bufErr) return setBufferError(bufErr);
-      const msg = error?.response?.data?.error || error?.message || 'Failed to compress files';
+      const msg = error?.message || 'Failed to compress files';
       notifyError(msg);
     },
   });
@@ -288,7 +293,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
     onError: (error: any) => {
       const bufErr = isBufferError(error);
       if (bufErr) return setBufferError(bufErr);
-      const msg = error?.response?.data?.error || error?.message || 'Failed to extract archive';
+      const msg = error?.message || 'Failed to extract archive';
       notifyError(msg);
     },
   });
@@ -302,7 +307,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
       notifySuccess('Permissions updated');
     },
     onError: (error: any) => {
-      const msg = error?.response?.data?.error || error?.message || 'Failed to update permissions';
+      const msg = error?.message || 'Failed to update permissions';
       notifyError(msg);
     },
   });
@@ -316,7 +321,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
       notifySuccess('Renamed');
     },
     onError: (error: any) => {
-      const msg = error?.response?.data?.error || error?.message || 'Failed to rename';
+      const msg = error?.message || 'Failed to rename';
       notifyError(msg);
     },
   });
