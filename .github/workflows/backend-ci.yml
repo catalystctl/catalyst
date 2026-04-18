@@ -115,8 +115,6 @@ jobs:
   build:
     needs: test
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    container:
-      image: oven/bun:1.3-debian
     if: github.ref == 'refs/heads/main'
 
     steps:
