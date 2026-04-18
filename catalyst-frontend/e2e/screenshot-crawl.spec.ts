@@ -1,7 +1,6 @@
-import { test, type Page, type Browser, type BrowserContext } from '@playwright/test';
+import { test, type Page, type Browser, type BrowserContext, expect } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 
 /**
  * Concurrent screenshot crawler.
@@ -18,15 +17,16 @@ import { fileURLToPath } from 'url';
  * Screenshots saved to docs/screenshots/ organized by category:
  *   auth/   — login, register, forgot-password
  *   user/   — dashboard, profile, servers, server tabs
- *   admin/  — admin pages + one server/node/template/role/plugin detail
+ *   admin/  — admin pages + one server/node/template detail
  *
  * Resolution: 1920×1080 (1080p).
  */
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// ─── Configuration ────────────────────────────────────────────────────────────
-const BASE_DIR = path.resolve(__dirname, '../../docs/screenshots');
+// The build script (docs/screenshots-site/build.mjs) reads from ../screenshots
+// relative to its own location (docs/screenshots-site/), which resolves to
+// docs/screenshots/ at the repo root. Use process.cwd() so this is relative
+// to where Playwright was invoked (catalyst-frontend/), giving the repo-root path.
+const BASE_DIR = path.resolve(process.cwd(), '../docs/screenshots');
 const CREDS = { email: 'admin@example.com', password: 'admin123' };
 const RESOLUTION = { width: 1920, height: 1080 };
 
@@ -55,16 +55,34 @@ async function navAndWait(page: Page, pathStr: string): Promise<boolean> {
 
 async function login(page: Page) {
   await navAndWait(page, '/login');
+
+  // Wait for the login form to be fully rendered
+  await page.locator('input[id="email"]').waitFor({ state: 'visible', timeout: 10_000 });
+  await page.locator('input[id="password"]').waitFor({ state: 'visible', timeout: 5_000 });
+
   await page.locator('input[id="email"]').fill(CREDS.email);
   await page.locator('input[id="password"]').fill(CREDS.password);
-  await page.locator('button:has-text("Sign in")').first().click({ timeout: 10_000 });
-  await page.waitForURL(/\/(servers|dashboard)/, { timeout: 15_000 }).catch(() => {});
-  await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
-  await page.waitForTimeout(800);
+
+  // Click the Sign in button and wait for navigation away from /login
+  const signInBtn = page.locator('button:has-text("Sign in")').first();
+  await expect(signInBtn).toBeEnabled({ timeout: 5_000 });
+  await signInBtn.click();
+
+  // Wait until we leave /login (successful redirect)
+  await page.waitForURL(
+    (url) => !url.pathname.includes('/login'),
+    { timeout: 15_000 },
+  ).catch(() => {});
+
+  // Additional wait for the app shell / sidebar to render
+  await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {});
+  await page.waitForTimeout(1_000);
 }
 
 function isAuthed(page: Page) {
-  return !page.url().includes('/login');
+  const url = page.url();
+  // Not on login, register, forgot-password, or any other auth page
+  return !url.includes('/login') && !url.includes('/register') && !url.includes('/forgot-password');
 }
 
 async function screenshot(
@@ -76,7 +94,11 @@ async function screenshot(
   const page = await ctx.newPage();
   try {
     await page.setViewportSize(RESOLUTION);
-    await navAndWait(page, url);
+    const ok = await navAndWait(page, url);
+    if (!ok) {
+      console.log(`  ✗ ${folder}/${slugify(name)} — navigation failed`);
+      return;
+    }
     const dir = path.join(BASE_DIR, folder);
     ensureDir(dir);
     const file = `${slugify(name)}.png`;
@@ -92,11 +114,24 @@ async function screenshotPage(
   folder: string,
   name: string,
 ): Promise<void> {
+  const file = `${slugify(name)}.png`;
+  const destPath = path.join(BASE_DIR, folder, file);
   const dir = path.join(BASE_DIR, folder);
   ensureDir(dir);
-  const file = `${slugify(name)}.png`;
-  await page.screenshot({ path: path.join(dir, file), fullPage: true });
-  console.log(`  ✓ ${folder}/${file}`);
+  await page.screenshot({ path: destPath, fullPage: true });
+  console.log(`  ✓ ${folder}/${file}  → ${destPath}`);
+}
+
+/**
+ * Hide the Tanstack Query devtools button so it doesn't pollute screenshots,
+ * then wait briefly for the page to settle.
+ */
+async function hideDevtoolsAndSettle(page: Page) {
+  await page.evaluate(() => {
+    const btn = document.querySelector('button[aria-label="Open Tanstack query devtools"]') as HTMLElement | null;
+    if (btn) btn.style.display = 'none';
+  }).catch(() => {});
+  await page.waitForTimeout(300);
 }
 
 /**
@@ -111,7 +146,7 @@ async function discoverFirst(
   await navAndWait(page, listPath);
 
   const links = page.locator(`a[href*="${linkPattern}"]`);
-  const count = await links.count();
+  const count = await links.count({ timeout: 10_000 }).catch(() => 0);
   if (count === 0) return null;
 
   // Only ever look at the first link
@@ -171,6 +206,7 @@ const ADMIN_ROUTES: RouteEntry[] = [
 ];
 
 // Entity discovery config — screenshot ONE per type
+// Only includes entities that have actual detail routes in App.tsx
 interface EntityConfig {
   listPath: string;
   linkPattern: string;
@@ -222,28 +258,23 @@ const ENTITY_CONFIGS: EntityConfig[] = [
     folder: 'admin',
     label: 'template',
   },
-  {
-    listPath: '/admin/roles',
-    linkPattern: '/admin/roles/',
-    detailPrefix: '/admin/roles/',
-    folder: 'admin',
-    label: 'role',
-  },
-  {
-    listPath: '/admin/plugins',
-    linkPattern: '/admin/plugin/',
-    detailPrefix: '/admin/plugin/',
-    folder: 'admin',
-    label: 'plugin',
-  },
+  // NOTE: Roles and plugins use modals (not detail routes), so they are omitted.
 ];
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
 
 async function setupScreenshots() {
-  if (fs.existsSync(BASE_DIR)) fs.rmSync(BASE_DIR, { recursive: true });
+  // Ensure all dirs exist. Only clean auth (runs first in every fresh run).
+  // User/admin dirs may have screenshots from concurrent workers — don't wipe them.
   for (const folder of ['auth', 'user', 'admin']) {
-    ensureDir(path.join(BASE_DIR, folder));
+    const dir = path.join(BASE_DIR, folder);
+    ensureDir(dir);
+    // Clean auth only (it runs first so it always starts clean)
+    if (folder === 'auth') {
+      for (const file of fs.readdirSync(dir)) {
+        fs.unlinkSync(path.join(dir, file));
+      }
+    }
   }
 }
 
@@ -259,7 +290,12 @@ test.describe('📸 Auth Pages', () => {
   for (const route of AUTH_ROUTES) {
     test(`${route.label}`, async ({ page }) => {
       await page.setViewportSize(RESOLUTION);
-      await navAndWait(page, route.path);
+      const ok = await navAndWait(page, route.path);
+      if (!ok) {
+        console.log(`  ⚠ ${route.path} — navigation failed (skipped)`);
+        return;
+      }
+      await hideDevtoolsAndSettle(page);
       await screenshotPage(page, route.folder, route.label);
     });
   }
@@ -271,6 +307,7 @@ test.describe('📸 User Pages', () => {
   test.setTimeout(3 * 60 * 1000);
 
   test('Login + static pages', async ({ page }) => {
+    test.setTimeout(4 * 60 * 1000); // login + 3 pages in one session
     await page.setViewportSize(RESOLUTION);
     await login(page);
 
@@ -279,12 +316,18 @@ test.describe('📸 User Pages', () => {
         console.log(`  ⚠ ${route.path} — not authenticated (skipped)`);
         continue;
       }
-      await navAndWait(page, route.path);
+      const ok = await navAndWait(page, route.path);
+      if (!ok) {
+        console.log(`  ⚠ ${route.path} — navigation failed (skipped)`);
+        continue;
+      }
+      await hideDevtoolsAndSettle(page);
       await screenshotPage(page, route.folder, route.label);
     }
   });
 
   test('Server detail (one server, every tab)', async ({ page }) => {
+    test.setTimeout(4 * 60 * 1000); // 14 tabs × ~10s each + discovery
     await page.setViewportSize(RESOLUTION);
     await login(page);
     if (!isAuthed(page)) return;
@@ -301,7 +344,12 @@ test.describe('📸 User Pages', () => {
     // Screenshot every tab available for the server
     const serverConfig = ENTITY_CONFIGS.find(e => e.label === 'server')!;
     for (const tab of serverConfig.detailTabs) {
-      await navAndWait(page, base + tab.suffix);
+      const ok = await navAndWait(page, base + tab.suffix);
+      if (!ok) {
+        console.log(`  ⚠ Server tab ${tab.label} — navigation failed (skipped)`);
+        continue;
+      }
+      await hideDevtoolsAndSettle(page);
       await screenshotPage(page, 'user', `server-details-${tab.label}`);
     }
   });
@@ -310,7 +358,7 @@ test.describe('📸 User Pages', () => {
 // ─── Worker 3: Admin pages (login + admin entity screenshots) ────────────────
 
 test.describe('📸 Admin Pages', () => {
-  test.setTimeout(4 * 60 * 1000);
+  test.setTimeout(6 * 60 * 1000);
 
   test('Login + static admin pages', async ({ page }) => {
     await page.setViewportSize(RESOLUTION);
@@ -318,35 +366,80 @@ test.describe('📸 Admin Pages', () => {
     if (!isAuthed(page)) return;
 
     for (const route of ADMIN_ROUTES) {
-      await navAndWait(page, route.path);
+      const ok = await navAndWait(page, route.path);
+      if (!ok) {
+        console.log(`  ⚠ ${route.path} — navigation failed (skipped)`);
+        continue;
+      }
+      await hideDevtoolsAndSettle(page);
       await screenshotPage(page, route.folder, route.label);
     }
   });
 
   test('Admin entity details (one per type)', async ({ page }) => {
+    test.setTimeout(8 * 60 * 1000); // server(14 tabs) + node(2) + template(1) = slow
     await page.setViewportSize(RESOLUTION);
     await login(page);
     if (!isAuthed(page)) return;
 
     for (const entity of ENTITY_CONFIGS) {
       console.log(`\n  ── ${entity.label} ──`);
-      const item = await discoverFirst(page, entity.listPath, entity.linkPattern);
-      if (!item) {
+
+      // Navigate to the list page and wait for it to settle before looking for links.
+      await navAndWait(page, entity.listPath);
+      // Small settle time for data tables / async rows to render after nav.
+      await page.waitForTimeout(1_000);
+
+      const links = page.locator(`a[href*="${entity.linkPattern}"]`);
+      const count = await links.count({ timeout: 15_000 }).catch(() => 0);
+      if (count === 0) {
         console.log(`  ⚠ No ${entity.label} found — skipped`);
         continue;
       }
+
+      // Only ever look at the first link
+      const href = await links.first().getAttribute('href', { timeout: 3_000 }).catch(() => null);
+      if (!href) {
+        console.log(`  ⚠ No href found for ${entity.label} — skipped`);
+        continue;
+      }
+
+      const escaped = entity.linkPattern.replace(/\//g, '\\/');
+      const match = href.match(new RegExp(`${escaped}([^/?#]+)`));
+      if (!match) {
+        console.log(`  ⚠ Could not parse ID from href: ${href}`);
+        continue;
+      }
+
+      let name = match[1];
+      try {
+        const text = (await links.first().innerText({ timeout: 2_000 })).trim();
+        if (text && text.length < 100) name = text;
+      } catch { /* noop */ }
+
+      const item = { id: match[1], name };
       console.log(`  🖥️  ${item.name}`);
 
       const base = `${entity.detailPrefix}${encodeURIComponent(item.id)}`;
 
       if (entity.detailTabs && entity.detailTabs.length > 0) {
         for (const tab of entity.detailTabs) {
-          await navAndWait(page, base + tab.suffix);
+          const ok = await navAndWait(page, base + tab.suffix);
+          if (!ok) {
+            console.log(`  ⚠ ${entity.label} tab ${tab.label} — navigation failed (skipped)`);
+            continue;
+          }
+          await hideDevtoolsAndSettle(page);
           await screenshotPage(page, entity.folder, `${entity.label}-${tab.label}`);
         }
       } else {
-        await navAndWait(page, base);
-        await screenshotPage(page, entity.folder, `${entity.label}-details`);
+        const ok = await navAndWait(page, base);
+        if (!ok) {
+          console.log(`  ⚠ ${entity.label} details — navigation failed (skipped)`);
+        } else {
+          await hideDevtoolsAndSettle(page);
+          await screenshotPage(page, entity.folder, `${entity.label}-details`);
+        }
       }
     }
   });

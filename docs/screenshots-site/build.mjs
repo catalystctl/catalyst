@@ -110,7 +110,7 @@ const allImagesJS = Object.entries(CATEGORIES)
 
 function screenshotCard(img, featured) {
   const cls = featured ? 'screenshot-card featured' : 'screenshot-card';
-  const aspect = featured ? '"16/9"' : '"16/12.3"';
+  const aspect = featured ? '16/9' : '16/12.3';
   const badge = featured ? '' : `<span class="card-badge">Screenshot</span>`;
   return [
     `<div class="${cls}" data-src="./screenshots/${img.path.split('/screenshots/')[1]}" data-title="${img.title.replace(/"/g, '&quot;')}">`,
@@ -163,6 +163,7 @@ const sectionsHTML = Object.entries(CATEGORIES)
 const authCount = screenshots.auth?.length || 0;
 const userCount = screenshots.user?.length || 0;
 const adminCount = screenshots.admin?.length || 0;
+const cats = Object.values(screenshots).filter(a => a.length > 0).length;
 const emptyState = totalCount === 0
   ? `<div class="empty-state"><p>No screenshots found. Run <code>bun run test:screenshots</code> in <code>catalyst-frontend/</code> to generate them.</p></div>`
   : sectionsHTML;
@@ -351,7 +352,7 @@ ${fontCSS}
   <div class="stat-card">
     <div class="stat-icon amber">&#128193;</div>
     <div>
-      <div class="stat-value">3</div>
+      <div class="stat-value">${cats}</div>
       <div class="stat-label">Categories</div>
     </div>
   </div>
@@ -476,7 +477,6 @@ ${emptyState}
 
 writeFileSync(OUT, html, 'utf8');
 
-const cats = Object.values(screenshots).filter(a => a.length > 0).length;
 console.log('✅ Built screenshots-site/');
 console.log(`   Total: ${totalCount} screenshots across ${cats} categories`);
 console.log(`   Auth: ${authCount}  User: ${userCount}  Admin: ${adminCount}`);
