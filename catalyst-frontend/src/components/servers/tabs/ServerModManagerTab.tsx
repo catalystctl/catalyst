@@ -665,19 +665,13 @@ export default function ServerModManagerTab({
         ))}
       </motion.div>
 
-      <AnimatePresence mode="wait">
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* BROWSE TAB                                                       */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {modSubTab === 'browse' && (
-          <motion.div
-            key="browse"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            className="space-y-4"
-          >
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* BROWSE TAB                                                       */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      <div
+        style={{ display: modSubTab === 'browse' ? 'contents' : 'none' }}
+        className="space-y-4"
+      >
             {/* ── Filters ── */}
             <motion.div
               variants={itemVariants}
@@ -1034,21 +1028,15 @@ export default function ServerModManagerTab({
                 )}
               </>
             )}
-          </motion.div>
-        )}
+          </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
         {/* INSTALLED TAB                                                     */}
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {modSubTab === 'installed' && (
-          <motion.div
-            key="installed"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            className="space-y-3"
-          >
+        <div
+          style={{ display: modSubTab === 'installed' ? 'contents' : 'none' }}
+          className="space-y-3"
+        >
             {/* ── Toolbar ── */}
             <motion.div
               variants={itemVariants}
@@ -1411,9 +1399,7 @@ export default function ServerModManagerTab({
                 </AnimatePresence>
               </motion.div>
             )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
 
       {/* Update confirmation modal */}
       <UpdateConfirmModal

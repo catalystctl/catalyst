@@ -570,19 +570,13 @@ export default function ServerPluginManagerTab({
         ))}
       </motion.div>
 
-      <AnimatePresence mode="wait">
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* BROWSE TAB                                                       */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {pluginSubTab === 'browse' && (
-          <motion.div
-            key="browse"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            className="space-y-4"
-          >
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* BROWSE TAB                                                       */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      <div
+        style={{ display: pluginSubTab === 'browse' ? 'contents' : 'none' }}
+        className="space-y-4"
+      >
             {/* ── Filters ── */}
             <motion.div
               variants={itemVariants}
@@ -935,21 +929,15 @@ export default function ServerPluginManagerTab({
                 )}
               </>
             )}
-          </motion.div>
-        )}
+          </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
         {/* INSTALLED TAB                                                     */}
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {pluginSubTab === 'installed' && (
-          <motion.div
-            key="installed"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            className="space-y-3"
-          >
+        <div
+          style={{ display: pluginSubTab === 'installed' ? 'contents' : 'none' }}
+          className="space-y-3"
+        >
             {/* ── Toolbar ── */}
             <motion.div
               variants={itemVariants}
@@ -1315,9 +1303,7 @@ export default function ServerPluginManagerTab({
                 </AnimatePresence>
               </motion.div>
             )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
 
       {/* Update confirmation modal */}
       <UpdateConfirmModal
