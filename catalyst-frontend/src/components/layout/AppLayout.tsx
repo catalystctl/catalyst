@@ -87,7 +87,19 @@ function AppLayout() {
         )}
       >
         <div className="space-y-4">
-          <Breadcrumbs />
+          <div className="flex items-center justify-between">
+            <Breadcrumbs />
+            <button
+              type="button"
+              onClick={() => setIsSearchOpen(true)}
+              className="hidden items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-400 shadow-sm transition-all duration-200 hover:border-zinc-300 hover:text-zinc-600 dark:border-zinc-800 dark:bg-surface-1 dark:text-zinc-500 dark:hover:border-zinc-700 dark:hover:text-zinc-300 lg:flex"
+              aria-label="Open search (⌘K)"
+            >
+              <Search className="h-3.5 w-3.5" />
+              <span>Search</span>
+              <kbd className="hidden rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400 sm:inline-block dark:border-zinc-700 dark:bg-surface-2 dark:text-zinc-500">⌘K</kbd>
+            </button>
+          </div>
           <Outlet />
         </div>
       </main>
