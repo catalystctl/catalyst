@@ -3,6 +3,8 @@ import apiClient from './client';
 export type PluginManagerSearchResponse = {
   hits?: any[];
   data?: any[];
+  total_hits?: number;
+  totalCount?: number;
 };
 
 export type InstalledPlugin = {

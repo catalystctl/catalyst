@@ -1,17 +1,21 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
+  ArrowLeftRight,
   ArrowUpCircle,
-  CheckSquare,
+  ChevronLeft,
+  ChevronRight,
   Download,
   ExternalLink,
   Loader2,
+  Package,
   Puzzle,
   RefreshCw,
   Search,
-  Square,
   Trash2,
+  X,
 } from 'lucide-react';
+import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { formatBytes } from '../../../utils/formatters';
 import { pluginManagerApi } from '../../../services/api/pluginManager';
 import {
@@ -20,25 +24,163 @@ import {
 } from '../../../utils/notify';
 import {
   titleCase,
-  displayProviderName,
   normalizeVersionId,
   normalizeVersionLabel,
   filterAndSortVersions,
   formatDownloadCount,
   isStableRelease,
 } from '../../../utils/modManagerUtils';
+import { Badge } from '../../../components/ui/badge';
+import { Button } from '../../../components/ui/button';
+import { Input } from '../../../components/ui/input';
+import { Skeleton } from '../../../components/ui/skeleton';
 import EmptyState from '../../shared/EmptyState';
-import ServerTabCard from './ServerTabCard';
 import UpdateConfirmModal, {
   type UpdateItem,
 } from './UpdateConfirmModal';
 
+// ── Animation Variants ──
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.04, delayChildren: 0.05 },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 10 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { type: 'spring', stiffness: 300, damping: 24 },
+  },
+};
+
+const cardVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.97 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    transition: { type: 'spring', stiffness: 400, damping: 28 },
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.97,
+    transition: { duration: 0.15 },
+  },
+};
+
+const RESULTS_PER_PAGE = 12;
+
+// ── Types ──
 interface Props {
   serverId: string | undefined;
   serverGameVersion?: string;
   pluginManagerConfig: any;
 }
 
+// ── Skeleton Loaders ──
+function BrowseSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-xl border border-border/50 bg-card/60 p-4"
+        >
+          <div className="flex gap-3">
+            <Skeleton className="h-11 w-11 rounded-lg" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-3/5 rounded" />
+              <Skeleton className="h-3 w-full rounded" />
+              <Skeleton className="h-3 w-20 rounded" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Version Selector Popover ──
+function VersionSelector({
+  versionOptions,
+  selectedVersion,
+  onVersionChange,
+  isLoading,
+  isError,
+  onInstall,
+  isInstalling,
+}: {
+  versionOptions: any[];
+  selectedVersion: string;
+  onVersionChange: (id: string) => void;
+  isLoading: boolean;
+  isError: boolean;
+  onInstall: () => void;
+  isInstalling: boolean;
+}) {
+  return (
+    <motion.div
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={{ duration: 0.2, ease: 'easeInOut' }}
+      className="overflow-hidden"
+    >
+      <div className="mt-3 space-y-2 border-t border-border/50 pt-3">
+        <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Version
+        </label>
+        {isError ? (
+          <p className="text-xs text-danger">Failed to load versions.</p>
+        ) : (
+          <div className="flex items-end gap-2">
+            <div className="relative flex-1">
+              <select
+                className="w-full appearance-none rounded-lg border border-border bg-surface-2 px-3 py-2 pr-8 text-xs text-foreground transition-colors focus:border-primary-500 focus:outline-none"
+                value={selectedVersion}
+                onChange={(event) => onVersionChange(event.target.value)}
+                disabled={isLoading}
+              >
+                <option value="">
+                  {isLoading ? 'Loading…' : 'Select version'}
+                </option>
+                {versionOptions.map((version: any) => {
+                  const vid = normalizeVersionId(version);
+                  const vlabel = normalizeVersionLabel(version);
+                  if (!vid) return null;
+                  return (
+                    <option key={vid} value={String(vid)}>
+                      {vlabel}
+                    </option>
+                  );
+                })}
+              </select>
+              <ChevronLeft className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -rotate-90 text-muted-foreground" />
+            </div>
+            <Button
+              size="sm"
+              disabled={!selectedVersion || isInstalling}
+              onClick={onInstall}
+              className="gap-1.5"
+            >
+              {isInstalling ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              {isInstalling ? 'Installing…' : 'Install'}
+            </Button>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Main Component ──
 export default function ServerPluginManagerTab({
   serverId,
   serverGameVersion,
@@ -58,6 +200,7 @@ export default function ServerPluginManagerTab({
   // ── Browse state ──
   const [pluginQuery, setPluginQuery] = useState('');
   const [pluginGameVersion, setPluginGameVersion] = useState('');
+  const [searchPage, setSearchPage] = useState(1);
   const [selectedPlugin, setSelectedPlugin] = useState<string | null>(null);
   const [selectedPluginName, setSelectedPluginName] = useState('');
   const [selectedPluginVersion, setSelectedPluginVersion] = useState('');
@@ -96,9 +239,11 @@ export default function ServerPluginManagerTab({
     );
   }, [serverGameVersion]);
 
+  // Reset page and selection on filter change
   useEffect(() => {
     setSelectedPlugin(null);
     setSelectedPluginVersion('');
+    setSearchPage(1);
   }, [pluginProvider, pluginQuery, pluginGameVersion]);
 
   useEffect(() => {
@@ -117,7 +262,6 @@ export default function ServerPluginManagerTab({
     data: pluginSearchResults,
     isLoading: pluginSearchLoading,
     isError: pluginSearchError,
-    refetch: refetchPluginSearch,
   } = useQuery({
     queryKey: [
       'plugin-manager-search',
@@ -125,12 +269,14 @@ export default function ServerPluginManagerTab({
       pluginProvider,
       pluginQuery,
       pluginGameVersion,
+      searchPage,
     ],
     queryFn: () =>
       pluginManagerApi.search(serverId ?? '', {
         provider: pluginProvider,
         query: pluginQuery.trim() || undefined,
         gameVersion: pluginGameVersion.trim() || undefined,
+        page: searchPage,
       }),
     enabled: Boolean(serverId && pluginProvider),
   });
@@ -212,6 +358,10 @@ export default function ServerPluginManagerTab({
     return [];
   }, [pluginSearchResults]);
 
+  const totalHits = (pluginSearchResults as any)?.total_hits ?? pluginResults.length;
+
+  const totalPages = Math.max(1, Math.ceil(totalHits / RESULTS_PER_PAGE));
+
   const pluginVersionOptions = useMemo(() => {
     if (!pluginVersions) return [];
     const versionsResponse = pluginVersions as any;
@@ -258,6 +408,13 @@ export default function ServerPluginManagerTab({
     pluginInstalledSort,
   ]);
 
+  const pluginsWithUpdates = installedPlugins.filter(
+    (p: any) => p.hasUpdate,
+  );
+  const pluginsWithUpdatesSelected = pluginsWithUpdates.filter((p: any) =>
+    selectedPluginFiles.has(p.name),
+  );
+
   // Auto-select stable version
   useEffect(() => {
     if (!selectedPlugin) return;
@@ -284,6 +441,10 @@ export default function ServerPluginManagerTab({
   }, [pluginVersionOptions, selectedPlugin, selectedPluginVersion]);
 
   // ── Handlers ──
+  const handleSearch = useCallback(() => {
+    setSearchPage(1);
+  }, []);
+
   const handleUpdatePlugins = async () => {
     if (!serverId) return;
     setIsUpdatingPlugins(true);
@@ -329,389 +490,527 @@ export default function ServerPluginManagerTab({
     }
   };
 
-  // ── Render ──
+  // ── Guard ──
   if (!pluginManagerConfig) {
     return (
-      <ServerTabCard>
-        <EmptyState
-          title="Plugin manager not available"
-          description="This server template does not have a plugin manager configured."
-        />
-      </ServerTabCard>
+      <EmptyState
+        title="Plugin manager not available"
+        description="This server template does not have a plugin manager configured."
+      />
     );
   }
 
   return (
-    <div className="space-y-4">
-      {/* Sub-tab toggle + title */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <Puzzle className="h-5 w-5 text-primary-500" />
-          <h2 className="text-base font-semibold text-foreground">
-            Plugin Manager
-          </h2>
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="space-y-5"
+    >
+      {/* ── Header ── */}
+      <motion.div
+        variants={itemVariants}
+        className="flex flex-wrap items-end justify-between gap-4"
+      >
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-violet-500 to-purple-500 opacity-20 blur-sm" />
+              <Puzzle className="relative h-7 w-7 text-violet-600 dark:text-violet-400" />
+            </div>
+            <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+              Plugins
+            </h1>
+          </div>
+          <p className="ml-10 text-sm text-muted-foreground">
+            Browse and install plugins for your server
+          </p>
         </div>
-        <div className="flex items-center overflow-hidden rounded-lg border border-border bg-surface-2">
+        <div className="flex items-center gap-2">
+          {installedPlugins.length > 0 && (
+            <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
+              <Package className="h-2.5 w-2.5" />
+              {installedPlugins.length} installed
+            </Badge>
+          )}
+          {pluginsWithUpdates.length > 0 && (
+            <Badge variant="warning" className="h-8 gap-1.5 px-3 text-xs">
+              <ArrowUpCircle className="h-2.5 w-2.5" />
+              {pluginsWithUpdates.length} update{pluginsWithUpdates.length !== 1 ? 's' : ''}
+            </Badge>
+          )}
+        </div>
+      </motion.div>
+
+      {/* ── Sub-tab toggle ── */}
+      <motion.div variants={itemVariants} className="flex items-center gap-1 rounded-xl border border-border bg-card/80 p-1 backdrop-blur-sm">
+        {(['browse', 'installed'] as const).map((tab) => (
           <button
+            key={tab}
             type="button"
-            className={`px-4 py-1.5 text-xs font-semibold transition-colors ${pluginSubTab === 'browse' ? 'bg-primary-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
-            onClick={() => setPluginSubTab('browse')}
-          >
-            Browse
-          </button>
-          <button
-            type="button"
-            className={`px-4 py-1.5 text-xs font-semibold transition-colors ${pluginSubTab === 'installed' ? 'bg-primary-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`relative flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all duration-200 ${
+              pluginSubTab === tab
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
             onClick={() => {
-              setPluginSubTab('installed');
-              refetchInstalledPlugins();
+              setPluginSubTab(tab);
+              if (tab === 'installed') refetchInstalledPlugins();
             }}
           >
-            Installed
-            {installedPlugins.length > 0 && (
-              <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-card/20 px-1 text-[10px]">
+            {tab === 'browse' ? 'Browse' : 'Installed'}
+            {tab === 'installed' && installedPlugins.length > 0 && (
+              <span className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] ${
+                pluginSubTab === 'installed' ? 'bg-white/20' : 'bg-surface-2'
+              }`}>
                 {installedPlugins.length}
               </span>
             )}
           </button>
-        </div>
-      </div>
+        ))}
+      </motion.div>
 
-      {pluginSubTab === 'browse' ? (
-        <div className="space-y-4">
-          {/* Filters card */}
-          <ServerTabCard>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Provider
-                </label>
-                <select
-                  className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground transition-colors focus:border-primary-500 focus:bg-card focus:outline-none dark:focus:border-primary-400"
-                  value={pluginProvider}
-                  onChange={(event) =>
-                    setPluginProvider(event.target.value)
-                  }
-                >
-                  {pluginManagerProviders.map((provider: string) => (
-                    <option key={provider} value={provider}>
-                      {provider === 'spiget'
-                        ? 'Spigot'
-                        : titleCase(provider)}
-                    </option>
-                  ))}
-                </select>
+      <AnimatePresence mode="wait">
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* BROWSE TAB                                                       */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {pluginSubTab === 'browse' && (
+          <motion.div
+            key="browse"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-4"
+          >
+            {/* ── Filters ── */}
+            <motion.div
+              variants={itemVariants}
+              className="flex flex-wrap items-center gap-2.5"
+            >
+              {/* Search */}
+              <div className="relative min-w-[200px] flex-1 max-w-sm">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={pluginQuery}
+                  onChange={(e) => setPluginQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSearch();
+                  }}
+                  placeholder="Search plugins…"
+                  className="pl-9"
+                />
               </div>
-              <div>
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Game Version
-                </label>
-                <input
-                  className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground transition-colors focus:border-primary-500 focus:bg-card focus:outline-none dark:focus:border-primary-400"
+
+              {/* Game version */}
+              <div className="relative">
+                <Input
                   value={pluginGameVersion}
-                  onChange={(event) =>
-                    setPluginGameVersion(event.target.value)
-                  }
-                  placeholder={serverGameVersion || 'e.g. 1.20.1, latest'}
+                  onChange={(e) => setPluginGameVersion(e.target.value)}
+                  placeholder={serverGameVersion || 'Game version'}
+                  className="w-40"
                   list="plugin-game-version-tags"
                 />
                 {pluginProvider === 'modrinth' && pluginGameVersionTags && pluginGameVersionTags.length > 0 && (
                   <datalist id="plugin-game-version-tags">
                     <option value="latest" />
-                    {pluginGameVersionTags.map((v) => (
+                    {pluginGameVersionTags.slice(0, 30).map((v) => (
                       <option key={v} value={v} />
                     ))}
                   </datalist>
                 )}
               </div>
-            </div>
-            <div className="mt-3 flex gap-2">
-              <div className="relative flex-1">
+
+              {/* Provider */}
+              <select
+                className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                value={pluginProvider}
+                onChange={(e) => setPluginProvider(e.target.value)}
+              >
+                {pluginManagerProviders.map((provider: string) => (
+                  <option key={provider} value={provider}>
+                    {provider === 'spiget' ? 'Spigot' : titleCase(provider)}
+                  </option>
+                ))}
+              </select>
+
+              {/* Search button */}
+              <Button
+                size="sm"
+                onClick={handleSearch}
+                disabled={pluginSearchLoading}
+                className="gap-1.5"
+              >
+                {pluginSearchLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Search className="h-3.5 w-3.5" />
+                )}
+                Search
+              </Button>
+            </motion.div>
+
+            {/* ── Results area ── */}
+            {pluginSearchLoading ? (
+              <BrowseSkeleton />
+            ) : pluginSearchError ? (
+              <motion.div
+                variants={itemVariants}
+                className="rounded-xl border border-danger/30 bg-danger-muted p-4 text-sm text-danger"
+              >
+                Unable to load search results. Check your provider API keys in
+                admin settings.
+              </motion.div>
+            ) : pluginResults.length === 0 ? (
+              <motion.div variants={itemVariants}>
+                <EmptyState
+                  title="No results"
+                  description={
+                    pluginQuery.trim()
+                      ? 'Try a different search term or adjust your filters.'
+                      : 'Search for a plugin to get started.'
+                  }
+                />
+              </motion.div>
+            ) : (
+              <>
+                {/* Results count + pagination info */}
+                <motion.div
+                  variants={itemVariants}
+                  className="flex items-center justify-between"
+                >
+                  <span className="text-xs text-muted-foreground">
+                    {totalHits.toLocaleString()} result{totalHits !== 1 ? 's' : ''}
+                    {totalHits > RESULTS_PER_PAGE && (
+                      <> · Page {searchPage} of {totalPages}</>
+                    )}
+                  </span>
+                  {totalHits > RESULTS_PER_PAGE && (
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={searchPage <= 1}
+                        onClick={() => setSearchPage((p) => Math.max(1, p - 1))}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <span className="min-w-[4rem] text-center text-xs text-muted-foreground">
+                        {searchPage} / {totalPages}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={searchPage >= totalPages}
+                        onClick={() => setSearchPage((p) => Math.min(totalPages, p + 1))}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </motion.div>
+
+                {/* Result cards */}
+                <motion.div
+                  variants={containerVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                >
+                  <AnimatePresence>
+                    {pluginResults.map((entry: any) => {
+                      const id =
+                        pluginProvider === 'paper'
+                          ? encodeURIComponent(
+                              (entry.owner?.name && entry.slug
+                                ? `${entry.owner.name}/${entry.slug}`
+                                : entry.slug || entry.id) ?? '',
+                            )
+                          : entry.project_id ||
+                            entry.id ||
+                            entry.resourceId ||
+                            entry.slug ||
+                            entry.name;
+                      const title =
+                        entry.name ||
+                        entry.title ||
+                        entry.tag ||
+                        entry.slug ||
+                        'Untitled';
+                      const summary =
+                        entry.description ||
+                        entry.summary ||
+                        entry.tag ||
+                        '';
+                      const isActive =
+                        selectedPlugin === String(id);
+                      const imageUrl =
+                        pluginProvider === 'modrinth'
+                          ? entry.icon_url
+                          : pluginProvider === 'paper'
+                            ? entry.avatarUrl
+                            : entry.icon?.url || entry.icon?.data;
+                      const fallbackLabel = title
+                        .split(/\s+/)
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map((s: string) => s[0]?.toUpperCase() ?? '')
+                        .join('');
+                      const downloads =
+                        entry.downloads ?? entry.stats?.downloads ?? 0;
+                      let externalUrl = '';
+                      if (pluginProvider === 'modrinth') {
+                        const slug =
+                          entry.slug || entry.project_id || entry.id;
+                        externalUrl = slug
+                          ? `https://modrinth.com/plugin/${slug}`
+                          : '';
+                      } else if (pluginProvider === 'paper') {
+                        const hangarOwner = entry.owner?.name || entry.namespace?.owner;
+                        const hangarSlug = entry.slug || entry.namespace?.slug;
+                        externalUrl =
+                          hangarOwner && hangarSlug
+                            ? `https://hangar.papermc.io/${hangarOwner}/${hangarSlug}`
+                            : '';
+                      } else {
+                        externalUrl = id
+                          ? `https://www.spigotmc.org/resources/${id}/`
+                          : '';
+                      }
+
+                      return (
+                        <motion.div
+                          key={String(id)}
+                          variants={cardVariants}
+                          layout
+                          layoutId={`plugin-${String(id)}`}
+                          className={`group relative rounded-xl border p-4 transition-all duration-200 ${
+                            isActive
+                              ? 'border-primary/50 bg-primary-muted/50 ring-1 ring-primary/20 shadow-lg shadow-primary/5'
+                              : 'border-border/50 bg-card/80 backdrop-blur-sm hover:border-primary/30 hover:shadow-md'
+                          }`}
+                          onClick={() => {
+                            setSelectedPlugin(
+                              isActive ? null : String(id),
+                            );
+                            setSelectedPluginName(title);
+                          }}
+                        >
+                          <div className="flex gap-3">
+                            {imageUrl ? (
+                              <img
+                                src={imageUrl}
+                                alt=""
+                                loading="lazy"
+                                className="h-11 w-11 rounded-lg object-cover ring-1 ring-black/5"
+                              />
+                            ) : (
+                              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-surface-2 text-xs font-bold text-muted-foreground">
+                                {fallbackLabel || 'PL'}
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="truncate text-sm font-semibold text-foreground">
+                                  {title}
+                                </span>
+                                {externalUrl && (
+                                  <a
+                                    href={externalUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="shrink-0 rounded-md p-0.5 opacity-0 transition-all hover:bg-surface-2 group-hover:opacity-100"
+                                  >
+                                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-primary-500" />
+                                  </a>
+                                )}
+                              </div>
+                              {summary && (
+                                <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                                  {summary}
+                                </p>
+                              )}
+                              {downloads > 0 && (
+                                <div className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+                                  <Download className="h-3 w-3" />
+                                  {formatDownloadCount(downloads)}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Expanded version selector */}
+                          <AnimatePresence>
+                            {isActive && (
+                              <VersionSelector
+                                versionOptions={pluginVersionOptions}
+                                selectedVersion={selectedPluginVersion}
+                                onVersionChange={setSelectedPluginVersion}
+                                isLoading={pluginVersionsLoading}
+                                isError={pluginVersionsError}
+                                onInstall={() =>
+                                  installPluginMutation.mutate()
+                                }
+                                isInstalling={
+                                  installPluginMutation.isPending
+                                }
+                              />
+                            )}
+                          </AnimatePresence>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+                </motion.div>
+
+                {/* Bottom pagination */}
+                {totalHits > RESULTS_PER_PAGE && (
+                  <motion.div
+                    variants={itemVariants}
+                    className="flex items-center justify-center gap-2 pt-2"
+                  >
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={searchPage <= 1}
+                      onClick={() =>
+                        setSearchPage((p) => Math.max(1, p - 1))
+                      }
+                      className="gap-1.5"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                      Previous
+                    </Button>
+                    <div className="flex items-center gap-1">
+                      {Array.from(
+                        {
+                          length: Math.min(totalPages, 5),
+                        },
+                        (_, i) => {
+                          let pageNum: number;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (searchPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (searchPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = searchPage - 2 + i;
+                          }
+                          return (
+                            <button
+                              key={pageNum}
+                              type="button"
+                              className={`h-8 min-w-8 rounded-lg px-2 text-xs font-medium transition-colors ${
+                                searchPage === pageNum
+                                  ? 'bg-primary text-white shadow-sm'
+                                  : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'
+                              }`}
+                              onClick={() => setSearchPage(pageNum)}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        },
+                      )}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={searchPage >= totalPages}
+                      onClick={() =>
+                        setSearchPage((p) =>
+                          Math.min(totalPages, p + 1),
+                        )
+                      }
+                      className="gap-1.5"
+                    >
+                      Next
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </motion.div>
+                )}
+              </>
+            )}
+          </motion.div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* INSTALLED TAB                                                     */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {pluginSubTab === 'installed' && (
+          <motion.div
+            key="installed"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-3"
+          >
+            {/* ── Toolbar ── */}
+            <motion.div
+              variants={itemVariants}
+              className="flex flex-wrap items-center gap-2.5"
+            >
+              <div className="relative min-w-[200px] flex-1 max-w-sm">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  className="w-full rounded-lg border border-border bg-surface-2 py-2 pl-9 pr-3 text-sm text-foreground transition-colors focus:border-primary-500 focus:bg-card focus:outline-none dark:focus:border-primary-400"
-                  value={pluginQuery}
-                  onChange={(event) => setPluginQuery(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') refetchPluginSearch();
-                  }}
-                  placeholder="Search plugins…"
+                <Input
+                  value={pluginInstalledSearch}
+                  onChange={(e) =>
+                    setPluginInstalledSearch(e.target.value)
+                  }
+                  placeholder="Search installed plugins…"
+                  className="pl-9"
                 />
               </div>
-              <button
-                type="button"
-                className="rounded-lg bg-primary-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-primary-500 disabled:opacity-50"
-                onClick={() => refetchPluginSearch()}
-                disabled={pluginSearchLoading}
-              >
-                Search
-              </button>
-            </div>
-          </ServerTabCard>
 
-          {/* Results */}
-          {pluginSearchLoading ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {Array.from({ length: 6 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="animate-pulse rounded-xl border border-border bg-card p-4"
-                >
-                  <div className="flex gap-3">
-                    <div className="h-12 w-12 rounded-lg bg-surface-3 dark:bg-surface-2" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-4 w-2/3 rounded bg-surface-3 dark:bg-surface-2" />
-                      <div className="h-3 w-full rounded bg-surface-2 dark:bg-surface-2/60" />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : pluginSearchError ? (
-            <div className="rounded-xl border border-danger/30 bg-danger-muted p-4 text-sm text-danger">
-              Unable to load search results. Check your provider API keys in
-              admin settings.
-            </div>
-          ) : pluginResults.length === 0 ? (
-            <ServerTabCard>
-              <EmptyState
-                title="No results"
-                description={
-                  pluginQuery.trim()
-                    ? 'Try a different search term or adjust your filters.'
-                    : 'Search for a plugin to get started.'
-                }
-              />
-            </ServerTabCard>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {pluginResults.map((entry: any) => {
-                const hangarOwner =
-                  entry.owner?.name ||
-                  entry.owner?.username ||
-                  entry.namespace?.owner;
-                const hangarSlug =
-                  entry.slug || entry.namespace?.slug;
-                const hangarProjectId =
-                  hangarOwner && hangarSlug
-                    ? `${hangarOwner}/${hangarSlug}`
-                    : entry.slug || entry.id;
-                const id =
-                  pluginProvider === 'paper'
-                    ? encodeURIComponent(hangarProjectId ?? '')
-                    : entry.project_id ||
-                      entry.id ||
-                      entry.resourceId ||
-                      entry.slug ||
-                      entry.name;
-                const title =
-                  entry.name ||
-                  entry.title ||
-                  entry.tag ||
-                  entry.slug ||
-                  'Untitled';
-                const summary =
-                  entry.description ||
-                  entry.summary ||
-                  entry.tag ||
-                  '';
-                const isActive = selectedPlugin === String(id);
-                const imageUrl =
-                  pluginProvider === 'modrinth'
-                    ? entry.icon_url
-                    : pluginProvider === 'paper'
-                      ? entry.avatarUrl
-                      : entry.icon?.url || entry.icon?.data;
-                const fallbackLabel = title
-                  .split(/\s+/)
-                  .filter(Boolean)
-                  .slice(0, 2)
-                  .map((segment: string) =>
-                    segment[0]?.toUpperCase() ?? '',
+              <select
+                className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                value={pluginInstalledFilter}
+                onChange={(e) =>
+                  setPluginInstalledFilter(
+                    e.target.value as typeof pluginInstalledFilter,
                   )
-                  .join('');
-                const downloads =
-                  entry.downloads ?? entry.stats?.downloads ?? 0;
-                const providerLabel =
-                  pluginProvider === 'modrinth'
-                    ? 'Modrinth'
-                    : pluginProvider === 'paper'
-                      ? 'Paper'
-                      : 'Spigot';
-                let externalUrl = '';
-                if (pluginProvider === 'modrinth') {
-                  const slug =
-                    entry.slug || entry.project_id || entry.id;
-                  externalUrl = slug
-                    ? `https://modrinth.com/plugin/${slug}`
-                    : '';
-                } else if (pluginProvider === 'paper') {
-                  externalUrl = hangarProjectId
-                    ? `https://hangar.papermc.io/${hangarProjectId}`
-                    : '';
-                } else {
-                  externalUrl = id
-                    ? `https://www.spigotmc.org/resources/${id}/`
-                    : '';
                 }
-                return (
-                  <div
-                    key={String(id)}
-                    className={`group relative cursor-pointer rounded-xl border p-4 transition-all duration-200 ${isActive ? 'border-primary bg-primary-muted ring-1 ring-primary/20' : 'border-border/50 bg-card/80 backdrop-blur-sm hover:border-primary/30 hover:shadow-md'}`}
-                    onClick={() => {
-                      setSelectedPlugin(String(id));
-                      setSelectedPluginName(title);
-                    }}
-                  >
-                    <div className="flex gap-3">
-                      {imageUrl ? (
-                        <img
-                          src={imageUrl}
-                          alt=""
-                          loading="lazy"
-                          className="h-12 w-12 rounded-lg object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-surface-2 text-xs font-bold text-muted-foreground dark:bg-surface-2">
-                          {fallbackLabel || 'PL'}
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="text-sm font-semibold text-foreground">
-                            {title}
-                          </span>
-                          {externalUrl && (
-                            <a
-                              href={externalUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={(event) =>
-                                event.stopPropagation()
-                              }
-                              className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-                              title={`View on ${providerLabel}`}
-                            >
-                              <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-primary-500" />
-                            </a>
-                          )}
-                        </div>
-                        {summary && (
-                          <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                            {summary}
-                          </p>
-                        )}
-                        {downloads > 0 && (
-                          <div className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-                            <Download className="h-3 w-3" />
-                            {formatDownloadCount(downloads)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    {isActive && (
-                      <div className="mt-3 border-t border-border pt-3">
-                        <div className="flex items-end gap-2">
-                          <div className="flex-1">
-                            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                              Version
-                            </label>
-                            <select
-                              className="w-full rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-foreground transition-colors focus:border-primary-500 focus:bg-card focus:outline-none"
-                              value={selectedPluginVersion}
-                              onChange={(event) =>
-                                setSelectedPluginVersion(
-                                  event.target.value,
-                                )
-                              }
-                              disabled={pluginVersionsLoading}
-                            >
-                              <option value="">
-                                {pluginVersionsLoading
-                                  ? 'Loading…'
-                                  : 'Select version'}
-                              </option>
-                              {pluginVersionOptions.map(
-                                (version: any) => {
-                                  const vid = normalizeVersionId(version);
-                                  const vlabel =
-                                    normalizeVersionLabel(version);
-                                  if (!vid) return null;
-                                  return (
-                                    <option
-                                      key={vid}
-                                      value={String(vid)}
-                                    >
-                                      {vlabel}
-                                    </option>
-                                  );
-                                },
-                              )}
-                            </select>
-                          </div>
-                          <button
-                            type="button"
-                            className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-primary-500 disabled:opacity-50"
-                            onClick={() =>
-                              installPluginMutation.mutate()
-                            }
-                            disabled={
-                              !selectedPluginVersion ||
-                              installPluginMutation.isPending
-                            }
-                          >
-                            {installPluginMutation.isPending
-                              ? 'Installing…'
-                              : 'Install'}
-                          </button>
-                        </div>
-                        {pluginVersionsError && (
-                          <p className="mt-2 text-xs text-danger">
-                            Failed to load versions.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      ) : (
-        /* ── Installed plugins ── */
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          {/* Toolbar */}
-          <div className="space-y-3 border-b border-border px-4 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs tabular-nums text-muted-foreground">
-                {filteredInstalledPlugins.length}
-                {filteredInstalledPlugins.length !==
-                installedPlugins.length
-                  ? ` / ${installedPlugins.length}`
-                  : ''}{' '}
-                plugin{installedPlugins.length !== 1 ? 's' : ''}
-              </span>
-              <div className="flex items-center gap-1.5">
-                {installedPlugins.some((p: any) => p.hasUpdate) && (
-                  <button
-                    type="button"
-                    className="flex items-center gap-1 rounded-lg bg-warning-muted px-2.5 py-1.5 text-xs font-medium text-warning transition-colors hover:bg-warning-muted dark:bg-warning/10 dark:text-warning dark:hover:bg-warning/20"
+              >
+                <option value="all">All</option>
+                <option value="updates">Has Updates</option>
+                <option value="tracked">Tracked</option>
+                <option value="untracked">Untracked</option>
+              </select>
+
+              <select
+                className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                value={pluginInstalledSort}
+                onChange={(e) =>
+                  setPluginInstalledSort(
+                    e.target.value as typeof pluginInstalledSort,
+                  )
+                }
+              >
+                <option value="name">Name</option>
+                <option value="size">Size</option>
+                <option value="date">Date</option>
+              </select>
+
+              <div className="ml-auto flex items-center gap-1.5">
+                {pluginsWithUpdates.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 border-warning/30 text-warning hover:bg-warning/10 hover:text-warning"
                     disabled={isUpdatingPlugins}
                     onClick={() => {
-                      const pluginsToUpdate =
-                        selectedPluginFiles.size > 0
-                          ? installedPlugins.filter(
-                              (p: any) =>
-                                p.hasUpdate &&
-                                selectedPluginFiles.has(p.name),
-                            )
-                          : installedPlugins.filter(
-                              (p: any) => p.hasUpdate,
-                            );
-                      if (!pluginsToUpdate.length) return;
+                      const modsToUpdate =
+                        pluginsWithUpdatesSelected.length > 0
+                          ? pluginsWithUpdatesSelected
+                          : pluginsWithUpdates;
+                      if (!modsToUpdate.length) return;
                       setUpdateConfirmPlugins(
-                        pluginsToUpdate.map((p: any) => ({
+                        modsToUpdate.map((p: any) => ({
                           name: p.name,
                           currentVersion:
                             p.versionId || 'unknown',
@@ -723,30 +1022,19 @@ export default function ServerPluginManagerTab({
                       );
                     }}
                   >
-                    <ArrowUpCircle className="h-3 w-3" />
-                    Update{' '}
-                    {selectedPluginFiles.size > 0
-                      ? 'Selected'
-                      : 'All'}{' '}
-                    (
-                    {(
-                      selectedPluginFiles.size > 0
-                        ? installedPlugins.filter(
-                            (p: any) =>
-                              p.hasUpdate &&
-                              selectedPluginFiles.has(p.name),
-                          )
-                        : installedPlugins.filter(
-                            (p: any) => p.hasUpdate,
-                          )
-                    ).length}
-                    )
-                  </button>
+                    <ArrowUpCircle className="h-3.5 w-3.5" />
+                    Update
+                    {pluginsWithUpdatesSelected.length > 0
+                      ? ` (${pluginsWithUpdatesSelected.length})`
+                      : ` All (${pluginsWithUpdates.length})`}
+                  </Button>
                 )}
+
                 {selectedPluginFiles.size > 0 && (
-                  <button
-                    type="button"
-                    className="flex items-center gap-1 rounded-lg bg-danger-muted px-2.5 py-1.5 text-xs font-medium text-danger transition-colors hover:bg-danger-muted dark:bg-danger/10 dark:text-danger dark:hover:bg-danger/20"
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 border-danger/30 text-danger hover:bg-danger/10 hover:text-danger"
                     onClick={() => {
                       if (
                         !confirm(
@@ -760,269 +1048,276 @@ export default function ServerPluginManagerTab({
                       setSelectedPluginFiles(new Set());
                     }}
                   >
-                    <Trash2 className="h-3 w-3" />
+                    <Trash2 className="h-3.5 w-3.5" />
                     Remove ({selectedPluginFiles.size})
-                  </button>
+                  </Button>
                 )}
-                <button
-                  type="button"
-                  className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:hover:bg-surface-2 dark:hover:text-foreground"
+
+                <Button
+                  variant="ghost"
+                  size="sm"
                   disabled={isCheckingPluginUpdates}
                   onClick={handleCheckUpdates}
+                  className="gap-1.5"
                 >
                   {isCheckingPluginUpdates ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <RefreshCw className="h-3 w-3" />
+                    <RefreshCw className="h-3.5 w-3.5" />
                   )}
-                  {isCheckingPluginUpdates
-                    ? 'Checking…'
-                    : 'Check Updates'}
-                </button>
+                  Check Updates
+                </Button>
               </div>
-            </div>
-            {/* Search, Filter, Sort row */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search installed plugins…"
-                  className="w-full rounded-lg border border-border bg-surface-2 py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary-500 focus:outline-none dark:placeholder:text-muted-foreground"
-                  value={pluginInstalledSearch}
-                  onChange={(e) =>
-                    setPluginInstalledSearch(e.target.value)
-                  }
-                />
-              </div>
-              <select
-                className="rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-foreground focus:border-primary-500 focus:outline-none"
-                value={pluginInstalledFilter}
-                onChange={(e) =>
-                  setPluginInstalledFilter(
-                    e.target.value as typeof pluginInstalledFilter,
-                  )
-                }
-              >
-                <option value="all">All</option>
-                <option value="updates">Has Updates</option>
-                <option value="tracked">Tracked</option>
-                <option value="untracked">Untracked</option>
-              </select>
-              <select
-                className="rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-foreground focus:border-primary-500 focus:outline-none"
-                value={pluginInstalledSort}
-                onChange={(e) =>
-                  setPluginInstalledSort(
-                    e.target.value as typeof pluginInstalledSort,
-                  )
-                }
-              >
-                <option value="name">Sort: Name</option>
-                <option value="size">Sort: Size</option>
-                <option value="date">Sort: Date</option>
-              </select>
-            </div>
-          </div>
+            </motion.div>
 
-          {/* Select All bar */}
-          {filteredInstalledPlugins.length > 0 && (
-            <div className="flex items-center gap-3 border-b border-border bg-surface-2/50 px-4 py-1.5 dark:bg-surface-2/30">
-              <button
-                type="button"
-                className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground dark:hover:text-foreground"
-                onClick={() => {
-                  if (
-                    selectedPluginFiles.size ===
-                    filteredInstalledPlugins.length
-                  ) {
-                    setSelectedPluginFiles(new Set());
-                  } else {
-                    setSelectedPluginFiles(
-                      new Set(
-                        filteredInstalledPlugins.map(
-                          (p: any) => p.name,
-                        ),
-                      ),
-                    );
-                  }
-                }}
-              >
-                {selectedPluginFiles.size ===
-                  filteredInstalledPlugins.length &&
-                filteredInstalledPlugins.length > 0 ? (
-                  <CheckSquare className="h-3.5 w-3.5 text-primary-500" />
-                ) : (
-                  <Square className="h-3.5 w-3.5" />
-                )}
-                {selectedPluginFiles.size > 0
-                  ? `${selectedPluginFiles.size} selected`
-                  : 'Select all'}
-              </button>
-              {selectedPluginFiles.size > 0 && (
+            {/* Count bar */}
+            <motion.div
+              variants={itemVariants}
+              className="flex items-center justify-between px-1"
+            >
+              <span className="text-xs text-muted-foreground">
+                {filteredInstalledPlugins.length}
+                {filteredInstalledPlugins.length !==
+                installedPlugins.length
+                  ? ` of ${installedPlugins.length}`
+                  : ''}{' '}
+                plugin{installedPlugins.length !== 1 ? 's' : ''}
+              </span>
+              {filteredInstalledPlugins.length > 0 && (
                 <button
                   type="button"
-                  className="text-xs text-muted-foreground transition-colors hover:text-muted-foreground dark:hover:text-foreground"
-                  onClick={() => setSelectedPluginFiles(new Set())}
+                  className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+                  onClick={() => {
+                    if (
+                      selectedPluginFiles.size ===
+                      filteredInstalledPlugins.length
+                    ) {
+                      setSelectedPluginFiles(new Set());
+                    } else {
+                      setSelectedPluginFiles(
+                        new Set(
+                          filteredInstalledPlugins.map(
+                            (p: any) => p.name,
+                          ),
+                        ),
+                      );
+                    }
+                  }}
                 >
-                  Clear
+                  {selectedPluginFiles.size ===
+                    filteredInstalledPlugins.length &&
+                  selectedPluginFiles.size > 0
+                    ? 'Deselect all'
+                    : 'Select all'}
                 </button>
               )}
-            </div>
-          )}
+            </motion.div>
 
-          {/* Plugin list */}
-          {filteredInstalledPlugins.length === 0 ? (
-            <div className="p-8">
-              <EmptyState
-                title={
-                  pluginInstalledSearch ||
-                  pluginInstalledFilter !== 'all'
-                    ? 'No matching plugins'
-                    : 'No plugins installed'
-                }
-                description={
-                  pluginInstalledSearch ||
-                  pluginInstalledFilter !== 'all'
-                    ? 'Try adjusting your search or filter.'
-                    : 'Install plugins from the Browse tab to see them here.'
-                }
-              />
-            </div>
-          ) : (
-            <div className="divide-y divide-zinc-200">
-              {filteredInstalledPlugins.map((plugin: any) => {
-                const isSelected = selectedPluginFiles.has(
-                  plugin.name,
-                );
-                return (
-                  <div
-                    key={plugin.name}
-                    className={`group flex items-center gap-3 px-4 py-3 transition-colors ${isSelected ? 'bg-primary-50/40 dark:bg-primary-500/5' : 'hover:bg-surface-2 dark:hover:bg-surface-2/40'}`}
-                  >
-                    <button
-                      type="button"
-                      className="shrink-0"
-                      onClick={() => {
-                        const next = new Set(selectedPluginFiles);
-                        if (isSelected)
-                          next.delete(plugin.name);
-                        else next.add(plugin.name);
-                        setSelectedPluginFiles(next);
-                      }}
-                    >
-                      {isSelected ? (
-                        <CheckSquare className="h-4 w-4 text-primary-500" />
-                      ) : (
-                        <Square className="h-4 w-4 text-foreground transition-colors group-hover:text-muted-foreground" />
-                      )}
-                    </button>
-                    <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${plugin.hasUpdate ? 'bg-warning-muted' : 'bg-surface-2'}`}
-                    >
-                      <Puzzle
-                        className={`h-4 w-4 ${plugin.hasUpdate ? 'text-warning' : 'text-muted-foreground'}`}
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate text-sm font-medium text-foreground">
-                          {plugin.projectName || plugin.name}
-                        </span>
-                        {plugin.hasUpdate && (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-warning-muted px-1.5 py-0.5 text-[10px] font-semibold text-warning">
-                            <ArrowUpCircle className="h-2.5 w-2.5" />
-                            Update
-                          </span>
-                        )}
-                        {plugin.provider && (
-                          <span className="inline-flex shrink-0 rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted-foreground dark:bg-surface-2">
-                            {plugin.provider}
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-                        <span className="font-mono">
-                          {formatBytes(plugin.size)}
-                        </span>
-                        {plugin.modifiedAt && (
-                          <span>
-                            {new Date(
-                              plugin.modifiedAt,
-                            ).toLocaleDateString()}
-                          </span>
-                        )}
-                        {plugin.versionId && (
-                          <span title={plugin.versionId}>
-                            v
-                            {plugin.versionId.length > 12
-                              ? plugin.versionId.slice(0, 8) +
-                                '…'
-                              : plugin.versionId}
-                          </span>
-                        )}
-                        {plugin.hasUpdate &&
-                          plugin.latestVersionName && (
-                            <span className="font-medium text-warning">
-                              → {plugin.latestVersionName}
-                            </span>
-                          )}
-                        {!plugin.provider && (
-                          <span className="italic text-foreground">
-                            untracked
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                      {plugin.hasUpdate && (
+            {/* ── Plugin list ── */}
+            {filteredInstalledPlugins.length === 0 ? (
+              <motion.div variants={itemVariants}>
+                <EmptyState
+                  title={
+                    pluginInstalledSearch ||
+                    pluginInstalledFilter !== 'all'
+                      ? 'No matching plugins'
+                      : 'No plugins installed'
+                  }
+                  description={
+                    pluginInstalledSearch ||
+                    pluginInstalledFilter !== 'all'
+                      ? 'Try adjusting your search or filter.'
+                      : 'Install plugins from the Browse tab to see them here.'
+                  }
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+                className="overflow-hidden rounded-xl border border-border bg-card/80 backdrop-blur-sm"
+              >
+                <AnimatePresence>
+                  {filteredInstalledPlugins.map((plugin: any) => {
+                    const isSelected = selectedPluginFiles.has(
+                      plugin.name,
+                    );
+                    return (
+                      <motion.div
+                        key={plugin.name}
+                        variants={itemVariants}
+                        layout
+                        className={`group flex items-center gap-3 border-b border-border/50 px-4 py-3 transition-colors last:border-0 ${
+                          isSelected
+                            ? 'bg-primary-500/5'
+                            : 'hover:bg-surface-2/60'
+                        }`}
+                      >
+                        {/* Checkbox */}
                         <button
                           type="button"
-                          className="rounded-lg p-1.5 text-warning transition-colors hover:bg-warning-muted"
-                          title="Update to latest version"
-                          disabled={isUpdatingPlugins}
-                          onClick={() =>
-                            setUpdateConfirmPlugins([
-                              {
-                                name: plugin.name,
-                                currentVersion:
-                                  plugin.versionId || 'unknown',
-                                latestVersion:
-                                  plugin.latestVersionName ||
-                                  plugin.latestVersionId ||
-                                  'latest',
-                              },
-                            ])
-                          }
+                          className="shrink-0 rounded-md transition-colors hover:bg-surface-2"
+                          onClick={() => {
+                            const next = new Set(selectedPluginFiles);
+                            if (isSelected)
+                              next.delete(plugin.name);
+                            else next.add(plugin.name);
+                            setSelectedPluginFiles(next);
+                          }}
                         >
-                          <ArrowUpCircle className="h-4 w-4" />
+                          <div
+                            className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${
+                              isSelected
+                                ? 'border-primary bg-primary text-white'
+                                : 'border-border bg-background group-hover:border-primary/40'
+                            }`}
+                          >
+                            {isSelected && (
+                              <svg
+                                className="h-3 w-3"
+                                viewBox="0 0 12 12"
+                                fill="none"
+                              >
+                                <path
+                                  d="M2.5 6L5 8.5L9.5 3.5"
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            )}
+                          </div>
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-danger-muted hover:text-danger"
-                        title="Remove"
-                        onClick={() => {
-                          if (
-                            confirm(
-                              `Remove ${plugin.projectName || plugin.name}?`,
-                            )
-                          )
-                            uninstallPluginMutation.mutate(
-                              plugin.name,
-                            );
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+
+                        {/* Icon */}
+                        <div
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                            plugin.hasUpdate
+                              ? 'bg-warning/10'
+                              : 'bg-surface-2'
+                          }`}
+                        >
+                          <Puzzle
+                            className={`h-4 w-4 ${
+                              plugin.hasUpdate
+                                ? 'text-warning'
+                                : 'text-muted-foreground'
+                            }`}
+                          />
+                        </div>
+
+                        {/* Info */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-medium text-foreground">
+                              {plugin.projectName || plugin.name}
+                            </span>
+                            {plugin.hasUpdate && (
+                              <Badge
+                                variant="warning"
+                                className="gap-1 px-1.5 py-0 text-[10px]"
+                              >
+                                <ArrowUpCircle className="h-2.5 w-2.5" />
+                                Update
+                              </Badge>
+                            )}
+                            {plugin.provider && (
+                              <Badge
+                                variant="secondary"
+                                className="px-1.5 py-0 text-[10px] capitalize"
+                              >
+                                {plugin.provider}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                            <span className="font-mono">
+                              {formatBytes(plugin.size)}
+                            </span>
+                            {plugin.modifiedAt && (
+                              <span>
+                                {new Date(
+                                  plugin.modifiedAt,
+                                ).toLocaleDateString()}
+                              </span>
+                            )}
+                            {!plugin.provider && (
+                              <span className="italic text-foreground/60">
+                                untracked
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Update arrow */}
+                        {plugin.hasUpdate && plugin.latestVersionName && (
+                          <div className="hidden items-center gap-1.5 sm:flex">
+                            <span className="text-[11px] text-muted-foreground line-through">
+                              {plugin.versionId?.length > 12
+                                ? plugin.versionId.slice(0, 8) + '…'
+                                : plugin.versionId}
+                            </span>
+                            <ArrowLeftRight className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-[11px] font-medium text-warning">
+                              {plugin.latestVersionName}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                          {plugin.hasUpdate && (
+                            <button
+                              type="button"
+                              className="rounded-lg p-1.5 text-warning transition-colors hover:bg-warning/10"
+                              title="Update to latest version"
+                              disabled={isUpdatingPlugins}
+                              onClick={() =>
+                                setUpdateConfirmPlugins([
+                                  {
+                                    name: plugin.name,
+                                    currentVersion:
+                                      plugin.versionId || 'unknown',
+                                    latestVersion:
+                                      plugin.latestVersionName ||
+                                      plugin.latestVersionId ||
+                                      'latest',
+                                  },
+                                ])
+                              }
+                            >
+                              <ArrowUpCircle className="h-4 w-4" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
+                            title="Remove"
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  `Remove ${plugin.projectName || plugin.name}?`,
+                                )
+                              )
+                                uninstallPluginMutation.mutate(
+                                  plugin.name,
+                                );
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Update confirmation modal */}
       <UpdateConfirmModal
@@ -1033,6 +1328,6 @@ export default function ServerPluginManagerTab({
         onCancel={() => setUpdateConfirmPlugins([])}
         onConfirm={handleUpdatePlugins}
       />
-    </div>
+    </motion.div>
   );
 }
