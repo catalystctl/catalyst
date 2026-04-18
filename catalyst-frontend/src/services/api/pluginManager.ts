@@ -20,6 +20,13 @@ export type InstalledPlugin = {
 };
 
 export const pluginManagerApi = {
+  gameVersions: async (serverId: string, provider: string) => {
+    const data = await apiClient.get<{ success: boolean; data?: string[] }>(
+      `/api/servers/${serverId}/plugin-manager/game-versions`,
+      { params: { provider } },
+    );
+    return data.data ?? [];
+  },
   search: async (
     serverId: string,
     params: {

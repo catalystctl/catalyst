@@ -215,6 +215,13 @@ export default function ServerModManagerTab({
   }, [selectedProject]);
 
   // ── Queries ──
+  const { data: modGameVersionTags } = useQuery({
+    queryKey: ['mod-manager-game-versions', serverId, modProvider, modProviderGame],
+    queryFn: () => modManagerApi.gameVersions(serverId ?? '', modProvider, modProviderGame || undefined),
+    enabled: Boolean(serverId && modProvider === 'modrinth'),
+    staleTime: 10 * 60 * 1000,
+  });
+
   const {
     data: modSearchResults,
     isLoading: modSearchLoading,
@@ -552,8 +559,17 @@ export default function ServerModManagerTab({
                   onChange={(event) =>
                     setModGameVersion(event.target.value)
                   }
-                  placeholder={serverGameVersion || 'e.g. 1.20.1'}
+                  placeholder={serverGameVersion || 'e.g. 1.20.1, latest'}
+                  list="mod-game-version-tags"
                 />
+                {modProvider === 'modrinth' && modGameVersionTags && modGameVersionTags.length > 0 && (
+                  <datalist id="mod-game-version-tags">
+                    <option value="latest" />
+                    {modGameVersionTags.map((v) => (
+                      <option key={v} value={v} />
+                    ))}
+                  </datalist>
+                )}
               </div>
             </div>
             <div className="mt-3 flex gap-2">

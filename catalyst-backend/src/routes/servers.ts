@@ -40,6 +40,7 @@ import {
   renderInviteEmail,
   sendEmail,
 } from "../services/mailer";
+import { resolveModrinthGameVersion } from "../services/modrinth-version-resolver";
 
 const MAX_PORT = 65535;
 const INVITE_EXPIRY_DAYS = 7;
@@ -2564,6 +2565,68 @@ export async function serverRoutes(app: FastifyInstance) {
     }
   );
 
+  // Get valid game version tags for a provider (used for autocomplete)
+  app.get(
+    "/:serverId/mod-manager/game-versions",
+    {
+      onRequest: [app.authenticate],
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId } = request.params as { serverId: string };
+      const { provider, game } = request.query as { provider?: string; game?: string };
+      const userId = request.user.userId;
+
+      if (!provider) {
+        return reply.status(400).send({ error: "provider is required" });
+      }
+
+      const server = await ensureServerAccess(serverId, userId, "server.read", reply);
+      if (!server) return;
+      const modManager = ensureModManagerEnabled(server, reply);
+      if (!modManager) return;
+      const providerEntry = resolveModManagerProvider(modManager, provider, game);
+      if (!providerEntry) {
+        return reply.status(400).send({ error: "Provider or game not enabled for this template" });
+      }
+      const providerId = providerEntry.id;
+
+      if (providerId !== "modrinth") {
+        // Non-Modrinth providers don't support game version tag resolution
+        return reply.send({ success: true, data: [] });
+      }
+
+      const providerConfig = await loadProviderConfig(providerId);
+      if (!providerConfig) {
+        return reply.status(404).send({ error: "Provider not found" });
+      }
+      let headers: Record<string, string>;
+      try {
+        const settings = await getModManagerSettings();
+        headers = buildProviderHeaders(providerConfig, settings);
+      } catch (error: any) {
+        return reply.status(409).send({ error: error?.message || "Missing provider API key" });
+      }
+
+      const baseUrl = providerConfig.baseUrl.replace(/\/$/, "");
+      const url = `${baseUrl}/v2/tag/game_version`;
+      try {
+        const response = await fetch(url, { headers });
+        if (!response.ok) {
+          return reply.send({ success: true, data: [] });
+        }
+        const data = (await response.json()) as any[];
+        // Return release versions only, sorted by date descending
+        const releases = data
+          .filter((v) => v.version_type === "release")
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .map((v) => v.version);
+        return reply.send({ success: true, data: releases });
+      } catch {
+        return reply.send({ success: true, data: [] });
+      }
+    }
+  );
+
   app.get(
     "/:serverId/mod-manager/search",
     {
@@ -2627,10 +2690,14 @@ export async function serverRoutes(app: FastifyInstance) {
       const pageValue = typeof page === "string" ? Number(page) : page ?? 1;
       const baseUrl = providerConfig.baseUrl.replace(/\/$/, "");
       const searchQuery = typeof query === "string" ? query.trim() : "";
-      const resolvedGameVersion = gameVersion?.trim() || extractGameVersion(server.environment);
+      const rawGameVersion = gameVersion?.trim() || extractGameVersion(server.environment);
       const isTrending = !searchQuery;
       let url = "";
       if (providerId === "modrinth") {
+        // Resolve game version (handles "latest", partial versions like "1.21")
+        const resolvedGameVersion = rawGameVersion
+          ? await resolveModrinthGameVersion(rawGameVersion, baseUrl, headers)
+          : "";
         const facets: string[][] = [];
         facets.push([
           `project_type:${
@@ -2686,7 +2753,7 @@ export async function serverRoutes(app: FastifyInstance) {
           pageSize: "20",
           index: String(Math.max(0, (Number(pageValue) - 1) * 20)),
           ...(searchQuery ? { searchFilter: searchQuery } : {}),
-          ...(resolvedGameVersion ? { gameVersion: resolvedGameVersion } : {}),
+          ...(rawGameVersion ? { gameVersion: rawGameVersion } : {}),
           ...(isTrending ? { sortField: "2", sortOrder: "desc" } : {}),
           ...(classId ? { classId } : {}),
           ...(modLoaderType ? { modLoaderType } : {}),
@@ -2915,6 +2982,62 @@ export async function serverRoutes(app: FastifyInstance) {
     }
   );
 
+  // Get valid game version tags for a provider (used for autocomplete)
+  app.get(
+    "/:serverId/plugin-manager/game-versions",
+    {
+      onRequest: [app.authenticate],
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId } = request.params as { serverId: string };
+      const { provider: rawProvider } = request.query as { provider?: string };
+      const provider = rawProvider === "spiget" ? "spigot" : rawProvider;
+      const userId = request.user.userId;
+
+      if (!provider) {
+        return reply.status(400).send({ error: "provider is required" });
+      }
+
+      const server = await ensureServerAccess(serverId, userId, "server.read", reply);
+      if (!server) return;
+      const pluginManager = ensurePluginManagerEnabled(server, reply);
+      if (!pluginManager) return;
+
+      if (provider !== "modrinth") {
+        return reply.send({ success: true, data: [] });
+      }
+
+      const providerConfig = await loadPluginProviderConfig(provider);
+      if (!providerConfig) {
+        return reply.status(404).send({ error: "Provider not found" });
+      }
+      let headers: Record<string, string>;
+      try {
+        const settings = await getModManagerSettings();
+        headers = buildProviderHeaders(providerConfig, settings);
+      } catch (error: any) {
+        return reply.status(409).send({ error: error?.message || "Missing provider API key" });
+      }
+
+      const baseUrl = providerConfig.baseUrl.replace(/\/$/, "");
+      const url = `${baseUrl}/v2/tag/game_version`;
+      try {
+        const response = await fetch(url, { headers });
+        if (!response.ok) {
+          return reply.send({ success: true, data: [] });
+        }
+        const data = (await response.json()) as any[];
+        const releases = data
+          .filter((v) => v.version_type === "release")
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .map((v) => v.version);
+        return reply.send({ success: true, data: releases });
+      } catch {
+        return reply.send({ success: true, data: [] });
+      }
+    }
+  );
+
   app.get(
     "/:serverId/plugin-manager/search",
     {
@@ -2962,10 +3085,14 @@ export async function serverRoutes(app: FastifyInstance) {
       const pageValue = typeof page === "string" ? Number(page) : page ?? 1;
       const baseUrl = providerConfig.baseUrl.replace(/\/$/, "");
       const searchQuery = typeof query === "string" ? query.trim() : "";
-      const resolvedGameVersion = gameVersion?.trim() || extractGameVersion(server.environment);
+      const rawGameVersion = gameVersion?.trim() || extractGameVersion(server.environment);
       const isTrending = !searchQuery;
       let url = "";
       if (provider === "modrinth") {
+        // Resolve game version (handles "latest", partial versions like "1.21")
+        const resolvedGameVersion = rawGameVersion
+          ? await resolveModrinthGameVersion(rawGameVersion, baseUrl, headers)
+          : "";
         const facets: string[][] = [["project_type:plugin"]];
         if (resolvedGameVersion) {
           facets.push([`versions:${resolvedGameVersion}`]);
@@ -3519,7 +3646,22 @@ export async function serverRoutes(app: FastifyInstance) {
 
           if (record.provider === "modrinth") {
             const versions = Array.isArray(payload) ? payload : [];
-            const latest = versions[0];
+            // Resolve server game version for filtering
+            const serverGameVer = extractGameVersion(server.environment);
+            const resolvedGameVer = serverGameVer
+              ? await resolveModrinthGameVersion(serverGameVer, baseUrl, headers)
+              : null;
+            // Filter versions matching the server's game version
+            const matching = resolvedGameVer
+              ? versions.filter((v: any) =>
+                  Array.isArray(v.game_versions) &&
+                  v.game_versions.some((gv: string) => gv === resolvedGameVer || gv.startsWith(resolvedGameVer + "."))
+                )
+              : versions;
+            // Prefer release versions, then most recent by date
+            const releases = matching.filter((v: any) => v.version_type === "release");
+            const candidates = releases.length ? releases : matching;
+            const latest = candidates[0];
             if (latest) {
               latestVersionId = latest.id;
               latestVersionName = latest.version_number ?? latest.name ?? null;
@@ -3618,7 +3760,22 @@ export async function serverRoutes(app: FastifyInstance) {
 
           if (record.provider === "modrinth") {
             const versions = Array.isArray(payload) ? payload : [];
-            const latest = versions[0];
+            // Resolve server game version for filtering
+            const serverGameVer = extractGameVersion(server.environment);
+            const resolvedGameVer = serverGameVer
+              ? await resolveModrinthGameVersion(serverGameVer, baseUrl, headers)
+              : null;
+            // Filter versions matching the server's game version
+            const matching = resolvedGameVer
+              ? versions.filter((v: any) =>
+                  Array.isArray(v.game_versions) &&
+                  v.game_versions.some((gv: string) => gv === resolvedGameVer || gv.startsWith(resolvedGameVer + "."))
+                )
+              : versions;
+            // Prefer release versions, then most recent by date
+            const releases = matching.filter((v: any) => v.version_type === "release");
+            const candidates = releases.length ? releases : matching;
+            const latest = candidates[0];
             if (latest) {
               latestVersionId = latest.id;
               latestVersionName = latest.version_number ?? latest.name ?? null;

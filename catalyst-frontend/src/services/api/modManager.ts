@@ -22,6 +22,13 @@ export type InstalledMod = {
 };
 
 export const modManagerApi = {
+  gameVersions: async (serverId: string, provider: string, game?: string) => {
+    const data = await apiClient.get<{ success: boolean; data?: string[] }>(
+      `/api/servers/${serverId}/mod-manager/game-versions`,
+      { params: { provider, game } },
+    );
+    return data.data ?? [];
+  },
   search: async (
     serverId: string,
     params: {

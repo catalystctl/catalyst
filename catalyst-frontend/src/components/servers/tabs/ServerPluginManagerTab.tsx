@@ -106,6 +106,13 @@ export default function ServerPluginManagerTab({
   }, [selectedPlugin]);
 
   // ── Queries ──
+  const { data: pluginGameVersionTags } = useQuery({
+    queryKey: ['plugin-manager-game-versions', serverId, pluginProvider],
+    queryFn: () => pluginManagerApi.gameVersions(serverId ?? '', pluginProvider),
+    enabled: Boolean(serverId && pluginProvider === 'modrinth'),
+    staleTime: 10 * 60 * 1000,
+  });
+
   const {
     data: pluginSearchResults,
     isLoading: pluginSearchLoading,
@@ -405,8 +412,17 @@ export default function ServerPluginManagerTab({
                   onChange={(event) =>
                     setPluginGameVersion(event.target.value)
                   }
-                  placeholder={serverGameVersion || 'e.g. 1.20.1'}
+                  placeholder={serverGameVersion || 'e.g. 1.20.1, latest'}
+                  list="plugin-game-version-tags"
                 />
+                {pluginProvider === 'modrinth' && pluginGameVersionTags && pluginGameVersionTags.length > 0 && (
+                  <datalist id="plugin-game-version-tags">
+                    <option value="latest" />
+                    {pluginGameVersionTags.map((v) => (
+                      <option key={v} value={v} />
+                    ))}
+                  </datalist>
+                )}
               </div>
             </div>
             <div className="mt-3 flex gap-2">

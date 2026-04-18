@@ -121,6 +121,8 @@ export const matchesRequestedGameVersion = (
 ) => {
   const requested = requestedVersion?.trim();
   if (!requested) return true;
+  // "latest" matches everything — let all versions through
+  if (requested.toLowerCase() === 'latest') return true;
   const versions = extractGameVersions(version);
   if (!versions.length) return true;
   return versions.some((entry) => isGameVersionMatch(entry, requested));
