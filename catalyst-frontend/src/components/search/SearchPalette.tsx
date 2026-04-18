@@ -1077,7 +1077,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
 
             {/* ── Category Pills (visible when no query) ── */}
             {!query.trim() && availableCategories.length > 1 && (
-              <div className="flex gap-1.5 overflow-x-auto border-b border-border px-4 py-2 scrollbar-none">
+              <div className="sticky top-0 z-10 flex gap-1.5 overflow-x-auto border-b border-border bg-surface-0/80 px-4 py-2 backdrop-blur-xl scrollbar-none">
                 <button
                   type="button"
                   onClick={() => handleCategoryClick('All')}
@@ -1132,7 +1132,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
                     return (
                       <div key={category}>
                         {/* Group header */}
-                        <div className="flex items-center gap-2 px-4 py-1.5">
+                        <div className="sticky top-0 z-10 flex items-center gap-2 bg-surface-0/80 px-4 py-1.5 backdrop-blur-xl">
                           <CatIcon className={cn('h-3 w-3', meta.color)} />
                           <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60">
                             {meta.label}
