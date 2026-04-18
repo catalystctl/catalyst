@@ -113,6 +113,7 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
     nextId.current = 0;
     initialLoadedRef.current = false;
     batchBuffer.current = [];
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEntries([]);
     setStreamStatus('connecting');
 

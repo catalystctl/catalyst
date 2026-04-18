@@ -945,6 +945,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
 
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery('');
       setSelectedIndex(0);
       setActiveCategory('All');
@@ -955,6 +956,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
 
   // Reset selection when query/category changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedIndex(0);
   }, [query, activeCategory]);
 

@@ -401,7 +401,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!password) {
         return reply.status(400).send({ error: "Password is required" });
       }
-      const response = await auth.api.enableTwoFactor({
+      const response = await (auth.api as any).enableTwoFactor({
         headers: getHeaders(request),
         body: { password },
         returnHeaders: true,
@@ -420,7 +420,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!password) {
         return reply.status(400).send({ error: "Password is required" });
       }
-      const response = await auth.api.disableTwoFactor({
+      const response = await (auth.api as any).disableTwoFactor({
         headers: getHeaders(request),
         body: { password },
         returnHeaders: true,
@@ -439,7 +439,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!password) {
         return reply.status(400).send({ error: "Password is required" });
       }
-      const response = await auth.api.generateBackupCodes({
+      const response = await (auth.api as any).generateBackupCodes({
         headers: getHeaders(request),
         body: { password },
         returnHeaders: true,
@@ -454,7 +454,7 @@ export async function authRoutes(app: FastifyInstance) {
     "/profile/passkeys",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const response = await auth.api.listPasskeys({
+      const response = await (auth.api as any).listPasskeys({
         headers: getHeaders(request),
       });
       reply.send(serialize({ success: true, data: response }));
@@ -468,7 +468,7 @@ export async function authRoutes(app: FastifyInstance) {
       const { name, authenticatorAttachment } = request.body as {
         name?: string; authenticatorAttachment?: "platform" | "cross-platform";
       };
-      const response = await auth.api.generatePasskeyRegistrationOptions({
+      const response = await (auth.api as any).generatePasskeyRegistrationOptions({
         headers: getHeaders(request),
         query: {
           ...(name ? { name } : {}),
@@ -489,7 +489,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!credentialResponse) {
         return reply.status(400).send({ error: "Missing passkey response" });
       }
-      const response = await auth.api.verifyPasskeyRegistration({
+      const response = await (auth.api as any).verifyPasskeyRegistration({
         headers: getHeaders(request),
         body: { response: credentialResponse, ...(name ? { name } : {}) },
       });
@@ -502,7 +502,7 @@ export async function authRoutes(app: FastifyInstance) {
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const response = await auth.api.deletePasskey({
+      const response = await (auth.api as any).deletePasskey({
         headers: getHeaders(request),
         body: { id },
       });
@@ -519,7 +519,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!name) {
         return reply.status(400).send({ error: "Missing name" });
       }
-      const response = await auth.api.updatePasskey({
+      const response = await (auth.api as any).updatePasskey({
         headers: getHeaders(request),
         body: { id, name },
       });
@@ -547,7 +547,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!providerId) {
         return reply.status(400).send({ error: "Missing providerId" });
       }
-      const response = await auth.api.oAuth2LinkAccount({
+      const response = await (auth.api as any).oAuth2LinkAccount({
         headers: getHeaders(request),
         body: {
           providerId,
@@ -680,7 +680,7 @@ export async function authRoutes(app: FastifyInstance) {
       }
       await prisma.user.update({
         where: { id: request.user.userId },
-        data: { preferences: prefs },
+        data: { preferences: prefs as any },
       });
       reply.send(serialize({ success: true }));
     }

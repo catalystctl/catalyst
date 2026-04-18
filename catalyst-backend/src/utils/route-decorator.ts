@@ -13,7 +13,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
  * Creates an OpenAPI-compatible schema from a Zod schema
  */
 export function schema<T extends z.ZodSchema>(zodSchema: T) {
-  return zodToJsonSchema(zodSchema, 'schema');
+  return zodToJsonSchema(zodSchema as any, 'schema');
 }
 
 /**

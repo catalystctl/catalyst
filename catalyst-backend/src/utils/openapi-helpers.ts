@@ -16,7 +16,7 @@ type JsonSchema = Record<string, unknown>;
  * Uses type assertion to handle Zod 4 compatibility issues
  */
 export function toJsonSchema<T extends z.ZodTypeAny>(schema: T, name?: string): JsonSchema {
-  return zodToJsonSchema(schema, name) as JsonSchema;
+  return zodToJsonSchema(schema as any, name) as JsonSchema;
 }
 
 // Alias for convenience

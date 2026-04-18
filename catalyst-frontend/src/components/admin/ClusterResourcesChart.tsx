@@ -89,6 +89,7 @@ function useLiveHistory(data: ClusterMetrics | undefined, metric: MetricType) {
     const prev = prevMetricRef.current;
     if (prev !== null && prev !== metric) {
       // Metric changed — reset history
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setHistory([createLivePoint(data, metric)]);
     } else {
       setHistory((prev) => {

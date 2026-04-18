@@ -135,6 +135,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormData({ name: '', expiresIn: 7776000, allPermissions: true, permissions: [], rateLimitMax: 100, rateLimitTimeWindow: 60000 });
       setCreatedKey(null);
       setCopied(false);

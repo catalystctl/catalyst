@@ -172,6 +172,7 @@ export default function ProfilePage() {
   const qrValue = tfaSetup?.qrCode || (tfaSetup?.otpAuthUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(tfaSetup.otpAuthUrl)}` : undefined);
 
   const refreshPasskeys = useCallback(async () => { try { setPasskeys(await profileApi.listPasskeys()); } catch { setPasskeys([]); } }, []);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { refreshPasskeys().catch(() => {}); }, [profile?.id, refreshPasskeys]);
 
   // ── Mutations ──

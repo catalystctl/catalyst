@@ -20,6 +20,20 @@ const formatMB = (mb: number) => {
   return `${mb.toFixed(0)} MB`;
 };
 
+const barColor = (val: number) =>
+  val > 80 ? 'bg-danger' : val > 60 ? 'bg-warning' : 'bg-primary';
+
+function MiniBar({ value, className }: { value: number; className?: string }) {
+  return (
+    <div className={`h-1 w-16 overflow-hidden rounded-full bg-surface-2 ${className}`}>
+      <div
+        className={`h-full rounded-full transition-all duration-500 ${barColor(value)}`}
+        style={{ width: `${value}%` }}
+      />
+    </div>
+  );
+}
+
 function ServerListItem({ server }: { server: Server }) {
   const host =
     server.connection?.host ??
@@ -51,18 +65,6 @@ function ServerListItem({ server }: { server: Server }) {
   const cpuBar = cpuPercent ?? 0;
   const memoryBar = memoryPercent ?? 0;
   const diskBar = diskPercent ?? 0;
-
-  const barColor = (val: number) =>
-    val > 80 ? 'bg-danger' : val > 60 ? 'bg-warning' : 'bg-primary';
-
-  const MiniBar = ({ value, className }: { value: number; className?: string }) => (
-    <div className={`h-1 w-16 overflow-hidden rounded-full bg-surface-2 ${className}`}>
-      <div
-        className={`h-full rounded-full transition-all duration-500 ${barColor(value)}`}
-        style={{ width: `${value}%` }}
-      />
-    </div>
-  );
 
   return (
     <motion.div
