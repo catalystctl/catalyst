@@ -126,7 +126,8 @@ jobs:
       - name: Build Docker image
         uses: useblacksmith/build-push-action@v2
         with:
-          context: ./catalyst-backend
+          context: .
+          file: catalyst-backend/Dockerfile
           tags: catalyst:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
