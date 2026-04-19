@@ -6,6 +6,13 @@ set -e
 
 echo "==> Catalyst Backend starting..."
 
+# Ensure data directories exist (volumes may be mounted over the Dockerfile-created dirs)
+mkdir -p /var/lib/catalyst/servers \
+         /var/lib/catalyst/backups \
+         /var/lib/catalyst/plugins \
+         /tmp/catalyst-backup-stream \
+         /tmp/catalyst-backup-transfer
+
 # Run pending migrations (non-destructive — safe to run on every start)
 if [ -n "$DATABASE_URL" ]; then
     echo "==> Running database migrations..."

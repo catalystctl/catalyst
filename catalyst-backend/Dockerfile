@@ -53,7 +53,11 @@ COPY catalyst-backend/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
 # Create data directories
-RUN mkdir -p /var/lib/catalyst/servers /var/lib/catalyst/backups /tmp/catalyst-backup-stream /tmp/catalyst-backup-transfer && \
+RUN mkdir -p /var/lib/catalyst/servers \
+             /var/lib/catalyst/backups \
+             /var/lib/catalyst/plugins \
+             /tmp/catalyst-backup-stream \
+             /tmp/catalyst-backup-transfer && \
     chown -R catalyst:catalyst /var/lib/catalyst /tmp/catalyst-backup-stream /tmp/catalyst-backup-transfer
 
 USER catalyst

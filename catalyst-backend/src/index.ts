@@ -121,7 +121,7 @@ const webhookService = new WebhookService(prisma, logger);
 const alertService = new AlertService(prisma, logger);
 const fileTunnel = new FileTunnelService(logger);
 const pluginLoader = new PluginLoader(
-	process.env.PLUGINS_DIR || path.join(process.cwd(), "..", "catalyst-plugins"),
+	process.env.PLUGINS_DIR || "/var/lib/catalyst/plugins",
 	prisma,
 	logger,
 	wsGateway,

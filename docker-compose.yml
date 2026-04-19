@@ -74,6 +74,7 @@ services:
     volumes:
       - catalyst-server-data:/var/lib/catalyst/servers
       - catalyst-backup-data:/var/lib/catalyst/backups
+      - catalyst-plugin-data:/var/lib/catalyst/plugins
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/health || exit 1"]
       interval: 15s
@@ -102,4 +103,6 @@ volumes:
   catalyst-server-data:
     driver: local
   catalyst-backup-data:
+    driver: local
+  catalyst-plugin-data:
     driver: local
