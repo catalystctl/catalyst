@@ -26,6 +26,9 @@ RUN bunx prisma generate --config prisma/prisma.config.ts
 # Stage 2: Runtime - clean image without build tools
 FROM oven/bun:1.3-alpine
 
+# Install curl for Docker healthcheck
+RUN apk add --no-cache curl
+
 WORKDIR /app
 
 # Copy installed dependencies from builder (includes compiled native modules)
