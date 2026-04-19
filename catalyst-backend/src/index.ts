@@ -511,6 +511,20 @@ async function bootstrap() {
 				config: { rateLimit: { max: 1000000000, timeWindow: "1 minute" } },
 			},
 			async (request, reply) => {
+				try {
+					await prisma.$queryRaw`SELECT 1`;
+				} catch (dbError: any) {
+					request.log.error(
+						{ err: dbError },
+						"Health check: database unreachable",
+					);
+					return reply.status(503).send({
+						status: "unhealthy",
+						error: "database unreachable",
+						details: dbError.message,
+						timestamp: new Date().toISOString(),
+					});
+				}
 				return { status: "ok", timestamp: new Date().toISOString() };
 			},
 		);
