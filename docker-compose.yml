@@ -60,6 +60,7 @@ services:
       PASSKEY_RP_ID: ${PASSKEY_RP_ID:-localhost}
       SFTP_ENABLED: ${SFTP_ENABLED:-true}
       SFTP_PORT: "2022"
+      DEPLOY_SCRIPT_PATH: /scripts/deploy-agent.sh
       SERVER_DATA_DIR: /var/lib/catalyst/servers
       BACKUP_DIR: /var/lib/catalyst/backups
       BACKUP_STORAGE_MODE: ${BACKUP_STORAGE_MODE:-local}

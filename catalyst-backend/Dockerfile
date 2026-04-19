@@ -45,6 +45,9 @@ COPY --from=builder /app/tsconfig.json ./tsconfig.json
 RUN mkdir -p ../catalyst-shared
 COPY --from=builder /app/../catalyst-shared/types.ts ../catalyst-shared/types.ts
 
+# Copy deploy script
+COPY scripts/deploy-agent.sh /scripts/deploy-agent.sh
+
 # Create non-root user
 RUN addgroup -S catalyst && adduser -S catalyst -G catalyst
 

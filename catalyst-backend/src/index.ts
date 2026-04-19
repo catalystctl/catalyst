@@ -787,12 +787,9 @@ async function bootstrap() {
 
 		// Canonical node deployment script endpoint (public)
 		app.get("/api/agent/deploy-script", async (_request, reply) => {
-			const deployScriptPath = path.resolve(
-				process.cwd(),
-				"..",
-				"scripts",
-				"deploy-agent.sh",
-			);
+			const deployScriptPath =
+				process.env.DEPLOY_SCRIPT_PATH ||
+				path.resolve(process.cwd(), "..", "scripts", "deploy-agent.sh");
 
 			if (!fs.existsSync(deployScriptPath)) {
 				return reply.status(404).send({ error: "Deploy script not found" });
