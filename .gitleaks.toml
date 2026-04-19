@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+# Ignore documentation files that contain example/placeholder tokens
+[allowlist]
+  paths = [
+    '''docs/.*\.md$''',
+    '''\.gitleaksignore$''',
+  ]

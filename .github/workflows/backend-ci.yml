@@ -109,7 +109,7 @@ jobs:
           sudo mv gitleaks /usr/local/bin/
 
       - name: Run gitleaks scan
-        run: gitleaks detect --redact -v --log-opts=-1
+        run: gitleaks detect --redact -v --log-opts=-1 --config .gitleaks.toml
         continue-on-error: false
 
   build:

@@ -18,5 +18,11 @@ backend-docs.md:generic-api-key:57
 backend-docs.md:generic-api-key:93
 backend-docs.md:generic-api-key:1939
 
+catalyst-agent/config.toml:generic-api-key:13
+
+docs/admin-guide.md:curl-auth-header:719
+docs/api-reference.md:curl-auth-header:99
+docs/user-guide.md:curl-auth-header:765
+
 
 
