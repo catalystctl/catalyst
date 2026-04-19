@@ -5,7 +5,8 @@ import 'dotenv/config';
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
-import { auth } from "../src/auth";
+import { auth, initAuth } from "../src/auth";
+initAuth();
 import * as fs from 'fs';
 import * as path from 'path';
 

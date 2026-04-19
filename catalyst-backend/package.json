@@ -9,7 +9,7 @@
     "bun": ">=1.0.0"
   },
   "scripts": {
-    "dev": "bun --watch src/index.ts",
+    "dev": "bun --watch src/index.ts -- --host",
     "build": "tsc",
     "start": "bun dist/index.js",
     "db:push": "prisma db push --config prisma/prisma.config.ts",

@@ -50,3 +50,4 @@ catalyst-frontend/.vite/
 .pi/
 context.md
 test-results/.last-run.json
+.pi-lens
