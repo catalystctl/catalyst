@@ -300,7 +300,13 @@ impl SystemSetup {
             );
         }
 
-        if has_systemctl {
+        // If the socket already exists, skip the restart — it was likely
+        // started by the deploy script or a previous boot.  Restarting
+        // containerd while the agent itself is starting can cause race
+        // conditions and rapid crash-loops.
+        if Path::new("/run/containerd/containerd.sock").exists() {
+            info!("✓ containerd socket already present");
+        } else if has_systemctl {
             Self::run_command("systemctl", &["daemon-reload"], None)?;
             Self::run_command("systemctl", &["restart", "containerd"], None)?;
         } else {

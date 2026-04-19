@@ -700,11 +700,13 @@ async function bootstrap() {
 				arch === "aarch64" || arch === "arm64" ? "aarch64" : "x86_64";
 			const target = `${normalizedArch}-unknown-linux-musl`;
 
+			// Allow overriding the agent target directory via env var.
+			// Falls back to the default location in catalyst-agent/target/.
+			const agentTargetDir =
+				process.env.AGENT_TARGET_DIR ||
+				path.resolve(process.cwd(), "..", "catalyst-agent", "target");
 			const agentPath = path.resolve(
-				process.cwd(),
-				"..",
-				"catalyst-agent",
-				"target",
+				agentTargetDir,
 				target,
 				"release",
 				"catalyst-agent",
@@ -713,11 +715,9 @@ async function bootstrap() {
 			if (!fs.existsSync(agentPath)) {
 				// Attempt to build the agent automatically (only in development)
 				if (process.env.NODE_ENV === "production") {
-					return reply
-						.status(404)
-						.send({
-							error: `Agent binary not found for ${target}. Please build with 'cargo build --release --target ${target}' in catalyst-agent/`,
-						});
+					return reply.status(404).send({
+						error: `Agent binary not found for ${target}. Please build with 'cargo build --release --target ${target}' in catalyst-agent/`,
+					});
 				}
 
 				app.log.warn(
@@ -741,6 +741,10 @@ async function bootstrap() {
 						cwd: agentDir,
 						stdio: "inherit",
 						timeout: 300000, // 5 minutes
+						env: {
+							...process.env,
+							CARGO_TARGET_DIR: path.resolve(agentDir, "target"),
+						},
 					});
 
 					app.log.info("Agent built successfully");
