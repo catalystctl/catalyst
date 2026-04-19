@@ -35,6 +35,7 @@ import { WebhookService } from "./services/webhook-service";
 import { TaskScheduler } from "./services/task-scheduler";
 import { alertRoutes } from "./routes/alerts";
 import { dashboardRoutes } from "./routes/dashboard";
+import { setupRoutes } from "./routes/setup";
 import {
 	verifyApiKey as verifyApiKeyService,
 	createApiKey as createApiKeyService,
@@ -557,6 +558,7 @@ async function bootstrap() {
 			},
 		};
 		await app.register(authRoutes, { prefix: "/api/auth", ...authRateLimit });
+		await app.register(setupRoutes, { prefix: "/api/setup" });
 		app.route({
 			method: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 			url: "/api/auth/*",

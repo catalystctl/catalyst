@@ -1,5 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import SetupPage from './pages/setup/SetupPage';
+import { useSetupStatus } from './hooks/useSetupStatus';
 import { motion, AnimatePresence } from 'framer-motion';
 import AppLayout from './components/layout/AppLayout';
 import ProtectedRoute, { hasAnyAdminPermission } from './components/auth/ProtectedRoute';
@@ -78,7 +80,8 @@ function PageTransition({ children }: { children: React.ReactNode }) {
 function App() {
   useAuthInit();
   const { theme, setThemeSettings, applyTheme, injectCustomCss } = useThemeStore();
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, isReady } = useAuthStore();
+  const { setupRequired, isLoading: isSetupLoading } = useSetupStatus();
 
   // Load public theme settings on mount
   useEffect(() => {
@@ -124,12 +127,44 @@ function App() {
     applyTheme();
   }, [theme, applyTheme]);
 
+  // Full-screen loading while auth initializes or setup status is checked
+  if (!isReady || isSetupLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect unauthenticated users to /setup when OOBE is required
+  if (setupRequired && !isAuthenticated) {
+    return (
+      <ErrorBoundary>
+        <ToastProvider />
+        <PluginProvider>
+          <AnimatePresence mode="wait">
+            <Routes>
+              <Route path="/setup" element={<SetupPage />} />
+              <Route path="*" element={<Navigate to="/setup" replace />} />
+            </Routes>
+          </AnimatePresence>
+        </PluginProvider>
+      </ErrorBoundary>
+    );
+  }
+
   return (
     <ErrorBoundary>
       <ToastProvider />
       <PluginProvider>
         <AnimatePresence mode="wait">
           <Routes>
+            {/* OOBE setup wizard — accessible even when setup is done (page redirects if not needed) */}
+            <Route path="/setup" element={<SetupPage />} />
+
             {/* Auth pages — rendered immediately for fast login */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
@@ -151,25 +186,53 @@ function App() {
 
               <Route
                 path="dashboard"
-                element={<Suspense fallback={<PageFallback />}><PageTransition><DashboardPage /></PageTransition></Suspense>}
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <PageTransition>
+                      <DashboardPage />
+                    </PageTransition>
+                  </Suspense>
+                }
               />
               <Route
                 path="profile"
-                element={<Suspense fallback={<PageFallback />}><PageTransition><ProfilePage /></PageTransition></Suspense>}
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <PageTransition>
+                      <ProfilePage />
+                    </PageTransition>
+                  </Suspense>
+                }
               />
               <Route
                 path="servers"
-                element={<Suspense fallback={<PageFallback />}><PageTransition><ServersPage /></PageTransition></Suspense>}
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <PageTransition>
+                      <ServersPage />
+                    </PageTransition>
+                  </Suspense>
+                }
               />
               <Route
                 path="servers/:serverId/:tab?"
-                element={<Suspense fallback={<PageFallback />}><PageTransition><ServerDetailsPage /></PageTransition></Suspense>}
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <PageTransition>
+                      <ServerDetailsPage />
+                    </PageTransition>
+                  </Suspense>
+                }
               />
               <Route
                 path="tickets"
                 element={
                   <ProtectedRoute>
-                    <Suspense fallback={<PageFallback />}><PageTransition><PluginRoutePage /></PageTransition></Suspense>
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <PluginRoutePage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
@@ -177,7 +240,11 @@ function App() {
                 path="admin/nodes/:nodeId"
                 element={
                   <ProtectedRoute requireAdmin>
-                    <Suspense fallback={<PageFallback />}><PageTransition><NodeDetailsPage /></PageTransition></Suspense>
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <NodeDetailsPage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
@@ -185,15 +252,32 @@ function App() {
                 path="admin/nodes/:nodeId/allocations"
                 element={
                   <ProtectedRoute requireAdmin>
-                    <Suspense fallback={<PageFallback />}><PageTransition><NodeAllocationsPage /></PageTransition></Suspense>
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <NodeAllocationsPage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
               <Route
                 path="admin/templates/:templateId"
                 element={
-                  <ProtectedRoute requirePermissions={['template.read', 'template.create', 'template.update', 'template.delete', 'admin.read', 'admin.write']}>
-                    <Suspense fallback={<PageFallback />}><PageTransition><TemplateDetailsPage /></PageTransition></Suspense>
+                  <ProtectedRoute
+                    requirePermissions={[
+                      'template.read',
+                      'template.create',
+                      'template.update',
+                      'template.delete',
+                      'admin.read',
+                      'admin.write',
+                    ]}
+                  >
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <TemplateDetailsPage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
@@ -201,46 +285,106 @@ function App() {
                 path="admin"
                 element={
                   <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                    <Suspense fallback={<PageFallback />}><PageTransition><AdminDashboardPage /></PageTransition></Suspense>
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <AdminDashboardPage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
               <Route
                 path="admin/users"
                 element={
-                  <ProtectedRoute requirePermissions={['user.read', 'user.create', 'user.update', 'user.delete', 'user.set_roles', 'admin.read', 'admin.write']}>
-                    <Suspense fallback={<PageFallback />}><PageTransition><UsersPage /></PageTransition></Suspense>
+                  <ProtectedRoute
+                    requirePermissions={[
+                      'user.read',
+                      'user.create',
+                      'user.update',
+                      'user.delete',
+                      'user.set_roles',
+                      'admin.read',
+                      'admin.write',
+                    ]}
+                  >
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <UsersPage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
               <Route
                 path="admin/roles"
                 element={
-                  <ProtectedRoute requirePermissions={['role.read', 'role.create', 'role.update', 'role.delete', 'admin.read', 'admin.write']}>
-                    <Suspense fallback={<PageFallback />}><PageTransition><RolesPage /></PageTransition></Suspense>
+                  <ProtectedRoute
+                    requirePermissions={[
+                      'role.read',
+                      'role.create',
+                      'role.update',
+                      'role.delete',
+                      'admin.read',
+                      'admin.write',
+                    ]}
+                  >
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <RolesPage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
               <Route
                 path="admin/servers"
                 element={
-                  <ProtectedRoute requirePermissions={['admin.read', 'admin.write']} redirectTo="/servers">
-                    <Suspense fallback={<PageFallback />}><PageTransition><AdminServersPage /></PageTransition></Suspense>
+                  <ProtectedRoute
+                    requirePermissions={['admin.read', 'admin.write']}
+                    redirectTo="/servers"
+                  >
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <AdminServersPage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
               <Route
                 path="admin/nodes"
                 element={
-                  <ProtectedRoute requirePermissions={['node.read', 'node.create', 'node.update', 'node.delete', 'admin.read', 'admin.write']}>
-                    <Suspense fallback={<PageFallback />}><PageTransition><AdminNodesPage /></PageTransition></Suspense>
+                  <ProtectedRoute
+                    requirePermissions={[
+                      'node.read',
+                      'node.create',
+                      'node.update',
+                      'node.delete',
+                      'admin.read',
+                      'admin.write',
+                    ]}
+                  >
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <AdminNodesPage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
               <Route
                 path="admin/templates"
                 element={
-                  <ProtectedRoute requirePermissions={['template.read', 'template.create', 'template.update', 'template.delete', 'admin.read', 'admin.write']}>
+                  <ProtectedRoute
+                    requirePermissions={[
+                      'template.read',
+                      'template.create',
+                      'template.update',
+                      'template.delete',
+                      'admin.read',
+                      'admin.write',
+                    ]}
+                  >
                     <Suspense fallback={<PageFallback />}>
                       <PageTransition>
                         <div className="space-y-6">
@@ -255,7 +399,11 @@ function App() {
                 path="admin/database"
                 element={
                   <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                    <Suspense fallback={<PageFallback />}><PageTransition><DatabasePage /></PageTransition></Suspense>
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <DatabasePage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
@@ -263,7 +411,11 @@ function App() {
                 path="admin/network"
                 element={
                   <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                    <Suspense fallback={<PageFallback />}><PageTransition><ActivityPage /></PageTransition></Suspense>
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <ActivityPage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
@@ -271,7 +423,11 @@ function App() {
                 path="admin/system"
                 element={
                   <ProtectedRoute requireAdminWrite>
-                    <Suspense fallback={<PageFallback />}><PageTransition><SystemPage /></PageTransition></Suspense>
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <SystemPage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
@@ -279,7 +435,11 @@ function App() {
                 path="admin/security"
                 element={
                   <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                    <Suspense fallback={<PageFallback />}><PageTransition><SecurityPage /></PageTransition></Suspense>
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <SecurityPage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
@@ -287,15 +447,32 @@ function App() {
                 path="admin/theme-settings"
                 element={
                   <ProtectedRoute requireAdminWrite>
-                    <Suspense fallback={<PageFallback />}><PageTransition><ThemeSettingsPage /></PageTransition></Suspense>
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <ThemeSettingsPage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
               <Route
                 path="admin/alerts"
                 element={
-                  <ProtectedRoute requirePermissions={['alert.read', 'alert.create', 'alert.update', 'alert.delete', 'admin.read', 'admin.write']}>
-                    <Suspense fallback={<PageFallback />}><PageTransition><AdminAlertsPage /></PageTransition></Suspense>
+                  <ProtectedRoute
+                    requirePermissions={[
+                      'alert.read',
+                      'alert.create',
+                      'alert.update',
+                      'alert.delete',
+                      'admin.read',
+                      'admin.write',
+                    ]}
+                  >
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <AdminAlertsPage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
@@ -303,15 +480,25 @@ function App() {
                 path="admin/audit-logs"
                 element={
                   <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                    <Suspense fallback={<PageFallback />}><PageTransition><AuditLogsPage /></PageTransition></Suspense>
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <AuditLogsPage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
               <Route
                 path="admin/api-keys"
                 element={
-                  <ProtectedRoute requirePermissions={['apikey.manage', 'admin.read', 'admin.write']}>
-                    <Suspense fallback={<PageFallback />}><PageTransition><ApiKeysPage /></PageTransition></Suspense>
+                  <ProtectedRoute
+                    requirePermissions={['apikey.manage', 'admin.read', 'admin.write']}
+                  >
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <ApiKeysPage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
@@ -319,7 +506,11 @@ function App() {
                 path="admin/migration"
                 element={
                   <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                    <Suspense fallback={<PageFallback />}><PageTransition><MigrationPage /></PageTransition></Suspense>
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <MigrationPage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
@@ -327,7 +518,11 @@ function App() {
                 path="admin/plugins"
                 element={
                   <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                    <Suspense fallback={<PageFallback />}><PageTransition><PluginsPage /></PageTransition></Suspense>
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <PluginsPage />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
@@ -335,7 +530,11 @@ function App() {
                 path="admin/plugin/:pluginTabId"
                 element={
                   <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                    <Suspense fallback={<PageFallback />}><PageTransition><PluginTabPage location="admin" /></PageTransition></Suspense>
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <PluginTabPage location="admin" />
+                      </PageTransition>
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
