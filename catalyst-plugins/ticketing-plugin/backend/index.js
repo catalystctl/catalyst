@@ -101,7 +101,7 @@ async function incrementCounter() {
 // ── Helper: Get user from DB ──
 async function getUserById(userId) {
   if (!userId) return null;
-  return context.db.user.findUnique({
+  return context.db.users.findUnique({
     where: { id: userId },
     select: { id: true, name: true, username: true, email: true, image: true },
   });
@@ -110,7 +110,7 @@ async function getUserById(userId) {
 // ── Helper: Get server from DB ──
 async function getServerById(serverId) {
   if (!serverId) return null;
-  return context.db.server.findUnique({
+  return context.db.servers.findUnique({
     where: { id: serverId },
     select: { id: true, name: true, uuid: true, status: true },
   });
@@ -118,7 +118,7 @@ async function getServerById(serverId) {
 
 // ── Helper: Get all users for assignment dropdown ──
 async function getUsersForAssignment() {
-  return context.db.user.findMany({
+  return context.db.users.findMany({
     where: { banned: false },
     select: { id: true, name: true, username: true, email: true, image: true },
     orderBy: { name: 'asc' },
@@ -224,19 +224,19 @@ async function enrichTickets(tickets) {
 
   const [users, assignees, servers] = await Promise.all([
     userIds.length > 0
-      ? context.db.user.findMany({
+      ? context.db.users.findMany({
           where: { id: { in: userIds } },
           select: { id: true, name: true, username: true, email: true, image: true },
         })
       : [],
     assigneeIds.length > 0
-      ? context.db.user.findMany({
+      ? context.db.users.findMany({
           where: { id: { in: assigneeIds } },
           select: { id: true, name: true, username: true, email: true, image: true },
         })
       : [],
     serverIds.length > 0
-      ? context.db.server.findMany({
+      ? context.db.servers.findMany({
           where: { id: { in: serverIds } },
           select: { id: true, name: true, uuid: true, status: true },
         })
@@ -260,7 +260,7 @@ async function enrichComments(comments) {
   const userIds = [...new Set(comments.map((c) => c.userId).filter(Boolean))];
   const users =
     userIds.length > 0
-      ? await context.db.user.findMany({
+      ? await context.db.users.findMany({
           where: { id: { in: userIds } },
           select: { id: true, name: true, username: true, email: true, image: true },
         })
@@ -983,7 +983,7 @@ const plugin = {
       method: 'GET',
       url: '/servers',
       handler: async () => {
-        const servers = await context.db.server.findMany({
+        const servers = await context.db.servers.findMany({
           select: { id: true, name: true, uuid: true, status: true },
           orderBy: { name: 'asc' },
         });
