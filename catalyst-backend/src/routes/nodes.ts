@@ -464,6 +464,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 					prefix: true,
 					createdAt: true,
 					enabled: true,
+					requestCount: true,
+					lastRequest: true,
 				},
 			});
 
@@ -480,6 +482,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 									: null,
 								createdAt: existingKey.createdAt,
 								enabled: existingKey.enabled,
+								requestCount: existingKey.requestCount,
+								lastRequest: existingKey.lastRequest,
 							}
 						: null,
 				},

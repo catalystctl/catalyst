@@ -69,42 +69,38 @@ function ModalShell({
   if (!open) return null;
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-        className={`w-full max-w-2xl rounded-xl border bg-card shadow-xl ${
-          variant === 'danger'
-            ? 'border-rose-500/50'
-            : 'border-border'
-        }`}
-      >
-        <div
-          className={`flex items-center justify-between border-b px-6 py-4 ${
-            variant === 'danger'
-              ? 'border-rose-500/30 bg-rose-500/5'
-              : 'border-border'
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+          className={`w-full max-w-2xl rounded-xl border bg-card shadow-xl ${
+            variant === 'danger' ? 'border-rose-500/50' : 'border-border'
           }`}
         >
-          <h2 className="text-lg font-semibold text-foreground dark:text-white">{title}</h2>
-          <button
-            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground dark:text-zinc-300"
-            onClick={onClose}
+          <div
+            className={`flex items-center justify-between border-b px-6 py-4 ${
+              variant === 'danger' ? 'border-rose-500/30 bg-rose-500/5' : 'border-border'
+            }`}
           >
-            Close
-          </button>
-        </div>
-        <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300">
-          {children}
-        </div>
-        {footer && (
-          <div className="flex justify-end gap-2 border-t border-border px-6 py-4 text-xs">
-            {footer}
+            <h2 className="text-lg font-semibold text-foreground dark:text-white">{title}</h2>
+            <button
+              className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground dark:text-zinc-300"
+              onClick={onClose}
+            >
+              Close
+            </button>
           </div>
-        )}
-      </motion.div>
-    </div>
+          <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300">
+            {children}
+          </div>
+          {footer && (
+            <div className="flex justify-end gap-2 border-t border-border px-6 py-4 text-xs">
+              {footer}
+            </div>
+          )}
+        </motion.div>
+      </div>
     </ModalPortal>
   );
 }
@@ -288,10 +284,7 @@ function NodeDetailsPage() {
                 <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
                   {node.name}
                 </h1>
-                <Badge
-                  variant={node.isOnline ? 'success' : 'secondary'}
-                  className="gap-1.5"
-                >
+                <Badge variant={node.isOnline ? 'success' : 'secondary'} className="gap-1.5">
                   <span className="relative flex h-1.5 w-1.5">
                     {node.isOnline && (
                       <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -306,7 +299,9 @@ function NodeDetailsPage() {
                 </Badge>
               </div>
               <div className="ml-10 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                <span className="font-mono text-xs opacity-70">{node.hostname ?? 'hostname n/a'}</span>
+                <span className="font-mono text-xs opacity-70">
+                  {node.hostname ?? 'hostname n/a'}
+                </span>
                 <span className="text-zinc-300 dark:text-zinc-700">·</span>
                 <span>{node.publicAddress ?? 'address n/a'}</span>
                 {node.location && (
@@ -384,10 +379,7 @@ function NodeDetailsPage() {
         )}
 
         {/* ── Resource Grid ── */}
-        <motion.div
-          variants={itemVariants}
-          className="grid grid-cols-1 gap-4 lg:grid-cols-3"
-        >
+        <motion.div variants={itemVariants} className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           {stats ? <NodeMetricsCard stats={stats} /> : null}
 
           <div className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm lg:col-span-2">
@@ -510,14 +502,8 @@ function NodeDetailsPage() {
       </div>
 
       {/* ── Deploy Script Modal ── */}
-      <ModalShell
-        open={!!deployInfo}
-        onClose={() => setDeployInfo(null)}
-        title="Deploy agent"
-      >
-        <div>
-          Run this on the node to install and register the agent (valid for 24 hours).
-        </div>
+      <ModalShell open={!!deployInfo} onClose={() => setDeployInfo(null)} title="Deploy agent">
+        <div>Run this on the node to install and register the agent (valid for 24 hours).</div>
         <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 font-mono text-xs text-foreground dark:bg-zinc-950/40 dark:text-zinc-100">
           <code className="whitespace-pre-wrap">
             {deployInfo
@@ -597,6 +583,20 @@ function NodeDetailsPage() {
                 : 'n/a'}
             </div>
           </div>
+          <div>
+            <span className="text-xs text-muted-foreground">Requests</span>
+            <div className="mt-0.5 font-medium text-foreground dark:text-zinc-100">
+              {apiKeyStatus?.apiKey?.requestCount ?? 0}
+            </div>
+          </div>
+          <div>
+            <span className="text-xs text-muted-foreground">Last request</span>
+            <div className="mt-0.5 font-medium text-foreground dark:text-zinc-100">
+              {apiKeyStatus?.apiKey?.lastRequest
+                ? new Date(apiKeyStatus.apiKey.lastRequest).toLocaleString()
+                : 'Never'}
+            </div>
+          </div>
         </div>
         {apiKeyStatus?.apiKey?.preview && (
           <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 font-mono text-xs text-foreground dark:bg-zinc-950/40 dark:text-zinc-100">
@@ -606,8 +606,8 @@ function NodeDetailsPage() {
         <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-amber-700 dark:text-amber-300">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>
-            The full API key cannot be displayed as it was only shown once when created.
-            If you need to update the agent's key, you must regenerate it.
+            The full API key cannot be displayed as it was only shown once when created. If you need
+            to update the agent's key, you must regenerate it.
           </span>
         </div>
         <div className="flex justify-end gap-2 border-t border-border pt-4 text-xs">
@@ -684,7 +684,9 @@ function NodeDetailsPage() {
         <NodeUpdateModal
           node={node}
           open
-          onOpenChange={(open) => { if (!open) setShowUpdateModal(false); }}
+          onOpenChange={(open) => {
+            if (!open) setShowUpdateModal(false);
+          }}
         />
       )}
       {showDeleteModal && (
@@ -692,7 +694,9 @@ function NodeDetailsPage() {
           nodeId={node.id}
           nodeName={node.name}
           open
-          onOpenChange={(open) => { if (!open) setShowDeleteModal(false); }}
+          onOpenChange={(open) => {
+            if (!open) setShowDeleteModal(false);
+          }}
         />
       )}
 
@@ -725,9 +729,7 @@ function CapacityBlock({
         <span>{label}</span>
       </div>
       <div className="mt-1 text-sm font-semibold text-foreground dark:text-zinc-100">{value}</div>
-      {detail && (
-        <div className="mt-0.5 text-[11px] text-muted-foreground">{detail}</div>
-      )}
+      {detail && <div className="mt-0.5 text-[11px] text-muted-foreground">{detail}</div>}
     </div>
   );
 }
