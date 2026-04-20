@@ -26,6 +26,7 @@ FAIL=0
 SKIP=0
 
 remote="$1"
+remote_url="$2"
 branch=$(git rev-parse --abbrev-ref HEAD)
 
 # Determine the upstream ref to diff against
@@ -74,8 +75,8 @@ separator() {
 }
 
 # ── Only push to GitHub ─────────────────────────────────────────
-if [[ "$remote" != *"github.com"* ]] && [[ "$remote" != *"github"* ]]; then
-    echo -e "${YELLOW}Not pushing to GitHub, skipping pre-push checks.${NC}"
+if [[ "$remote_url" != *"github.com"* ]] && [[ "$remote_url" != *"github"* ]]; then
+    echo -e "${YELLOW}Not pushing to GitHub ($remote), skipping pre-push checks.${NC}"
     exit 0
 fi
 
