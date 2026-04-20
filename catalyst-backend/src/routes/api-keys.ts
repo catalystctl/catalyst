@@ -18,6 +18,8 @@ const createApiKeySchema = z.object({
 const updateApiKeySchema = z.object({
   name: z.string().min(1).max(100).optional(),
   enabled: z.boolean().optional(),
+  rateLimitMax: z.number().int().min(1).max(10000).optional(),
+  rateLimitTimeWindow: z.number().int().min(1000).max(3600000).optional(),
 });
 
 export async function apiKeyRoutes(app: FastifyInstance) {
@@ -198,10 +200,31 @@ export async function apiKeyRoutes(app: FastifyInstance) {
       const { id } = request.params;
       const body = updateApiKeySchema.parse(request.body);
 
+      const updateData: any = { updatedAt: new Date() };
+      if (body.name !== undefined) updateData.name = body.name;
+      if (body.enabled !== undefined) updateData.enabled = body.enabled;
+      if (body.rateLimitMax !== undefined) {
+        updateData.rateLimitMax = body.rateLimitMax;
+        updateData.refillAmount = body.rateLimitMax;
+      }
+      if (body.rateLimitTimeWindow !== undefined) {
+        updateData.rateLimitTimeWindow = body.rateLimitTimeWindow;
+        updateData.refillInterval = body.rateLimitTimeWindow;
+      }
+
       const apiKey = await prisma.apikey.update({
         where: { id },
-        data: { name: body.name, enabled: body.enabled, updatedAt: new Date() },
-        select: { id: true, name: true, enabled: true, expiresAt: true, lastRequest: true, updatedAt: true },
+        data: updateData,
+        select: {
+          id: true, name: true, prefix: true, start: true, enabled: true,
+          expiresAt: true, lastRequest: true, requestCount: true, remaining: true,
+          rateLimitMax: true, rateLimitTimeWindow: true,
+          allPermissions: true, permissions: true, metadata: true,
+          createdAt: true, updatedAt: true, userId: true,
+          user: {
+            select: { id: true, username: true, email: true },
+          },
+        },
       });
 
       await prisma.auditLog.create({

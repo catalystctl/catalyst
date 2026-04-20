@@ -64,6 +64,8 @@ export interface CreateApiKeyResponse {
 export interface UpdateApiKeyRequest {
   name?: string;
   enabled?: boolean;
+  rateLimitMax?: number;
+  rateLimitTimeWindow?: number;
 }
 
 export interface ApiKeyUsage {

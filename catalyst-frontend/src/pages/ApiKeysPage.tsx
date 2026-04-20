@@ -5,6 +5,7 @@ import {
   Search,
   Plus,
   Trash2,
+  Pencil,
   Copy,
   Server,
   Filter,
@@ -17,8 +18,10 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useApiKeys, useDeleteApiKey, usePermissionsCatalog } from '../hooks/useApiKeys';
+import { useNodes } from '../hooks/useNodes';
 import { ApiKey, PermissionCategory, getPermissionLabel } from '../services/apiKeys';
 import { CreateApiKeyDialog } from '../components/apikeys/CreateApiKeyDialog';
+import { EditApiKeyDialog } from '../components/apikeys/EditApiKeyDialog';
 import EmptyState from '../components/shared/EmptyState';
 import { Input } from '../components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -158,13 +161,17 @@ function StatCard({ label, value, variant = 'default' }: { label: string; value:
 function ApiKeyRow({
   apiKey,
   onDelete,
+  onEdit,
   index,
   catalog,
+  getNodeName,
 }: {
   apiKey: ApiKey;
   onDelete: () => void;
+  onEdit: () => void;
   index: number;
   catalog: PermissionCategory[];
+  getNodeName: (nodeId: string) => string | undefined;
 }) {
   const agent = isAgentKey(apiKey);
   const expired = isExpired(apiKey.expiresAt);
@@ -220,11 +227,22 @@ function ApiKeyRow({
                   <Badge variant="destructive" className="text-[10px]">Expired</Badge>
                 )}
               </div>
-              {agent && nodeId && (
-                <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
-                  Node: <code className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-[11px] dark:bg-amber-900/30">{nodeId}</code>
-                </div>
-              )}
+              {agent && nodeId && (() => {
+                const nodeName = getNodeName(nodeId);
+                return (
+                  <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                    Node:{' '}
+                    {nodeName ? (
+                      <span className="font-medium">{nodeName}</span>
+                    ) : null}
+                    {' '}
+                    <code className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-[11px] dark:bg-amber-900/30">{nodeId.slice(0, 12)}{nodeId.length > 12 ? '...' : ''}</code>
+                    {!nodeName && (
+                      <span className="ml-1 text-[11px] opacity-60">(unknown)</span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -284,14 +302,23 @@ function ApiKeyRow({
           </div>
         </div>
 
-        {/* Delete action */}
-        <button
-          onClick={onDelete}
-          className="shrink-0 rounded-md p-1.5 text-muted-foreground opacity-100 transition-colors hover:bg-rose-50 hover:text-rose-600 sm:opacity-0 sm:group-hover:opacity-100"
-          title="Revoke key"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        {/* Actions */}
+        <div className="flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+          <button
+            onClick={onEdit}
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+            title="Edit key"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={onDelete}
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600"
+            title="Revoke key"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
     </motion.div>
   );
@@ -301,8 +328,10 @@ function ApiKeyRow({
 export function ApiKeysPage() {
   const { data: apiKeys, isLoading } = useApiKeys();
   const { data: catalog = [] } = usePermissionsCatalog();
+  const { data: nodes = [] } = useNodes();
   const deleteApiKey = useDeleteApiKey();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editKey, setEditKey] = useState<ApiKey | null>(null);
   const [deleteKey, setDeleteKey] = useState<ApiKey | null>(null);
   const [confirmAgentDelete, setConfirmAgentDelete] = useState(false);
   const [search, setSearch] = useState('');
@@ -324,6 +353,11 @@ export function ApiKeysPage() {
   const handleCancelDelete = () => {
     setDeleteKey(null);
     setConfirmAgentDelete(false);
+  };
+
+  const getNodeName = (nodeId: string): string | undefined => {
+    const node = nodes.find((n) => n.id === nodeId);
+    return node?.name;
   };
 
   const filteredApiKeys = useMemo(() => {
@@ -501,6 +535,8 @@ export function ApiKeysPage() {
                 index={i}
                 catalog={catalog}
                 onDelete={() => { setDeleteKey(apiKey); setConfirmAgentDelete(false); }}
+                onEdit={() => setEditKey(apiKey)}
+                getNodeName={getNodeName}
               />
             ))}
           </div>
@@ -528,6 +564,15 @@ export function ApiKeysPage() {
 
       {/* ── Create Dialog ── */}
       <CreateApiKeyDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
+
+      {/* ── Edit Dialog ── */}
+      {editKey && (
+        <EditApiKeyDialog
+          apiKey={editKey}
+          open={!!editKey}
+          onClose={() => setEditKey(null)}
+        />
+      )}
 
       {/* ── Delete Confirmation ── */}
       {deleteKey && (
