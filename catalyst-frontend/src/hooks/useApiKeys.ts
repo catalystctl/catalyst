@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
-import { apiKeyService, CreateApiKeyRequest, UpdateApiKeyRequest } from '../services/apiKeys';
+import { apiKeyService, CreateApiKeyRequest, UpdateApiKeyRequest, type ApiKey } from '../services/apiKeys';
 import { toast } from 'sonner';
 
 export const API_KEYS_QUERY_KEY = ['api-keys'] as const;
@@ -69,11 +69,14 @@ export function useCreateApiKey() {
   return useMutation({
     mutationFn: (data: CreateApiKeyRequest) => apiKeyService.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.apiKeys() });
+      queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY_KEY });
       toast.success('API key created successfully');
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to create API key');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY_KEY });
     },
   });
 }
@@ -88,12 +91,15 @@ export function useUpdateApiKey() {
     mutationFn: ({ id, data }: { id: string; data: UpdateApiKeyRequest }) =>
       apiKeyService.update(id, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: qk.apiKeys() });
+      queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: qk.apiKeyVariable(variables.id) });
       toast.success('API key updated successfully');
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to update API key');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY_KEY });
     },
   });
 }
@@ -106,12 +112,26 @@ export function useDeleteApiKey() {
 
   return useMutation({
     mutationFn: (id: string) => apiKeyService.delete(id),
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: API_KEYS_QUERY_KEY });
+      const previous = queryClient.getQueryData<ApiKey[]>(API_KEYS_QUERY_KEY);
+      queryClient.setQueryData<ApiKey[]>(API_KEYS_QUERY_KEY, (old) =>
+        old ? old.filter((key) => key.id !== id) : old,
+      );
+      return { previous };
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.apiKeys() });
       toast.success('API key revoked successfully');
     },
-    onError: (error: any) => {
-      toast.error(error?.message || 'Failed to revoke API key');
+    onError: (_error, _id, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(API_KEYS_QUERY_KEY, context.previous);
+      }
+      toast.error('Failed to revoke API key');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY_KEY });
     },
   });
 }
