@@ -225,18 +225,6 @@ function App() {
                 }
               />
               <Route
-                path="tickets"
-                element={
-                  <ProtectedRoute>
-                    <Suspense fallback={<PageFallback />}>
-                      <PageTransition>
-                        <PluginRoutePage />
-                      </PageTransition>
-                    </Suspense>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
                 path="admin/nodes/:nodeId"
                 element={
                   <ProtectedRoute requireAdmin>
@@ -539,6 +527,25 @@ function App() {
                 }
               />
             </Route>
+
+              {/* Plugin dynamic routes — /${pluginName} for each plugin's UserPage */}
+              {/* Must come AFTER all static routes to avoid conflicts. */}
+              <Route
+                path="tickets"
+                element={<Navigate to="/ticketing-plugin" replace />}
+              />
+              <Route
+                path={":pluginRouteName"}
+                element={
+                  <ProtectedRoute>
+                    <Suspense fallback={<PageFallback />}>
+                      <PageTransition>
+                        <PluginRoutePage />
+                      </PageTransition>
+                    </Suspense>
+                  </ProtectedRoute>
+                }
+              />
 
             <Route path="*" element={<NotFoundPage />} />
           </Routes>

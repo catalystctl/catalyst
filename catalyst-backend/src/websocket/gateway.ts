@@ -137,6 +137,14 @@ export class WebSocketGateway {
   // Admin SSE event subscribers — receive entity-level admin events (users, nodes, templates, alerts)
   private readonly adminEventSubscribers = new Map<string, { eventTypes: string[]; push: (event: string, data: any) => void }>();
 
+  // ── Plugin WebSocket handler dispatch ─────────────────────────────────────
+  // Maps prefixed message types (e.g. "plugin:ticketing-plugin:subscribe")
+  // to the handler registered by the plugin and the plugin name.
+  private pluginWsHandlers = new Map<
+    string,
+    { handler: (data: any, clientId?: string, userId?: string) => Promise<void> | void; pluginName: string }
+  >();
+
   // Connection limits
   private readonly MAX_AGENT_CONNECTIONS = 1000;  // Max agent connections
   private readonly MAX_CLIENT_CONNECTIONS = 5000; // Max client connections
@@ -1588,6 +1596,20 @@ export class WebSocketGateway {
         return;
       }
 
+      // ── Plugin WebSocket handler dispatch ─────────────────────────────
+      if (typeof message.type === 'string' && message.type.startsWith('plugin:')) {
+        const entry = this.pluginWsHandlers.get(message.type);
+        if (entry) {
+          try {
+            await entry.handler(message.data ?? message, clientId, client.userId);
+          } catch (err) {
+            this.logger.error(err, `Plugin WS handler error for ${message.type}`);
+          }
+          return;
+        }
+        // No matching handler — fall through to other message types
+      }
+
       if (message.type === "subscribe") {
         if (!message.serverId) {
           return;
@@ -2541,4 +2563,50 @@ export class WebSocketGateway {
   }
 
   private userCommandCounters = new Map<string, { count: number; resetAt: number }>();
+
+  // ── Plugin WebSocket Handler Management ──────────────────────────────────
+
+  /**
+   * Register a plugin WebSocket message handler.
+   * @param type  Prefixed type string, e.g. "plugin:ticketing-plugin:subscribe"
+   * @param handler  Async handler receiving (data, clientId, userId)
+   * @param pluginName  Name of the registering plugin (for cleanup on unload)
+   */
+  registerPluginWsHandler(
+    type: string,
+    handler: (data: any, clientId?: string, userId?: string) => Promise<void> | void,
+    pluginName: string,
+  ): void {
+    this.pluginWsHandlers.set(type, { handler, pluginName });
+    this.logger.debug({ type, pluginName }, 'Plugin WS handler registered');
+  }
+
+  /**
+   * Unregister all WebSocket handlers for a plugin (called on disable/unload).
+   */
+  unregisterPluginWsHandlers(pluginName: string): void {
+    for (const [type, entry] of this.pluginWsHandlers) {
+      if (entry.pluginName === pluginName) {
+        this.pluginWsHandlers.delete(type);
+      }
+    }
+    this.logger.debug({ pluginName }, 'Plugin WS handlers unregistered');
+  }
+
+  /**
+   * Broadcast a message to all authenticated WebSocket clients.
+   * Used by plugins to push real-time events.
+   */
+  broadcastToAuthenticated(message: any): void {
+    const data = typeof message === 'string' ? message : JSON.stringify(message);
+ for (const [, client] of this.clients) {
+      if (client.authenticated && client.socket.readyState === 1) {
+        try {
+          client.socket.send(data);
+        } catch {
+          // ignore send errors on stale connections
+        }
+      }
+    }
+  }
 }

@@ -32,11 +32,27 @@ export const PluginManifestSchema = z.object({
       entry: z.string(),
     })
     .optional(),
-  dependencies: z.record(z.string(), z.string().regex(/^\d+\.\d+\.\d+$/, 'Dependency versions must follow semver format (e.g., 1.0.0)')).optional(),
-  config: z.record(
-    z.string().regex(CONFIG_KEY_REGEX, 'Config keys must be alphanumeric with optional hyphens/underscores, max 50 chars'),
-    z.any()
-  ).optional(),
+  dependencies: z
+    .record(
+      z.string(),
+      z.string().regex(/^\d+\.\d+\.\d+$/, 'Dependency versions must follow semver format (e.g., 1.0.0)'),
+    )
+    .optional(),
+  config: z
+    .record(
+      z.string().regex(CONFIG_KEY_REGEX, 'Config keys must be alphanumeric with optional hyphens/underscores, max 50 chars'),
+      z.any(),
+    )
+    .optional(),
+  events: z
+    .record(
+      z.string(),
+      z.object({
+        payload: z.record(z.string(), z.any()),
+        description: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 /**
@@ -64,18 +80,18 @@ export function validateConfigKey(key: string): boolean {
  */
 export function hasPermission(userPermissions: string[], requiredPermissions: string[]): boolean {
   if (userPermissions.includes('*')) return true;
-  
+
   return requiredPermissions.every((required) => {
     // Check exact match
     if (userPermissions.includes(required)) return true;
-    
+
     // Check wildcard permissions (e.g., 'server.*' matches 'server.start')
     const parts = required.split('.');
     for (let i = parts.length; i > 0; i--) {
       const wildcardPerm = `${parts.slice(0, i).join('.')}.*`;
       if (userPermissions.includes(wildcardPerm)) return true;
     }
-    
+
     return false;
   });
 }
@@ -87,12 +103,12 @@ export function isVersionCompatible(required: string, current: string): boolean 
   // Simple semver range check (supports >=, >, =, <, <=)
   const match = required.match(/^([><=]+)?\s*(\d+\.\d+\.\d+)$/);
   if (!match) return false;
-  
+
   const operator = match[1] || '=';
   const requiredVersion = match[2];
-  
+
   const compare = compareVersions(current, requiredVersion);
-  
+
   switch (operator) {
     case '>=':
       return compare >= 0;
@@ -117,12 +133,12 @@ export function isVersionCompatible(required: string, current: string): boolean 
 function compareVersions(a: string, b: string): number {
   const aParts = a.split('.').map(Number);
   const bParts = b.split('.').map(Number);
-  
+
   for (let i = 0; i < 3; i++) {
     if (aParts[i] > bParts[i]) return 1;
     if (aParts[i] < bParts[i]) return -1;
   }
-  
+
   return 0;
 }
 
@@ -133,34 +149,78 @@ function compareVersions(a: string, b: string): number {
 export function validateDependencies(
   dependencies: Record<string, string> | undefined,
   registryPlugins: string[],
-  registryVersions: Map<string, string>
+  registryVersions: Map<string, string>,
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
-  
+
   if (!dependencies) {
     return { valid: true, errors: [] };
   }
-  
+
   for (const [name, version] of Object.entries(dependencies)) {
     // Check dependency exists
     if (!registryPlugins.includes(name)) {
       errors.push(`Missing dependency: ${name}@${version} (plugin not found)`);
       continue;
     }
-    
+
     // Check version compatibility
     const installedVersion = registryVersions.get(name);
     if (installedVersion && !isVersionCompatible(version, installedVersion)) {
-      errors.push(`Dependency version mismatch: ${name} requires ${version}, found ${installedVersion}`);
+      errors.push(
+        `Dependency version mismatch: ${name} requires ${version}, found ${installedVersion}`,
+      );
     }
-    
+
     // Validate version format
     if (!VERSION_REGEX.test(version)) {
       errors.push(`Invalid dependency version format: ${name}@${version} (must be semver)`);
     }
   }
-  
+
   return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Detect circular dependencies in a dependency graph.
+ * Returns an array of plugin names that participate in cycles (if any).
+ */
+export function detectCircularDependencies(
+  dependencies: Record<string, Record<string, string> | undefined>,
+): string[] {
+  const visited = new Set<string>();
+  const recursionStack = new Set<string>();
+  const cycleMembers = new Set<string>();
+
+  function dfs(pluginName: string): boolean {
+    visited.add(pluginName);
+    recursionStack.add(pluginName);
+
+    const deps = dependencies[pluginName] || {};
+    for (const dep of Object.keys(deps)) {
+      if (!visited.has(dep)) {
+        if (dfs(dep)) {
+          cycleMembers.add(pluginName);
+          return true;
+        }
+      } else if (recursionStack.has(dep)) {
+        cycleMembers.add(pluginName);
+        cycleMembers.add(dep);
+        return true;
+      }
+    }
+
+    recursionStack.delete(pluginName);
+    return false;
+  }
+
+  for (const pluginName of Object.keys(dependencies)) {
+    if (!visited.has(pluginName)) {
+      dfs(pluginName);
+    }
+  }
+
+  return Array.from(cycleMembers);
 }
 
 /**
@@ -170,12 +230,12 @@ export function warnUndeclaredPermissionUsage(
   pluginName: string,
   declaredPermissions: string[],
   attemptedAccess: string,
-  logger: Logger
+  logger: Logger,
 ): void {
   if (!declaredPermissions.includes('*') && !declaredPermissions.includes(attemptedAccess)) {
     logger.warn(
       { plugin: pluginName, attemptedAccess, declaredPermissions },
-      'Plugin attempted to use API not declared in manifest permissions'
+      'Plugin attempted to use API not declared in manifest permissions',
     );
   }
 }

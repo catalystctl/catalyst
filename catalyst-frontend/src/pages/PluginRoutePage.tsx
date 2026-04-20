@@ -1,18 +1,26 @@
 import { usePluginRoutes } from '../plugins/hooks';
-import { Navigate } from 'react-router-dom';
+import { useParams, Navigate } from 'react-router-dom';
 
 /**
- * Renders the first plugin page that matches the current route.
- * Used for standalone plugin pages like /tickets that any authenticated user can access.
+ * Renders the plugin page that matches the current dynamic route.
+ * Used for standalone plugin pages like /ticketing-plugin, /any-plugin, etc.
+ * that any authenticated user can access.
+ *
+ * The URL path segment is matched against plugin route paths.
+ * The route param `:pluginRouteName` comes from App.tsx's catch-all route.
  */
 export default function PluginRoutePage() {
+  const { pluginRouteName } = useParams<{ pluginRouteName: string }>();
   const routes = usePluginRoutes();
-  const first = routes[0];
 
-  if (!first) {
+  // Match the current path against plugin route paths
+  const currentPath = `/${pluginRouteName}`;
+  const matched = routes.find((r) => r.path === currentPath);
+
+  if (!matched) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  const Component = first.component;
+  const Component = matched.component;
   return <Component />;
 }

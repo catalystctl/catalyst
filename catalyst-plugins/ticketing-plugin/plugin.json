@@ -1,61 +1,34 @@
 {
   "name": "ticketing-plugin",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "displayName": "Ticketing System",
-  "description": "Full-featured ticketing system with server/user linking, categories, priorities, assignments, comments, and real-time notifications",
+  "description": "Full-featured ticketing system with SLA tracking, advanced filtering, real-time updates, ticket linking, bulk operations, templates, and customizable workflows",
   "author": "Catalyst Team",
   "catalystVersion": ">=1.0.0",
   "permissions": [
     "server.read",
-    "server.write",
-    "admin.read",
-    "admin.write",
     "user.read"
   ],
-  "backend": {
-    "entry": "backend/index.js"
-  },
-  "frontend": {
-    "entry": "frontend/index.ts",
-    "hasTabs": true,
-    "hasComponents": false
-  },
   "config": {
-    "autoCloseDays": {
-      "type": "number",
-      "default": 30,
-      "description": "Automatically close resolved tickets after this many days (0 to disable)"
-    },
-    "maxOpenTicketsPerUser": {
-      "type": "number",
-      "default": 20,
-      "description": "Maximum number of open tickets per user (0 for unlimited)"
-    },
-    "defaultPriority": {
-      "type": "string",
-      "default": "medium",
-      "description": "Default priority for new tickets (low, medium, high, critical)"
-    },
-    "allowedPriorities": {
-      "type": "string",
-      "default": "low,medium,high,critical",
-      "description": "Comma-separated list of allowed priorities"
-    },
-    "notifyOnAssignment": {
-      "type": "boolean",
-      "default": true,
-      "description": "Send WebSocket notification when a ticket is assigned"
-    },
-    "notifyOnComment": {
-      "type": "boolean",
-      "default": true,
-      "description": "Send WebSocket notification on new ticket comments"
-    },
-    "notifyOnStatusChange": {
-      "type": "boolean",
-      "default": true,
-      "description": "Send WebSocket notification on ticket status changes"
-    }
+    "autoAssignEnabled": { "type": "boolean", "default": false, "description": "Automatically assign new tickets to available users" },
+    "autoCloseDays": { "type": "number", "default": 30, "description": "Auto-close resolved tickets after this many days (0 to disable)" },
+    "defaultPriority": { "type": "select", "default": "medium", "description": "Default priority for new tickets", "options": ["critical", "high", "medium", "low", "minimal"] },
+    "defaultCategory": { "type": "select", "default": "Support", "description": "Default category for new tickets", "options": ["Bug Report", "Feature Request", "Support", "Billing", "Infrastructure", "Security", "Documentation", "Other"] },
+    "responseSlaHours": { "type": "number", "default": 4, "description": "SLA: maximum hours before first response" },
+    "resolutionSlaHours": { "type": "number", "default": 48, "description": "SLA: maximum hours before resolution" },
+    "maxEscalationLevel": { "type": "number", "default": 3, "description": "Maximum escalation level (0-3)" }
   },
-  "dependencies": {}
+  "events": {
+    "ticket:created": { "payload": { "ticketId": "string", "ticketNumber": "string" } },
+    "ticket:updated": { "payload": { "ticketId": "string", "changes": "object" } },
+    "ticket:deleted": { "payload": { "ticketId": "string" } },
+    "ticket:comment-added": { "payload": { "ticketId": "string", "commentId": "string" } },
+    "ticket:status-changed": { "payload": { "ticketId": "string", "from": "string", "to": "string" } },
+    "ticket:assigned": { "payload": { "ticketId": "string", "assigneeId": "string" } },
+    "ticket:escalated": { "payload": { "ticketId": "string", "level": "number" } },
+    "ticket:sla-breached": { "payload": { "ticketId": "string", "type": "string" } },
+    "ticket:bulk-updated": { "payload": { "ticketIds": "string[]", "action": "string" } }
+  },
+  "backend": { "entry": "backend/index.js" },
+  "frontend": { "entry": "frontend/index.ts", "hasTabs": true }
 }

@@ -48,7 +48,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       if (!isAdmin) return;
       const registry = pluginLoader.getRegistry();
       const plugins = registry.getAll();
-      
+
       const pluginList = plugins.map((p) => ({
         name: p.manifest.name,
         version: p.manifest.version,
@@ -63,15 +63,18 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         permissions: p.manifest.permissions,
         hasBackend: !!p.manifest.backend,
         hasFrontend: !!p.manifest.frontend,
+        dependencies: p.manifest.dependencies,
+        hasDeclaredEvents: !!p.manifest.events,
+        declaredEvents: p.manifest.events ? Object.keys(p.manifest.events) : [],
       }));
-      
+
       return {
         success: true,
         data: pluginList,
       };
-    }
+    },
   );
-  
+
   /**
    * GET /api/plugins/:name
    * Get plugin details
@@ -87,14 +90,14 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       const { name } = request.params as { name: string };
       const registry = pluginLoader.getRegistry();
       const plugin = registry.get(name);
-      
+
       if (!plugin) {
         return reply.status(404).send({
           success: false,
           error: 'Plugin not found',
         });
       }
-      
+
       return {
         success: true,
         data: {
@@ -116,11 +119,14 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
           routes: plugin.routes.map((r) => ({ method: r.method, url: r.url })),
           wsHandlers: Array.from(plugin.wsHandlers.keys()),
           tasks: Array.from(plugin.tasks.values()).map((t) => ({ cron: t.cron })),
+          dependencies: plugin.manifest.dependencies,
+          events: plugin.manifest.events,
+          exposedApis: registry.getExposedApiNames(name),
         },
       };
-    }
+    },
   );
-  
+
   /**
    * POST /api/plugins/:name/enable
    * Enable or disable a plugin
@@ -135,14 +141,14 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       if (!isAdmin) return;
       const { name } = request.params as { name: string };
       const body = EnablePluginSchema.parse(request.body);
-      
+
       try {
         if (body.enabled) {
           await pluginLoader.enablePlugin(name);
         } else {
           await pluginLoader.disablePlugin(name);
         }
-        
+
         return {
           success: true,
           message: `Plugin ${body.enabled ? 'enabled' : 'disabled'} successfully`,
@@ -153,9 +159,9 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
           error: error.message,
         });
       }
-    }
+    },
   );
-  
+
   /**
    * POST /api/plugins/:name/reload
    * Reload a plugin (hot-reload)
@@ -169,10 +175,10 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       const isAdmin = ensureAdmin(request, reply, 'admin.write');
       if (!isAdmin) return;
       const { name } = request.params as { name: string };
-      
+
       try {
         await pluginLoader.reloadPlugin(name);
-        
+
         return {
           success: true,
           message: 'Plugin reloaded successfully',
@@ -183,9 +189,9 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
           error: error.message,
         });
       }
-    }
+    },
   );
-  
+
   /**
    * PUT /api/plugins/:name/config
    * Update plugin configuration
@@ -200,23 +206,23 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       if (!isAdmin) return;
       const { name } = request.params as { name: string };
       const body = UpdatePluginConfigSchema.parse(request.body);
-      
+
       const registry = pluginLoader.getRegistry();
       const plugin = registry.get(name);
-      
+
       if (!plugin) {
         return reply.status(404).send({
           success: false,
           error: 'Plugin not found',
         });
       }
-      
+
       try {
         // Update each config key
         for (const [key, value] of Object.entries(body.config)) {
           await plugin.context.setConfig(key, value);
         }
-        
+
         return {
           success: true,
           message: 'Plugin configuration updated',
@@ -227,12 +233,12 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
           error: error.message,
         });
       }
-    }
+    },
   );
-  
+
   /**
    * GET /api/plugins/:name/frontend-manifest
-   * Get plugin frontend manifest
+   * Get plugin frontend manifest with real data from plugin.json
    */
   app.get(
     '/api/plugins/:name/frontend-manifest',
@@ -241,32 +247,34 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
     },
     async (request, reply) => {
       const { name } = request.params as { name: string };
-    const registry = pluginLoader.getRegistry();
-    const plugin = registry.get(name);
-    
-    if (!plugin) {
-      return reply.status(404).send({
-        success: false,
-        error: 'Plugin not found',
-      });
-    }
-    
-    if (!plugin.manifest.frontend) {
-      return reply.status(404).send({
-        success: false,
-        error: 'Plugin has no frontend',
-      });
-    }
-    
-    // Read frontend manifest if exists
-    // For now, return placeholder
-    return {
-      success: true,
-      data: {
-        routes: [],
-        tabs: [],
-        components: {},
-      },
-    };
-  });
+      const registry = pluginLoader.getRegistry();
+      const plugin = registry.get(name);
+
+      if (!plugin) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Plugin not found',
+        });
+      }
+
+      if (!plugin.manifest.frontend) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Plugin has no frontend',
+        });
+      }
+
+      return {
+        success: true,
+        data: {
+          name: plugin.manifest.name,
+          displayName: plugin.manifest.displayName,
+          entry: plugin.manifest.frontend.entry,
+          config: plugin.manifest.config,
+          permissions: plugin.manifest.permissions,
+          events: plugin.manifest.events,
+        },
+      };
+    },
+  );
 }

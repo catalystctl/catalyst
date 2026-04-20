@@ -204,8 +204,14 @@ function PluginSettingsModal({
     enabled: open,
   });
 
-  // Use pluginDetails config as base, but allow local edits to override
-  const config = localConfig ?? pluginDetails?.config ?? {};
+  // Use pluginDetails config as base, but allow local edits to override.
+  // Config can come from two sources:
+  //   1. manifest.config — schema definitions with { type, default, description, options }
+  //   2. pluginDetails.config — current runtime values (flat key-value or schema)
+  // We merge: use manifest schema for rendering, overlay with runtime values.
+  const manifestSchema = pluginDetails?.manifest?.config ?? {};
+  const runtimeValues = pluginDetails?.config ?? {};
+  const config = localConfig ?? (Object.keys(manifestSchema).length > 0 ? manifestSchema : runtimeValues);
 
   const handleConfigChange = (key: string, value: any) => {
     setLocalConfig((prev) => ({ ...(prev ?? config), [key]: value }));
@@ -229,6 +235,25 @@ function PluginSettingsModal({
     },
     onError: (error: any) => toast.error(error.message || 'Failed to update configuration'),
   });
+
+  /** Type guard for config schema entries */
+  type ConfigSchemaEntry = { type: string; default?: any; description?: string; label?: string; options?: any[] };
+  function isConfigSchema(v: any): v is ConfigSchemaEntry {
+    return v && typeof v === 'object' && typeof v.type === 'string';
+  }
+
+  /** Extract the effective config value for saving (strips schema metadata) */
+  const buildSaveConfig = (): PluginConfig => {
+    const result: PluginConfig = {};
+    for (const [key, value] of Object.entries(config)) {
+      if (isConfigSchema(value)) {
+        result[key] = value.default;
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
+  };
 
   if (!open) return null;
 
@@ -255,7 +280,7 @@ function PluginSettingsModal({
           </div>
         </div>
 
-        <div className="px-6 py-5">
+        <div className="max-h-[60vh] overflow-y-auto px-6 py-5">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -267,57 +292,89 @@ function PluginSettingsModal({
           ) : (
             <div className="space-y-4">
               {Object.entries(config).map(([key, value]) => {
-                const isSchema = value && typeof value === 'object' && 'type' in value;
-                const fieldType = isSchema ? value.type : typeof value;
-                const currentValue = isSchema ? value.default : value;
-                const description = isSchema ? value.description : '';
-                const displayKey = isSchema
-                  ? key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())
-                  : key;
+                const schema = isConfigSchema(value) ? value : null;
+                const fieldType = schema ? schema.type : typeof value;
+                const currentValue = schema ? schema.default : value;
+                const description = schema ? (schema.description || '') : '';
+                const label = schema ? (schema.label || key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())) : key;
+                const selectOptions = schema ? (schema.options || []) : [];
+
+                // Check runtime values for overrides
+                const runtimeOverride = runtimeValues[key];
+                const effectiveValue = runtimeOverride !== undefined && !schema ? runtimeOverride : currentValue;
 
                 return (
-                  <label key={key} className="block space-y-1">
-                    <span className="text-xs font-medium text-muted-foreground">{displayKey}</span>
+                  <div key={key} className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">{label}</label>
                     {description && (
-                      <p className="text-[11px] text-muted-foreground">{description}</p>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">{description}</p>
                     )}
                     {fieldType === 'boolean' ? (
                       <label className="flex items-center gap-2 cursor-pointer pt-1">
                         <input
                           type="checkbox"
-                          checked={!!currentValue}
+                          checked={!!effectiveValue}
                           onChange={(e) =>
-                            handleConfigChange(key, isSchema
-                              ? { ...value, default: e.target.checked }
+                            handleConfigChange(key, schema
+                              ? { ...(value as Record<string, any>), default: e.target.checked }
                               : e.target.checked)
                           }
                           className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-zinc-600 dark:bg-surface-1 dark:text-primary-400"
                         />
                         <span className="text-sm text-muted-foreground">
-                          {currentValue ? 'Enabled' : 'Disabled'}
+                          {effectiveValue ? 'Enabled' : 'Disabled'}
                         </span>
                       </label>
                     ) : fieldType === 'number' ? (
                       <Input
                         type="number"
-                        value={currentValue ?? ''}
+                        value={effectiveValue ?? ''}
                         onChange={(e) =>
-                          handleConfigChange(key, isSchema
-                            ? { ...value, default: parseFloat(e.target.value) || 0 }
+                          handleConfigChange(key, schema
+                            ? { ...(value as Record<string, any>), default: parseFloat(e.target.value) || 0 }
                             : parseFloat(e.target.value) || 0)
                         }
                       />
+                    ) : fieldType === 'select' && selectOptions.length > 0 ? (
+                      <select
+                        value={String(effectiveValue ?? '')}
+                        onChange={(e) => {
+                          const selected = selectOptions.find((o: any) => String(o.value) === e.target.value);
+                          const newVal = selected ? selected.value : e.target.value;
+                          handleConfigChange(key, schema
+                            ? { ...(value as Record<string, any>), default: newVal }
+                            : newVal);
+                        }}
+                        className="flex h-9 w-full rounded-md border border-border bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {selectOptions.map((opt: any) => (
+                          <option key={String(opt.value)} value={String(opt.value)}>
+                            {opt.label || opt.value}
+                          </option>
+                        ))}
+                      </select>
+                    ) : fieldType === 'text' ? (
+                      <textarea
+                        value={String(effectiveValue ?? '')}
+                        rows={3}
+                        onChange={(e) =>
+                          handleConfigChange(key, schema
+                            ? { ...(value as Record<string, any>), default: e.target.value }
+                            : e.target.value)
+                        }
+                        className="flex min-h-[80px] w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                      />
                     ) : (
                       <Input
-                        value={String(currentValue ?? '')}
+                        value={String(effectiveValue ?? '')}
                         onChange={(e) =>
-                          handleConfigChange(key, isSchema
-                            ? { ...value, default: e.target.value }
+                          handleConfigChange(key, schema
+                            ? { ...(value as Record<string, any>), default: e.target.value }
                             : e.target.value)
                         }
                       />
                     )}
-                  </label>
+                  </div>
                 );
               })}
             </div>
@@ -328,7 +385,7 @@ function PluginSettingsModal({
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button
             size="sm"
-            onClick={() => updateMutation.mutate(config)}
+            onClick={() => updateMutation.mutate(buildSaveConfig())}
             disabled={updateMutation.isPending}
           >
             {updateMutation.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
