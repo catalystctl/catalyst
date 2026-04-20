@@ -116,7 +116,8 @@ class ScopedPluginDBClient implements ScopedPluginDB {
           select: {
             id: true,
             name: true,
-            type: true,
+            uuid: true,
+            description: true,
             status: true,
             createdAt: true,
             updatedAt: true,
@@ -133,7 +134,8 @@ class ScopedPluginDBClient implements ScopedPluginDB {
           select: {
             id: true,
             name: true,
-            type: true,
+            uuid: true,
+            description: true,
             status: true,
             createdAt: true,
             updatedAt: true,
@@ -187,9 +189,9 @@ class ScopedPluginDBClient implements ScopedPluginDB {
             id: true,
             username: true,
             email: true,
-            roleIds: true,
             name: true,
             image: true,
+            banned: true,
             createdAt: true,
             ...(args?.select || {}),
           },
@@ -205,9 +207,9 @@ class ScopedPluginDBClient implements ScopedPluginDB {
             id: true,
             username: true,
             email: true,
-            roleIds: true,
             name: true,
             image: true,
+            banned: true,
             createdAt: true,
             ...(args?.select || {}),
           },
@@ -597,7 +599,7 @@ export function createPluginContext(
 
     registerRoute(options: RouteOptions) {
       // Prefix route path with plugin namespace
-      const prefixedPath = `/api/plugins/${manifest.name}${options.url}`;
+      const prefixedPath = `/api/plugins/${manifest.name}/${options.url.replace(/^\//, '')}`;
       const routeOptions: RouteOptions = {
         ...options,
         url: prefixedPath,

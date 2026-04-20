@@ -53,6 +53,11 @@ async function pluginFetch<T>(
     }
 
     const data = await res.json();
+    // If the backend already returns the plugin response shape, pass through
+    // to avoid double-wrapping: { success: true, data: { success: true, data: [...] } }
+    if (data && typeof data === 'object' && 'success' in data) {
+      return data as PluginApiResponse<T>;
+    }
     return { success: true, data };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Network error';

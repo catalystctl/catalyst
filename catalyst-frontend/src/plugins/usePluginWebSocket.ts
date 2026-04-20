@@ -83,6 +83,13 @@ export function usePluginWebSocket(
     const wsUrl = url || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
     const fullUrl = `${wsUrl}/ws/plugins`;
 
+    // Don't attempt connection if no custom URL provided — the default /ws/plugins
+    // endpoint doesn't exist on the backend yet. Only connect if an explicit URL is given.
+    if (!url) {
+      setError('WebSocket not available');
+      return;
+    }
+
     try {
       const ws = new WebSocket(fullUrl);
       wsRef.current = ws;
@@ -96,6 +103,13 @@ export function usePluginWebSocket(
       ws.onclose = () => {
         setConnected(false);
         wsRef.current = null;
+
+        // If we never successfully connected, give up after 2 attempts
+        // to avoid spamming reconnect attempts to a non-existent endpoint
+        if (reconnectAttemptsRef.current >= 2) {
+          setError('WebSocket unavailable');
+          return;
+        }
 
         // Auto-reconnect with exponential backoff if still enabled
         if (enabledRef.current) {

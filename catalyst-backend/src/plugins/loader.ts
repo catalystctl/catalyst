@@ -291,7 +291,7 @@ export class PluginLoader {
       // Load backend if exists
       if (manifest.backend?.entry) {
         const backendPath = path.resolve(resolvedPath, manifest.backend.entry);
-        const backendModule = await import(backendPath + '?t=' + Date.now());
+        const backendModule = await import(backendPath);
         loadedPlugin.backend = backendModule.default || backendModule;
 
         // Call onLoad lifecycle hook
@@ -567,7 +567,9 @@ export class PluginLoader {
     } catch {
       // Not in require cache, that's fine
     }
-    // Cache-busting query param is applied in loadPlugin via import(path + '?t=...')
+    // Note: ESM cache clearing is limited. Node.js does not expose a public API to clear
+    // the ESM module cache. The CJS require.cache clear below handles CJS interop.
+    // For full ESM cache invalidation, a server restart is recommended.
     // This ensures ESM modules are re-imported fresh
 
     // Load plugin again
