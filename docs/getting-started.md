@@ -40,10 +40,28 @@ Make sure you have:
 
 ## Step 1: Install the Panel
 
-If you haven't already, follow the [Installation Guide](./installation.md) to deploy Catalyst using Docker Compose:
+If you haven't already, deploy Catalyst using one of the supported methods below.
+
+> **⚠️ Important:** Docker Compose (with Docker or Podman) is the **only supported deployment method**. Direct installation, containerd (`ctr`/`nerdctl`), and other container runtimes are not supported.
+
+### Option A: One-Line Install (Recommended)
+
+The fastest way — no need to clone the full repo:
 
 ```bash
-git clone https://github.com/your-org/catalyst.git
+curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh | bash
+cd catalyst-docker
+# Edit .env — set PUBLIC_URL at minimum
+nano .env
+docker compose up -d
+```
+
+👉 See [`catalyst-docker/README.md`](../catalyst-docker/README.md) for full details including TLS setup.
+
+### Option B: Build from Source
+
+```bash
+git clone https://github.com/catalystctl/catalyst.git
 cd catalyst
 cp .env.example .env
 # Edit .env with your values

@@ -18,11 +18,38 @@ Catalyst is a complete platform built for enterprise game server hosts, game com
 
 ### 📦 Prerequisites
 
-- **Docker** with Compose support, **Podman** with Compose support, or **containerd** (with `nerdctl` or `ctr`)
+- **Docker** with Compose support or **Podman** with Compose support
 
 That's it. Everything runs in containers — no Node.js, Bun, or Rust install needed on the host.
 
-### 🚀 Deploy with Docker Compose
+> **⚠️ Important:** Docker Compose (with Docker or Podman) is the **only supported deployment method**. Direct installation, containerd (`ctr`/`nerdctl`), and other container runtimes are not supported.
+
+### 🚀 One-Line Install (Recommended)
+
+The fastest way to get Catalyst running — no need to clone the full repo:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh | bash
+```
+
+This downloads the standalone [`catalyst-docker/`](catalyst-docker/) folder with pre-built images from GitHub Container Registry, generates secure secrets, and sets up `.env` for you.
+
+Then start the stack:
+
+```bash
+cd catalyst-docker
+# Edit .env — set PUBLIC_URL at minimum
+nano .env
+docker compose up -d
+```
+
+👉 See [`catalyst-docker/README.md`](catalyst-docker/README.md) for full details including TLS setup with Caddy or Traefik.
+
+---
+
+### 🐳 Deploy with Docker Compose (from source)
+
+If you prefer to build from source:
 
 ```bash
 git clone https://github.com/catalystctl/catalyst.git
@@ -86,51 +113,8 @@ podman compose up -d --build
 All commands are the same, just replace `docker` with `podman`. The helper script
 `./dev.sh` will auto-detect Podman if Docker is not installed.
 
----
-
-### 🟦 Deploy with containerd
-
-For environments using containerd directly (no Docker/Podman), Catalyst includes
-helpers to run PostgreSQL and Redis under containerd. The backend and frontend
-images can then be managed with `nerdctl` or `ctr`.
-
-#### Using nerdctl (compose-like)
-
-```bash
-git clone https://github.com/catalystctl/catalyst.git
-cd catalyst
-
-cp .env.example .env
-# Edit .env — set BETTER_AUTH_SECRET and POSTGRES_PASSWORD
-
-# Start dependencies (PostgreSQL + Redis)
-export POSTGRES_PASSWORD=<your-password>
-./containerd/compose-to-nerdctl.sh
-
-# Build and start backend + frontend
-nerdctl compose -f docker-compose.yml up -d --build
-```
-
-#### Using ctr (no compose)
-
-```bash
-git clone https://github.com/catalystctl/catalyst.git
-cd catalyst
-
-cp .env.example .env
-# Edit .env — set BETTER_AUTH_SECRET and POSTGRES_PASSWORD
-
-# Start dependencies directly via containerd
-./containerd/compose-to-containerd.sh
-
-# Build and run backend/frontend containers manually with ctr
-# (see containerd/compose-to-containerd.sh for image and runtime details)
-```
-
-For systemd integration and automatic restart on boot, see the service files in
-`containerd/`.
-
-👉 See [`containerd/`](containerd/) for the full helper scripts and configuration.
+You can also use the [one-line install](#-one-line-install-recommended) with Podman —
+just run `podman compose up -d` instead of `docker compose up -d`.
 
 ### 🔧 Configuration
 
@@ -347,7 +331,7 @@ All screenshots are captured automatically at 1080p via Playwright. [See how to 
 | Alerting | ✅ Stable |
 | Agent (Rust, containerd) | ✅ Stable |
 | Testing | ✅ 23 E2E test suites |
-| Container Deployment | ✅ Docker Compose, Podman Compose, containerd |
+| Container Deployment | ✅ Docker Compose, Podman Compose |
 | v2 (Scaling, CLI, Mobile) | 🔮 Planned |
 
 ---

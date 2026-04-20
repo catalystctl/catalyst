@@ -5,7 +5,9 @@ Complete instructions for deploying Catalyst, a production-grade game server man
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
+- [One-Line Install (Recommended)](#one-line-install-recommended)
 - [Quick Start (Docker Compose)](#quick-start-docker-compose)
+- [Standalone Docker (catalyst-docker)](#standalone-docker-catalyst-docker)
 - [Environment Variables](#environment-variables)
   - [Required Variables](#required-variables)
   - [General Settings](#general-settings)
@@ -19,14 +21,7 @@ Complete instructions for deploying Catalyst, a production-grade game server man
   - [OAuth Providers](#oauth-providers)
   - [S3 Backups](#s3-backups)
 - [Service Architecture](#service-architecture)
-- [Manual Deployment](#manual-deployment)
-  - [Database Setup](#database-setup)
-  - [Redis Setup](#redis-setup)
-  - [Backend Setup](#backend-setup)
-  - [Frontend Setup](#frontend-setup)
-  - [Database Seeding](#database-seeding)
 - [Development Setup](#development-setup)
-- [Containerd / nerdctl Deployment](#containerd--nerdctl-deployment)
 - [Reverse Proxy Configuration](#reverse-proxy-configuration)
   - [Nginx (Standalone)](#nginx-standalone)
   - [Caddy](#caddy)
@@ -47,16 +42,43 @@ Complete instructions for deploying Catalyst, a production-grade game server man
 | **RAM** | 2 GB | 4+ GB |
 | **Disk** | 10 GB (panel only) | SSD with 50+ GB |
 
-> **Note:** Docker or Podman is required. Catalyst also supports nerdctl/containerd for infrastructure without Docker.
+> **Note:** Docker Compose (with Docker or Podman) is the **only supported deployment method**. Direct installation, containerd (`ctr`/`nerdctl`), and other container runtimes are not supported.
+
+## One-Line Install (Recommended)
+
+The fastest way to get Catalyst running — no need to clone the full repo:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh | bash
+```
+
+This script:
+- Checks for Docker and Docker Compose
+- Downloads the standalone `catalyst-docker/` folder from GitHub
+- Generates secure `POSTGRES_PASSWORD` and `BETTER_AUTH_SECRET`
+- Creates `.env` from `.env.example`
+
+Then start the stack:
+
+```bash
+cd catalyst-docker
+# Edit .env — set PUBLIC_URL at minimum
+nano .env
+docker compose up -d
+```
+
+👉 See [`catalyst-docker/README.md`](../catalyst-docker/README.md) for full details including TLS setup with Caddy or Traefik.
+
+---
 
 ## Quick Start (Docker Compose)
 
-The fastest way to get Catalyst running is via Docker Compose.
+If you prefer to build from source:
 
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-org/catalyst.git
+git clone https://github.com/catalystctl/catalyst.git
 cd catalyst
 ```
 
@@ -116,6 +138,28 @@ docker compose exec backend bun run db:seed
 | **API** | `http://localhost:3000/api` |
 | **API Docs** | `http://localhost:3000/docs` |
 | **SFTP** | `localhost:2022` |
+
+---
+
+## Standalone Docker (catalyst-docker)
+
+The `catalyst-docker/` folder is a self-contained deployment using **pre-built images** from GitHub Container Registry — no build step required. This is what the [one-line install](#one-line-install-recommended) downloads.
+
+```bash
+# Clone and enter the standalone folder
+git clone https://github.com/catalystctl/catalyst.git
+cd catalyst/catalyst-docker
+
+cp .env.example .env
+# Edit .env — set PUBLIC_URL at minimum
+nano .env
+
+docker compose up -d
+```
+
+For Podman, use `podman compose up -d` instead.
+
+👉 See [`catalyst-docker/README.md`](../catalyst-docker/README.md) for the complete guide including TLS setup, port configuration, and troubleshooting.
 
 ## Environment Variables
 
@@ -261,82 +305,7 @@ All services include health checks:
 
 The frontend waits for the backend to be healthy before starting.
 
-## Manual Deployment
-
-If you prefer to run services outside Docker, follow these steps.
-
-### Database Setup
-
-Install PostgreSQL 16+ and create the database:
-
-```bash
-# Create database and user
-sudo -u postgres createuser catalyst
-sudo -u postgres createdb catalyst_db -O catalyst
-sudo -u postgres psql -c "ALTER USER catalyst PASSWORD 'your-secure-password';"
-```
-
-### Redis Setup
-
-Install Redis 7+:
-
-```bash
-# Ubuntu/Debian
-sudo apt install redis-server
-
-# Enable and start
-sudo systemctl enable redis-server
-sudo systemctl start redis-server
-```
-
-### Backend Setup
-
-The backend requires **Bun** (>= 1.0.0) or **Node.js** (>= 20.0.0).
-
-```bash
-cd catalyst/catalyst-backend
-
-# Install dependencies
-bun install
-
-# Generate Prisma client
-bunx prisma generate --config prisma/prisma.config.ts
-
-# Run database migrations
-bunx prisma migrate deploy --config prisma/prisma.config.ts
-
-# Build for production
-bun run build
-
-# Start
-DATABASE_URL="postgresql://catalyst:password@localhost:5432/catalyst_db" \
-BETTER_AUTH_SECRET="$(openssl rand -base64 32)" \
-BETTER_AUTH_URL="https://panel.example.com" \
-bun run start
-```
-
-### Frontend Setup
-
-```bash
-cd catalyst/catalyst-frontend
-
-# Install dependencies
-bun install
-
-# Build
-bun run build
-
-# Serve the dist/ directory with any static file server or nginx
-```
-
-### Database Seeding
-
-For development/testing only:
-
-```bash
-cd catalyst/catalyst-backend
-NODE_ENV=development bun run db:seed
-```
+> **Note:** Docker Compose (with Docker or Podman) is the **only supported deployment method**. Manual installation of individual services is not supported.
 
 ## Development Setup
 
@@ -382,46 +351,7 @@ bun run db:studio
 | `bun run lint` | Lint all packages |
 | `bun run test` | Run tests |
 
-## Containerd / nerdctl Deployment
 
-For environments without Docker, Catalyst provides containerd and nerdctl support.
-
-### Using nerdctl (Recommended for non-Docker setups)
-
-```bash
-export POSTGRES_PASSWORD="your-secure-password"
-
-# Start PostgreSQL and Redis under containerd via nerdctl
-./containerd/compose-to-nerdctl.sh
-```
-
-The script:
-- Starts PostgreSQL 16 and Redis 7 containers via nerdctl
-- Creates persistent data directories at `/var/lib/catalyst/`
-- Performs health checks on both services
-- Is idempotent (won't recreate existing containers)
-
-### Using systemd Services
-
-For production, install the provided systemd service files:
-
-```bash
-# Copy service files
-sudo cp containerd/catalyst-postgres.service /etc/systemd/system/
-sudo cp containerd/catalyst-redis.service /etc/systemd/system/
-
-# Create environment files
-sudo mkdir -p /etc/catalyst
-sudo tee /etc/catalyst/postgres.env <<EOF
-POSTGRES_PASSWORD=your-secure-password
-EOF
-
-# Enable and start
-sudo systemctl daemon-reload
-sudo systemctl enable --now catalyst-postgres catalyst-redis
-```
-
-Service files are provided for: PostgreSQL, Redis, MinIO, MySQL, and SeaweedFS.
 
 ## Reverse Proxy Configuration
 
@@ -507,14 +437,12 @@ docker compose exec backend bunx prisma migrate deploy --config prisma/prisma.co
 
 > **Note:** The backend entrypoint automatically runs database migrations on every startup, so explicit migration commands are usually not needed.
 
-### Manual
+### Standalone Docker (catalyst-docker)
 
 ```bash
-cd catalyst/catalyst-backend
-bun install
-bunx prisma generate --config prisma/prisma.config.ts
-bun run build
-# Restart your process manager (systemd, pm2, etc.)
+cd catalyst-docker
+docker compose pull
+docker compose up -d
 ```
 
 ## Troubleshooting
