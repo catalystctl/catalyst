@@ -113,7 +113,7 @@ if has_changes '^(catalyst-backend|catalyst-shared)/' || has_changes '^bun\.lock
 
         run_check "Backend: generate Prisma client" bunx prisma generate --schema=catalyst-backend/prisma/schema.prisma
 
-        run_check "Backend: lint" bun run lint --filter=catalyst-backend
+        run_check "Backend: lint" bun --filter=catalyst-backend run lint
 
         run_check "Backend: build" bun run build:backend
     else
