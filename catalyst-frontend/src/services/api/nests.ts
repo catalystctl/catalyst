@@ -1,5 +1,6 @@
 import apiClient from './client';
 import type { Nest } from '../../types/template';
+export type { Nest } from '../../types/template';
 
 type ApiResponse<T> = {
   success: boolean;

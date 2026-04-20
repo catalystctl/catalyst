@@ -107,6 +107,7 @@ export async function templateRoutes(app: FastifyInstance) {
 				allocatedMemoryMb,
 				allocatedCpuCores,
 				features,
+				nestId,
 			} = request.body as {
 				name: string;
 				description?: string;
@@ -126,6 +127,7 @@ export async function templateRoutes(app: FastifyInstance) {
 				allocatedMemoryMb: number;
 				allocatedCpuCores: number;
 				features?: Record<string, any>;
+				nestId?: string | null;
 			};
 
 			const template = await prisma.serverTemplate.create({
@@ -155,6 +157,7 @@ export async function templateRoutes(app: FastifyInstance) {
 						...(features || {}),
 						...(configFile ? { configFile } : {}),
 					},
+					nestId: nestId || null,
 				},
 				include: {
 					nest: {
@@ -219,6 +222,7 @@ export async function templateRoutes(app: FastifyInstance) {
 				allocatedMemoryMb,
 				allocatedCpuCores,
 				features,
+				nestId,
 			} = request.body as {
 				name?: string;
 				description?: string;
@@ -235,6 +239,7 @@ export async function templateRoutes(app: FastifyInstance) {
 				supportedPorts?: number[];
 				allocatedMemoryMb?: number;
 				allocatedCpuCores?: number;
+				nestId?: string | null;
 				features?: Record<string, any>;
 			};
 			const nextData: Record<string, unknown> = {};
@@ -278,6 +283,7 @@ export async function templateRoutes(app: FastifyInstance) {
 			if (defaultImage !== undefined) {
 				nextData.defaultImage = defaultImage || null;
 			}
+			if (nestId !== undefined) nextData.nestId = nestId || null;
 
 			const updated = await prisma.serverTemplate.update({
 				where: { id: templateId },
@@ -375,11 +381,9 @@ export async function templateRoutes(app: FastifyInstance) {
 				!Array.isArray(egg.images) ||
 				egg.images.length === 0
 			) {
-				return reply
-					.status(400)
-					.send({
-						error: "Missing required field: images (must be a non-empty array)",
-					});
+				return reply.status(400).send({
+					error: "Missing required field: images (must be a non-empty array)",
+				});
 			}
 
 			// Validate nestId if provided
@@ -396,11 +400,9 @@ export async function templateRoutes(app: FastifyInstance) {
 				where: { name: sanitizedName },
 			});
 			if (existing) {
-				return reply
-					.status(409)
-					.send({
-						error: `A template with the name '${sanitizedName}' already exists`,
-					});
+				return reply.status(409).send({
+					error: `A template with the name '${sanitizedName}' already exists`,
+				});
 			}
 
 			// Map Pterodactyl variables to Catalyst format

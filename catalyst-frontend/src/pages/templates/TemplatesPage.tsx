@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
@@ -20,6 +20,7 @@ import {
 import { useTemplates } from '../../hooks/useTemplates';
 import TemplateCreateModal from '../../components/templates/TemplateCreateModal';
 import TemplateEditModal from '../../components/templates/TemplateEditModal';
+import NestsManagerModal from '../../components/templates/NestsManagerModal';
 import EmptyState from '../../components/shared/EmptyState';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import { Input } from '../../components/ui/input';
@@ -311,6 +312,14 @@ function TemplatesPage({ hideHeader }: Props) {
     label: string;
   } | null>(null);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [nestsModalOpen, setNestsModalOpen] = useState(false);
+
+  // Listen for custom events from template modals to open nests manager
+  useEffect(() => {
+    const handler = () => setNestsModalOpen(true);
+    window.addEventListener('catalyst:open-nests-modal', handler);
+    return () => window.removeEventListener('catalyst:open-nests-modal', handler);
+  }, []);
 
   const { user } = useAuthStore();
 
@@ -520,6 +529,15 @@ function TemplatesPage({ hideHeader }: Props) {
                     )}
                   </>
                 )}
+                {canWrite && (
+                  <button
+                    className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                    onClick={() => setNestsModalOpen(true)}
+                  >
+                    <FolderOpen className="mr-1.5 inline h-4 w-4" />
+                    Nests
+                  </button>
+                )}
                 {canWrite ? (
                   <TemplateCreateModal />
                 ) : (
@@ -693,8 +711,20 @@ function TemplatesPage({ hideHeader }: Props) {
                               <SelectItem value="all">All nests</SelectItem>
                               {nests.map((nest) => (
                                 <SelectItem key={nest.id} value={nest.id}>
-                                  {nest.icon ? `${nest.icon} ` : ''}
-                                  {nest.name}
+                                  <span className="flex items-center gap-2">
+                                    {nest.icon ? (
+                                      <img
+                                        src={nest.icon}
+                                        alt=""
+                                        className="h-3.5 w-3.5 rounded object-cover"
+                                      />
+                                    ) : (
+                                      <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-surface-2 text-[8px] font-bold uppercase text-muted-foreground">
+                                        {nest.name.slice(0, 2)}
+                                      </span>
+                                    )}
+                                    {nest.name}
+                                  </span>
                                 </SelectItem>
                               ))}
                               {nestCounts.ungroupedCount > 0 && (
@@ -930,6 +960,9 @@ function TemplatesPage({ hideHeader }: Props) {
           )}
         </motion.div>
       </div>
+
+      {/* ── Nests Manager Modal ── */}
+      <NestsManagerModal open={nestsModalOpen} onOpenChange={setNestsModalOpen} />
 
       {/* ── Edit Template Modal ── */}
       {editingTemplateId &&

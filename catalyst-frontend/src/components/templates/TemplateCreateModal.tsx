@@ -3,6 +3,21 @@ import type { ChangeEvent } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
+import {
+  FolderOpen,
+  ArrowRight,
+  SkipForward,
+  Upload,
+  Link as LinkIcon,
+  Loader2,
+} from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../components/ui/select';
 import type { TemplateImageOption, TemplateVariable } from '../../types/template';
 import { templatesApi } from '../../services/api/templates';
 import { nestsApi } from '../../services/api/nests';
@@ -63,6 +78,11 @@ function TemplateCreateModal() {
   const [pluginManagerEnabled, setPluginManagerEnabled] = useState(false);
   const [pluginProviders, setPluginProviders] = useState<string[]>([]);
   const [nestId, setNestId] = useState('');
+  const [step, setStep] = useState<1 | 2>(1);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importUrl, setImportUrl] = useState('');
+  const [importUrlLoading, setImportUrlLoading] = useState(false);
+  const [importUrlError, setImportUrlError] = useState('');
 
   const { data: nests = [] } = useQuery({
     queryKey: qk.nests(),
@@ -366,6 +386,7 @@ function TemplateCreateModal() {
     if (!files.length) return;
     setImportError('');
     if (files.length === 1) {
+      setStep(1);
       setOpen(true);
       const reader = new FileReader();
       reader.onload = () => {
@@ -414,6 +435,35 @@ function TemplateCreateModal() {
       notifyError(`${failureCount} template${failureCount === 1 ? '' : 's'} failed to import`);
     }
     event.target.value = '';
+  };
+
+  const handleImportUrl = async () => {
+    const url = importUrl.trim();
+    if (!url) return;
+    setImportUrlLoading(true);
+    setImportUrlError('');
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const content = await response.text();
+      const parsed = parseEggContent(content);
+      if (!parsed) {
+        setImportUrlError('Failed to parse — the URL must return valid JSON or YAML.');
+        setImportUrlLoading(false);
+        return;
+      }
+      setImportModalOpen(false);
+      setImportUrl('');
+      setStep(1);
+      setOpen(true);
+      applyTemplateImport(parsed);
+    } catch (error: any) {
+      setImportUrlError(error?.message || 'Failed to fetch the URL. Check the link and try again.');
+    } finally {
+      setImportUrlLoading(false);
+    }
   };
 
   // Signal-based stops don't require a stop command
@@ -466,6 +516,7 @@ function TemplateCreateModal() {
           className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500"
           onClick={() => {
             setImportError('');
+            setStep(1);
             setOpen(true);
           }}
         >
@@ -473,7 +524,11 @@ function TemplateCreateModal() {
         </button>
         <button
           className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-          onClick={() => importFileRef.current?.click()}
+          onClick={() => {
+            setImportUrl('');
+            setImportUrlError('');
+            setImportModalOpen(true);
+          }}
         >
           Import
         </button>
@@ -490,13 +545,16 @@ function TemplateCreateModal() {
         <ModalPortal>
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10 backdrop-blur-sm">
             <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl transition-all duration-300 dark:border-border dark:bg-surface-1">
+              {/* ── Header ── */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5 dark:border-border">
                 <div>
                   <h2 className="text-lg font-semibold text-foreground dark:text-white">
-                    Create template
+                    {step === 1 ? 'New Template' : 'Create template'}
                   </h2>
                   <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-                    Define runtime images, resources, and startup commands.
+                    {step === 1
+                      ? 'Choose a nest to organize this template.'
+                      : 'Define runtime images, resources, and startup commands.'}
                   </p>
                 </div>
                 <button
@@ -504,171 +562,529 @@ function TemplateCreateModal() {
                   onClick={() => {
                     setOpen(false);
                     setImportError('');
+                    setStep(1);
                   }}
                 >
                   Close
                 </button>
               </div>
-              <div className="space-y-6 overflow-y-auto px-6 py-5 text-sm text-muted-foreground dark:text-zinc-300">
-                {importError ? (
-                  <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-500 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
-                    {importError}
-                  </p>
-                ) : null}
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <label className="block space-y-1">
-                    <span className="text-muted-foreground dark:text-muted-foreground">Name</span>
-                    <input
-                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                      placeholder="Minecraft Paper"
-                    />
-                  </label>
-                  <label className="block space-y-1">
-                    <span className="text-muted-foreground dark:text-muted-foreground">Author</span>
-                    <input
-                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                      value={author}
-                      onChange={(event) => setAuthor(event.target.value)}
-                      placeholder="Catalyst Maintainers"
-                    />
-                  </label>
-                  <label className="block space-y-1">
-                    <span className="text-muted-foreground dark:text-muted-foreground">
-                      Nest (optional)
-                    </span>
-                    <select
-                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                      value={nestId}
-                      onChange={(event) => setNestId(event.target.value)}
-                    >
-                      <option value="">None</option>
-                      {nests.map((nest) => (
-                        <option key={nest.id} value={nest.id}>
-                          {nest.icon ? `${nest.icon} ` : ''}
-                          {nest.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block space-y-1">
-                    <span className="text-muted-foreground dark:text-muted-foreground">
-                      Version
-                    </span>
-                    <input
-                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                      value={version}
-                      onChange={(event) => setVersion(event.target.value)}
-                      placeholder="1.20.4"
-                    />
-                  </label>
-                  <label className="block space-y-1">
-                    <span className="text-muted-foreground dark:text-muted-foreground">
-                      Icon URL (optional)
-                    </span>
-                    <input
-                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                      value={iconUrl}
-                      onChange={(event) => setIconUrl(event.target.value)}
-                      placeholder="https://example.com/icon.png"
-                    />
-                  </label>
-                  <label className="block space-y-1">
-                    <span className="text-muted-foreground dark:text-muted-foreground">
-                      Import template (optional)
-                    </span>
-                    <input
-                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-muted-foreground hover:file:bg-surface-3 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:file:bg-surface-2 dark:file:text-muted-foreground dark:text-zinc-200 dark:hover:file:bg-surface-2"
-                      type="file"
-                      accept="application/json,.json,application/x-yaml,.yaml,.yml"
-                      onChange={handleImportFile}
-                    />
-                    {importError ? <p className="text-xs text-rose-400">{importError}</p> : null}
-                  </label>
-                </div>
-                <label className="block space-y-1">
-                  <span className="text-muted-foreground dark:text-muted-foreground">
-                    Description
+
+              {/* ── Step indicator ── */}
+              <div className="flex items-center gap-2 border-b border-border px-6 py-2.5 dark:border-border">
+                <div
+                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 1 ? 'bg-primary/10 text-primary-600 dark:text-primary-400' : 'text-muted-foreground'}`}
+                >
+                  <span
+                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 1 ? 'bg-primary text-white' : 'bg-surface-3 text-muted-foreground'}`}
+                  >
+                    1
                   </span>
-                  <textarea
-                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                    rows={2}
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                    placeholder="Template summary"
-                  />
-                </label>
-                <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
-                  <div className="text-sm font-semibold text-foreground dark:text-zinc-200">
-                    Runtime images
+                  Nest
+                </div>
+                <div className="h-px flex-1 bg-border" />
+                <div
+                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 2 ? 'bg-primary/10 text-primary-600 dark:text-primary-400' : 'text-muted-foreground'}`}
+                >
+                  <span
+                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 2 ? 'bg-primary text-white' : 'bg-surface-3 text-muted-foreground'}`}
+                  >
+                    2
+                  </span>
+                  Details
+                </div>
+              </div>
+
+              {/* ── Step 1: Nest Selection ── */}
+              {step === 1 && (
+                <div className="flex flex-col items-center px-6 py-10 text-center">
+                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/10 to-rose-500/10 dark:from-amber-500/20 dark:to-rose-500/20">
+                    <FolderOpen className="h-7 w-7 text-amber-600 dark:text-amber-400" />
                   </div>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    <label className="block space-y-1">
-                      <span className="text-muted-foreground dark:text-muted-foreground">
-                        Container image
+                  <h3 className="text-base font-semibold text-foreground dark:text-white">
+                    Assign this template to a nest?
+                  </h3>
+                  <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+                    <span className="font-medium text-foreground dark:text-zinc-200">Nests</span>{' '}
+                    are categories that help you organize templates. For example, you might have a{' '}
+                    <span className="font-medium">&ldquo;Minecraft&rdquo;</span> nest for all
+                    Minecraft-related templates, or a{' '}
+                    <span className="font-medium">&ldquo;Source Engine&rdquo;</span> nest for
+                    Counter-Strike and Garry&rsquo;s Mod templates.
+                  </p>
+
+                  {nests.length > 0 ? (
+                    <label className="mt-6 block w-full max-w-xs space-y-1.5">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        Select a nest (optional)
                       </span>
-                      <input
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                        value={image}
-                        onChange={(event) => setImage(event.target.value)}
-                        placeholder="itzg/minecraft-server:latest"
-                      />
-                    </label>
-                    <label className="block space-y-1">
-                      <span className="text-muted-foreground dark:text-muted-foreground">
-                        Default image (optional)
-                      </span>
-                      <input
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                        value={defaultImage}
-                        onChange={(event) => setDefaultImage(event.target.value)}
-                        placeholder="eclipse-temurin:21-jre"
-                      />
-                    </label>
-                    <label className="block space-y-1 md:col-span-2">
-                      <span className="text-muted-foreground dark:text-muted-foreground">
-                        Install image (optional)
-                      </span>
-                      <input
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                        value={installImage}
-                        onChange={(event) => setInstallImage(event.target.value)}
-                        placeholder="alpine:3.19"
-                      />
-                    </label>
-                  </div>
-                  <div className="space-y-3 rounded-lg border border-border bg-white p-3 transition-all duration-300 dark:border-border dark:bg-zinc-950/40">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-xs font-semibold text-muted-foreground dark:text-zinc-300">
-                        Image variants
-                      </div>
-                      <button
-                        className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                        onClick={() =>
-                          setImageOptions((prev) => [...prev, { name: '', label: '', image: '' }])
-                        }
-                        type="button"
+                      <Select
+                        value={nestId || '__none__'}
+                        onValueChange={(v) => setNestId(v === '__none__' ? '' : v)}
                       >
-                        Add image
-                      </button>
+                        <SelectTrigger className="w-full max-w-xs">
+                          <SelectValue placeholder="Skip — no nest" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Skip — no nest</SelectItem>
+                          {nests.map((nest) => (
+                            <SelectItem key={nest.id} value={nest.id}>
+                              <span className="flex items-center gap-2">
+                                {nest.icon ? (
+                                  <img
+                                    src={nest.icon}
+                                    alt=""
+                                    className="h-4 w-4 rounded object-cover"
+                                  />
+                                ) : (
+                                  <span className="flex h-4 w-4 items-center justify-center rounded bg-surface-2 text-[9px] font-bold uppercase text-muted-foreground">
+                                    {nest.name.slice(0, 2)}
+                                  </span>
+                                )}
+                                {nest.name}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+                  ) : (
+                    <div className="mt-6 rounded-xl border border-dashed border-border bg-surface-2/50 px-5 py-4 dark:bg-surface-1/40">
+                      <p className="text-sm text-muted-foreground">
+                        No nests exist yet.{' '}
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+                          onClick={() => {
+                            setOpen(false);
+                            setStep(1);
+                            window.dispatchEvent(new CustomEvent('catalyst:open-nests-modal'));
+                          }}
+                        >
+                          Create a nest
+                        </button>{' '}
+                        first, or skip this step.
+                      </p>
                     </div>
-                    {imageOptions.length ? (
-                      <div className="space-y-2">
-                        {imageOptions.map((option, index) => (
-                          <div
-                            key={`${option.name}-${index}`}
-                            className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"
+                  )}
+
+                  <div className="mt-8 flex items-center gap-3">
+                    <button
+                      className="flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                      onClick={() => setStep(2)}
+                    >
+                      <SkipForward className="h-3.5 w-3.5" />
+                      Skip
+                    </button>
+                    {nests.length > 0 && (
+                      <button
+                        className="flex items-center gap-1.5 rounded-full bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500"
+                        onClick={() => setStep(2)}
+                      >
+                        Continue
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Step 2: Template Form ── */}
+              {step === 2 && (
+                <>
+                  <div className="space-y-6 overflow-y-auto px-6 py-5 text-sm text-muted-foreground dark:text-zinc-300">
+                    {importError ? (
+                      <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-500 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
+                        {importError}
+                      </p>
+                    ) : null}
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <label className="block space-y-1">
+                        <span className="text-muted-foreground dark:text-muted-foreground">
+                          Name
+                        </span>
+                        <input
+                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          value={name}
+                          onChange={(event) => setName(event.target.value)}
+                          placeholder="Minecraft Paper"
+                        />
+                      </label>
+                      <label className="block space-y-1">
+                        <span className="text-muted-foreground dark:text-muted-foreground">
+                          Author
+                        </span>
+                        <input
+                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          value={author}
+                          onChange={(event) => setAuthor(event.target.value)}
+                          placeholder="Catalyst Maintainers"
+                        />
+                      </label>
+                      <label className="block space-y-1">
+                        <span className="text-muted-foreground dark:text-muted-foreground">
+                          Version
+                        </span>
+                        <input
+                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          value={version}
+                          onChange={(event) => setVersion(event.target.value)}
+                          placeholder="1.20.4"
+                        />
+                      </label>
+                      <label className="block space-y-1">
+                        <span className="text-muted-foreground dark:text-muted-foreground">
+                          Icon URL (optional)
+                        </span>
+                        <input
+                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          value={iconUrl}
+                          onChange={(event) => setIconUrl(event.target.value)}
+                          placeholder="https://example.com/icon.png"
+                        />
+                      </label>
+                      <label className="block space-y-1">
+                        <span className="text-muted-foreground dark:text-muted-foreground">
+                          Import template (optional)
+                        </span>
+                        <input
+                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-muted-foreground hover:file:bg-surface-3 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:file:bg-surface-2 dark:file:text-muted-foreground dark:text-zinc-200 dark:hover:file:bg-surface-2"
+                          type="file"
+                          accept="application/json,.json,application/x-yaml,.yaml,.yml"
+                          onChange={handleImportFile}
+                        />
+                        {importError ? (
+                          <p className="text-xs text-rose-400">{importError}</p>
+                        ) : null}
+                      </label>
+                    </div>
+                    <label className="block space-y-1">
+                      <span className="text-muted-foreground dark:text-muted-foreground">
+                        Description
+                      </span>
+                      <textarea
+                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                        rows={2}
+                        value={description}
+                        onChange={(event) => setDescription(event.target.value)}
+                        placeholder="Template summary"
+                      />
+                    </label>
+                    <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
+                      <div className="text-sm font-semibold text-foreground dark:text-zinc-200">
+                        Runtime images
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <label className="block space-y-1">
+                          <span className="text-muted-foreground dark:text-muted-foreground">
+                            Container image
+                          </span>
+                          <input
+                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            value={image}
+                            onChange={(event) => setImage(event.target.value)}
+                            placeholder="itzg/minecraft-server:latest"
+                          />
+                        </label>
+                        <label className="block space-y-1">
+                          <span className="text-muted-foreground dark:text-muted-foreground">
+                            Default image (optional)
+                          </span>
+                          <input
+                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            value={defaultImage}
+                            onChange={(event) => setDefaultImage(event.target.value)}
+                            placeholder="eclipse-temurin:21-jre"
+                          />
+                        </label>
+                        <label className="block space-y-1 md:col-span-2">
+                          <span className="text-muted-foreground dark:text-muted-foreground">
+                            Install image (optional)
+                          </span>
+                          <input
+                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            value={installImage}
+                            onChange={(event) => setInstallImage(event.target.value)}
+                            placeholder="alpine:3.19"
+                          />
+                        </label>
+                      </div>
+                      <div className="space-y-3 rounded-lg border border-border bg-white p-3 transition-all duration-300 dark:border-border dark:bg-zinc-950/40">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-xs font-semibold text-muted-foreground dark:text-zinc-300">
+                            Image variants
+                          </div>
+                          <button
+                            className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                            onClick={() =>
+                              setImageOptions((prev) => [
+                                ...prev,
+                                { name: '', label: '', image: '' },
+                              ])
+                            }
+                            type="button"
                           >
+                            Add image
+                          </button>
+                        </div>
+                        {imageOptions.length ? (
+                          <div className="space-y-2">
+                            {imageOptions.map((option, index) => (
+                              <div
+                                key={`${option.name}-${index}`}
+                                className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"
+                              >
+                                <label className="block space-y-1">
+                                  <span className="text-xs text-muted-foreground dark:text-muted-foreground">
+                                    Name
+                                  </span>
+                                  <input
+                                    className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
+                                    value={option.name}
+                                    onChange={(event) =>
+                                      setImageOptions((prev) =>
+                                        prev.map((item, itemIndex) =>
+                                          itemIndex === index
+                                            ? { ...item, name: event.target.value }
+                                            : item,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                </label>
+                                <label className="block space-y-1">
+                                  <span className="text-xs text-muted-foreground dark:text-muted-foreground">
+                                    Label
+                                  </span>
+                                  <input
+                                    className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
+                                    value={option.label ?? ''}
+                                    onChange={(event) =>
+                                      setImageOptions((prev) =>
+                                        prev.map((item, itemIndex) =>
+                                          itemIndex === index
+                                            ? { ...item, label: event.target.value }
+                                            : item,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                </label>
+                                <label className="block space-y-1">
+                                  <span className="text-xs text-muted-foreground dark:text-muted-foreground">
+                                    Image
+                                  </span>
+                                  <input
+                                    className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
+                                    value={option.image}
+                                    onChange={(event) =>
+                                      setImageOptions((prev) =>
+                                        prev.map((item, itemIndex) =>
+                                          itemIndex === index
+                                            ? { ...item, image: event.target.value }
+                                            : item,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                </label>
+                                <button
+                                  className="rounded-full border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-600 transition-all duration-300 hover:border-rose-400 dark:border-rose-500/30 dark:text-rose-300"
+                                  onClick={() =>
+                                    setImageOptions((prev) =>
+                                      prev.filter((_, itemIndex) => itemIndex !== index),
+                                    )
+                                  }
+                                  type="button"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground dark:text-muted-foreground">
+                            Add optional image variants for selectable runtimes.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
+                      <div className="text-sm font-semibold text-foreground dark:text-zinc-200">
+                        Commands & config
+                      </div>
+                      <label className="block space-y-1">
+                        <span className="text-muted-foreground dark:text-muted-foreground">
+                          Config file path (optional)
+                        </span>
+                        <input
+                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          value={configFile}
+                          onChange={(event) => setConfigFile(event.target.value)}
+                          placeholder="/config/server.properties"
+                        />
+                      </label>
+                      <label className="block space-y-1">
+                        <span className="text-muted-foreground dark:text-muted-foreground">
+                          Config files (optional)
+                        </span>
+                        <input
+                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          value={configFiles.join(', ')}
+                          onChange={(event) => {
+                            const next = event.target.value
+                              .split(',')
+                              .map((entry) => entry.trim())
+                              .filter(Boolean);
+                            setConfigFiles(next);
+                          }}
+                          placeholder="/config/server.properties, /config/extra.yml"
+                        />
+                      </label>
+                      <label className="block space-y-1">
+                        <span className="text-muted-foreground dark:text-muted-foreground">
+                          Startup command
+                        </span>
+                        <textarea
+                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          rows={2}
+                          value={startup}
+                          onChange={(event) => setStartup(event.target.value)}
+                          placeholder="java -Xmx{{MEMORY}}M -jar server.jar"
+                        />
+                      </label>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                        <label className="block space-y-1 md:col-span-2">
+                          <span className="text-muted-foreground dark:text-muted-foreground">
+                            Stop command
+                          </span>
+                          <input
+                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            value={stopCommand}
+                            onChange={(event) => setStopCommand(event.target.value)}
+                            placeholder="stop"
+                          />
+                        </label>
+                        <label className="block space-y-1">
+                          <span className="text-muted-foreground dark:text-muted-foreground">
+                            Signal
+                          </span>
+                          <select
+                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            value={sendSignalTo}
+                            onChange={(event) =>
+                              setSendSignalTo(
+                                event.target.value as 'SIGTERM' | 'SIGINT' | 'SIGKILL',
+                              )
+                            }
+                          >
+                            <option value="SIGTERM">SIGTERM</option>
+                            <option value="SIGINT">SIGINT</option>
+                            <option value="SIGKILL">SIGKILL</option>
+                          </select>
+                        </label>
+                      </div>
+                      <label className="block space-y-1">
+                        <span className="text-muted-foreground dark:text-muted-foreground">
+                          Install script (optional)
+                        </span>
+                        <textarea
+                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          rows={5}
+                          value={installScript}
+                          onChange={(event) => setInstallScript(event.target.value)}
+                          placeholder="#!/bin/sh"
+                        />
+                      </label>
+                    </div>
+                    <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
+                      <div className="text-sm font-semibold text-foreground dark:text-zinc-200">
+                        Resources & ports
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                        <label className="block space-y-1">
+                          <span className="text-muted-foreground dark:text-muted-foreground">
+                            Ports (comma separated)
+                          </span>
+                          <input
+                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            value={supportedPorts}
+                            onChange={(event) => setSupportedPorts(event.target.value)}
+                            placeholder="25565, 25566"
+                          />
+                        </label>
+                        <label className="block space-y-1">
+                          <span className="text-muted-foreground dark:text-muted-foreground">
+                            Allocated memory (MB)
+                          </span>
+                          <input
+                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            type="number"
+                            min={128}
+                            value={allocatedMemoryMb}
+                            onChange={(event) => setAllocatedMemoryMb(event.target.value)}
+                          />
+                        </label>
+                        <label className="block space-y-1">
+                          <span className="text-muted-foreground dark:text-muted-foreground">
+                            Allocated CPU cores
+                          </span>
+                          <input
+                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={allocatedCpuCores}
+                            onChange={(event) => setAllocatedCpuCores(event.target.value)}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                    <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="text-sm font-semibold text-foreground dark:text-zinc-200">
+                          Variables
+                        </h3>
+                        <button
+                          className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                          onClick={() => setVariables((prev) => [...prev, createVariableDraft()])}
+                          type="button"
+                        >
+                          Add variable
+                        </button>
+                      </div>
+                      {variables.map((variable, index) => (
+                        <div
+                          key={`${variable.name}-${index}`}
+                          className="rounded-xl border border-border bg-white p-3 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-zinc-950/40 dark:hover:border-primary/30"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-xs font-semibold text-muted-foreground dark:text-zinc-300">
+                              Variable {index + 1}
+                            </div>
+                            {variables.length > 1 ? (
+                              <button
+                                className="text-xs text-rose-500 transition-all duration-300 hover:text-rose-400 dark:text-rose-300"
+                                onClick={() =>
+                                  setVariables((prev) =>
+                                    prev.filter((_, itemIndex) => itemIndex !== index),
+                                  )
+                                }
+                                type="button"
+                              >
+                                Remove
+                              </button>
+                            ) : null}
+                          </div>
+                          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                             <label className="block space-y-1">
-                              <span className="text-xs text-muted-foreground dark:text-muted-foreground">
+                              <span className="text-muted-foreground dark:text-muted-foreground">
                                 Name
                               </span>
                               <input
-                                className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
-                                value={option.name}
+                                className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                                value={variable.name}
                                 onChange={(event) =>
-                                  setImageOptions((prev) =>
+                                  setVariables((prev) =>
                                     prev.map((item, itemIndex) =>
                                       itemIndex === index
                                         ? { ...item, name: event.target.value }
@@ -679,436 +1095,209 @@ function TemplateCreateModal() {
                               />
                             </label>
                             <label className="block space-y-1">
-                              <span className="text-xs text-muted-foreground dark:text-muted-foreground">
-                                Label
+                              <span className="text-muted-foreground dark:text-muted-foreground">
+                                Default
                               </span>
                               <input
-                                className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
-                                value={option.label ?? ''}
+                                className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                                value={variable.defaultValue}
                                 onChange={(event) =>
-                                  setImageOptions((prev) =>
+                                  setVariables((prev) =>
                                     prev.map((item, itemIndex) =>
                                       itemIndex === index
-                                        ? { ...item, label: event.target.value }
+                                        ? { ...item, defaultValue: event.target.value }
                                         : item,
                                     ),
                                   )
                                 }
                               />
+                            </label>
+                            <label className="block space-y-1 md:col-span-2">
+                              <span className="text-muted-foreground dark:text-muted-foreground">
+                                Description
+                              </span>
+                              <input
+                                className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                                value={variable.description}
+                                onChange={(event) =>
+                                  setVariables((prev) =>
+                                    prev.map((item, itemIndex) =>
+                                      itemIndex === index
+                                        ? { ...item, description: event.target.value }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                              />
+                            </label>
+                            <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-zinc-300">
+                              <input
+                                type="checkbox"
+                                className="rounded border-border bg-white text-primary-600 focus:ring-primary-500 dark:border-border dark:bg-surface-1 dark:text-primary-400 dark:focus:ring-primary-400"
+                                checked={variable.required}
+                                onChange={(event) =>
+                                  setVariables((prev) =>
+                                    prev.map((item, itemIndex) =>
+                                      itemIndex === index
+                                        ? { ...item, required: event.target.checked }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                              />
+                              Required
                             </label>
                             <label className="block space-y-1">
-                              <span className="text-xs text-muted-foreground dark:text-muted-foreground">
-                                Image
+                              <span className="text-muted-foreground dark:text-muted-foreground">
+                                Input type
                               </span>
-                              <input
-                                className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
-                                value={option.image}
+                              <select
+                                className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                                value={variable.input}
                                 onChange={(event) =>
-                                  setImageOptions((prev) =>
+                                  setVariables((prev) =>
                                     prev.map((item, itemIndex) =>
                                       itemIndex === index
-                                        ? { ...item, image: event.target.value }
+                                        ? {
+                                            ...item,
+                                            input: event.target.value as TemplateVariable['input'],
+                                          }
                                         : item,
                                     ),
                                   )
                                 }
+                              >
+                                <option value="text">Text</option>
+                                <option value="number">Number</option>
+                                <option value="password">Password</option>
+                                <option value="select">Select</option>
+                                <option value="checkbox">Checkbox</option>
+                                <option value="textarea">Textarea</option>
+                              </select>
+                            </label>
+                            <label className="block space-y-1 md:col-span-2">
+                              <span className="text-muted-foreground dark:text-muted-foreground">
+                                Rules (semicolon separated)
+                              </span>
+                              <input
+                                className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                                value={variable.rules}
+                                onChange={(event) =>
+                                  setVariables((prev) =>
+                                    prev.map((item, itemIndex) =>
+                                      itemIndex === index
+                                        ? { ...item, rules: event.target.value }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                                placeholder="between:512,16384; in:val1,val2"
                               />
                             </label>
-                            <button
-                              className="rounded-full border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-600 transition-all duration-300 hover:border-rose-400 dark:border-rose-500/30 dark:text-rose-300"
-                              onClick={() =>
-                                setImageOptions((prev) =>
-                                  prev.filter((_, itemIndex) => itemIndex !== index),
-                                )
-                              }
-                              type="button"
-                            >
-                              Remove
-                            </button>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-                        Add optional image variants for selectable runtimes.
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
-                  <div className="text-sm font-semibold text-foreground dark:text-zinc-200">
-                    Commands & config
-                  </div>
-                  <label className="block space-y-1">
-                    <span className="text-muted-foreground dark:text-muted-foreground">
-                      Config file path (optional)
-                    </span>
-                    <input
-                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                      value={configFile}
-                      onChange={(event) => setConfigFile(event.target.value)}
-                      placeholder="/config/server.properties"
-                    />
-                  </label>
-                  <label className="block space-y-1">
-                    <span className="text-muted-foreground dark:text-muted-foreground">
-                      Config files (optional)
-                    </span>
-                    <input
-                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                      value={configFiles.join(', ')}
-                      onChange={(event) => {
-                        const next = event.target.value
-                          .split(',')
-                          .map((entry) => entry.trim())
-                          .filter(Boolean);
-                        setConfigFiles(next);
-                      }}
-                      placeholder="/config/server.properties, /config/extra.yml"
-                    />
-                  </label>
-                  <label className="block space-y-1">
-                    <span className="text-muted-foreground dark:text-muted-foreground">
-                      Startup command
-                    </span>
-                    <textarea
-                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                      rows={2}
-                      value={startup}
-                      onChange={(event) => setStartup(event.target.value)}
-                      placeholder="java -Xmx{{MEMORY}}M -jar server.jar"
-                    />
-                  </label>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <label className="block space-y-1 md:col-span-2">
-                      <span className="text-muted-foreground dark:text-muted-foreground">
-                        Stop command
-                      </span>
-                      <input
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                        value={stopCommand}
-                        onChange={(event) => setStopCommand(event.target.value)}
-                        placeholder="stop"
-                      />
-                    </label>
-                    <label className="block space-y-1">
-                      <span className="text-muted-foreground dark:text-muted-foreground">
-                        Signal
-                      </span>
-                      <select
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                        value={sendSignalTo}
-                        onChange={(event) =>
-                          setSendSignalTo(event.target.value as 'SIGTERM' | 'SIGINT' | 'SIGKILL')
-                        }
-                      >
-                        <option value="SIGTERM">SIGTERM</option>
-                        <option value="SIGINT">SIGINT</option>
-                        <option value="SIGKILL">SIGKILL</option>
-                      </select>
-                    </label>
-                  </div>
-                  <label className="block space-y-1">
-                    <span className="text-muted-foreground dark:text-muted-foreground">
-                      Install script (optional)
-                    </span>
-                    <textarea
-                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                      rows={5}
-                      value={installScript}
-                      onChange={(event) => setInstallScript(event.target.value)}
-                      placeholder="#!/bin/sh"
-                    />
-                  </label>
-                </div>
-                <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
-                  <div className="text-sm font-semibold text-foreground dark:text-zinc-200">
-                    Resources & ports
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <label className="block space-y-1">
-                      <span className="text-muted-foreground dark:text-muted-foreground">
-                        Ports (comma separated)
-                      </span>
-                      <input
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                        value={supportedPorts}
-                        onChange={(event) => setSupportedPorts(event.target.value)}
-                        placeholder="25565, 25566"
-                      />
-                    </label>
-                    <label className="block space-y-1">
-                      <span className="text-muted-foreground dark:text-muted-foreground">
-                        Allocated memory (MB)
-                      </span>
-                      <input
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                        type="number"
-                        min={128}
-                        value={allocatedMemoryMb}
-                        onChange={(event) => setAllocatedMemoryMb(event.target.value)}
-                      />
-                    </label>
-                    <label className="block space-y-1">
-                      <span className="text-muted-foreground dark:text-muted-foreground">
-                        Allocated CPU cores
-                      </span>
-                      <input
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                        type="number"
-                        min={1}
-                        step={1}
-                        value={allocatedCpuCores}
-                        onChange={(event) => setAllocatedCpuCores(event.target.value)}
-                      />
-                    </label>
-                  </div>
-                </div>
-                <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-foreground dark:text-zinc-200">
-                      Variables
-                    </h3>
-                    <button
-                      className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                      onClick={() => setVariables((prev) => [...prev, createVariableDraft()])}
-                      type="button"
-                    >
-                      Add variable
-                    </button>
-                  </div>
-                  {variables.map((variable, index) => (
-                    <div
-                      key={`${variable.name}-${index}`}
-                      className="rounded-xl border border-border bg-white p-3 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-zinc-950/40 dark:hover:border-primary/30"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-xs font-semibold text-muted-foreground dark:text-zinc-300">
-                          Variable {index + 1}
                         </div>
-                        {variables.length > 1 ? (
-                          <button
-                            className="text-xs text-rose-500 transition-all duration-300 hover:text-rose-400 dark:text-rose-300"
-                            onClick={() =>
-                              setVariables((prev) =>
-                                prev.filter((_, itemIndex) => itemIndex !== index),
-                              )
-                            }
-                            type="button"
-                          >
-                            Remove
-                          </button>
-                        ) : null}
+                      ))}
+                    </div>
+                    <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
+                      <div className="text-sm font-semibold text-foreground dark:text-zinc-200">
+                        Advanced features
                       </div>
-                      <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-                        <label className="block space-y-1">
-                          <span className="text-muted-foreground dark:text-muted-foreground">
-                            Name
-                          </span>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-zinc-300">
                           <input
-                            className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                            value={variable.name}
-                            onChange={(event) =>
-                              setVariables((prev) =>
-                                prev.map((item, itemIndex) =>
-                                  itemIndex === index
-                                    ? { ...item, name: event.target.value }
-                                    : item,
-                                ),
-                              )
-                            }
+                            type="checkbox"
+                            className="rounded border-border bg-white text-primary-600 focus:ring-primary-500 dark:border-border dark:bg-surface-1 dark:text-primary-400 dark:focus:ring-primary-400"
+                            checked={restartOnExit}
+                            onChange={(event) => setRestartOnExit(event.target.checked)}
                           />
+                          Restart on exit
                         </label>
                         <label className="block space-y-1">
                           <span className="text-muted-foreground dark:text-muted-foreground">
-                            Default
+                            Max instances (optional)
                           </span>
                           <input
-                            className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                            value={variable.defaultValue}
-                            onChange={(event) =>
-                              setVariables((prev) =>
-                                prev.map((item, itemIndex) =>
-                                  itemIndex === index
-                                    ? { ...item, defaultValue: event.target.value }
-                                    : item,
-                                ),
-                              )
-                            }
-                          />
-                        </label>
-                        <label className="block space-y-1 md:col-span-2">
-                          <span className="text-muted-foreground dark:text-muted-foreground">
-                            Description
-                          </span>
-                          <input
-                            className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                            value={variable.description}
-                            onChange={(event) =>
-                              setVariables((prev) =>
-                                prev.map((item, itemIndex) =>
-                                  itemIndex === index
-                                    ? { ...item, description: event.target.value }
-                                    : item,
-                                ),
-                              )
-                            }
+                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            type="number"
+                            min={1}
+                            value={maxInstances}
+                            onChange={(event) => setMaxInstances(event.target.value)}
+                            placeholder="Unlimited"
                           />
                         </label>
                         <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-zinc-300">
                           <input
                             type="checkbox"
                             className="rounded border-border bg-white text-primary-600 focus:ring-primary-500 dark:border-border dark:bg-surface-1 dark:text-primary-400 dark:focus:ring-primary-400"
-                            checked={variable.required}
-                            onChange={(event) =>
-                              setVariables((prev) =>
-                                prev.map((item, itemIndex) =>
-                                  itemIndex === index
-                                    ? { ...item, required: event.target.checked }
-                                    : item,
-                                ),
-                              )
-                            }
+                            checked={fileEditorEnabled}
+                            onChange={(event) => setFileEditorEnabled(event.target.checked)}
                           />
-                          Required
+                          Enable file editor
                         </label>
                         <label className="block space-y-1">
                           <span className="text-muted-foreground dark:text-muted-foreground">
-                            Input type
-                          </span>
-                          <select
-                            className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                            value={variable.input}
-                            onChange={(event) =>
-                              setVariables((prev) =>
-                                prev.map((item, itemIndex) =>
-                                  itemIndex === index
-                                    ? {
-                                        ...item,
-                                        input: event.target.value as TemplateVariable['input'],
-                                      }
-                                    : item,
-                                ),
-                              )
-                            }
-                          >
-                            <option value="text">Text</option>
-                            <option value="number">Number</option>
-                            <option value="password">Password</option>
-                            <option value="select">Select</option>
-                            <option value="checkbox">Checkbox</option>
-                            <option value="textarea">Textarea</option>
-                          </select>
-                        </label>
-                        <label className="block space-y-1 md:col-span-2">
-                          <span className="text-muted-foreground dark:text-muted-foreground">
-                            Rules (semicolon separated)
+                            File editor restricted paths (optional)
                           </span>
                           <input
-                            className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                            value={variable.rules}
-                            onChange={(event) =>
-                              setVariables((prev) =>
-                                prev.map((item, itemIndex) =>
-                                  itemIndex === index
-                                    ? { ...item, rules: event.target.value }
-                                    : item,
-                                ),
-                              )
-                            }
-                            placeholder="between:512,16384; in:val1,val2"
+                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            value={fileEditorRestrictedPaths}
+                            onChange={(event) => setFileEditorRestrictedPaths(event.target.value)}
+                            placeholder="/sensitive, /config"
                           />
                         </label>
                       </div>
+                      <label className="block space-y-1">
+                        <span className="text-muted-foreground dark:text-muted-foreground">
+                          Backup paths (optional)
+                        </span>
+                        <input
+                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          value={backupPaths}
+                          onChange={(event) => setBackupPaths(event.target.value)}
+                          placeholder="/world, /plugins, /config"
+                        />
+                      </label>
                     </div>
-                  ))}
-                </div>
-                <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
-                  <div className="text-sm font-semibold text-foreground dark:text-zinc-200">
-                    Advanced features
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-zinc-300">
-                      <input
-                        type="checkbox"
-                        className="rounded border-border bg-white text-primary-600 focus:ring-primary-500 dark:border-border dark:bg-surface-1 dark:text-primary-400 dark:focus:ring-primary-400"
-                        checked={restartOnExit}
-                        onChange={(event) => setRestartOnExit(event.target.checked)}
-                      />
-                      Restart on exit
-                    </label>
-                    <label className="block space-y-1">
-                      <span className="text-muted-foreground dark:text-muted-foreground">
-                        Max instances (optional)
-                      </span>
-                      <input
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                        type="number"
-                        min={1}
-                        value={maxInstances}
-                        onChange={(event) => setMaxInstances(event.target.value)}
-                        placeholder="Unlimited"
-                      />
-                    </label>
-                    <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-zinc-300">
-                      <input
-                        type="checkbox"
-                        className="rounded border-border bg-white text-primary-600 focus:ring-primary-500 dark:border-border dark:bg-surface-1 dark:text-primary-400 dark:focus:ring-primary-400"
-                        checked={fileEditorEnabled}
-                        onChange={(event) => setFileEditorEnabled(event.target.checked)}
-                      />
-                      Enable file editor
-                    </label>
-                    <label className="block space-y-1">
-                      <span className="text-muted-foreground dark:text-muted-foreground">
-                        File editor restricted paths (optional)
-                      </span>
-                      <input
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                        value={fileEditorRestrictedPaths}
-                        onChange={(event) => setFileEditorRestrictedPaths(event.target.value)}
-                        placeholder="/sensitive, /config"
-                      />
-                    </label>
-                  </div>
-                  <label className="block space-y-1">
-                    <span className="text-muted-foreground dark:text-muted-foreground">
-                      Backup paths (optional)
-                    </span>
-                    <input
-                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                      value={backupPaths}
-                      onChange={(event) => setBackupPaths(event.target.value)}
-                      placeholder="/world, /plugins, /config"
+                    <TemplateProviderEditor
+                      modManagerEnabled={modManagerEnabled}
+                      onModManagerEnabledChange={setModManagerEnabled}
+                      modProviders={modProviders}
+                      onModProvidersChange={setModProviders}
+                      pluginManagerEnabled={pluginManagerEnabled}
+                      onPluginManagerEnabledChange={setPluginManagerEnabled}
+                      pluginProviders={pluginProviders}
+                      onPluginProvidersChange={setPluginProviders}
                     />
-                  </label>
-                </div>
-                <TemplateProviderEditor
-                  modManagerEnabled={modManagerEnabled}
-                  onModManagerEnabledChange={setModManagerEnabled}
-                  modProviders={modProviders}
-                  onModProvidersChange={setModProviders}
-                  pluginManagerEnabled={pluginManagerEnabled}
-                  onPluginManagerEnabledChange={setPluginManagerEnabled}
-                  pluginProviders={pluginProviders}
-                  onPluginProvidersChange={setPluginProviders}
-                />
-              </div>
+                  </div>
+                </>
+              )}
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-4 text-xs dark:border-border">
-                <div className="space-y-1">
-                  {missingFields.length > 0 ? (
-                    <div className="text-xs">
-                      <span className="text-muted-foreground dark:text-muted-foreground">
-                        Missing required fields:{' '}
-                      </span>
-                      <span className="text-amber-600 dark:text-amber-400 font-medium">
-                        {missingFields.join(', ')}
-                      </span>
+                <div className="flex items-center gap-3">
+                  {step === 2 && (
+                    <button
+                      className="rounded-full border border-border px-4 py-2 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                      onClick={() => setStep(1)}
+                    >
+                      {'\u2190'} Back
+                    </button>
+                  )}
+                  {step === 2 && (
+                    <div className="space-y-1">
+                      {missingFields.length > 0 ? (
+                        <div className="text-xs">
+                          <span className="text-muted-foreground dark:text-muted-foreground">
+                            Missing required fields:{' '}
+                          </span>
+                          <span className="text-amber-600 dark:text-amber-400 font-medium">
+                            {missingFields.join(', ')}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground dark:text-muted-foreground">
+                          Templates are available immediately after creation.
+                        </span>
+                      )}
                     </div>
-                  ) : (
-                    <span className="text-xs text-muted-foreground dark:text-muted-foreground">
-                      Templates are available immediately after creation.
-                    </span>
                   )}
                 </div>
                 <div className="flex gap-2">
@@ -1117,23 +1306,118 @@ function TemplateCreateModal() {
                     onClick={() => {
                       setOpen(false);
                       setImportError('');
+                      setStep(1);
                     }}
                   >
                     Cancel
                   </button>
-                  <button
-                    className="rounded-full bg-primary-600 px-4 py-2 font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
-                    onClick={() => mutation.mutate()}
-                    disabled={disableSubmit}
-                  >
-                    {mutation.isPending ? 'Creating...' : 'Create template'}
-                  </button>
+                  {step === 2 && (
+                    <button
+                      className="rounded-full bg-primary-600 px-4 py-2 font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+                      onClick={() => mutation.mutate()}
+                      disabled={disableSubmit}
+                    >
+                      {mutation.isPending ? 'Creating...' : 'Create template'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           </div>
         </ModalPortal>
       ) : null}
+      {/* ── Import Modal ── */}
+      {importModalOpen && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10 backdrop-blur-sm">
+            <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl dark:border-border dark:bg-surface-1">
+              <div className="flex items-center justify-between border-b border-border px-6 py-4 dark:border-border">
+                <div>
+                  <h2 className="text-base font-semibold text-foreground dark:text-white">
+                    Import Template
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Import from a URL or upload a local file.
+                  </p>
+                </div>
+                <button
+                  className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                  onClick={() => setImportModalOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <div className="space-y-5 px-6 py-5">
+                {/* URL Import */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <LinkIcon className="h-4 w-4 text-primary-500" />
+                    <span className="text-sm font-medium text-foreground dark:text-white">
+                      From URL
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Paste a direct link to a .json or .yaml egg file.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      className="flex-1 rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                      value={importUrl}
+                      onChange={(e) => {
+                        setImportUrl(e.target.value);
+                        setImportUrlError('');
+                      }}
+                      placeholder="https://raw.githubusercontent.com/.../egg.json"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !importUrlLoading) handleImportUrl();
+                      }}
+                    />
+                    <button
+                      className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+                      onClick={handleImportUrl}
+                      disabled={!importUrl.trim() || importUrlLoading}
+                    >
+                      {importUrlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                      {importUrlLoading ? 'Fetching...' : 'Import'}
+                    </button>
+                  </div>
+                  {importUrlError && (
+                    <p className="text-xs text-rose-500 dark:text-rose-400">{importUrlError}</p>
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="text-xs font-medium text-muted-foreground">or</span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+
+                {/* Local Upload */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Upload className="h-4 w-4 text-primary-500" />
+                    <span className="text-sm font-medium text-foreground dark:text-white">
+                      From Local File
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Upload a .json or .yaml egg file from your computer.
+                  </p>
+                  <button
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-4 py-4 text-sm font-medium text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                    onClick={() => importFileRef.current?.click()}
+                  >
+                    <Upload className="h-4 w-4" />
+                    Choose file{''}
+                    <span className="text-xs opacity-60">(.json, .yaml, .yml)</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
     </div>
   );
 }

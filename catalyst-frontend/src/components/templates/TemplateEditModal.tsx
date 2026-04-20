@@ -1,6 +1,14 @@
 import { useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../components/ui/select';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import type { Template, TemplateImageOption, TemplateVariable } from '../../types/template';
@@ -480,19 +488,51 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange }: Edi
                     <span className="text-muted-foreground dark:text-muted-foreground">
                       Nest (optional)
                     </span>
-                    <select
-                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                      value={nestId}
-                      onChange={(event) => setNestId(event.target.value)}
+                    <Select
+                      value={nestId || '__none__'}
+                      onValueChange={(v) => setNestId(v === '__none__' ? '' : v)}
                     >
-                      <option value="">None</option>
-                      {nests.map((nest) => (
-                        <option key={nest.id} value={nest.id}>
-                          {nest.icon ? `${nest.icon} ` : ''}
-                          {nest.name}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">None</SelectItem>
+                        {nests.map((nest) => (
+                          <SelectItem key={nest.id} value={nest.id}>
+                            <span className="flex items-center gap-2">
+                              {nest.icon ? (
+                                <img
+                                  src={nest.icon}
+                                  alt=""
+                                  className="h-4 w-4 rounded object-cover"
+                                />
+                              ) : (
+                                <span className="flex h-4 w-4 items-center justify-center rounded bg-surface-2 text-[9px] font-bold uppercase text-muted-foreground">
+                                  {nest.name.slice(0, 2)}
+                                </span>
+                              )}
+                              {nest.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {nests.length === 0 && (
+                      <p className="mt-1 text-[11px] text-muted-foreground/70">
+                        No nests available.{' '}
+                        <Link
+                          to="/admin/templates"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            window.dispatchEvent(new CustomEvent('catalyst:open-nests-modal'));
+                          }}
+                          className="inline-flex items-center gap-0.5 font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+                        >
+                          Create one
+                        </Link>{' '}
+                        to group templates by category.
+                      </p>
+                    )}
                   </label>
                   <label className="block space-y-1">
                     <span className="text-muted-foreground dark:text-muted-foreground">
