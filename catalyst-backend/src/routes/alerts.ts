@@ -270,10 +270,20 @@ export async function alertRoutes(app: FastifyInstance) {
       });
 
       reply.send(serialize({ success: true, rule }));
+
+      // Broadcast alert_rule_updated event
+      const wsGatewayAlertUpdated = (app as any).wsGateway;
+      if (wsGatewayAlertUpdated?.pushToAdminSubscribers) {
+        wsGatewayAlertUpdated.pushToAdminSubscribers('alert_rule_updated', {
+          type: 'alert_rule_updated',
+          ruleId: rule.id,
+          rule,
+          updatedBy: user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
-
-  // Delete an alert rule
   app.delete(
     '/alert-rules/:ruleId',
     { preHandler: authenticate },

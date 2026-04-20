@@ -5,6 +5,7 @@ import Breadcrumbs from './Breadcrumbs';
 import { useServerStateUpdates } from '../../hooks/useServerStateUpdates';
 import { useSseUserEvents } from '../../hooks/useSseUserEvents';
 import { useSseTemplateEvents } from '../../hooks/useSseTemplateEvents';
+import { useSseAdminEvents } from '../../hooks/useSseAdminEvents';
 import { useThemeStore } from '../../stores/themeStore';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { useCmdK } from '../../hooks/useKeyboardShortcut';
@@ -16,6 +17,7 @@ function AppLayout() {
   useServerStateUpdates();
   useSseUserEvents();
   useSseTemplateEvents();
+  useSseAdminEvents();
   const { sidebarCollapsed } = useThemeStore();
   const { panelName } = usePanelBranding();
   const [isSearchOpen, setIsSearchOpen] = useState(false);

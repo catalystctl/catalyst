@@ -166,10 +166,20 @@ export async function roleRoutes(app: FastifyInstance) {
         success: true,
         data: role,
       }));
+
+      // Broadcast role_created event
+      const wsGatewayRoleCreated = (app as any).wsGateway;
+      if (wsGatewayRoleCreated?.pushToAdminSubscribers) {
+        wsGatewayRoleCreated.pushToAdminSubscribers('role_created', {
+          type: 'role_created',
+          roleId: role.id,
+          roleName: role.name,
+          createdBy: userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
-
-  // PUT /api/roles/:roleId - Update role
   app.put(
     '/:roleId',
     { onRequest: [authenticate] },
@@ -233,10 +243,20 @@ export async function roleRoutes(app: FastifyInstance) {
         success: true,
         data: updated,
       }));
+
+      // Broadcast role_updated event
+      const wsGatewayRoleUpdated = (app as any).wsGateway;
+      if (wsGatewayRoleUpdated?.pushToAdminSubscribers) {
+        wsGatewayRoleUpdated.pushToAdminSubscribers('role_updated', {
+          type: 'role_updated',
+          roleId: updated.id,
+          roleName: updated.name,
+          updatedBy: userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
-
-  // DELETE /api/roles/:roleId - Delete role
   app.delete(
     '/:roleId',
     { onRequest: [authenticate] },
@@ -279,10 +299,20 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       reply.send({ success: true });
+
+      // Broadcast role_deleted event
+      const wsGatewayRoleDeleted = (app as any).wsGateway;
+      if (wsGatewayRoleDeleted?.pushToAdminSubscribers) {
+        wsGatewayRoleDeleted.pushToAdminSubscribers('role_deleted', {
+          type: 'role_deleted',
+          roleId,
+          roleName: role.name,
+          deletedBy: userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
-
-  // POST /api/roles/:roleId/permissions - Add permission to role
   app.post(
     '/:roleId/permissions',
     { onRequest: [authenticate] },

@@ -102,6 +102,18 @@ export async function apiKeyRoutes(app: FastifyInstance) {
         },
       });
 
+      // Broadcast api_key_created event
+      const wsGatewayApiKeyCreated = (app as any).wsGateway;
+      if (wsGatewayApiKeyCreated?.pushToAdminSubscribers) {
+        wsGatewayApiKeyCreated.pushToAdminSubscribers('api_key_created', {
+          type: 'api_key_created',
+          keyId: apiKeyData.id,
+          keyName: body.name,
+          createdBy: request.user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       return reply.send(serialize({ success: true, data: apiKeyData }));
     } catch (error: any) {
       request.log.error(error, "Failed to create API key");
@@ -202,6 +214,18 @@ export async function apiKeyRoutes(app: FastifyInstance) {
         },
       });
 
+      // Broadcast api_key_updated event
+      const wsGatewayApiKeyUpdated = (app as any).wsGateway;
+      if (wsGatewayApiKeyUpdated?.pushToAdminSubscribers) {
+        wsGatewayApiKeyUpdated.pushToAdminSubscribers('api_key_updated', {
+          type: 'api_key_updated',
+          keyId: apiKey.id,
+          keyName: apiKey.name,
+          updatedBy: request.user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       return reply.send(serialize({ success: true, data: apiKey }));
     } catch (error: any) {
       request.log.error(error, "Failed to update API key");
@@ -235,6 +259,18 @@ export async function apiKeyRoutes(app: FastifyInstance) {
           details: { name: apiKey.name },
         },
       });
+
+      // Broadcast api_key_deleted event
+      const wsGatewayApiKeyDeleted = (app as any).wsGateway;
+      if (wsGatewayApiKeyDeleted?.pushToAdminSubscribers) {
+        wsGatewayApiKeyDeleted.pushToAdminSubscribers('api_key_deleted', {
+          type: 'api_key_deleted',
+          keyId: id,
+          keyName: apiKey.name,
+          deletedBy: request.user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       return reply.send({ success: true, message: "API key deleted successfully" });
     } catch (error: any) {

@@ -123,6 +123,18 @@ export async function nestRoutes(app: FastifyInstance) {
       });
 
       reply.status(201).send({ success: true, data: nest });
+
+      // Broadcast nest_created event
+      const wsGatewayNestCreated = (app as any).wsGateway;
+      if (wsGatewayNestCreated?.pushToAdminSubscribers) {
+        wsGatewayNestCreated.pushToAdminSubscribers('nest_created', {
+          type: 'nest_created',
+          nestId: nest.id,
+          nestName: nest.name,
+          createdBy: request.user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 
@@ -170,6 +182,17 @@ export async function nestRoutes(app: FastifyInstance) {
       });
 
       reply.send({ success: true, data: updated });
+
+      // Broadcast nest_updated event
+      const wsGatewayNestUpdated = (app as any).wsGateway;
+      if (wsGatewayNestUpdated?.pushToAdminSubscribers) {
+        wsGatewayNestUpdated.pushToAdminSubscribers('nest_updated', {
+          type: 'nest_updated',
+          nestId,
+          updatedBy: request.user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 
@@ -204,6 +227,18 @@ export async function nestRoutes(app: FastifyInstance) {
       await prisma.nest.delete({
         where: { id: nestId },
       });
+
+      // Broadcast nest_deleted event
+      const wsGatewayNestDeleted = (app as any).wsGateway;
+      if (wsGatewayNestDeleted?.pushToAdminSubscribers) {
+        wsGatewayNestDeleted.pushToAdminSubscribers('nest_deleted', {
+          type: 'nest_deleted',
+          nestId,
+          nestName: nest.name,
+          deletedBy: request.user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       reply.send({ success: true });
     }

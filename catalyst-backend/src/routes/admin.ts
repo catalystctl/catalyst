@@ -527,6 +527,20 @@ export async function adminRoutes(app: FastifyInstance) {
         },
       });
 
+      // Broadcast user_updated event
+      const wsGatewayUserUpdated = (app as any).wsGateway;
+      if (wsGatewayUserUpdated?.pushToGlobalSubscribers) {
+        wsGatewayUserUpdated.pushToGlobalSubscribers('user_updated', {
+          type: 'user_updated',
+          userId: updatedUser.id,
+          email: updatedUser.email,
+          username: updatedUser.username,
+          roles: updatedUser.roles,
+          updatedBy: user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       return reply.send(updatedUser);
     }
   );
@@ -1756,6 +1770,18 @@ export async function adminRoutes(app: FastifyInstance) {
       }
 
       reply.status(201).send({ success: true, data: pool });
+
+      // Broadcast ip_pool_created event
+      const wsGatewayIpPoolCreated = (app as any).wsGateway;
+      if (wsGatewayIpPoolCreated?.pushToAdminSubscribers) {
+        wsGatewayIpPoolCreated.pushToAdminSubscribers('ip_pool_created', {
+          type: 'ip_pool_created',
+          poolId: pool.id,
+          nodeId,
+          createdBy: user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 
@@ -1834,6 +1860,17 @@ export async function adminRoutes(app: FastifyInstance) {
       }
 
       reply.send(serialize({ success: true, data: updated }));
+
+      // Broadcast ip_pool_updated event
+      const wsGatewayIpPoolUpdated = (app as any).wsGateway;
+      if (wsGatewayIpPoolUpdated?.pushToAdminSubscribers) {
+        wsGatewayIpPoolUpdated.pushToAdminSubscribers('ip_pool_updated', {
+          type: 'ip_pool_updated',
+          poolId,
+          updatedBy: user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 
@@ -1881,6 +1918,17 @@ export async function adminRoutes(app: FastifyInstance) {
       }
 
       reply.send({ success: true });
+
+      // Broadcast ip_pool_deleted event
+      const wsGatewayIpPoolDeleted = (app as any).wsGateway;
+      if (wsGatewayIpPoolDeleted?.pushToAdminSubscribers) {
+        wsGatewayIpPoolDeleted.pushToAdminSubscribers('ip_pool_deleted', {
+          type: 'ip_pool_deleted',
+          poolId,
+          deletedBy: user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 
@@ -1956,6 +2004,18 @@ export async function adminRoutes(app: FastifyInstance) {
           details: { name: created.name, host: created.host, port: created.port },
         });
 
+        // Broadcast database_host_created event
+        const wsGatewayDbHostCreated = (app as any).wsGateway;
+        if (wsGatewayDbHostCreated?.pushToAdminSubscribers) {
+          wsGatewayDbHostCreated.pushToAdminSubscribers('database_host_created', {
+            type: 'database_host_created',
+            hostId: created.id,
+            hostName: created.name,
+            createdBy: user.userId,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
         reply.status(201).send({ success: true, data: created });
       } catch (error: any) {
         return reply.status(409).send({ error: 'Database host name already exists' });
@@ -2024,6 +2084,17 @@ export async function adminRoutes(app: FastifyInstance) {
           details: { name: updated.name, host: updated.host, port: updated.port },
         });
 
+        // Broadcast database_host_updated event
+        const wsGatewayDbHostUpdated = (app as any).wsGateway;
+        if (wsGatewayDbHostUpdated?.pushToAdminSubscribers) {
+          wsGatewayDbHostUpdated.pushToAdminSubscribers('database_host_updated', {
+            type: 'database_host_updated',
+            hostId: updated.id,
+            updatedBy: user.userId,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
         reply.send(serialize({ success: true, data: updated }));
       } catch (error: any) {
         return reply.status(409).send({ error: 'Database host name already exists' });
@@ -2062,6 +2133,17 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       reply.send({ success: true });
+
+      // Broadcast database_host_deleted event
+      const wsGatewayDbHostDeleted = (app as any).wsGateway;
+      if (wsGatewayDbHostDeleted?.pushToAdminSubscribers) {
+        wsGatewayDbHostDeleted.pushToAdminSubscribers('database_host_deleted', {
+          type: 'database_host_deleted',
+          hostId,
+          deletedBy: user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 

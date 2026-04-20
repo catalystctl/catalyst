@@ -20,7 +20,32 @@ export type AdminEventType =
   | 'template_updated'
   | 'alert_rule_created'
   | 'alert_rule_deleted'
-  | 'alert_rule_updated';
+  | 'alert_rule_updated'
+  | 'role_created'
+  | 'role_deleted'
+  | 'role_updated'
+  | 'alert_created'
+  | 'alert_resolved'
+  | 'alert_deleted'
+  | 'server_updated'
+  | 'server_suspended'
+  | 'server_unsuspended'
+  | 'node_updated'
+  | 'api_key_created'
+  | 'api_key_updated'
+  | 'api_key_deleted'
+  | 'location_created'
+  | 'location_updated'
+  | 'location_deleted'
+  | 'nest_created'
+  | 'nest_updated'
+  | 'nest_deleted'
+  | 'database_host_created'
+  | 'database_host_updated'
+  | 'database_host_deleted'
+  | 'ip_pool_created'
+  | 'ip_pool_updated'
+  | 'ip_pool_deleted';
 
 const ADMIN_EVENT_TYPES: AdminEventType[] = [
   'user_created',
@@ -36,6 +61,31 @@ const ADMIN_EVENT_TYPES: AdminEventType[] = [
   'alert_rule_created',
   'alert_rule_deleted',
   'alert_rule_updated',
+  'role_created',
+  'role_deleted',
+  'role_updated',
+  'alert_created',
+  'alert_resolved',
+  'alert_deleted',
+  'server_updated',
+  'server_suspended',
+  'server_unsuspended',
+  'node_updated',
+  'api_key_created',
+  'api_key_updated',
+  'api_key_deleted',
+  'location_created',
+  'location_updated',
+  'location_deleted',
+  'nest_created',
+  'nest_updated',
+  'nest_deleted',
+  'database_host_created',
+  'database_host_updated',
+  'database_host_deleted',
+  'ip_pool_created',
+  'ip_pool_updated',
+  'ip_pool_deleted',
 ];
 
 type AdminEventHandler = (type: AdminEventType, data: Record<string, unknown>) => void;

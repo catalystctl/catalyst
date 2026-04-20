@@ -203,6 +203,20 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         webhookService.serverBulkSuspended(result.success, reason, userId).catch(() => {});
       }
 
+      // Broadcast server_suspended events for each successfully suspended server
+      const wsGatewayBulkSuspend = (app as any).wsGateway;
+      if (wsGatewayBulkSuspend?.pushToAdminSubscribers) {
+        for (const id of result.success) {
+          wsGatewayBulkSuspend.pushToAdminSubscribers('server_suspended', {
+            type: 'server_suspended',
+            serverId: id,
+            bulk: true,
+            triggeredBy: userId,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+
       reply.send(serialize({
         success: true,
         data: result,
@@ -303,6 +317,20 @@ export async function bulkServerRoutes(app: FastifyInstance) {
           result.success.push(serverId);
         } catch (err: any) {
           result.failed.push({ id: serverId, error: err.message || 'Unknown error' });
+        }
+      }
+
+      // Broadcast server_unsuspended events for each successfully unsuspended server
+      const wsGatewayBulkUnsuspend = (app as any).wsGateway;
+      if (wsGatewayBulkUnsuspend?.pushToAdminSubscribers) {
+        for (const id of result.success) {
+          wsGatewayBulkUnsuspend.pushToAdminSubscribers('server_unsuspended', {
+            type: 'server_unsuspended',
+            serverId: id,
+            bulk: true,
+            triggeredBy: userId,
+            timestamp: new Date().toISOString(),
+          });
         }
       }
 
@@ -416,6 +444,20 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       // Fire webhook
       if (webhookService && result.success.length > 0) {
         webhookService.serverBulkDeleted(result.success, userId).catch(() => {});
+      }
+
+      // Broadcast server_deleted events for each successfully deleted server
+      const wsGatewayBulkDelete = (app as any).wsGateway;
+      if (wsGatewayBulkDelete?.pushToAdminSubscribers) {
+        for (const id of result.success) {
+          wsGatewayBulkDelete.pushToAdminSubscribers('server_deleted', {
+            type: 'server_deleted',
+            serverId: id,
+            bulk: true,
+            triggeredBy: userId,
+            timestamp: new Date().toISOString(),
+          });
+        }
       }
 
       reply.send(serialize({

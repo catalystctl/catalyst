@@ -24,6 +24,8 @@ const ADMIN_EVENT_TYPES = [
   'node_created', 'node_deleted',
   'template_created', 'template_deleted', 'template_updated',
   'alert_created', 'alert_resolved', 'alert_deleted',
+  'alert_rule_created', 'alert_rule_deleted', 'alert_rule_updated',
+  'role_created', 'role_deleted', 'role_updated',
 ];
 
 type ReqHeaders = Record<string, string | string[] | undefined>;

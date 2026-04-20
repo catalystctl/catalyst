@@ -129,6 +129,18 @@ export async function locationRoutes(app: FastifyInstance) {
 			});
 
 			reply.status(201).send({ success: true, data: location });
+
+			// Broadcast location_created event
+			const wsGatewayLocationCreated = (app as any).wsGateway;
+			if (wsGatewayLocationCreated?.pushToAdminSubscribers) {
+				wsGatewayLocationCreated.pushToAdminSubscribers('location_created', {
+					type: 'location_created',
+					locationId: location.id,
+					locationName: location.name,
+					createdBy: request.user.userId,
+					timestamp: new Date().toISOString(),
+				});
+			}
 		},
 	);
 
@@ -175,6 +187,17 @@ export async function locationRoutes(app: FastifyInstance) {
 			});
 
 			reply.send({ success: true, data: updated });
+
+			// Broadcast location_updated event
+			const wsGatewayLocationUpdated = (app as any).wsGateway;
+			if (wsGatewayLocationUpdated?.pushToAdminSubscribers) {
+				wsGatewayLocationUpdated.pushToAdminSubscribers('location_updated', {
+					type: 'location_updated',
+					locationId,
+					updatedBy: request.user.userId,
+					timestamp: new Date().toISOString(),
+				});
+			}
 		},
 	);
 
@@ -208,6 +231,18 @@ export async function locationRoutes(app: FastifyInstance) {
 			await prisma.location.delete({
 				where: { id: locationId },
 			});
+
+			// Broadcast location_deleted event
+			const wsGatewayLocationDeleted = (app as any).wsGateway;
+			if (wsGatewayLocationDeleted?.pushToAdminSubscribers) {
+				wsGatewayLocationDeleted.pushToAdminSubscribers('location_deleted', {
+					type: 'location_deleted',
+					locationId,
+					locationName: location.name,
+					deletedBy: request.user.userId,
+					timestamp: new Date().toISOString(),
+				});
+			}
 
 			reply.send({ success: true });
 		},

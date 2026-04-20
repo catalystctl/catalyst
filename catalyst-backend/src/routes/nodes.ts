@@ -266,6 +266,19 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			const { secret: _secret, ...safeNode } = node;
 			reply.send(serialize({ success: true, data: safeNode }));
+
+			// Broadcast node_created event
+			const wsGatewayNodeCreated = (app as any).wsGateway;
+			if (wsGatewayNodeCreated?.pushToAdminSubscribers) {
+				wsGatewayNodeCreated.pushToAdminSubscribers('node_created', {
+					type: 'node_created',
+					nodeId: node.id,
+					nodeName: node.name,
+					locationId,
+					createdBy: request.user.userId,
+					timestamp: new Date().toISOString(),
+				});
+			}
 		},
 	);
 
@@ -647,6 +660,17 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			reply.send(serialize({ success: true, data: updated }));
+
+			// Broadcast node_updated event
+			const wsGatewayNodeUpdated = (app as any).wsGateway;
+			if (wsGatewayNodeUpdated?.pushToAdminSubscribers) {
+				wsGatewayNodeUpdated.pushToAdminSubscribers('node_updated', {
+					type: 'node_updated',
+					nodeId,
+					updatedBy: request.user.userId,
+					timestamp: new Date().toISOString(),
+				});
+			}
 		},
 	);
 
@@ -889,6 +913,18 @@ export async function nodeRoutes(app: FastifyInstance) {
 			await prisma.node.delete({ where: { id: nodeId } });
 
 			reply.send({ success: true, deletedApiKeys: deletedKeys });
+
+			// Broadcast node_deleted event
+			const wsGatewayNodeDeleted = (app as any).wsGateway;
+			if (wsGatewayNodeDeleted?.pushToAdminSubscribers) {
+				wsGatewayNodeDeleted.pushToAdminSubscribers('node_deleted', {
+					type: 'node_deleted',
+					nodeId,
+					nodeName: node.name,
+					deletedBy: request.user.userId,
+					timestamp: new Date().toISOString(),
+				});
+			}
 		},
 	);
 

@@ -1831,6 +1831,19 @@ export async function serverRoutes(app: FastifyInstance) {
       if (webhookService) {
         webhookService.serverCreated({ id: server.id, name: server.name, ownerId: effectiveOwnerId }, userId).catch(() => {});
       }
+
+      // Broadcast server_created event
+      const wsGatewayServerCreated = (app as any).wsGateway;
+      if (wsGatewayServerCreated?.pushToAdminSubscribers) {
+        wsGatewayServerCreated.pushToAdminSubscribers('server_created', {
+          type: 'server_created',
+          serverId: server.id,
+          serverName: server.name,
+          ownerId: effectiveOwnerId,
+          createdBy: userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 
@@ -2417,6 +2430,17 @@ export async function serverRoutes(app: FastifyInstance) {
       });
 
       reply.send({ success: true, data: updated });
+
+      // Broadcast server_updated event
+      const wsGatewayServerUpdated = (app as any).wsGateway;
+      if (wsGatewayServerUpdated?.pushToAdminSubscribers) {
+        wsGatewayServerUpdated.pushToAdminSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId: server.id,
+          updatedBy: userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 
@@ -4913,6 +4937,18 @@ export async function serverRoutes(app: FastifyInstance) {
       const webhookService: any = (app as any).webhookService;
       if (webhookService) {
         webhookService.serverDeleted(serverId, server.name, userId).catch(() => {});
+      }
+
+      // Broadcast server_deleted event
+      const wsGateway2 = (app as any).wsGateway;
+      if (wsGateway2?.pushToAdminSubscribers) {
+        wsGateway2.pushToAdminSubscribers('server_deleted', {
+          type: 'server_deleted',
+          serverId: serverId,
+          serverName: server.name,
+          deletedBy: userId,
+          timestamp: new Date().toISOString(),
+        });
       }
     }
   );
@@ -7583,6 +7619,17 @@ export async function serverRoutes(app: FastifyInstance) {
         webhookService.serverSuspended(serverId, server!.name, updated.suspensionReason, userId).catch(() => {});
       }
 
+      const wsGatewayServerSuspended = (app as any).wsGateway;
+      if (wsGatewayServerSuspended?.pushToAdminSubscribers) {
+        wsGatewayServerSuspended.pushToAdminSubscribers('server_suspended', {
+          type: 'server_suspended',
+          serverId,
+          serverName: server!.name,
+          suspendedBy: userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       return reply.send({ success: true, data: updated });
     }
   );
@@ -7658,6 +7705,17 @@ export async function serverRoutes(app: FastifyInstance) {
       const webhookService: any = (app as any).webhookService;
       if (webhookService) {
         webhookService.serverUnsuspended(serverId, server!.name, userId).catch(() => {});
+      }
+
+      const wsGatewayServerUnsuspended = (app as any).wsGateway;
+      if (wsGatewayServerUnsuspended?.pushToAdminSubscribers) {
+        wsGatewayServerUnsuspended.pushToAdminSubscribers('server_unsuspended', {
+          type: 'server_unsuspended',
+          serverId,
+          serverName: server!.name,
+          unsuspendedBy: userId,
+          timestamp: new Date().toISOString(),
+        });
       }
 
       return reply.send({ success: true, data: updated });
