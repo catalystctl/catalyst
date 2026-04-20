@@ -29,7 +29,6 @@ const CLEANUP_INTERVAL_MS = 60_000;
 interface SseSubscriber {
   unsubscribe: () => void;
   heartbeatTimer: ReturnType<typeof setInterval>;
-  cleanupTimer: ReturnType<typeof setInterval>;
 }
 
 function formatSse(event: string, data: unknown): string {
@@ -48,7 +47,6 @@ function cleanupSubscriber(id: string) {
   const sub = activeSubscribers.get(id);
   if (!sub) return;
   clearInterval(sub.heartbeatTimer);
-  clearInterval(sub.cleanupTimer);
   sub.unsubscribe();
   activeSubscribers.delete(id);
 }
@@ -70,6 +68,7 @@ const EVENT_TYPES = [
   'storage_resize_complete',
   'user_created',
   'user_deleted',
+  'user_updated',
 ];
 
 export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGateway) {
@@ -176,13 +175,8 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
       // Generate a unique subscriber ID for tracking
       const subscriberId = `${serverId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-      // Auto-cleanup any orphaned subscribers older than CLEANUP_INTERVAL_MS
-      const cleanupTimer = setInterval(() => {
-        cleanupSubscriber(subscriberId);
-      }, CLEANUP_INTERVAL_MS);
-
-      // Register subscriber with both timers
-      activeSubscribers.set(subscriberId, { unsubscribe, heartbeatTimer, cleanupTimer });
+      // Register subscriber
+      activeSubscribers.set(subscriberId, { unsubscribe, heartbeatTimer });
 
       // Cleanup on disconnect
       request.raw.on('close', () => {

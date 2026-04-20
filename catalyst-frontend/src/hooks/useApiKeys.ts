@@ -3,7 +3,7 @@ import { qk } from '@/lib/queryKeys';
 import { apiKeyService, CreateApiKeyRequest, UpdateApiKeyRequest } from '../services/apiKeys';
 import { toast } from 'sonner';
 
-export const API_KEYS_QUERY_KEY = ['apiKeys'] as const;
+export const API_KEYS_QUERY_KEY = ['api-keys'] as const;
 
 /**
  * Hook to fetch all API keys

@@ -333,10 +333,10 @@ export async function adminRoutes(app: FastifyInstance) {
         },
       });
 
-      // Broadcast user_created event to all global SSE subscribers
+      // Broadcast user_created event to all admin SSE subscribers
       const wsGateway = (app as any).wsGateway;
-      if (wsGateway?.pushToGlobalSubscribers) {
-        wsGateway.pushToGlobalSubscribers('user_created', {
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('user_created', {
           type: 'user_created',
           user: createdUser,
           createdBy: user.userId,
@@ -529,8 +529,8 @@ export async function adminRoutes(app: FastifyInstance) {
 
       // Broadcast user_updated event
       const wsGatewayUserUpdated = (app as any).wsGateway;
-      if (wsGatewayUserUpdated?.pushToGlobalSubscribers) {
-        wsGatewayUserUpdated.pushToGlobalSubscribers('user_updated', {
+      if (wsGatewayUserUpdated?.pushToAdminSubscribers) {
+        wsGatewayUserUpdated.pushToAdminSubscribers('user_updated', {
           type: 'user_updated',
           userId: updatedUser.id,
           email: updatedUser.email,
@@ -703,9 +703,9 @@ export async function adminRoutes(app: FastifyInstance) {
         webhookService.userDeleted(userId, existingUser.email, existingUser.username, user.userId).catch(() => {});
       }
 
-      // Broadcast user_deleted event to all global SSE subscribers
-      if (wsGateway?.pushToGlobalSubscribers) {
-        wsGateway.pushToGlobalSubscribers('user_deleted', {
+      // Broadcast user_deleted event to all admin SSE subscribers
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('user_deleted', {
           type: 'user_deleted',
           userId,
           email: existingUser.email,

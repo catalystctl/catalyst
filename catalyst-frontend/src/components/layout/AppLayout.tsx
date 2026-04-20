@@ -3,8 +3,6 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Breadcrumbs from './Breadcrumbs';
 import { useServerStateUpdates } from '../../hooks/useServerStateUpdates';
-import { useSseUserEvents } from '../../hooks/useSseUserEvents';
-import { useSseTemplateEvents } from '../../hooks/useSseTemplateEvents';
 import { useSseAdminEvents } from '../../hooks/useSseAdminEvents';
 import { useThemeStore } from '../../stores/themeStore';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
@@ -15,8 +13,6 @@ import { cn } from '@/lib/utils';
 
 function AppLayout() {
   useServerStateUpdates();
-  useSseUserEvents();
-  useSseTemplateEvents();
   useSseAdminEvents();
   const { sidebarCollapsed } = useThemeStore();
   const { panelName } = usePanelBranding();

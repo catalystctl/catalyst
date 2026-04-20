@@ -20,12 +20,18 @@ import { fromNodeHeaders } from 'better-auth/node';
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const ADMIN_EVENT_TYPES = [
   'user_created', 'user_deleted', 'user_updated',
-  'server_created', 'server_deleted',
-  'node_created', 'node_deleted',
+  'server_created', 'server_deleted', 'server_updated',
+  'server_suspended', 'server_unsuspended',
+  'node_created', 'node_deleted', 'node_updated',
   'template_created', 'template_deleted', 'template_updated',
   'alert_created', 'alert_resolved', 'alert_deleted',
   'alert_rule_created', 'alert_rule_deleted', 'alert_rule_updated',
   'role_created', 'role_deleted', 'role_updated',
+  'api_key_created', 'api_key_updated', 'api_key_deleted',
+  'location_created', 'location_updated', 'location_deleted',
+  'nest_created', 'nest_updated', 'nest_deleted',
+  'database_host_created', 'database_host_updated', 'database_host_deleted',
+  'ip_pool_created', 'ip_pool_updated', 'ip_pool_deleted',
 ];
 
 type ReqHeaders = Record<string, string | string[] | undefined>;
