@@ -5,6 +5,7 @@ export function useAuthInit() {
   const { init } = useAuthStore();
 
   useEffect(() => {
-    init();
+    // Silently handle 401 — expected when no session exists
+    init().catch(() => {});
   }, [init]);
 }

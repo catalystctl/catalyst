@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { usePluginStore } from './store';
 import { fetchPlugins } from './api';
 import { loadPluginFrontend } from './loader';
+import { useAuthStore } from '../stores/authStore';
 import type { LoadedPlugin } from './types';
 
 interface PluginContextValue {
@@ -16,6 +17,7 @@ const PluginContext = createContext<PluginContextValue | null>(null);
 export function PluginProvider({ children }: { children: React.ReactNode }) {
   const { plugins, loading, error, setPlugins, setLoading, setError } = usePluginStore();
   const [initialized, setInitialized] = useState(false);
+  const { isAuthenticated } = useAuthStore();
   
   const loadPlugins = async () => {
     setLoading(true);
@@ -50,10 +52,10 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
   };
   
   useEffect(() => {
-    if (!initialized) {
+    if (!initialized && isAuthenticated) {
       loadPlugins();
     }
-  }, [initialized]);
+  }, [initialized, isAuthenticated]);
   
   const value: PluginContextValue = React.useMemo(() => ({
     plugins,

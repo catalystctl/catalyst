@@ -156,7 +156,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
           isAuthenticated: false,
           isRefreshing: false,
           isReady: true,
-          error: message as string,
+          error: null,
           rememberMe: false,
         });
         throw error;
