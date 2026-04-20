@@ -1,0 +1,163 @@
+#!/bin/bash
+#
+# Pre-push hook — mirrors CI/CD checks before allowing a push to GitHub.
+# This prevents pushing code that would fail CI/CD.
+#
+# Covers:
+#   backend-ci:   lint, build
+#   agent-ci:     cargo fmt, cargo check, cargo clippy, cargo test
+#   security:     gitleaks detect (if installed)
+#
+# Each check is scoped to the files changed vs the remote branch,
+# so unrelated changes don't trigger unnecessary runs.
+
+set -uo pipefail
+
+# ── Colours ──────────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+PASS=0
+FAIL=0
+SKIP=0
+
+remote="$1"
+branch=$(git rev-parse --abbrev-ref HEAD)
+
+# Determine the upstream ref to diff against
+if git rev-parse "origin/$branch" >/dev/null 2>&1; then
+    upstream="origin/$branch"
+else
+    upstream=$(git merge-base origin/HEAD HEAD 2>/dev/null || echo "")
+fi
+
+if [ -z "$upstream" ]; then
+    echo -e "${YELLOW}⚠ Could not determine upstream ref — running ALL checks${NC}"
+    CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git ls-files)
+else
+    CHANGED_FILES=$(git diff --name-only "$upstream"...HEAD 2>/dev/null || git diff --name-only "$upstream" HEAD)
+fi
+
+# ── Helpers ──────────────────────────────────────────────────────
+has_changes() {
+    echo "$CHANGED_FILES" | grep -qE "$1"
+}
+
+run_check() {
+    local label="$1"
+    shift
+    echo -e "${CYAN}  ▶ ${label}...${NC}"
+    if "$@"; then
+        echo -e "${GREEN}  ✔ ${label}${NC}"
+        PASS=$((PASS + 1))
+        return 0
+    else
+        echo -e "${RED}  ✘ ${label} — FAILED${NC}"
+        FAIL=$((FAIL + 1))
+        return 1
+    fi
+}
+
+skip_check() {
+    echo -e "${YELLOW}  ⊘ $1 (no relevant changes)${NC}"
+    SKIP=$((SKIP + 1))
+}
+
+separator() {
+    echo ""
+    echo -e "${BOLD}━━━ $1 ━━━${NC}"
+    echo ""
+}
+
+# ── Only push to GitHub ─────────────────────────────────────────
+if [[ "$remote" != *"github.com"* ]] && [[ "$remote" != *"github"* ]]; then
+    echo -e "${YELLOW}Not pushing to GitHub, skipping pre-push checks.${NC}"
+    exit 0
+fi
+
+echo -e "${BOLD}
+╔══════════════════════════════════════════════════╗
+║        Catalyst Pre-Push CI Gate                ║
+║   Pushing ${branch} → ${remote}  ║
+╚══════════════════════════════════════════════════╝${NC}"
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT"
+
+# ══════════════════════════════════════════════════════════════════
+# 1. SECURITY — gitleaks
+# ══════════════════════════════════════════════════════════════════
+separator "Security"
+
+if command -v gitleaks >/dev/null 2>&1; then
+    run_check "Gitleaks secret scan" gitleaks detect --redact -v --log-opts=-1 --config .gitleaks.toml
+else
+    echo -e "${YELLOW}  ⚠ gitleaks not installed — skipping secret scan${NC}"
+    echo -e "${YELLOW}    Install: https://github.com/gitleaks/gitleaks${NC}"
+    SKIP=$((SKIP + 1))
+fi
+
+# ══════════════════════════════════════════════════════════════════
+# 2. BACKEND — lint & build (mirrors backend-ci.yml)
+# ══════════════════════════════════════════════════════════════════
+separator "Backend (catalyst-backend)"
+
+if has_changes '^(catalyst-backend|catalyst-shared)/' || has_changes '^bun\.lock' || has_changes '^package\.json$'; then
+    if [ -d "catalyst-backend" ]; then
+        run_check "Backend: install deps" bun install --frozen-lockfile
+
+        run_check "Backend: generate Prisma client" bunx prisma generate --schema=catalyst-backend/prisma/schema.prisma
+
+        run_check "Backend: lint" bun run lint --filter=catalyst-backend
+
+        run_check "Backend: build" bun run build:backend
+    else
+        skip_check "Backend (no catalyst-backend directory)"
+    fi
+else
+    skip_check "Backend lint & build"
+fi
+
+# ══════════════════════════════════════════════════════════════════
+# 3. AGENT — fmt, check, clippy, test (mirrors agent-ci.yml)
+# ══════════════════════════════════════════════════════════════════
+separator "Agent (catalyst-agent)"
+
+if has_changes '^catalyst-agent/'; then
+    if [ -d "catalyst-agent" ]; then
+        run_check "Agent: cargo fmt --check" cargo fmt --manifest-path catalyst-agent/Cargo.toml -- --check
+
+        run_check "Agent: cargo check" cargo check --manifest-path catalyst-agent/Cargo.toml
+
+        run_check "Agent: cargo clippy" cargo clippy --manifest-path catalyst-agent/Cargo.toml -- -D warnings
+
+        run_check "Agent: cargo test" cargo test --manifest-path catalyst-agent/Cargo.toml
+    else
+        skip_check "Agent (no catalyst-agent directory)"
+    fi
+else
+    skip_check "Agent fmt, check, clippy, test"
+fi
+
+# ══════════════════════════════════════════════════════════════════
+# Summary
+# ══════════════════════════════════════════════════════════════════
+echo ""
+echo -e "${BOLD}═══════════════════════════════════════════════════${NC}"
+echo -e "  ${GREEN}✔ Passed: ${PASS}${NC}   ${RED}✘ Failed: ${FAIL}${NC}   ${YELLOW}⊘ Skipped: ${SKIP}${NC}"
+echo -e "${BOLD}═══════════════════════════════════════════════════${NC}"
+echo ""
+
+if [ "$FAIL" -gt 0 ]; then
+    echo -e "${RED}${BOLD}🚫 Push blocked — ${FAIL} check(s) failed.${NC}"
+    echo -e "${RED}   Fix the errors above and try again.${NC}"
+    echo -e "${RED}   To bypass (not recommended): git push --no-verify${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}${BOLD}✅ All checks passed — push allowed.${NC}"
+exit 0
