@@ -95,7 +95,15 @@ export function initAuth() {
       process.env.FRONTEND_URL,
       ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(s => s.trim()) : []),
       ...(process.env.NODE_ENV !== 'production'
-        ? ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"]
+        ? [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+            ...(process.env.DEV_EXTRA_ORIGINS
+              ? process.env.DEV_EXTRA_ORIGINS.split(',').map((s) => s.trim())
+              : []),
+          ]
         : []),
     ].filter((origin): origin is string => Boolean(origin)),
     database: prismaAdapter(prisma, { provider: "postgresql" }),
@@ -160,7 +168,15 @@ export function initAuth() {
           process.env.FRONTEND_URL,
           ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(s => s.trim()) : []),
           ...(process.env.NODE_ENV !== 'production'
-            ? ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"]
+            ? [
+                "http://localhost:3000",
+                "http://localhost:5173",
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:5173",
+                ...(process.env.DEV_EXTRA_ORIGINS
+                  ? process.env.DEV_EXTRA_ORIGINS.split(',').map((s) => s.trim())
+                  : []),
+              ]
             : []),
         ].filter((origin): origin is string => Boolean(origin)),
         rpID: process.env.PASSKEY_RP_ID || undefined,

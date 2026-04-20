@@ -1,6 +1,19 @@
 import type { PluginManifest } from './types';
 
-const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:3000');
+// In dev, defaults to relative URL (uses Vite proxy) unless VITE_API_URL is explicitly set.
+// In prod, always uses relative URL (same-origin behind nginx).
+const API_BASE = import.meta.env.VITE_API_URL ?? '';
+
+// Warn if someone set VITE_API_URL to an absolute URL — that bypasses the
+// Vite dev-server proxy and won't work through VS Code tunnels.
+if (import.meta.env.DEV && API_BASE && !API_BASE.startsWith('/')) {
+  console.warn(
+    '[plugins/api] VITE_API_URL is an absolute URL (%s). ' +
+    'This bypasses the Vite dev proxy and may not work via tunnels. ' +
+    'Set VITE_API_URL to empty or omit it to use the proxy.',
+    API_BASE,
+  );
+}
 
 async function apiFetch<T>(
   path: string,
