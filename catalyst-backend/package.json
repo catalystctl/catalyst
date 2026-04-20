@@ -43,7 +43,7 @@
     "cron-parser": "~5.5.0",
     "dotenv": "~17.2.3",
     "fastify": "~5.7.4",
-    "mysql2": "~3.16.3",
+    "mysql2": "~3.22.1",
     "nanoid": "~5.1.6",
     "node-cron": "~4.2.1",
     "node-fetch": "~3.3.2",
