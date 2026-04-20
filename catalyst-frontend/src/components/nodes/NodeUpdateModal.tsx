@@ -1,10 +1,19 @@
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { MapPin } from 'lucide-react';
 import type { NodeInfo } from '../../types/node';
 import { nodesApi } from '../../services/api/nodes';
+import { locationsApi } from '../../services/api/locations';
 import { qk } from '../../lib/queryKeys';
 import { queryClient } from '../../lib/queryClient';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../components/ui/select';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
 type Props = {
@@ -22,17 +31,26 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange }: Props) {
   };
   const [name, setName] = useState(node.name);
   const [description, setDescription] = useState(node.description ?? '');
+  const [locationId, setLocationId] = useState(node.locationId ?? '');
   const [hostname, setHostname] = useState(node.hostname ?? '');
   const [publicAddress, setPublicAddress] = useState(node.publicAddress ?? '');
   const [memory, setMemory] = useState(String(node.maxMemoryMb ?? 0));
   const [cpu, setCpu] = useState(String(node.maxCpuCores ?? 0));
-  const [serverDataDir, setServerDataDir] = useState(node.serverDataDir ?? '/var/lib/catalyst/servers');
+  const [serverDataDir, setServerDataDir] = useState(
+    node.serverDataDir ?? '/var/lib/catalyst/servers',
+  );
+
+  const { data: locations = [] } = useQuery({
+    queryKey: qk.locations(),
+    queryFn: locationsApi.list,
+  });
 
   const mutation = useMutation({
     mutationFn: () =>
       nodesApi.update(node.id, {
         name: name || undefined,
         description: description || undefined,
+        locationId: locationId || undefined,
         hostname: hostname || undefined,
         publicAddress: publicAddress || undefined,
         maxMemoryMb: Number(memory) || undefined,
@@ -63,103 +81,154 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange }: Props) {
       )}
       {open ? (
         <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl border border-border bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
-            <div className="flex items-center justify-between border-b border-border px-6 py-4 dark:border-border">
-              <h2 className="text-lg font-semibold text-foreground dark:text-white">Update node</h2>
-              <button
-                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                onClick={() => setOpen(false)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300">
-              <label className="block space-y-1">
-                <span className="text-muted-foreground dark:text-muted-foreground">Name</span>
-                <input
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-muted-foreground dark:text-muted-foreground">Description</span>
-                <input
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-muted-foreground dark:text-muted-foreground">Server data directory</span>
-                <input
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 font-mono text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                  value={serverDataDir}
-                  onChange={(event) => setServerDataDir(event.target.value)}
-                  placeholder="/var/lib/catalyst/servers"
-                />
-                <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-                  Directory on the node where server files will be stored
-                </p>
-              </label>
-              <label className="block space-y-1">
-                <span className="text-muted-foreground dark:text-muted-foreground">Hostname</span>
-                <input
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                  value={hostname}
-                  onChange={(event) => setHostname(event.target.value)}
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-muted-foreground dark:text-muted-foreground">Public address</span>
-                <input
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                  value={publicAddress}
-                  onChange={(event) => setPublicAddress(event.target.value)}
-                />
-              </label>
-              <div className="grid grid-cols-2 gap-3">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-xl border border-border bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
+              <div className="flex items-center justify-between border-b border-border px-6 py-4 dark:border-border">
+                <h2 className="text-lg font-semibold text-foreground dark:text-white">
+                  Update node
+                </h2>
+                <button
+                  className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                  onClick={() => setOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300">
                 <label className="block space-y-1">
-                  <span className="text-muted-foreground dark:text-muted-foreground">Memory (MB)</span>
+                  <span className="text-muted-foreground dark:text-muted-foreground">Name</span>
                   <input
                     className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                    value={memory}
-                    onChange={(event) => setMemory(event.target.value)}
-                    type="number"
-                    min={256}
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
                   />
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-muted-foreground dark:text-muted-foreground">CPU cores</span>
+                  <span className="text-muted-foreground dark:text-muted-foreground">
+                    Description
+                  </span>
                   <input
                     className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
-                    value={cpu}
-                    onChange={(event) => setCpu(event.target.value)}
-                    type="number"
-                    min={1}
-                    step={1}
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
                   />
                 </label>
+                <label className="block space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground">Location</span>
+                  {locations.length > 0 ? (
+                    <Select
+                      value={locationId || '__none__'}
+                      onValueChange={(v) => setLocationId(v === '__none__' ? '' : v)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a location…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {locations.map((location) => (
+                          <SelectItem key={location.id} value={location.id}>
+                            <span className="flex items-center gap-2">
+                              <MapPin className="h-3.5 w-3.5 text-emerald-500" />
+                              {location.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border bg-surface-2/50 px-3 py-2 dark:bg-surface-1/40">
+                      <p className="text-xs text-muted-foreground">
+                        No locations exist yet.{' '}
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+                          onClick={() => {
+                            setOpen(false);
+                            window.dispatchEvent(new CustomEvent('catalyst:open-locations-modal'));
+                          }}
+                        >
+                          Create a location
+                        </button>
+                      </p>
+                    </div>
+                  )}
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-muted-foreground dark:text-muted-foreground">
+                    Server data directory
+                  </span>
+                  <input
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 font-mono text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                    value={serverDataDir}
+                    onChange={(event) => setServerDataDir(event.target.value)}
+                    placeholder="/var/lib/catalyst/servers"
+                  />
+                  <p className="text-xs text-muted-foreground dark:text-muted-foreground">
+                    Directory on the node where server files will be stored
+                  </p>
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-muted-foreground dark:text-muted-foreground">Hostname</span>
+                  <input
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                    value={hostname}
+                    onChange={(event) => setHostname(event.target.value)}
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-muted-foreground dark:text-muted-foreground">
+                    Public address
+                  </span>
+                  <input
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                    value={publicAddress}
+                    onChange={(event) => setPublicAddress(event.target.value)}
+                  />
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block space-y-1">
+                    <span className="text-muted-foreground dark:text-muted-foreground">
+                      Memory (MB)
+                    </span>
+                    <input
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                      value={memory}
+                      onChange={(event) => setMemory(event.target.value)}
+                      type="number"
+                      min={256}
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-muted-foreground dark:text-muted-foreground">
+                      CPU cores
+                    </span>
+                    <input
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                      value={cpu}
+                      onChange={(event) => setCpu(event.target.value)}
+                      type="number"
+                      min={1}
+                      step={1}
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 border-t border-border px-6 py-4 text-xs dark:border-border">
+                <button
+                  className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                  onClick={() => setOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="rounded-md bg-primary-600 px-4 py-2 font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+                  onClick={() => mutation.mutate()}
+                  disabled={mutation.isPending}
+                >
+                  {mutation.isPending ? 'Saving...' : 'Save changes'}
+                </button>
               </div>
             </div>
-            <div className="flex justify-end gap-2 border-t border-border px-6 py-4 text-xs dark:border-border">
-              <button
-                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                onClick={() => setOpen(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="rounded-md bg-primary-600 px-4 py-2 font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
-                onClick={() => mutation.mutate()}
-                disabled={mutation.isPending}
-              >
-                {mutation.isPending ? 'Saving...' : 'Save changes'}
-              </button>
-            </div>
           </div>
-        </div>
         </ModalPortal>
       ) : null}
     </>

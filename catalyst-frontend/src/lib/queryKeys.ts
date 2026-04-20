@@ -33,6 +33,9 @@ export const qk = {
   nodeAssignments: (nodeId: string) => ['nodes', nodeId, 'assignments'] as const,
   nodeApiKey: (nodeId: string) => ['node-api-key', nodeId] as const,
 
+  // ── Locations ──────────────────────────────────────────────────────
+  locations: () => ['locations'] as const,
+
   // ── Nests ───────────────────────────────────────────────────────────
   nests: () => ['nests'] as const,
 

@@ -1,13 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import {
   Server,
   Cpu,
   HardDrive,
-  Activity,
   Search,
   Filter,
   ArrowUpDown,
@@ -15,11 +14,13 @@ import {
   MoreHorizontal,
   ExternalLink,
   X,
+  MapPin,
 } from 'lucide-react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import EmptyState from '../../components/shared/EmptyState';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import NodeCreateModal from '../../components/nodes/NodeCreateModal';
+import LocationsManagerModal from '../../components/nodes/LocationsManagerModal';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -41,6 +42,8 @@ import { useAdminNodes } from '../../hooks/useAdmin';
 import { useAuthStore } from '../../stores/authStore';
 import type { NodeInfo } from '../../types/node';
 import { nodesApi } from '../../services/api/nodes';
+import { locationsApi } from '../../services/api/locations';
+import type { Location } from '../../services/api/locations';
 import { notifyError, notifySuccess } from '../../utils/notify';
 
 // ── Animation Variants ──
@@ -81,10 +84,7 @@ function TableSkeleton() {
   return (
     <div className="space-y-1">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div
-          key={i}
-          className="flex items-center gap-4 rounded-lg px-4 py-3.5"
-        >
+        <div key={i} className="flex items-center gap-4 rounded-lg px-4 py-3.5">
           <div className="h-4 w-4 animate-pulse rounded bg-surface-3" />
           <div className="h-9 w-9 animate-pulse rounded-lg bg-surface-3" />
           <div className="flex-1 space-y-2">
@@ -103,18 +103,229 @@ function TableSkeleton() {
   );
 }
 
+// ── Location Section Header ──
+function LocationSectionHeader({ location, count }: { location: Location | null; count: number }) {
+  if (location) {
+    return (
+      <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
+        <div className="flex items-center gap-2">
+          <MapPin className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          <h3 className="text-sm font-semibold text-foreground dark:text-zinc-100">
+            {location.name}
+          </h3>
+          <Badge variant="secondary" className="text-[10px]">
+            {count} node{count !== 1 ? 's' : ''}
+          </Badge>
+          {location.description && (
+            <span className="hidden text-xs text-muted-foreground sm:inline">
+              {location.description}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
+      <div className="flex items-center gap-2">
+        <MapPin className="h-4 w-4 text-muted-foreground" />
+        <h3 className="text-sm font-semibold text-foreground dark:text-zinc-100">Unassigned</h3>
+        <Badge variant="secondary" className="text-[10px]">
+          {count} node{count !== 1 ? 's' : ''}
+        </Badge>
+      </div>
+    </div>
+  );
+}
+
+// ── Node Row ──
+function NodeRow({
+  node,
+  isSelected,
+  canDelete,
+  selectedIds,
+  setSelectedIds,
+  handleBulkDelete,
+  deleteMutation,
+}: {
+  node: NodeInfo;
+  isSelected: boolean;
+  canDelete: boolean;
+  selectedIds: string[];
+  setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
+  handleBulkDelete: (ids: string[], label: string) => void;
+  deleteMutation: { isPending: boolean };
+}) {
+  const serverCount = node._count?.servers ?? node.servers?.length ?? 0;
+  const memoryGB = node.maxMemoryMb ? (node.maxMemoryMb / 1024).toFixed(1) : '0';
+  const lastSeen = node.lastSeenAt ? new Date(node.lastSeenAt).toLocaleString() : 'n/a';
+
+  return (
+    <motion.div
+      key={node.id}
+      variants={rowVariants}
+      className={`group relative flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-2/50 ${
+        isSelected ? 'bg-primary/5' : ''
+      }`}
+    >
+      {/* Checkbox */}
+      {canDelete && (
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() =>
+            setSelectedIds((prev) =>
+              prev.includes(node.id) ? prev.filter((id) => id !== node.id) : [...prev, node.id],
+            )
+          }
+          className="h-4 w-4 flex-shrink-0 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+        />
+      )}
+
+      {/* Online indicator dot + icon */}
+      <div className="flex items-center gap-2">
+        <div
+          className={`h-2 w-2 rounded-full transition-colors ${
+            node.isOnline ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-surface-3'
+          }`}
+        />
+        <div
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${
+            node.isOnline
+              ? 'bg-emerald-100 dark:bg-emerald-900/30'
+              : 'bg-surface-2 dark:bg-surface-2'
+          }`}
+        >
+          <Server
+            className={`h-4 w-4 transition-colors ${
+              node.isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'
+            }`}
+          />
+        </div>
+      </div>
+
+      {/* Node info — primary column */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2.5">
+          <Link
+            to={`/admin/nodes/${node.id}`}
+            className="truncate font-semibold text-foreground transition-colors hover:text-primary dark:text-zinc-100 dark:hover:text-primary-400"
+          >
+            {node.name}
+          </Link>
+          <Badge
+            variant={node.isOnline ? 'success' : 'secondary'}
+            className="shrink-0 gap-1 text-[11px]"
+          >
+            <span className="relative flex h-1.5 w-1.5">
+              {node.isOnline && (
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              )}
+              <span
+                className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
+                  node.isOnline ? 'bg-emerald-500' : 'bg-zinc-400'
+                }`}
+              />
+            </span>
+            {node.isOnline ? 'Online' : 'Offline'}
+          </Badge>
+        </div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+          <span className="font-mono text-[11px] opacity-70">
+            {node.hostname ?? 'hostname n/a'}
+          </span>
+          {node.location && <span>{node.location.name}</span>}
+          <span className="hidden sm:inline">Last seen {lastSeen}</span>
+        </div>
+      </div>
+
+      {/* Resource stats — visible on larger screens */}
+      <div className="hidden items-center gap-4 lg:flex">
+        <div className="text-right">
+          <div className="text-xs font-medium text-foreground dark:text-zinc-100">
+            {serverCount}
+          </div>
+          <div className="text-[11px] text-muted-foreground">servers</div>
+        </div>
+        <div className="text-right">
+          <div className="text-xs font-medium text-foreground dark:text-zinc-100">
+            {node.maxCpuCores ?? 0}
+          </div>
+          <div className="text-[11px] text-muted-foreground">cores</div>
+        </div>
+        <div className="text-right">
+          <div className="text-xs font-medium text-foreground dark:text-zinc-100">
+            {memoryGB} GB
+          </div>
+          <div className="text-[11px] text-muted-foreground">memory</div>
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+        <Link
+          to={`/admin/nodes/${node.id}`}
+          className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary dark:hover:text-primary-400"
+        >
+          <ExternalLink className="h-3 w-3" />
+          <span className="hidden sm:inline">Manage</span>
+        </Link>
+
+        {canDelete && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                title="More"
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <Link to={`/admin/nodes/${node.id}`} className="gap-2 text-xs">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Manage
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => handleBulkDelete([node.id], node.name)}
+                disabled={deleteMutation.isPending}
+                className="gap-2 text-xs text-rose-600 dark:text-rose-400"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
 // ── Main Component ──
 function AdminNodesPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [locationFilter, setLocationFilter] = useState('');
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
   const [sort, setSort] = useState('name-asc');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
-  const [deleteTargets, setDeleteTargets] = useState<{ nodeIds: string[]; label: string } | null>(null);
+  const [deleteTargets, setDeleteTargets] = useState<{ nodeIds: string[]; label: string } | null>(
+    null,
+  );
+  const [locationsModalOpen, setLocationsModalOpen] = useState(false);
 
   const { data, isLoading } = useAdminNodes({ search: search.trim() || undefined });
   const { user } = useAuthStore();
+
+  const { data: locations = [] } = useQuery({
+    queryKey: qk.locations(),
+    queryFn: locationsApi.list,
+  });
 
   const canWrite = useMemo(
     () => user?.permissions?.includes('admin.write') || user?.permissions?.includes('*'),
@@ -126,8 +337,13 @@ function AdminNodesPage() {
     [user?.permissions],
   );
 
+  useEffect(() => {
+    const handler = () => setLocationsModalOpen(true);
+    window.addEventListener('catalyst:open-locations-modal', handler);
+    return () => window.removeEventListener('catalyst:open-locations-modal', handler);
+  }, []);
+
   const nodes = data?.nodes ?? [];
-  const locationId = nodes[0]?.locationId ?? '';
 
   // ── Derived data ──
   const onlineNodes = nodes.filter((node) => node.isOnline);
@@ -136,35 +352,37 @@ function AdminNodesPage() {
   const totalCpu = nodes.reduce((acc, node) => acc + (node.maxCpuCores ?? 0), 0);
   const totalMemory = nodes.reduce((acc, node) => acc + (node.maxMemoryMb ?? 0), 0);
 
-  const locations = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const node of nodes) {
-      if (node.location?.id && node.location?.name) {
-        map.set(node.location.id, node.location.name);
-      }
+  // Location lookup map
+  const locationMap = useMemo(() => {
+    const map = new Map<string, Location>();
+    for (const loc of locations) {
+      map.set(loc.id, loc);
     }
-    return Array.from(map.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [nodes]);
+    return map;
+  }, [locations]);
 
+  // Count nodes per location for pills and filter panel
   const locationCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const node of nodes) {
-      if (node.location?.id) {
-        counts[node.location.id] = (counts[node.location.id] || 0) + 1;
+    const counts = new Map<string, number>();
+    let unassignedCount = 0;
+    for (const n of nodes) {
+      if (n.locationId) {
+        counts.set(n.locationId, (counts.get(n.locationId) || 0) + 1);
+      } else {
+        unassignedCount++;
       }
     }
-    return counts;
+    return { counts, unassignedCount };
   }, [nodes]);
 
-  const hasActiveFilters = statusFilter || locationFilter;
+  const hasActiveFilters = statusFilter || selectedLocationId !== null;
 
   const clearFilters = () => {
     setStatusFilter('');
-    setLocationFilter('');
+    setSelectedLocationId(null);
   };
 
+  // Nodes filtered by search, status, and location
   const filteredNodes = useMemo(() => {
     let filtered = nodes;
     if (statusFilter === 'online') {
@@ -172,8 +390,10 @@ function AdminNodesPage() {
     } else if (statusFilter === 'offline') {
       filtered = filtered.filter((node) => !node.isOnline);
     }
-    if (locationFilter) {
-      filtered = filtered.filter((node) => node.location?.id === locationFilter);
+    if (selectedLocationId === '__unassigned__') {
+      filtered = filtered.filter((node) => !node.locationId);
+    } else if (selectedLocationId !== null) {
+      filtered = filtered.filter((node) => node.locationId === selectedLocationId);
     }
     const sorted = [...filtered];
     sorted.sort((a, b) => {
@@ -193,7 +413,26 @@ function AdminNodesPage() {
       }
     });
     return sorted;
-  }, [nodes, statusFilter, locationFilter, sort]);
+  }, [nodes, statusFilter, selectedLocationId, sort]);
+
+  // Group nodes by location (used when "All" is selected)
+  const groupedByLocation = useMemo(() => {
+    const groups = new Map<string | null, typeof nodes>();
+    for (const n of filteredNodes) {
+      const key = n.locationId || null;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(n);
+    }
+    // Sort: locations first (sorted by location name), then unassigned last
+    const entries = Array.from(groups.entries()).sort((a, b) => {
+      if (a[0] === null) return 1;
+      if (b[0] === null) return -1;
+      const locA = locationMap.get(a[0]!);
+      const locB = locationMap.get(b[0]!);
+      return (locA?.name || '').localeCompare(locB?.name || '');
+    });
+    return entries;
+  }, [filteredNodes, locationMap]);
 
   const filteredIds = useMemo(() => filteredNodes.map((node) => node.id), [filteredNodes]);
   const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
@@ -214,16 +453,13 @@ function AdminNodesPage() {
       return Promise.all(nodeIds.map((nodeId) => nodesApi.deleteNode(nodeId)));
     },
     onSuccess: (_data, nodeIds) => {
-      notifySuccess(
-        `${nodeIds.length} node${nodeIds.length === 1 ? '' : 's'} deleted`,
-      );
+      notifySuccess(`${nodeIds.length} node${nodeIds.length === 1 ? '' : 's'} deleted`);
       queryClient.invalidateQueries({ queryKey: qk.adminNodes() });
       setSelectedIds([]);
       setDeleteTargets(null);
     },
     onError: (error: any) => {
-      const message =
-        error?.response?.data?.error || 'Failed to delete node(s)';
+      const message = error?.response?.data?.error || 'Failed to delete node(s)';
       notifyError(message);
     },
   });
@@ -232,6 +468,50 @@ function AdminNodesPage() {
     if (!nodeIds.length) return;
     setDeleteTargets({ nodeIds, label });
   };
+
+  // Determine whether to show grouped or flat view
+  const showGroupedView = selectedLocationId === null && locations.length > 0;
+
+  // Helper to render node rows (used in both grouped and flat views)
+  const renderNodeRows = (groupNodes: NodeInfo[], showSelectAll?: boolean) => (
+    <>
+      {showSelectAll && canDelete && (
+        <div className="flex items-center gap-3 border-b border-border px-4 py-2">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={groupNodes.length > 0 && groupNodes.every((n) => selectedIds.includes(n.id))}
+              onChange={() =>
+                setSelectedIds((prev) => {
+                  const groupIds = groupNodes.map((n) => n.id);
+                  if (groupIds.every((id) => prev.includes(id))) {
+                    return prev.filter((id) => !groupIds.includes(id));
+                  }
+                  return Array.from(new Set([...prev, ...groupIds]));
+                })
+              }
+              className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+            />
+            <span className="text-xs font-medium text-muted-foreground">Select all in section</span>
+          </label>
+        </div>
+      )}
+      <div className="divide-y divide-border/50">
+        {groupNodes.map((node) => (
+          <NodeRow
+            key={node.id}
+            node={node}
+            isSelected={selectedIds.includes(node.id)}
+            canDelete={canDelete}
+            selectedIds={selectedIds}
+            setSelectedIds={setSelectedIds}
+            handleBulkDelete={handleBulkDelete}
+            deleteMutation={deleteMutation}
+          />
+        ))}
+      </div>
+    </>
+  );
 
   return (
     <motion.div
@@ -301,17 +581,21 @@ function AdminNodesPage() {
                 </Badge>
               </>
             )}
+            {canWrite && <NodeCreateModal />}
             {canWrite && (
-              <NodeCreateModal locationId={locationId} />
+              <button
+                className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                onClick={() => setLocationsModalOpen(true)}
+              >
+                <MapPin className="mr-1.5 inline h-4 w-4" />
+                Locations
+              </button>
             )}
           </div>
         </motion.div>
 
         {/* ── Search & Controls Bar ── */}
-        <motion.div
-          variants={itemVariants}
-          className="flex flex-wrap items-center gap-2.5"
-        >
+        <motion.div variants={itemVariants} className="flex flex-wrap items-center gap-2.5">
           {/* Search input */}
           <div className="relative min-w-[200px] flex-1 max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -334,7 +618,7 @@ function AdminNodesPage() {
             Filters
             {hasActiveFilters && (
               <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
-                {[statusFilter, locationFilter].filter(Boolean).length}
+                {[statusFilter, selectedLocationId].filter(Boolean).length}
               </span>
             )}
           </Button>
@@ -361,6 +645,71 @@ function AdminNodesPage() {
           </span>
         </motion.div>
 
+        {/* ── Location Selector Tabs ── */}
+        {locations.length > 0 && (
+          <motion.div
+            variants={itemVariants}
+            className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin"
+          >
+            <button
+              className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                selectedLocationId === null
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'bg-surface-2 text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => setSelectedLocationId(null)}
+            >
+              All
+              <span
+                className={`text-[10px] ${selectedLocationId === null ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
+              >
+                {nodes.length}
+              </span>
+            </button>
+            {locations.map((location) => {
+              const count = locationCounts.counts.get(location.id) || 0;
+              if (count === 0) return null;
+              return (
+                <button
+                  key={location.id}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                    selectedLocationId === location.id
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'bg-surface-2 text-muted-foreground hover:text-foreground'
+                  }`}
+                  onClick={() => setSelectedLocationId(location.id)}
+                >
+                  <MapPin className="h-3.5 w-3.5" />
+                  {location.name}
+                  <span
+                    className={`text-[10px] ${selectedLocationId === location.id ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+            {locationCounts.unassignedCount > 0 && (
+              <button
+                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                  selectedLocationId === '__unassigned__'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-surface-2 text-muted-foreground hover:text-foreground'
+                }`}
+                onClick={() => setSelectedLocationId('__unassigned__')}
+              >
+                <MapPin className="h-3.5 w-3.5" />
+                Unassigned
+                <span
+                  className={`text-[10px] ${selectedLocationId === '__unassigned__' ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
+                >
+                  {locationCounts.unassignedCount}
+                </span>
+              </button>
+            )}
+          </motion.div>
+        )}
+
         {/* ── Expandable Filter Panel ── */}
         <AnimatePresence>
           {showFilters && (
@@ -386,22 +735,18 @@ function AdminNodesPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All statuses</SelectItem>
-                        <SelectItem value="online">
-                          Online ({onlineNodes.length})
-                        </SelectItem>
-                        <SelectItem value="offline">
-                          Offline ({offlineNodes.length})
-                        </SelectItem>
+                        <SelectItem value="online">Online ({onlineNodes.length})</SelectItem>
+                        <SelectItem value="offline">Offline ({offlineNodes.length})</SelectItem>
                       </SelectContent>
                     </Select>
                   </label>
-                  {locations.length > 1 && (
+                  {locations.length > 0 && (
                     <label className="space-y-1.5">
                       <span className="text-xs font-medium text-muted-foreground">Location</span>
                       <Select
-                        value={locationFilter || 'all'}
+                        value={selectedLocationId || 'all'}
                         onValueChange={(value) => {
-                          setLocationFilter(value === 'all' ? '' : value);
+                          setSelectedLocationId(value === 'all' ? null : value);
                         }}
                       >
                         <SelectTrigger className="w-44">
@@ -411,10 +756,19 @@ function AdminNodesPage() {
                           <SelectItem value="all">All locations</SelectItem>
                           {locations.map((loc) => (
                             <SelectItem key={loc.id} value={loc.id}>
-                              {loc.name}
-                              {locationCounts[loc.id] ? ` (${locationCounts[loc.id]})` : ''}
+                              <span className="flex items-center gap-2">
+                                {loc.name}
+                                {locationCounts.counts.get(loc.id)
+                                  ? ` (${locationCounts.counts.get(loc.id)})`
+                                  : ''}
+                              </span>
                             </SelectItem>
                           ))}
+                          {locationCounts.unassignedCount > 0 && (
+                            <SelectItem value="__unassigned__">
+                              Unassigned ({locationCounts.unassignedCount})
+                            </SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                     </label>
@@ -462,9 +816,7 @@ function AdminNodesPage() {
                   <Button
                     variant="destructive"
                     size="sm"
-                    onClick={() =>
-                      handleBulkDelete(selectedIds, `${selectedIds.length} nodes`)
-                    }
+                    onClick={() => handleBulkDelete(selectedIds, `${selectedIds.length} nodes`)}
                     disabled={deleteMutation.isPending}
                     className="gap-1.5 text-xs"
                   >
@@ -479,261 +831,146 @@ function AdminNodesPage() {
 
         {/* ── Node List ── */}
         <motion.div variants={itemVariants}>
-          <div className="rounded-xl border border-border bg-card/80 shadow-sm backdrop-blur-sm">
-            {isLoading ? (
-              <div className="p-4">
-                <TableSkeleton />
-              </div>
-            ) : filteredNodes.length > 0 ? (
-              <>
-                {/* Select-all header */}
-                {canDelete && (
-                  <div className="flex items-center gap-3 border-b border-border px-4 py-2">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={allSelected}
-                        onChange={() =>
-                          setSelectedIds((prev) => {
-                            if (allSelected) {
-                              return prev.filter((id) => !filteredIds.includes(id));
-                            }
-                            return Array.from(new Set([...prev, ...filteredIds]));
-                          })
-                        }
-                        className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
-                      />
-                      <span className="text-xs font-medium text-muted-foreground">
-                        Select all
-                      </span>
-                    </label>
-                  </div>
-                )}
-
-                {/* Node rows */}
-                <div className="divide-y divide-border/50">
-                  {filteredNodes.map((node: NodeInfo) => {
-                    const isSelected = selectedIds.includes(node.id);
-                    const serverCount = node._count?.servers ?? node.servers?.length ?? 0;
-                    const memoryGB = node.maxMemoryMb
-                      ? (node.maxMemoryMb / 1024).toFixed(1)
-                      : '0';
-                    const lastSeen = node.lastSeenAt
-                      ? new Date(node.lastSeenAt).toLocaleString()
-                      : 'n/a';
-
-                    return (
-                      <motion.div
-                        key={node.id}
-                        variants={rowVariants}
-                        className={`group relative flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-2/50 ${
-                          isSelected ? 'bg-primary/5' : ''
-                        }`}
-                      >
-                        {/* Checkbox */}
-                        {canDelete && (
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() =>
-                              setSelectedIds((prev) =>
-                                prev.includes(node.id)
-                                  ? prev.filter((id) => id !== node.id)
-                                  : [...prev, node.id],
-                              )
-                            }
-                            className="h-4 w-4 flex-shrink-0 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
-                          />
-                        )}
-
-                        {/* Online indicator dot + icon */}
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`h-2 w-2 rounded-full transition-colors ${
-                              node.isOnline ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-surface-3'
-                            }`}
-                          />
-                          <div
-                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${
-                              node.isOnline
-                                ? 'bg-emerald-100 dark:bg-emerald-900/30'
-                                : 'bg-surface-2 dark:bg-surface-2'
-                            }`}
-                          >
-                            <Server
-                              className={`h-4 w-4 transition-colors ${
-                                node.isOnline
-                                  ? 'text-emerald-600 dark:text-emerald-400'
-                                  : 'text-muted-foreground'
-                              }`}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Node info — primary column */}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2.5">
-                            <Link
-                              to={`/admin/nodes/${node.id}`}
-                              className="truncate font-semibold text-foreground transition-colors hover:text-primary dark:text-zinc-100 dark:hover:text-primary-400"
-                            >
-                              {node.name}
-                            </Link>
-                            <Badge
-                              variant={node.isOnline ? 'success' : 'secondary'}
-                              className="shrink-0 gap-1 text-[11px]"
-                            >
-                              <span className="relative flex h-1.5 w-1.5">
-                                {node.isOnline && (
-                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                                )}
-                                <span
-                                  className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
-                                    node.isOnline ? 'bg-emerald-500' : 'bg-zinc-400'
-                                  }`}
-                                />
-                              </span>
-                              {node.isOnline ? 'Online' : 'Offline'}
-                            </Badge>
-                          </div>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                            <span className="font-mono text-[11px] opacity-70">
-                              {node.hostname ?? 'hostname n/a'}
-                            </span>
-                            {node.location && (
-                              <span>{node.location.name}</span>
-                            )}
-                            <span className="hidden sm:inline">Last seen {lastSeen}</span>
-                          </div>
-                        </div>
-
-                        {/* Resource stats — visible on larger screens */}
-                        <div className="hidden items-center gap-4 lg:flex">
-                          <div className="text-right">
-                            <div className="text-xs font-medium text-foreground dark:text-zinc-100">
-                              {serverCount}
-                            </div>
-                            <div className="text-[11px] text-muted-foreground">servers</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-xs font-medium text-foreground dark:text-zinc-100">
-                              {node.maxCpuCores ?? 0}
-                            </div>
-                            <div className="text-[11px] text-muted-foreground">cores</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-xs font-medium text-foreground dark:text-zinc-100">
-                              {memoryGB} GB
-                            </div>
-                            <div className="text-[11px] text-muted-foreground">memory</div>
-                          </div>
-                        </div>
-
-                        {/* Action buttons */}
-                        <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                          <Link
-                            to={`/admin/nodes/${node.id}`}
-                            className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary dark:hover:text-primary-400"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            <span className="hidden sm:inline">Manage</span>
-                          </Link>
-
-                          {canDelete && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button
-                                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-                                  title="More"
-                                >
-                                  <MoreHorizontal className="h-3.5 w-3.5" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem asChild>
-                                  <Link
-                                    to={`/admin/nodes/${node.id}`}
-                                    className="gap-2 text-xs"
-                                  >
-                                    <ExternalLink className="h-3.5 w-3.5" />
-                                    Manage
-                                  </Link>
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    handleBulkDelete([node.id], node.name)
-                                  }
-                                  disabled={deleteMutation.isPending}
-                                  className="gap-2 text-xs text-rose-600 dark:text-rose-400"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                        </div>
-                      </motion.div>
-                    );
-                  })}
+          {showGroupedView ? (
+            /* ── Grouped by Location View ── */
+            <div className="space-y-4">
+              {isLoading ? (
+                <div className="rounded-xl border border-border bg-card/80 p-4 shadow-sm backdrop-blur-sm">
+                  <TableSkeleton />
                 </div>
-              </>
-            ) : (
-              <div className="p-6">
-                <EmptyState
-                  title={
-                    search.trim() || hasActiveFilters
-                      ? 'No nodes found'
-                      : 'No nodes detected'
-                  }
-                  description={
-                    search.trim() || hasActiveFilters
-                      ? 'Try adjusting your search or filters.'
-                      : 'Install the Catalyst agent and register nodes to begin.'
-                  }
-                  action={
-                    hasActiveFilters ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={clearFilters}
-                      >
-                        <X className="mr-1.5 h-3.5 w-3.5" />
-                        Clear filters
-                      </Button>
-                    ) : canWrite ? (
-                      <NodeCreateModal locationId={locationId} />
-                    ) : undefined
-                  }
-                />
-              </div>
-            )}
-          </div>
+              ) : groupedByLocation.length > 0 ? (
+                groupedByLocation.map(([locationId, groupNodes]) => {
+                  const location = locationId ? (locationMap.get(locationId) ?? null) : null;
+                  return (
+                    <div
+                      key={locationId ?? '__unassigned__'}
+                      className="rounded-xl border border-border bg-card/80 shadow-sm backdrop-blur-sm overflow-hidden"
+                    >
+                      <LocationSectionHeader location={location} count={groupNodes.length} />
+                      {renderNodeRows(groupNodes, true)}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="rounded-xl border border-border bg-card/80 p-6 shadow-sm backdrop-blur-sm">
+                  <EmptyState
+                    title={search.trim() || statusFilter ? 'No nodes found' : 'No nodes detected'}
+                    description={
+                      search.trim() || statusFilter
+                        ? 'Try adjusting your search or filters.'
+                        : 'Install the Catalyst agent and register nodes to begin.'
+                    }
+                    action={
+                      hasActiveFilters ? (
+                        <Button variant="outline" size="sm" onClick={clearFilters}>
+                          <X className="mr-1.5 h-3.5 w-3.5" />
+                          Clear filters
+                        </Button>
+                      ) : canWrite && !search.trim() ? (
+                        <NodeCreateModal />
+                      ) : undefined
+                    }
+                  />
+                </div>
+              )}
+            </div>
+          ) : (
+            /* ── Flat List View (single location selected or no locations exist) ── */
+            <div className="rounded-xl border border-border bg-card/80 shadow-sm backdrop-blur-sm overflow-hidden">
+              {isLoading ? (
+                <div className="p-4">
+                  <TableSkeleton />
+                </div>
+              ) : filteredNodes.length > 0 ? (
+                <>
+                  {/* Select-all header */}
+                  {canDelete && (
+                    <div className="flex items-center gap-3 border-b border-border px-4 py-2">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          onChange={() =>
+                            setSelectedIds((prev) => {
+                              if (allSelected) {
+                                return prev.filter((id) => !filteredIds.includes(id));
+                              }
+                              return Array.from(new Set([...prev, ...filteredIds]));
+                            })
+                          }
+                          className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+                        />
+                        <span className="text-xs font-medium text-muted-foreground">
+                          Select all
+                        </span>
+                      </label>
+                    </div>
+                  )}
+
+                  {/* Node rows */}
+                  <div className="divide-y divide-border/50">
+                    {filteredNodes.map((node: NodeInfo) => (
+                      <NodeRow
+                        key={node.id}
+                        node={node}
+                        isSelected={selectedIds.includes(node.id)}
+                        canDelete={canDelete}
+                        selectedIds={selectedIds}
+                        setSelectedIds={setSelectedIds}
+                        handleBulkDelete={handleBulkDelete}
+                        deleteMutation={deleteMutation}
+                      />
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="p-6">
+                  <EmptyState
+                    title={
+                      search.trim() || hasActiveFilters ? 'No nodes found' : 'No nodes detected'
+                    }
+                    description={
+                      search.trim() || hasActiveFilters
+                        ? 'Try adjusting your search or filters.'
+                        : 'Install the Catalyst agent and register nodes to begin.'
+                    }
+                    action={
+                      hasActiveFilters ? (
+                        <Button variant="outline" size="sm" onClick={clearFilters}>
+                          <X className="mr-1.5 h-3.5 w-3.5" />
+                          Clear filters
+                        </Button>
+                      ) : canWrite ? (
+                        <NodeCreateModal />
+                      ) : undefined
+                    }
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </motion.div>
       </div>
 
       {/* ── Delete Confirmation Dialog ── */}
+      <LocationsManagerModal open={locationsModalOpen} onOpenChange={setLocationsModalOpen} />
       <ConfirmDialog
         open={!!deleteTargets}
         title="Delete Nodes"
         message={
           <div className="space-y-2">
             <p>
-              You are about to delete{' '}
-              <span className="font-semibold">{deleteTargets?.label}</span>.
+              You are about to delete <span className="font-semibold">{deleteTargets?.label}</span>.
             </p>
             <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-              Nodes with running servers cannot be deleted. Stop all servers on
-              a node before deleting it. This cannot be undone.
+              Nodes with running servers cannot be deleted. Stop all servers on a node before
+              deleting it. This cannot be undone.
             </p>
           </div>
         }
         confirmText="Delete"
         cancelText="Cancel"
-        onConfirm={() =>
-          deleteTargets && deleteMutation.mutate(deleteTargets.nodeIds)
-        }
+        onConfirm={() => deleteTargets && deleteMutation.mutate(deleteTargets.nodeIds)}
         onCancel={() => setDeleteTargets(null)}
         variant="danger"
         loading={deleteMutation.isPending}

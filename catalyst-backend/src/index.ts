@@ -19,6 +19,7 @@ import { nodeRoutes } from "./routes/nodes";
 import { serverRoutes } from "./routes/servers";
 import { templateRoutes } from "./routes/templates";
 import { nestRoutes } from "./routes/nests";
+import { locationRoutes } from "./routes/locations";
 import { metricsRoutes } from "./routes/metrics";
 import { adminEventsRoutes } from "./routes/admin-events";
 import { metricsStreamRoutes } from "./routes/metrics-stream";
@@ -676,6 +677,7 @@ async function bootstrap() {
 		});
 		await app.register(templateRoutes, { prefix: "/api/templates" });
 		await app.register(nestRoutes, { prefix: "/api/nests" });
+		await app.register(locationRoutes, { prefix: "/api/locations" });
 		await app.register(metricsRoutes, { prefix: "/api" });
 		await app.register(backupRoutes, { prefix: "/api/servers" });
 		await app.register(adminRoutes, { prefix: "/api/admin" });

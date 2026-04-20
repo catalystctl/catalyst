@@ -59,6 +59,7 @@ export const nodesApi = {
     payload: {
       name?: string;
       description?: string;
+      locationId?: string;
       hostname?: string;
       publicAddress?: string;
       maxMemoryMb?: number;
