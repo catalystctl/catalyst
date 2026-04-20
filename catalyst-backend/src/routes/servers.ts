@@ -392,7 +392,12 @@ const buildConnectionInfo = (
   };
 };
 
-const patchTemplateForRuntime = (template: any) => template;
+const patchTemplateForRuntime = (template: any) => ({
+  ...template,
+  stopCommand: template.stopCommand ?? 'stop',
+  sendSignalTo: template.sendSignalTo ?? 'SIGTERM',
+  installImage: template.installImage ?? 'alpine:3.19',
+});
 
   const withConnectionInfo = (server: any, fallbackNode?: { publicAddress?: string }) => ({
     ...server,

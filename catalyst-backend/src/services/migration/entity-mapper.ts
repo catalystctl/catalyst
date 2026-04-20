@@ -237,13 +237,15 @@ export class EntityMapper {
     }
 
     // Stop command — from config.stop (API) or stop (egg export)
-    const stopCommand = cfg?.stop || ptero.stop || "minecraft:stop";
-    let sendSignalTo: "SIGTERM" | "SIGINT" | "SIGKILL" = "SIGTERM";
-    if (stopCommand.toLowerCase().includes("kill")) {
-      sendSignalTo = "SIGKILL";
-    } else if (stopCommand.toLowerCase().includes("/stop")) {
-      sendSignalTo = "SIGTERM";
-    }
+    const rawStopCommand = cfg?.stop || ptero.stop || "stop";
+    const stopSignalMap: Record<string, "SIGTERM" | "SIGINT" | "SIGKILL"> = {
+      "^C": "SIGINT", "^c": "SIGINT", "^^C": "SIGINT",
+      "^SIGKILL": "SIGKILL", "^X": "SIGKILL",
+      "SIGINT": "SIGINT", "SIGTERM": "SIGTERM", "SIGKILL": "SIGKILL",
+    };
+    const resolvedSignal = stopSignalMap[rawStopCommand] || "SIGTERM";
+    const stopCommand = stopSignalMap[rawStopCommand] ? "" : rawStopCommand.replace(/^\//, "");
+    const sendSignalTo = resolvedSignal;
 
     return {
       data: {

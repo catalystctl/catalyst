@@ -2531,12 +2531,11 @@ impl WebSocketHandler {
                 .list_dir(server_uuid, path)
                 .await
                 .map(|entries| Some(json!({ "entries": entries }))),
-            "mkdir" => {
-                self.file_manager
-                    .mkdir(server_uuid, path)
-                    .await
-                    .map(|_| None)
-            }
+            "mkdir" => self
+                .file_manager
+                .mkdir(server_uuid, path)
+                .await
+                .map(|_| None),
             _ => {
                 return Err(AgentError::InvalidRequest(format!(
                     "Unknown file operation: {}",

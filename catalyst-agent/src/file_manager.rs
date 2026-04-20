@@ -396,9 +396,9 @@ impl FileManager {
 
         debug!("Creating directory: {:?}", normalized);
 
-        fs::create_dir_all(&normalized)
-            .await
-            .map_err(|e| AgentError::FileSystemError(format!("Failed to create directory: {}", e)))?;
+        fs::create_dir_all(&normalized).await.map_err(|e| {
+            AgentError::FileSystemError(format!("Failed to create directory: {}", e))
+        })?;
 
         info!("Directory created: {:?}", normalized);
         Ok(())

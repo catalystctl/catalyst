@@ -376,13 +376,13 @@ export async function templateRoutes(app: FastifyInstance) {
 					.status(400)
 					.send({ error: "Missing required field: startup" });
 			}
-			if (
-				!egg?.images ||
-				!Array.isArray(egg.images) ||
-				egg.images.length === 0
-			) {
+			// Accept images as string array (Pelican) or docker_images as Record (Pterodactyl export)
+			const hasImages =
+				(Array.isArray(egg.images) && egg.images.length > 0) ||
+				(egg.docker_images && typeof egg.docker_images === "object" && Object.keys(egg.docker_images).length > 0);
+			if (!hasImages) {
 				return reply.status(400).send({
-					error: "Missing required field: images (must be a non-empty array)",
+					error: "Missing required field: images (must be a non-empty array or docker_images object)",
 				});
 			}
 
@@ -428,24 +428,45 @@ export async function templateRoutes(app: FastifyInstance) {
 					: [],
 			}));
 
-			// Map images
-			const mappedImages = Array.isArray(egg.images)
-				? egg.images.map((img: string, i: number) => ({
-						name: `image-${i}`,
-						image: img,
-					}))
-				: [];
+			// Map images — handle both Pelican array format (egg.images) and Pterodactyl export format (egg.docker_images as Record)
+			let rawImages: string[];
+			if (Array.isArray(egg.images)) {
+				rawImages = egg.images;
+			} else if (egg.docker_images && typeof egg.docker_images === "object") {
+				rawImages = Object.values(egg.docker_images);
+			} else {
+				rawImages = [];
+			}
+			const mappedImages = rawImages.map((img: string, i: number) => ({
+				name: `image-${i}`,
+				image: img,
+			}));
 
 			// Build features from Pterodactyl egg data
 			const eggFeatures: Record<string, any> = {};
 			if (Array.isArray(egg.features)) {
 				eggFeatures.pterodactylFeatures = egg.features;
 			}
+			// Parse startup detection — config.startup may be a JSON string or object
 			if (egg.config?.startup) {
-				eggFeatures.startupDetection = egg.config.startup;
+				try {
+					const parsed = typeof egg.config.startup === "string"
+						? JSON.parse(egg.config.startup)
+						: egg.config.startup;
+					if (parsed && typeof parsed === "object") {
+						eggFeatures.startupDetection = parsed;
+					}
+				} catch { /* ignore */ }
 			}
 			if (egg.config?.logs) {
-				eggFeatures.logDetection = egg.config.logs;
+				try {
+					const parsed = typeof egg.config.logs === "string"
+						? JSON.parse(egg.config.logs)
+						: egg.config.logs;
+					if (parsed && typeof parsed === "object") {
+						eggFeatures.logDetection = parsed;
+					}
+				} catch { /* ignore */ }
 			}
 			// Store Pterodactyl config file definitions for the config editor
 			if (egg.config?.files) {
@@ -467,19 +488,37 @@ export async function templateRoutes(app: FastifyInstance) {
 				}
 			}
 
+			// Parse stop command — config.stop may be a JSON string or direct value
+			const rawStop = (() => {
+				if (egg.config?.stop) {
+					if (typeof egg.config.stop === "string") {
+						try { return JSON.parse(egg.config.stop); } catch { return egg.config.stop; }
+					}
+					return egg.config.stop;
+				}
+				return undefined;
+			})();
+			const stopSignalMap: Record<string, "SIGINT" | "SIGTERM" | "SIGKILL"> = {
+				"^C": "SIGINT", "^c": "SIGINT", "^^C": "SIGINT",
+				"^SIGKILL": "SIGKILL", "^X": "SIGKILL",
+				"SIGINT": "SIGINT", "SIGTERM": "SIGTERM", "SIGKILL": "SIGKILL",
+			};
+			const resolvedStopSignal = rawStop ? (stopSignalMap[rawStop] || "SIGTERM") : "SIGTERM";
+			const resolvedStopCommand = rawStop ? (stopSignalMap[rawStop] ? "" : rawStop.replace(/^\//, "")) : "stop";
+
 			const template = await prisma.serverTemplate.create({
 				data: {
 					name: sanitizedName,
 					description: egg.description || null,
 					author: egg.author || "Pterodactyl Import",
 					version: egg.meta?.version || "PTDL_v2",
-					image: egg.images[0],
+					image: rawImages[0] || "",
 					images: mappedImages,
-					defaultImage: egg.images[0] || null,
+					defaultImage: rawImages[0] || null,
 					installImage: egg.scripts?.installation?.container || null,
 					startup: egg.startup,
-					stopCommand: "minecraft:stop", // Pterodactyl default
-					sendSignalTo: "SIGTERM",
+					stopCommand: resolvedStopCommand,
+					sendSignalTo: resolvedStopSignal,
 					variables: mappedVariables,
 					installScript: egg.scripts?.installation?.script || null,
 					supportedPorts: [25565],

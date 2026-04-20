@@ -747,11 +747,33 @@ impl ContainerdRuntime {
             "options": ["rbind", "rw"]
         }));
 
+        // Detect the correct shell interpreter for the install script.
+        //
+        // Pterodactyl install scripts use #!/bin/bash or #!/bin/ash shebangs but the
+        // OCI spec uses `args` directly, so the shebang is ignored.
+        //
+        // Problem: On Debian-based images, /bin/sh is dash (POSIX), not bash.
+        // Many Pterodactyl scripts use bash-isms like [[ ]] that fail under dash.
+        // On Alpine-based images, /bin/sh is busybox ash which supports [[ ]].
+        //
+        // Solution: Use bash on Debian images (where dash lacks [[ ]]),
+        // use sh on Alpine images (where busybox ash supports [[ ]]),
+        // and fall back to sh otherwise (POSIX compatibility).
+        let (interp, interp_arg) = detect_install_interpreter(image, script);
+        info!(
+            "Install script interpreter: {} {} (image: {})",
+            interp, interp_arg, image
+        );
+
         // Wrap the install script so all files are chowned to the runtime user (1000:1000)
         // after the user-provided script completes. The installer runs as root but the
         // runtime container runs as 1000:1000, so files must be accessible.
+        //
+        // Pterodactyl mounts server data at /mnt/server, but Catalyst mounts at /data.
+        // Create a symlink so install scripts that hardcode /mnt/server still work.
+        // Also set HOME=/data for compatibility with scripts that use $HOME.
         let wrapped_script = format!(
-            "{}\n\necho '[Catalyst] Fixing file ownership for runtime user...'\nchown -R 1000:1000 /data",
+            "mkdir -p /mnt/server && ln -sfn /data /mnt/server\nexport HOME=/data\n\n{}\n\necho '[Catalyst] Fixing file ownership for runtime user...'\nchown -R 1000:1000 /data",
             script
         );
 
@@ -759,7 +781,7 @@ impl ContainerdRuntime {
             "ociVersion": "1.1.0",
             "process": {
                 "terminal": false, "user": {"uid":0,"gid":0},
-                "args": ["sh", "-c", &wrapped_script], "env": env_list,
+                "args": [interp, interp_arg, &wrapped_script], "env": env_list,
                 "cwd": "/data",
                 "capabilities":{"bounding":caps,"effective":caps,"permitted":caps,"ambient":caps},
                 "noNewPrivileges": true
@@ -2950,6 +2972,58 @@ fn is_not_found(e: &tonic::Status) -> bool {
     e.message().contains("not found")
         || e.message().contains("process already finished")
         || e.code() == tonic::Code::NotFound
+}
+
+/// Detect the correct shell interpreter for an install script.
+///
+/// Pterodactyl install scripts use `#!/bin/bash` or `#!/bin/ash` shebangs but the
+/// OCI spec uses `args` directly, so the shebang line is ignored.
+///
+/// On Debian-based images, `/bin/sh` is `dash` (POSIX) which does NOT support
+/// bash-isms like `[[ ]]`, `=~`, arrays, etc. Many Pterodactyl scripts use these.
+/// On Alpine-based images, `/bin/sh` is busybox `ash` which DOES support `[[ ]]`.
+///
+/// Strategy:
+/// - Debian/Ubuntu images → use `bash` (pre-installed, handles bash-isms)
+/// - Alpine images → use `sh` (busybox ash, supports [[ ]], bash not guaranteed)
+/// - Explicit `#!/bin/bash` shebang on any image → use `bash`
+/// - Other images → use `bash` as safe default for Pterodactyl compatibility
+///
+/// Returns (interpreter, argument) — typically ("bash", "-c") or ("sh", "-c").
+fn detect_install_interpreter(image: &str, script: &str) -> (&'static str, &'static str) {
+    let image_lower = image.to_lowercase();
+    let is_alpine = image_lower.contains("alpine");
+
+    // Check explicit shebang
+    let first_line = script.lines().next().unwrap_or("").trim();
+    if first_line.starts_with("#!") {
+        let shebang = first_line.trim_start_matches("#!").trim();
+        let interpreter = shebang.split_whitespace().next().unwrap_or("");
+        let basename = interpreter.rsplit('/').next().unwrap_or(interpreter);
+        match basename {
+            "bash" => return ("bash", "-c"),
+            "ash" => {
+                // ash scripts on Alpine → use sh (busybox ash)
+                // ash scripts on non-Alpine → use bash (superset, ash unavailable)
+                if is_alpine {
+                    return ("sh", "-c");
+                } else {
+                    return ("bash", "-c");
+                }
+            }
+            _ => (),
+        }
+    }
+
+    // No shebang or unknown interpreter — choose based on image
+    if is_alpine {
+        // On Alpine, /bin/sh = busybox ash which supports [[ ]]
+        ("sh", "-c")
+    } else {
+        // On Debian/Ubuntu and other images, use bash for Pterodactyl compatibility
+        // Most scripts have bash-isms even without an explicit shebang
+        ("bash", "-c")
+    }
 }
 
 fn base_mounts(data_dir: &str) -> Vec<serde_json::Value> {
