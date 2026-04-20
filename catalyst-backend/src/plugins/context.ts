@@ -105,10 +105,13 @@ class ScopedPluginDBClient implements ScopedPluginDB {
       throw new Error('Permission denied: servers access not declared in manifest');
     }
     this.logger.debug({ plugin: this.pluginName }, 'Plugin accessed servers (read)');
-    const self = this;
+    const prisma = this.prisma;
+    const permissions = this.permissions;
+    const pluginName = this.pluginName;
+    const logger = this.logger;
     return {
       findMany: async (args?: any) =>
-        self.prisma.server.findMany({
+        prisma.server.findMany({
           ...args,
           select: {
             id: true,
@@ -125,7 +128,7 @@ class ScopedPluginDBClient implements ScopedPluginDB {
           ...(args?.orderBy ? { orderBy: args.orderBy } : {}),
         }),
       findUnique: async (args: any) => {
-        const result = await self.prisma.server.findUnique({
+        const result = await prisma.server.findUnique({
           ...args,
           select: {
             id: true,
@@ -139,10 +142,10 @@ class ScopedPluginDBClient implements ScopedPluginDB {
         });
         return result;
       },
-      count: async (args?: any) => self.prisma.server.count(args),
+      count: async (args?: any) => prisma.server.count(args),
       update: async (id: string, data: Record<string, any>) => {
-        if (!self.permissions.has('server.write') && !self.permissions.has('*')) {
-          self.logger.warn({ plugin: self.pluginName }, 'Plugin attempted server.update without server.write permission');
+        if (!permissions.has('server.write') && !permissions.has('*')) {
+          logger.warn({ plugin: pluginName }, 'Plugin attempted server.update without server.write permission');
           throw new Error('Permission denied: server.write permission required for updates');
         }
         const filtered: Record<string, any> = {};
@@ -150,8 +153,8 @@ class ScopedPluginDBClient implements ScopedPluginDB {
           if (SERVER_WRITE_WHITELIST.has(key)) {
             filtered[key] = data[key];
           } else {
-            self.logger.warn(
-              { plugin: self.pluginName, field: key },
+            logger.warn(
+              { plugin: pluginName, field: key },
               'Plugin attempted to update non-whitelisted server field',
             );
           }
@@ -159,8 +162,8 @@ class ScopedPluginDBClient implements ScopedPluginDB {
         if (Object.keys(filtered).length === 0) {
           throw new Error('No whitelisted fields in update data. Allowed fields: status');
         }
-        self.logger.info({ plugin: self.pluginName, serverId: id, fields: Object.keys(filtered) }, 'Plugin updated server');
-        return self.prisma.server.update({ where: { id }, data: filtered });
+        logger.info({ plugin: pluginName, serverId: id, fields: Object.keys(filtered) }, 'Plugin updated server');
+        return prisma.server.update({ where: { id }, data: filtered });
       },
     };
   }
@@ -172,10 +175,13 @@ class ScopedPluginDBClient implements ScopedPluginDB {
       throw new Error('Permission denied: users access not declared in manifest');
     }
     this.logger.debug({ plugin: this.pluginName }, 'Plugin accessed users (read, limited)');
-    const self = this;
+    const prisma = this.prisma;
+    const permissions = this.permissions;
+    const pluginName = this.pluginName;
+    const logger = this.logger;
     return {
       findMany: async (args?: any) =>
-        self.prisma.user.findMany({
+        prisma.user.findMany({
           ...args,
           select: {
             id: true,
@@ -193,7 +199,7 @@ class ScopedPluginDBClient implements ScopedPluginDB {
           ...(args?.orderBy ? { orderBy: args.orderBy } : {}),
         }),
       findUnique: async (args: any) => {
-        const result = await self.prisma.user.findUnique({
+        const result = await prisma.user.findUnique({
           ...args,
           select: {
             id: true,
@@ -208,10 +214,10 @@ class ScopedPluginDBClient implements ScopedPluginDB {
         });
         return result;
       },
-      count: async (args?: any) => self.prisma.user.count(args),
+      count: async (args?: any) => prisma.user.count(args),
       update: async (id: string, data: Record<string, any>) => {
-        if (!self.permissions.has('user.write') && !self.permissions.has('*')) {
-          self.logger.warn({ plugin: self.pluginName }, 'Plugin attempted user.update without user.write permission');
+        if (!permissions.has('user.write') && !permissions.has('*')) {
+          logger.warn({ plugin: pluginName }, 'Plugin attempted user.update without user.write permission');
           throw new Error('Permission denied: user.write permission required for updates');
         }
         const filtered: Record<string, any> = {};
@@ -219,8 +225,8 @@ class ScopedPluginDBClient implements ScopedPluginDB {
           if (USER_WRITE_WHITELIST.has(key)) {
             filtered[key] = data[key];
           } else {
-            self.logger.warn(
-              { plugin: self.pluginName, field: key },
+            logger.warn(
+              { plugin: pluginName, field: key },
               'Plugin attempted to update non-whitelisted user field',
             );
           }
@@ -228,8 +234,8 @@ class ScopedPluginDBClient implements ScopedPluginDB {
         if (Object.keys(filtered).length === 0) {
           throw new Error('No whitelisted fields in update data. Allowed fields: roleIds');
         }
-        self.logger.info({ plugin: self.pluginName, userId: id, fields: Object.keys(filtered) }, 'Plugin updated user');
-        return self.prisma.user.update({ where: { id }, data: filtered });
+        logger.info({ plugin: pluginName, userId: id, fields: Object.keys(filtered) }, 'Plugin updated user');
+        return prisma.user.update({ where: { id }, data: filtered });
       },
     };
   }
@@ -253,29 +259,30 @@ class ScopedPluginDBClient implements ScopedPluginDB {
   // Plugin-scoped data only - plugins can always access their own storage
   get pluginStorage() {
     this.logger.debug({ plugin: this.pluginName }, 'Plugin accessed pluginStorage');
-    const self = this;
+    const prisma = this.prisma;
+    const pluginName = this.pluginName;
     return {
       findUnique: async (args: any) =>
-        self.prisma.pluginStorage.findUnique({
+        prisma.pluginStorage.findUnique({
           ...args,
-          where: { ...args.where, pluginName: self.pluginName },
+          where: { ...args.where, pluginName },
         }),
       upsert: async (args: any) =>
-        self.prisma.pluginStorage.upsert({
+        prisma.pluginStorage.upsert({
           ...args,
-          create: { ...args.create, pluginName: self.pluginName },
+          create: { ...args.create, pluginName },
           update: args.update,
-          where: { ...args.where, pluginName: self.pluginName },
+          where: { ...args.where, pluginName },
         }),
       deleteMany: async (args: any) =>
-        self.prisma.pluginStorage.deleteMany({
+        prisma.pluginStorage.deleteMany({
           ...args,
-          where: { ...args.where, pluginName: self.pluginName },
+          where: { ...args.where, pluginName },
         }),
       findMany: async (args?: any) =>
-        self.prisma.pluginStorage.findMany({
+        prisma.pluginStorage.findMany({
           ...args,
-          where: { ...args?.where, pluginName: self.pluginName },
+          where: { ...args?.where, pluginName },
         }),
     };
   }
@@ -391,9 +398,9 @@ class PluginCollectionImpl implements PluginCollectionAPI {
         docs.sort((a, b) => {
           const aVal = a[sortField];
           const bVal = b[sortField];
-          if (aVal == null && bVal == null) return 0;
-          if (aVal == null) return 1 * sortOrder;
-          if (bVal == null) return -1 * sortOrder;
+          if (aVal === null && bVal === null) return 0;
+          if (aVal === null) return 1 * sortOrder;
+          if (bVal === null) return -1 * sortOrder;
           if (aVal < bVal) return -1 * sortOrder;
           if (aVal > bVal) return 1 * sortOrder;
           return 0;
@@ -412,7 +419,7 @@ class PluginCollectionImpl implements PluginCollectionAPI {
     if (options?.projection) {
       docs = docs.map((d) => {
         const projected: any = { _id: d._id };
-        for (const [field, include] of Object.entries(options!.projection!)) {
+        for (const [field, include] of Object.entries(options?.projection ?? {})) {
           if (include && d[field] !== undefined) {
             projected[field] = d[field];
           }
@@ -665,7 +672,7 @@ export function createPluginContext(
       if (!eventHandlers.has(event)) {
         eventHandlers.set(event, new Set());
       }
-      eventHandlers.get(event)!.add(handler);
+      eventHandlers.get(event)?.add(handler);
 
       // Register with event emitter
       eventEmitter.on(event, handler);

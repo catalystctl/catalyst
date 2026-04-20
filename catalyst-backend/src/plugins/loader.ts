@@ -165,7 +165,7 @@ export class PluginLoader {
         if (nameToEntry.has(dep)) {
           // dep must come before manifest.name
           inDegree.set(manifest.name, (inDegree.get(manifest.name) || 0) + 1);
-          dependents.get(dep)!.push(manifest.name);
+          dependents.get(dep)?.push(manifest.name);
         }
       }
     }
@@ -178,7 +178,8 @@ export class PluginLoader {
 
     const sorted: string[] = [];
     while (queue.length > 0) {
-      const name = queue.shift()!;
+      const name = queue.shift();
+      if (!name) break;
       sorted.push(name);
 
       for (const dependent of dependents.get(name) || []) {
@@ -204,7 +205,7 @@ export class PluginLoader {
       }
     }
 
-    return sorted.map((name) => nameToEntry.get(name)!);
+    return sorted.map((name) => nameToEntry.get(name)!).filter(Boolean);
   }
 
   /**
