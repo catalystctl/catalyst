@@ -1,0 +1,52 @@
+# =============================================================================
+# Catalyst — Caddy TLS Reverse Proxy Overlay
+#
+# Usage:
+#   1. Set DOMAIN=panel.example.com in .env (required)
+#   2. Optionally set ACME_EMAIL=admin@example.com for Let's Encrypt notifications
+#   3. docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d
+#
+# Requires:
+#   - Port 80 reachable from the internet (for ACME HTTP-01 challenge)
+#   - DNS A record pointing DOMAIN to this host
+#
+# Caddy automatically:
+#   - Obtains and renews Let's Encrypt certificates
+#   - Redirects HTTP → HTTPS
+#   - Handles OCSP stapling
+#
+# podman-compose note: if ports aren't removed (merge instead of replace),
+# set FRONTEND_PORT=127.0.0.1:8080 in .env to restrict direct access.
+# =============================================================================
+
+services:
+  frontend:
+    # Remove direct host exposure — Caddy proxies to this instead.
+    # Note: Docker Compose v2 correctly replaces the base ports list.
+    # podman-compose merges instead — set FRONTEND_PORT=127.0.0.1:8080 in .env to restrict.
+    ports: []
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: catalyst-caddy
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_started
+    ports:
+      - "${HTTP_PORT:-0.0.0.0:80}:80"
+      - "${HTTPS_PORT:-0.0.0.0:443}:443"
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN is required when using the Caddy overlay}
+      # Optional: email for Let's Encrypt expiry notifications
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+    driver: local
+  caddy-config:
+    driver: local

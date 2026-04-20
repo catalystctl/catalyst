@@ -89,7 +89,9 @@ If you didn't seed, the **first user to register becomes the administrator**.
 
 | Port | Service | Default Bind | Description |
 |---|---|---|---|
-| 8080 | Frontend (nginx) | `0.0.0.0:8080` | Web panel |
+| 8080 | Frontend (nginx) | `0.0.0.0:8080` | Web panel (direct, no TLS) |
+| 80 | Reverse proxy | `0.0.0.0:80` | HTTP → HTTPS redirect (Caddy/Traefik) |
+| 443 | Reverse proxy | `0.0.0.0:443` | HTTPS (Caddy/Traefik) |
 | 3000 | Backend API | `0.0.0.0:3000` | REST API / WebSocket |
 | 2022 | SFTP | `0.0.0.0:2022` | File upload/download |
 | 5432 | PostgreSQL | `127.0.0.1:5432` | Database (local only) |
@@ -105,8 +107,100 @@ All data is persisted in named volumes:
 | `catalyst-server-data` | Server files |
 | `catalyst-backup-data` | Backup archives |
 | `catalyst-plugin-data` | Installed plugins |
+| `caddy-data` | Caddy TLS certificates (Caddy overlay) |
+| `caddy-config` | Caddy configuration state (Caddy overlay) |
+| `traefik-certs` | Traefik ACME certificates (Traefik overlay) |
 
-### HTTPS / HSTS
+### HTTPS / TLS Setup (Automatic)
+
+Two compose overlay files are included for automatic HTTPS with Let's Encrypt:
+
+| Option | Best for | Config file |
+|---|---|---|
+| **Caddy** | Simplicity — zero-config TLS, 2-line Caddyfile | `docker-compose.caddy.yml` |
+| **Traefik** | Advanced — Docker-native service discovery, dashboard | `docker-compose.traefik.yml` |
+
+Both overlays:
+- Remove direct host exposure from the frontend container
+- Add a reverse proxy that binds to ports 80/443
+- Auto-obtain and auto-renew Let's Encrypt certificates (ACME HTTP-01)
+- Redirect HTTP → HTTPS automatically
+- Persist certificates in Docker volumes across restarts
+
+### Prerequisites
+
+- DNS **A record** pointing your domain to this host's public IP
+- Ports **80** and **443** reachable from the internet (required for ACME challenge)
+- For rootless podman: `echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee -a /etc/sysctl.conf && sudo sysctl -p`
+- If using **podman-compose**: it merges port lists instead of replacing them. Set `FRONTEND_PORT=127.0.0.1:8080` in `.env` to restrict direct access when using an SSL overlay.
+
+### Option A: Caddy (recommended)
+
+Caddy is the simplest option — a single 2-line `Caddyfile` handles everything.
+
+**1. Configure `.env`:**
+
+```bash
+DOMAIN=panel.example.com
+ACME_EMAIL=admin@example.com        # optional but recommended
+PUBLIC_URL=https://panel.example.com  # update to https://
+NODE_ENV=production                   # enables HSTS in the backend
+```
+
+**2. Start the stack with the Caddy overlay:**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d
+```
+
+That's it. Visit `https://panel.example.com` — Caddy handles everything else.
+
+### Option B: Traefik
+
+Traefik uses Docker labels for routing and offers a web dashboard.
+
+**1. Configure `.env`:**
+
+```bash
+DOMAIN=panel.example.com
+ACME_EMAIL=admin@example.com        # optional but recommended
+PUBLIC_URL=https://panel.example.com  # update to https://
+NODE_ENV=production                   # enables HSTS in the backend
+```
+
+**2. Start the stack with the Traefik overlay:**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d
+```
+
+**3. (Optional) Access the Traefik dashboard:**
+
+Open `http://127.0.0.1:8080` on the server. The dashboard is localhost-only by default.
+
+> **Security:** Never expose the Traefik dashboard on `0.0.0.0` without authentication.
+> To disable it entirely, set `TRAEFIK_DASHBOARD_PORT=` in `.env`.
+
+### Switching from plain HTTP to HTTPS
+
+If you already have a running stack without TLS:
+
+1. Update `.env` — set `DOMAIN`, `PUBLIC_URL=https://...`, and `NODE_ENV=production`
+2. Pull updated images (nginx config changed): `docker compose pull`
+3. Start with the overlay: `docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d`
+
+### How it works
+
+```
+Internet → Caddy/Traefik (443/80) → frontend nginx (:80) → backend (:3000)
+```
+
+- The **reverse proxy** terminates TLS and forwards plain HTTP to the nginx container
+- **nginx** preserves the upstream `X-Forwarded-Proto: https` header and adds conditional HSTS
+- The **backend** sees the correct protocol and applies its own security headers
+- **SFTP** (port 2022) is unaffected — it's a separate protocol
+
+### HSTS Note
 
 The backend sets aggressive security headers in `NODE_ENV=production`:
 
@@ -114,8 +208,6 @@ The backend sets aggressive security headers in `NODE_ENV=production`:
 - `upgrade-insecure-requests` in CSP — auto-upgrades http to https
 
 If you're running over **plain HTTP** (no TLS/reverse proxy), you **must** set `NODE_ENV=development` in `.env`. Otherwise browsers will cache HSTS and refuse to load `http://` resources, breaking deploy scripts and the panel.
-
-For production with HTTPS, set `NODE_ENV=production` and place a reverse proxy (Caddy, nginx, Traefik) in front to terminate TLS.
 
 ## Updating
 

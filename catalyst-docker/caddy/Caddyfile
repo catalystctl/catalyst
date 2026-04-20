@@ -1,0 +1,7 @@
+# Caddy configuration for Catalyst
+# {$DOMAIN} is substituted from the DOMAIN environment variable.
+# Everything else (TLS, HTTP→HTTPS redirect, OCSP) is automatic.
+
+{$DOMAIN} {
+	reverse_proxy frontend:80
+}

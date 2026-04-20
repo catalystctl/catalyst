@@ -1,0 +1,32 @@
+# =============================================================================
+# Traefik v3 — Static Configuration
+# See: https://doc.traefik.io/traefik/reference/static-configuration/file/
+# =============================================================================
+
+# Docker provider — discover services from container labels
+providers:
+  docker:
+    endpoint: unix:///var/run/docker.sock
+    exposedByDefault: false
+    network: default
+
+# Entrypoints
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+# Dashboard (accessible on the traefik service's 8080 port)
+api:
+  dashboard: true
+  insecure: true
+
+# ACME certificate resolver — HTTP-01 challenge on the "web" entrypoint
+# Email is set via CLI arg in docker-compose.traefik.yml
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web

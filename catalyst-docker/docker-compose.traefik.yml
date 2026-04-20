@@ -1,0 +1,62 @@
+# =============================================================================
+# Catalyst — Traefik TLS Reverse Proxy Overlay
+#
+# Usage:
+#   1. Set DOMAIN=panel.example.com in .env (required)
+#   2. Optionally set ACME_EMAIL=admin@example.com for Let's Encrypt notifications
+#   3. docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d
+#
+# Requires:
+#   - Port 80 reachable from the internet (for ACME HTTP-01 challenge)
+#   - DNS A record pointing DOMAIN to this host
+#
+# Traefik automatically:
+#   - Discovers the frontend service via Docker labels
+#   - Obtains and renews Let's Encrypt certificates
+#   - Redirects HTTP → HTTPS
+#
+# podman-compose note: if ports aren't removed (merge instead of replace),
+# set FRONTEND_PORT=127.0.0.1:8080 in .env to restrict direct access.
+# =============================================================================
+
+services:
+  frontend:
+    # Remove direct host exposure — Traefik proxies to this instead.
+    # Note: Docker Compose v2 correctly replaces the base ports list.
+    # podman-compose merges instead — set FRONTEND_PORT=127.0.0.1:8080 in .env to restrict.
+    ports: []
+    labels:
+      - "traefik.enable=true"
+      # HTTPS router
+      - "traefik.http.routers.frontend.rule=Host(`${DOMAIN:?DOMAIN is required when using the Traefik overlay}`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      # HTTP → HTTPS redirect
+      - "traefik.http.routers.frontend-http.rule=Host(`${DOMAIN:?DOMAIN is required when using the Traefik overlay}`)"
+      - "traefik.http.routers.frontend-http.entrypoints=web"
+      - "traefik.http.routers.frontend-http.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
+
+  traefik:
+    image: traefik:v3
+    container_name: catalyst-traefik
+    restart: unless-stopped
+    # ACME email via CLI arg (static config file doesn't support env vars)
+    command:
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-}"
+    ports:
+      - "${HTTP_PORT:-0.0.0.0:80}:80"
+      - "${HTTPS_PORT:-0.0.0.0:443}:443"
+      # Dashboard — localhost only. Set TRAEFIK_DASHBOARD_PORT= to disable.
+      # WARNING: Never expose on 0.0.0.0 without authentication.
+      - "${TRAEFIK_DASHBOARD_PORT:-127.0.0.1:8080}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - traefik-certs:/letsencrypt
+
+volumes:
+  traefik-certs:
+    driver: local
