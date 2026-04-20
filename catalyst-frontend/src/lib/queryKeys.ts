@@ -8,8 +8,7 @@ export const qk = {
 
   // ── Server ──────────────────────────────────────────────────────────
   server: (id: string) => ['server', id] as const,
-  servers: (filters?: Record<string, unknown>) =>
-    ['servers', filters ?? null] as const,
+  servers: (filters?: Record<string, unknown>) => ['servers', filters ?? null] as const,
   serverPermissions: (id: string) => ['server-permissions', id] as const,
   serverInvites: (id: string) => ['server-invites', id] as const,
   serverAllocations: (id: string) => ['server-allocations', id] as const,
@@ -22,8 +21,7 @@ export const qk = {
   tasks: (serverId: string) => ['tasks', serverId] as const,
 
   // ── Files ──────────────────────────────────────────────────────────
-  files: (serverId: string, path: string) =>
-    ['files', serverId, path] as const,
+  files: (serverId: string, path: string) => ['files', serverId, path] as const,
 
   // ── Databases ──────────────────────────────────────────────────────
   serverDatabases: (serverId: string) => ['server-databases', serverId] as const,
@@ -34,6 +32,9 @@ export const qk = {
   node: (id: string) => ['node', id] as const,
   nodeAssignments: (nodeId: string) => ['nodes', nodeId, 'assignments'] as const,
   nodeApiKey: (nodeId: string) => ['node-api-key', nodeId] as const,
+
+  // ── Nests ───────────────────────────────────────────────────────────
+  nests: () => ['nests'] as const,
 
   // ── Templates ───────────────────────────────────────────────────────
   templates: () => ['templates'] as const,
@@ -69,8 +70,7 @@ export const qk = {
   adminAuthLockouts: () => ['admin-auth-lockouts'] as const,
   adminDatabaseHosts: () => ['admin-database-hosts'] as const,
   adminIpPools: (nodeId: string) => ['ip-pools', nodeId] as const,
-  adminNodeAllocations: (nodeId: string) =>
-    ['node-allocations', nodeId] as const,
+  adminNodeAllocations: (nodeId: string) => ['node-allocations', nodeId] as const,
   adminThemeSettings: () => ['admin-theme-settings'] as const,
 
   // ── Profile ─────────────────────────────────────────────────────────
@@ -88,6 +88,5 @@ export const qk = {
 
   // ── Files / SFTP ────────────────────────────────────────────────────
   sftpTokens: (serverId: string) => ['sftp-tokens', serverId] as const,
-  sftpConnectionInfo: (serverId: string) =>
-    ['sftp-connection-info', serverId] as const,
+  sftpConnectionInfo: (serverId: string) => ['sftp-connection-info', serverId] as const,
 } as const;

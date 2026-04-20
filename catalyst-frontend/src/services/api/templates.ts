@@ -35,6 +35,7 @@ export const templatesApi = {
     allocatedMemoryMb: number;
     allocatedCpuCores: number;
     features?: Template['features'];
+    nestId?: string | null;
   }) => {
     const data = await apiClient.post<ApiResponse<Template>>('/api/templates', payload);
     return data.data;
@@ -59,9 +60,13 @@ export const templatesApi = {
       allocatedMemoryMb: number;
       allocatedCpuCores: number;
       features?: Template['features'];
+      nestId?: string | null;
     }>,
   ) => {
-    const data = await apiClient.put<ApiResponse<Template>>(`/api/templates/${templateId}`, payload);
+    const data = await apiClient.put<ApiResponse<Template>>(
+      `/api/templates/${templateId}`,
+      payload,
+    );
     return data.data;
   },
   remove: async (templateId: string) => {

@@ -52,6 +52,15 @@ export interface TemplateFeatures {
   [key: string]: any;
 }
 
+export interface Nest {
+  id: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  author?: string;
+  templateCount?: number;
+}
+
 export interface Template {
   id: string;
   name: string;
@@ -59,6 +68,8 @@ export interface Template {
   author: string;
   version: string;
   image: string;
+  nestId?: string | null;
+  nest?: Nest | null;
   images?: TemplateImageOption[];
   defaultImage?: string;
   installImage?: string;
