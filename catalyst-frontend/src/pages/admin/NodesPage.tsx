@@ -450,7 +450,7 @@ function AdminNodesPage() {
   // ── Delete mutation ──
   const deleteMutation = useMutation({
     mutationFn: (nodeIds: string[]) => {
-      return Promise.all(nodeIds.map((nodeId) => nodesApi.deleteNode(nodeId)));
+      return Promise.all(nodeIds.map((nodeId) => nodesApi.remove(nodeId)));
     },
     onSuccess: (_data, nodeIds) => {
       notifySuccess(`${nodeIds.length} node${nodeIds.length === 1 ? '' : 's'} deleted`);

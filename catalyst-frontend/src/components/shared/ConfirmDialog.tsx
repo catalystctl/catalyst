@@ -59,7 +59,10 @@ export function ConfirmDialog({
             <div className="flex-shrink-0 mt-0.5">{config.icon}</div>
             <div className="flex-1">
               <AlertDialogTitle>{title}</AlertDialogTitle>
-              <AlertDialogDescription className="mt-2">{message}</AlertDialogDescription>
+              <AlertDialogDescription className="sr-only">
+                {typeof message === 'string' ? message : title}
+              </AlertDialogDescription>
+              <div className="mt-2 text-sm text-muted-foreground">{message}</div>
             </div>
           </div>
         </AlertDialogHeader>

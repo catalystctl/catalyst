@@ -447,14 +447,12 @@ export async function nodeRoutes(app: FastifyInstance) {
 				return reply.status(404).send({ error: "Node not found" });
 			}
 
-			// Find existing API key for this node
-			// Metadata is stored as stringified JSON, so use string_contains
-			// nodeId is validated by Prisma's findUnique check above
-			const safeNodeId = escapeForJsonQuery(nodeId);
+			// Find existing API key for this node via JSON path query
 			const existingKey = await prisma.apikey.findFirst({
 				where: {
 					metadata: {
-						string_contains: `"nodeId":"${safeNodeId}"`,
+						path: ["nodeId"],
+						equals: nodeId,
 					},
 				},
 				select: {
@@ -509,13 +507,12 @@ export async function nodeRoutes(app: FastifyInstance) {
 			}
 
 			// Check for existing API key
-			// Metadata is stored as stringified JSON, so use string_contains
-			// nodeId is validated by Prisma's findUnique check above
-			const safeNodeId = escapeForJsonQuery(nodeId);
+			// Check for existing API key via JSON path query
 			const existingKey = await prisma.apikey.findFirst({
 				where: {
 					metadata: {
-						string_contains: `"nodeId":"${safeNodeId}"`,
+						path: ["nodeId"],
+						equals: nodeId,
 					},
 				},
 			});
@@ -870,9 +867,28 @@ export async function nodeRoutes(app: FastifyInstance) {
 				});
 			}
 
+			// Clean up agent API keys associated with this node
+			const agentKeys = await prisma.apikey.findMany({
+				where: {
+					metadata: {
+						path: ["nodeId"],
+						equals: nodeId,
+					},
+				},
+				select: { id: true },
+			});
+
+			let deletedKeys = 0;
+			if (agentKeys.length > 0) {
+				const result = await prisma.apikey.deleteMany({
+					where: { id: { in: agentKeys.map((k) => k.id) } },
+				});
+				deletedKeys = result.count;
+			}
+
 			await prisma.node.delete({ where: { id: nodeId } });
 
-			reply.send({ success: true });
+			reply.send({ success: true, deletedApiKeys: deletedKeys });
 		},
 	);
 

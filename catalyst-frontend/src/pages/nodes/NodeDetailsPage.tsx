@@ -15,7 +15,6 @@ import {
   ExternalLink,
   Copy,
   AlertTriangle,
-  RefreshCw,
   Clock,
   Shield,
 } from 'lucide-react';
@@ -118,8 +117,6 @@ function NodeDetailsPage() {
     expiresAt: string;
   } | null>(null);
   const [generatedApiKey, setGeneratedApiKey] = useState<string | null>(null);
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -147,13 +144,13 @@ function NodeDetailsPage() {
   });
 
   const apiKeyMutation = useMutation({
-    mutationFn: async (regenerate?: boolean) => {
+    mutationFn: async () => {
       if (!node?.id) throw new Error('Missing node id');
+      const regenerate = apiKeyStatus?.exists === true;
       return nodesApi.generateApiKey(node.id, regenerate);
     },
     onSuccess: (info) => {
       setGeneratedApiKey(info?.apiKey ?? null);
-      setShowRegenerateConfirm(false);
       queryClient.invalidateQueries({ queryKey: ['node-api-key', nodeId] });
       notifySuccess(info?.regenerated ? 'API key regenerated' : 'API key generated');
     },
@@ -164,15 +161,7 @@ function NodeDetailsPage() {
   });
 
   const handleApiKeyClick = () => {
-    if (apiKeyStatus?.exists) {
-      setShowApiKeyModal(true);
-    } else {
-      apiKeyMutation.mutate(false);
-    }
-  };
-
-  const handleRegenerateConfirm = () => {
-    apiKeyMutation.mutate(true);
+    apiKeyMutation.mutate();
   };
 
   const canWrite = useMemo(
@@ -360,9 +349,9 @@ function NodeDetailsPage() {
             >
               <Key className="h-3.5 w-3.5" />
               {apiKeyMutation.isPending
-                ? 'Processing…'
+                ? 'Generating…'
                 : apiKeyStatus?.exists
-                  ? 'View API Key'
+                  ? 'Regenerate API Key'
                   : 'Generate API Key'}
             </Button>
             <Button
@@ -521,12 +510,22 @@ function NodeDetailsPage() {
         </div>
       </ModalShell>
 
-      {/* ── Generated API Key Modal ── */}
+      {/* ── Generated / Regenerated API Key Modal ── */}
       <ModalShell
         open={!!generatedApiKey}
         onClose={() => setGeneratedApiKey(null)}
         title="Agent API Key"
       >
+        {apiKeyStatus?.exists && (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-amber-700 dark:text-amber-300">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>
+              The previous API key has been revoked. Update the agent's{' '}
+              <code className="rounded bg-amber-100 px-1 dark:bg-amber-900/30">config.toml</code>{' '}
+              with the new key below.
+            </span>
+          </div>
+        )}
         <div>
           Add this API key to your agent's{' '}
           <code className="rounded bg-surface-2 px-1 dark:bg-surface-2">config.toml</code> file:
@@ -557,124 +556,6 @@ function NodeDetailsPage() {
           </Button>
           <Button variant="outline" size="sm" onClick={() => setGeneratedApiKey(null)}>
             Done
-          </Button>
-        </div>
-      </ModalShell>
-
-      {/* ── Existing API Key Info Modal ── */}
-      <ModalShell
-        open={showApiKeyModal && !!apiKeyStatus?.apiKey}
-        onClose={() => setShowApiKeyModal(false)}
-        title="Existing Agent API Key"
-      >
-        <div>An API key already exists for this node's agent.</div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <span className="text-xs text-muted-foreground">Name</span>
-            <div className="mt-0.5 font-medium text-foreground dark:text-zinc-100">
-              {apiKeyStatus?.apiKey?.name}
-            </div>
-          </div>
-          <div>
-            <span className="text-xs text-muted-foreground">Created</span>
-            <div className="mt-0.5 font-medium text-foreground dark:text-zinc-100">
-              {apiKeyStatus?.apiKey?.createdAt
-                ? new Date(apiKeyStatus.apiKey.createdAt).toLocaleString()
-                : 'n/a'}
-            </div>
-          </div>
-          <div>
-            <span className="text-xs text-muted-foreground">Requests</span>
-            <div className="mt-0.5 font-medium text-foreground dark:text-zinc-100">
-              {apiKeyStatus?.apiKey?.requestCount ?? 0}
-            </div>
-          </div>
-          <div>
-            <span className="text-xs text-muted-foreground">Last request</span>
-            <div className="mt-0.5 font-medium text-foreground dark:text-zinc-100">
-              {apiKeyStatus?.apiKey?.lastRequest
-                ? new Date(apiKeyStatus.apiKey.lastRequest).toLocaleString()
-                : 'Never'}
-            </div>
-          </div>
-        </div>
-        {apiKeyStatus?.apiKey?.preview && (
-          <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 font-mono text-xs text-foreground dark:bg-zinc-950/40 dark:text-zinc-100">
-            <code className="whitespace-pre-wrap break-all">{apiKeyStatus.apiKey.preview}</code>
-          </div>
-        )}
-        <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-amber-700 dark:text-amber-300">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span>
-            The full API key cannot be displayed as it was only shown once when created. If you need
-            to update the agent's key, you must regenerate it.
-          </span>
-        </div>
-        <div className="flex justify-end gap-2 border-t border-border pt-4 text-xs">
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => {
-              setShowApiKeyModal(false);
-              setShowRegenerateConfirm(true);
-            }}
-            className="gap-1.5"
-          >
-            <RefreshCw className="h-3 w-3" />
-            Regenerate Key
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowApiKeyModal(false)}>
-            Done
-          </Button>
-        </div>
-      </ModalShell>
-
-      {/* ── Regenerate Confirmation Modal ── */}
-      <ModalShell
-        open={showRegenerateConfirm}
-        onClose={() => setShowRegenerateConfirm(false)}
-        title="⚠️ Regenerate API Key"
-        variant="danger"
-      >
-        <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 p-4">
-          <p className="mb-2 text-sm font-semibold text-rose-700 dark:text-rose-300">
-            This action will:
-          </p>
-          <ul className="list-inside list-disc space-y-1 text-sm text-rose-600 dark:text-rose-400">
-            <li>
-              <strong>Delete</strong> the current API key immediately
-            </li>
-            <li>
-              <strong>Disconnect</strong> the agent from Catalyst
-            </li>
-            <li>
-              Require <strong>manual reconfiguration</strong> of the agent with the new key
-            </li>
-          </ul>
-        </div>
-        <p>
-          The agent will be <strong>unable to communicate</strong> with Catalyst until you update
-          its <code className="mx-1 rounded bg-surface-2 px-1">config.toml</code> with the new API
-          key.
-        </p>
-        <div className="flex justify-end gap-2 border-t border-border pt-4 text-xs">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowRegenerateConfirm(false)}
-            disabled={apiKeyMutation.isPending}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleRegenerateConfirm}
-            disabled={apiKeyMutation.isPending}
-            className="gap-1.5"
-          >
-            <RefreshCw className="h-3 w-3" />
-            {apiKeyMutation.isPending ? 'Regenerating…' : 'Yes, Regenerate Key'}
           </Button>
         </div>
       </ModalShell>
