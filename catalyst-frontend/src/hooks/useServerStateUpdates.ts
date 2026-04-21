@@ -138,6 +138,32 @@ export function useServerStateUpdates() {
             });
           }
         }
+
+        // Mod manager events - invalidate mod manager query cache
+        if (type === 'mod_install_complete' || type === 'mod_uninstall_complete' || type === 'mod_update_complete') {
+          const serverId = String(data.serverId ?? '');
+          if (serverId) {
+            (queryClient as any).invalidateQueries({
+              predicate: (query: any) =>
+                Array.isArray(query.queryKey) &&
+                query.queryKey[0] === 'mod-manager-installed' &&
+                query.queryKey[1] === serverId,
+            });
+          }
+        }
+
+        // Plugin manager events - invalidate plugin manager query cache
+        if (type === 'plugin_install_complete' || type === 'plugin_uninstall_complete' || type === 'plugin_update_complete') {
+          const serverId = String(data.serverId ?? '');
+          if (serverId) {
+            (queryClient as any).invalidateQueries({
+              predicate: (query: any) =>
+                Array.isArray(query.queryKey) &&
+                query.queryKey[0] === 'plugin-manager-installed' &&
+                query.queryKey[1] === serverId,
+            });
+          }
+        }
       },
       () => {},
     );

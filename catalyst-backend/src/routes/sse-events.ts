@@ -69,6 +69,14 @@ const EVENT_TYPES = [
   'user_created',
   'user_deleted',
   'user_updated',
+  // Mod manager events
+  'mod_install_complete',
+  'mod_uninstall_complete',
+  'mod_update_complete',
+  // Plugin manager events
+  'plugin_install_complete',
+  'plugin_uninstall_complete',
+  'plugin_update_complete',
 ];
 
 export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGateway) {

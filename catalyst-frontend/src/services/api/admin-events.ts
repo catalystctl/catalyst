@@ -64,7 +64,15 @@ export type AdminEventType =
   | 'node_assigned'
   | 'node_unassigned'
   | 'wildcard_assigned'
-  | 'wildcard_removed';
+  | 'wildcard_removed'
+  // Mod manager events (admin-scoped)
+  | 'mod_install_complete'
+  | 'mod_uninstall_complete'
+  | 'mod_update_complete'
+  // Plugin manager events (admin-scoped)
+  | 'plugin_install_complete'
+  | 'plugin_uninstall_complete'
+  | 'plugin_update_complete';
 
 const ADMIN_EVENT_TYPES: AdminEventType[] = [
   'user_created',
@@ -124,6 +132,14 @@ const ADMIN_EVENT_TYPES: AdminEventType[] = [
   'node_unassigned',
   'wildcard_assigned',
   'wildcard_removed',
+  // Mod manager events (admin-scoped)
+  'mod_install_complete',
+  'mod_uninstall_complete',
+  'mod_update_complete',
+  // Plugin manager events (admin-scoped)
+  'plugin_install_complete',
+  'plugin_uninstall_complete',
+  'plugin_update_complete',
 ];
 
 type AdminEventHandler = (type: AdminEventType, data: Record<string, unknown>) => void;

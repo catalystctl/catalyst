@@ -29,7 +29,10 @@ export function useFileManager(serverId?: string, initialPath = '/') {
       return filesApi.list(serverId, path);
     },
     enabled: Boolean(serverId),
-    refetchOnWindowFocus: false,
+    // Refresh files when user switches back to the tab (server state may have changed)
+    refetchOnWindowFocus: true,
+    // Treat file listings as stale after 30s so refetchOnWindowFocus triggers refresh
+    staleTime: 30_000,
   });
 
   const openFile = useCallback(

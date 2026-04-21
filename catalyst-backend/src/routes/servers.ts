@@ -3005,6 +3005,27 @@ export async function serverRoutes(app: FastifyInstance) {
           },
         });
         reply.send({ success: true, data: { path: normalizedFile } });
+
+        // Emit SSE event for mod install completion
+        const gateway = (app as any).wsGateway;
+        if (gateway?.pushToAdminSubscribers) {
+          gateway.pushToAdminSubscribers('mod_install_complete', {
+            serverId,
+            target: normalizedFile,
+            filename,
+            projectName: projectName || undefined,
+            timestamp: Date.now(),
+          });
+        }
+        if (gateway?.pushToGlobalSubscribers) {
+          gateway.pushToGlobalSubscribers('mod_install_complete', {
+            serverId,
+            target: normalizedFile,
+            filename,
+            projectName: projectName || undefined,
+            timestamp: Date.now(),
+          });
+        }
       } catch (error: any) {
         reply.status(400).send({ error: error?.message || "Failed to install asset" });
       }
@@ -3422,6 +3443,27 @@ export async function serverRoutes(app: FastifyInstance) {
           },
         });
         reply.send({ success: true, data: { path: normalizedFile } });
+
+        // Emit SSE event for plugin install completion
+        const gateway = (app as any).wsGateway;
+        if (gateway?.pushToAdminSubscribers) {
+          gateway.pushToAdminSubscribers('plugin_install_complete', {
+            serverId,
+            target: normalizedFile,
+            filename,
+            projectName: projectName || undefined,
+            timestamp: Date.now(),
+          });
+        }
+        if (gateway?.pushToGlobalSubscribers) {
+          gateway.pushToGlobalSubscribers('plugin_install_complete', {
+            serverId,
+            target: normalizedFile,
+            filename,
+            projectName: projectName || undefined,
+            timestamp: Date.now(),
+          });
+        }
       } catch (error: any) {
         reply.status(400).send({ error: error?.message || "Failed to install asset" });
       }
@@ -3569,6 +3611,25 @@ export async function serverRoutes(app: FastifyInstance) {
           },
         });
         reply.send({ success: true });
+
+        // Emit SSE event for mod uninstall completion
+        const gateway = (app as any).wsGateway;
+        if (gateway?.pushToAdminSubscribers) {
+          gateway.pushToAdminSubscribers('mod_uninstall_complete', {
+            serverId,
+            target: targetValue,
+            filename: safeName,
+            timestamp: Date.now(),
+          });
+        }
+        if (gateway?.pushToGlobalSubscribers) {
+          gateway.pushToGlobalSubscribers('mod_uninstall_complete', {
+            serverId,
+            target: targetValue,
+            filename: safeName,
+            timestamp: Date.now(),
+          });
+        }
       } catch (error: any) {
         reply.status(400).send({ error: error?.message || "Failed to uninstall mod" });
       }
@@ -3616,6 +3677,23 @@ export async function serverRoutes(app: FastifyInstance) {
           },
         });
         reply.send({ success: true });
+
+        // Emit SSE event for plugin uninstall completion
+        const gateway = (app as any).wsGateway;
+        if (gateway?.pushToAdminSubscribers) {
+          gateway.pushToAdminSubscribers('plugin_uninstall_complete', {
+            serverId,
+            filename: safeName,
+            timestamp: Date.now(),
+          });
+        }
+        if (gateway?.pushToGlobalSubscribers) {
+          gateway.pushToGlobalSubscribers('plugin_uninstall_complete', {
+            serverId,
+            filename: safeName,
+            timestamp: Date.now(),
+          });
+        }
       } catch (error: any) {
         reply.status(400).send({ error: error?.message || "Failed to uninstall plugin" });
       }
@@ -3967,6 +4045,23 @@ export async function serverRoutes(app: FastifyInstance) {
       }
 
       reply.send({ success: true, data: results });
+
+      // Emit SSE event for mod update completion
+      const gateway = (app as any).wsGateway;
+      if (gateway?.pushToAdminSubscribers) {
+        gateway.pushToAdminSubscribers('mod_update_complete', {
+          serverId,
+          results: results.map((r: { filename: string; success: boolean }) => ({ filename: r.filename, success: r.success })),
+          timestamp: Date.now(),
+        });
+      }
+      if (gateway?.pushToGlobalSubscribers) {
+        gateway.pushToGlobalSubscribers('mod_update_complete', {
+          serverId,
+          results: results.map((r: { filename: string; success: boolean }) => ({ filename: r.filename, success: r.success })),
+          timestamp: Date.now(),
+        });
+      }
     }
   );
 

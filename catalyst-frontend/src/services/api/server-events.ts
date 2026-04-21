@@ -25,7 +25,15 @@ export type ServerEventType =
   | 'task_progress'
   | 'task_complete'
   | 'resource_stats'
-  | 'storage_resize_complete';
+  | 'storage_resize_complete'
+  // Mod manager events
+  | 'mod_install_complete'
+  | 'mod_uninstall_complete'
+  | 'mod_update_complete'
+  // Plugin manager events
+  | 'plugin_install_complete'
+  | 'plugin_uninstall_complete'
+  | 'plugin_update_complete';
 
 export type StreamStatus = 'connecting' | 'connected' | 'reconnecting' | 'closed' | 'error';
 
@@ -44,6 +52,14 @@ const EVENT_TYPES: ServerEventType[] = [
   'task_complete',
   'resource_stats',
   'storage_resize_complete',
+  // Mod manager events
+  'mod_install_complete',
+  'mod_uninstall_complete',
+  'mod_update_complete',
+  // Plugin manager events
+  'plugin_install_complete',
+  'plugin_uninstall_complete',
+  'plugin_update_complete',
 ];
 
 /**

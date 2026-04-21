@@ -110,3 +110,10 @@ export function useThemeSettings() {
     queryFn: adminApi.getThemeSettings,
   });
 }
+
+export function useOidcConfig() {
+  return useQuery({
+    queryKey: qk.adminOidcConfig(),
+    queryFn: adminApi.getOidcConfig,
+  });
+}

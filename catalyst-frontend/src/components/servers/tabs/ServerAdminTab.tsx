@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { qk } from '../../../lib/queryKeys';
 import {
@@ -287,6 +288,7 @@ export default function ServerAdminTab({
   const [transferOwnerPending, setTransferOwnerPending] = useState(false);
   const [transferOwnerConfirm, setTransferOwnerConfirm] = useState(false);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   // ── Derived ──
   const templateImages = server.template?.images ?? [];
@@ -1019,6 +1021,7 @@ export default function ServerAdminTab({
             serverId={serverId}
             serverName={serverName}
             disabled={!canDelete}
+            onDeleted={() => navigate('/servers')}
           />
         </div>
       </div>

@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import { toast } from 'sonner';
-import { useThemeSettings } from '../../hooks/useAdmin';
+import { useThemeSettings, useOidcConfig } from '../../hooks/useAdmin';
 import { generatePalette, hexToHSL, type HarmonyMode } from '../../utils/generatePalette';
 import { adminApi } from '../../services/api/admin';
 import { useThemeStore, defaultThemeColors } from '../../stores/themeStore';
@@ -136,16 +136,18 @@ function ColorPicker({
 // ─── OIDC Provider Section ───
 
 function OidcProviderSection() {
+  // Use TanStack Query so SSE can invalidate this and trigger re-render
+  const { data: serverConfigs = {}, isLoading } = useOidcConfig();
+  
+  // Local state for editing - syncs with server data when query changes
   const [configs, setConfigs] = useState<Record<string, { clientId: string; clientSecret: string; discoveryUrl: string; source: string }>>({});
-  const [loading, setLoading] = useState(true);
 
-
+  // Sync local state when server data changes (e.g., after SSE invalidation)
   useEffect(() => {
-    adminApi.getOidcConfig().then((data) => {
-      setConfigs(data);
-      setLoading(false);
-    }).catch(() => setLoading(false));
-  }, []);
+    if (Object.keys(serverConfigs).length > 0) {
+      setConfigs(serverConfigs);
+    }
+  }, [serverConfigs]);
 
   const updateField = (provider: string, field: string, value: string) => {
     setConfigs((prev) => ({
@@ -155,9 +157,10 @@ function OidcProviderSection() {
   };
 
   const oidcMutation = useMutation({
-    mutationFn: () => adminApi.updateOidcConfig(configs),
+    mutationFn: (localConfigs: typeof configs) => adminApi.updateOidcConfig(localConfigs),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.adminThemeSettings() });
+      queryClient.invalidateQueries({ queryKey: qk.adminOidcConfig() });
       toast.success('OAuth configuration saved. A server restart may be required for changes to take effect.');
     },
     onError: (err: any) => {
@@ -166,7 +169,7 @@ function OidcProviderSection() {
   });
 
   const handleSave = () => {
-    oidcMutation.mutate();
+    oidcMutation.mutate(configs);
   };
 
   if (loading) {

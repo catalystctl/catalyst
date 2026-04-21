@@ -145,6 +145,12 @@ export function useSseAdminEvents() {
             predicate: (query: Query) =>
               Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-servers',
           });
+          // Also invalidate server permissions and invites (access changes)
+          if (serverId) {
+            q.invalidateQueries({ queryKey: ['server-permissions', serverId] });
+            q.invalidateQueries({ queryKey: ['server-invites', serverId] });
+            q.invalidateQueries({ queryKey: ['server-allocations', serverId] });
+          }
           q.invalidateQueries({ queryKey: ['dashboard-stats'] });
           q.invalidateQueries({ queryKey: ['admin-stats'] });
           q.invalidateQueries({ queryKey: ['dashboard-activity'] });
@@ -380,6 +386,11 @@ export function useSseAdminEvents() {
             predicate: (query: Query) =>
               Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-audit-logs',
           });
+          // Also invalidate profile audit log (users see their own audit entries)
+          q.invalidateQueries({
+            predicate: (query: Query) =>
+              Array.isArray(query.queryKey) && query.queryKey[0] === 'profile-audit-log',
+          });
         }
         if (type === 'auth_lockout_created' || type === 'auth_lockout_cleared') {
           q.invalidateQueries({ queryKey: ['admin-auth-lockouts'] });
@@ -425,6 +436,30 @@ export function useSseAdminEvents() {
             predicate: (query: Query) =>
               Array.isArray(query.queryKey) && query.queryKey[0] === 'nodes',
           });
+        }
+
+        // ── Mod Manager Events ───────────────────────────────────────
+        if (type === 'mod_install_complete' || type === 'mod_uninstall_complete' || type === 'mod_update_complete') {
+          const serverId = String(data.serverId ?? '');
+          if (serverId) {
+            q.invalidateQueries({
+              predicate: (query: Query) =>
+                Array.isArray(query.queryKey) &&
+                query.queryKey[0] === 'mod-manager-installed',
+            });
+          }
+        }
+
+        // ── Plugin Manager Events ────────────────────────────────────
+        if (type === 'plugin_install_complete' || type === 'plugin_uninstall_complete' || type === 'plugin_update_complete') {
+          const serverId = String(data.serverId ?? '');
+          if (serverId) {
+            q.invalidateQueries({
+              predicate: (query: Query) =>
+                Array.isArray(query.queryKey) &&
+                query.queryKey[0] === 'plugin-manager-installed',
+            });
+          }
         }
       },
       () => {},

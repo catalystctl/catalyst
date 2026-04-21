@@ -35,6 +35,16 @@ const ADMIN_EVENT_TYPES = [
   'security_settings_updated', 'smtp_settings_updated', 'theme_settings_updated',
   'system_settings_updated', 'oidc_settings_updated', 'plugin_updated',
   'audit_log_created', 'auth_lockout_created', 'auth_lockout_cleared',
+  // Task CRUD events
+  'task_created', 'task_updated', 'task_deleted',
+  // Database events
+  'database_created', 'database_deleted', 'database_password_rotated',
+  // Node assignment events
+  'node_assigned', 'node_unassigned', 'wildcard_assigned', 'wildcard_removed',
+  // Mod manager events (admin-scoped)
+  'mod_install_complete', 'mod_uninstall_complete', 'mod_update_complete',
+  // Plugin manager events (admin-scoped)
+  'plugin_install_complete', 'plugin_uninstall_complete', 'plugin_update_complete',
 ];
 
 type ReqHeaders = Record<string, string | string[] | undefined>;

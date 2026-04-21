@@ -13,9 +13,10 @@ type Props = {
   disabled?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  onDeleted?: () => void;
 };
 
-function DeleteServerDialog({ serverId, serverName, disabled = false, open: controlledOpen, onOpenChange }: Props) {
+function DeleteServerDialog({ serverId, serverName, disabled = false, open: controlledOpen, onOpenChange, onDeleted }: Props) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = (value: boolean) => {
@@ -26,8 +27,10 @@ function DeleteServerDialog({ serverId, serverName, disabled = false, open: cont
     mutationFn: () => serversApi.delete(serverId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.servers() });
+      queryClient.invalidateQueries({ queryKey: qk.adminServers() });
       notifySuccess('Server deleted');
       setOpen(false);
+      onDeleted?.();
     },
     onError: () => notifyError('Failed to delete server'),
   });
