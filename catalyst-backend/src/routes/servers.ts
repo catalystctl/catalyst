@@ -5449,6 +5449,18 @@ export async function serverRoutes(app: FastifyInstance) {
       });
 
       reply.send({ success: true, data: access });
+
+      // Broadcast server_updated event (access change)
+      const wsGatewayAccessUpdated = (app as any).wsGateway;
+      if (wsGatewayAccessUpdated?.pushToAdminSubscribers) {
+        wsGatewayAccessUpdated.pushToAdminSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'access_updated',
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 
@@ -5498,6 +5510,18 @@ export async function serverRoutes(app: FastifyInstance) {
       });
 
       reply.send({ success: true });
+
+      // Broadcast server_updated event (access removed)
+      const wsGatewayAccessRemoved = (app as any).wsGateway;
+      if (wsGatewayAccessRemoved?.pushToAdminSubscribers) {
+        wsGatewayAccessRemoved.pushToAdminSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'access_removed',
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 
@@ -5649,6 +5673,19 @@ export async function serverRoutes(app: FastifyInstance) {
           },
         });
 
+        // Broadcast database_created event
+        const wsGatewayDbCreated = (app as any).wsGateway;
+        if (wsGatewayDbCreated?.pushToAdminSubscribers) {
+          wsGatewayDbCreated.pushToAdminSubscribers('database_created', {
+            type: 'database_created',
+            serverId,
+            databaseId: database.id,
+            databaseName: database.name,
+            createdBy: userId,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
         reply.status(201).send({
           success: true,
           data: {
@@ -5734,6 +5771,19 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
+      // Broadcast database_password_rotated event
+      const wsGatewayDbRotated = (app as any).wsGateway;
+      if (wsGatewayDbRotated?.pushToAdminSubscribers) {
+        wsGatewayDbRotated.pushToAdminSubscribers('database_password_rotated', {
+          type: 'database_password_rotated',
+          serverId,
+          databaseId: database.id,
+          databaseName: database.name,
+          rotatedBy: userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       reply.send({
         success: true,
         data: {
@@ -5809,6 +5859,18 @@ export async function serverRoutes(app: FastifyInstance) {
           details: { databaseId },
         },
       });
+
+      // Broadcast database_deleted event
+      const wsGatewayDbDeleted = (app as any).wsGateway;
+      if (wsGatewayDbDeleted?.pushToAdminSubscribers) {
+        wsGatewayDbDeleted.pushToAdminSubscribers('database_deleted', {
+          type: 'database_deleted',
+          serverId,
+          databaseId,
+          deletedBy: userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       reply.send({ success: true });
     }
@@ -7504,6 +7566,18 @@ export async function serverRoutes(app: FastifyInstance) {
             currentNode: targetNode.name,
           },
         });
+
+        // Broadcast server_updated event (node transfer)
+        const wsGatewayTransfer = (app as any).wsGateway;
+        if (wsGatewayTransfer?.pushToAdminSubscribers) {
+          wsGatewayTransfer.pushToAdminSubscribers('server_updated', {
+            type: 'server_updated',
+            serverId: id,
+            updatedBy: request.user.userId,
+            change: 'node_transferred',
+            timestamp: new Date().toISOString(),
+          });
+        }
       } catch (error: any) {
         // Rollback on error
         await prisma.server.update({
@@ -7812,6 +7886,18 @@ export async function serverRoutes(app: FastifyInstance) {
       });
 
       return reply.send({ success: true, data: updated });
+
+      // Broadcast server_updated event (ownership transfer)
+      const wsGatewayOwnership = (app as any).wsGateway;
+      if (wsGatewayOwnership?.pushToAdminSubscribers) {
+        wsGatewayOwnership.pushToAdminSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'ownership_transferred',
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 
@@ -7876,6 +7962,18 @@ export async function serverRoutes(app: FastifyInstance) {
       });
 
       return reply.send({ success: true, data: updated });
+
+      // Broadcast server_updated event (archived)
+      const wsGatewayArchive = (app as any).wsGateway;
+      if (wsGatewayArchive?.pushToAdminSubscribers) {
+        wsGatewayArchive.pushToAdminSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'archived',
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 
@@ -7927,6 +8025,18 @@ export async function serverRoutes(app: FastifyInstance) {
       });
 
       return reply.send({ success: true, data: updated });
+
+      // Broadcast server_updated event (restored from archive)
+      const wsGatewayRestore = (app as any).wsGateway;
+      if (wsGatewayRestore?.pushToAdminSubscribers) {
+        wsGatewayRestore.pushToAdminSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'restored',
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 }

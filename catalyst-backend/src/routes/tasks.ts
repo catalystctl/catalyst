@@ -137,6 +137,19 @@ export async function taskRoutes(app: FastifyInstance) {
       }
 
       reply.send(serialize({ success: true, task }));
+
+      // Broadcast task_created event
+      const wsGatewayTaskCreated = (app as any).wsGateway;
+      if (wsGatewayTaskCreated?.pushToAdminSubscribers) {
+        wsGatewayTaskCreated.pushToAdminSubscribers('task_created', {
+          type: 'task_created',
+          serverId,
+          taskId: task.id,
+          taskName: task.name,
+          createdBy: user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 
@@ -266,6 +279,19 @@ export async function taskRoutes(app: FastifyInstance) {
       }
 
       reply.send(serialize({ success: true, task }));
+
+      // Broadcast task_updated event
+      const wsGatewayTaskUpdated = (app as any).wsGateway;
+      if (wsGatewayTaskUpdated?.pushToAdminSubscribers) {
+        wsGatewayTaskUpdated.pushToAdminSubscribers('task_updated', {
+          type: 'task_updated',
+          serverId,
+          taskId: task.id,
+          taskName: task.name,
+          updatedBy: user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 
@@ -297,6 +323,18 @@ export async function taskRoutes(app: FastifyInstance) {
       }
 
       reply.send({ success: true, message: 'Task deleted' });
+
+      // Broadcast task_deleted event
+      const wsGatewayTaskDeleted = (app as any).wsGateway;
+      if (wsGatewayTaskDeleted?.pushToAdminSubscribers) {
+        wsGatewayTaskDeleted.pushToAdminSubscribers('task_deleted', {
+          type: 'task_deleted',
+          serverId,
+          taskId,
+          deletedBy: user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 

@@ -358,6 +358,19 @@ export async function roleRoutes(app: FastifyInstance) {
         success: true,
         data: updated,
       }));
+
+      // Broadcast role_updated event (permission added)
+      const wsGatewayPermAdded = (app as any).wsGateway;
+      if (wsGatewayPermAdded?.pushToAdminSubscribers) {
+        wsGatewayPermAdded.pushToAdminSubscribers('role_updated', {
+          type: 'role_updated',
+          roleId,
+          roleName: updated.name,
+          updatedBy: userId,
+          change: 'permission_added',
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 
@@ -409,6 +422,19 @@ export async function roleRoutes(app: FastifyInstance) {
         success: true,
         data: updated,
       }));
+
+      // Broadcast role_updated event (permission removed)
+      const wsGatewayPermRemoved = (app as any).wsGateway;
+      if (wsGatewayPermRemoved?.pushToAdminSubscribers) {
+        wsGatewayPermRemoved.pushToAdminSubscribers('role_updated', {
+          type: 'role_updated',
+          roleId,
+          roleName: updated.name,
+          updatedBy: userId,
+          change: 'permission_removed',
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 
@@ -463,6 +489,19 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       reply.send({ success: true });
+
+      // Broadcast user_updated event (role assigned)
+      const wsGatewayRoleAssign = (app as any).wsGateway;
+      if (wsGatewayRoleAssign?.pushToAdminSubscribers) {
+        wsGatewayRoleAssign.pushToAdminSubscribers('user_updated', {
+          type: 'user_updated',
+          userId,
+          updatedBy: currentUserId,
+          change: 'role_assigned',
+          roleId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 
@@ -510,6 +549,19 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       reply.send({ success: true });
+
+      // Broadcast user_updated event (role removed)
+      const wsGatewayRoleRemove = (app as any).wsGateway;
+      if (wsGatewayRoleRemove?.pushToAdminSubscribers) {
+        wsGatewayRoleRemove.pushToAdminSubscribers('user_updated', {
+          type: 'user_updated',
+          userId,
+          updatedBy: currentUserId,
+          change: 'role_removed',
+          roleId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 

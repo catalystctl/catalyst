@@ -1396,6 +1396,20 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			reply.status(201).send(serialize({ success: true, data: assignment }));
+
+			// Broadcast node_assigned event
+			const wsGatewayNodeAssigned = (app as any).wsGateway;
+			if (wsGatewayNodeAssigned?.pushToAdminSubscribers) {
+				wsGatewayNodeAssigned.pushToAdminSubscribers('node_assigned', {
+					type: 'node_assigned',
+					nodeId,
+					targetType,
+					targetId,
+					assignmentId: assignment.id,
+					assignedBy: request.user.userId,
+					timestamp: new Date().toISOString(),
+				});
+			}
 		},
 	);
 
@@ -1445,6 +1459,20 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			reply.send({ success: true });
+
+			// Broadcast node_unassigned event
+			const wsGatewayNodeUnassigned = (app as any).wsGateway;
+			if (wsGatewayNodeUnassigned?.pushToAdminSubscribers) {
+				wsGatewayNodeUnassigned.pushToAdminSubscribers('node_unassigned', {
+					type: 'node_unassigned',
+					nodeId,
+					targetType: assignment.userId ? 'user' : 'role',
+					targetId: assignment.userId || assignment.roleId!,
+					assignmentId,
+					removedBy: request.user.userId,
+					timestamp: new Date().toISOString(),
+				});
+			}
 		},
 	);
 
@@ -1591,6 +1619,19 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			reply.status(201).send(serialize({ success: true, data: assignment }));
+
+			// Broadcast wildcard_assigned event
+			const wsGatewayWildcardAssigned = (app as any).wsGateway;
+			if (wsGatewayWildcardAssigned?.pushToAdminSubscribers) {
+				wsGatewayWildcardAssigned.pushToAdminSubscribers('wildcard_assigned', {
+					type: 'wildcard_assigned',
+					targetType,
+					targetId,
+					assignmentId: assignment.id,
+					assignedBy: request.user.userId,
+					timestamp: new Date().toISOString(),
+				});
+			}
 		},
 	);
 
@@ -1648,6 +1689,19 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			reply.send({ success: true });
+
+			// Broadcast wildcard_removed event
+			const wsGatewayWildcardRemoved = (app as any).wsGateway;
+			if (wsGatewayWildcardRemoved?.pushToAdminSubscribers) {
+				wsGatewayWildcardRemoved.pushToAdminSubscribers('wildcard_removed', {
+					type: 'wildcard_removed',
+					targetType,
+					targetId,
+					assignmentId: wildcardAssignment.id,
+					removedBy: request.user.userId,
+					timestamp: new Date().toISOString(),
+				});
+			}
 		},
 	);
 }

@@ -185,6 +185,11 @@ export function useSseAdminEvents() {
           }
           q.invalidateQueries({ queryKey: ['admin-health'] });
           q.invalidateQueries({ queryKey: ['locations'] });
+          // Invalidate cluster metrics when node status changes
+          q.invalidateQueries({
+            predicate: (query: Query) =>
+              Array.isArray(query.queryKey) && query.queryKey[0] === 'cluster-metrics',
+          });
         }
 
         // ── Template Events ─────────────────────────────────────────
@@ -238,6 +243,14 @@ export function useSseAdminEvents() {
             predicate: (query: Query) =>
               Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-roles',
           });
+          // Role changes affect permissions — invalidate server-permissions and my-permissions
+          if (type === 'role_updated') {
+            q.invalidateQueries({
+              predicate: (query: Query) =>
+                Array.isArray(query.queryKey) && query.queryKey[0] === 'server-permissions',
+            });
+            q.invalidateQueries({ queryKey: ['my-permissions'] });
+          }
           if (type === 'role_deleted') {
             const roleId = String(data.roleId ?? '');
             if (roleId) {

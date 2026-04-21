@@ -1197,6 +1197,19 @@ export async function adminRoutes(app: FastifyInstance) {
                   data: `Server suspended${reason?.trim() ? `: ${reason.trim()}` : ''}`,
                 },
               });
+
+              // Broadcast server_suspended event for bulk action
+              const wsGatewayBulkSuspend = (app as any).wsGateway;
+              if (wsGatewayBulkSuspend?.pushToAdminSubscribers) {
+                wsGatewayBulkSuspend.pushToAdminSubscribers('server_suspended', {
+                  type: 'server_suspended',
+                  serverId: server.id,
+                  serverName: server.name,
+                  suspendedBy: user.userId,
+                  timestamp: new Date().toISOString(),
+                });
+              }
+
               return { serverId: server.id, status: 'success' };
             }
 
@@ -1229,6 +1242,19 @@ export async function adminRoutes(app: FastifyInstance) {
                   data: 'Server unsuspended',
                 },
               });
+
+              // Broadcast server_unsuspended event for bulk action
+              const wsGatewayBulkUnsuspend = (app as any).wsGateway;
+              if (wsGatewayBulkUnsuspend?.pushToAdminSubscribers) {
+                wsGatewayBulkUnsuspend.pushToAdminSubscribers('server_unsuspended', {
+                  type: 'server_unsuspended',
+                  serverId: server.id,
+                  serverName: server.name,
+                  unsuspendedBy: user.userId,
+                  timestamp: new Date().toISOString(),
+                });
+              }
+
               return { serverId: server.id, status: 'success' };
             }
 
