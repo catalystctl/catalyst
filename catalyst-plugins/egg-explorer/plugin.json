@@ -1,0 +1,32 @@
+{
+  "name": "egg-explorer",
+  "version": "1.0.0",
+  "displayName": "Egg Explorer",
+  "description": "Browse and install game server templates from the Pterodactyl game-eggs repository directly from the admin panel",
+  "author": "Karutoil",
+  "catalystVersion": ">=1.0.0",
+  "permissions": [
+    "admin.read"
+  ],
+  "backend": {
+    "entry": "backend/index.js"
+  },
+  "frontend": {
+    "entry": "frontend/index.ts",
+    "hasTabs": true
+  },
+  "config": {
+    "syncInterval": {
+      "type": "select",
+      "default": "weekly",
+      "description": "How often to automatically sync with the game-eggs repository",
+      "options": ["daily", "weekly", "monthly", "manual"]
+    },
+    "repoPath": {
+      "type": "string",
+      "default": "/tmp/catalyst-game-eggs",
+      "description": "Local filesystem path where the game-eggs repository will be cloned"
+    }
+  },
+  "dependencies": {}
+}

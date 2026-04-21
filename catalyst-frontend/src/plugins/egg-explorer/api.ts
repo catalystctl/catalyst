@@ -1,0 +1,91 @@
+// src/plugins/egg-explorer/api.ts
+// API client for the egg-explorer plugin.
+
+import { createPluginApiClient } from '../plugin-api';
+import type { EggSummary, EggCategory, EggIndexStatus, EggListResponse } from './types';
+
+const api = createPluginApiClient('egg-explorer');
+const API_BASE = import.meta.env.VITE_API_URL ?? '';
+
+// ── Plugin backend endpoints ──
+
+export async function fetchEggs(params?: {
+  search?: string;
+  category?: string;
+  subcategory?: string;
+  imageFamily?: string;
+  feature?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<EggListResponse> {
+  const sp = new URLSearchParams();
+  if (params?.search) sp.set('search', params.search);
+  if (params?.category) sp.set('category', params.category);
+  if (params?.subcategory) sp.set('subcategory', params.subcategory);
+  if (params?.imageFamily) sp.set('imageFamily', params.imageFamily);
+  if (params?.feature) sp.set('feature', params.feature);
+  if (params?.page) sp.set('page', String(params.page));
+  if (params?.pageSize) sp.set('pageSize', String(params.pageSize));
+
+  const res = await api.get<EggListResponse>(`?${sp.toString()}`);
+  if (!res.success) throw new Error(res.error ?? 'Failed to fetch eggs');
+  // pluginFetch pass-through: res IS { success, data, pagination, ... }
+  // Destructure to get the full response shape the caller expects
+  const { success: _s, error: _e, ...paginated } = res as any;
+  return paginated as EggListResponse;
+}
+
+export async function fetchCategories(): Promise<{
+  data: EggCategory[];
+  totalCategories: number;
+  totalEggs: number;
+}> {
+  const res = await api.get<any>('categories');
+  if (!res.success) throw new Error(res.error ?? 'Failed to fetch categories');
+  const { success: _s, error: _e, ...rest } = res as any;
+  return rest;
+}
+
+export async function fetchStatus(): Promise<EggIndexStatus> {
+  const res = await api.get<EggIndexStatus>('status');
+  if (!res.success || !res.data) throw new Error(res.error ?? 'Failed to fetch status');
+  return res.data;
+}
+
+export async function triggerSync(): Promise<void> {
+  const res = await api.post<void>('sync');
+  if (!res.success) throw new Error(res.error ?? 'Failed to trigger sync');
+}
+
+export async function fetchFullEgg(filePath: string): Promise<any> {
+  const res = await api.get<any>(`egg?path=${encodeURIComponent(filePath)}`);
+  if (!res.success || !res.data) throw new Error(res.error ?? 'Failed to fetch egg data');
+  return res.data;
+}
+
+// ── Catalyst core endpoint (template import) ──
+
+export async function importEgg(eggData: Record<string, any>, nestId?: string) {
+  const res = await fetch(`${API_BASE}/api/templates/import-pterodactyl`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...eggData, nestId }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    throw new Error(body.error || 'Import failed');
+  }
+
+  return res.json();
+}
+
+// ── Nests (for the import dialog) ──
+
+export async function fetchNests(): Promise<Array<{ id: string; name: string }>> {
+  const res = await fetch(`${API_BASE}/api/nests`, { credentials: 'include' });
+  if (!res.ok) return [];
+  const body = await res.json();
+  return body.data ?? [];
+}
