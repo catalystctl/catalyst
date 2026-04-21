@@ -184,6 +184,7 @@ export function useSseAdminEvents() {
             q.invalidateQueries({ queryKey: ['node-metrics', nodeId] });
           }
           q.invalidateQueries({ queryKey: ['admin-health'] });
+          q.invalidateQueries({ queryKey: ['locations'] });
         }
 
         // ── Template Events ─────────────────────────────────────────
@@ -271,6 +272,10 @@ export function useSseAdminEvents() {
               Array.isArray(query.queryKey) && query.queryKey[0] === 'api-keys',
           });
           q.invalidateQueries({ queryKey: ['profile-api-keys'] });
+          q.invalidateQueries({
+            predicate: (query: Query) =>
+              Array.isArray(query.queryKey) && query.queryKey[0] === 'node-api-key',
+          });
         }
 
         // ── Location Events ────────────────────────────────────────
@@ -343,6 +348,8 @@ export function useSseAdminEvents() {
         }
         if (type === 'system_settings_updated') {
           q.invalidateQueries({ queryKey: ['admin-mod-manager'] });
+          q.invalidateQueries({ queryKey: ['admin-smtp'] });
+          q.invalidateQueries({ queryKey: ['admin-security-settings'] });
         }
         if (type === 'oidc_settings_updated') {
           // OIDC config uses local state, invalidate any related queries
@@ -363,6 +370,48 @@ export function useSseAdminEvents() {
         }
         if (type === 'auth_lockout_created' || type === 'auth_lockout_cleared') {
           q.invalidateQueries({ queryKey: ['admin-auth-lockouts'] });
+        }
+
+        // ── Task Events (M-11) ──────────────────────────────────────
+        if (type === 'task_created' || type === 'task_updated' || type === 'task_deleted') {
+          const serverId = String(data.serverId ?? '');
+          if (serverId) {
+            q.invalidateQueries({
+              predicate: (query: Query) =>
+                Array.isArray(query.queryKey) && query.queryKey[0] === 'tasks' && query.queryKey[1] === serverId,
+            });
+          }
+        }
+
+        // ── Database Events (M-12) ─────────────────────────────────
+        if (type === 'database_created' || type === 'database_deleted' || type === 'database_password_rotated') {
+          const serverId = String(data.serverId ?? '');
+          if (serverId) {
+            q.invalidateQueries({
+              predicate: (query: Query) =>
+                Array.isArray(query.queryKey) && query.queryKey[0] === 'server-databases' && query.queryKey[1] === serverId,
+            });
+          }
+        }
+
+        // ── Node Assignment Events (H-03) ──────────────────────────
+        if (type === 'node_assigned' || type === 'node_unassigned' || type === 'wildcard_assigned' || type === 'wildcard_removed') {
+          const nodeId = String(data.nodeId ?? '');
+          const roleId = String(data.roleId ?? '');
+          const userId = String(data.userId ?? '');
+          if (nodeId) {
+            q.invalidateQueries({ queryKey: ['nodes', nodeId, 'assignments'] });
+          }
+          if (roleId) {
+            q.invalidateQueries({ queryKey: ['roles', roleId, 'nodes'] });
+          }
+          if (userId) {
+            q.invalidateQueries({ queryKey: ['users', userId, 'nodes'] });
+          }
+          q.invalidateQueries({
+            predicate: (query: Query) =>
+              Array.isArray(query.queryKey) && query.queryKey[0] === 'nodes',
+          });
         }
       },
       () => {},

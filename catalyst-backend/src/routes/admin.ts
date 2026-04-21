@@ -1570,6 +1570,11 @@ export async function adminRoutes(app: FastifyInstance) {
         },
       });
 
+      try {
+        const wsGateway = (app as any).wsGateway;
+        wsGateway?.pushToAdminSubscribers('security_settings_updated', { updatedBy: user.userId });
+      } catch {}
+
       reply.send({ success: true });
     }
   );
@@ -2233,6 +2238,11 @@ export async function adminRoutes(app: FastifyInstance) {
         },
       });
 
+      try {
+        const wsGateway = (app as any).wsGateway;
+        wsGateway?.pushToAdminSubscribers('smtp_settings_updated', { updatedBy: user.userId });
+      } catch {}
+
       reply.send({ success: true });
     }
   );
@@ -2280,6 +2290,11 @@ export async function adminRoutes(app: FastifyInstance) {
           modrinthConfigured: Boolean(modrinthApiKey),
         },
       });
+
+      try {
+        const wsGateway = (app as any).wsGateway;
+        wsGateway?.pushToAdminSubscribers('system_settings_updated', { updatedBy: user.userId });
+      } catch {}
 
       reply.send({ success: true });
     }
@@ -2401,6 +2416,11 @@ export async function adminRoutes(app: FastifyInstance) {
         details: updateData,
       });
 
+      try {
+        const wsGateway = (app as any).wsGateway;
+        wsGateway?.pushToAdminSubscribers('theme_settings_updated', { updatedBy: user.userId });
+      } catch {}
+
       reply.send(serialize({ success: true, data: settings }));
     }
   );
@@ -2488,6 +2508,11 @@ export async function adminRoutes(app: FastifyInstance) {
         resourceId: lockoutId,
         details: { email: lockout.email, ipAddress: lockout.ipAddress },
       });
+
+      try {
+        const wsGateway = (app as any).wsGateway;
+        wsGateway?.pushToAdminSubscribers('auth_lockout_cleared', { lockoutId });
+      } catch {}
 
       reply.send({ success: true });
     }
@@ -2606,6 +2631,11 @@ export async function adminRoutes(app: FastifyInstance) {
         resource: 'oidc_config',
         details: { providers: Object.keys(meta.oidcProviders) },
       });
+
+      try {
+        const wsGateway = (app as any).wsGateway;
+        wsGateway?.pushToAdminSubscribers('oidc_settings_updated', { updatedBy: request.user.userId });
+      } catch {}
 
       reply.send(serialize({ success: true, message: 'OIDC configuration updated. Restart required for changes to take full effect.' }));
     }

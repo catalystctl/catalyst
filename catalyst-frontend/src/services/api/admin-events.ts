@@ -54,7 +54,17 @@ export type AdminEventType =
   | 'plugin_updated'
   | 'audit_log_created'
   | 'auth_lockout_created'
-  | 'auth_lockout_cleared';
+  | 'auth_lockout_cleared'
+  | 'task_created'
+  | 'task_updated'
+  | 'task_deleted'
+  | 'database_created'
+  | 'database_deleted'
+  | 'database_password_rotated'
+  | 'node_assigned'
+  | 'node_unassigned'
+  | 'wildcard_assigned'
+  | 'wildcard_removed';
 
 const ADMIN_EVENT_TYPES: AdminEventType[] = [
   'user_created',
@@ -104,6 +114,16 @@ const ADMIN_EVENT_TYPES: AdminEventType[] = [
   'audit_log_created',
   'auth_lockout_created',
   'auth_lockout_cleared',
+  'task_created',
+  'task_updated',
+  'task_deleted',
+  'database_created',
+  'database_deleted',
+  'database_password_rotated',
+  'node_assigned',
+  'node_unassigned',
+  'wildcard_assigned',
+  'wildcard_removed',
 ];
 
 type AdminEventHandler = (type: AdminEventType, data: Record<string, unknown>) => void;

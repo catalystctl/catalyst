@@ -261,6 +261,7 @@ function TemplateCreateModal() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.templates() });
+      queryClient.invalidateQueries({ queryKey: qk.nests() });
       notifySuccess('Template created');
       setOpen(false);
       setName('');
@@ -430,6 +431,7 @@ function TemplateCreateModal() {
     if (successCount) {
       notifySuccess(`Imported ${successCount} template${successCount === 1 ? '' : 's'}`);
       queryClient.invalidateQueries({ queryKey: qk.templates() });
+      queryClient.invalidateQueries({ queryKey: qk.nests() });
     }
     if (failureCount) {
       notifyError(`${failureCount} template${failureCount === 1 ? '' : 's'} failed to import`);

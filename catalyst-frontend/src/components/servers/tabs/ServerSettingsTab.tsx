@@ -1,4 +1,6 @@
 import ServerTabCard from './ServerTabCard';
+import { useQueryClient } from '@tanstack/react-query';
+import { qk } from '../../../lib/queryKeys';
 import { serversApi } from '../../../services/api/servers';
 import { notifySuccess, notifyError } from '../../../utils/notify';
 
@@ -21,9 +23,13 @@ export default function ServerSettingsTab({
   isSuspended,
   serverStatus,
 }: Props) {
+  const queryClient = useQueryClient();
+
   const handleReinstall = async () => {
     try {
       await serversApi.install(serverId);
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.servers() });
       notifySuccess('Reinstall started');
     } catch (error: unknown) {
       notifyError(

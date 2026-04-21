@@ -7,6 +7,7 @@
  */
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { qk } from '../lib/queryKeys';
 import { backupsApi } from '../services/api/backups';
 import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
 
@@ -28,22 +29,12 @@ export function useBackups(serverId?: string, options?: { page?: number; limit?:
           type !== 'backup_delete_complete'
         ) return;
 
-        queryClient.invalidateQueries({
-          predicate: (query) =>
-            Array.isArray(query.queryKey) &&
-            query.queryKey[0] === 'backups' &&
-            query.queryKey[1] === serverId,
-        });
+        queryClient.invalidateQueries({ queryKey: ['backups', serverId] });
 
         // Follow-up fetch to pick up updated size/metadata after remote upload
         if (type === 'backup_complete') {
           setTimeout(() => {
-            queryClient.invalidateQueries({
-              predicate: (query) =>
-                Array.isArray(query.queryKey) &&
-                query.queryKey[0] === 'backups' &&
-                query.queryKey[1] === serverId,
-            });
+            queryClient.invalidateQueries({ queryKey: ['backups', serverId] });
           }, 1500);
         }
       },
@@ -54,7 +45,7 @@ export function useBackups(serverId?: string, options?: { page?: number; limit?:
   }, [serverId, queryClient]);
 
   return useQuery({
-    queryKey: ['backups', serverId, { page, limit }],
+    queryKey: qk.backups(serverId!, page, limit),
     queryFn: () => backupsApi.list(serverId!, { page, limit }),
     enabled: Boolean(serverId),
     refetchInterval: (query) => {

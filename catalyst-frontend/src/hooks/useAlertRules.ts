@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { qk } from '../lib/queryKeys';
 import { alertsApi } from '../services/api/alerts';
 
 export function useAlertRules(params?: {
@@ -9,7 +10,7 @@ export function useAlertRules(params?: {
   scope?: 'mine' | 'all';
 }) {
   return useQuery({
-    queryKey: ['alert-rules', params],
+    queryKey: qk.alertRules(params as Record<string, unknown> | undefined),
     queryFn: () => alertsApi.listRules(params),
   });
 }

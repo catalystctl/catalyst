@@ -146,6 +146,9 @@ export function NodeAssignmentsSelector({
       // Invalidate queries after successful API call
       queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId) });
       queryClient.invalidateQueries({ queryKey: qk.userNodes(userId) });
+      queryClient.invalidateQueries({ predicate: (q: any) =>
+        Array.isArray(q.queryKey) && q.queryKey[0] === 'nodes' && q.queryKey[2] === 'assignments'
+      });
     } catch (error: unknown) {
       // Revert on error
       notifyError(getErrorMessage(error, 'Failed to update wildcard assignment'));
@@ -214,6 +217,9 @@ export function NodeAssignmentsSelector({
       notifySuccess('Node assigned');
       queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId) });
       queryClient.invalidateQueries({ queryKey: qk.userNodes(userId) });
+      queryClient.invalidateQueries({ predicate: (q: any) =>
+        Array.isArray(q.queryKey) && q.queryKey[0] === 'nodes' && q.queryKey[2] === 'assignments'
+      });
       return true;
     } catch (error: unknown) {
       notifyError(getErrorMessage(error, 'Failed to assign node'));
@@ -237,6 +243,9 @@ export function NodeAssignmentsSelector({
         notifySuccess('Node unassigned');
         queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId) });
         queryClient.invalidateQueries({ queryKey: qk.userNodes(userId) });
+        queryClient.invalidateQueries({ predicate: (q: any) =>
+          Array.isArray(q.queryKey) && q.queryKey[0] === 'nodes' && q.queryKey[2] === 'assignments'
+        });
         return true;
       }
       return false;
@@ -281,6 +290,11 @@ export function NodeAssignmentsSelector({
       setExpirationNodeId(null);
       setExpirationDate('');
       notifySuccess('Expiration updated');
+      queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId) });
+      queryClient.invalidateQueries({ queryKey: qk.userNodes(userId) });
+      queryClient.invalidateQueries({ predicate: (q: any) =>
+        Array.isArray(q.queryKey) && q.queryKey[0] === 'nodes' && q.queryKey[2] === 'assignments'
+      });
     } catch (error: unknown) {
       notifyError(getErrorMessage(error, 'Failed to update expiration'));
     }

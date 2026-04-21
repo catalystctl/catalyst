@@ -32,6 +32,9 @@ const ADMIN_EVENT_TYPES = [
   'nest_created', 'nest_updated', 'nest_deleted',
   'database_host_created', 'database_host_updated', 'database_host_deleted',
   'ip_pool_created', 'ip_pool_updated', 'ip_pool_deleted',
+  'security_settings_updated', 'smtp_settings_updated', 'theme_settings_updated',
+  'system_settings_updated', 'oidc_settings_updated', 'plugin_updated',
+  'audit_log_created', 'auth_lockout_created', 'auth_lockout_cleared',
 ];
 
 type ReqHeaders = Record<string, string | string[] | undefined>;

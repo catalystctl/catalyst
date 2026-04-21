@@ -880,7 +880,7 @@ export default function MigrationPage() {
   const pauseMutation = useMutation({
     mutationFn: () => migrationApi.pause(activeJobId!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.migrationJob() });
+      queryClient.invalidateQueries({ queryKey: qk.migrationJob(activeJobId!) });
       queryClient.invalidateQueries({ queryKey: qk.migrationJobs() });
       notifyInfo('Migration paused');
     },
@@ -890,7 +890,7 @@ export default function MigrationPage() {
   const resumeMutation = useMutation({
     mutationFn: () => migrationApi.resume(activeJobId!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.migrationJob() });
+      queryClient.invalidateQueries({ queryKey: qk.migrationJob(activeJobId!) });
       queryClient.invalidateQueries({ queryKey: qk.migrationJobs() });
       notifySuccess('Migration resumed');
     },
@@ -900,7 +900,7 @@ export default function MigrationPage() {
   const cancelMutation = useMutation({
     mutationFn: () => migrationApi.cancel(activeJobId!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.migrationJob() });
+      queryClient.invalidateQueries({ queryKey: qk.migrationJob(activeJobId!) });
       queryClient.invalidateQueries({ queryKey: qk.migrationJobs() });
       notifyInfo('Migration cancelled');
     },
@@ -910,8 +910,8 @@ export default function MigrationPage() {
   const retryMutation = useMutation({
     mutationFn: (stepId: string) => migrationApi.retryStep(activeJobId!, stepId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.migrationJob() });
-      queryClient.invalidateQueries({ queryKey: qk.migrationSteps() });
+      queryClient.invalidateQueries({ queryKey: qk.migrationJob(activeJobId!) });
+      queryClient.invalidateQueries({ queryKey: qk.migrationSteps(activeJobId!) });
       notifySuccess('Step queued for retry');
     },
     onError: (err: any) => notifyError(err.response?.data?.error || 'Retry failed'),

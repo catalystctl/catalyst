@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { qk } from '../lib/queryKeys';
 import { serversApi } from '../services/api/servers';
 import { notifyError, notifySuccess } from '../utils/notify';
 import { useAuthStore } from '../stores/authStore';
@@ -11,6 +12,7 @@ function InvitesPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, setSession } = useAuthStore();
+  const queryClient = useQueryClient();
   const [accepted, setAccepted] = useState(false);
   const [registerUsername, setRegisterUsername] = useState('');
   const [registerPassword, setRegisterPassword] = useState('');
@@ -33,6 +35,7 @@ function InvitesPage() {
     onSuccess: () => {
       setAccepted(true);
       notifySuccess('Invite accepted');
+      queryClient.invalidateQueries({ queryKey: qk.servers() });
       navigate('/servers');
     },
     onError: (error: any) => {

@@ -179,17 +179,17 @@ export default function ProfilePage() {
   // ── Mutations ──
   const updateProfileMutation = useMutation({
     mutationFn: () => profileApi.updateProfile({ username: editUsername, firstName: editFirstName, lastName: editLastName }),
-    onSuccess: () => { notifySuccess('Profile updated'); setEditingProfile(false); queryClient.invalidateQueries({ queryKey: ['profile'] }); useAuthStore.getState().refresh().catch(() => {}); },
+    onSuccess: () => { notifySuccess('Profile updated'); setEditingProfile(false); queryClient.invalidateQueries({ queryKey: ['profile'] }); queryClient.invalidateQueries({ queryKey: ['profile-audit-log'] }); useAuthStore.getState().refresh().catch(() => {}); },
     onError: (e: any) => notifyError(e?.response?.data?.error || e?.message || 'Failed to update'),
   });
   const changePwMutation = useMutation({
     mutationFn: () => profileApi.changePassword({ currentPassword: curPw, newPassword: newPw, revokeOtherSessions: revokeOthers }),
-    onSuccess: () => { notifySuccess('Password updated'); setCurPw(''); setNewPw(''); setRevokeOthers(false); },
+    onSuccess: () => { notifySuccess('Password updated'); setCurPw(''); setNewPw(''); setRevokeOthers(false); queryClient.invalidateQueries({ queryKey: ['profile'] }); queryClient.invalidateQueries({ queryKey: qk.profileSessions() }); queryClient.invalidateQueries({ queryKey: ['profile-audit-log'] }); },
     onError: (e: any) => notifyError(e?.response?.data?.error || e?.message || 'Failed'),
   });
   const setPwMutation = useMutation({
     mutationFn: () => profileApi.setPassword({ newPassword: setPwVal }),
-    onSuccess: () => { notifySuccess('Password set'); setSetPwVal(''); queryClient.invalidateQueries({ queryKey: ['profile'] }); },
+    onSuccess: () => { notifySuccess('Password set'); setSetPwVal(''); queryClient.invalidateQueries({ queryKey: ['profile'] }); useAuthStore.getState().refresh().catch(() => {}); },
     onError: (e: any) => notifyError(e?.response?.data?.error || e?.message || 'Failed'),
   });
   const enableTfaMutation = useMutation({
@@ -199,47 +199,48 @@ export default function ProfilePage() {
       setTfaSetup({ qrCode: p?.qrCode || p?.qr || p?.qrImage, secret: p?.secret, otpAuthUrl: p?.totpURI || p?.otpAuthUrl || p?.otpauthUrl, backupCodes: p?.backupCodes || [] });
       setTfaModalOpen(true); notifySuccess('2FA enabled'); setTfaPw('');
       queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.invalidateQueries({ queryKey: ['profile-audit-log'] });
     },
     onError: (e: any) => notifyError(e?.response?.data?.error || e?.message || 'Failed'),
   });
   const disableTfaMutation = useMutation({
     mutationFn: () => profileApi.disableTwoFactor({ password: tfaPw }),
-    onSuccess: () => { notifySuccess('2FA disabled'); setTfaPw(''); queryClient.invalidateQueries({ queryKey: ['profile'] }); },
+    onSuccess: () => { notifySuccess('2FA disabled'); setTfaPw(''); queryClient.invalidateQueries({ queryKey: ['profile'] }); queryClient.invalidateQueries({ queryKey: ['profile-audit-log'] }); },
     onError: (e: any) => notifyError(e?.response?.data?.error || e?.message || 'Failed'),
   });
   const genCodesMutation = useMutation({
     mutationFn: () => profileApi.generateBackupCodes({ password: tfaPw }),
-    onSuccess: (data: any) => { setTfaSetup((p) => ({ ...p, backupCodes: data?.data?.backupCodes || data?.backupCodes || [] })); notifySuccess('Codes generated'); setTfaPw(''); },
+    onSuccess: (data: any) => { setTfaSetup((p) => ({ ...p, backupCodes: data?.data?.backupCodes || data?.backupCodes || [] })); notifySuccess('Codes generated'); setTfaPw(''); queryClient.invalidateQueries({ queryKey: ['profile-audit-log'] }); },
     onError: (e: any) => notifyError(e?.response?.data?.error || e?.message || 'Failed'),
   });
   const addPkMutation = useMutation({
     mutationFn: () => profileApi.createPasskey({ name: pkName || undefined }),
-    onSuccess: async () => { notifySuccess('Passkey added'); setPkName(''); await refreshPasskeys(); },
+    onSuccess: async () => { notifySuccess('Passkey added'); setPkName(''); await refreshPasskeys(); queryClient.invalidateQueries({ queryKey: ['profile-audit-log'] }); },
     onError: (e: any) => notifyError(e?.message || 'Failed'),
   });
   const delPkMutation = useMutation({
     mutationFn: (id: string) => profileApi.deletePasskey(id),
-    onSuccess: async () => { notifySuccess('Passkey removed'); await refreshPasskeys(); },
+    onSuccess: async () => { notifySuccess('Passkey removed'); await refreshPasskeys(); queryClient.invalidateQueries({ queryKey: ['profile-audit-log'] }); },
     onError: (e: any) => notifyError(e?.message || 'Failed'),
   });
   const updPkMutation = useMutation({
     mutationFn: async () => { if (!editPkId) return; return profileApi.updatePasskey(editPkId, editPkName); },
-    onSuccess: async () => { notifySuccess('Passkey updated'); setEditPkId(null); setEditPkName(''); await refreshPasskeys(); },
+    onSuccess: async () => { notifySuccess('Passkey updated'); setEditPkId(null); setEditPkName(''); await refreshPasskeys(); queryClient.invalidateQueries({ queryKey: ['profile-audit-log'] }); },
     onError: (e: any) => notifyError(e?.message || 'Failed'),
   });
   const revokeSessionMutation = useMutation({
     mutationFn: (id: string) => profileApi.revokeSession(id),
-    onSuccess: () => { notifySuccess('Session revoked'); queryClient.invalidateQueries({ queryKey: qk.profileSessions() }); },
+    onSuccess: () => { notifySuccess('Session revoked'); queryClient.invalidateQueries({ queryKey: qk.profileSessions() }); queryClient.invalidateQueries({ queryKey: ['profile-audit-log'] }); },
     onError: (e: any) => notifyError(e?.message || 'Failed'),
   });
   const revokeAllMutation = useMutation({
     mutationFn: () => profileApi.revokeAllSessions(),
-    onSuccess: (data) => { notifySuccess(`Revoked ${data.revoked} session(s)`); queryClient.invalidateQueries({ queryKey: qk.profileSessions() }); },
+    onSuccess: (data) => { notifySuccess(`Revoked ${data.revoked} session(s)`); queryClient.invalidateQueries({ queryKey: qk.profileSessions() }); queryClient.invalidateQueries({ queryKey: ['profile-audit-log'] }); },
     onError: (e: any) => notifyError(e?.message || 'Failed'),
   });
   const resendVerifyMutation = useMutation({
     mutationFn: () => profileApi.resendVerification(),
-    onSuccess: () => notifySuccess('Verification email sent'),
+    onSuccess: () => { notifySuccess('Verification email sent'); queryClient.invalidateQueries({ queryKey: ['profile-audit-log'] }); },
     onError: (e: any) => notifyError(e?.message || 'Failed'),
   });
   const removeAvatarMutation = useMutation({
@@ -457,7 +458,7 @@ export default function ProfilePage() {
                 <div className="space-y-3">
                   <div className="flex flex-wrap gap-2">
                     {availableProviders.map((p) => (
-                      <Button key={p} variant="outline" size="sm" onClick={() => profileApi.linkSso(p)} className="text-xs"><ExternalLink className="mr-1.5 h-3 w-3" />Link {p.toUpperCase()}</Button>
+                      <Button key={p} variant="outline" size="sm" onClick={() => profileApi.linkSso(p).then(() => { queryClient.invalidateQueries({ queryKey: ['profile-sso-accounts'] }); queryClient.invalidateQueries({ queryKey: ['profile'] }); })} className="text-xs"><ExternalLink className="mr-1.5 h-3 w-3" />Link {p.toUpperCase()}</Button>
                     ))}
                   </div>
                   {(ssoAccounts ?? []).filter((a) => a.providerId !== 'credential').length === 0 ? <p className="py-2 text-center text-xs text-muted-foreground">No linked accounts</p> : (ssoAccounts ?? []).filter((a) => a.providerId !== 'credential').map((a) => (

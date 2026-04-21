@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { qk } from '../lib/queryKeys';
 import { filesApi } from '../services/api/files';
 import type { FileEntry } from '../types/file';
 import { notifyError } from '../utils/notify';
@@ -22,7 +23,7 @@ export function useFileManager(serverId?: string, initialPath = '/') {
   }, []);
 
   const listQuery = useQuery({
-    queryKey: ['files', serverId, path],
+    queryKey: qk.files(serverId!, path),
     queryFn: () => {
       if (!serverId) throw new Error('missing server id');
       return filesApi.list(serverId, path);

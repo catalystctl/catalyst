@@ -4,14 +4,14 @@ import { qk } from '../lib/queryKeys';
 
 export function useProfile() {
   return useQuery({
-    queryKey: ['profile'],
+    queryKey: qk.profile(),
     queryFn: profileApi.getProfile,
   });
 }
 
 export function useProfileSsoAccounts() {
   return useQuery({
-    queryKey: ['profile-sso-accounts'],
+    queryKey: qk.profileSsoAccounts(),
     queryFn: profileApi.listSsoAccounts,
   });
 }
@@ -26,7 +26,7 @@ export function useSessions() {
 
 export function useAuditLog(limit = 50, offset = 0) {
   return useQuery({
-    queryKey: ['profile-audit-log', limit, offset],
+    queryKey: qk.profileAuditLog(limit, offset),
     queryFn: () => profileApi.getAuditLog(limit, offset),
   });
 }

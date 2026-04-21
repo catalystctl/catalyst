@@ -368,6 +368,7 @@ function UsersPage() {
     onSuccess: () => {
       notifySuccess('User updated');
       queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
+      queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
       setEditingUserId(null);
       setEditRoleSearch('');
       setEditServerSearch('');
@@ -387,6 +388,7 @@ function UsersPage() {
     onSuccess: () => {
       notifySuccess('User deleted');
       queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
+      queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
     },
     onError: (error: any) => {
       const rawError = error?.response?.data?.error;
@@ -450,6 +452,7 @@ function UsersPage() {
         `${userIds.length} user${userIds.length === 1 ? '' : 's'} deleted`,
       );
       queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
+      queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
       setSelectedIds([]);
       setDeletingUser(null);
     },

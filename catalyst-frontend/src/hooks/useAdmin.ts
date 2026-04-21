@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
+import { qk } from '../lib/queryKeys';
 import { adminApi } from '../services/api/admin';
 
 export function useAdminStats() {
   return useQuery({
-    queryKey: ['admin-stats'],
+    queryKey: qk.adminStats(),
     queryFn: adminApi.stats,
     refetchInterval: 30000,
   });
@@ -11,7 +12,7 @@ export function useAdminStats() {
 
 export function useAdminHealth() {
   return useQuery({
-    queryKey: ['admin-health'],
+    queryKey: qk.adminHealth(),
     queryFn: adminApi.health,
     refetchInterval: 15000,
   });
@@ -19,14 +20,14 @@ export function useAdminHealth() {
 
 export function useAdminUsers(params?: { page?: number; limit?: number; search?: string }) {
   return useQuery({
-    queryKey: ['admin-users', params],
+    queryKey: qk.adminUsers(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listUsers(params),
   });
 }
 
 export function useAdminRoles() {
   return useQuery({
-    queryKey: ['admin-roles'],
+    queryKey: qk.adminRoles(),
     queryFn: adminApi.listRoles,
   });
 }
@@ -39,14 +40,14 @@ export function useAdminServers(params?: {
   owner?: string;
 }) {
   return useQuery({
-    queryKey: ['admin-servers', params],
+    queryKey: qk.adminServers(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listServers(params),
   });
 }
 
 export function useAdminNodes(params?: { search?: string }) {
   return useQuery({
-    queryKey: ['admin-nodes', params],
+    queryKey: qk.adminNodes(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listNodes(params),
     refetchInterval: 30000,
   });
@@ -62,7 +63,7 @@ export function useAuditLogs(params?: {
   to?: string;
 }) {
   return useQuery({
-    queryKey: ['admin-audit-logs', params],
+    queryKey: qk.adminAuditLogs(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listAuditLogs(params),
     refetchInterval: 15000,
   });
@@ -70,42 +71,42 @@ export function useAuditLogs(params?: {
 
 export function useDatabaseHosts() {
   return useQuery({
-    queryKey: ['admin-database-hosts'],
+    queryKey: qk.adminDatabaseHosts(),
     queryFn: adminApi.listDatabaseHosts,
   });
 }
 
 export function useSmtpSettings() {
   return useQuery({
-    queryKey: ['admin-smtp'],
+    queryKey: qk.adminSmtp(),
     queryFn: adminApi.getSmtpSettings,
   });
 }
 
 export function useSecuritySettings() {
   return useQuery({
-    queryKey: ['admin-security-settings'],
+    queryKey: qk.adminSecuritySettings(),
     queryFn: adminApi.getSecuritySettings,
   });
 }
 
 export function useModManagerSettings() {
   return useQuery({
-    queryKey: ['admin-mod-manager'],
+    queryKey: qk.adminModManager(),
     queryFn: adminApi.getModManagerSettings,
   });
 }
 
 export function useAuthLockouts(params?: { page?: number; limit?: number; search?: string }) {
   return useQuery({
-    queryKey: ['admin-auth-lockouts', params],
+    queryKey: qk.adminAuthLockouts(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listAuthLockouts(params),
   });
 }
 
 export function useThemeSettings() {
   return useQuery({
-    queryKey: ['admin-theme-settings'],
+    queryKey: qk.adminThemeSettings(),
     queryFn: adminApi.getThemeSettings,
   });
 }

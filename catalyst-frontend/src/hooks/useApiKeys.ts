@@ -3,14 +3,12 @@ import { qk } from '@/lib/queryKeys';
 import { apiKeyService, CreateApiKeyRequest, UpdateApiKeyRequest, type ApiKey } from '../services/apiKeys';
 import { toast } from 'sonner';
 
-export const API_KEYS_QUERY_KEY = ['api-keys'] as const;
-
 /**
  * Hook to fetch all API keys
  */
 export function useApiKeys() {
   return useQuery({
-    queryKey: API_KEYS_QUERY_KEY,
+    queryKey: qk.apiKeys(),
     queryFn: () => apiKeyService.list(),
   });
 }
@@ -20,7 +18,7 @@ export function useApiKeys() {
  */
 export function useApiKey(id: string | undefined) {
   return useQuery({
-    queryKey: [...API_KEYS_QUERY_KEY, id],
+    queryKey: qk.apiKeyDetail(id!),
     queryFn: () => apiKeyService.get(id!),
     enabled: !!id,
   });
@@ -31,7 +29,7 @@ export function useApiKey(id: string | undefined) {
  */
 export function useApiKeyUsage(id: string | undefined) {
   return useQuery({
-    queryKey: [...API_KEYS_QUERY_KEY, id, 'usage'],
+    queryKey: qk.apiKeyUsage(id!),
     queryFn: () => apiKeyService.getUsage(id!),
     enabled: !!id,
     refetchInterval: 30000,
@@ -43,7 +41,7 @@ export function useApiKeyUsage(id: string | undefined) {
  */
 export function usePermissionsCatalog() {
   return useQuery({
-    queryKey: ['permissions-catalog'] as const,
+    queryKey: qk.permissionsCatalog(),
     queryFn: () => apiKeyService.getPermissionsCatalog(),
     staleTime: 10 * 60 * 1000, // Catalog rarely changes
   });
@@ -54,7 +52,7 @@ export function usePermissionsCatalog() {
  */
 export function useMyPermissions() {
   return useQuery({
-    queryKey: ['my-permissions'] as const,
+    queryKey: qk.myPermissions(),
     queryFn: () => apiKeyService.getMyPermissions(),
     staleTime: 60 * 1000, // Refresh every minute
   });
@@ -69,14 +67,14 @@ export function useCreateApiKey() {
   return useMutation({
     mutationFn: (data: CreateApiKeyRequest) => apiKeyService.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: qk.apiKeys() });
       toast.success('API key created successfully');
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to create API key');
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: qk.apiKeys() });
     },
   });
 }
@@ -91,7 +89,7 @@ export function useUpdateApiKey() {
     mutationFn: ({ id, data }: { id: string; data: UpdateApiKeyRequest }) =>
       apiKeyService.update(id, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: qk.apiKeys() });
       queryClient.invalidateQueries({ queryKey: qk.apiKeyVariable(variables.id) });
       toast.success('API key updated successfully');
     },
@@ -99,7 +97,7 @@ export function useUpdateApiKey() {
       toast.error(error?.message || 'Failed to update API key');
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: qk.apiKeys() });
     },
   });
 }
@@ -113,9 +111,9 @@ export function useDeleteApiKey() {
   return useMutation({
     mutationFn: (id: string) => apiKeyService.delete(id),
     onMutate: async (id: string) => {
-      await queryClient.cancelQueries({ queryKey: API_KEYS_QUERY_KEY });
-      const previous = queryClient.getQueryData<ApiKey[]>(API_KEYS_QUERY_KEY);
-      queryClient.setQueryData<ApiKey[]>(API_KEYS_QUERY_KEY, (old) =>
+      await queryClient.cancelQueries({ queryKey: qk.apiKeys() });
+      const previous = queryClient.getQueryData<ApiKey[]>(qk.apiKeys());
+      queryClient.setQueryData<ApiKey[]>(qk.apiKeys(), (old) =>
         old ? old.filter((key) => key.id !== id) : old,
       );
       return { previous };
@@ -126,12 +124,12 @@ export function useDeleteApiKey() {
     },
     onError: (_error, _id, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(API_KEYS_QUERY_KEY, context.previous);
+        queryClient.setQueryData(qk.apiKeys(), context.previous);
       }
       toast.error('Failed to revoke API key');
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: qk.apiKeys() });
     },
   });
 }

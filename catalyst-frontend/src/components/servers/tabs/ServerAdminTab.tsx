@@ -374,6 +374,9 @@ export default function ServerAdminTab({
       setTransferOwnerPending(true);
       await serversApi.transferOwnership(serverId, { newOwnerId: newOwnerId.trim() });
       notifySuccess('Ownership transferred');
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.servers() });
+      queryClient.invalidateQueries({ queryKey: qk.serverPermissions(serverId) });
       setNewOwnerId('');
       setTransferOwnerConfirm(false);
     } catch (err: unknown) {

@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { filesApi } from '../../../services/api/files';
 import {
   detectConfigFormat,
@@ -91,6 +91,7 @@ export default function ServerConfigurationTab({
   // ── Config file state ──
   const [configFiles, setConfigFiles] = useState<ConfigFileState[]>([]);
   const [openConfigIndex, setOpenConfigIndex] = useState(-1);
+  const queryClient = useQueryClient();
   const [configSearch, setConfigSearch] = useState('');
 
   const configTemplatePath = server.template?.features?.configFile;
@@ -281,6 +282,9 @@ export default function ServerConfigurationTab({
     },
     onSuccess: () => {
       notifySuccess('Configuration saved');
+      if (serverId) {
+        queryClient.invalidateQueries({ queryKey: ['files', serverId] });
+      }
     },
     onError: (error: any) => {
       const message =

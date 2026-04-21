@@ -57,6 +57,9 @@ function NodeCreateModal(_props: Props) {
     },
     onSuccess: (info) => {
       queryClient.invalidateQueries({ queryKey: qk.nodes() });
+      queryClient.invalidateQueries({ predicate: (q: any) =>
+        Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-nodes'
+      });
       notifySuccess('Node registered');
       setDeployInfo(info ?? null);
       setOpen(false);

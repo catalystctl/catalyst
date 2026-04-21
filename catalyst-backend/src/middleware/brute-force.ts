@@ -13,6 +13,7 @@
 
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { PrismaClient, User } from "@prisma/client";
+import { getWsGateway } from '../websocket/gateway';
 
 const LOCKOUT_THRESHOLDS = [
   { attempts: 5, lockout: 5 * 60 * 1000 },    // 5 attempts = 5 min lockout
@@ -148,10 +149,19 @@ export const handleFailedLogin = async (
   // Apply lockout if threshold reached
   const threshold = LOCKOUT_THRESHOLDS.find(t => updatedUser.failedLoginAttempts >= t.attempts);
   if (threshold) {
+    const lockedUntil = new Date(Date.now() + threshold.lockout);
     await prisma.user.update({
       where: { id: user.id },
-      data: { lockedUntil: new Date(Date.now() + threshold.lockout) },
+      data: { lockedUntil },
     });
+
+    try {
+      const wsGateway = getWsGateway();
+      wsGateway?.pushToAdminSubscribers('auth_lockout_created', {
+        userId: user.id,
+        lockedUntil: lockedUntil.toISOString(),
+      });
+    } catch {}
   }
 };
 

@@ -52,7 +52,7 @@ export const usePluginStore = create<PluginStore>((set, get) => ({
         p.manifest.name === name
           ? {
               ...p,
-              manifest: { ...p.manifest, config: { ...p.manifest.config } },
+              manifest: { ...p.manifest, config: { ...p.manifest.config, ...config } },
             }
           : p
       ),

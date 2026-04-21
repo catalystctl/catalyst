@@ -138,7 +138,7 @@ function ColorPicker({
 function OidcProviderSection() {
   const [configs, setConfigs] = useState<Record<string, { clientId: string; clientSecret: string; discoveryUrl: string; source: string }>>({});
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+
 
   useEffect(() => {
     adminApi.getOidcConfig().then((data) => {
@@ -154,16 +154,19 @@ function OidcProviderSection() {
     }));
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await adminApi.updateOidcConfig(configs);
+  const oidcMutation = useMutation({
+    mutationFn: () => adminApi.updateOidcConfig(configs),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.adminThemeSettings() });
       toast.success('OAuth configuration saved. A server restart may be required for changes to take effect.');
-    } catch (err: any) {
+    },
+    onError: (err: any) => {
       toast.error(err.response?.data?.error || 'Failed to save OAuth configuration');
-    } finally {
-      setSaving(false);
-    }
+    },
+  });
+
+  const handleSave = () => {
+    oidcMutation.mutate();
   };
 
   if (loading) {
@@ -249,10 +252,10 @@ function OidcProviderSection() {
         <button
           type="button"
           onClick={handleSave}
-          disabled={saving}
+          disabled={oidcMutation.isPending}
           className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
         >
-          {saving ? (
+          {oidcMutation.isPending ? (
             <><div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Saving…</>
           ) : (
             <><Save className="h-3.5 w-3.5" />Save OAuth Config</>

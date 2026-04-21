@@ -60,6 +60,9 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange }: Props) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.nodes() });
       queryClient.invalidateQueries({ queryKey: qk.node(node.id) });
+      queryClient.invalidateQueries({ predicate: (q: any) =>
+        Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-nodes'
+      });
       notifySuccess('Node updated');
       setOpen(false);
     },

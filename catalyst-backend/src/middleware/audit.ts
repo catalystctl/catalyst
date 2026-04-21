@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../db.js';
+import { getWsGateway } from '../websocket/gateway';
 
 interface AuditLogOptions {
   action: string;
@@ -16,7 +17,7 @@ export async function createAuditLog(
   options: AuditLogOptions
 ): Promise<void> {
   try {
-    await prisma.auditLog.create({
+    const entry = await prisma.auditLog.create({
       data: {
         userId,
         action: options.action,
@@ -25,6 +26,18 @@ export async function createAuditLog(
         details: options.details || {},
       },
     });
+
+    try {
+      const wsGateway = getWsGateway();
+      wsGateway?.pushToAdminSubscribers('audit_log_created', {
+        id: entry.id,
+        action: entry.action,
+        userId: entry.userId,
+        resource: entry.resource,
+        resourceId: entry.resourceId,
+        timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : new Date().toISOString(),
+      });
+    } catch {}
   } catch (error) {
     console.error('Failed to create audit log:', error);
   }

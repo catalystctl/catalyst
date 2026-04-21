@@ -21,7 +21,7 @@ export type ServerEventType =
   | 'backup_delete_complete'
   | 'eula_required'
   | 'alert'
-  | 'server_log'
+  | 'console_output'
   | 'task_progress'
   | 'task_complete'
   | 'resource_stats'
@@ -39,7 +39,7 @@ const EVENT_TYPES: ServerEventType[] = [
   'backup_delete_complete',
   'eula_required',
   'alert',
-  'server_log',
+  'console_output',
   'task_progress',
   'task_complete',
   'resource_stats',

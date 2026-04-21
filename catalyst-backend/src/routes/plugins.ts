@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { PluginLoader } from '../plugins/loader';
 import { z } from 'zod';
+import { getWsGateway } from '../websocket/gateway';
 
 const EnablePluginSchema = z.object({
   enabled: z.boolean(),
@@ -150,6 +151,11 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
           await pluginLoader.disablePlugin(name);
         }
 
+        try {
+          const wsGateway = getWsGateway();
+          wsGateway?.pushToAdminSubscribers('plugin_updated', { name, action: body.enabled ? 'enabled' : 'disabled' });
+        } catch {}
+
         return {
           success: true,
           message: `Plugin ${body.enabled ? 'enabled' : 'disabled'} successfully`,
@@ -179,6 +185,11 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
 
       try {
         await pluginLoader.reloadPlugin(name);
+
+        try {
+          const wsGateway = getWsGateway();
+          wsGateway?.pushToAdminSubscribers('plugin_updated', { name, action: 'reloaded' });
+        } catch {}
 
         return {
           success: true,
@@ -223,6 +234,11 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         for (const [key, value] of Object.entries(body.config)) {
           await plugin.context.setConfig(key, value);
         }
+
+        try {
+          const wsGateway = getWsGateway();
+          wsGateway?.pushToAdminSubscribers('plugin_updated', { name, action: 'config_updated' });
+        } catch {}
 
         return {
           success: true,
