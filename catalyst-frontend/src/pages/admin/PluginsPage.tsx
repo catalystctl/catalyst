@@ -205,11 +205,11 @@ function PluginSettingsModal({
   });
 
   // Use pluginDetails config as base, but allow local edits to override.
-  // Config can come from two sources:
-  //   1. manifest.config — schema definitions with { type, default, description, options }
-  //   2. pluginDetails.config — current runtime values (flat key-value or schema)
-  // We merge: use manifest schema for rendering, overlay with runtime values.
-  const manifestSchema = pluginDetails?.manifest?.config ?? {};
+  // Config rendering uses two sources:
+  //   1. pluginDetails.configSchema — original schema from plugin.json (type, default, description, label)
+  //   2. pluginDetails.config — current values (may be raw values after user saved)
+  // We use the schema for rendering labels/descriptions/types, overlay with current values.
+  const manifestSchema = pluginDetails?.configSchema ?? {};
   const runtimeValues = pluginDetails?.config ?? {};
   const config = localConfig ?? (Object.keys(manifestSchema).length > 0 ? manifestSchema : runtimeValues);
 
@@ -299,9 +299,10 @@ function PluginSettingsModal({
                 const label = schema ? (schema.label || key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())) : key;
                 const selectOptions = schema ? (schema.options || []) : [];
 
-                // Check runtime values for overrides
+                // Use runtime value if set, otherwise fall back to schema default
                 const runtimeOverride = runtimeValues[key];
-                const effectiveValue = runtimeOverride !== undefined && !schema ? runtimeOverride : currentValue;
+                const isRuntimeObject = runtimeOverride !== undefined && !isConfigSchema(runtimeOverride);
+                const effectiveValue = isRuntimeObject ? runtimeOverride : currentValue;
 
                 return (
                   <div key={key} className="space-y-1.5">
@@ -353,6 +354,17 @@ function PluginSettingsModal({
                           </option>
                         ))}
                       </select>
+                    ) : fieldType === 'password' ? (
+                      <Input
+                        type="password"
+                        value={String(effectiveValue ?? '')}
+                        onChange={(e) =>
+                          handleConfigChange(key, schema
+                            ? { ...(value as Record<string, any>), default: e.target.value }
+                            : e.target.value)
+                        }
+                        placeholder="••••••••"
+                      />
                     ) : fieldType === 'text' ? (
                       <textarea
                         value={String(effectiveValue ?? '')}

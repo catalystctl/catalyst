@@ -1,10 +1,11 @@
 // src/plugins/egg-explorer/components/EggExplorer.tsx
 // Main admin tab component for browsing and installing Pterodactyl eggs.
 //
-// Fetches the full egg index (~248 eggs, ~450 KB) once on mount, then does
-// all filtering / searching in-memory for instant responsiveness.
+// The backend builds a basic index from the GitHub Tree API in a single call,
+// so the UI is usable almost instantly. Full metadata enrichment happens in
+// the background. Users can also click any egg to fetch full details on demand.
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -16,6 +17,7 @@ import {
   Clock,
   FolderOpen,
   Filter,
+  Key,
 } from 'lucide-react';
 import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
@@ -99,7 +101,6 @@ export function EggExplorer() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [initialSyncDone, setInitialSyncDone] = useState(false);
 
   // ── Reset visible count when filters change ──
   useEffect(() => {
@@ -119,72 +120,53 @@ export function EggExplorer() {
 
   const hasMore = visibleCount < filteredEggs.length;
 
-  // ── Fetch status on mount ──
+  // ── Fetch status + eggs on mount ──
   useEffect(() => {
     let cancelled = false;
-    const poll = async () => {
-      try {
-        const s = await fetchStatus();
-        if (cancelled) return;
-        setStatus(s);
-        if (s.ready) {
-          setInitialSyncDone(true);
-          return true;
-        }
-        if (s.syncing) setSyncing(true);
-        return false;
-      } catch {
-        return false;
-      }
-    };
 
     (async () => {
-      let done = await poll();
-      while (!done && !cancelled) {
-        await new Promise((r) => setTimeout(r, 2000));
-        done = await poll();
+      try {
+        // Poll status until ready (should be very fast — single Tree API call)
+        let s: EggIndexStatus | null = null;
+        for (let i = 0; i < 15; i++) {
+          s = await fetchStatus();
+          if (cancelled) return;
+          setStatus(s);
+          if (s.ready) break;
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+        if (!s?.ready) {
+          setError('Egg index failed to load. Check server logs or try syncing.');
+          setLoading(false);
+          return;
+        }
+
+        // Fetch categories + all eggs
+        const catRes = await fetchCategories();
+        if (cancelled) return;
+        setCategories(catRes.data || []);
+
+        const eggRes = await fetch(`/api/plugins/egg-explorer/?pageSize=999`, {
+          credentials: 'include',
+        }).then((r) => r.json());
+        if (cancelled) return;
+        setAllEggs(eggRes.data || []);
+      } catch (err: any) {
+        if (!cancelled) setError(err.message);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
 
     return () => { cancelled = true; };
   }, []);
 
-  // Auto-trigger sync if not ready
-  useEffect(() => {
-    if (status && !status.ready && !status.syncing && !initialSyncDone) {
-      triggerSync().catch(() => {});
-    }
-  }, [status, initialSyncDone]);
-
-  // ── Fetch all eggs + categories once ready ──
-  useEffect(() => {
-    if (!initialSyncDone) return;
-
-    setLoading(true);
-    setError(null);
-
-    Promise.all([fetchCategories()])
-      .then(([catRes]) => {
-        setCategories(catRes.data || []);
-        // Eggs are already embedded in the categories response from the status check.
-        // But we need the full list — fetch from the backend with a large page size.
-        return fetch(`/api/plugins/egg-explorer/?pageSize=999`, {
-          credentials: 'include',
-        })
-          .then((r) => r.json())
-          .then((res) => {
-            setAllEggs(res.data || []);
-          });
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [initialSyncDone]);
-
   // ── Handlers ──
   const handleSync = useCallback(async () => {
     setSyncing(true);
     try {
       await triggerSync();
+      // Poll until ready
       let ready = false;
       while (!ready) {
         await new Promise((r) => setTimeout(r, 2000));
@@ -192,7 +174,6 @@ export function EggExplorer() {
         setStatus(s);
         if (s.ready) {
           ready = true;
-          setInitialSyncDone(true);
           // Re-fetch everything
           const catRes = await fetchCategories();
           setCategories(catRes.data || []);
@@ -224,11 +205,13 @@ export function EggExplorer() {
   // ── Derived ──
   const activeCategory = categories.find((c) => c.id === selectedCategory);
   const activeFiltersCount = [selectedCategory, selectedSubcategory, selectedFamily, search].filter(Boolean).length;
+  const enrichedCount = allEggs.filter((e) => e.enriched).length;
+  const showTokenBanner = status && !status.hasToken && enrichedCount < allEggs.length;
 
   // ─── Render ────────────────────────────────────────────────────────────
 
-  // Loading / initial sync screen
-  if (!initialSyncDone) {
+  // Loading screen
+  if (loading && allEggs.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-24">
         <div className="relative">
@@ -237,22 +220,16 @@ export function EggExplorer() {
         </div>
         <div className="text-center">
           <h2 className="text-lg font-semibold text-foreground dark:text-white">
-            Syncing Egg Repository
+            Loading Egg Explorer
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {syncing
-              ? 'Cloning and indexing 248 eggs from the Pterodactyl game-eggs repo…'
-              : 'Connecting to the egg index…'}
+            Fetching egg index from GitHub…
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" />
-          This may take a moment on first load
+          This takes only a moment
         </div>
-        <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing} className="mt-2">
-          <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
-          {syncing ? 'Syncing…' : 'Retry Sync'}
-        </Button>
       </div>
     );
   }
@@ -271,6 +248,41 @@ export function EggExplorer() {
       </div>
 
       <div className="relative z-10 space-y-5">
+        {/* ─── GitHub Token banner ─── */}
+        <AnimatePresence>
+          {showTokenBanner && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+                <Key className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                    Add a GitHub token for richer egg metadata
+                  </p>
+                  <p className="mt-0.5 text-xs text-amber-600/80 dark:text-amber-400/70">
+                    {enrichedCount}/{allEggs.length} eggs have full details.
+                    Go to <span className="font-medium">Plugins → Egg Explorer → ⚙️ → GitHub Token</span> to
+                    increase the rate limit from 60/hr to 5,000/hr.
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowTokenBanner(false)}
+                  className="shrink-0 h-6 w-6 p-0 text-amber-500 hover:text-amber-600"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* ─── Header ─── */}
         <motion.div variants={itemVariants} className="flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-1.5">

@@ -25,6 +25,7 @@ export interface EggSummary {
   installImage: string | null;
   stopCommand: string | null;
   hasInstallScript: boolean;
+  enriched: boolean;
 }
 
 export interface EggCategory {
@@ -40,6 +41,8 @@ export interface EggIndexStatus {
   syncing: boolean;
   totalEggs: number;
   totalCategories: number;
+  enriched: number;
+  hasToken: boolean;
   lastSync: string | null;
 }
 

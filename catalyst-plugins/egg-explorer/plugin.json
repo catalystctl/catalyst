@@ -1,6 +1,6 @@
 {
   "name": "egg-explorer",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "displayName": "Egg Explorer",
   "description": "Browse and install game server templates from the Pterodactyl game-eggs repository directly from the admin panel",
   "author": "Karutoil",
@@ -22,10 +22,11 @@
       "description": "How often to automatically sync with the game-eggs repository",
       "options": ["daily", "weekly", "monthly", "manual"]
     },
-    "repoPath": {
-      "type": "string",
-      "default": "/tmp/catalyst-game-eggs",
-      "description": "Local filesystem path where the game-eggs repository will be cloned"
+    "ghToken": {
+      "type": "password",
+      "default": "",
+      "description": "GitHub Personal Access Token — increases the API rate limit from 60/hr to 5,000/hr for faster full indexing. Create one at https://github.com/settings/personal-access-tokens (no special scopes required).",
+      "label": "GitHub Token"
     }
   },
   "dependencies": {}

@@ -256,6 +256,9 @@ export class PluginLoader {
         originalHandlers: new Map(),
       };
 
+      // Snapshot original config schema before any mutations
+      const originalConfig = manifest.config ? JSON.parse(JSON.stringify(manifest.config)) : undefined;
+
       // Persist to database FIRST (before creating context)
       await this.prisma.plugin.upsert({
         where: { name: manifest.name },
@@ -273,6 +276,7 @@ export class PluginLoader {
       // Create plugin context (pass registry for RPC support)
       const context = createPluginContext(
         manifest,
+        originalConfig,
         this.prisma,
         this.logger,
         this.wsGateway,

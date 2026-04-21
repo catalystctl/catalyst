@@ -567,6 +567,7 @@ function getAllowedTablesForPermissions(permissions: string[]): string[] {
  */
 export function createPluginContext(
   manifest: PluginManifest,
+  originalConfig: Record<string, any> | undefined,
   prisma: PrismaClient,
   logger: Logger,
   wsGateway: WebSocketGateway,
@@ -593,6 +594,7 @@ export function createPluginContext(
 
   const context: PluginBackendContext = {
     manifest,
+    originalConfig,
     db: scopedDb,
     logger: pluginLogger,
     wsGateway,

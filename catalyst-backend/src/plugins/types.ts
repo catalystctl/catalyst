@@ -182,6 +182,8 @@ export type PluginEventHandler = (data: any) => Promise<void> | void;
 export interface PluginBackendContext {
   // Plugin metadata
   manifest: PluginManifest;
+  /** Original config schema from plugin.json (never mutated by setConfig) */
+  originalConfig?: Record<string, any>;
 
   // Core services
   db: ScopedPluginDB;

@@ -114,6 +114,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
           error: plugin.error?.message,
           permissions: plugin.manifest.permissions,
           config: plugin.manifest.config,
+          configSchema: plugin.context.originalConfig,
           hasBackend: !!plugin.manifest.backend,
           hasFrontend: !!plugin.manifest.frontend,
           routes: plugin.routes.map((r) => ({ method: r.method, url: r.url })),

@@ -33,7 +33,7 @@ export interface PluginManifest {
  * A single configuration field schema for a plugin.
  */
 export interface PluginConfigField {
-  type: 'string' | 'number' | 'boolean' | 'select' | 'text';
+  type: 'string' | 'number' | 'boolean' | 'select' | 'text' | 'password';
   default?: any;
   description?: string;
   label?: string;

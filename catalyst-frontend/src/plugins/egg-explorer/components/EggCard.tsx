@@ -44,7 +44,7 @@ export function EggCard({ egg, onClick, index }: Props) {
 
         {/* Description */}
         <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-          {egg.description || 'No description provided.'}
+          {egg.description || 'Click to view details'}
         </p>
 
         {/* Tags */}
@@ -58,7 +58,7 @@ export function EggCard({ egg, onClick, index }: Props) {
             <span>{fam.icon}</span>
             {fam.label}
           </Badge>
-          {egg.variableCount > 0 && (
+          {egg.enriched && egg.variableCount > 0 && (
             <Badge variant="outline" className="gap-1 text-[10px] px-1.5 py-0">
               <Settings className="h-2.5 w-2.5" />
               {egg.variableCount}
