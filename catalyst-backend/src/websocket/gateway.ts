@@ -137,6 +137,49 @@ export class WebSocketGateway {
   // Admin SSE event subscribers — receive entity-level admin events (users, nodes, templates, alerts)
   private readonly adminEventSubscribers = new Map<string, { eventTypes: string[]; push: (event: string, data: any) => void }>();
 
+  // ── Agent auth lockout tracker (progressive backoff) ───────────────────────
+  // Tracks failed auth attempts per nodeId. Lockout durations increase with
+  // each successive failure: 5s, 15s, 60s, 300s, 900s, 3600s (max 1 hour).
+  private agentAuthFailures = new Map<string, { count: number; lockedUntil: number }>();
+  private static readonly AGENT_LOCKOUT_BASE_SECONDS = [5, 15, 60, 300, 900, 3600];
+
+  private getAgentLockoutSeconds(failureCount: number): number {
+    const tiers = WebSocketGateway.AGENT_LOCKOUT_BASE_SECONDS;
+    return tiers[Math.min(failureCount - 1, tiers.length - 1)];
+  }
+
+  private recordAgentAuthFailure(nodeId: string): number {
+    const entry = this.agentAuthFailures.get(nodeId);
+    const now = Date.now();
+    if (!entry || now >= entry.lockedUntil) {
+      // First failure or previous lockout expired — start fresh
+      const lockoutSeconds = this.getAgentLockoutSeconds(1);
+      this.agentAuthFailures.set(nodeId, { count: 1, lockedUntil: now + lockoutSeconds * 1000 });
+      return lockoutSeconds;
+    }
+    // Still within lockout window — increment and extend
+    entry.count += 1;
+    const lockoutSeconds = this.getAgentLockoutSeconds(entry.count);
+    entry.lockedUntil = now + lockoutSeconds * 1000;
+    return lockoutSeconds;
+  }
+
+  private checkAgentLockout(nodeId: string): { locked: boolean; retryAfterSeconds: number } {
+    const entry = this.agentAuthFailures.get(nodeId);
+    if (!entry) return { locked: false, retryAfterSeconds: 0 };
+    const now = Date.now();
+    if (now >= entry.lockedUntil) {
+      // Lockout expired, clean up
+      this.agentAuthFailures.delete(nodeId);
+      return { locked: false, retryAfterSeconds: 0 };
+    }
+    return { locked: true, retryAfterSeconds: Math.ceil((entry.lockedUntil - now) / 1000) };
+  }
+
+  private clearAgentAuthFailures(nodeId: string): void {
+    this.agentAuthFailures.delete(nodeId);
+  }
+
   // ── Plugin WebSocket handler dispatch ─────────────────────────────────────
   // Maps prefixed message types (e.g. "plugin:ticketing-plugin:subscribe")
   // to the handler registered by the plugin and the plugin name.
@@ -239,8 +282,21 @@ export class WebSocketGateway {
       };
 
       if (token) {
+        // Check progressive lockout before attempting auth
+        const lockout = this.checkAgentLockout(nodeId);
+        if (lockout.locked) {
+          this.logger.warn(
+            { nodeId, retryAfterSeconds: lockout.retryAfterSeconds },
+            `Agent connection rejected: auth lockout active for ${lockout.retryAfterSeconds}s`,
+          );
+          socket.send(JSON.stringify({ type: 'error', error: 'auth_lockout', retryAfterSeconds: lockout.retryAfterSeconds }));
+          socket.close();
+          return;
+        }
+
         const authResult = await this.authenticateAgentToken(nodeId, token);
         if (authResult) {
+          this.clearAgentAuthFailures(nodeId);
           const existing = this.agents.get(nodeId);
           if (existing && existing.socket !== socket) {
             this.logger.warn({ nodeId }, "Replacing existing agent connection");
@@ -260,7 +316,12 @@ export class WebSocketGateway {
           agent.authenticated = true;
           await this.finalizeAgentConnection(authResult.node, agent);
         } else {
-          this.logger.warn(`Agent authentication failed for node: ${nodeId}`);
+          const lockoutSeconds = this.recordAgentAuthFailure(nodeId);
+          this.logger.warn(
+            { nodeId, failureCount: this.agentAuthFailures.get(nodeId)?.count, lockoutSeconds },
+            `Agent authentication failed for node: ${nodeId} — locked out for ${lockoutSeconds}s`,
+          );
+          socket.send(JSON.stringify({ type: 'error', error: 'auth_failed', retryAfterSeconds: lockoutSeconds }));
           agent.socket.close();
         }
       } else {
@@ -278,6 +339,18 @@ export class WebSocketGateway {
         this.agents.set(nodeId, agent);
         socket.on("message", onMessage);
         socket.on("close", onClose);
+        // Check progressive lockout for handshake path too
+        const lockout = this.checkAgentLockout(nodeId);
+        if (lockout.locked) {
+          this.logger.warn(
+            { nodeId, retryAfterSeconds: lockout.retryAfterSeconds },
+            `Agent connection rejected: auth lockout active for ${lockout.retryAfterSeconds}s (handshake path)`,
+          );
+          socket.send(JSON.stringify({ type: 'error', error: 'auth_lockout', retryAfterSeconds: lockout.retryAfterSeconds }));
+          socket.close();
+          return;
+        }
+
         this.logger.info({ nodeId }, "Agent connected, awaiting handshake");
 
         // Disconnect agent if handshake not completed within 10 seconds
@@ -579,14 +652,19 @@ export class WebSocketGateway {
           "Agent auth check",
         );
         if (!authResult) {
+          const lockoutSeconds = this.recordAgentAuthFailure(nodeId);
           this.logger.warn(
-            { nodeId, token: Boolean(tokenValue) },
-            `Agent authentication failed for node: ${nodeId}`,
+            { nodeId, token: Boolean(tokenValue), lockoutSeconds },
+            `Agent authentication failed for node: ${nodeId} — locked out for ${lockoutSeconds}s`,
           );
+          try {
+            agent.socket.send(JSON.stringify({ type: 'error', error: 'auth_failed', retryAfterSeconds: lockoutSeconds }));
+          } catch { /* socket may already be closing */ }
           agent.socket.close();
           this.agents.delete(nodeId);
           return;
         }
+        this.clearAgentAuthFailures(nodeId);
         // Set authenticated flag IMMEDIATELY to prevent timeout from disconnecting during async operations
         agent.authenticated = true;
         await this.finalizeAgentConnection(authResult.node, agent);

@@ -305,6 +305,9 @@ pub struct WebSocketHandler {
     active_restore_streams: Arc<RwLock<HashMap<String, tokio::process::Child>>>,
     /// The requestId of the currently active restore stream (at most one at a time).
     active_restore_request_id: Arc<RwLock<Option<String>>>,
+    /// When set by the backend after an auth failure, the agent should wait this many
+    /// seconds before reconnecting (progressive lockout).
+    retry_after_seconds: Arc<RwLock<Option<u64>>>,
 }
 
 impl Clone for WebSocketHandler {
@@ -326,6 +329,7 @@ impl Clone for WebSocketHandler {
             server_health_state: self.server_health_state.clone(),
             active_restore_streams: self.active_restore_streams.clone(),
             active_restore_request_id: self.active_restore_request_id.clone(),
+            retry_after_seconds: self.retry_after_seconds.clone(),
         }
     }
 }
@@ -365,6 +369,7 @@ impl WebSocketHandler {
             server_health_state: Arc::new(RwLock::new(HashMap::new())),
             active_restore_streams: Arc::new(RwLock::new(HashMap::new())),
             active_restore_request_id: Arc::new(RwLock::new(None)),
+            retry_after_seconds: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -439,7 +444,14 @@ impl WebSocketHandler {
             }
 
             self.set_backend_connected(false).await;
-            tokio::time::sleep(Duration::from_secs(5)).await;
+            let retry_secs = {
+                let mut ra = self.retry_after_seconds.write().await;
+                ra.take().unwrap_or(5)
+            };
+            if retry_secs > 5 {
+                info!("Auth lockout: waiting {}s before reconnecting", retry_secs);
+            }
+            tokio::time::sleep(Duration::from_secs(retry_secs)).await;
         }
     }
 
@@ -767,6 +779,28 @@ impl WebSocketHandler {
             Some("node_handshake_response") => {
                 info!("Handshake accepted by backend");
                 self.set_backend_connected(true).await;
+            }
+            Some("error") => {
+                let error_type = msg["error"].as_str().unwrap_or("unknown");
+                let retry_after = msg["retryAfterSeconds"].as_u64();
+                match error_type {
+                    "auth_lockout" => {
+                        let secs = retry_after.unwrap_or(60);
+                        warn!(
+                            "Backend auth lockout active — must wait {}s before reconnecting",
+                            secs
+                        );
+                        *self.retry_after_seconds.write().await = Some(secs);
+                    }
+                    "auth_failed" => {
+                        let secs = retry_after.unwrap_or(5);
+                        warn!("Backend rejected auth credentials — retrying in {}s", secs);
+                        *self.retry_after_seconds.write().await = Some(secs);
+                    }
+                    _ => {
+                        warn!("Backend error: {}", error_type);
+                    }
+                }
             }
             _ => {
                 warn!("Unknown message type: {}", msg["type"]);
