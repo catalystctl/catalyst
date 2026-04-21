@@ -31,6 +31,8 @@ export function useSseAdminEvents() {
         if (type === 'user_created') {
           const newUser = data.user as AdminUser;
           if (!newUser) return;
+          q.invalidateQueries({ queryKey: ['dashboard-activity'] });
+          q.invalidateQueries({ queryKey: ['dashboard-resources'] });
           q.setQueriesData(
             { predicate: (query: Query) =>
               Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-users' },
@@ -59,11 +61,23 @@ export function useSseAdminEvents() {
           // Also invalidate profile query if the updated user is the current user
           q.invalidateQueries({ queryKey: ['profile'] });
           q.invalidateQueries({ queryKey: ['my-permissions'] });
+
+          // If the updated user is the current user, refresh the auth store
+          // so the sidebar (which reads from zustand) updates immediately.
+          // Use refresh() to get the full updated user from the server.
+          const currentUser = useAuthStore.getState().user;
+          if (currentUser && currentUser.id === userId) {
+            useAuthStore.getState().refresh().catch(() => {});
+          }
+          // Also invalidate dashboard activity since user changes are notable events
+          q.invalidateQueries({ queryKey: ['dashboard-activity'] });
         }
 
         if (type === 'user_deleted') {
           const deletedUserId = String(data.userId ?? '');
           if (!deletedUserId) return;
+          q.invalidateQueries({ queryKey: ['dashboard-activity'] });
+          q.invalidateQueries({ queryKey: ['dashboard-resources'] });
           q.setQueriesData(
             { predicate: (query: Query) =>
               Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-users' },
@@ -91,6 +105,9 @@ export function useSseAdminEvents() {
               Array.isArray(query.queryKey) && query.queryKey[0] === 'servers',
           });
           q.invalidateQueries({ queryKey: ['dashboard-stats'] });
+          q.invalidateQueries({ queryKey: ['admin-stats'] });
+          q.invalidateQueries({ queryKey: ['dashboard-activity'] });
+          q.invalidateQueries({ queryKey: ['dashboard-resources'] });
         }
 
         if (type === 'server_deleted') {
@@ -107,6 +124,9 @@ export function useSseAdminEvents() {
             q.removeQueries({ queryKey: ['server', serverId] });
           }
           q.invalidateQueries({ queryKey: ['dashboard-stats'] });
+          q.invalidateQueries({ queryKey: ['admin-stats'] });
+          q.invalidateQueries({ queryKey: ['dashboard-activity'] });
+          q.invalidateQueries({ queryKey: ['dashboard-resources'] });
         }
 
         // ── Server Update/Suspend/Unsuspend Events ──────────────────
@@ -126,6 +146,9 @@ export function useSseAdminEvents() {
               Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-servers',
           });
           q.invalidateQueries({ queryKey: ['dashboard-stats'] });
+          q.invalidateQueries({ queryKey: ['admin-stats'] });
+          q.invalidateQueries({ queryKey: ['dashboard-activity'] });
+          q.invalidateQueries({ queryKey: ['dashboard-resources'] });
         }
 
         // ── Node Events ─────────────────────────────────────────────
@@ -142,6 +165,10 @@ export function useSseAdminEvents() {
             }
           }
           q.invalidateQueries({ queryKey: ['dashboard-stats'] });
+          q.invalidateQueries({ queryKey: ['admin-stats'] });
+          q.invalidateQueries({ queryKey: ['admin-health'] });
+          q.invalidateQueries({ queryKey: ['dashboard-activity'] });
+          q.invalidateQueries({ queryKey: ['dashboard-resources'] });
         }
 
         if (type === 'node_updated') {
@@ -150,6 +177,13 @@ export function useSseAdminEvents() {
               Array.isArray(query.queryKey) &&
               (query.queryKey[0] === 'admin-nodes' || query.queryKey[0] === 'nodes'),
           });
+          const nodeId = String(data.nodeId ?? '');
+          if (nodeId) {
+            q.invalidateQueries({ queryKey: ['node', nodeId] });
+            q.invalidateQueries({ queryKey: ['node-stats', nodeId] });
+            q.invalidateQueries({ queryKey: ['node-metrics', nodeId] });
+          }
+          q.invalidateQueries({ queryKey: ['admin-health'] });
         }
 
         // ── Template Events ─────────────────────────────────────────
@@ -226,6 +260,8 @@ export function useSseAdminEvents() {
               Array.isArray(query.queryKey) && query.queryKey[0] === 'alerts',
           });
           q.invalidateQueries({ queryKey: ['alerts-stats'] });
+          q.invalidateQueries({ queryKey: ['dashboard-stats'] });
+          q.invalidateQueries({ queryKey: ['admin-stats'] });
         }
 
         // ── API Key Events ─────────────────────────────────────────
@@ -234,6 +270,7 @@ export function useSseAdminEvents() {
             predicate: (query: Query) =>
               Array.isArray(query.queryKey) && query.queryKey[0] === 'api-keys',
           });
+          q.invalidateQueries({ queryKey: ['profile-api-keys'] });
         }
 
         // ── Location Events ────────────────────────────────────────
@@ -242,6 +279,12 @@ export function useSseAdminEvents() {
             predicate: (query: Query) =>
               Array.isArray(query.queryKey) && query.queryKey[0] === 'locations',
           });
+          // Also invalidate node queries since nodes display location names
+          q.invalidateQueries({
+            predicate: (query) =>
+              Array.isArray(query.queryKey) &&
+              (query.queryKey[0] === 'admin-nodes' || query.queryKey[0] === 'nodes'),
+          });
         }
 
         // ── Nest Events ────────────────────────────────────────────
@@ -249,6 +292,11 @@ export function useSseAdminEvents() {
           q.invalidateQueries({
             predicate: (query: Query) =>
               Array.isArray(query.queryKey) && query.queryKey[0] === 'nests',
+          });
+          // Templates are grouped by nest, so nest changes should refresh template lists
+          q.invalidateQueries({
+            predicate: (query) =>
+              Array.isArray(query.queryKey) && query.queryKey[0] === 'templates',
           });
         }
 
@@ -270,12 +318,51 @@ export function useSseAdminEvents() {
                 Array.isArray(query.queryKey) && query.queryKey[0] === 'ip-pools' && query.queryKey[1] === nodeId,
             });
           }
+          // Also invalidate the plain ip-pools key (used by NodeAllocationsPage)
+          q.invalidateQueries({
+            predicate: (query) =>
+              Array.isArray(query.queryKey) && query.queryKey[0] === 'ip-pools',
+          });
           // Also invalidate node detail since it may show pool count
           q.invalidateQueries({
             predicate: (query: Query) =>
               Array.isArray(query.queryKey) &&
               (query.queryKey[0] === 'admin-nodes' || query.queryKey[0] === 'nodes'),
           });
+        }
+
+        // ── Settings Events ──────────────────────────────────────────
+        if (type === 'security_settings_updated') {
+          q.invalidateQueries({ queryKey: ['admin-security-settings'] });
+        }
+        if (type === 'smtp_settings_updated') {
+          q.invalidateQueries({ queryKey: ['admin-smtp'] });
+        }
+        if (type === 'theme_settings_updated') {
+          q.invalidateQueries({ queryKey: ['admin-theme-settings'] });
+        }
+        if (type === 'system_settings_updated') {
+          q.invalidateQueries({ queryKey: ['admin-mod-manager'] });
+        }
+        if (type === 'oidc_settings_updated') {
+          // OIDC config uses local state, invalidate any related queries
+          q.invalidateQueries({ queryKey: ['admin-oidc-config'] });
+        }
+        if (type === 'plugin_updated') {
+          q.invalidateQueries({
+            predicate: (query: Query) =>
+              Array.isArray(query.queryKey) &&
+              (query.queryKey[0] === 'admin-plugins' || query.queryKey[0] === 'plugins'),
+          });
+        }
+        if (type === 'audit_log_created') {
+          q.invalidateQueries({
+            predicate: (query: Query) =>
+              Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-audit-logs',
+          });
+        }
+        if (type === 'auth_lockout_created' || type === 'auth_lockout_cleared') {
+          q.invalidateQueries({ queryKey: ['admin-auth-lockouts'] });
         }
       },
       () => {},

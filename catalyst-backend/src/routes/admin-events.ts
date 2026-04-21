@@ -87,14 +87,18 @@ export function adminEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGate
         return;
       }
 
-      // SSE headers
+      // SSE headers — prevent proxy buffering with proper CORS using origin whitelist
+      const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
+      const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').filter(Boolean);
+      if (allowedOrigins.includes(origin)) {
+        reply.raw.setHeader('Access-Control-Allow-Origin', origin);
+        reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no',
-        'Access-Control-Allow-Origin': request.headers.origin || '*',
-        'Access-Control-Allow-Credentials': 'true',
       });
 
       reply.raw.write(formatSseComment('connected'));

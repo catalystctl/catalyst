@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import type pino from 'pino';
 import fetch from 'node-fetch';
 import { renderAlertEmail, sendEmail } from './mailer';
+import { getWsGateway } from '../websocket/gateway';
 
 interface AlertConditions {
   cpuThreshold?: number;
@@ -433,6 +434,17 @@ export class AlertService {
     });
 
     this.logger.info(`Alert created: ${alert.title} (${alert.id})`);
+
+    // Notify admin SSE subscribers
+    const gateway = getWsGateway();
+    if (gateway) {
+      gateway.pushToAdminSubscribers('alert_created', {
+        type: 'alert_created',
+        alert,
+        timestamp: Date.now(),
+      });
+    }
+
     return alert;
   }
 
@@ -773,5 +785,15 @@ export class AlertService {
     });
 
     this.logger.info(`Alert resolved: ${alertId}`);
+
+    // Notify admin SSE subscribers
+    const gateway = getWsGateway();
+    if (gateway) {
+      gateway.pushToAdminSubscribers('alert_resolved', {
+        type: 'alert_resolved',
+        alertId,
+        timestamp: Date.now(),
+      });
+    }
   }
 }

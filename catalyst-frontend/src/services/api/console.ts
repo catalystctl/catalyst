@@ -31,11 +31,12 @@ class ConsoleSseClient {
   private serverId: string | null = null;
   private handlers = new Set<EventHandler>();
   private statusListeners = new Set<(status: StreamStatus) => void>();
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private reconnectDelay = 1000;
-  private maxReconnectDelay = 30_000;
   private destroyed = false;
-  private lastEventId: string | null = null;
+
+  // Reconnection is handled natively by the browser's EventSource API.
+  // When the server sends `id:` fields in SSE events, the browser automatically
+  // stores the last event ID and sends it as the `Last-Event-ID` header on
+  // reconnect, enabling the server to replay any missed events.
 
   /** Connect to the SSE stream for a server's console output. */
   connect(serverId: string): void {
@@ -46,7 +47,6 @@ class ConsoleSseClient {
 
     this.serverId = serverId;
     this.destroyed = false;
-    this.reconnectDelay = 1000;
     this.notifyStatus('connecting');
     this.openConnection();
   }
@@ -60,7 +60,6 @@ class ConsoleSseClient {
     this.es = new EventSource(url, { withCredentials: true });
 
     this.es.onopen = () => {
-      this.reconnectDelay = 1000; // Reset backoff on successful connect
       this.notifyStatus('connected');
     };
 
@@ -168,10 +167,6 @@ class ConsoleSseClient {
   /** Immediately disconnect and don't reconnect. */
   disconnect(): void {
     this.destroyed = true;
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
     if (this.es) {
       this.es.close();
       this.es = null;

@@ -4,17 +4,24 @@ import { Upload, X } from 'lucide-react';
 type Props = {
   path: string;
   isUploading: boolean;
-  onUpload: (files: File[]) => void;
+  onUpload: (files: File[], onProgress?: (fileIndex: number, progress: number) => void) => void;
   onClose: () => void;
 };
 
 function FileUploader({ path, isUploading, onUpload, onClose }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
+  const [fileProgress, setFileProgress] = useState<Record<number, number>>({});
+  const [fileNames, setFileNames] = useState<string[]>([]);
 
   const handleFiles = (files: FileList | null) => {
     if (!files?.length) return;
-    onUpload(Array.from(files));
+    const arr = Array.from(files);
+    setFileNames(arr.map((f) => f.name));
+    setFileProgress({});
+    onUpload(arr, (fileIndex, progress) => {
+      setFileProgress((prev) => ({ ...prev, [fileIndex]: progress }));
+    });
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -73,6 +80,30 @@ function FileUploader({ path, isUploading, onUpload, onClose }: Props) {
           </button>
         </div>
       </div>
+      {/* Upload progress */}
+      {isUploading && fileNames.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {fileNames.map((name, idx) => {
+            const pct = fileProgress[idx] ?? 0;
+            return (
+              <div key={idx} className="flex items-center gap-3">
+                <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={name}>
+                  {name}
+                </span>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {pct}%
+                </span>
+                <div className="h-1.5 w-24 flex-shrink-0 overflow-hidden rounded-full bg-surface-2 dark:bg-surface-2">
+                  <div
+                    className="h-full rounded-full bg-primary-600 transition-all duration-200"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

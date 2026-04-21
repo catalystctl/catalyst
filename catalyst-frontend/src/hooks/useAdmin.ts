@@ -48,6 +48,7 @@ export function useAdminNodes(params?: { search?: string }) {
   return useQuery({
     queryKey: ['admin-nodes', params],
     queryFn: () => adminApi.listNodes(params),
+    refetchInterval: 30000,
   });
 }
 
@@ -63,6 +64,7 @@ export function useAuditLogs(params?: {
   return useQuery({
     queryKey: ['admin-audit-logs', params],
     queryFn: () => adminApi.listAuditLogs(params),
+    refetchInterval: 15000,
   });
 }
 

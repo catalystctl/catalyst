@@ -95,11 +95,21 @@ export function useServerStateUpdates() {
           if (!pendingUpdates.current) {
             pendingUpdates.current = new Map();
           }
+          const state = String(data.state ?? '');
           pendingUpdates.current.set(serverId, {
-            state: String(data.state ?? ''),
+            state,
             data,
           });
           scheduleProcess();
+          // Invalidate file queries when server starts/stops (new files may be generated)
+          if (state === 'running' || state === 'stopped' || state === 'offline') {
+            (queryClient as any).invalidateQueries({
+              predicate: (query: any) =>
+                Array.isArray(query.queryKey) &&
+                query.queryKey[0] === 'files' &&
+                query.queryKey[1] === serverId,
+            });
+          }
           return;
         }
 
@@ -114,6 +124,19 @@ export function useServerStateUpdates() {
               query.queryKey[0] === 'backups' &&
               query.queryKey[1] === serverId,
           });
+        }
+
+        // Task execution events
+        if (type === 'task_progress' || type === 'task_complete') {
+          const serverId = String(data.serverId ?? '');
+          if (serverId) {
+            (queryClient as any).invalidateQueries({
+              predicate: (query: any) =>
+                Array.isArray(query.queryKey) &&
+                query.queryKey[0] === 'tasks' &&
+                query.queryKey[1] === serverId,
+            });
+          }
         }
       },
       () => {},

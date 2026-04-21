@@ -45,7 +45,16 @@ export type AdminEventType =
   | 'database_host_deleted'
   | 'ip_pool_created'
   | 'ip_pool_updated'
-  | 'ip_pool_deleted';
+  | 'ip_pool_deleted'
+  | 'security_settings_updated'
+  | 'smtp_settings_updated'
+  | 'theme_settings_updated'
+  | 'system_settings_updated'
+  | 'oidc_settings_updated'
+  | 'plugin_updated'
+  | 'audit_log_created'
+  | 'auth_lockout_created'
+  | 'auth_lockout_cleared';
 
 const ADMIN_EVENT_TYPES: AdminEventType[] = [
   'user_created',
@@ -86,6 +95,15 @@ const ADMIN_EVENT_TYPES: AdminEventType[] = [
   'ip_pool_created',
   'ip_pool_updated',
   'ip_pool_deleted',
+  'security_settings_updated',
+  'smtp_settings_updated',
+  'theme_settings_updated',
+  'system_settings_updated',
+  'oidc_settings_updated',
+  'plugin_updated',
+  'audit_log_created',
+  'auth_lockout_created',
+  'auth_lockout_cleared',
 ];
 
 type AdminEventHandler = (type: AdminEventType, data: Record<string, unknown>) => void;

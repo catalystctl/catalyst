@@ -252,8 +252,8 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
   });
 
   const uploadMutation = useMutation({
-    mutationFn: async (uploadFiles: File[]) => {
-      await filesApi.upload(serverId, path, uploadFiles);
+    mutationFn: async ({ files, onProgress }: { files: File[]; onProgress?: (fileIndex: number, progress: number) => void }) => {
+      await filesApi.upload(serverId, path, files, onProgress);
     },
     onSuccess: () => {
       invalidateFiles();
@@ -690,7 +690,9 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
           <FileUploader
             path={path}
             isUploading={uploadMutation.isPending}
-            onUpload={(filesToUpload) => uploadMutation.mutate(filesToUpload)}
+            onUpload={(filesToUpload, onProgress) =>
+              uploadMutation.mutate({ files: filesToUpload, onProgress })
+            }
             onClose={() => setShowUpload(false)}
           />
         )}

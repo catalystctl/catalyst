@@ -95,6 +95,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
       notifySuccess('Location created');
       queryClient.invalidateQueries({ queryKey: qk.locations() });
       queryClient.invalidateQueries({ queryKey: qk.nodes() });
+      queryClient.invalidateQueries({ queryKey: qk.adminNodes() });
       setIsCreating(false);
     },
     onError: (error: any) => {
@@ -110,6 +111,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
       notifySuccess('Location updated');
       queryClient.invalidateQueries({ queryKey: qk.locations() });
       queryClient.invalidateQueries({ queryKey: qk.nodes() });
+      queryClient.invalidateQueries({ queryKey: qk.adminNodes() });
       setEditingLocation(null);
     },
     onError: (error: any) => {
@@ -124,6 +126,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
       notifySuccess('Location deleted');
       queryClient.invalidateQueries({ queryKey: qk.locations() });
       queryClient.invalidateQueries({ queryKey: qk.nodes() });
+      queryClient.invalidateQueries({ queryKey: qk.adminNodes() });
       setDeleteTarget(null);
     },
     onError: (error: any) => {

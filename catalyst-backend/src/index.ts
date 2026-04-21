@@ -13,7 +13,7 @@ import fastifySwaggerUi from "@fastify/swagger-ui";
 import pino from "pino";
 import { prisma } from "./db";
 import "./types"; // Load type augmentations
-import { WebSocketGateway } from "./websocket/gateway";
+import { WebSocketGateway, setWsGateway } from "./websocket/gateway";
 import { authRoutes } from "./routes/auth";
 import { nodeRoutes } from "./routes/nodes";
 import { serverRoutes } from "./routes/servers";
@@ -117,6 +117,7 @@ app.setErrorHandler((error, _request, reply) => {
 });
 
 const wsGateway = new WebSocketGateway(prisma, logger);
+setWsGateway(wsGateway);
 const rbac = new RbacMiddleware(prisma);
 const taskScheduler = new TaskScheduler(prisma, logger);
 const webhookService = new WebhookService(prisma, logger);

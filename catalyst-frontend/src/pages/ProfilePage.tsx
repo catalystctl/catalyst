@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { qk } from '../lib/queryKeys';
 import { Link } from 'react-router-dom';
 import { motion, type Variants } from 'framer-motion';
 import {
@@ -228,12 +229,12 @@ export default function ProfilePage() {
   });
   const revokeSessionMutation = useMutation({
     mutationFn: (id: string) => profileApi.revokeSession(id),
-    onSuccess: () => { notifySuccess('Session revoked'); queryClient.invalidateQueries({ queryKey: ['profile-sessions'] }); },
+    onSuccess: () => { notifySuccess('Session revoked'); queryClient.invalidateQueries({ queryKey: qk.profileSessions() }); },
     onError: (e: any) => notifyError(e?.message || 'Failed'),
   });
   const revokeAllMutation = useMutation({
     mutationFn: () => profileApi.revokeAllSessions(),
-    onSuccess: (data) => { notifySuccess(`Revoked ${data.revoked} session(s)`); queryClient.invalidateQueries({ queryKey: ['profile-sessions'] }); },
+    onSuccess: (data) => { notifySuccess(`Revoked ${data.revoked} session(s)`); queryClient.invalidateQueries({ queryKey: qk.profileSessions() }); },
     onError: (e: any) => notifyError(e?.message || 'Failed'),
   });
   const resendVerifyMutation = useMutation({

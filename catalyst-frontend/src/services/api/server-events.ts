@@ -25,9 +25,7 @@ export type ServerEventType =
   | 'task_progress'
   | 'task_complete'
   | 'resource_stats'
-  | 'storage_resize_complete'
-  | 'user_created'
-  | 'user_deleted';
+  | 'storage_resize_complete';
 
 export type StreamStatus = 'connecting' | 'connected' | 'reconnecting' | 'closed' | 'error';
 
@@ -46,8 +44,6 @@ const EVENT_TYPES: ServerEventType[] = [
   'task_complete',
   'resource_stats',
   'storage_resize_complete',
-  'user_created',
-  'user_deleted',
 ];
 
 /**

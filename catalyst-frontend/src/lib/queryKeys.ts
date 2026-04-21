@@ -61,6 +61,9 @@ export const qk = {
   apiKeyVariable: (id: string) => ['api-key-variable', id] as const,
 
   // ── Admin ───────────────────────────────────────────────────────────
+  adminStats: () => ['admin-stats'] as const,
+  adminHealth: () => ['admin-health'] as const,
+  adminAuditLogs: () => ['admin-audit-logs'] as const,
   adminUsers: () => ['admin-users'] as const,
   adminNodes: () => ['admin-nodes'] as const,
   adminServers: () => ['admin-servers'] as const,
@@ -78,6 +81,8 @@ export const qk = {
 
   // ── Profile ─────────────────────────────────────────────────────────
   profile: () => ['profile'] as const,
+  profileApiKeys: () => ['profile-api-keys'] as const,
+  profileSessions: () => ['profile-sessions'] as const,
   profileSsoAccounts: () => ['profile-sso-accounts'] as const,
 
   // ── Migration ────────────────────────────────────────────────────────

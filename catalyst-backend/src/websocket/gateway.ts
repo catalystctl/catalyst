@@ -278,6 +278,12 @@ export class WebSocketGateway {
           where: { id: nodeId },
           data: { isOnline: false },
         });
+        this.pushToAdminSubscribers('node_updated', {
+          type: 'node_updated',
+          nodeId,
+          isOnline: false,
+          timestamp: Date.now(),
+        });
         this.logger.info(`Agent disconnected: ${nodeId}`);
       };
 
@@ -375,6 +381,12 @@ export class WebSocketGateway {
     await this.prisma.node.update({
       where: { id: node.id },
       data: { isOnline: true, lastSeenAt: new Date() },
+    });
+    this.pushToAdminSubscribers('node_updated', {
+      type: 'node_updated',
+      nodeId: node.id,
+      isOnline: true,
+      timestamp: Date.now(),
     });
     this.logger.info(`Agent connected: ${node.id} (${node.hostname})`);
     agent.socket.send(
@@ -1959,7 +1971,7 @@ export class WebSocketGateway {
    * Route a message to all subscribed clients (WebSocket + SSE).
    * Used for server-scoped events (state changes, backups, alerts).
    */
-  private async routeToClients(serverId: string, message: any): Promise<void> {
+  async routeToClients(serverId: string, message: any): Promise<void> {
     // Use cached server access list
     const now = Date.now();
     let cached = this.serverAccessCache.get(serverId);
@@ -2351,6 +2363,12 @@ export class WebSocketGateway {
             where: { id: nodeId },
             data: { isOnline: false },
           });
+          this.pushToAdminSubscribers('node_updated', {
+            type: 'node_updated',
+            nodeId,
+            isOnline: false,
+            timestamp: Date.now(),
+          });
         }
       }
     }, 10000); // Check every 10 seconds
@@ -2687,4 +2705,17 @@ export class WebSocketGateway {
       }
     }
   }
+}
+
+// ── Module-level singleton getter for services that don't have access to the Fastify app ──
+let _wsGatewayInstance: WebSocketGateway | null = null;
+
+/** Return the gateway singleton. Returns null before the app calls `setWsGateway()`. */
+export function getWsGateway(): WebSocketGateway | null {
+  return _wsGatewayInstance;
+}
+
+/** Called once from index.ts after the gateway is constructed. */
+export function setWsGateway(gw: WebSocketGateway): void {
+  _wsGatewayInstance = gw;
 }

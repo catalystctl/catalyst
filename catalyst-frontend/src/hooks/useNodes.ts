@@ -5,6 +5,7 @@ export function useNodes() {
   return useQuery({
     queryKey: ['nodes'],
     queryFn: nodesApi.list,
+    refetchInterval: 30000,
   });
 }
 

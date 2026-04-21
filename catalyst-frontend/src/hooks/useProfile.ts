@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { profileApi } from '../services/api/profile';
+import { qk } from '../lib/queryKeys';
 
 export function useProfile() {
   return useQuery({
@@ -17,7 +18,7 @@ export function useProfileSsoAccounts() {
 
 export function useSessions() {
   return useQuery({
-    queryKey: ['profile-sessions'],
+    queryKey: qk.profileSessions(),
     queryFn: profileApi.listSessions,
     refetchInterval: 30_000,
   });
@@ -32,7 +33,7 @@ export function useAuditLog(limit = 50, offset = 0) {
 
 export function useProfileApiKeys() {
   return useQuery({
-    queryKey: ['profile-api-keys'],
+    queryKey: qk.profileApiKeys(),
     queryFn: profileApi.getApiKeys,
   });
 }

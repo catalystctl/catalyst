@@ -166,20 +166,44 @@ export const filesApi = {
     return blob.text();
   },
 
-  upload: async (serverId: string, path: string, files: File[]) => {
+  upload: async (
+    serverId: string,
+    path: string,
+    files: File[],
+    onProgress?: (fileIndex: number, progress: number) => void,
+  ) => {
     const normalizedPath = normalizePath(path);
     await Promise.all(
-      files.map(async (file) => {
-        const formData = new FormData();
-        formData.append('path', normalizedPath);
-        formData.append('file', file);
-        const res = await fetch(`/api/servers/${serverId}/files/upload`, {
-          method: 'POST',
-          credentials: 'include',
-          body: formData,
-        });
-        return assertOk(res);
-      }),
+      files.map((file, index) =>
+        new Promise<void>((resolve, reject) => {
+          const formData = new FormData();
+          formData.append('path', normalizedPath);
+          formData.append('file', file);
+
+          const xhr = new XMLHttpRequest();
+
+          xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable && onProgress) {
+              onProgress(index, Math.round((e.loaded / e.total) * 100));
+            }
+          });
+
+          xhr.addEventListener('load', () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve();
+            } else {
+              reject(new Error(`Upload failed: ${xhr.status}`));
+            }
+          });
+
+          xhr.addEventListener('error', () => reject(new Error('Upload failed')));
+          xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
+
+          xhr.open('POST', `/api/servers/${serverId}/files/upload`);
+          xhr.withCredentials = true;
+          xhr.send(formData);
+        }),
+      ),
     );
   },
 

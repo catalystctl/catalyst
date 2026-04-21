@@ -23,6 +23,7 @@ export function useServerMetrics(serverId?: string, allocatedMemoryMb?: number) 
 
   const lastUpdateRef = useRef(0);
   const rafRef = useRef<number>(0);
+  const pendingDataRef = useRef<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     if (!serverId) return;
@@ -32,37 +33,46 @@ export function useServerMetrics(serverId?: string, allocatedMemoryMb?: number) 
       (type: ServerEventType, data: Record<string, unknown>) => {
         if (type !== 'resource_stats' || String(data.serverId) !== serverId) return;
 
+        const applyMetrics = (d: Record<string, unknown>) => {
+          const cpuPercent = clampPercent(Number(d.cpuPercent ?? d.cpu ?? 0));
+          const memoryUsageMb = Number(d.memoryUsageMb ?? 0);
+          const memoryPercent =
+            typeof d.memory === 'number'
+              ? clampPercent(d.memory)
+              : memoryBudget
+                ? clampPercent((memoryUsageMb / memoryBudget) * 100)
+                : 0;
+
+          setMetrics({
+            cpuPercent,
+            memoryPercent,
+            memoryUsageMb,
+            networkRxBytes: Number(d.networkRxBytes ?? 0),
+            networkTxBytes: Number(d.networkTxBytes ?? 0),
+            diskIoMb: Number(d.diskIoMb ?? 0),
+            diskUsageMb: Number(d.diskUsageMb ?? 0),
+            diskTotalMb: Number(d.diskTotalMb ?? 0),
+            timestamp: new Date().toISOString(),
+          });
+        };
+
         const now = performance.now();
         if (now - lastUpdateRef.current < UPDATE_THROTTLE_MS) {
+          pendingDataRef.current = data;
           if (!rafRef.current) {
             rafRef.current = requestAnimationFrame(() => {
               rafRef.current = 0;
+              if (pendingDataRef.current) {
+                applyMetrics(pendingDataRef.current);
+                lastUpdateRef.current = performance.now();
+                pendingDataRef.current = null;
+              }
             });
           }
           return;
         }
         lastUpdateRef.current = now;
-
-        const cpuPercent = clampPercent(Number(data.cpuPercent ?? data.cpu ?? 0));
-        const memoryUsageMb = Number(data.memoryUsageMb ?? 0);
-        const memoryPercent =
-          typeof data.memory === 'number'
-            ? clampPercent(data.memory)
-            : memoryBudget
-              ? clampPercent((memoryUsageMb / memoryBudget) * 100)
-              : 0;
-
-        setMetrics({
-          cpuPercent,
-          memoryPercent,
-          memoryUsageMb,
-          networkRxBytes: String(data.networkRxBytes ?? ''),
-          networkTxBytes: String(data.networkTxBytes ?? ''),
-          diskIoMb: Number(data.diskIoMb ?? 0),
-          diskUsageMb: Number(data.diskUsageMb ?? 0),
-          diskTotalMb: Number(data.diskTotalMb ?? 0),
-          timestamp: new Date().toISOString(),
-        });
+        applyMetrics(data);
       },
       () => {},
     );

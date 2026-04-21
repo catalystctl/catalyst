@@ -17,8 +17,8 @@ export function useServerMetricsHistory(serverId?: string, timeRange?: MetricsTi
         ? serversApi.metrics(serverId, { hours: range.hours, limit: range.limit })
         : Promise.reject(new Error('missing server id')),
     enabled: Boolean(serverId),
-    staleTime: 10 * 1000, // 10 seconds - data is considered fresh for 10 seconds
-    refetchInterval: 30 * 1000, // Refetch every 30 seconds
+    staleTime: 5 * 1000, // 5 seconds - data is considered fresh for 5 seconds
+    refetchInterval: 10 * 1000, // Refetch every 10 seconds
     refetchIntervalInBackground: false, // Don't refetch when tab is not focused
   });
 }

@@ -88,7 +88,7 @@ function NodeAllocationsPage() {
 
   // Fetch IP pools (IpAllocation via pools)
   const { data: allPools = [], isLoading: poolsLoading } = useQuery({
-    queryKey: ['ip-pools'],
+    queryKey: qk.adminIpPools(nodeId!),
     queryFn: adminApi.listIpPools,
   });
 

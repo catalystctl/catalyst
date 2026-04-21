@@ -1,4 +1,6 @@
 import { useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { qk } from '../../../lib/queryKeys';
 import {
   AlertTriangle,
   Archive,
@@ -284,6 +286,7 @@ export default function ServerAdminTab({
   const [newOwnerId, setNewOwnerId] = useState('');
   const [transferOwnerPending, setTransferOwnerPending] = useState(false);
   const [transferOwnerConfirm, setTransferOwnerConfirm] = useState(false);
+  const queryClient = useQueryClient();
 
   // ── Derived ──
   const templateImages = server.template?.images ?? [];
@@ -326,6 +329,8 @@ export default function ServerAdminTab({
       setRebuildPending(true);
       await serversApi.rebuild(serverId);
       notifySuccess('Container rebuild initiated');
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.servers() });
       setRebuildConfirm(false);
     } catch (err: unknown) {
       notifyError(err instanceof Error ? err.message : 'Failed to rebuild container');
@@ -339,6 +344,8 @@ export default function ServerAdminTab({
       setKillPending(true);
       await serversApi.kill(serverId);
       notifySuccess('Server process killed');
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.servers() });
       setKillConfirm(false);
     } catch (err: unknown) {
       notifyError(err instanceof Error ? err.message : 'Failed to kill server');
@@ -352,6 +359,8 @@ export default function ServerAdminTab({
       setReinstallPending(true);
       await serversApi.install(serverId);
       notifySuccess('Reinstall initiated');
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.servers() });
       setReinstallConfirm(false);
     } catch (err: unknown) {
       notifyError(err instanceof Error ? err.message : 'Failed to reinstall');

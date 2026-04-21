@@ -107,9 +107,7 @@ export default function ServerMetricsTab({
               {
                 label: 'Network RX',
                 value: (() => {
-                  // Use the last history point's rate (MB/s) if available
-                  const lastPoint = metricsHistory?.history?.[metricsHistory.history.length - 1];
-                  const rate = lastPoint?.networkRxBytes;
+                  const rate = liveMetrics?.networkRxBytes;
                   if (rate != null && typeof rate === 'number') return `${rate.toFixed(2)} MB/s`;
                   return 'n/a';
                 })(),
@@ -117,8 +115,7 @@ export default function ServerMetricsTab({
               {
                 label: 'Network TX',
                 value: (() => {
-                  const lastPoint = metricsHistory?.history?.[metricsHistory.history.length - 1];
-                  const rate = lastPoint?.networkTxBytes;
+                  const rate = liveMetrics?.networkTxBytes;
                   if (rate != null && typeof rate === 'number') return `${rate.toFixed(2)} MB/s`;
                   return 'n/a';
                 })(),

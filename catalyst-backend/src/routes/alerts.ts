@@ -587,6 +587,18 @@ export async function alertRoutes(app: FastifyInstance) {
         },
       });
 
+      // Notify admin SSE subscribers for each resolved alert
+      const wsGateway = (app as any).wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        for (const alertId of alertIds) {
+          wsGateway.pushToAdminSubscribers('alert_resolved', {
+            type: 'alert_resolved',
+            alertId,
+            timestamp: Date.now(),
+          });
+        }
+      }
+
       reply.send({ success: true, message: `${alertIds.length} alerts resolved` });
     }
   );

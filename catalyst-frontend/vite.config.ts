@@ -1,9 +1,12 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
-export default defineConfig({
-  plugins: [react()],
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, path.resolve(__dirname, '.'), 'VITE_');
+
+  return {
+    plugins: [react()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -12,6 +15,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
+    allowedHosts: env.VITE_PASSKEY_RP_ID ? [env.VITE_PASSKEY_RP_ID] : undefined,
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:3000',
@@ -84,5 +88,6 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
     },
-  },
+    },
+  };
 });

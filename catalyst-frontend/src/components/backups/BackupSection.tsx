@@ -1,4 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { qk } from '../../lib/queryKeys';
 import { useBackups } from '../../hooks/useBackups';
 import { notifyError, notifyInfo } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
@@ -53,6 +55,7 @@ function BackupSection({
   const [sftpPrivateKey, setSftpPrivateKey] = useState('');
   const [sftpPrivateKeyPassphrase, setSftpPrivateKeyPassphrase] = useState('');
   const [sftpBasePath, setSftpBasePath] = useState('');
+  const queryClient = useQueryClient();
   const { progressByBackup, setProgress, clearProgress } = useBackupDownloadStore();
   const { data, isLoading, isError } = useBackups(serverId, { page, limit: 10 });
   const progressKeyPrefix = useMemo(() => `server:${serverId}:backup:`, [serverId]);
@@ -455,6 +458,7 @@ function BackupSection({
                   sftpConfig,
                 });
                 notifySuccess('Backup settings updated');
+                queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
               } catch (error: unknown) {
                 notifyError(getErrorMessage(error, 'Failed to update settings'));
               }

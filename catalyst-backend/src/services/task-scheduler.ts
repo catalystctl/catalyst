@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { CronExpressionParser } from 'cron-parser';
 import type { PrismaClient } from '@prisma/client';
 import type pino from 'pino';
+import { getWsGateway } from '../websocket/gateway';
 
 interface TaskExecutor {
   executeTask(task: any): Promise<void>;
@@ -147,6 +148,18 @@ export class TaskScheduler {
     const startedAt = new Date();
     this.logger.info(`Executing task: ${task.name} (${task.id})`);
 
+    // Notify clients that task is running
+    const gateway = getWsGateway();
+    if (gateway) {
+      gateway.routeToClients(task.serverId, {
+        type: 'task_progress',
+        taskId: task.id,
+        serverId: task.serverId,
+        status: 'running',
+        timestamp: Date.now(),
+      });
+    }
+
     try {
       // Check if server still exists
       const server = await this.prisma.server.findUnique({
@@ -175,6 +188,18 @@ export class TaskScheduler {
         },
       });
 
+      // Notify clients that task completed
+      if (gateway) {
+        gateway.routeToClients(task.serverId, {
+          type: 'task_complete',
+          taskId: task.id,
+          serverId: task.serverId,
+          status: 'success',
+          lastRunAt: new Date().toISOString(),
+          timestamp: Date.now(),
+        });
+      }
+
       // Update next run time
       await this.updateNextRunTime(task.id, task.schedule, startedAt);
 
@@ -191,6 +216,18 @@ export class TaskScheduler {
           lastError: message,
         },
       });
+
+      // Notify clients that task failed
+      if (gateway) {
+        gateway.routeToClients(task.serverId, {
+          type: 'task_complete',
+          taskId: task.id,
+          serverId: task.serverId,
+          status: 'failed',
+          lastRunAt: new Date().toISOString(),
+          timestamp: Date.now(),
+        });
+      }
       await this.updateNextRunTime(task.id, task.schedule, startedAt);
     } finally {
       this.runningTasks.delete(task.id);

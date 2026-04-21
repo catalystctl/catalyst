@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import Breadcrumbs from './Breadcrumbs';
 import { useServerStateUpdates } from '../../hooks/useServerStateUpdates';
 import { useSseAdminEvents } from '../../hooks/useSseAdminEvents';
+import { useProfileSync } from '../../hooks/useProfileSync';
 import { useThemeStore } from '../../stores/themeStore';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { useCmdK } from '../../hooks/useKeyboardShortcut';
@@ -14,6 +15,7 @@ import { cn } from '@/lib/utils';
 function AppLayout() {
   useServerStateUpdates();
   useSseAdminEvents();
+  useProfileSync();
   const { sidebarCollapsed } = useThemeStore();
   const { panelName } = usePanelBranding();
   const [isSearchOpen, setIsSearchOpen] = useState(false);

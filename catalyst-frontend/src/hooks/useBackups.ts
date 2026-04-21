@@ -57,5 +57,14 @@ export function useBackups(serverId?: string, options?: { page?: number; limit?:
     queryKey: ['backups', serverId, { page, limit }],
     queryFn: () => backupsApi.list(serverId!, { page, limit }),
     enabled: Boolean(serverId),
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return false;
+      const backups = data.backups ?? data;
+      if (Array.isArray(backups) && backups.some((b: any) => b.status === 'in_progress' || b.status === 'processing')) {
+        return 5000;
+      }
+      return false;
+    },
   });
 }

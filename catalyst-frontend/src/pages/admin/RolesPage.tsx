@@ -502,7 +502,7 @@ function RolesPage() {
 
   // Fetch roles
   const { data: roles = [], isLoading } = useQuery({
-    queryKey: ['roles'],
+    queryKey: qk.adminRoles(),
     queryFn: rolesApi.list,
   });
 

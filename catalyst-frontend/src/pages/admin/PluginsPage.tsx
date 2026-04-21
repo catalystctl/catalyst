@@ -199,7 +199,7 @@ function PluginSettingsModal({
   const [localConfig, setLocalConfig] = useState<PluginConfig | null>(null);
 
   const { data: pluginDetails, isLoading } = useQuery({
-    queryKey: ['plugin', pluginName],
+    queryKey: qk.adminPlugin(pluginName),
     queryFn: () => fetchPluginDetails(pluginName),
     enabled: open,
   });
@@ -417,7 +417,7 @@ export default function PluginsPage() {
   const [settingsPlugin, setSettingsPlugin] = useState<string | null>(null);
 
   const { data: plugins, isLoading } = useQuery({
-    queryKey: ['plugins'],
+    queryKey: qk.adminPlugins(),
     queryFn: fetchPlugins,
   });
 
