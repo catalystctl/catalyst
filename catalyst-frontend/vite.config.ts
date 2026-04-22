@@ -1,25 +1,26 @@
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
-import { visualizer } from 'rollup-plugin-visualizer';
 import path from 'path';
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(async ({ mode }) => {
   const env = loadEnv(mode, path.resolve(__dirname, '.'), 'VITE_');
 
+  const plugins: Plugin[] = [react()];
+
+  if (mode === 'analyze') {
+    const { visualizer } = await import('rollup-plugin-visualizer');
+    plugins.push(
+      visualizer({
+        open: true,
+        gzipSize: true,
+        brotliSize: true,
+        filename: 'dist/stats.html',
+      }) as Plugin,
+    );
+  }
+
   return {
-    plugins: [
-      react(),
-      ...(mode === 'analyze'
-        ? [
-            visualizer({
-              open: true,
-              gzipSize: true,
-              brotliSize: true,
-              filename: 'dist/stats.html',
-            }),
-          ]
-        : []),
-    ],
+    plugins,
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

@@ -54,10 +54,7 @@ export function useSseAdminEvents() {
         if (type === 'user_updated') {
           const userId = String(data.userId ?? '');
           if (!userId) return;
-          q.invalidateQueries({
-            predicate: (query: Query) =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-users',
-          });
+          q.invalidateQueries({ queryKey: ['admin-users'] });
           // Also invalidate profile query if the updated user is the current user
           q.invalidateQueries({ queryKey: ['profile'] });
           q.invalidateQueries({ queryKey: ['my-permissions'] });
@@ -195,14 +192,10 @@ export function useSseAdminEvents() {
         if (type === 'template_updated') {
           const templateId = String(data.templateId ?? '');
           if (!templateId) return;
-          q.invalidateQueries({
-            predicate: (query: Query) =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === 'templates',
-          });
-          q.invalidateQueries({
-            predicate: (query: Query) =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === 'template' && query.queryKey[1] === templateId,
-          });
+          Promise.all([
+            q.invalidateQueries({ queryKey: ['templates'] }),
+            q.invalidateQueries({ queryKey: ['template', templateId] }),
+          ]);
         }
 
         if (type === 'template_deleted') {
@@ -216,25 +209,18 @@ export function useSseAdminEvents() {
               return prev.filter((t: ServerTemplate) => t.id !== templateId);
             },
           );
-          q.invalidateQueries({
-            predicate: (query: Query) =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === 'template' && query.queryKey[1] === templateId,
-          });
+          q.invalidateQueries({ queryKey: ['template', templateId] });
         }
 
         // ── Role Events ─────────────────────────────────────────────
         if (type === 'role_created' || type === 'role_updated' || type === 'role_deleted') {
-          q.invalidateQueries({
-            predicate: (query: Query) =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-roles',
-          });
+          q.invalidateQueries({ queryKey: ['admin-roles'] });
           // Role changes affect permissions — invalidate server-permissions and my-permissions
           if (type === 'role_updated') {
-            q.invalidateQueries({
-              predicate: (query: Query) =>
-                Array.isArray(query.queryKey) && query.queryKey[0] === 'server-permissions',
-            });
-            q.invalidateQueries({ queryKey: ['my-permissions'] });
+            Promise.all([
+              q.invalidateQueries({ queryKey: ['server-permissions'] }),
+              q.invalidateQueries({ queryKey: ['my-permissions'] }),
+            ]);
           }
           if (type === 'role_deleted') {
             // Individual role detail queries don't exist yet;
@@ -244,21 +230,17 @@ export function useSseAdminEvents() {
 
         // ── Alert Rule Events ───────────────────────────────────────
         if (type === 'alert_rule_created' || type === 'alert_rule_updated' || type === 'alert_rule_deleted') {
-          q.invalidateQueries({
-            predicate: (query: Query) =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === 'alert-rules',
-          });
+          q.invalidateQueries({ queryKey: ['alert-rules'] });
         }
 
         // ── Alert Instance Events ───────────────────────────────────
         if (type === 'alert_created' || type === 'alert_resolved' || type === 'alert_deleted') {
-          q.invalidateQueries({
-            predicate: (query: Query) =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === 'alerts',
-          });
-          q.invalidateQueries({ queryKey: ['alerts-stats'] });
-          q.invalidateQueries({ queryKey: ['dashboard-stats'] });
-          q.invalidateQueries({ queryKey: ['admin-stats'] });
+          Promise.all([
+            q.invalidateQueries({ queryKey: ['alerts'] }),
+            q.invalidateQueries({ queryKey: ['alerts-stats'] }),
+            q.invalidateQueries({ queryKey: ['dashboard-stats'] }),
+            q.invalidateQueries({ queryKey: ['admin-stats'] }),
+          ]);
         }
 
         // ── API Key Events ─────────────────────────────────────────
