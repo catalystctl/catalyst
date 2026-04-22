@@ -10,7 +10,8 @@ function InvitesPage() {
   const { token } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, setSession } = useAuthStore();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const setSession = useAuthStore((s) => s.setSession);
   const queryClient = useQueryClient();
   const [accepted, setAccepted] = useState(false);
   const [registerUsername, setRegisterUsername] = useState('');

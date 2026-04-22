@@ -2,10 +2,14 @@ import { Link } from 'react-router-dom';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { useAuthStore } from '../../stores/authStore';
 import { useThemeStore } from '../../stores/themeStore';
+import { shallow } from 'zustand/shallow';
 
 function Header() {
-  const { user, logout } = useAuthStore();
-  const { toggleSidebar, sidebarCollapsed, themeSettings } = useThemeStore();
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const toggleSidebar = useThemeStore((s) => s.toggleSidebar);
+  const sidebarCollapsed = useThemeStore((s) => s.sidebarCollapsed);
+  const themeSettings = useThemeStore((s) => s.themeSettings);
 
   const displayName = user?.firstName || user?.lastName
     ? [user.firstName, user.lastName].filter(Boolean).join(' ')

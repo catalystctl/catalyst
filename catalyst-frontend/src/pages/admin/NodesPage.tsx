@@ -320,7 +320,7 @@ function AdminNodesPage() {
   const [locationsModalOpen, setLocationsModalOpen] = useState(false);
 
   const { data, isLoading } = useAdminNodes({ search: search.trim() || undefined });
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
 
   const { data: locations = [] } = useQuery({
     queryKey: qk.locations(),

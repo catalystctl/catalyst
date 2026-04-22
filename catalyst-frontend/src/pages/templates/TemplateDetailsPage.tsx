@@ -47,7 +47,7 @@ function TemplateDetailsPage() {
   const { templateId } = useParams();
   const navigate = useNavigate();
   const { data: template, isLoading, isError, refetch } = useTemplate(templateId);
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const canWrite = useMemo(

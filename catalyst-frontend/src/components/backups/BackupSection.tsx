@@ -38,7 +38,7 @@ function BackupSection({
 }) {
   const [page, setPage] = useState(1);
   const { data: server } = useServer(serverId);
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const [storageMode, setStorageMode] = useState<BackupStorageMode>('local');
   const [retentionCount, setRetentionCount] = useState('');
   const [retentionDays, setRetentionDays] = useState('');

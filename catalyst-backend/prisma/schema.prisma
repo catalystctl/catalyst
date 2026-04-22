@@ -530,6 +530,9 @@ model Server {
   allocations    NodeAllocation[]
   installedMods  InstalledMod[]
   stats          ServerStat[]
+
+  @@index([status])
+  @@index([nodeId])
 }
 
 // ============================================================================
@@ -680,6 +683,7 @@ model AuditLog {
   timestamp  DateTime @default(now())
 
   @@index([userId, timestamp])
+  @@index([timestamp])
 }
 
 // ============================================================================

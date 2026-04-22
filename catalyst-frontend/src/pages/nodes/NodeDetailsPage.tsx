@@ -106,7 +106,7 @@ function ModalShell({
 
 function NodeDetailsPage() {
   const { nodeId } = useParams();
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
   const { data: node, isLoading, isError, refetch } = useNode(nodeId);
   const { data: stats } = useNodeStats(nodeId);

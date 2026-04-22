@@ -2,6 +2,7 @@ import { NavLink, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useThemeStore } from '../../stores/themeStore';
+import { shallow } from 'zustand/shallow';
 import { hasAnyPermission } from '../auth/ProtectedRoute';
 import {
   LayoutDashboard,
@@ -298,9 +299,13 @@ function Section({ title, links, defaultExpanded = false, collapsed }: SectionPr
 }
 
 function Sidebar() {
-  const { theme, setTheme } = useUIStore();
-  const { user, logout } = useAuthStore();
-  const { themeSettings, sidebarCollapsed, toggleSidebar } = useThemeStore();
+  const theme = useUIStore((s) => s.theme);
+  const setTheme = useUIStore((s) => s.setTheme);
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const themeSettings = useThemeStore((s) => s.themeSettings);
+  const sidebarCollapsed = useThemeStore((s) => s.sidebarCollapsed);
+  const toggleSidebar = useThemeStore((s) => s.toggleSidebar);
   const userPermissions = user?.permissions || [];
   const pluginTabs = usePluginTabs('admin');
   const pluginRoutes = usePluginRoutes();

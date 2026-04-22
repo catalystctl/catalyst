@@ -197,7 +197,7 @@ async function main() {
   }
 
   // Generate and write agent config.toml
-  const backendUrl = process.env.BACKEND_URL || process.env.BACKEND_EXTERNAL_ADDRESS || "http://localhost:3000";
+  const backendUrl = process.env.BACKEND_EXTERNAL_ADDRESS || process.env.BACKEND_URL || "http://localhost:3000";
   const agentConfigPath = path.join(process.cwd(), "..", "catalyst-agent", "config.toml");
   const agentConfigContent = generateAgentConfig(node, backendUrl, apiKey);
   

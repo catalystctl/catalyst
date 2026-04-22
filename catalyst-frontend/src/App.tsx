@@ -12,6 +12,7 @@ import { useThemeStore } from './stores/themeStore';
 import { themeApi } from './services/api/theme';
 import { adminApi } from './services/api/admin';
 import { useAuthStore } from './stores/authStore';
+import { shallow } from 'zustand/shallow';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
@@ -79,8 +80,14 @@ function PageTransition({ children }: { children: React.ReactNode }) {
 
 function App() {
   useAuthInit();
-  const { theme, setThemeSettings, applyTheme, injectCustomCss } = useThemeStore();
-  const { user, isAuthenticated, isReady } = useAuthStore();
+  const theme = useThemeStore((s) => s.theme);
+  const setThemeSettings = useThemeStore((s) => s.setThemeSettings);
+  const applyTheme = useThemeStore((s) => s.applyTheme);
+  const injectCustomCss = useThemeStore((s) => s.injectCustomCss);
+  const { user, isAuthenticated, isReady } = useAuthStore(
+    (s) => ({ user: s.user, isAuthenticated: s.isAuthenticated, isReady: s.isReady }),
+    shallow,
+  );
   const { setupRequired, isLoading: isSetupLoading } = useSetupStatus();
 
   // Load public theme settings on mount
@@ -145,7 +152,7 @@ function App() {
       <ErrorBoundary>
         <ToastProvider />
         <PluginProvider>
-          <AnimatePresence mode="wait">
+          <AnimatePresence initial={false}>
             <Routes>
               <Route path="/setup" element={<SetupPage />} />
               <Route path="*" element={<Navigate to="/setup" replace />} />
@@ -160,7 +167,7 @@ function App() {
     <ErrorBoundary>
       <ToastProvider />
       <PluginProvider>
-        <AnimatePresence mode="wait">
+        <AnimatePresence initial={false}>
           <Routes>
             {/* OOBE setup wizard — accessible even when setup is done (page redirects if not needed) */}
             <Route path="/setup" element={<SetupPage />} />

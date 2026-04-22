@@ -14,7 +14,9 @@ type TwoFactorSchema = z.infer<typeof twoFactorSchema>;
 function TwoFactorPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { verifyTwoFactor, isLoading, error } = useAuthStore();
+  const verifyTwoFactor = useAuthStore((s) => s.verifyTwoFactor);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const error = useAuthStore((s) => s.error);
   const {
     register,
     handleSubmit,

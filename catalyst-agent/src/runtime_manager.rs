@@ -773,7 +773,7 @@ impl ContainerdRuntime {
         // Create a symlink so install scripts that hardcode /mnt/server still work.
         // Also set HOME=/data for compatibility with scripts that use $HOME.
         let wrapped_script = format!(
-            "mkdir -p /mnt/server && ln -sfn /data /mnt/server\nexport HOME=/data\n\n{}\n\necho '[Catalyst] Fixing file ownership for runtime user...'\nchown -R 1000:1000 /data",
+            "rm -rf /mnt/server && ln -s /data /mnt/server\nexport HOME=/data\n\n{}\n\necho '[Catalyst] Fixing file ownership for runtime user...'\nchown -R 1000:1000 /data",
             script
         );
 
@@ -3001,7 +3001,14 @@ fn detect_install_interpreter(image: &str, script: &str) -> (&'static str, &'sta
         let interpreter = shebang.split_whitespace().next().unwrap_or("");
         let basename = interpreter.rsplit('/').next().unwrap_or(interpreter);
         match basename {
-            "bash" => return ("bash", "-c"),
+            "bash" => {
+                if is_alpine {
+                    // Alpine has no bash; busybox ash supports [[ ]] and most bash-isms
+                    return ("sh", "-c");
+                } else {
+                    return ("bash", "-c");
+                }
+            }
             "ash" => {
                 // ash scripts on Alpine → use sh (busybox ash)
                 // ash scripts on non-Alpine → use bash (superset, ash unavailable)

@@ -80,6 +80,7 @@ export function useSmtpSettings() {
   return useQuery({
     queryKey: qk.adminSmtp(),
     queryFn: adminApi.getSmtpSettings,
+    staleTime: 300_000,
   });
 }
 
@@ -87,6 +88,7 @@ export function useSecuritySettings() {
   return useQuery({
     queryKey: qk.adminSecuritySettings(),
     queryFn: adminApi.getSecuritySettings,
+    staleTime: 300_000,
   });
 }
 
@@ -94,6 +96,7 @@ export function useModManagerSettings() {
   return useQuery({
     queryKey: qk.adminModManager(),
     queryFn: adminApi.getModManagerSettings,
+    staleTime: 300_000,
   });
 }
 
@@ -108,6 +111,7 @@ export function useThemeSettings() {
   return useQuery({
     queryKey: qk.adminThemeSettings(),
     queryFn: adminApi.getThemeSettings,
+    staleTime: 300_000,
   });
 }
 
@@ -115,5 +119,6 @@ export function useOidcConfig() {
   return useQuery({
     queryKey: qk.adminOidcConfig(),
     queryFn: adminApi.getOidcConfig,
+    staleTime: 300_000,
   });
 }

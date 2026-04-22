@@ -39,6 +39,9 @@ export class TaskScheduler {
     // Load all enabled tasks
     await this.loadTasks();
 
+    // Recovery: restart tasks that should have run while the scheduler was down
+    await this.recoverMissedTasks();
+
     // Check for tasks every minute to handle nextRunAt updates
     this.checkInterval = setInterval(() => {
       this.checkAndUpdateTasks();
@@ -262,13 +265,61 @@ export class TaskScheduler {
   }
 
   /**
-   * Check for tasks that need to be reloaded or updated
+   * Recover tasks that were missed while the scheduler was offline.
+   * Only runs tasks whose nextRunAt has passed and that are not already running.
+   */
+  async recoverMissedTasks() {
+    try {
+      const now = new Date();
+      const missedTasks = await this.prisma.scheduledTask.findMany({
+        where: {
+          enabled: true,
+          nextRunAt: { lte: now },
+        },
+      });
+      for (const task of missedTasks) {
+        if (this.runningTasks.has(task.id)) {
+          this.logger.warn(`Skipping recovery of already running task ${task.id}`);
+          continue;
+        }
+        this.logger.info(`Recovering missed task: ${task.name} (${task.id})`);
+        await this.executeTask(task);
+      }
+    } catch (error) {
+      this.logger.error(error, 'Failed to recover missed tasks');
+    }
+  }
+
+  /**
+   * Check for tasks that need to be reloaded or updated.
+   * Uses lightweight queries to avoid full table scans.
    */
   async checkAndUpdateTasks() {
     try {
-      // Reload all enabled tasks (in case they were added/modified)
-      const tasks = await this.prisma.scheduledTask.findMany({
+      // Fetch only IDs of enabled tasks for scheduling comparison (lightweight)
+      const enabledTaskIdRows = await this.prisma.scheduledTask.findMany({
         where: { enabled: true },
+        select: { id: true },
+      });
+      const enabledTaskIds = new Set(enabledTaskIdRows.map((t) => t.id));
+
+      // Find tasks that are scheduled but disabled in DB
+      for (const [taskId] of this.scheduledJobs.entries()) {
+        if (!enabledTaskIds.has(taskId)) {
+          this.unscheduleTask(taskId);
+        }
+      }
+
+      // Fetch tasks that need execution or scheduling (targeted query)
+      const now = new Date();
+      const tasks = await this.prisma.scheduledTask.findMany({
+        where: {
+          enabled: true,
+          OR: [
+            { nextRunAt: { lte: now } },
+            { nextRunAt: null },
+          ],
+        },
       });
 
       // Find tasks that are in DB but not scheduled
@@ -278,17 +329,12 @@ export class TaskScheduler {
         }
       }
 
-      // Find tasks that are scheduled but disabled in DB
-      const enabledTaskIds = new Set(tasks.map((t) => t.id));
-      for (const [taskId] of this.scheduledJobs.entries()) {
-        if (!enabledTaskIds.has(taskId)) {
-          this.unscheduleTask(taskId);
-        }
-      }
-
-      const now = new Date();
       for (const task of tasks) {
         if (task.nextRunAt && task.nextRunAt <= now) {
+          if (this.runningTasks.has(task.id)) {
+            this.logger.warn(`Task ${task.id} is already running, skipping scheduled execution`);
+            continue;
+          }
           await this.executeTask(task);
         } else if (!task.nextRunAt) {
           await this.updateNextRunTime(task.id, task.schedule, now);

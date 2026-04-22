@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, type Variants } from 'framer-motion';
 import {
@@ -52,25 +52,24 @@ import type {
 } from '../../types/server';
 
 import ServerControls from '../../components/servers/ServerControls';
-import ServerConsoleTab from '../../components/servers/ServerConsoleTab';
 import ServerStatusBadge from '../../components/servers/ServerStatusBadge';
 import FileManager from '../../components/files/FileManager';
 import BackupSection from '../../components/backups/BackupSection';
-import AlertsPage from '../alerts/AlertsPage';
 import EulaModal from '../../components/servers/EulaModal';
-import {
-  ServerTabCard,
-  ServerSftpTab,
-  ServerTasksTab,
-  ServerDatabasesTab,
-  ServerMetricsTab,
-  ServerSettingsTab,
-  ServerAdminTab,
-  ServerUsersTab,
-  ServerConfigurationTab,
-  ServerModManagerTab,
-  ServerPluginManagerTab,
-} from '../../components/servers/tabs';
+import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+
+const ServerConsoleTab = lazy(() => import('../../components/servers/ServerConsoleTab'));
+const ServerSftpTab = lazy(() => import('../../components/servers/tabs/ServerSftpTab'));
+const ServerTasksTab = lazy(() => import('../../components/servers/tabs/ServerTasksTab'));
+const ServerDatabasesTab = lazy(() => import('../../components/servers/tabs/ServerDatabasesTab'));
+const ServerMetricsTab = lazy(() => import('../../components/servers/tabs/ServerMetricsTab'));
+const ServerSettingsTab = lazy(() => import('../../components/servers/tabs/ServerSettingsTab'));
+const ServerAdminTab = lazy(() => import('../../components/servers/tabs/ServerAdminTab'));
+const ServerUsersTab = lazy(() => import('../../components/servers/tabs/ServerUsersTab'));
+const ServerConfigurationTab = lazy(() => import('../../components/servers/tabs/ServerConfigurationTab'));
+const ServerModManagerTab = lazy(() => import('../../components/servers/tabs/ServerModManagerTab'));
+const ServerPluginManagerTab = lazy(() => import('../../components/servers/tabs/ServerPluginManagerTab'));
+const AlertsPage = lazy(() => import('../alerts/AlertsPage'));
 
 // ── Tab labels & icons ──
 const tabLabels = {
@@ -128,13 +127,21 @@ const itemVariants: Variants = {
   },
 };
 
+function TabSkeleton() {
+  return (
+    <div className="flex h-96 items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
+    </div>
+  );
+}
+
 function ServerDetailsPage() {
   const { serverId, tab } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: server, isLoading, isError, refetch } = useServer(serverId);
   const liveMetrics = useServerMetrics(serverId, server?.allocatedMemoryMb);
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
 
   // ── Metrics ──
   const [metricsTimeRange, setMetricsTimeRange] = useState<MetricsTimeRange>({
@@ -927,6 +934,7 @@ function ServerDetailsPage() {
 
         {/* ── Tab Content ── */}
         <motion.div variants={itemVariants}>
+          <Suspense fallback={<TabSkeleton />}>
           {activeTab === 'console' && (
             <ServerConsoleTab
               liveMetrics={liveMetrics}
@@ -1147,6 +1155,7 @@ function ServerDetailsPage() {
               serverStatus={server.status}
             />
           )}
+          </Suspense>
         </motion.div>
       </div>
 

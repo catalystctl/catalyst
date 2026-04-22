@@ -126,16 +126,18 @@ export class WebSocketGateway {
   private readonly agentConsoleBytesLimit = { maxBytes: resolveConsoleOutputByteLimit() };
   private readonly pendingAgentRequestLimit = 2000;
   private readonly autoRestartingServers = new Set<string>();
+  private heartbeatInterval?: ReturnType<typeof setInterval>;
+  private subscriberSweepInterval?: ReturnType<typeof setInterval>;
 
-  // SSE console stream subscribers — maps serverId → subscriberId → push function
-  private readonly sseSubscribers = new Map<string, Map<string, (event: string, data: any) => void>>();
-  // SSE event subscribers — maps serverId → subscriberId → { eventTypes: string[], push: fn }
+  // SSE console stream subscribers — maps serverId → subscriberId → { push, lastActivity }
+  private readonly sseSubscribers = new Map<string, Map<string, { push: (event: string, data: any) => void; lastActivity: number }>>();
+  // SSE event subscribers — maps serverId → subscriberId → { eventTypes, push, lastActivity }
   // Used for non-console events (state updates, backups, alerts, etc.)
-  private readonly sseEventSubscribers = new Map<string, Map<string, { eventTypes: string[]; push: (event: string, data: any) => void }>>();
+  private readonly sseEventSubscribers = new Map<string, Map<string, { eventTypes: string[]; push: (event: string, data: any) => void; lastActivity: number }>>();
   // Global SSE event subscribers — receive ALL events across all servers (for AppLayout)
-  private readonly globalSseSubscribers = new Map<string, { eventTypes: string[]; push: (event: string, data: any) => void; serverIds?: Set<string> }>();
+  private readonly globalSseSubscribers = new Map<string, { eventTypes: string[]; push: (event: string, data: any) => void; serverIds?: Set<string>; lastActivity: number }>();
   // Admin SSE event subscribers — receive entity-level admin events (users, nodes, templates, alerts)
-  private readonly adminEventSubscribers = new Map<string, { eventTypes: string[]; push: (event: string, data: any) => void }>();
+  private readonly adminEventSubscribers = new Map<string, { eventTypes: string[]; push: (event: string, data: any) => void; lastActivity: number }>();
 
   // ── Agent auth lockout tracker (progressive backoff) ───────────────────────
   // Tracks failed auth attempts per nodeId. Lockout durations increase with
@@ -196,6 +198,7 @@ export class WebSocketGateway {
   constructor(private prisma: PrismaClient, logger: pino.Logger) {
     this.logger = logger.child({ component: "WebSocketGateway" });
     this.startHeartbeatCheck();
+    this.startSubscriberSweep();
     this.refreshConsoleLimits().catch((err) =>
       this.logger.warn({ err }, "Failed to load console rate limits")
     );
@@ -277,7 +280,7 @@ export class WebSocketGateway {
         this.prisma.node.update({
           where: { id: nodeId },
           data: { isOnline: false },
-        });
+        }).catch(err => this.logger.error({ err, nodeId }, 'Failed to update node status on disconnect'));
         this.pushToAdminSubscribers('node_updated', {
           type: 'node_updated',
           nodeId,
@@ -791,10 +794,14 @@ export class WebSocketGateway {
       if (message.type === "heartbeat") {
         if (agent) {
           agent.lastHeartbeat = Date.now();
-          await this.prisma.node.update({
-            where: { id: nodeId },
-            data: { lastSeenAt: new Date() },
-          });
+          try {
+            await this.prisma.node.update({
+              where: { id: nodeId },
+              data: { lastSeenAt: new Date() },
+            });
+          } catch (err) {
+            this.logger.error({ err, nodeId }, 'WebSocket handler error: heartbeat node update failed');
+          }
         }
       } else if (message.type === "health_report") {
         if (!this.allowAgentMetrics(nodeId)) {
@@ -828,23 +835,27 @@ export class WebSocketGateway {
           this.logger.warn({ nodeId }, "Invalid health report payload");
           return;
         }
-        await this.prisma.node.update({
-          where: { id: nodeId },
-          data: { isOnline: true, lastSeenAt: new Date() },
-        });
-        await this.prisma.nodeMetrics.create({
-          data: {
-            nodeId,
-            cpuPercent,
-            memoryUsageMb: Math.round(memoryUsageMb),
-            memoryTotalMb: Math.round(memoryTotalMb),
-            diskUsageMb: Math.round(diskUsageMb),
-            diskTotalMb: Math.round(diskTotalMb),
-            networkRxBytes,
-            networkTxBytes,
-            containerCount: Math.max(0, Math.round(containerCount)),
-          },
-        });
+        try {
+          await this.prisma.node.update({
+            where: { id: nodeId },
+            data: { isOnline: true, lastSeenAt: new Date() },
+          });
+          await this.prisma.nodeMetrics.create({
+            data: {
+              nodeId,
+              cpuPercent,
+              memoryUsageMb: Math.round(memoryUsageMb),
+              memoryTotalMb: Math.round(memoryTotalMb),
+              diskUsageMb: Math.round(diskUsageMb),
+              diskTotalMb: Math.round(diskTotalMb),
+              networkRxBytes,
+              networkTxBytes,
+              containerCount: Math.max(0, Math.round(containerCount)),
+            },
+          });
+        } catch (err) {
+          this.logger.error({ err, nodeId }, 'WebSocket handler error: failed to persist health report');
+        }
       } else if (message.type === "resource_stats") {
         if (!this.allowAgentMetrics(nodeId)) {
           if (this.shouldWarnRateLimit(nodeId, this.agentMetricsLimit.windowMs)) {
@@ -1013,7 +1024,11 @@ export class WebSocketGateway {
 
           // Fallback: upsert each item individually (safe but slower). We attempt
           // to preserve spike semantics by keeping max(memory, disk, network) where applicable.
-          for (const it of filtered) {
+          const MAX_FALLBACK_ITEMS = 20;
+          if (filtered.length > MAX_FALLBACK_ITEMS) {
+            this.logger.warn({ count: filtered.length }, 'Batch metrics fallback limited to 20 items');
+          }
+          for (const it of filtered.slice(0, MAX_FALLBACK_ITEMS)) {
             try {
               const existing = await this.prisma.serverMetrics.findUnique({
                 where: {
@@ -1102,13 +1117,17 @@ export class WebSocketGateway {
         if (message.serverId && message.data) {
           // Sanitize console output to prevent XSS attacks
           const sanitizedData = sanitizeInput(message.data);
-          await this.prisma.serverLog.create({
-            data: {
-              serverId: message.serverId,
-              stream: message.stream || "stdout",
-              data: sanitizedData,
-            },
-          });
+          try {
+            await this.prisma.serverLog.create({
+              data: {
+                serverId: message.serverId,
+                stream: message.stream || "stdout",
+                data: sanitizedData,
+              },
+            });
+          } catch (err) {
+            this.logger.error({ err, serverId: message.serverId }, 'WebSocket handler error: failed to persist console log');
+          }
         }
         if (!this.allowConsoleOutput(message.serverId)) {
           await this.maybeWarnConsoleThrottle(message.serverId);
@@ -1203,27 +1222,31 @@ export class WebSocketGateway {
 
         }
 
-        await this.prisma.server.update({
-          where: { id: message.serverId },
-          data: nextData,
-        });
-        if (message.reason) {
-          await this.prisma.serverLog.create({
-            data: {
-              serverId: message.serverId,
-              stream: "system",
-              data: `Status changed to ${message.state}: ${message.reason}`,
-            },
+        try {
+          await this.prisma.server.update({
+            where: { id: message.serverId },
+            data: nextData,
           });
-        }
-        if (shouldRecordCrash && typeof message.exitCode === "number") {
-          await this.prisma.serverLog.create({
-            data: {
-              serverId: message.serverId,
-              stream: "system",
-              data: `Exit code: ${message.exitCode}`,
-            },
-          });
+          if (message.reason) {
+            await this.prisma.serverLog.create({
+              data: {
+                serverId: message.serverId,
+                stream: "system",
+                data: `Status changed to ${message.state}: ${message.reason}`,
+              },
+            });
+          }
+          if (shouldRecordCrash && typeof message.exitCode === "number") {
+            await this.prisma.serverLog.create({
+              data: {
+                serverId: message.serverId,
+                stream: "system",
+                data: `Exit code: ${message.exitCode}`,
+              },
+            });
+          }
+        } catch (err) {
+          this.logger.error({ err, serverId: message.serverId }, 'WebSocket handler error: failed to persist state update');
         }
 
         if (shouldAutoRestart && server.node?.isOnline) {
@@ -2017,6 +2040,7 @@ export class WebSocketGateway {
       const eventData = JSON.stringify(messageToSend);
       for (const [, sub] of sseEventSubs) {
         if (sub.eventTypes.includes(eventType)) {
+          sub.lastActivity = Date.now();
           try { sub.push(eventType, eventData); } catch { /* ignore */ }
         }
       }
@@ -2027,6 +2051,7 @@ export class WebSocketGateway {
     for (const [, sub] of this.globalSseSubscribers) {
       if (sub.serverIds && !sub.serverIds.has(serverId)) continue;
       if (sub.eventTypes.includes(eventType)) {
+        sub.lastActivity = Date.now();
         try { sub.push(eventType, eventData); } catch { /* ignore */ }
       }
     }
@@ -2043,6 +2068,7 @@ export class WebSocketGateway {
     const eventData = JSON.stringify(data);
     for (const [, sub] of this.globalSseSubscribers) {
       if (sub.eventTypes.includes(eventType)) {
+        sub.lastActivity = Date.now();
         try {
           sub.push(eventType, eventData);
         } catch {
@@ -2061,6 +2087,7 @@ export class WebSocketGateway {
     const eventData = JSON.stringify(data);
     for (const [, sub] of this.adminEventSubscribers) {
       if (sub.eventTypes.includes(eventType)) {
+        sub.lastActivity = Date.now();
         try {
           sub.push(eventType, eventData);
         } catch {
@@ -2079,7 +2106,7 @@ export class WebSocketGateway {
     push: (event: string, data: any) => void,
   ): () => void {
     const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    this.adminEventSubscribers.set(subscriberId, { eventTypes, push });
+    this.adminEventSubscribers.set(subscriberId, { eventTypes, push, lastActivity: Date.now() });
     this.logger.debug({ subscriberId, eventTypes }, 'Admin SSE subscriber added');
     return () => {
       this.adminEventSubscribers.delete(subscriberId);
@@ -2161,8 +2188,9 @@ export class WebSocketGateway {
           error: message.error,
         });
 
-      for (const [, push] of sseSubs) {
-        push(event, eventData);
+      for (const [, sub] of sseSubs) {
+        sub.lastActivity = Date.now();
+        sub.push(event, eventData);
       }
     }
   }
@@ -2178,7 +2206,7 @@ export class WebSocketGateway {
       this.sseSubscribers.set(serverId, new Map());
     }
     const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    this.sseSubscribers.get(serverId)!.set(subscriberId, push);
+    this.sseSubscribers.get(serverId)!.set(subscriberId, { push, lastActivity: Date.now() });
     this.logger.debug({ serverId, subscriberId }, 'SSE subscriber added');
 
     return () => {
@@ -2217,7 +2245,7 @@ export class WebSocketGateway {
       this.sseEventSubscribers.set(serverId, new Map());
     }
     const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    this.sseEventSubscribers.get(serverId)!.set(subscriberId, { eventTypes, push });
+    this.sseEventSubscribers.get(serverId)!.set(subscriberId, { eventTypes, push, lastActivity: Date.now() });
     this.logger.debug({ serverId, subscriberId, eventTypes }, 'SSE event subscriber added');
 
     return () => {
@@ -2257,6 +2285,7 @@ export class WebSocketGateway {
       eventTypes,
       push,
       serverIds: serverIds?.length ? new Set(serverIds) : undefined,
+      lastActivity: Date.now(),
     });
     this.logger.debug({ subscriberId, eventTypes, serverIds }, 'Global SSE subscriber added');
 
@@ -2350,7 +2379,7 @@ export class WebSocketGateway {
   }
 
   private startHeartbeatCheck() {
-    setInterval(() => {
+    this.heartbeatInterval = setInterval(() => {
       const now = Date.now();
       const timeout = 60000; // 60 seconds - agent sends every 15s
 
@@ -2362,7 +2391,7 @@ export class WebSocketGateway {
           this.prisma.node.update({
             where: { id: nodeId },
             data: { isOnline: false },
-          });
+          }).catch(err => this.logger.error({ err, nodeId }, 'Failed to update node status on heartbeat timeout'));
           this.pushToAdminSubscribers('node_updated', {
             type: 'node_updated',
             nodeId,
@@ -2372,6 +2401,61 @@ export class WebSocketGateway {
         }
       }
     }, 10000); // Check every 10 seconds
+  }
+
+  private startSubscriberSweep() {
+    this.subscriberSweepInterval = setInterval(() => {
+      this.sweepSseSubscribers();
+      this.sweepSseEventSubscribers();
+      this.sweepGlobalSubscribers();
+      this.sweepAdminSubscribers();
+    }, 60000);
+  }
+
+  private sweepSseSubscribers() {
+    const now = Date.now();
+    for (const [serverId, subs] of this.sseSubscribers) {
+      for (const [subId, sub] of subs) {
+        if (now - sub.lastActivity > 300_000) {
+          subs.delete(subId);
+        }
+      }
+      if (subs.size === 0) {
+        this.sseSubscribers.delete(serverId);
+      }
+    }
+  }
+
+  private sweepSseEventSubscribers() {
+    const now = Date.now();
+    for (const [serverId, subs] of this.sseEventSubscribers) {
+      for (const [subId, sub] of subs) {
+        if (now - sub.lastActivity > 300_000) {
+          subs.delete(subId);
+        }
+      }
+      if (subs.size === 0) {
+        this.sseEventSubscribers.delete(serverId);
+      }
+    }
+  }
+
+  private sweepGlobalSubscribers() {
+    const now = Date.now();
+    for (const [subId, sub] of this.globalSseSubscribers) {
+      if (now - sub.lastActivity > 300_000) {
+        this.globalSseSubscribers.delete(subId);
+      }
+    }
+  }
+
+  private sweepAdminSubscribers() {
+    const now = Date.now();
+    for (const [subId, sub] of this.adminEventSubscribers) {
+      if (now - sub.lastActivity > 300_000) {
+        this.adminEventSubscribers.delete(subId);
+      }
+    }
   }
 
   // Send message to agent (for API endpoints)
@@ -2475,7 +2559,7 @@ export class WebSocketGateway {
     }
 
     if (this.pendingAgentRequests.size >= this.pendingAgentRequestLimit) {
-      throw new Error("Too many pending agent requests");
+      return Promise.reject(new Error('Pending agent request limit exceeded'));
     }
     const requestId = message.requestId || crypto.randomUUID();
     const payload = { ...message, requestId };
@@ -2499,7 +2583,7 @@ export class WebSocketGateway {
     }
 
     if (this.pendingAgentRequests.size >= this.pendingAgentRequestLimit) {
-      throw new Error("Too many pending agent requests");
+      return Promise.reject(new Error('Pending agent request limit exceeded'));
     }
     const requestId = message.requestId || crypto.randomUUID();
     const payload = { ...message, requestId };
@@ -2534,7 +2618,7 @@ export class WebSocketGateway {
     }
 
     if (this.pendingAgentRequests.size >= this.pendingAgentRequestLimit) {
-      throw new Error("Too many pending agent requests");
+      return Promise.reject(new Error('Pending agent request limit exceeded'));
     }
     const requestId = message.requestId || crypto.randomUUID();
     const payload = { ...message, requestId };
@@ -2704,6 +2788,38 @@ export class WebSocketGateway {
         }
       }
     }
+  }
+
+  /**
+   * Destroy the gateway: close all connections and clean up resources.
+   */
+  destroy(): void {
+    this.logger.info('Destroying WebSocket gateway');
+    if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+    if (this.subscriberSweepInterval) clearInterval(this.subscriberSweepInterval);
+    for (const [nodeId, agent] of this.agents) {
+      try {
+        agent.socket.close();
+      } catch {
+        // ignore
+      }
+      this.agents.delete(nodeId);
+    }
+    for (const [clientId, client] of this.clients) {
+      try {
+        client.socket.close();
+      } catch {
+        // ignore
+      }
+      this.clients.delete(clientId);
+    }
+    this.pendingAgentRequests.clear();
+    this.sseSubscribers.clear();
+    this.sseEventSubscribers.clear();
+    this.globalSseSubscribers.clear();
+    this.adminEventSubscribers.clear();
+    this.pluginWsHandlers.clear();
+    this.logger.info('WebSocket gateway destroyed');
   }
 }
 

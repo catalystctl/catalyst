@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { usePluginTabs } from '../plugins/hooks';
+import { usePluginContext } from '../plugins/PluginProvider';
 
 interface PluginTabPageProps {
   location: 'admin' | 'server';
@@ -8,7 +10,14 @@ interface PluginTabPageProps {
 
 export default function PluginTabPage({ location, serverId }: PluginTabPageProps) {
   const { pluginTabId } = useParams<{ pluginTabId: string }>();
+  const { reloadPlugins, initialized, loading } = usePluginContext();
   const pluginTabs = usePluginTabs(location);
+
+  useEffect(() => {
+    if (!initialized && !loading) {
+      reloadPlugins();
+    }
+  }, [initialized, loading, reloadPlugins]);
   
   const tab = pluginTabs.find((t) => t.id === pluginTabId);
   

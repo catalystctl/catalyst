@@ -3,10 +3,7 @@
  * Fixes serialization issues with BigInt, _count, and nested relations
  */
 export function serialize<T>(data: T): any {
-  // Handle BigInt serialization
-  return JSON.parse(
-    JSON.stringify(data, (_key, value) =>
-      typeof value === 'bigint' ? value.toString() : value
-    )
-  );
+  return JSON.parse(JSON.stringify(data, (_key, value) =>
+    typeof value === 'bigint' ? value.toString() : value
+  ));
 }

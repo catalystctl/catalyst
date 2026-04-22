@@ -4106,7 +4106,7 @@ impl WebSocketHandler {
         networks.refresh(true);
         let mut total_network_rx_bytes: u64 = 0;
         let mut total_network_tx_bytes: u64 = 0;
-        for (_name, data) in networks.list() {
+        for data in networks.list().values() {
             total_network_rx_bytes += data.total_received();
             total_network_tx_bytes += data.total_transmitted();
         }

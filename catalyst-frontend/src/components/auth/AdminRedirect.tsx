@@ -22,7 +22,7 @@ const ADMIN_ROUTES: Array<{ path: string; permissions: string[] }> = [
 
 function AdminRedirect() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const userPermissions = user?.permissions || [];
 
   useEffect(() => {

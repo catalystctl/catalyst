@@ -26,8 +26,9 @@ function ServersPage() {
   const [filters, setFilters] = useState<Record<string, any>>({});
   const [accessFilter, setAccessFilter] = useState<AccessFilter>('all');
   const { data, isLoading } = useServers(filters);
-  const { user } = useAuthStore();
-  const { serverViewMode, setServerViewMode } = useThemeStore();
+  const user = useAuthStore((s) => s.user);
+  const serverViewMode = useThemeStore((s) => s.serverViewMode);
+  const setServerViewMode = useThemeStore((s) => s.setServerViewMode);
   const canCreateServer =
     user?.permissions?.includes('*') ||
     user?.permissions?.includes('admin.write') ||

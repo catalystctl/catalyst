@@ -321,7 +321,7 @@ function TemplatesPage({ hideHeader }: Props) {
     return () => window.removeEventListener('catalyst:open-nests-modal', handler);
   }, []);
 
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
 
   const canWrite = useMemo(
     () => user?.permissions?.includes('admin.write') || user?.permissions?.includes('*'),

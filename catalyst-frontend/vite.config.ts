@@ -1,12 +1,25 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { visualizer } from 'rollup-plugin-visualizer';
 import path from 'path';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, path.resolve(__dirname, '.'), 'VITE_');
 
   return {
-    plugins: [react()],
+    plugins: [
+      react(),
+      ...(mode === 'analyze'
+        ? [
+            visualizer({
+              open: true,
+              gzipSize: true,
+              brotliSize: true,
+              filename: 'dist/stats.html',
+            }),
+          ]
+        : []),
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
@@ -59,17 +72,15 @@ export default defineConfig(({ mode }) => {
               '@radix-ui/react-avatar',
             ],
             'vendor-motion': ['framer-motion'],
+            'vendor-charts': ['recharts'],
+            'vendor-form': ['react-hook-form', 'zod', '@hookform/resolvers'],
+            'vendor-cmdk': ['cmdk'],
+            'vendor-date': ['date-fns'],
+            'vendor-sonner': ['sonner'],
             'vendor-utils': [
               'clsx',
               'tailwind-merge',
               'class-variance-authority',
-              'date-fns',
-              'zod',
-              '@hookform/resolvers',
-              'react-hook-form',
-              'sonner',
-              'cmdk',
-              'recharts',
             ],
           },
           // Asset file names with hashes for cache busting

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../../stores/authStore';
 import { useThemeStore } from '../../stores/themeStore';
+import { shallow } from 'zustand/shallow';
 import apiClient from '../../services/api/client';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
 import { BrandFooter } from '../../components/shared/BrandFooter';
@@ -69,8 +70,12 @@ const stepIcons = [Sparkles, User, Palette];
 
 function SetupPage() {
   const navigate = useNavigate();
-  const { init } = useAuthStore();
-  const { previewColors, cancelPreview, applyTheme, setTheme, theme } = useThemeStore();
+  const init = useAuthStore((s) => s.init);
+  const previewColors = useThemeStore((s) => s.previewColors);
+  const cancelPreview = useThemeStore((s) => s.cancelPreview);
+  const applyTheme = useThemeStore((s) => s.applyTheme);
+  const setTheme = useThemeStore((s) => s.setTheme);
+  const theme = useThemeStore((s) => s.theme);
 
   const [currentStep, setCurrentStep] = useState(0);
   const [direction, setDirection] = useState(1);

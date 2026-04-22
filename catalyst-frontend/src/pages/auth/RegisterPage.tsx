@@ -8,7 +8,9 @@ import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthM
 
 function RegisterPage() {
   const navigate = useNavigate();
-  const { register: registerUser, isLoading, error } = useAuthStore();
+  const registerUser = useAuthStore((s) => s.register);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const error = useAuthStore((s) => s.error);
   const {
     register,
     handleSubmit,

@@ -10,7 +10,7 @@ import { nodesApi } from '../../services/api/nodes';
 import { useAuthStore } from '../../stores/authStore';
 
 function CreateServerModal() {
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const { data: accessibleNodesData } = useAccessibleNodes();
   const accessibleNodes = accessibleNodesData?.nodes || [];
   const hasNodeWildcard = accessibleNodesData?.hasWildcard || false;

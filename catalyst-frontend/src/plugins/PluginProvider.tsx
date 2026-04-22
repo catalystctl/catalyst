@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { usePluginStore } from './store';
 import { fetchPlugins } from './api';
 import { loadPluginFrontend } from './loader';
@@ -9,23 +9,29 @@ interface PluginContextValue {
   plugins: LoadedPlugin[];
   loading: boolean;
   error: string | null;
+  initialized: boolean;
   reloadPlugins: () => Promise<void>;
 }
 
 const PluginContext = createContext<PluginContextValue | null>(null);
 
 export function PluginProvider({ children }: { children: React.ReactNode }) {
-  const { plugins, loading, error, setPlugins, setLoading, setError } = usePluginStore();
+  const plugins = usePluginStore((s) => s.plugins);
+  const loading = usePluginStore((s) => s.loading);
+  const error = usePluginStore((s) => s.error);
+  const setPlugins = usePluginStore((s) => s.setPlugins);
+  const setLoading = usePluginStore((s) => s.setLoading);
+  const setError = usePluginStore((s) => s.setError);
   const [initialized, setInitialized] = useState(false);
-  const { isAuthenticated } = useAuthStore();
-  
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
   const loadPlugins = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const manifests = await fetchPlugins();
-      
+
       // Load frontend for each enabled plugin
       const loadedPlugins: LoadedPlugin[] = await Promise.all(
         manifests.map(async (manifest) => {
@@ -40,7 +46,7 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
           };
         })
       );
-      
+
       setPlugins(loadedPlugins);
       setInitialized(true);
     } catch (err: unknown) {
@@ -50,19 +56,14 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     }
   };
-  
-  useEffect(() => {
-    if (!initialized && isAuthenticated) {
-      loadPlugins();
-    }
-  }, [initialized, isAuthenticated]);
-  
+
   const value: PluginContextValue = React.useMemo(() => ({
     plugins,
     loading,
     error,
+    initialized,
     reloadPlugins: loadPlugins,
-  }), [plugins, loading, error]);
+  }), [plugins, loading, error, initialized]);
   
   return <PluginContext.Provider value={value}>{children}</PluginContext.Provider>;
 }

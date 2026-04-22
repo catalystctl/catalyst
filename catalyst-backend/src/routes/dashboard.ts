@@ -1,6 +1,14 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 
+let dashboardCache: { data: any; timestamp: number; key: string } | null = null;
+const CACHE_TTL = 10_000; // 10 seconds
+
+function buildCacheKey(user: any): string {
+  const perms: string[] = user?.permissions ?? [];
+  return `${user?.userId ?? 'anon'}:${perms.sort().join(',')}`;
+}
+
 export async function dashboardRoutes(app: FastifyInstance) {
   const authenticate = (app as any).authenticate;
 
@@ -10,6 +18,12 @@ export async function dashboardRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
+      const cacheKey = buildCacheKey(user);
+
+      if (dashboardCache && dashboardCache.key === cacheKey && Date.now() - dashboardCache.timestamp < CACHE_TTL) {
+        return reply.send({ data: dashboardCache.data });
+      }
+
       const perms: string[] = user?.permissions ?? [];
 
       // Check if user has any relevant permission
@@ -33,16 +47,18 @@ export async function dashboardRoutes(app: FastifyInstance) {
         canReadAlerts || isAdmin ? prisma.alert.count({ where: { resolved: false } }) : 0,
       ]);
 
-      return reply.send({
-        data: {
-          servers: serverCount,
-          serversOnline,
-          nodes: nodeCount,
-          nodesOnline,
-          alerts: alertCount,
-          alertsUnacknowledged,
-        },
-      });
+      const data = {
+        servers: serverCount,
+        serversOnline,
+        nodes: nodeCount,
+        nodesOnline,
+        alerts: alertCount,
+        alertsUnacknowledged,
+      };
+
+      dashboardCache = { data, timestamp: Date.now(), key: cacheKey };
+
+      return reply.send({ data });
     }
   );
 

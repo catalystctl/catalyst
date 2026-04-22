@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import type pino from 'pino';
 
 const MAX_RETENTION = 7 * 24 * 60 * 60 * 1000; // 7 days
+const BATCH_SIZE = 1000;
 
 export const startStatRetention = (prisma: PrismaClient, logger: pino.Logger) => {
   const log = logger.child({ component: 'StatRetention' });
@@ -9,11 +10,26 @@ export const startStatRetention = (prisma: PrismaClient, logger: pino.Logger) =>
   const retain = async () => {
     try {
       const cutoff = new Date(Date.now() - MAX_RETENTION);
-      const result = await prisma.serverStat.deleteMany({
-        where: { createdAt: { lt: cutoff } },
-      });
-      if (result.count > 0) {
-        log.info({ count: result.count }, 'Pruned old server stats');
+      let totalDeleted = 0;
+
+      while (true) {
+        const batch = await prisma.serverStat.findMany({
+          where: { createdAt: { lt: cutoff } },
+          take: BATCH_SIZE,
+          select: { id: true },
+        });
+        if (batch.length === 0) break;
+
+        const result = await prisma.serverStat.deleteMany({
+          where: { id: { in: batch.map((b) => b.id) } },
+        });
+        totalDeleted += result.count;
+        if (batch.length < BATCH_SIZE) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+
+      if (totalDeleted > 0) {
+        log.info({ count: totalDeleted }, 'Pruned old server stats');
       }
     } catch (err) {
       log.error({ err }, 'Failed to prune server stats');

@@ -12,15 +12,26 @@
  */
 
 import { prisma } from "../db";
-import { createHash, randomBytes } from "crypto";
+import { createHash, createHmac, randomBytes } from "crypto";
 
 const DEFAULT_PREFIX = "catalyst";
 const KEY_LENGTH = 32; // bytes of randomness
 
-/** Hash an API key using SHA-256 → base64url (same format better-auth uses). */
+/**
+ * Hash an API key using HMAC-SHA256 with a per-key salt.
+ *
+ * The salt is deterministically derived from the first 16 characters of the key,
+ * ensuring unique salts per key without requiring an immediate schema migration.
+ *
+ * NOTE: For stronger security, add a `salt String?` column to the `apikey`
+ * Prisma model and store a cryptographically random salt per key. When that
+ * migration is applied, update this function to accept the stored salt and
+ * adjust the lookup strategy in verifyApiKey accordingly.
+ */
 export function hashApiKey(key: string): string {
-  const hash = createHash("sha256").update(key).digest();
-  return hash.toString("base64url");
+  const salt = key.slice(0, 16);
+  const secret = process.env.API_KEY_SECRET || "fallback-secret";
+  return createHmac("sha256", secret).update(key + salt).digest("hex");
 }
 
 export interface CreateApiKeyParams {
@@ -100,6 +111,8 @@ export async function createApiKey(params: CreateApiKeyParams): Promise<ApiKeyRe
   const random = randomBytes(KEY_LENGTH).toString("base64url");
   const fullKey = `${prefix}_${random}`;
   const hashedKey = hashApiKey(fullKey);
+  // When a dedicated `salt` column is added, generate a random salt here
+  // and pass it to hashApiKey() instead of the deterministic derivation.
 
   // Calculate expiry
   const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null;

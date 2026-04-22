@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { usePluginRoutes } from '../plugins/hooks';
+import { usePluginContext } from '../plugins/PluginProvider';
 import { useParams, Navigate } from 'react-router-dom';
 
 /**
@@ -11,7 +13,14 @@ import { useParams, Navigate } from 'react-router-dom';
  */
 export default function PluginRoutePage() {
   const { pluginRouteName } = useParams<{ pluginRouteName: string }>();
+  const { reloadPlugins, initialized, loading } = usePluginContext();
   const routes = usePluginRoutes();
+
+  useEffect(() => {
+    if (!initialized && !loading) {
+      reloadPlugins();
+    }
+  }, [initialized, loading, reloadPlugins]);
 
   // Match the current path against plugin route paths
   const currentPath = `/${pluginRouteName}`;

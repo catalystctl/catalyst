@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useMemo } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import { useDashboardStats, useDashboardActivity, useResourceStats } from '../../hooks/useDashboard';
 import { Skeleton } from '../../components/shared/Skeleton';
@@ -19,7 +20,7 @@ import {
 } from 'lucide-react';
 
 function DashboardPage() {
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const canCreateServer =
     user?.permissions?.includes('*') ||
     user?.permissions?.includes('admin.write') ||
@@ -47,72 +48,79 @@ function DashboardPage() {
   const nodesTotal = stats?.nodes ?? 0;
   const alertsUnacked = stats?.alertsUnacknowledged ?? 0;
 
-  const resourceMetrics = [
-    {
-      label: 'CPU',
-      value: resources?.cpuUtilization ?? 0,
-      icon: Cpu,
-      color: 'text-primary',
-      bg: 'bg-primary',
-    },
-    {
-      label: 'Memory',
-      value: resources?.memoryUtilization ?? 0,
-      icon: MemoryStick,
-      color: 'text-success',
-      bg: 'bg-success',
-    },
-    {
-      label: 'Network',
-      value: resources?.networkThroughput ?? 0,
-      icon: Network,
-      color: 'text-warning',
-      bg: 'bg-warning',
-    },
-  ];
+  const resourceMetrics = useMemo(
+    () => [
+      {
+        label: 'CPU',
+        value: resources?.cpuUtilization ?? 0,
+        icon: Cpu,
+        color: 'text-primary',
+        bg: 'bg-primary',
+      },
+      {
+        label: 'Memory',
+        value: resources?.memoryUtilization ?? 0,
+        icon: MemoryStick,
+        color: 'text-success',
+        bg: 'bg-success',
+      },
+      {
+        label: 'Network',
+        value: resources?.networkThroughput ?? 0,
+        icon: Network,
+        color: 'text-warning',
+        bg: 'bg-warning',
+      },
+    ],
+    [resources?.cpuUtilization, resources?.memoryUtilization, resources?.networkThroughput],
+  );
 
-  const quickActions = [
-    {
-      title: 'Create Server',
-      description: 'Deploy a new game server',
-      icon: Plus,
-      href: '/servers',
-      color: 'bg-primary',
-      show: canCreateServer,
-    },
-    {
-      title: 'View Servers',
-      description: 'Manage your servers',
-      icon: Server,
-      href: '/servers',
-      color: 'bg-primary',
-      show: !canCreateServer,
-    },
-    {
-      title: 'Register Node',
-      description: 'Add infrastructure',
-      icon: HardDrive,
-      href: '/admin/nodes',
-      color: 'bg-primary',
-      show: isAdmin,
-    },
-    {
-      title: 'View Alerts',
-      description: alertsUnacked > 0 ? `${alertsUnacked} need attention` : 'All clear',
-      icon: Shield,
-      href: isAdmin ? '/admin/alerts' : '/profile',
-      color: alertsUnacked > 0 ? 'bg-danger' : 'bg-zinc-600',
-      show: isAdmin,
-    },
-    {
-      title: 'Profile Settings',
-      description: 'Manage your account',
-      icon: Activity,
-      href: '/profile',
-      color: 'bg-zinc-600',
-      show: !isAdmin,
-    },
-  ].filter((action) => action.show);
+  const quickActions = useMemo(
+    () =>
+      [
+        {
+          title: 'Create Server',
+          description: 'Deploy a new game server',
+          icon: Plus,
+          href: '/servers',
+          color: 'bg-primary',
+          show: canCreateServer,
+        },
+        {
+          title: 'View Servers',
+          description: 'Manage your servers',
+          icon: Server,
+          href: '/servers',
+          color: 'bg-primary',
+          show: !canCreateServer,
+        },
+        {
+          title: 'Register Node',
+          description: 'Add infrastructure',
+          icon: HardDrive,
+          href: '/admin/nodes',
+          color: 'bg-primary',
+          show: isAdmin,
+        },
+        {
+          title: 'View Alerts',
+          description: alertsUnacked > 0 ? `${alertsUnacked} need attention` : 'All clear',
+          icon: Shield,
+          href: isAdmin ? '/admin/alerts' : '/profile',
+          color: alertsUnacked > 0 ? 'bg-danger' : 'bg-zinc-600',
+          show: isAdmin,
+        },
+        {
+          title: 'Profile Settings',
+          description: 'Manage your account',
+          icon: Activity,
+          href: '/profile',
+          color: 'bg-zinc-600',
+          show: !isAdmin,
+        },
+      ].filter((action) => action.show),
+    [canCreateServer, isAdmin, alertsUnacked],
+  );
 
   return (
     <div className="space-y-6">

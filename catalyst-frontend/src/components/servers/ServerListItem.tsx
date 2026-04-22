@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, type Variants } from 'framer-motion';
 import type { Server } from '../../types/server';
@@ -143,4 +144,4 @@ function ServerListItem({ server }: { server: Server }) {
   );
 }
 
-export default ServerListItem;
+export default memo(ServerListItem);

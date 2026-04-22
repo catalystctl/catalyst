@@ -276,7 +276,10 @@ function OidcProviderSection() {
 
 function ThemeSettingsPage() {
   const { data: settings, isLoading } = useThemeSettings();
-  const { setThemeSettings: applyThemeSettings, applyTheme, previewColors, cancelPreview } = useThemeStore();
+  const applyThemeSettings = useThemeStore((s) => s.setThemeSettings);
+  const applyTheme = useThemeStore((s) => s.applyTheme);
+  const previewColors = useThemeStore((s) => s.previewColors);
+  const cancelPreview = useThemeStore((s) => s.cancelPreview);
 
   // ── Branding ──
   const [panelName, setPanelName] = useState('Catalyst');

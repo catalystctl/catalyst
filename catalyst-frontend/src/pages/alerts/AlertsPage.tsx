@@ -235,7 +235,7 @@ type Props = {
 };
 
 function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Props) {
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const [showRuleModal, setShowRuleModal] = useState(false);
   const [editingRule, setEditingRule] = useState<AlertRule | null>(null);
   const [filterResolved, setFilterResolved] = useState<'false' | 'true' | 'all'>('false');

@@ -1,5 +1,6 @@
-import { useEffect, useMemo } from 'react';
-import Editor from '@monaco-editor/react';
+import { useEffect, useMemo, lazy, Suspense } from 'react';
+
+const Editor = lazy(() => import('@monaco-editor/react'));
 import { Download, RotateCcw, Save, X } from 'lucide-react';
 
 type FileDraft = {
@@ -198,23 +199,29 @@ function FileEditor({
             Loading file contents...
           </div>
         ) : (
-          <Editor
-            height="100%"
-            theme="vs-dark"
-            language={language}
-            value={file.content}
-            onChange={(value) => onChange(value ?? '')}
-            options={{
-              minimap: { enabled: false },
-              fontSize: 13,
-              scrollBeyondLastLine: false,
-              wordWrap: 'on',
-              padding: { top: 12 },
-              lineNumbers: 'on',
-              renderLineHighlight: 'line',
-              bracketPairColorization: { enabled: true },
-            }}
-          />
+          <Suspense fallback={
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground dark:text-muted-foreground">
+              Loading editor...
+            </div>
+          }>
+            <Editor
+              height="100%"
+              theme="vs-dark"
+              language={language}
+              value={file.content}
+              onChange={(value) => onChange(value ?? '')}
+              options={{
+                minimap: { enabled: false },
+                fontSize: 13,
+                scrollBeyondLastLine: false,
+                wordWrap: 'on',
+                padding: { top: 12 },
+                lineNumbers: 'on',
+                renderLineHighlight: 'line',
+                bracketPairColorization: { enabled: true },
+              }}
+            />
+          </Suspense>
         )}
       </div>
     </div>

@@ -57,6 +57,7 @@ import {
 import { startAuditRetention } from "./services/audit-retention";
 import { startStatRetention } from "./services/stat-retention";
 import { startBackupRetention } from "./services/backup-retention";
+import { startLogRetention } from "./services/log-retention";
 import { auth } from "./auth";
 import { fromNodeHeaders } from "better-auth/node";
 import { normalizeHostIp } from "./utils/ipam";
@@ -79,8 +80,9 @@ const logger = pino(
 );
 
 const app = Fastify({
-	logger: true,
+	logger,
 	bodyLimit: 1048576, // 1MB default limit (lowered from 100MB)
+	trustProxy: true,
 });
 
 // Parse application/octet-stream as raw Buffer (used by file tunnel stream responses)
@@ -132,6 +134,9 @@ const pluginLoader = new PluginLoader(
 	{ hotReload: process.env.PLUGIN_HOT_RELOAD !== "false" },
 );
 let auditRetentionInterval: ReturnType<typeof setInterval> | null = null;
+let statRetentionInterval: ReturnType<typeof setInterval> | null = null;
+let backupRetentionInterval: ReturnType<typeof setInterval> | null = null;
+let logRetentionInterval: ReturnType<typeof setInterval> | null = null;
 
 // Set task executor for the scheduler
 taskScheduler.setTaskExecutor({
@@ -357,12 +362,17 @@ async function bootstrap() {
 	try {
 		// Register security plugins
 		// Response compression — gzip/br/deflate for smaller payloads
-		// Disabled by default (nginx handles it); set ENABLE_COMPRESSION=true to enable.
-		if (process.env.ENABLE_COMPRESSION === "true") {
+		// Enabled by default; set ENABLE_COMPRESSION=false to disable.
+		if (process.env.ENABLE_COMPRESSION !== "false") {
 			await app.register(fastifyCompress, {
 				global: true,
 				encodings: ["gzip", "br", "deflate"],
 				threshold: 1024, // Only compress responses > 1KB
+			});
+			app.addHook("onSend", async (_request, reply, _payload) => {
+				if (reply.getHeader("content-type")?.toString().includes("text/event-stream")) {
+					reply.header("content-encoding", undefined);
+				}
 			});
 		}
 
@@ -444,6 +454,7 @@ async function bootstrap() {
 			limits: {
 				fileSize: 104857600,
 			},
+			attachFieldsToBody: false,
 		});
 
 		// Register plugins
@@ -1194,11 +1205,14 @@ async function bootstrap() {
 		auditRetentionInterval = startAuditRetention(prisma, logger);
 		logger.info("Audit retention job scheduled");
 
-		startStatRetention(prisma, logger);
+		statRetentionInterval = startStatRetention(prisma, logger);
 		logger.info("Stat retention job scheduled");
 
-		startBackupRetention(prisma, logger);
+		backupRetentionInterval = startBackupRetention(prisma, logger);
 		logger.info("Backup retention job scheduled");
+
+		logRetentionInterval = startLogRetention(prisma, logger);
+		logger.info("Log retention job scheduled");
 	} catch (err) {
 		logger.error(err, "Failed to start server");
 		process.exit(1);
@@ -1261,6 +1275,25 @@ echo "Running deploy script..."
 "$TMP_SCRIPT" "$BACKEND_HTTP_URL" "$NODE_ID" "$NODE_API_KEY" "$NODE_HOSTNAME"
 `;
 }
+
+async function shutdown(signal: string) {
+	logger.info(`Received ${signal}, shutting down gracefully...`);
+	await app.close();
+	taskScheduler?.stop();
+	alertService?.stop();
+	wsGateway?.destroy();
+	pluginLoader?.shutdown().catch(() => {});
+	fileTunnel?.destroy();
+	if (auditRetentionInterval) clearInterval(auditRetentionInterval);
+	if (statRetentionInterval) clearInterval(statRetentionInterval);
+	if (backupRetentionInterval) clearInterval(backupRetentionInterval);
+	if (logRetentionInterval) clearInterval(logRetentionInterval);
+	await prisma.$disconnect();
+	process.exit(0);
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 bootstrap().catch((err) => {
 	logger.error(err, "Bootstrap error");

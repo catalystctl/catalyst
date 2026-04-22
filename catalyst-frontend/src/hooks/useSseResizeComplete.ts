@@ -34,10 +34,12 @@ export function useSseResizeComplete(
           notifyError(result.error || 'Storage resize failed');
         }
 
-        queryClient.invalidateQueries({ queryKey: ['server', serverId] });
-        queryClient.invalidateQueries({ queryKey: ['servers'] });
-        queryClient.invalidateQueries({ queryKey: ['dashboard-resources'] });
-        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+        Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['server', serverId] }),
+          queryClient.invalidateQueries({ queryKey: ['servers'] }),
+          queryClient.invalidateQueries({ queryKey: ['dashboard-resources'] }),
+          queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] }),
+        ]);
 
         onComplete(result);
       },

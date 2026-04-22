@@ -761,7 +761,7 @@ interface SearchPaletteProps {
 
 function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const { data: servers, isLoading: serversLoading } = useServers();
   const { data: nodes, isLoading: nodesLoading } = useNodes();
   const { data: templates, isLoading: templatesLoading } = useTemplates();

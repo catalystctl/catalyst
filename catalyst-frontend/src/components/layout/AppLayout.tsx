@@ -16,7 +16,7 @@ function AppLayout() {
   useServerStateUpdates();
   useSseAdminEvents();
   useProfileSync();
-  const { sidebarCollapsed } = useThemeStore();
+  const sidebarCollapsed = useThemeStore((s) => s.sidebarCollapsed);
   const { panelName } = usePanelBranding();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);

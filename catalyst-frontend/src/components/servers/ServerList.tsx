@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { Server } from '../../types/server';
 import ServerCard from './ServerCard';
 import ServerListItem from './ServerListItem';
@@ -16,7 +17,7 @@ const listVariants: Variants = {
   visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 400, damping: 30, staggerChildren: 0.03 } },
 };
 
-function ServerList({ servers, viewMode = 'card' }: { servers: Server[]; viewMode?: ViewMode }) {
+function ServerListBase({ servers, viewMode = 'card' }: { servers: Server[]; viewMode?: ViewMode }) {
   if (!servers.length) {
     return <EmptyState title="No servers" description="Create a server to get started." />;
   }
@@ -50,4 +51,5 @@ function ServerList({ servers, viewMode = 'card' }: { servers: Server[]; viewMod
   );
 }
 
+const ServerList = memo(ServerListBase);
 export default ServerList;

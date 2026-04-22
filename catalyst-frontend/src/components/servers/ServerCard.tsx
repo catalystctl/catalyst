@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, type Variants } from 'framer-motion';
 import type { Server } from '../../types/server';
@@ -61,6 +62,15 @@ function ServerCard({ server }: { server: Server }) {
   const barColor = (val: number) =>
     val > 80 ? 'bg-danger' : val > 60 ? 'bg-warning' : 'bg-primary';
 
+  const metrics = useMemo(
+    () => [
+      { label: 'CPU', value: cpuPercent, bar: cpuBar, display: formatPercent(cpuPercent) },
+      { label: 'RAM', value: memoryPercent, bar: memoryBar, display: formatPercent(memoryPercent) },
+      { label: 'Disk', value: diskPercent, bar: diskBar, display: diskDisplay },
+    ],
+    [cpuPercent, cpuBar, memoryPercent, memoryBar, diskPercent, diskBar, diskDisplay],
+  );
+
   return (
     <motion.div
       variants={itemVariants}
@@ -94,11 +104,7 @@ function ServerCard({ server }: { server: Server }) {
 
         {/* Resource Usage */}
         <div className="mb-4 grid gap-3 md:grid-cols-3">
-          {[
-            { label: 'CPU', value: cpuPercent, bar: cpuBar, display: formatPercent(cpuPercent) },
-            { label: 'RAM', value: memoryPercent, bar: memoryBar, display: formatPercent(memoryPercent) },
-            { label: 'Disk', value: diskPercent, bar: diskBar, display: diskDisplay },
-          ].map((metric) => (
+          {metrics.map((metric) => (
             <div key={metric.label} className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-medium uppercase tracking-wider text-muted-foreground">{metric.label}</span>
@@ -147,4 +153,4 @@ function ServerCard({ server }: { server: Server }) {
   );
 }
 
-export default ServerCard;
+export default memo(ServerCard);

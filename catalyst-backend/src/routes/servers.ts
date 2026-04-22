@@ -612,8 +612,23 @@ export async function serverRoutes(app: FastifyInstance) {
   };
 
   const modManagerDefaultTargets: ModManagerTarget[] = ["mods", "datapacks", "modpacks"];
-  const curseforgeGameIdCache = new Map<string, string>();
-  const curseforgeClassIdCache = new Map<string, string>();
+
+  class SimpleLRU<K, V> extends Map<K, V> {
+    private maxSize: number;
+    constructor(maxSize: number) { super(); this.maxSize = maxSize; }
+    set(key: K, value: V): this {
+      if (this.size >= this.maxSize && !this.has(key)) {
+        const firstKey = this.keys().next().value;
+        if (firstKey !== undefined) {
+          this.delete(firstKey);
+        }
+      }
+      return super.set(key, value);
+    }
+  }
+
+  const curseforgeGameIdCache = new SimpleLRU<string, string>(1000);
+  const curseforgeClassIdCache = new SimpleLRU<string, string>(1000);
 
   const normalizeTargetValue = (value: unknown): ModManagerTarget | null => {
     if (typeof value !== "string") return null;

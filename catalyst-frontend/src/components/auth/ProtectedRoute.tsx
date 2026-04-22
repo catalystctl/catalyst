@@ -66,7 +66,9 @@ type Props = {
 
 function ProtectedRoute({ children, requireAdmin, requireAdminWrite, requirePermissions, redirectTo }: Props) {
   const location = useLocation();
-  const { isAuthenticated, isReady, user } = useAuthStore();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isReady = useAuthStore((s) => s.isReady);
+  const user = useAuthStore((s) => s.user);
   const userPermissions = user?.permissions || [];
 
   const hasAdminAccess =

@@ -4,7 +4,7 @@
 
 [server]
 # Backend WebSocket URL (ws:// for development, wss:// for production)
-backend_url = "ws://localhost:3000/ws"
+backend_url = "ws://192.168.1.78:3000/ws"
 
 # Unique node identifier (UUID from database)
 node_id = "cmo6hdahu0003odpdzol1uwpp"

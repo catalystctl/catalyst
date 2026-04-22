@@ -1,4 +1,7 @@
 import { randomUUID } from "crypto";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import type { Logger } from "pino";
 import { getSecuritySettings } from "./mailer";
 import { prisma } from "../db.js";
@@ -10,7 +13,7 @@ export interface FileTunnelRequest {
   serverUuid: string;
   path: string;
   data?: Record<string, unknown>;
-  /** Raw binary payload stored separately for upload operations */
+  /** Upload data is stored on disk; this field is kept for backward compatibility */
   uploadData?: Buffer;
 }
 
@@ -49,13 +52,20 @@ export class FileTunnelService {
   private queues = new Map<string, FileTunnelRequest[]>();
   /** Agents currently long-polling, keyed by nodeId */
   private pollers = new Map<string, WaitingPoller[]>();
-  /** Upload data keyed by requestId - includes nodeId for validation */
-  private uploads = new Map<string, { data: Buffer; nodeId: string; createdAt: number }>();
+  /** Upload temp files keyed by requestId - includes nodeId for validation */
+  private uploads = new Map<string, { filePath: string; size: number; nodeId: string; createdAt: number }>();
   private logger: Logger;
   private cleanupTimer: ReturnType<typeof setInterval>;
+  private tempDir: string;
 
   constructor(logger: Logger) {
     this.logger = logger.child({ service: "file-tunnel" });
+    this.tempDir = path.join(os.tmpdir(), "catalyst-uploads");
+    try {
+      fs.mkdirSync(this.tempDir, { recursive: true });
+    } catch (err) {
+      this.logger.error({ err }, "Failed to create upload temp directory");
+    }
     this.cleanupTimer = setInterval(() => this.cleanup(), 60_000);
   }
 
@@ -120,7 +130,14 @@ export class FileTunnelService {
     };
 
     if (uploadData) {
-      this.uploads.set(requestId, { data: uploadData, nodeId, createdAt: Date.now() });
+      const filePath = path.join(this.tempDir, `${requestId}.bin`);
+      try {
+        fs.writeFileSync(filePath, uploadData);
+        this.uploads.set(requestId, { filePath, size: uploadData.length, nodeId, createdAt: Date.now() });
+      } catch (err) {
+        this.logger.error({ err, requestId }, "Failed to write upload temp file");
+        throw new Error("Failed to stage upload data");
+      }
     }
 
     return new Promise<FileTunnelResponse>((resolve, reject) => {
@@ -216,7 +233,11 @@ export class FileTunnelService {
 
     clearTimeout(pending.timer);
     this.pending.delete(requestId);
-    this.uploads.delete(requestId);
+    const uploadEntry = this.uploads.get(requestId);
+    if (uploadEntry) {
+      try { fs.unlinkSync(uploadEntry.filePath); } catch {}
+      this.uploads.delete(requestId);
+    }
     pending.resolve(response);
     return true;
   }
@@ -224,6 +245,7 @@ export class FileTunnelService {
   /**
    * Get upload data for a request (agent pulls upload content).
    * Now validates that the requesting node matches the upload's target node.
+   * Reads from the temporary disk file instead of keeping data in memory.
    */
   getUploadData(requestId: string, nodeId: string): Buffer | null {
     const entry = this.uploads.get(requestId);
@@ -238,7 +260,12 @@ export class FileTunnelService {
       return null;
     }
 
-    return entry.data;
+    try {
+      return fs.readFileSync(entry.filePath);
+    } catch (err) {
+      this.logger.error({ err, requestId, filePath: entry.filePath }, "Failed to read upload temp file");
+      return null;
+    }
   }
 
   /**
@@ -266,6 +293,7 @@ export class FileTunnelService {
     // Clean expired uploads
     for (const [id, entry] of this.uploads) {
       if (now - entry.createdAt > UPLOAD_TTL_MS) {
+        try { fs.unlinkSync(entry.filePath); } catch {}
         this.uploads.delete(id);
       }
     }
@@ -274,7 +302,11 @@ export class FileTunnelService {
     for (const [id, pending] of this.pending) {
       if (now - pending.createdAt > REQUEST_TIMEOUT_MS * 2) {
         this.pending.delete(id);
-        this.uploads.delete(id);
+        const uploadEntry = this.uploads.get(id);
+        if (uploadEntry) {
+          try { fs.unlinkSync(uploadEntry.filePath); } catch {}
+          this.uploads.delete(id);
+        }
       }
     }
   }
@@ -296,6 +328,12 @@ export class FileTunnelService {
     }
     this.pollers.clear();
     this.queues.clear();
+    // Clean up temp files
+    for (const [, entry] of this.uploads) {
+      try { fs.unlinkSync(entry.filePath); } catch {}
+    }
     this.uploads.clear();
+    // Attempt to remove temp directory
+    try { fs.rmSync(this.tempDir, { recursive: true, force: true }); } catch {}
   }
 }

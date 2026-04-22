@@ -16,6 +16,12 @@
 
 import type { PrismaClient } from "@prisma/client";
 import type { Permission } from "../shared-types";
+import { SimpleCache } from "./cache";
+
+// In-memory permission caches to avoid N+1 queries.
+// TTL of 30s balances freshness with query reduction.
+const nodeAccessCache = new SimpleCache<string, boolean>(30_000);
+const userAccessibleNodesCache = new SimpleCache<string, { nodeIds: string[]; hasWildcard: boolean }>(30_000);
 
 /**
  * Parse a permission string with optional scope
@@ -535,9 +541,16 @@ export async function hasNodeAccess(
   userId: string,
   nodeId: string
 ): Promise<boolean> {
+  const cacheKey = `hasNodeAccess:${userId}:${nodeId}`;
+  const cached = nodeAccessCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
   // First check if user is admin
   const isAdmin = await isAdminUser(prisma, userId, true);
-  if (isAdmin) return true;
+  if (isAdmin) {
+    nodeAccessCache.set(cacheKey, true);
+    return true;
+  }
 
   const now = new Date();
 
@@ -554,6 +567,7 @@ export async function hasNodeAccess(
   });
 
   if (userWildcard) {
+    nodeAccessCache.set(cacheKey, true);
     return true;
   }
 
@@ -570,6 +584,7 @@ export async function hasNodeAccess(
   });
 
   if (userAssignment) {
+    nodeAccessCache.set(cacheKey, true);
     return true;
   }
 
@@ -599,6 +614,7 @@ export async function hasNodeAccess(
     });
 
     if (roleWildcard) {
+      nodeAccessCache.set(cacheKey, true);
       return true;
     }
 
@@ -615,10 +631,12 @@ export async function hasNodeAccess(
     });
 
     if (roleAssignment) {
+      nodeAccessCache.set(cacheKey, true);
       return true;
     }
   }
 
+  nodeAccessCache.set(cacheKey, false);
   return false;
 }
 
@@ -635,13 +653,19 @@ export async function getUserAccessibleNodes(
   prisma: PrismaClient,
   userId: string
 ): Promise<{ nodeIds: string[]; hasWildcard: boolean }> {
+  const cacheKey = `getUserAccessibleNodes:${userId}`;
+  const cached = userAccessibleNodesCache.get(cacheKey);
+  if (cached) return cached;
+
   const isAdmin = await isAdminUser(prisma, userId, true);
   if (isAdmin) {
     // Admins have access to all nodes (effectively wildcard)
     const allNodes = await prisma.node.findMany({
       select: { id: true },
     });
-    return { nodeIds: allNodes.map((n) => n.id), hasWildcard: true };
+    const result = { nodeIds: allNodes.map((n) => n.id), hasWildcard: true };
+    userAccessibleNodesCache.set(cacheKey, result);
+    return result;
   }
 
   const now = new Date();
@@ -665,7 +689,9 @@ export async function getUserAccessibleNodes(
     const allNodes = await prisma.node.findMany({
       select: { id: true },
     });
-    return { nodeIds: allNodes.map((n) => n.id), hasWildcard: true };
+    const result = { nodeIds: allNodes.map((n) => n.id), hasWildcard: true };
+    userAccessibleNodesCache.set(cacheKey, result);
+    return result;
   }
 
   // Get direct user assignments (specific nodes)
@@ -717,7 +743,9 @@ export async function getUserAccessibleNodes(
       const allNodes = await prisma.node.findMany({
         select: { id: true },
       });
-      return { nodeIds: allNodes.map((n) => n.id), hasWildcard: true };
+      const result = { nodeIds: allNodes.map((n) => n.id), hasWildcard: true };
+      userAccessibleNodesCache.set(cacheKey, result);
+      return result;
     }
 
     const roleAssignments = await prisma.nodeAssignment.findMany({
@@ -739,7 +767,9 @@ export async function getUserAccessibleNodes(
     }
   }
 
-  return { nodeIds: Array.from(accessibleNodeIds), hasWildcard };
+  const result = { nodeIds: Array.from(accessibleNodeIds), hasWildcard };
+  userAccessibleNodesCache.set(cacheKey, result);
+  return result;
 }
 
 /**

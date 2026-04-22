@@ -9,6 +9,7 @@ export function useServers(params?: ServerListParams) {
   return useQuery({
     queryKey: qk.servers(params as Record<string, unknown> | undefined),
     queryFn: () => serversApi.list(params),
+    staleTime: 30_000,
     refetchInterval: (query) =>
       (query.state.data as Server[] | undefined)?.some((server) =>
         transitionalStatuses.has(server.status),

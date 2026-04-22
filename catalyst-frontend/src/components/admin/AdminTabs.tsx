@@ -36,7 +36,7 @@ function hasPermission(userPermissions: string[] | undefined, requiredPermission
 }
 
 function AdminTabs() {
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const userPermissions = user?.permissions || [];
   const pluginTabs = usePluginTabs('admin');
 

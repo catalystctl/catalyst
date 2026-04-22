@@ -78,6 +78,10 @@ export function initAuth() {
         csrfToken: { type: "string", required: false },
       },
       cookieCache: {
+        // Disabled by default to prevent stale session data during rapid permission
+        // changes and to ensure fresh role/permission resolution on every request.
+        // Enable (set enabled: true) only if your deployment has very high read volume
+        // and permissions change infrequently.
         enabled: false,
         maxAge: 5 * 60, // 5 minutes (better-auth uses seconds, not milliseconds)
       },
