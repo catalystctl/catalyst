@@ -419,10 +419,10 @@ export async function adminRoutes(app: FastifyInstance) {
       }
 
       if (password) {
-        await auth.api.setUserPassword({
+        await auth.api.setPassword({
           headers: fromNodeHeaders(request.headers as Record<string, string | string[] | undefined>),
-          body: { newPassword: password, userId },
-        });
+          body: { newPassword: password },
+        } as any);
       }
 
       const updatedUser = await prisma.user.update({
@@ -1620,7 +1620,7 @@ export async function adminRoutes(app: FastifyInstance) {
       try {
         const wsGateway = (app as any).wsGateway;
         wsGateway?.pushToAdminSubscribers('security_settings_updated', { updatedBy: user.userId });
-      } catch {}
+      } catch { /* ignore — WS push is best-effort */ }
 
       reply.send({ success: true });
     }
@@ -2288,7 +2288,7 @@ export async function adminRoutes(app: FastifyInstance) {
       try {
         const wsGateway = (app as any).wsGateway;
         wsGateway?.pushToAdminSubscribers('smtp_settings_updated', { updatedBy: user.userId });
-      } catch {}
+      } catch { /* ignore — WS push is best-effort */ }
 
       reply.send({ success: true });
     }
@@ -2341,7 +2341,7 @@ export async function adminRoutes(app: FastifyInstance) {
       try {
         const wsGateway = (app as any).wsGateway;
         wsGateway?.pushToAdminSubscribers('system_settings_updated', { updatedBy: user.userId });
-      } catch {}
+      } catch { /* ignore — WS push is best-effort */ }
 
       reply.send({ success: true });
     }
@@ -2466,7 +2466,7 @@ export async function adminRoutes(app: FastifyInstance) {
       try {
         const wsGateway = (app as any).wsGateway;
         wsGateway?.pushToAdminSubscribers('theme_settings_updated', { updatedBy: user.userId });
-      } catch {}
+      } catch { /* ignore — WS push is best-effort */ }
 
       reply.send(serialize({ success: true, data: settings }));
     }
@@ -2559,7 +2559,7 @@ export async function adminRoutes(app: FastifyInstance) {
       try {
         const wsGateway = (app as any).wsGateway;
         wsGateway?.pushToAdminSubscribers('auth_lockout_cleared', { lockoutId });
-      } catch {}
+      } catch { /* ignore — WS push is best-effort */ }
 
       reply.send({ success: true });
     }
@@ -2682,7 +2682,7 @@ export async function adminRoutes(app: FastifyInstance) {
       try {
         const wsGateway = (app as any).wsGateway;
         wsGateway?.pushToAdminSubscribers('oidc_settings_updated', { updatedBy: request.user.userId });
-      } catch {}
+      } catch { /* ignore — WS push is best-effort */ }
 
       reply.send(serialize({ success: true, message: 'OIDC configuration updated. Restart required for changes to take full effect.' }));
     }

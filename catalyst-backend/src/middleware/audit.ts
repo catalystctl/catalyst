@@ -37,7 +37,7 @@ export async function createAuditLog(
         resourceId: entry.resourceId,
         timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : new Date().toISOString(),
       });
-    } catch {}
+    } catch { /* ignore — audit logging is best-effort */ }
   } catch (error) {
     console.error('Failed to create audit log:', error);
   }

@@ -161,7 +161,7 @@ export const handleFailedLogin = async (
         userId: user.id,
         lockedUntil: lockedUntil.toISOString(),
       });
-    } catch {}
+    } catch { /* ignore — WS push is best-effort */ }
   }
 };
 

@@ -154,7 +154,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         try {
           const wsGateway = getWsGateway();
           wsGateway?.pushToAdminSubscribers('plugin_updated', { name, action: body.enabled ? 'enabled' : 'disabled' });
-        } catch {}
+        } catch { /* ignore — WS push is best-effort */ }
 
         return {
           success: true,
@@ -189,7 +189,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         try {
           const wsGateway = getWsGateway();
           wsGateway?.pushToAdminSubscribers('plugin_updated', { name, action: 'reloaded' });
-        } catch {}
+        } catch { /* ignore — WS push is best-effort */ }
 
         return {
           success: true,
@@ -238,7 +238,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         try {
           const wsGateway = getWsGateway();
           wsGateway?.pushToAdminSubscribers('plugin_updated', { name, action: 'config_updated' });
-        } catch {}
+        } catch { /* ignore — WS push is best-effort */ }
 
         return {
           success: true,
