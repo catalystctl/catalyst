@@ -12,7 +12,7 @@ import { useThemeStore } from './stores/themeStore';
 import { themeApi } from './services/api/theme';
 import { adminApi } from './services/api/admin';
 import { useAuthStore } from './stores/authStore';
-import { shallow } from 'zustand/shallow';
+
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
@@ -84,10 +84,9 @@ function App() {
   const setThemeSettings = useThemeStore((s) => s.setThemeSettings);
   const applyTheme = useThemeStore((s) => s.applyTheme);
   const injectCustomCss = useThemeStore((s) => s.injectCustomCss);
-  const { user, isAuthenticated, isReady } = useAuthStore(
-    (s) => ({ user: s.user, isAuthenticated: s.isAuthenticated, isReady: s.isReady }),
-    shallow,
-  );
+  const user = useAuthStore((s) => s.user);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isReady = useAuthStore((s) => s.isReady);
   const { setupRequired, isLoading: isSetupLoading } = useSetupStatus();
 
   // Load public theme settings on mount

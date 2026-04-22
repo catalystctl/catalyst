@@ -301,7 +301,7 @@ function SecurityPage() {
     mutationFn: (lockoutId: string) => adminApi.clearAuthLockout(lockoutId),
     onSuccess: () => {
       notifySuccess('Lockout cleared');
-      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-auth-lockouts' });
+      queryClient.invalidateQueries({ queryKey: ['admin-auth-lockouts'] });
     },
     onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to clear lockout'),
   });

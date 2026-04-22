@@ -271,7 +271,7 @@ function AdminServersPage() {
           `${failedCount} server${failedCount === 1 ? '' : 's'} failed to ${variables.action}.`,
         );
       }
-      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-servers' });
+      queryClient.invalidateQueries({ queryKey: ['admin-servers'] });
       setSelectedIds([]);
       setSuspendTargets(null);
       setDeleteTargets(null);

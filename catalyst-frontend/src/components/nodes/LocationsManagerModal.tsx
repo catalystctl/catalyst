@@ -93,9 +93,11 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
     mutationFn: locationsApi.create,
     onSuccess: () => {
       notifySuccess('Location created');
-      queryClient.invalidateQueries({ queryKey: qk.locations() });
-      queryClient.invalidateQueries({ queryKey: qk.nodes() });
-      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-nodes' });
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: qk.locations() }),
+        queryClient.invalidateQueries({ queryKey: qk.nodes() }),
+        queryClient.invalidateQueries({ queryKey: ['admin-nodes'] }),
+      ]);
       setIsCreating(false);
     },
     onError: (error: any) => {
@@ -109,9 +111,11 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
       locationsApi.update(id, payload),
     onSuccess: () => {
       notifySuccess('Location updated');
-      queryClient.invalidateQueries({ queryKey: qk.locations() });
-      queryClient.invalidateQueries({ queryKey: qk.nodes() });
-      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-nodes' });
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: qk.locations() }),
+        queryClient.invalidateQueries({ queryKey: qk.nodes() }),
+        queryClient.invalidateQueries({ queryKey: ['admin-nodes'] }),
+      ]);
       setEditingLocation(null);
     },
     onError: (error: any) => {
@@ -124,9 +128,11 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
     mutationFn: locationsApi.remove,
     onSuccess: () => {
       notifySuccess('Location deleted');
-      queryClient.invalidateQueries({ queryKey: qk.locations() });
-      queryClient.invalidateQueries({ queryKey: qk.nodes() });
-      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-nodes' });
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: qk.locations() }),
+        queryClient.invalidateQueries({ queryKey: qk.nodes() }),
+        queryClient.invalidateQueries({ queryKey: ['admin-nodes'] }),
+      ]);
       setDeleteTarget(null);
     },
     onError: (error: any) => {

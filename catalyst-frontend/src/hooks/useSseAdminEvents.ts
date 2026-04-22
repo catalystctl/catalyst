@@ -31,8 +31,10 @@ export function useSseAdminEvents() {
         if (type === 'user_created') {
           const newUser = data.user as AdminUser;
           if (!newUser) return;
-          q.invalidateQueries({ queryKey: ['dashboard-activity'] });
-          q.invalidateQueries({ queryKey: ['dashboard-resources'] });
+          Promise.all([
+            q.invalidateQueries({ queryKey: ['dashboard-activity'] }),
+            q.invalidateQueries({ queryKey: ['dashboard-resources'] }),
+          ]);
           q.setQueriesData(
             { predicate: (query: Query) =>
               Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-users' },
@@ -54,10 +56,14 @@ export function useSseAdminEvents() {
         if (type === 'user_updated') {
           const userId = String(data.userId ?? '');
           if (!userId) return;
-          q.invalidateQueries({ queryKey: ['admin-users'] });
-          // Also invalidate profile query if the updated user is the current user
-          q.invalidateQueries({ queryKey: ['profile'] });
-          q.invalidateQueries({ queryKey: ['my-permissions'] });
+          Promise.all([
+            q.invalidateQueries({ queryKey: ['admin-users'] }),
+            // Also invalidate profile query if the updated user is the current user
+            q.invalidateQueries({ queryKey: ['profile'] }),
+            q.invalidateQueries({ queryKey: ['my-permissions'] }),
+            // Also invalidate dashboard activity since user changes are notable events
+            q.invalidateQueries({ queryKey: ['dashboard-activity'] }),
+          ]);
 
           // If the updated user is the current user, refresh the auth store
           // so the sidebar (which reads from zustand) updates immediately.
@@ -66,15 +72,15 @@ export function useSseAdminEvents() {
           if (currentUser && currentUser.id === userId) {
             useAuthStore.getState().refresh().catch(() => {});
           }
-          // Also invalidate dashboard activity since user changes are notable events
-          q.invalidateQueries({ queryKey: ['dashboard-activity'] });
         }
 
         if (type === 'user_deleted') {
           const deletedUserId = String(data.userId ?? '');
           if (!deletedUserId) return;
-          q.invalidateQueries({ queryKey: ['dashboard-activity'] });
-          q.invalidateQueries({ queryKey: ['dashboard-resources'] });
+          Promise.all([
+            q.invalidateQueries({ queryKey: ['dashboard-activity'] }),
+            q.invalidateQueries({ queryKey: ['dashboard-resources'] }),
+          ]);
           q.setQueriesData(
             { predicate: (query: Query) =>
               Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-users' },
@@ -299,9 +305,11 @@ export function useSseAdminEvents() {
           q.invalidateQueries({ queryKey: ['admin-theme-settings'] });
         }
         if (type === 'system_settings_updated') {
-          q.invalidateQueries({ queryKey: ['admin-mod-manager'] });
-          q.invalidateQueries({ queryKey: ['admin-smtp'] });
-          q.invalidateQueries({ queryKey: ['admin-security-settings'] });
+          Promise.all([
+            q.invalidateQueries({ queryKey: ['admin-mod-manager'] }),
+            q.invalidateQueries({ queryKey: ['admin-smtp'] }),
+            q.invalidateQueries({ queryKey: ['admin-security-settings'] }),
+          ]);
         }
         if (type === 'oidc_settings_updated') {
           // OIDC config uses local state, invalidate any related queries

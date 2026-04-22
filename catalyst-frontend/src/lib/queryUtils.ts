@@ -62,8 +62,9 @@ export function optimisticInvalidate(
   queryClient: any,
   queryKeys: readonly unknown[],
 ) {
-  queryClient.invalidateQueries({
-    predicate: (q: any) => matchQueryKeys(q.queryKey, queryKeys),
+  queryKeys.forEach((key) => {
+    const effectiveKey = Array.isArray(key) && key[key.length - 1] === null ? key.slice(0, -1) : key;
+    queryClient.invalidateQueries({ queryKey: effectiveKey });
   });
 }
 

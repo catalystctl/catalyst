@@ -1,10 +1,11 @@
 import { useAuthStore } from '../stores/authStore';
-import { shallow } from 'zustand/shallow';
 
 export function useAuth() {
-  const { user, isAuthenticated, login, register, logout, refresh } = useAuthStore(
-    (s) => ({ user: s.user, isAuthenticated: s.isAuthenticated, login: s.login, register: s.register, logout: s.logout, refresh: s.refresh }),
-    shallow,
-  );
+  const user = useAuthStore((s) => s.user);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const login = useAuthStore((s) => s.login);
+  const register = useAuthStore((s) => s.register);
+  const logout = useAuthStore((s) => s.logout);
+  const refresh = useAuthStore((s) => s.refresh);
   return { user, isAuthenticated, login, register, logout, refresh };
 }

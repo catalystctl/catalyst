@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { useAuthStore } from '../../stores/authStore';
 import { useThemeStore } from '../../stores/themeStore';
-import { shallow } from 'zustand/shallow';
 
 function Header() {
   const user = useAuthStore((s) => s.user);

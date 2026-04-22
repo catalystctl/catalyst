@@ -479,8 +479,10 @@ function ServerDetailsPage() {
       return serversApi.suspend(server.id, reason);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.server(server?.id) });
-      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'servers' });
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: qk.server(server?.id) }),
+        queryClient.invalidateQueries({ queryKey: ['servers'] }),
+      ]);
       notifySuccess('Server suspended');
       setSuspendReason('');
     },
@@ -496,8 +498,10 @@ function ServerDetailsPage() {
       return serversApi.unsuspend(server.id);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.server(server?.id) });
-      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'servers' });
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: qk.server(server?.id) }),
+        queryClient.invalidateQueries({ queryKey: ['servers'] }),
+      ]);
       notifySuccess('Server unsuspended');
     },
     onError: (error: any) =>
@@ -591,8 +595,10 @@ function ServerDetailsPage() {
     },
     onSuccess: () => {
       notifySuccess('Restart policy updated');
-      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'servers' });
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: qk.server(serverId) }),
+        queryClient.invalidateQueries({ queryKey: ['servers'] }),
+      ]);
     },
     onError: (error: any) =>
       notifyError(
@@ -609,8 +615,10 @@ function ServerDetailsPage() {
     },
     onSuccess: () => {
       notifySuccess('Crash count reset');
-      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'servers' });
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: qk.server(serverId) }),
+        queryClient.invalidateQueries({ queryKey: ['servers'] }),
+      ]);
     },
     onError: (error: any) =>
       notifyError(
@@ -629,8 +637,10 @@ function ServerDetailsPage() {
     },
     onSuccess: () => {
       notifySuccess('Server name updated');
-      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'servers' });
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: qk.server(serverId) }),
+        queryClient.invalidateQueries({ queryKey: ['servers'] }),
+      ]);
     },
     onError: (error: any) =>
       notifyError(

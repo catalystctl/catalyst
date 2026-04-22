@@ -2,7 +2,6 @@ import { NavLink, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useThemeStore } from '../../stores/themeStore';
-import { shallow } from 'zustand/shallow';
 import { hasAnyPermission } from '../auth/ProtectedRoute';
 import {
   LayoutDashboard,

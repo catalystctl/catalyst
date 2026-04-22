@@ -38,10 +38,10 @@ function NodeDeleteDialog({ nodeId, nodeName, open: controlledOpen, onOpenChange
       notifyError(message);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: qk.nodes() });
-      queryClient.invalidateQueries({ predicate: (q: any) =>
-        Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-nodes'
-      });
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: qk.nodes() }),
+        queryClient.invalidateQueries({ queryKey: ['admin-nodes'] }),
+      ]);
     },
     onSuccess: () => {
       notifySuccess('Node deleted');

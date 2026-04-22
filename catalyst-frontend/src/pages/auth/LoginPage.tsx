@@ -3,7 +3,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
-import { shallow } from 'zustand/shallow';
+
 import { authApi } from '../../services/api/auth';
 import type { LoginSchema } from '../../validators/auth';
 import { loginSchema } from '../../validators/auth';
@@ -34,10 +34,8 @@ function LoginPage() {
   const isLoading = useAuthStore((s) => s.isLoading);
   const error = useAuthStore((s) => s.error);
   const setSession = useAuthStore((s) => s.setSession);
-  const { isAuthenticated, isReady } = useAuthStore(
-    (s) => ({ isAuthenticated: s.isAuthenticated, isReady: s.isReady }),
-    shallow,
-  );
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isReady = useAuthStore((s) => s.isReady);
   const [authStep, setAuthStep] = useState<'passkey' | 'totp' | null>(null);
   const [passkeySubmitting, setPasskeySubmitting] = useState(false);
   const [allowPasskeyFallback, setAllowPasskeyFallback] = useState(false);

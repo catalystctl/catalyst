@@ -365,7 +365,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'alert-rules' });
+      queryClient.invalidateQueries({ queryKey: ['alert-rules'] });
       notifySuccess('Alert rule created');
       setShowRuleModal(false);
       resetRuleForm();
@@ -376,7 +376,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
   const updateRuleMutation = useMutation({
     mutationFn: (payload: { rule: AlertRule; updates: any }) => alertsApi.updateRule(payload.rule.id, payload.updates),
     onSuccess: () => {
-      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'alert-rules' });
+      queryClient.invalidateQueries({ queryKey: ['alert-rules'] });
       notifySuccess('Alert rule updated');
       setShowRuleModal(false);
       setEditingRule(null);
@@ -388,16 +388,18 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
   const deleteRuleMutation = useMutation({
     mutationFn: (ruleId: string) => alertsApi.deleteRule(ruleId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'alert-rules' });
+      queryClient.invalidateQueries({ queryKey: ['alert-rules'] });
       notifySuccess('Alert rule deleted');
     },
     onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to delete alert rule'),
   });
 
   const invalidateAlerts = () => {
-    queryClient.invalidateQueries({ queryKey: qk.alerts() });
-    queryClient.invalidateQueries({ queryKey: qk.alertStats() });
-    queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'alert-rules' });
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: qk.alerts() }),
+      queryClient.invalidateQueries({ queryKey: qk.alertStats() }),
+      queryClient.invalidateQueries({ queryKey: ['alert-rules'] }),
+    ]);
   };
 
   const resolveAlertMutation = useMutation({

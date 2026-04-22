@@ -58,11 +58,11 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange }: Props) {
         serverDataDir: serverDataDir || undefined,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.nodes() });
-      queryClient.invalidateQueries({ queryKey: qk.node(node.id) });
-      queryClient.invalidateQueries({ predicate: (q: any) =>
-        Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-nodes'
-      });
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: qk.nodes() }),
+        queryClient.invalidateQueries({ queryKey: qk.node(node.id) }),
+        queryClient.invalidateQueries({ queryKey: ['admin-nodes'] }),
+      ]);
       notifySuccess('Node updated');
       setOpen(false);
     },
