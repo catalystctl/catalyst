@@ -35,7 +35,7 @@ function TransferServerModal({ serverId, disabled = false }: Props) {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-      queryClient.invalidateQueries({ queryKey: qk.servers() });
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
       notifySuccess('Transfer started');
       setOpen(false);
     },

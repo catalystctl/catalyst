@@ -69,13 +69,21 @@ export function optimisticInvalidate(
 
 /**
  * Lightweight key matcher — checks if queryKey starts with any of the given prefixes.
+ *
+ * When a prefix ends with `null` (e.g. `['servers', null]` from `qk.servers()`),
+ * it matches ALL queries sharing the same base key regardless of their second
+ * element (filters, pagination params, etc.).  This avoids the TanStack Query
+ * pitfall where `['servers', null]` would otherwise fail to match
+ * `['servers', { status: 'running' }]`.
  */
 function matchQueryKeys(queryKey: readonly unknown[], prefixes: readonly unknown[]): boolean {
   return prefixes.some((p) => {
     if (Array.isArray(p)) {
+      // Strip trailing `null` entries — they represent "any params"
+      const effective = p[p.length - 1] === null ? p.slice(0, -1) : p;
       return (
-        queryKey.length >= p.length &&
-        p.every((k, i) => k === queryKey[i])
+        queryKey.length >= effective.length &&
+        effective.every((k, i) => k === queryKey[i])
       );
     }
     return queryKey[0] === p;

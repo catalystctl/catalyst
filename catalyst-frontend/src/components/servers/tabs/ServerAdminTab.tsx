@@ -332,7 +332,7 @@ export default function ServerAdminTab({
       await serversApi.rebuild(serverId);
       notifySuccess('Container rebuild initiated');
       queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-      queryClient.invalidateQueries({ queryKey: qk.servers() });
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
       setRebuildConfirm(false);
     } catch (err: unknown) {
       notifyError(err instanceof Error ? err.message : 'Failed to rebuild container');
@@ -347,7 +347,7 @@ export default function ServerAdminTab({
       await serversApi.kill(serverId);
       notifySuccess('Server process killed');
       queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-      queryClient.invalidateQueries({ queryKey: qk.servers() });
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
       setKillConfirm(false);
     } catch (err: unknown) {
       notifyError(err instanceof Error ? err.message : 'Failed to kill server');
@@ -362,7 +362,7 @@ export default function ServerAdminTab({
       await serversApi.install(serverId);
       notifySuccess('Reinstall initiated');
       queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-      queryClient.invalidateQueries({ queryKey: qk.servers() });
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
       setReinstallConfirm(false);
     } catch (err: unknown) {
       notifyError(err instanceof Error ? err.message : 'Failed to reinstall');
@@ -377,7 +377,7 @@ export default function ServerAdminTab({
       await serversApi.transferOwnership(serverId, { newOwnerId: newOwnerId.trim() });
       notifySuccess('Ownership transferred');
       queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-      queryClient.invalidateQueries({ queryKey: qk.servers() });
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
       queryClient.invalidateQueries({ queryKey: qk.serverPermissions(serverId) });
       setNewOwnerId('');
       setTransferOwnerConfirm(false);

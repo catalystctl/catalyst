@@ -417,7 +417,7 @@ export default function PluginsPage() {
   const [settingsPlugin, setSettingsPlugin] = useState<string | null>(null);
 
   const { data: plugins, isLoading } = useQuery({
-    queryKey: qk.adminPlugins(),
+    queryKey: ['admin-plugins'],
     queryFn: fetchPlugins,
   });
 
@@ -425,7 +425,7 @@ export default function PluginsPage() {
     mutationFn: ({ name, enabled }: { name: string; enabled: boolean }) => togglePlugin(name, enabled),
     onMutate: ({ name }) => setProcessingPlugin(name),
     onSuccess: (_, { enabled }) => {
-      queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
+      queryClient.invalidateQueries({ queryKey: ['admin-plugins'] });
       reloadPlugins();
       toast.success(`Plugin ${enabled ? 'enabled' : 'disabled'} successfully`);
     },
@@ -437,7 +437,7 @@ export default function PluginsPage() {
     mutationFn: (name: string) => reloadPlugin(name),
     onMutate: (name) => setProcessingPlugin(name),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
+      queryClient.invalidateQueries({ queryKey: ['admin-plugins'] });
       reloadPlugins();
       toast.success('Plugin reloaded successfully');
     },

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { qk } from '../lib/queryKeys';
 import { serversApi } from '../services/api/servers';
 import { notifyError, notifySuccess } from '../utils/notify';
 import { useAuthStore } from '../stores/authStore';
@@ -35,7 +34,7 @@ function InvitesPage() {
     onSuccess: () => {
       setAccepted(true);
       notifySuccess('Invite accepted');
-      queryClient.invalidateQueries({ queryKey: qk.servers() });
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
       navigate('/servers');
     },
     onError: (error: any) => {
@@ -67,6 +66,7 @@ function InvitesPage() {
         });
       }
       notifySuccess('Account created and invite accepted');
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
       navigate('/servers');
     },
     onError: (error: any) => {

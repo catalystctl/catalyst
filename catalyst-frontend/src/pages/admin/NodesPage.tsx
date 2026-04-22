@@ -454,7 +454,7 @@ function AdminNodesPage() {
     },
     onSuccess: (_data, nodeIds) => {
       notifySuccess(`${nodeIds.length} node${nodeIds.length === 1 ? '' : 's'} deleted`);
-      queryClient.invalidateQueries({ queryKey: qk.adminNodes() });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-nodes' });
       setSelectedIds([]);
       setDeleteTargets(null);
     },

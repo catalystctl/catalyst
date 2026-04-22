@@ -113,6 +113,39 @@ export function useServerStateUpdates() {
           return;
         }
 
+        if (type === 'server_deleted') {
+          // Remove the deleted server from all list caches
+          const q = queryClient as any;
+          q.setQueriesData(
+            { predicate: (query: Query) =>
+              Array.isArray(query.queryKey) && query.queryKey[0] === 'servers' },
+            (prev: any) => {
+              if (!Array.isArray(prev)) return prev;
+              return prev.filter((srv: any) => srv?.id !== serverId && srv?.uuid !== serverId);
+            },
+          );
+          q.removeQueries({ queryKey: ['server', serverId] });
+          q.invalidateQueries({
+            predicate: (query: Query) =>
+              Array.isArray(query.queryKey) && query.queryKey[0] === 'servers',
+          });
+          return;
+        }
+
+        // Server lifecycle events — invalidate list and detail caches
+        if (type === 'server_created' || type === 'server_updated' || type === 'server_suspended' || type === 'server_unsuspended') {
+          const q = queryClient as any;
+          q.invalidateQueries({
+            predicate: (query: Query) =>
+              Array.isArray(query.queryKey) && query.queryKey[0] === 'servers',
+          });
+          q.invalidateQueries({
+            predicate: (query: Query) =>
+              Array.isArray(query.queryKey) && query.queryKey[0] === 'server',
+          });
+          return;
+        }
+
         if (
           type === 'backup_complete' ||
           type === 'backup_restore_complete' ||

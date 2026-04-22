@@ -91,7 +91,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-      queryClient.invalidateQueries({ queryKey: qk.servers() });
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
       if (diskValue !== existingDiskMb) {
         notifySuccess('Storage resize initiated');
         setResizeDone(false); // Wait for SSE event to close modal

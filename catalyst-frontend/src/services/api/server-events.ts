@@ -26,6 +26,11 @@ export type ServerEventType =
   | 'task_complete'
   | 'resource_stats'
   | 'storage_resize_complete'
+  | 'server_deleted'
+  | 'server_created'
+  | 'server_updated'
+  | 'server_suspended'
+  | 'server_unsuspended'
   // Mod manager events
   | 'mod_install_complete'
   | 'mod_uninstall_complete'
@@ -52,6 +57,11 @@ const EVENT_TYPES: ServerEventType[] = [
   'task_complete',
   'resource_stats',
   'storage_resize_complete',
+  'server_deleted',
+  'server_created',
+  'server_updated',
+  'server_suspended',
+  'server_unsuspended',
   // Mod manager events
   'mod_install_complete',
   'mod_uninstall_complete',

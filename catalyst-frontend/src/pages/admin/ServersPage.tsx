@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import {
   Play,
@@ -272,7 +271,7 @@ function AdminServersPage() {
           `${failedCount} server${failedCount === 1 ? '' : 's'} failed to ${variables.action}.`,
         );
       }
-      queryClient.invalidateQueries({ queryKey: qk.adminServers() });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-servers' });
       setSelectedIds([]);
       setSuspendTargets(null);
       setDeleteTargets(null);

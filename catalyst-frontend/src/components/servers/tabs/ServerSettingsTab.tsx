@@ -29,7 +29,7 @@ export default function ServerSettingsTab({
     try {
       await serversApi.install(serverId);
       queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-      queryClient.invalidateQueries({ queryKey: qk.servers() });
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
       notifySuccess('Reinstall started');
     } catch (error: unknown) {
       notifyError(

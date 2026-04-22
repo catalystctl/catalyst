@@ -1849,6 +1849,16 @@ export async function serverRoutes(app: FastifyInstance) {
           timestamp: new Date().toISOString(),
         });
       }
+      if (wsGatewayServerCreated?.pushToGlobalSubscribers) {
+        wsGatewayServerCreated.pushToGlobalSubscribers('server_created', {
+          type: 'server_created',
+          serverId: server.id,
+          serverName: server.name,
+          ownerId: effectiveOwnerId,
+          createdBy: userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   );
 
@@ -2440,6 +2450,14 @@ export async function serverRoutes(app: FastifyInstance) {
       const wsGatewayServerUpdated = (app as any).wsGateway;
       if (wsGatewayServerUpdated?.pushToAdminSubscribers) {
         wsGatewayServerUpdated.pushToAdminSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId: server.id,
+          updatedBy: userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (wsGatewayServerUpdated?.pushToGlobalSubscribers) {
+        wsGatewayServerUpdated.pushToGlobalSubscribers('server_updated', {
           type: 'server_updated',
           serverId: server.id,
           updatedBy: userId,
@@ -4174,6 +4192,25 @@ export async function serverRoutes(app: FastifyInstance) {
         }
       }
 
+      // Broadcast plugin_update_complete event
+      const wsGatewayPluginUpdate = (app as any).wsGateway;
+      if (wsGatewayPluginUpdate?.pushToAdminSubscribers) {
+        wsGatewayPluginUpdate.pushToAdminSubscribers('plugin_update_complete', {
+          type: 'plugin_update_complete',
+          serverId,
+          updatedBy: userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (wsGatewayPluginUpdate?.pushToGlobalSubscribers) {
+        wsGatewayPluginUpdate.pushToGlobalSubscribers('plugin_update_complete', {
+          type: 'plugin_update_complete',
+          serverId,
+          updatedBy: userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       reply.send({ success: true, data: results });
     }
   );
@@ -5043,6 +5080,15 @@ export async function serverRoutes(app: FastifyInstance) {
       const wsGateway2 = (app as any).wsGateway;
       if (wsGateway2?.pushToAdminSubscribers) {
         wsGateway2.pushToAdminSubscribers('server_deleted', {
+          type: 'server_deleted',
+          serverId: serverId,
+          serverName: server.name,
+          deletedBy: userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (wsGateway2?.pushToGlobalSubscribers) {
+        wsGateway2.pushToGlobalSubscribers('server_deleted', {
           type: 'server_deleted',
           serverId: serverId,
           serverName: server.name,
@@ -7803,6 +7849,15 @@ export async function serverRoutes(app: FastifyInstance) {
           timestamp: new Date().toISOString(),
         });
       }
+      if (wsGatewayServerSuspended?.pushToGlobalSubscribers) {
+        wsGatewayServerSuspended.pushToGlobalSubscribers('server_suspended', {
+          type: 'server_suspended',
+          serverId,
+          serverName: server!.name,
+          suspendedBy: userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       return reply.send({ success: true, data: updated });
     }
@@ -7884,6 +7939,15 @@ export async function serverRoutes(app: FastifyInstance) {
       const wsGatewayServerUnsuspended = (app as any).wsGateway;
       if (wsGatewayServerUnsuspended?.pushToAdminSubscribers) {
         wsGatewayServerUnsuspended.pushToAdminSubscribers('server_unsuspended', {
+          type: 'server_unsuspended',
+          serverId,
+          serverName: server!.name,
+          unsuspendedBy: userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (wsGatewayServerUnsuspended?.pushToGlobalSubscribers) {
+        wsGatewayServerUnsuspended.pushToGlobalSubscribers('server_unsuspended', {
           type: 'server_unsuspended',
           serverId,
           serverName: server!.name,
@@ -7980,8 +8044,6 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
-      return reply.send({ success: true, data: updated });
-
       // Broadcast server_updated event (ownership transfer)
       const wsGatewayOwnership = (app as any).wsGateway;
       if (wsGatewayOwnership?.pushToAdminSubscribers) {
@@ -7993,6 +8055,17 @@ export async function serverRoutes(app: FastifyInstance) {
           timestamp: new Date().toISOString(),
         });
       }
+      if (wsGatewayOwnership?.pushToGlobalSubscribers) {
+        wsGatewayOwnership.pushToGlobalSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'ownership_transferred',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      return reply.send({ success: true, data: updated });
     }
   );
 
@@ -8056,8 +8129,6 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
-      return reply.send({ success: true, data: updated });
-
       // Broadcast server_updated event (archived)
       const wsGatewayArchive = (app as any).wsGateway;
       if (wsGatewayArchive?.pushToAdminSubscribers) {
@@ -8069,6 +8140,17 @@ export async function serverRoutes(app: FastifyInstance) {
           timestamp: new Date().toISOString(),
         });
       }
+      if (wsGatewayArchive?.pushToGlobalSubscribers) {
+        wsGatewayArchive.pushToGlobalSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'archived',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      return reply.send({ success: true, data: updated });
     }
   );
 
@@ -8119,8 +8201,6 @@ export async function serverRoutes(app: FastifyInstance) {
         },
       });
 
-      return reply.send({ success: true, data: updated });
-
       // Broadcast server_updated event (restored from archive)
       const wsGatewayRestore = (app as any).wsGateway;
       if (wsGatewayRestore?.pushToAdminSubscribers) {
@@ -8132,6 +8212,17 @@ export async function serverRoutes(app: FastifyInstance) {
           timestamp: new Date().toISOString(),
         });
       }
+      if (wsGatewayRestore?.pushToGlobalSubscribers) {
+        wsGatewayRestore.pushToGlobalSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'restored',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      return reply.send({ success: true, data: updated });
     }
   );
 }

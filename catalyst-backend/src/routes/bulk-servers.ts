@@ -216,6 +216,17 @@ export async function bulkServerRoutes(app: FastifyInstance) {
           });
         }
       }
+      if (wsGatewayBulkSuspend?.pushToGlobalSubscribers) {
+        for (const id of result.success) {
+          wsGatewayBulkSuspend.pushToGlobalSubscribers('server_suspended', {
+            type: 'server_suspended',
+            serverId: id,
+            bulk: true,
+            triggeredBy: userId,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
 
       reply.send(serialize({
         success: true,
@@ -325,6 +336,17 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       if (wsGatewayBulkUnsuspend?.pushToAdminSubscribers) {
         for (const id of result.success) {
           wsGatewayBulkUnsuspend.pushToAdminSubscribers('server_unsuspended', {
+            type: 'server_unsuspended',
+            serverId: id,
+            bulk: true,
+            triggeredBy: userId,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+      if (wsGatewayBulkUnsuspend?.pushToGlobalSubscribers) {
+        for (const id of result.success) {
+          wsGatewayBulkUnsuspend.pushToGlobalSubscribers('server_unsuspended', {
             type: 'server_unsuspended',
             serverId: id,
             bulk: true,
@@ -451,6 +473,17 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       if (wsGatewayBulkDelete?.pushToAdminSubscribers) {
         for (const id of result.success) {
           wsGatewayBulkDelete.pushToAdminSubscribers('server_deleted', {
+            type: 'server_deleted',
+            serverId: id,
+            bulk: true,
+            triggeredBy: userId,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+      if (wsGatewayBulkDelete?.pushToGlobalSubscribers) {
+        for (const id of result.success) {
+          wsGatewayBulkDelete.pushToGlobalSubscribers('server_deleted', {
             type: 'server_deleted',
             serverId: id,
             bulk: true,

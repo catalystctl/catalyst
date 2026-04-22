@@ -1209,6 +1209,15 @@ export async function adminRoutes(app: FastifyInstance) {
                   timestamp: new Date().toISOString(),
                 });
               }
+              if (wsGatewayBulkSuspend?.pushToGlobalSubscribers) {
+                wsGatewayBulkSuspend.pushToGlobalSubscribers('server_suspended', {
+                  type: 'server_suspended',
+                  serverId: server.id,
+                  serverName: server.name,
+                  suspendedBy: user.userId,
+                  timestamp: new Date().toISOString(),
+                });
+              }
 
               return { serverId: server.id, status: 'success' };
             }
@@ -1254,6 +1263,15 @@ export async function adminRoutes(app: FastifyInstance) {
                   timestamp: new Date().toISOString(),
                 });
               }
+              if (wsGatewayBulkUnsuspend?.pushToGlobalSubscribers) {
+                wsGatewayBulkUnsuspend.pushToGlobalSubscribers('server_unsuspended', {
+                  type: 'server_unsuspended',
+                  serverId: server.id,
+                  serverName: server.name,
+                  unsuspendedBy: user.userId,
+                  timestamp: new Date().toISOString(),
+                });
+              }
 
               return { serverId: server.id, status: 'success' };
             }
@@ -1282,6 +1300,9 @@ export async function adminRoutes(app: FastifyInstance) {
               const wsGateway = (app as any).wsGateway;
               if (wsGateway?.pushToAdminSubscribers) {
                 wsGateway.pushToAdminSubscribers('server_deleted', { type: 'server_deleted', serverId: server.id, serverName: server.name, deletedBy: user.userId, timestamp: new Date().toISOString() });
+              }
+              if (wsGateway?.pushToGlobalSubscribers) {
+                wsGateway.pushToGlobalSubscribers('server_deleted', { type: 'server_deleted', serverId: server.id, serverName: server.name, deletedBy: user.userId, timestamp: new Date().toISOString() });
               }
               return { serverId: server.id, status: 'success' };
             }

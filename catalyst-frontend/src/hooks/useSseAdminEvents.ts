@@ -258,10 +258,8 @@ export function useSseAdminEvents() {
             q.invalidateQueries({ queryKey: ['my-permissions'] });
           }
           if (type === 'role_deleted') {
-            const roleId = String(data.roleId ?? '');
-            if (roleId) {
-              q.removeQueries({ queryKey: ['role', roleId] });
-            }
+            // Individual role detail queries don't exist yet;
+            // invalidating the list is sufficient.
           }
         }
 

@@ -26,8 +26,13 @@ function DeleteServerDialog({ serverId, serverName, disabled = false, open: cont
   const mutation = useMutation({
     mutationFn: () => serversApi.delete(serverId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.servers() });
-      queryClient.invalidateQueries({ queryKey: qk.adminServers() });
+      queryClient.invalidateQueries({
+        predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'servers',
+      });
+      queryClient.invalidateQueries({
+        predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-servers',
+      });
+      queryClient.removeQueries({ queryKey: qk.server(serverId) });
       notifySuccess('Server deleted');
       setOpen(false);
       onDeleted?.();

@@ -336,7 +336,7 @@ function UsersPage() {
       }),
     onSuccess: () => {
       notifySuccess('User created');
-      queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-users' });
       setCreateEmail('');
       setCreateUsername('');
       setCreatePassword('');
@@ -367,7 +367,7 @@ function UsersPage() {
       }),
     onSuccess: () => {
       notifySuccess('User updated');
-      queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-users' });
       queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
       setEditingUserId(null);
       setEditRoleSearch('');
@@ -387,7 +387,7 @@ function UsersPage() {
     mutationFn: (userId: string) => adminApi.deleteUser(userId),
     onSuccess: () => {
       notifySuccess('User deleted');
-      queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-users' });
       queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
     },
     onError: (error: any) => {
@@ -412,7 +412,7 @@ function UsersPage() {
       notifySuccess(
         `${variables.userIds.length} user${variables.userIds.length === 1 ? '' : 's'} banned`,
       );
-      queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-users' });
       setSelectedIds([]);
       setBanTargets(null);
       setBanReason('');
@@ -432,7 +432,7 @@ function UsersPage() {
       notifySuccess(
         `${userIds.length} user${userIds.length === 1 ? '' : 's'} unbanned`,
       );
-      queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-users' });
       setSelectedIds([]);
       setUnbanTargets(null);
     },
@@ -451,7 +451,7 @@ function UsersPage() {
       notifySuccess(
         `${userIds.length} user${userIds.length === 1 ? '' : 's'} deleted`,
       );
-      queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'admin-users' });
       queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
       setSelectedIds([]);
       setDeletingUser(null);

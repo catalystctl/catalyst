@@ -21,7 +21,7 @@ function RestoreBackupDialog({
   const mutation = useMutation({
     mutationFn: () => backupsApi.restore(serverId, backup.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.backups(serverId) });
+      queryClient.invalidateQueries({ queryKey: ['backups', serverId] });
       queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
       notifySuccess('Backup restoration started');
       setOpen(false);

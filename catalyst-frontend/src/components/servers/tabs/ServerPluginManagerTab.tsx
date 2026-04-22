@@ -256,6 +256,7 @@ export default function ServerPluginManagerTab({
     queryFn: () => pluginManagerApi.gameVersions(serverId ?? '', pluginProvider),
     enabled: Boolean(serverId && pluginProvider === 'modrinth'),
     staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   const {

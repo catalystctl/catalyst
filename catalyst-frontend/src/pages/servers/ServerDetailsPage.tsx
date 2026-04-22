@@ -473,7 +473,7 @@ function ServerDetailsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.server(server?.id) });
-      queryClient.invalidateQueries({ queryKey: qk.servers() });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'servers' });
       notifySuccess('Server suspended');
       setSuspendReason('');
     },
@@ -490,7 +490,7 @@ function ServerDetailsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.server(server?.id) });
-      queryClient.invalidateQueries({ queryKey: qk.servers() });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'servers' });
       notifySuccess('Server unsuspended');
     },
     onError: (error: any) =>
@@ -585,7 +585,7 @@ function ServerDetailsPage() {
     onSuccess: () => {
       notifySuccess('Restart policy updated');
       queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-      queryClient.invalidateQueries({ queryKey: qk.servers() });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'servers' });
     },
     onError: (error: any) =>
       notifyError(
@@ -603,7 +603,7 @@ function ServerDetailsPage() {
     onSuccess: () => {
       notifySuccess('Crash count reset');
       queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-      queryClient.invalidateQueries({ queryKey: qk.servers() });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'servers' });
     },
     onError: (error: any) =>
       notifyError(
@@ -623,7 +623,7 @@ function ServerDetailsPage() {
     onSuccess: () => {
       notifySuccess('Server name updated');
       queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-      queryClient.invalidateQueries({ queryKey: qk.servers() });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'servers' });
     },
     onError: (error: any) =>
       notifyError(

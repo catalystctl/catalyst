@@ -44,6 +44,7 @@ export function usePermissionsCatalog() {
     queryKey: qk.permissionsCatalog(),
     queryFn: () => apiKeyService.getPermissionsCatalog(),
     staleTime: 10 * 60 * 1000, // Catalog rarely changes
+    refetchOnWindowFocus: true,
   });
 }
 

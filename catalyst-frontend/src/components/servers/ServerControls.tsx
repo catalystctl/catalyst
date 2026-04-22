@@ -34,8 +34,9 @@ function ServerControls({ serverId, status, permissions }: Props) {
   const canRestart = canStart && canStop;
   const canKill = canStop;
 
-  /** Snapshot + optimistic update + return snapshot key for rollback */
+  /** Snapshot + optimistic update + return snapshot for rollback */
   function snapshotAndOptimistic(nextStatus: ServerStatus) {
+    const prevServer = queryClient.getQueryData(qk.server(serverId));
     optimisticSet(queryClient, qk.server(serverId), (srv: Server) =>
       srv ? { ...srv, status: nextStatus, lastExitCode: undefined } : srv,
     );
@@ -44,22 +45,17 @@ function ServerControls({ serverId, status, permissions }: Props) {
         ? servers.map((s) => (s.id === serverId || s.uuid === serverId ? { ...s, status: nextStatus } : s))
         : servers,
     );
+    return prevServer;
   }
 
   const start = useMutation({
     mutationFn: () => serversApi.start(serverId),
     onMutate: () => {
-      snapshotAndOptimistic(OPTIMISTIC_STATUS.start);
+      return snapshotAndOptimistic(OPTIMISTIC_STATUS.start);
     },
     onError: (_err, _vars, prev) => {
-      queryClient.setQueryData(qk.server(serverId), prev as any);
-      queryClient.setQueryData(
-        qk.servers(),
-        (servers: Server[]) =>
-          Array.isArray(servers)
-            ? servers.map((s) => (s.id === serverId || s.uuid === serverId ? { ...s, status } : s))
-            : servers,
-      );
+      if (prev) queryClient.setQueryData(qk.server(serverId), prev);
+      optimisticInvalidate(queryClient, qk.servers());
       notifyError('Failed to start server');
     },
     onSettled: () => {
@@ -71,17 +67,11 @@ function ServerControls({ serverId, status, permissions }: Props) {
   const stop = useMutation({
     mutationFn: () => serversApi.stop(serverId),
     onMutate: () => {
-      snapshotAndOptimistic(OPTIMISTIC_STATUS.stop);
+      return snapshotAndOptimistic(OPTIMISTIC_STATUS.stop);
     },
     onError: (_err, _vars, prev) => {
-      queryClient.setQueryData(qk.server(serverId), prev as any);
-      queryClient.setQueryData(
-        qk.servers(),
-        (servers: Server[]) =>
-          Array.isArray(servers)
-            ? servers.map((s) => (s.id === serverId || s.uuid === serverId ? { ...s, status } : s))
-            : servers,
-      );
+      if (prev) queryClient.setQueryData(qk.server(serverId), prev);
+      optimisticInvalidate(queryClient, qk.servers());
       notifyError('Failed to stop server');
     },
     onSettled: () => {
@@ -93,17 +83,11 @@ function ServerControls({ serverId, status, permissions }: Props) {
   const restart = useMutation({
     mutationFn: () => serversApi.restart(serverId),
     onMutate: () => {
-      snapshotAndOptimistic(OPTIMISTIC_STATUS.restart);
+      return snapshotAndOptimistic(OPTIMISTIC_STATUS.restart);
     },
     onError: (_err, _vars, prev) => {
-      queryClient.setQueryData(qk.server(serverId), prev as any);
-      queryClient.setQueryData(
-        qk.servers(),
-        (servers: Server[]) =>
-          Array.isArray(servers)
-            ? servers.map((s) => (s.id === serverId || s.uuid === serverId ? { ...s, status } : s))
-            : servers,
-      );
+      if (prev) queryClient.setQueryData(qk.server(serverId), prev);
+      optimisticInvalidate(queryClient, qk.servers());
       notifyError('Failed to restart server');
     },
     onSettled: () => {
@@ -115,17 +99,11 @@ function ServerControls({ serverId, status, permissions }: Props) {
   const kill = useMutation({
     mutationFn: () => serversApi.kill(serverId),
     onMutate: () => {
-      snapshotAndOptimistic(OPTIMISTIC_STATUS.kill);
+      return snapshotAndOptimistic(OPTIMISTIC_STATUS.kill);
     },
     onError: (_err, _vars, prev) => {
-      queryClient.setQueryData(qk.server(serverId), prev as any);
-      queryClient.setQueryData(
-        qk.servers(),
-        (servers: Server[]) =>
-          Array.isArray(servers)
-            ? servers.map((s) => (s.id === serverId || s.uuid === serverId ? { ...s, status } : s))
-            : servers,
-      );
+      if (prev) queryClient.setQueryData(qk.server(serverId), prev);
+      optimisticInvalidate(queryClient, qk.servers());
       notifyError('Failed to kill server');
       setShowKillConfirm(false);
     },

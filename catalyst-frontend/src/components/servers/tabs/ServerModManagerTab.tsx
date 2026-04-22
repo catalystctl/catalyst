@@ -363,6 +363,7 @@ export default function ServerModManagerTab({
     queryFn: () => modManagerApi.gameVersions(serverId ?? '', modProvider, modProviderGame || undefined),
     enabled: Boolean(serverId && modProvider === 'modrinth'),
     staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   const {

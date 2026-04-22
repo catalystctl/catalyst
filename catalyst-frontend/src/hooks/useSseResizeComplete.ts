@@ -36,6 +36,8 @@ export function useSseResizeComplete(
 
         queryClient.invalidateQueries({ queryKey: ['server', serverId] });
         queryClient.invalidateQueries({ queryKey: ['servers'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard-resources'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
 
         onComplete(result);
       },
