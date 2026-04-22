@@ -56,7 +56,9 @@ function BackupSection({
   const [sftpPrivateKeyPassphrase, setSftpPrivateKeyPassphrase] = useState('');
   const [sftpBasePath, setSftpBasePath] = useState('');
   const queryClient = useQueryClient();
-  const { progressByBackup, setProgress, clearProgress } = useBackupDownloadStore();
+  const progressByBackup = useBackupDownloadStore((s) => s.progressByBackup);
+  const setProgress = useBackupDownloadStore((s) => s.setProgress);
+  const clearProgress = useBackupDownloadStore((s) => s.clearProgress);
   const { data, isLoading, isError } = useBackups(serverId, { page, limit: 10 });
   const progressKeyPrefix = useMemo(() => `server:${serverId}:backup:`, [serverId]);
   const backupAllocationMb = server?.backupAllocationMb ?? 0;

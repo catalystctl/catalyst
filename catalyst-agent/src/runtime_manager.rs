@@ -738,13 +738,21 @@ impl ContainerdRuntime {
             "CAP_NET_BIND_SERVICE",
         ];
 
-        // Build mounts including DNS resolv.conf
+        // Build mounts including DNS resolv.conf and a writable /tmp tmpfs.
+        // Many install scripts download and execute binaries in /tmp; a dedicated
+        // tmpfs without noexec ensures extracted executables can run.
         let mut mounts = base_mounts(data_dir);
         mounts.push(serde_json::json!({
             "destination": "/etc/resolv.conf",
             "type": "bind",
             "source": resolv_path.to_string_lossy().to_string(),
             "options": ["rbind", "rw"]
+        }));
+        mounts.push(serde_json::json!({
+            "destination": "/tmp",
+            "type": "tmpfs",
+            "source": "tmpfs",
+            "options": ["nosuid", "nodev", "mode=1777"]
         }));
 
         // Detect the correct shell interpreter for the install script.
@@ -773,7 +781,7 @@ impl ContainerdRuntime {
         // Create a symlink so install scripts that hardcode /mnt/server still work.
         // Also set HOME=/data for compatibility with scripts that use $HOME.
         let wrapped_script = format!(
-            "rm -rf /mnt/server && ln -s /data /mnt/server\nexport HOME=/data\n\n{}\n\necho '[Catalyst] Fixing file ownership for runtime user...'\nchown -R 1000:1000 /data",
+            "set -e\nrm -rf /mnt/server && ln -s /data /mnt/server\nexport HOME=/data\n\n{}\n\necho '[Catalyst] Fixing file ownership for runtime user...'\nchown -R 1000:1000 /data",
             script
         );
 

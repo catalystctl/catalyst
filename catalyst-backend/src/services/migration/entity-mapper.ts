@@ -4,6 +4,7 @@
 
 import type { PrismaClient } from "@prisma/client";
 import { nanoid } from "nanoid";
+import { sanitizeStartupCommand } from "../../utils/sanitize-startup";
 import {
   PTERODACTYL_PERMISSION_MAP,
   type PterodactylLocation,
@@ -257,7 +258,7 @@ export class EntityMapper {
         images: mappedImages,
         defaultImage: dockerImage || null,
         installImage: ptero.script?.container || null,
-        startup: ptero.startup || "",
+        startup: sanitizeStartupCommand(ptero.startup || ""),
         stopCommand,
         sendSignalTo,
         variables: mappedVariables,

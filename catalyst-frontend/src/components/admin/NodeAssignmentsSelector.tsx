@@ -248,11 +248,11 @@ export function NodeAssignmentsSelector({
       if (assignment) {
         await nodesApi.removeAssignment(nodeId, assignment.id);
         notifySuccess('Node unassigned');
-        queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId) });
-        queryClient.invalidateQueries({ queryKey: qk.userNodes(userId) });
-        queryClient.invalidateQueries({ predicate: (q: any) =>
-          Array.isArray(q.queryKey) && q.queryKey[0] === 'nodes' && q.queryKey[2] === 'assignments'
-        });
+        Promise.all([
+          queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId) }),
+          queryClient.invalidateQueries({ queryKey: qk.userNodes(userId) }),
+          queryClient.invalidateQueries({ queryKey: ['nodes'] }),
+        ]);
         return true;
       }
       return false;

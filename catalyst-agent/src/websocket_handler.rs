@@ -1976,6 +1976,43 @@ impl WebSocketHandler {
             env_map.insert("HOST_SERVER_DIR".to_string(), host_server_dir.clone());
             env_map.insert("SERVER_DIR".to_string(), CONTAINER_SERVER_DIR.to_string());
 
+            // Proton/SteamCMD containers need STEAM_COMPAT_DATA_PATH and
+            // STEAM_COMPAT_CLIENT_INSTALL_PATH so Wine prefixes and compat data
+            // are written to the server's data directory instead of crashing.
+            let lower_image = docker_image.to_lowercase();
+            if lower_image.contains("proton") || lower_image.contains("steamcmd") {
+                let appid = env_map.get("SRCDS_APPID").cloned().unwrap_or_default();
+                let compat_path = if !appid.is_empty() {
+                    format!("/data/.steam/steam/steamapps/compatdata/{}", appid)
+                } else {
+                    "/data/.proton".to_string()
+                };
+                env_map.insert("STEAM_COMPAT_DATA_PATH".to_string(), compat_path.clone());
+                env_map.insert(
+                    "STEAM_COMPAT_CLIENT_INSTALL_PATH".to_string(),
+                    "/data/Steam".to_string(),
+                );
+                info!(
+                    "Proton/SteamCMD image detected; set STEAM_COMPAT_DATA_PATH={} STEAM_COMPAT_CLIENT_INSTALL_PATH=/data/Steam",
+                    &compat_path
+                );
+                // Pre-create the compatdata directory on the host so Proton can
+                // write its lock file and prefix without crashing on first start.
+                let host_compat = server_dir_path.join(compat_path.strip_prefix("/data/").unwrap_or(".proton"));
+                if let Err(e) = tokio::fs::create_dir_all(&host_compat).await {
+                    warn!("Failed to create compatdata dir {}: {}", host_compat.display(), e);
+                } else if let Err(e) = chown_to_container_user(&host_compat).await {
+                    warn!("Failed to chown compatdata dir {}: {}", host_compat.display(), e);
+                }
+                // Also pre-create the Steam client install directory.
+                let host_steam = server_dir_path.join("Steam");
+                if let Err(e) = tokio::fs::create_dir_all(&host_steam).await {
+                    warn!("Failed to create Steam dir {}: {}", host_steam.display(), e);
+                } else if let Err(e) = chown_to_container_user(&host_steam).await {
+                    warn!("Failed to chown Steam dir {}: {}", host_steam.display(), e);
+                }
+            }
+
             info!("Starting server: {} (UUID: {})", server_id, server_uuid);
             info!(
                 "Image: {}, Port: {}, Memory: {}MB, CPU: {}",

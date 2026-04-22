@@ -27,6 +27,15 @@ impl StorageManager {
         fs::create_dir_all(mount_dir).await?;
 
         if self.is_mounted(mount_dir).await? {
+            // If an older mount still has noexec (from before the fix), remount
+            // with exec so game binaries can run from /data.
+            if self.mount_has_noexec(mount_dir).await? {
+                info!(
+                    "Remounting {} to remove noexec (game binaries need exec)",
+                    mount_dir.display()
+                );
+                self.remount_exec(mount_dir).await?;
+            }
             return Ok(image_path);
         }
 
@@ -216,7 +225,7 @@ impl StorageManager {
             .ok_or_else(|| AgentError::FileSystemError("Invalid mount path".to_string()))?
             .to_string();
         spawn_blocking(move || {
-            run("mount", &["-o", "loop,noexec,nodev,nosuid", &image, &mount])?;
+            run("mount", &["-o", "loop,exec,nodev,nosuid", &image, &mount])?;
             Ok::<(), AgentError>(())
         })
         .await
@@ -248,6 +257,33 @@ impl StorageManager {
             }
         }
         Ok(false)
+    }
+
+    async fn mount_has_noexec(&self, mount_dir: &Path) -> AgentResult<bool> {
+        let mounts = fs::read_to_string("/proc/mounts").await?;
+        let target = mount_dir.to_string_lossy();
+        for line in mounts.lines() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() > 3 && parts[1] == target {
+                let opts = parts[3];
+                return Ok(opts.split(',').any(|o| o == "noexec"));
+            }
+        }
+        Ok(false)
+    }
+
+    async fn remount_exec(&self, mount_dir: &Path) -> AgentResult<()> {
+        let mount = mount_dir
+            .to_str()
+            .ok_or_else(|| AgentError::FileSystemError("Invalid mount path".to_string()))?
+            .to_string();
+        spawn_blocking(move || {
+            run("mount", &["-o", "remount,exec", &mount])?;
+            Ok::<(), AgentError>(())
+        })
+        .await
+        .map_err(|e| AgentError::FileSystemError(format!("Remount task failed: {}", e)))??;
+        Ok(())
     }
 
     // --- Metrics buffering helpers ------------------------------------------------

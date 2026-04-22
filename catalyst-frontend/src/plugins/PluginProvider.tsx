@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState } from 'react';
 import { usePluginStore } from './store';
 import { fetchPlugins } from './api';
 import { loadPluginFrontend } from './loader';
-import { useAuthStore } from '../stores/authStore';
 import type { LoadedPlugin } from './types';
 
 interface PluginContextValue {
@@ -23,7 +22,6 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
   const setLoading = usePluginStore((s) => s.setLoading);
   const setError = usePluginStore((s) => s.setError);
   const [initialized, setInitialized] = useState(false);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const loadPlugins = async () => {
     setLoading(true);

@@ -76,7 +76,7 @@ type Props = {
 
 function NodesPage({ hideHeader }: Props) {
   const { data: nodes = [], isLoading } = useNodes();
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const canWrite = useMemo(
     () => user?.permissions?.includes('admin.write') || user?.permissions?.includes('*'),
     [user?.permissions],

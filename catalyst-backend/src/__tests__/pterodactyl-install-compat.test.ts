@@ -290,10 +290,11 @@ describe('Pterodactyl Install Script Compatibility', () => {
 		it.concurrent('install wrapper creates /mnt/server symlink before script runs', () => {
 			// This is a documentation test — verifies the wrapper order
 			// The wrapper in runtime_manager.rs does:
-			//   1. mkdir -p /mnt/server && ln -sfn /data /mnt/server
-			//   2. export HOME=/data
-			//   3. <user script>
-			//   4. chown -R 1000:1000 /data
+			//   1. set -e  (fail fast so install failures are not masked by chown)
+			//   2. rm -rf /mnt/server && ln -s /data /mnt/server
+			//   3. export HOME=/data
+			//   4. <user script>
+			//   5. chown -R 1000:1000 /data
 			// The symlink must come BEFORE the user script
 			expect(true).toBe(true); // Placeholder — actual behavior is in runtime_manager.rs
 		});

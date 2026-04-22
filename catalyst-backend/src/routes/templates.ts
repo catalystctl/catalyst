@@ -2,6 +2,7 @@ import { prisma } from "../db.js";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { hasPermission } from "../lib/permissions";
 import { serialize } from "../utils/serialize";
+import { sanitizeStartupCommand } from "../utils/sanitize-startup";
 
 const ensurePermission = async (
 	prisma: any,
@@ -516,7 +517,7 @@ export async function templateRoutes(app: FastifyInstance) {
 					images: mappedImages,
 					defaultImage: rawImages[0] || null,
 					installImage: egg.scripts?.installation?.container || null,
-					startup: egg.startup,
+					startup: sanitizeStartupCommand(egg.startup),
 					stopCommand: resolvedStopCommand,
 					sendSignalTo: resolvedStopSignal,
 					variables: mappedVariables,
