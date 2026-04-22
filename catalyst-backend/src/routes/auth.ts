@@ -1,6 +1,6 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { auth } from "../auth";
+import type { AuthInstance } from "../auth";
 import { fromNodeHeaders } from "better-auth/node";
 import { logAuthAttempt } from "../middleware/audit";
 import { serialize } from '../utils/serialize';
@@ -42,6 +42,10 @@ function extractResponseData(response: any) {
 }
 
 export async function authRoutes(app: FastifyInstance) {
+  // Lazy accessor — ensures we always get the initialized auth instance
+  // (initAuth() runs after routes are registered but before any requests arrive)
+  const getAuth = () => (app as any).auth as AuthInstance;
+
   const loadUserPermissions = async (userId: string) => {
     const roles = await prisma.role.findMany({
       where: { users: { some: { id: userId } } },
@@ -78,7 +82,7 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(409).send({ error: "Email or username already in use" });
       }
 
-      const response = await auth.api.signUpEmail({
+      const response = await getAuth().api.signUpEmail({
         headers: getHeaders(request),
         body: { email, password, name: username, username } as any,
         returnHeaders: true,
@@ -178,7 +182,7 @@ export async function authRoutes(app: FastifyInstance) {
 
       try {
 
-        const response = await auth.api.signInEmail({
+        const response = await getAuth().api.signInEmail({
           headers: getHeaders(request),
           body: {
             email: userRecord.email,
@@ -346,7 +350,7 @@ export async function authRoutes(app: FastifyInstance) {
       }
       const { currentPassword, newPassword, revokeOtherSessions } = changeValidation.data;
 
-      const response = await auth.api.changePassword({
+      const response = await getAuth().api.changePassword({
         headers: getHeaders(request),
         body: { currentPassword, newPassword, revokeOtherSessions },
         returnHeaders: true,
@@ -367,7 +371,7 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing new password" });
       }
 
-      const response = await auth.api.setPassword({
+      const response = await getAuth().api.setPassword({
         headers: getHeaders(request),
         body: { newPassword },
       });
@@ -401,7 +405,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!password) {
         return reply.status(400).send({ error: "Password is required" });
       }
-      const response = await (auth.api as any).enableTwoFactor({
+      const response = await (getAuth().api as any).enableTwoFactor({
         headers: getHeaders(request),
         body: { password },
         returnHeaders: true,
@@ -420,7 +424,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!password) {
         return reply.status(400).send({ error: "Password is required" });
       }
-      const response = await (auth.api as any).disableTwoFactor({
+      const response = await (getAuth().api as any).disableTwoFactor({
         headers: getHeaders(request),
         body: { password },
         returnHeaders: true,
@@ -439,7 +443,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!password) {
         return reply.status(400).send({ error: "Password is required" });
       }
-      const response = await (auth.api as any).generateBackupCodes({
+      const response = await (getAuth().api as any).generateBackupCodes({
         headers: getHeaders(request),
         body: { password },
         returnHeaders: true,
@@ -454,7 +458,7 @@ export async function authRoutes(app: FastifyInstance) {
     "/profile/passkeys",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const response = await (auth.api as any).listPasskeys({
+      const response = await (getAuth().api as any).listPasskeys({
         headers: getHeaders(request),
       });
       reply.send(serialize({ success: true, data: response }));
@@ -468,7 +472,7 @@ export async function authRoutes(app: FastifyInstance) {
       const { name, authenticatorAttachment } = request.body as {
         name?: string; authenticatorAttachment?: "platform" | "cross-platform";
       };
-      const response = await (auth.api as any).generatePasskeyRegistrationOptions({
+      const response = await (getAuth().api as any).generatePasskeyRegistrationOptions({
         headers: getHeaders(request),
         query: {
           ...(name ? { name } : {}),
@@ -489,7 +493,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!credentialResponse) {
         return reply.status(400).send({ error: "Missing passkey response" });
       }
-      const response = await (auth.api as any).verifyPasskeyRegistration({
+      const response = await (getAuth().api as any).verifyPasskeyRegistration({
         headers: getHeaders(request),
         body: { response: credentialResponse, ...(name ? { name } : {}) },
       });
@@ -502,7 +506,7 @@ export async function authRoutes(app: FastifyInstance) {
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const response = await (auth.api as any).deletePasskey({
+      const response = await (getAuth().api as any).deletePasskey({
         headers: getHeaders(request),
         body: { id },
       });
@@ -519,7 +523,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!name) {
         return reply.status(400).send({ error: "Missing name" });
       }
-      const response = await (auth.api as any).updatePasskey({
+      const response = await (getAuth().api as any).updatePasskey({
         headers: getHeaders(request),
         body: { id, name },
       });
@@ -532,7 +536,7 @@ export async function authRoutes(app: FastifyInstance) {
     "/profile/sso/accounts",
     { onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const accounts = await auth.api.listUserAccounts({
+      const accounts = await getAuth().api.listUserAccounts({
         headers: getHeaders(request),
       });
       reply.send(serialize({ success: true, data: accounts }));
@@ -547,7 +551,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!providerId) {
         return reply.status(400).send({ error: "Missing providerId" });
       }
-      const response = await (auth.api as any).oAuth2LinkAccount({
+      const response = await (getAuth().api as any).oAuth2LinkAccount({
         headers: getHeaders(request),
         body: {
           providerId,
@@ -568,7 +572,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!providerId) {
         return reply.status(400).send({ error: "Missing providerId" });
       }
-      const response = await auth.api.unlinkAccount({
+      const response = await getAuth().api.unlinkAccount({
         headers: getHeaders(request),
         body: { providerId, accountId },
       });
@@ -754,7 +758,7 @@ export async function authRoutes(app: FastifyInstance) {
       try {
         // Use better-auth's built-in verification email sender which generates
         // a signed token and includes the proper verification URL.
-        await auth.api.sendVerificationEmail({
+        await getAuth().api.sendVerificationEmail({
           headers: getHeaders(request),
           body: { email: user.email },
         });
@@ -881,7 +885,7 @@ export async function authRoutes(app: FastifyInstance) {
 
       try {
         const redirectUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/reset-password`;
-        await auth.api.requestPasswordReset({
+        await getAuth().api.requestPasswordReset({
           body: { email: normalizedEmail, redirectTo: redirectUrl },
         });
       } catch (error: any) {
@@ -956,7 +960,7 @@ export async function authRoutes(app: FastifyInstance) {
 
       // Invalidate all sessions (better-auth)
       try {
-        await auth.api.signOut({
+        await getAuth().api.signOut({
           headers: getHeaders(request),
         });
       } catch {
@@ -1000,7 +1004,7 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       try {
-        await auth.api.resetPassword({
+        await getAuth().api.resetPassword({
           body: { token, newPassword: password },
         });
         reply.send({ success: true, message: "Password has been reset successfully" });

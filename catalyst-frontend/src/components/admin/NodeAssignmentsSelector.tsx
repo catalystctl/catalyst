@@ -105,12 +105,12 @@ export function NodeAssignmentsSelector({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasWildcardFromApi]);
 
+  // Whether the component is in "create" mode (no target ID yet — selections are local-only)
+  const isCreateMode = !userId && !roleId;
+
   // Toggle wildcard (all nodes)
   const toggleWildcard = async () => {
     if (disabled) return;
-
-    const targetType = userId ? 'user' : 'role';
-    const targetId = userId || roleId;
 
     // Optimistic UI update - update state immediately
     if (hasWildcard) {
@@ -129,6 +129,11 @@ export function NodeAssignmentsSelector({
       onSelectionChange([wildcardNode]);
       setHasWildcard(true);
     }
+
+    if (isCreateMode) return; // No API call in create mode
+
+    const targetType = userId ? 'user' : 'role';
+    const targetId = userId || roleId;
 
     try {
       if (hasWildcard) {
@@ -205,6 +210,7 @@ export function NodeAssignmentsSelector({
 
   // Add node assignment to server
   const addNodeAssignment = async (nodeId: string) => {
+    if (isCreateMode) return true;
     try {
       const targetType = userId ? 'user' : 'role';
       const targetId = userId || roleId;
@@ -229,6 +235,7 @@ export function NodeAssignmentsSelector({
 
   // Remove node assignment from server
   const removeNodeAssignment = async (nodeId: string) => {
+    if (isCreateMode) return true;
     try {
       const nodeAssignments = await nodesApi.getAssignments(nodeId);
       const targetId = userId || roleId;
@@ -257,7 +264,7 @@ export function NodeAssignmentsSelector({
 
   // Update expiration date for a node
   const updateExpiration = async (nodeId: string, expiresAt: string) => {
-    if (disabled) return;
+    if (disabled || isCreateMode) return;
 
     // Remove old assignment and create new one with expiration
     const targetId = userId || roleId;

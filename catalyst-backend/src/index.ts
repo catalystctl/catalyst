@@ -344,7 +344,7 @@ const authenticate = async (request: any, reply: any) => {
 (app as any).taskScheduler = taskScheduler;
 (app as any).webhookService = webhookService;
 (app as any).alertService = alertService;
-(app as any).auth = auth;
+// (app as any).auth is set after initAuth() below
 (app as any).prisma = prisma;
 (app as any).rbac = rbac;
 (app as any).pluginLoader = pluginLoader;
@@ -1161,8 +1161,10 @@ async function bootstrap() {
 		}
 
 		// Initialize auth after OIDC env vars have been bootstrapped from DB
-		const { initAuth } = await import("./auth");
-		initAuth();
+		const authModule = await import("./auth");
+		authModule.initAuth();
+		// Update app.auth reference now that initAuth() has reassigned the module-level auth
+		(app as any).auth = authModule.auth;
 		logger.info("Auth initialized");
 
 		// Start server

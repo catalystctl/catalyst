@@ -2,6 +2,7 @@ import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import { fromNodeHeaders } from 'better-auth/node';
+import { auth } from '../auth';
 import { ServerState } from '../shared-types';
 import { ServerStateMachine } from '../services/state-machine';
 import { normalizeHostIp, releaseIpForServer, summarizePool } from '../utils/ipam';
@@ -23,7 +24,6 @@ import { serialize } from '../utils/serialize';
 export async function adminRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
   const authenticate = (app as any).authenticate;
-  const auth = (app as any).auth;
 
   const isSuspensionEnforced = () => process.env.SUSPENSION_ENFORCED !== "false";
   const isSuspensionDeleteBlocked = () => process.env.SUSPENSION_DELETE_BLOCKED !== "false";

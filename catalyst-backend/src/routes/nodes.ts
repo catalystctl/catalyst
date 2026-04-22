@@ -1321,6 +1321,12 @@ export async function nodeRoutes(app: FastifyInstance) {
 					.send({ error: "targetType must be 'user' or 'role'" });
 			}
 
+			if (!targetId) {
+				return reply
+					.status(400)
+					.send({ error: "targetId is required" });
+			}
+
 			// Verify target exists
 			if (targetType === "user") {
 				const user = await prisma.user.findUnique({
@@ -1542,6 +1548,12 @@ export async function nodeRoutes(app: FastifyInstance) {
 				return reply
 					.status(400)
 					.send({ error: "targetType must be 'user' or 'role'" });
+			}
+
+			if (!targetId) {
+				return reply
+					.status(400)
+					.send({ error: "targetId is required" });
 			}
 
 			// Verify target exists
