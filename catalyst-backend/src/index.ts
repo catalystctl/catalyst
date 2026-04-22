@@ -80,7 +80,7 @@ const logger = pino(
 );
 
 const app = Fastify({
-	logger,
+	logger: true,
 	bodyLimit: 1048576, // 1MB default limit (lowered from 100MB)
 	trustProxy: true,
 });

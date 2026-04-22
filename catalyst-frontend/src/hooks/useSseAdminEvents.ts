@@ -245,73 +245,47 @@ export function useSseAdminEvents() {
 
         // ── API Key Events ─────────────────────────────────────────
         if (type === 'api_key_created' || type === 'api_key_updated' || type === 'api_key_deleted') {
-          q.invalidateQueries({
-            predicate: (query: Query) =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === 'api-keys',
-          });
-          q.invalidateQueries({ queryKey: ['profile-api-keys'] });
-          q.invalidateQueries({
-            predicate: (query: Query) =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === 'node-api-key',
-          });
+          Promise.all([
+            q.invalidateQueries({ queryKey: ['api-keys'] }),
+            q.invalidateQueries({ queryKey: ['profile-api-keys'] }),
+            q.invalidateQueries({ queryKey: ['node-api-key'] }),
+          ]);
         }
 
         // ── Location Events ────────────────────────────────────────
         if (type === 'location_created' || type === 'location_updated' || type === 'location_deleted') {
-          q.invalidateQueries({
-            predicate: (query: Query) =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === 'locations',
-          });
-          // Also invalidate node queries since nodes display location names
-          q.invalidateQueries({
-            predicate: (query) =>
-              Array.isArray(query.queryKey) &&
-              (query.queryKey[0] === 'admin-nodes' || query.queryKey[0] === 'nodes'),
-          });
+          Promise.all([
+            q.invalidateQueries({ queryKey: ['locations'] }),
+            q.invalidateQueries({ queryKey: ['admin-nodes'] }),
+            q.invalidateQueries({ queryKey: ['nodes'] }),
+          ]);
         }
 
         // ── Nest Events ────────────────────────────────────────────
         if (type === 'nest_created' || type === 'nest_updated' || type === 'nest_deleted') {
-          q.invalidateQueries({
-            predicate: (query: Query) =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === 'nests',
-          });
-          // Templates are grouped by nest, so nest changes should refresh template lists
-          q.invalidateQueries({
-            predicate: (query) =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === 'templates',
-          });
+          Promise.all([
+            q.invalidateQueries({ queryKey: ['nests'] }),
+            q.invalidateQueries({ queryKey: ['templates'] }),
+          ]);
         }
 
         // ── Database Host Events ───────────────────────────────────
         if (type === 'database_host_created' || type === 'database_host_updated' || type === 'database_host_deleted') {
-          q.invalidateQueries({
-            predicate: (query: Query) =>
-              Array.isArray(query.queryKey) &&
-              (query.queryKey[0] === 'database-hosts' || query.queryKey[0] === 'admin-database-hosts'),
-          });
+          Promise.all([
+            q.invalidateQueries({ queryKey: ['database-hosts'] }),
+            q.invalidateQueries({ queryKey: ['admin-database-hosts'] }),
+          ]);
         }
 
         // ── IP Pool Events ─────────────────────────────────────────
         if (type === 'ip_pool_created' || type === 'ip_pool_updated' || type === 'ip_pool_deleted') {
           const nodeId = String(data.nodeId ?? '');
-          if (nodeId) {
-            q.invalidateQueries({
-              predicate: (query: Query) =>
-                Array.isArray(query.queryKey) && query.queryKey[0] === 'ip-pools' && query.queryKey[1] === nodeId,
-            });
-          }
-          // Also invalidate the plain ip-pools key (used by NodeAllocationsPage)
-          q.invalidateQueries({
-            predicate: (query) =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === 'ip-pools',
-          });
-          // Also invalidate node detail since it may show pool count
-          q.invalidateQueries({
-            predicate: (query: Query) =>
-              Array.isArray(query.queryKey) &&
-              (query.queryKey[0] === 'admin-nodes' || query.queryKey[0] === 'nodes'),
-          });
+          Promise.all([
+            ...(nodeId ? [q.invalidateQueries({ queryKey: ['ip-pools', nodeId] })] : []),
+            q.invalidateQueries({ queryKey: ['ip-pools'] }),
+            q.invalidateQueries({ queryKey: ['admin-nodes'] }),
+            q.invalidateQueries({ queryKey: ['nodes'] }),
+          ]);
         }
 
         // ── Settings Events ──────────────────────────────────────────
@@ -334,22 +308,16 @@ export function useSseAdminEvents() {
           q.invalidateQueries({ queryKey: ['admin-oidc-config'] });
         }
         if (type === 'plugin_updated') {
-          q.invalidateQueries({
-            predicate: (query: Query) =>
-              Array.isArray(query.queryKey) &&
-              (query.queryKey[0] === 'admin-plugins' || query.queryKey[0] === 'plugins'),
-          });
+          Promise.all([
+            q.invalidateQueries({ queryKey: ['admin-plugins'] }),
+            q.invalidateQueries({ queryKey: ['plugins'] }),
+          ]);
         }
         if (type === 'audit_log_created') {
-          q.invalidateQueries({
-            predicate: (query: Query) =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-audit-logs',
-          });
-          // Also invalidate profile audit log (users see their own audit entries)
-          q.invalidateQueries({
-            predicate: (query: Query) =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === 'profile-audit-log',
-          });
+          Promise.all([
+            q.invalidateQueries({ queryKey: ['admin-audit-logs'] }),
+            q.invalidateQueries({ queryKey: ['profile-audit-log'] }),
+          ]);
         }
         if (type === 'auth_lockout_created' || type === 'auth_lockout_cleared') {
           q.invalidateQueries({ queryKey: ['admin-auth-lockouts'] });
@@ -359,10 +327,7 @@ export function useSseAdminEvents() {
         if (type === 'task_created' || type === 'task_updated' || type === 'task_deleted') {
           const serverId = String(data.serverId ?? '');
           if (serverId) {
-            q.invalidateQueries({
-              predicate: (query: Query) =>
-                Array.isArray(query.queryKey) && query.queryKey[0] === 'tasks' && query.queryKey[1] === serverId,
-            });
+            q.invalidateQueries({ queryKey: ['tasks', serverId] });
           }
         }
 
@@ -370,10 +335,7 @@ export function useSseAdminEvents() {
         if (type === 'database_created' || type === 'database_deleted' || type === 'database_password_rotated') {
           const serverId = String(data.serverId ?? '');
           if (serverId) {
-            q.invalidateQueries({
-              predicate: (query: Query) =>
-                Array.isArray(query.queryKey) && query.queryKey[0] === 'server-databases' && query.queryKey[1] === serverId,
-            });
+            q.invalidateQueries({ queryKey: ['server-databases', serverId] });
           }
         }
 
@@ -391,21 +353,14 @@ export function useSseAdminEvents() {
           if (userId) {
             q.invalidateQueries({ queryKey: ['users', userId, 'nodes'] });
           }
-          q.invalidateQueries({
-            predicate: (query: Query) =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === 'nodes',
-          });
+          q.invalidateQueries({ queryKey: ['nodes'] });
         }
 
         // ── Mod Manager Events ───────────────────────────────────────
         if (type === 'mod_install_complete' || type === 'mod_uninstall_complete' || type === 'mod_update_complete') {
           const serverId = String(data.serverId ?? '');
           if (serverId) {
-            q.invalidateQueries({
-              predicate: (query: Query) =>
-                Array.isArray(query.queryKey) &&
-                query.queryKey[0] === 'mod-manager-installed',
-            });
+            q.invalidateQueries({ queryKey: ['mod-manager-installed'] });
           }
         }
 
@@ -413,11 +368,7 @@ export function useSseAdminEvents() {
         if (type === 'plugin_install_complete' || type === 'plugin_uninstall_complete' || type === 'plugin_update_complete') {
           const serverId = String(data.serverId ?? '');
           if (serverId) {
-            q.invalidateQueries({
-              predicate: (query: Query) =>
-                Array.isArray(query.queryKey) &&
-                query.queryKey[0] === 'plugin-manager-installed',
-            });
+            q.invalidateQueries({ queryKey: ['plugin-manager-installed'] });
           }
         }
       },
