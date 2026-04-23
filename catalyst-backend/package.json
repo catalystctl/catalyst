@@ -64,7 +64,7 @@
     "@typescript-eslint/eslint-plugin": "~8.54.0",
     "@typescript-eslint/parser": "~8.54.0",
     "@vitest/coverage-v8": "~4.0.18",
-    "eslint": "~10.1.0",
+    "eslint": "~10.2.1",
     "globals": "~17.3.0",
     "prisma": "~7.3.0",
     "typescript": "~6.0.2",
