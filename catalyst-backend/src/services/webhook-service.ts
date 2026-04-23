@@ -9,6 +9,7 @@
 import type { PrismaClient } from "@prisma/client";
 import type pino from "pino";
 import crypto from "crypto";
+import { captureSystemError } from "./error-logger";
 
 export interface WebhookEvent {
   event: string;
@@ -74,6 +75,12 @@ export class WebhookService {
       }
     } catch (err) {
       this.logger.warn(err, "Failed to load webhook URLs");
+      captureSystemError({
+        level: 'error',
+        component: 'WebhookService',
+        message: 'Failed to load webhook URLs',
+        stack: err instanceof Error ? err.stack : undefined,
+      }).catch(() => {});
     }
 
     return this.webhookUrls;
@@ -99,6 +106,13 @@ export class WebhookService {
     for (const url of urls) {
       this.dispatchSingle(url, payload, signature, event).catch((err) => {
         this.logger.warn({ url, event: event.event, err }, "Webhook delivery failed");
+        captureSystemError({
+          level: 'error',
+          component: 'WebhookService',
+          message: `Webhook delivery failed to ${url}`,
+          stack: err instanceof Error ? err.stack : undefined,
+          metadata: { url, event: event.event },
+        }).catch(() => {});
       });
     }
   }

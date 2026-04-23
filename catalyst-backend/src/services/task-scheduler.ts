@@ -3,6 +3,7 @@ import { CronExpressionParser } from 'cron-parser';
 import type { PrismaClient } from '@prisma/client';
 import type pino from 'pino';
 import { getWsGateway } from '../websocket/gateway';
+import { captureSystemError } from './error-logger';
 
 interface TaskExecutor {
   executeTask(task: any): Promise<void>;
@@ -91,6 +92,7 @@ export class TaskScheduler {
   scheduleTask(task: any) {
     // Validate cron expression
     if (!cron.validate(task.schedule)) {
+      captureSystemError({ level: 'warn', component: 'TaskScheduler', message: `Invalid cron expression for task ${task.id}: ${task.schedule}`, metadata: { taskId: task.id, schedule: task.schedule } }).catch(() => {});
       this.logger.error(`Invalid cron expression for task ${task.id}: ${task.schedule}`);
       return;
     }
@@ -115,6 +117,13 @@ export class TaskScheduler {
       job.start();
     } catch (error) {
       this.logger.error(error, `Failed to schedule task ${task.id}`);
+      captureSystemError({
+        level: 'error',
+        component: 'TaskScheduler',
+        message: `Failed to schedule task ${task.id}`,
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { taskId: task.id, schedule: task.schedule },
+      }).catch(() => {});
       return;
     }
 
@@ -210,6 +219,13 @@ export class TaskScheduler {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown task error';
       this.logger.error(error, `Failed to execute task: ${task.name} (${task.id})`);
+      captureSystemError({
+        level: 'error',
+        component: 'TaskScheduler',
+        message: `Failed to execute task: ${task.name} (${task.id})`,
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { taskId: task.id, taskName: task.name, serverId: task.serverId },
+      }).catch(() => {});
       await this.prisma.scheduledTask.update({
         where: { id: task.id },
         data: {
@@ -250,6 +266,13 @@ export class TaskScheduler {
       });
     } catch (error) {
       this.logger.error(error, `Failed to update next run time for task ${taskId}`);
+      captureSystemError({
+        level: 'error',
+        component: 'TaskScheduler',
+        message: `Failed to update next run time for task ${taskId}`,
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { taskId },
+      }).catch(() => {});
     }
   }
 
@@ -287,6 +310,12 @@ export class TaskScheduler {
       }
     } catch (error) {
       this.logger.error(error, 'Failed to recover missed tasks');
+      captureSystemError({
+        level: 'error',
+        component: 'TaskScheduler',
+        message: 'Failed to recover missed tasks',
+        stack: error instanceof Error ? error.stack : undefined,
+      }).catch(() => {});
     }
   }
 
@@ -342,6 +371,12 @@ export class TaskScheduler {
       }
     } catch (error) {
       this.logger.error(error, 'Failed to check and update tasks');
+      captureSystemError({
+        level: 'error',
+        component: 'TaskScheduler',
+        message: 'Failed to check and update tasks',
+        stack: error instanceof Error ? error.stack : undefined,
+      }).catch(() => {});
     }
   }
 

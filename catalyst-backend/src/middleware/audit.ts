@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../db.js';
 import { getWsGateway } from '../websocket/gateway';
+import { captureSystemError } from '../services/error-logger';
 
 interface AuditLogOptions {
   action: string;
@@ -38,8 +39,14 @@ export async function createAuditLog(
         timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : new Date().toISOString(),
       });
     } catch { /* ignore — audit logging is best-effort */ }
-  } catch (error) {
-    console.error('Failed to create audit log:', error);
+  } catch (error: any) {
+    captureSystemError({
+      level: 'warn',
+      component: 'AuditMiddleware',
+      message: 'Failed to create audit log',
+      stack: error?.stack,
+      metadata: { userId, action: options.action, resource: options.resource },
+    }).catch(() => {});
   }
 }
 
@@ -70,8 +77,14 @@ export async function logAuthAttempt(
         },
       });
     }
-  } catch (error) {
-    console.error('Failed to log auth attempt:', error);
+  } catch (error: any) {
+    captureSystemError({
+      level: 'warn',
+      component: 'AuditMiddleware',
+      message: 'Failed to log auth attempt',
+      stack: error?.stack,
+      metadata: { email, success, ip },
+    }).catch(() => {});
   }
 }
 

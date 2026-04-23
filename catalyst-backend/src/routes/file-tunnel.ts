@@ -4,6 +4,7 @@ import type { Logger } from "pino";
 import type { FileTunnelService, FileTunnelResponse } from "../services/file-tunnel";
 import { getSecuritySettings } from "../services/mailer";
 import { verifyAgentApiKey } from "../lib/agent-auth";
+import { captureSystemError } from "../services/error-logger";
 
 /**
  * Internal routes used by agents to poll for and respond to file operations.
@@ -84,6 +85,13 @@ export function fileTunnelRoutes(
         const requests = await fileTunnel.pollRequests(nodeId);
         reply.send({ requests });
       } catch (error) {
+        captureSystemError({
+          level: 'error',
+          component: 'FileTunnelRoutes',
+          message: error instanceof Error ? error.message : 'Poll error',
+          stack: error instanceof Error ? error.stack : undefined,
+          metadata: { nodeId, context: 'file_tunnel_poll' },
+        }).catch(() => {});
         log.error({ err: error, nodeId }, "Poll error");
         reply.status(500).send({ error: "Internal error" });
       }

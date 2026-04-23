@@ -687,6 +687,28 @@ model AuditLog {
 }
 
 // ============================================================================
+// SYSTEM ERRORS
+// ============================================================================
+
+model SystemError {
+  id        String   @id @default(cuid())
+  level     String   // error, warn, critical
+  component String   // WebSocketGateway, TaskScheduler, HTTP, etc.
+  message   String   @db.Text
+  stack     String?  @db.Text
+  metadata  Json?
+  requestId String?  // optional trace ID
+  userId    String?  // if error happened in authenticated context
+  resolved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([level, createdAt])
+  @@index([component, createdAt])
+  @@index([resolved, createdAt])
+  @@index([createdAt(sort: Desc)])
+}
+
+// ============================================================================
 // SERVER STATS (HISTORICAL RESOURCE DATA)
 // ============================================================================
 

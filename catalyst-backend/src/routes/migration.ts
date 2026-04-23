@@ -8,6 +8,7 @@ import { prisma } from "../db.js";
 import { MigrationService } from "../services/migration/index.js";
 
 import { serialize } from "../utils/serialize.js";
+import { captureSystemError } from "../services/error-logger.js";
 
 // Singleton migration service
 let migrationService: MigrationService | null = null;
@@ -110,6 +111,13 @@ export async function migrationRoutes(app: FastifyInstance) {
       const result = await service.testConnection(url, key, clientApiKey);
       reply.send(serialize(result));
     } catch (err: any) {
+      captureSystemError({
+        level: 'error',
+        component: 'MigrationRoutes',
+        message: err?.message || 'Migration test failed',
+        stack: err?.stack,
+        metadata: { context: 'migration_test' },
+      }).catch(() => {});
       logger.error({ err }, "Migration test failed");
       reply.status(500).send({ error: err.message || "Connection test failed" });
     }
@@ -229,6 +237,13 @@ export async function migrationRoutes(app: FastifyInstance) {
       const service = getMigrationService(logger, app);
       service.startMigration(job.id).catch(async (err) => {
         logger.error({ jobId: job.id, err }, "Migration failed to start");
+        captureSystemError({
+          level: 'error',
+          component: 'MigrationService',
+          message: `Migration failed to start: ${job.id}`,
+          stack: err instanceof Error ? err.stack : undefined,
+          metadata: { jobId: job.id },
+        }).catch(() => {});
         // Mark the job as failed so it doesn't block future migrations
         try {
           await prisma.migrationJob.update({
@@ -237,12 +252,26 @@ export async function migrationRoutes(app: FastifyInstance) {
           });
         } catch (updateErr) {
           logger.error({ jobId: job.id, err: updateErr }, "Failed to update job status after start error");
+          captureSystemError({
+            level: 'error',
+            component: 'MigrationService',
+            message: 'Failed to update job status after start error',
+            stack: updateErr instanceof Error ? updateErr.stack : undefined,
+            metadata: { jobId: job.id },
+          }).catch(() => {});
         }
       });
 
       reply.send({ jobId: job.id });
     } catch (err: any) {
       logger.error({ err }, "Failed to start migration");
+      captureSystemError({
+        level: 'error',
+        component: 'MigrationService',
+        message: err.message || 'Failed to start migration',
+        stack: err.stack,
+        metadata: { route: '/api/admin/migration' },
+      }).catch(() => {});
       reply.status(500).send({ error: err.message || "Failed to start migration" });
     }
   });

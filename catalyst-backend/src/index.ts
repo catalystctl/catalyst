@@ -14,6 +14,7 @@ import pino from "pino";
 import { prisma } from "./db";
 import "./types"; // Load type augmentations
 import { WebSocketGateway, setWsGateway } from "./websocket/gateway";
+import { setErrorLoggerGateway, captureSystemError } from "./services/error-logger";
 import { authRoutes } from "./routes/auth";
 import { nodeRoutes } from "./routes/nodes";
 import { serverRoutes } from "./routes/servers";
@@ -96,8 +97,16 @@ app.addContentTypeParser(
 	},
 );
 
-app.setErrorHandler((error, _request, reply) => {
+app.setErrorHandler((error, request, reply) => {
 	app.log.error(error);
+	captureSystemError({
+		level: 'error',
+		component: 'HTTP',
+		message: (error as Error).message || 'Internal Server Error',
+		stack: (error as Error).stack,
+		metadata: { statusCode: (error as any).statusCode, url: request.url, method: request.method },
+		userId: (request as any).user?.userId,
+	}).catch(() => {});
 	const status =
 		(error as any).statusCode && (error as any).statusCode >= 400
 			? (error as any).statusCode
@@ -120,6 +129,7 @@ app.setErrorHandler((error, _request, reply) => {
 
 const wsGateway = new WebSocketGateway(prisma, logger);
 setWsGateway(wsGateway);
+setErrorLoggerGateway(wsGateway);
 const rbac = new RbacMiddleware(prisma);
 const taskScheduler = new TaskScheduler(prisma, logger);
 const webhookService = new WebhookService(prisma, logger);
@@ -308,6 +318,13 @@ const authenticate = async (request: any, reply: any) => {
 				};
 				return; // API key auth successful
 			} catch (error: any) {
+				captureSystemError({
+					level: 'error',
+					component: 'Index',
+					message: error?.message || 'API key authentication error',
+					stack: error?.stack,
+					metadata: { context: 'api_key_auth' },
+				}).catch(() => {});
 				logger.error(error, "API key authentication error");
 				reply.status(401).send({ error: "Invalid or expired API key" });
 				return;
@@ -517,6 +534,13 @@ async function bootstrap() {
 		await app.register(fastifyWebsocket, {
 			options: { maxPayload: 64 * 1024 },
 			errorHandler: (error) => {
+				captureSystemError({
+					level: 'error',
+					component: 'Index',
+					message: (error as Error)?.message || 'WebSocket error handler',
+					stack: (error as Error)?.stack,
+					metadata: { context: 'websocket' },
+				}).catch(() => {});
 				logger.error(error, "WebSocket error handler");
 			},
 		});
@@ -531,6 +555,13 @@ async function bootstrap() {
 				try {
 					await prisma.$queryRaw`SELECT 1`;
 				} catch (dbError: any) {
+					captureSystemError({
+						level: 'error',
+						component: 'Index',
+						message: dbError?.message || 'Health check: database unreachable',
+						stack: dbError?.stack,
+						metadata: { context: 'health_check' },
+					}).catch(() => {});
 					request.log.error(
 						{ err: dbError },
 						"Health check: database unreachable",
@@ -788,6 +819,13 @@ async function bootstrap() {
 							.send({ error: "Agent build completed but binary not found" });
 					}
 				} catch (err) {
+					captureSystemError({
+						level: 'error',
+						component: 'Index',
+						message: err instanceof Error ? err.message : 'Failed to build agent',
+						stack: err instanceof Error ? err.stack : undefined,
+						metadata: { context: 'agent_build' },
+					}).catch(() => {});
 					app.log.error({ err }, "Failed to build agent");
 					return reply.status(500).send({
 						error: "Failed to build agent binary",
@@ -1139,6 +1177,13 @@ async function bootstrap() {
 					{ plugin: plugin.name, error: error.message },
 					"Failed to auto-enable plugin",
 				);
+				captureSystemError({
+					level: 'error',
+					component: 'PluginLoader',
+					message: `Failed to auto-enable plugin ${plugin.name}: ${error.message}`,
+					stack: error.stack,
+					metadata: { pluginName: plugin.name },
+				}).catch(() => {});
 			}
 		}
 
@@ -1215,6 +1260,12 @@ async function bootstrap() {
 		logger.info("Log retention job scheduled");
 	} catch (err) {
 		logger.error(err, "Failed to start server");
+		captureSystemError({
+			level: 'critical',
+			component: 'Bootstrap',
+			message: err instanceof Error ? err.message : String(err),
+			stack: err instanceof Error ? err.stack : undefined,
+		}).catch(() => {});
 		process.exit(1);
 	}
 }
@@ -1297,5 +1348,11 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 
 bootstrap().catch((err) => {
 	logger.error(err, "Bootstrap error");
+	captureSystemError({
+		level: 'critical',
+		component: 'Bootstrap',
+		message: err instanceof Error ? err.message : String(err),
+		stack: err instanceof Error ? err.stack : undefined,
+	}).catch(() => {});
 	process.exit(1);
 });

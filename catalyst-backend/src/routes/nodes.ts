@@ -7,6 +7,7 @@ import { auth } from "../auth";
 import { serialize } from "../utils/serialize";
 import { verifyAgentApiKey } from "../lib/agent-auth";
 import { createApiKey, deleteApiKey } from "../services/api-key-service";
+import { captureSystemError } from "../services/error-logger";
 
 // ID format validation — accepts UUID, Cuid2, and other safe identifier formats.
 const ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -418,6 +419,12 @@ export async function nodeRoutes(app: FastifyInstance) {
 						{ nodeId },
 						"Failed to create agent API key for deployment",
 					);
+					captureSystemError({
+						level: 'error',
+						component: 'NodeService',
+						message: 'Failed to create agent API key for deployment',
+						metadata: { nodeId },
+					}).catch(() => {});
 					return reply
 						.status(500)
 						.send({ error: "Failed to create agent API key" });
@@ -427,6 +434,13 @@ export async function nodeRoutes(app: FastifyInstance) {
 					{ error, nodeId },
 					"Failed to create agent API key for deployment",
 				);
+				captureSystemError({
+					level: 'error',
+					component: 'NodeService',
+					message: 'Failed to create agent API key for deployment',
+					stack: (error as Error)?.stack,
+					metadata: { nodeId },
+				}).catch(() => {});
 				return reply
 					.status(500)
 					.send({ error: "Failed to create agent API key" });
@@ -549,6 +563,13 @@ export async function nodeRoutes(app: FastifyInstance) {
 						"Deleted old API key for regeneration",
 					);
 				} catch (error) {
+					captureSystemError({
+						level: 'error',
+						component: 'NodeRoutes',
+						message: error instanceof Error ? error.message : 'Failed to delete old API key',
+						stack: error instanceof Error ? error.stack : undefined,
+						metadata: { keyId: existingKey.id, context: 'api_key_delete' },
+					}).catch(() => {});
 					request.log.error(
 						{ error, keyId: existingKey.id },
 						"Failed to delete old API key",
@@ -585,6 +606,13 @@ export async function nodeRoutes(app: FastifyInstance) {
 				});
 			} catch (error) {
 				request.log.error({ error, nodeId }, "Failed to create agent API key");
+				captureSystemError({
+					level: 'error',
+					component: 'NodeService',
+					message: 'Failed to create agent API key',
+					stack: (error as Error)?.stack,
+					metadata: { nodeId },
+				}).catch(() => {});
 				return reply.status(500).send({ error: "Failed to create API key" });
 			}
 		},

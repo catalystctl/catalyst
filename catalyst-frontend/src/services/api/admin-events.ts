@@ -55,6 +55,7 @@ export type AdminEventType =
   | 'audit_log_created'
   | 'auth_lockout_created'
   | 'auth_lockout_cleared'
+  | 'system_error'
   | 'task_created'
   | 'task_updated'
   | 'task_deleted'
@@ -122,6 +123,7 @@ const ADMIN_EVENT_TYPES: AdminEventType[] = [
   'audit_log_created',
   'auth_lockout_created',
   'auth_lockout_cleared',
+  'system_error',
   'task_created',
   'task_updated',
   'task_deleted',

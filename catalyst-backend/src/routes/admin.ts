@@ -8,6 +8,7 @@ import { ServerStateMachine } from '../services/state-machine';
 import { normalizeHostIp, releaseIpForServer, summarizePool } from '../utils/ipam';
 import { createAuditLog } from '../middleware/audit';
 import { revokeSftpTokensForUser } from '../services/sftp-token-manager';
+import { captureSystemError } from '../services/error-logger';
 // Permission checks use request.user.permissions (populated by auth middleware)
 // No DB queries needed — works for both session and API key auth.
 import {
@@ -1504,6 +1505,107 @@ export async function adminRoutes(app: FastifyInstance) {
     }
   );
 
+  // Get system errors (requires admin.read)
+  app.get(
+    '/system-errors',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const user = request.user;
+
+      if (!(checkPerm(request, 'admin.read'))) {
+        return reply.status(403).send({ error: 'Admin read permission required' });
+      }
+
+      const {
+        page = 1,
+        limit = 50,
+        level,
+        component,
+        resolved,
+        from,
+        to,
+      } = request.query as {
+        page?: number;
+        limit?: number;
+        level?: string;
+        component?: string;
+        resolved?: string;
+        from?: string;
+        to?: string;
+      };
+
+      const skip = (Number(page) - 1) * Number(limit);
+
+      const where: any = {};
+      if (level) where.level = level;
+      if (component) where.component = { contains: component };
+      if (resolved !== undefined) where.resolved = resolved === 'true';
+      if (from || to) {
+        const parsedFrom = from ? new Date(from) : undefined;
+        const parsedTo = to ? new Date(to) : undefined;
+        if (parsedFrom && Number.isNaN(parsedFrom.getTime())) {
+          return reply.status(400).send({ error: 'Invalid from timestamp' });
+        }
+        if (parsedTo && Number.isNaN(parsedTo.getTime())) {
+          return reply.status(400).send({ error: 'Invalid to timestamp' });
+        }
+        where.createdAt = {
+          ...(parsedFrom ? { gte: parsedFrom } : {}),
+          ...(parsedTo ? { lte: parsedTo } : {}),
+        };
+      }
+
+      const [errors, total] = await Promise.all([
+        prisma.systemError.findMany({
+          where,
+          skip,
+          take: Number(limit),
+          orderBy: {
+            createdAt: 'desc',
+          },
+        }),
+        prisma.systemError.count({ where }),
+      ]);
+
+      reply.send({
+        errors,
+        pagination: {
+          page: Number(page),
+          limit: Number(limit),
+          total,
+          totalPages: Math.ceil(total / Number(limit)),
+        },
+      });
+    }
+  );
+
+  // Resolve a system error (requires admin.write)
+  app.post(
+    '/system-errors/:id/resolve',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const user = request.user;
+
+      if (!(checkPerm(request, 'admin.write'))) {
+        return reply.status(403).send({ error: 'Admin write permission required' });
+      }
+
+      const { id } = request.params as { id: string };
+
+      const error = await prisma.systemError.findUnique({ where: { id } });
+      if (!error) {
+        return reply.status(404).send({ error: 'System error not found' });
+      }
+
+      const updated = await prisma.systemError.update({
+        where: { id },
+        data: { resolved: true },
+      });
+
+      reply.send({ success: true, error: updated });
+    }
+  );
+
   // Security settings (admin only)
   app.get(
     '/security-settings',
@@ -1817,6 +1919,13 @@ export async function adminRoutes(app: FastifyInstance) {
           rangeStart: startIp || undefined,
           rangeEnd: endIp || undefined,
         }).catch((err: Error) => {
+          captureSystemError({
+            level: 'warn',
+            component: 'AdminRoutes',
+            message: `Failed to send network creation to agent: ${err.message}`,
+            stack: err.stack,
+            metadata: { nodeId, error: err.message },
+          }).catch(() => {});
           console.error("Failed to send network creation to agent", { nodeId, error: err.message });
         });
       }
@@ -1907,6 +2016,13 @@ export async function adminRoutes(app: FastifyInstance) {
           rangeStart: updated.startIp || undefined,
           rangeEnd: updated.endIp || undefined,
         }).catch((err: Error) => {
+          captureSystemError({
+            level: 'warn',
+            component: 'AdminRoutes',
+            message: `Failed to send network update to agent ${pool.nodeId}: ${err.message}`,
+            stack: err.stack,
+            metadata: { nodeId: pool.nodeId, error: err.message },
+          }).catch(() => {});
           console.error(`Failed to send network update to agent ${pool.nodeId}:`, err);
         });
       }
@@ -1964,6 +2080,13 @@ export async function adminRoutes(app: FastifyInstance) {
             type: 'delete_network',
             networkName: pool.networkName,
           }).catch((err: Error) => {
+            captureSystemError({
+              level: 'warn',
+              component: 'AdminRoutes',
+              message: `Failed to send network deletion to agent ${pool.nodeId}: ${err.message}`,
+              stack: err.stack,
+              metadata: { nodeId: pool.nodeId, error: err.message },
+            }).catch(() => {});
             console.error(`Failed to send network deletion to agent ${pool.nodeId}:`, err);
           });
         }

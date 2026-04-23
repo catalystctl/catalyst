@@ -17,6 +17,7 @@ import type {
   AuthLockoutsResponse,
   Role,
   RolePreset,
+  SystemErrorsResponse,
 } from '../../types/admin';
 
 type ApiResponse<T> = {
@@ -285,5 +286,21 @@ export const adminApi = {
   getRolePresets: async () => {
     const data = await apiClient.get<ApiResponse<RolePreset[]>>('/api/roles/presets');
     return data.data || [];
+  },
+  listSystemErrors: async (params?: {
+    page?: number;
+    limit?: number;
+    level?: string;
+    component?: string;
+    resolved?: boolean;
+    from?: string;
+    to?: string;
+  }) => {
+    const data = await apiClient.get<SystemErrorsResponse>('/api/admin/system-errors', { params });
+    return data;
+  },
+  resolveSystemError: async (id: string) => {
+    const data = await apiClient.post<{ success: boolean }>(`/api/admin/system-errors/${id}/resolve`);
+    return data;
   },
 };

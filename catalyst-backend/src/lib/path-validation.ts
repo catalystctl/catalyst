@@ -14,6 +14,7 @@
 
 import path from 'path';
 import fs from 'fs';
+import { captureSystemError } from '../services/error-logger';
 
 // Unicode normalization - use built-in Intl for NFC normalization
 // This prevents homograph attacks where different Unicode representations
@@ -73,6 +74,12 @@ function logSecurityEvent(
 
   // Also log to console in development
   if (process.env.NODE_ENV === 'development') {
+    captureSystemError({
+      level: 'critical',
+      component: 'PathValidation',
+      message: 'Path Validation Security Event',
+      metadata: { event },
+    }).catch(() => {});
     console.warn('[Path Validation Security Event]', event);
   }
 }

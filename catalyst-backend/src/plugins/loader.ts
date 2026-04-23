@@ -8,6 +8,7 @@ import type { WebSocketGateway } from '../websocket/gateway';
 import type { PluginManifest, PluginBackend, LoadedPlugin, PluginStatus } from './types';
 import { validateManifest, isVersionCompatible, validateDependencies } from './validator';
 import { createPluginContext, runMiddleware } from './context';
+import { captureSystemError } from '../services/error-logger';
 import { PluginRegistry } from './registry';
 import EventEmitter from 'events';
 
@@ -52,6 +53,13 @@ export class PluginLoader {
     try {
       await fs.mkdir(this.pluginsDir, { recursive: true });
     } catch (error: any) {
+      captureSystemError({
+        level: 'error',
+        component: 'PluginLoader',
+        message: `Failed to create plugins directory: ${error?.message || String(error)}`,
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { pluginsDir: this.pluginsDir },
+      }).catch(() => {});
       this.logger.error({ error: error.message }, 'Failed to create plugins directory');
       throw error;
     }
@@ -103,7 +111,14 @@ export class PluginLoader {
 
           manifestEntries.push({ dirName: dir.name, pluginPath, manifest });
         } catch (error: any) {
-          this.logger.error(
+          captureSystemError({
+            level: 'warn',
+            component: 'PluginLoader',
+            message: `Failed to read/validate plugin manifest: ${error?.message || String(error)}`,
+            stack: error?.stack,
+            metadata: { plugin: dir.name },
+          }).catch(() => {});
+          this.logger.warn(
             { plugin: dir.name, error: error.message },
             'Failed to read/validate plugin manifest, skipping',
           );
@@ -123,6 +138,12 @@ export class PluginLoader {
         const result = validateDependencies(manifest.dependencies, pluginNames, pluginVersions);
         if (!result.valid) {
           for (const err of result.errors) {
+            captureSystemError({
+              level: 'error',
+              component: 'PluginLoader',
+              message: `Dependency validation error: ${err}`,
+              metadata: { plugin: manifest.name, error: err },
+            }).catch(() => {});
             this.logger.error({ plugin: manifest.name, error: err }, 'Dependency validation error');
           }
         }
@@ -137,6 +158,12 @@ export class PluginLoader {
 
       this.logger.info({ discovered: pluginDirs.length, loaded: sorted.length }, 'Plugin discovery complete');
     } catch (error: any) {
+      captureSystemError({
+        level: 'error',
+        component: 'PluginLoader',
+        message: `Plugin discovery failed: ${error?.message || String(error)}`,
+        stack: error?.stack,
+      }).catch(() => {});
       this.logger.error({ error: error.message }, 'Plugin discovery failed');
     }
   }
@@ -195,6 +222,12 @@ export class PluginLoader {
     if (sorted.length !== entries.length) {
       const missing = entries.filter((e) => !sorted.includes(e.manifest.name));
       const cyclePlugins = missing.map((e) => e.manifest.name).join(', ');
+      captureSystemError({
+        level: 'error',
+        component: 'PluginLoader',
+        message: `Circular dependency detected in plugins: ${cyclePlugins}`,
+        metadata: { plugins: cyclePlugins },
+      }).catch(() => {});
       this.logger.error(
         { plugins: cyclePlugins },
         'Circular dependency detected in plugins — loading partial order',
@@ -357,6 +390,13 @@ export class PluginLoader {
 
       this.logger.info({ plugin: manifest.name }, 'Plugin loaded successfully');
     } catch (error: any) {
+      captureSystemError({
+        level: 'error',
+        component: 'PluginLoader',
+        message: `Failed to load plugin: ${error?.message || String(error)}`,
+        stack: error?.stack,
+        metadata: { plugin: pluginName },
+      }).catch(() => {});
       this.logger.error({ plugin: pluginName, error: error.message }, 'Failed to load plugin');
 
       // Register as error state
@@ -420,6 +460,13 @@ export class PluginLoader {
 
       this.logger.info({ plugin: name }, 'Plugin enabled successfully');
     } catch (error: any) {
+      captureSystemError({
+        level: 'error',
+        component: 'PluginLoader',
+        message: `Failed to enable plugin: ${error?.message || String(error)}`,
+        stack: error?.stack,
+        metadata: { plugin: name },
+      }).catch(() => {});
       this.logger.error({ plugin: name, error: error.message }, 'Failed to enable plugin');
       plugin.status = 'error' as PluginStatus;
       plugin.error = error;
@@ -482,6 +529,13 @@ export class PluginLoader {
 
       this.logger.info({ plugin: name }, 'Plugin disabled successfully');
     } catch (error: any) {
+      captureSystemError({
+        level: 'error',
+        component: 'PluginLoader',
+        message: `Failed to disable plugin: ${error?.message || String(error)}`,
+        stack: error?.stack,
+        metadata: { plugin: name },
+      }).catch(() => {});
       this.logger.error({ plugin: name, error: error.message }, 'Failed to disable plugin');
       throw error;
     }
@@ -541,6 +595,13 @@ export class PluginLoader {
 
       this.logger.info({ plugin: name }, 'Plugin unloaded successfully');
     } catch (error: any) {
+      captureSystemError({
+        level: 'error',
+        component: 'PluginLoader',
+        message: `Failed to unload plugin: ${error?.message || String(error)}`,
+        stack: error?.stack,
+        metadata: { plugin: name },
+      }).catch(() => {});
       this.logger.error({ plugin: name, error: error.message }, 'Failed to unload plugin');
       throw error;
     }
@@ -622,7 +683,14 @@ export class PluginLoader {
       try {
         await this.reloadPlugin(pluginName);
       } catch (error: any) {
-        this.logger.error({ plugin: pluginName, error: error.message }, 'Hot-reload failed');
+        captureSystemError({
+          level: 'warn',
+          component: 'PluginLoader',
+          message: `Hot-reload failed: ${error?.message || String(error)}`,
+          stack: error?.stack,
+          metadata: { plugin: pluginName, file: filePath },
+        }).catch(() => {});
+        this.logger.warn({ plugin: pluginName, error: error.message }, 'Hot-reload failed');
       }
     });
   }
@@ -659,6 +727,13 @@ export class PluginLoader {
       try {
         await this.unloadPlugin(plugin.manifest.name);
       } catch (error: any) {
+        captureSystemError({
+          level: 'error',
+          component: 'PluginLoader',
+          message: `Error unloading plugin during shutdown: ${error?.message || String(error)}`,
+          stack: error instanceof Error ? error.stack : undefined,
+          metadata: { plugin: plugin.manifest.name },
+        }).catch(() => {});
         this.logger.error(
           { plugin: plugin.manifest.name, error: error.message },
           'Error unloading plugin during shutdown',

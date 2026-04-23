@@ -16,6 +16,7 @@ import { hasPermission, hasNodeAccess } from "../lib/permissions";
 import { sanitizeInput } from "../lib/validation";
 import { ServerStateMachine } from "../services/state-machine";
 import { normalizeHostIp } from "../utils/ipam";
+import { captureSystemError } from "../services/error-logger";
 
 const DEFAULT_CONSOLE_OUTPUT_BYTE_LIMIT = 2 * 1024 * 1024; // 2MB/s per server
 const MIN_CONSOLE_OUTPUT_BYTE_LIMIT = 256 * 1024;
@@ -280,7 +281,16 @@ export class WebSocketGateway {
         this.prisma.node.update({
           where: { id: nodeId },
           data: { isOnline: false },
-        }).catch(err => this.logger.error({ err, nodeId }, 'Failed to update node status on disconnect'));
+        }).catch(err => {
+          this.logger.error({ err, nodeId }, 'Failed to update node status on disconnect');
+          captureSystemError({
+            level: 'error',
+            component: 'WebSocketGateway',
+            message: `Failed to update node status on disconnect: ${nodeId}`,
+            stack: err instanceof Error ? err.stack : undefined,
+            metadata: { nodeId },
+          }).catch(() => {});
+        });
         this.pushToAdminSubscribers('node_updated', {
           type: 'node_updated',
           nodeId,
@@ -374,6 +384,13 @@ export class WebSocketGateway {
       }
     } catch (err) {
       this.logger.error(err, "Error in agent connection");
+      captureSystemError({
+        level: 'error',
+        component: 'WebSocketGateway',
+        message: err instanceof Error ? err.message : 'Error in agent connection',
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { nodeId },
+      }).catch(() => {});
       socket.close();
     }
   }
@@ -434,6 +451,13 @@ export class WebSocketGateway {
         );
       }
     } catch (err) {
+      captureSystemError({
+        level: 'error',
+        component: 'WebSocketGateway',
+        message: err instanceof Error ? err.message : 'Failed to resume console streams',
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { nodeId },
+      }).catch(() => {});
       this.logger.error(err, "Failed to resume console streams");
     }
   }
@@ -507,6 +531,12 @@ export class WebSocketGateway {
       }, 3000);  // Reduced from 5s to 3s
     } catch (err) {
       this.logger.error(err, "Error in client connection");
+      captureSystemError({
+        level: 'error',
+        component: 'WebSocketGateway',
+        message: err instanceof Error ? err.message : 'Error in client connection',
+        stack: err instanceof Error ? err.stack : undefined,
+      }).catch(() => {});
       socket.close();
     }
   }
@@ -756,6 +786,12 @@ export class WebSocketGateway {
         }
         if (message.error) {
           clearTimeout(pending.timeout);
+          captureSystemError({
+            level: 'error',
+            component: 'WebSocketGateway',
+            message: `Agent download chunk error: ${message.error}`,
+            metadata: { requestId: message.requestId, error: message.error },
+          }).catch(() => {});
           this.logger.error(
             { requestId: message.requestId, error: message.error },
             "Agent download chunk error",
@@ -770,6 +806,13 @@ export class WebSocketGateway {
             try {
               pending.onChunk(buffer);
             } catch (error) {
+              captureSystemError({
+                level: 'error',
+                component: 'WebSocketGateway',
+                message: error instanceof Error ? error.message : 'Failed to handle backup download chunk',
+                stack: error instanceof Error ? error.stack : undefined,
+                metadata: { requestId: message.requestId },
+              }).catch(() => {});
               this.logger.error(
                 { requestId: message.requestId, err: error },
                 "Failed to handle backup download chunk",
@@ -800,6 +843,13 @@ export class WebSocketGateway {
               data: { lastSeenAt: new Date() },
             });
           } catch (err) {
+            captureSystemError({
+              level: 'error',
+              component: 'WebSocketGateway',
+              message: err instanceof Error ? err.message : 'WebSocket handler error: heartbeat node update failed',
+              stack: err instanceof Error ? err.stack : undefined,
+              metadata: { nodeId },
+            }).catch(() => {});
             this.logger.error({ err, nodeId }, 'WebSocket handler error: heartbeat node update failed');
           }
         }
@@ -854,6 +904,13 @@ export class WebSocketGateway {
             },
           });
         } catch (err) {
+          captureSystemError({
+            level: 'error',
+            component: 'WebSocketGateway',
+            message: err instanceof Error ? err.message : 'WebSocket handler error: failed to persist health report',
+            stack: err instanceof Error ? err.stack : undefined,
+            metadata: { nodeId },
+          }).catch(() => {});
           this.logger.error({ err, nodeId }, 'WebSocket handler error: failed to persist health report');
         }
       } else if (message.type === "resource_stats") {
@@ -1020,6 +1077,13 @@ export class WebSocketGateway {
         try {
           await this.prisma.$executeRaw(sql);
         } catch (err) {
+          captureSystemError({
+            level: 'error',
+            component: 'WebSocketGateway',
+            message: err instanceof Error ? err.message : 'Failed to upsert batched metrics, falling back to per-item safe upsert',
+            stack: err instanceof Error ? err.stack : undefined,
+            metadata: {},
+          }).catch(() => {});
           this.logger.error({ err }, 'Failed to upsert batched metrics, falling back to per-item safe upsert');
 
           // Fallback: upsert each item individually (safe but slower). We attempt
@@ -1074,6 +1138,13 @@ export class WebSocketGateway {
                 });
               }
             } catch (e2) {
+              captureSystemError({
+                level: 'error',
+                component: 'WebSocketGateway',
+                message: e2 instanceof Error ? e2.message : 'Failed to upsert individual metric',
+                stack: e2 instanceof Error ? e2.stack : undefined,
+                metadata: { item: it },
+              }).catch(() => {});
               this.logger.error({ err: e2, item: it }, 'Failed to upsert individual metric');
             }
           }
@@ -1126,6 +1197,13 @@ export class WebSocketGateway {
               },
             });
           } catch (err) {
+            captureSystemError({
+              level: 'error',
+              component: 'WebSocketGateway',
+              message: err instanceof Error ? err.message : 'WebSocket handler error: failed to persist console log',
+              stack: err instanceof Error ? err.stack : undefined,
+              metadata: { serverId: message.serverId },
+            }).catch(() => {});
             this.logger.error({ err, serverId: message.serverId }, 'WebSocket handler error: failed to persist console log');
           }
         }
@@ -1246,6 +1324,13 @@ export class WebSocketGateway {
             });
           }
         } catch (err) {
+          captureSystemError({
+            level: 'error',
+            component: 'WebSocketGateway',
+            message: err instanceof Error ? err.message : 'WebSocket handler error: failed to persist state update',
+            stack: err instanceof Error ? err.stack : undefined,
+            metadata: { serverId: message.serverId },
+          }).catch(() => {});
           this.logger.error({ err, serverId: message.serverId }, 'WebSocket handler error: failed to persist state update');
         }
 
@@ -1545,6 +1630,13 @@ export class WebSocketGateway {
               });
             }
           } catch (error) {
+            captureSystemError({
+              level: 'error',
+              component: 'WebSocketGateway',
+              message: error instanceof Error ? error.message : 'Failed to upload backup to S3',
+              stack: error instanceof Error ? error.stack : undefined,
+              metadata: { backupId: backupRecord.id },
+            }).catch(() => {});
             this.logger.error({ err: error, backupId: backupRecord.id }, "Failed to upload backup to S3");
             await this.prisma.backup.update({
               where: { id: backupRecord.id },
@@ -1577,6 +1669,13 @@ export class WebSocketGateway {
               });
             }
           } catch (error) {
+            captureSystemError({
+              level: 'error',
+              component: 'WebSocketGateway',
+              message: error instanceof Error ? error.message : 'Failed to upload backup to SFTP',
+              stack: error instanceof Error ? error.stack : undefined,
+              metadata: { backupId: backupRecord.id },
+            }).catch(() => {});
             this.logger.error({ err: error, backupId: backupRecord.id }, "Failed to upload backup to SFTP");
             await this.prisma.backup.update({
               where: { id: backupRecord.id },
@@ -1601,6 +1700,13 @@ export class WebSocketGateway {
               backupRecord.path,
             );
           } catch (error) {
+            captureSystemError({
+              level: 'error',
+              component: 'WebSocketGateway',
+              message: error instanceof Error ? error.message : 'Failed to fetch stream backup',
+              stack: error instanceof Error ? error.stack : undefined,
+              metadata: { backupId: backupRecord.id },
+            }).catch(() => {});
             this.logger.error({ err: error, backupId: backupRecord.id }, "Failed to fetch stream backup");
           }
         }
@@ -1648,6 +1754,13 @@ export class WebSocketGateway {
       }
     } catch (err) {
       this.logger.error(err, `Error handling agent message from ${nodeId}`);
+      captureSystemError({
+        level: 'error',
+        component: 'WebSocketGateway',
+        message: err instanceof Error ? err.message : `Error handling agent message from ${nodeId}`,
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { nodeId },
+      }).catch(() => {});
     }
   }
 
@@ -1716,6 +1829,13 @@ export class WebSocketGateway {
           try {
             await entry.handler(message.data ?? message, clientId, client.userId);
           } catch (err) {
+            captureSystemError({
+              level: 'error',
+              component: 'WebSocketGateway',
+              message: err instanceof Error ? err.message : `Plugin WS handler error for ${message.type}`,
+              stack: err instanceof Error ? err.stack : undefined,
+              metadata: { messageType: message.type },
+            }).catch(() => {});
             this.logger.error(err, `Plugin WS handler error for ${message.type}`);
           }
           return;
@@ -1987,6 +2107,13 @@ export class WebSocketGateway {
       }
     } catch (err) {
       this.logger.error(err, `Error handling client message from ${clientId}`);
+      captureSystemError({
+        level: 'error',
+        component: 'WebSocketGateway',
+        message: err instanceof Error ? err.message : `Error handling client message from ${clientId}`,
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { clientId },
+      }).catch(() => {});
     }
   }
 
@@ -2397,7 +2524,16 @@ export class WebSocketGateway {
           this.prisma.node.update({
             where: { id: nodeId },
             data: { isOnline: false },
-          }).catch(err => this.logger.error({ err, nodeId }, 'Failed to update node status on heartbeat timeout'));
+          }).catch(err => {
+            this.logger.error({ err, nodeId }, 'Failed to update node status on heartbeat timeout');
+            captureSystemError({
+              level: 'error',
+              component: 'WebSocketGateway',
+              message: `Failed to update node status on heartbeat timeout: ${nodeId}`,
+              stack: err instanceof Error ? err.stack : undefined,
+              metadata: { nodeId },
+            }).catch(() => {});
+          });
           this.pushToAdminSubscribers('node_updated', {
             type: 'node_updated',
             nodeId,
@@ -2479,6 +2615,13 @@ export class WebSocketGateway {
       agent.socket.send(JSON.stringify(message));
       return true;
     } catch (err) {
+      captureSystemError({
+        level: 'error',
+        component: 'WebSocketGateway',
+        message: err instanceof Error ? err.message : `Error sending message to agent ${nodeId}`,
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { nodeId },
+      }).catch(() => {});
       this.logger.error(err, `Error sending message to agent ${nodeId}`);
       return false;
     }
@@ -2742,6 +2885,13 @@ export class WebSocketGateway {
       agent.socket.send(agentMessage);
     } catch (err) {
       this.logger.error({ err, serverId, userId }, 'Failed to forward console command to agent');
+      captureSystemError({
+        level: 'error',
+        component: 'WebSocketGateway',
+        message: 'Failed to forward console command to agent',
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { serverId, userId },
+      }).catch(() => {});
       throw new Error('Failed to communicate with node agent');
     }
 

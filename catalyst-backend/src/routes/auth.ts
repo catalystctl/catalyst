@@ -1,6 +1,7 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { AuthInstance } from "../auth";
+import { captureSystemError } from "../services/error-logger";
 import { fromNodeHeaders } from "better-auth/node";
 import { logAuthAttempt } from "../middleware/audit";
 import { serialize } from '../utils/serialize';
@@ -116,8 +117,15 @@ export async function authRoutes(app: FastifyInstance) {
           html: `<p>Welcome to ${panelName}, ${username}!</p><p>Your account has been created successfully.</p><p>You can now log in and start managing your servers.</p>`,
           text: `Welcome to ${panelName}, ${username}! Your account has been created successfully.`,
         });
-      } catch (emailErr) {
+      } catch (emailErr: any) {
         // Log but don't fail registration
+        captureSystemError({
+          level: 'warn',
+          component: 'AuthRoutes',
+          message: `Failed to send welcome email: ${emailErr?.message || String(emailErr)}`,
+          stack: emailErr?.stack,
+          metadata: { emailError: emailErr?.message || String(emailErr) },
+        }).catch(() => {});
         console.error('Failed to send welcome email:', emailErr);
       }
 

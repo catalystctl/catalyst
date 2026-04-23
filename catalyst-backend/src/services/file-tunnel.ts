@@ -5,6 +5,7 @@ import path from "path";
 import type { Logger } from "pino";
 import { getSecuritySettings } from "./mailer";
 import { prisma } from "../db.js";
+import { captureSystemError } from "../services/error-logger";
 
 export interface FileTunnelRequest {
   requestId: string;
@@ -64,6 +65,7 @@ export class FileTunnelService {
     try {
       fs.mkdirSync(this.tempDir, { recursive: true });
     } catch (err) {
+      captureSystemError({ level: 'error', component: 'FileTunnel', message: 'Failed to create upload temp directory', stack: err instanceof Error ? err.stack : undefined }).catch(() => {});
       this.logger.error({ err }, "Failed to create upload temp directory");
     }
     this.cleanupTimer = setInterval(() => this.cleanup(), 60_000);
@@ -135,6 +137,7 @@ export class FileTunnelService {
         fs.writeFileSync(filePath, uploadData);
         this.uploads.set(requestId, { filePath, size: uploadData.length, nodeId, createdAt: Date.now() });
       } catch (err) {
+        captureSystemError({ level: 'error', component: 'FileTunnel', message: 'Failed to write upload temp file', stack: err instanceof Error ? err.stack : undefined, metadata: { requestId } }).catch(() => {});
         this.logger.error({ err, requestId }, "Failed to write upload temp file");
         throw new Error("Failed to stage upload data");
       }
@@ -263,6 +266,7 @@ export class FileTunnelService {
     try {
       return fs.readFileSync(entry.filePath);
     } catch (err) {
+      captureSystemError({ level: 'error', component: 'FileTunnel', message: 'Failed to read upload temp file', stack: err instanceof Error ? err.stack : undefined, metadata: { requestId, filePath: entry.filePath } }).catch(() => {});
       this.logger.error({ err, requestId, filePath: entry.filePath }, "Failed to read upload temp file");
       return null;
     }

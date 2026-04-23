@@ -18,6 +18,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import type { Readable } from "stream";
 import { pipeline } from "stream/promises";
+import { captureSystemError } from "../services/error-logger";
 import { nanoid } from "nanoid";
 import { auth } from "../auth";
 import {
@@ -433,7 +434,13 @@ export async function serverRoutes(app: FastifyInstance) {
     const settings = await getSecuritySettings();
     fileRateLimitMax = settings.fileRateLimitMax;
     maxBufferBytes = (settings.maxBufferMb ?? 50) * 1024 * 1024;
-  } catch (error) {
+  } catch (error: any) {
+    captureSystemError({
+      level: 'warn',
+      component: 'ServerRoutes',
+      message: `Failed to load security settings for file rate limits: ${error?.message || String(error)}`,
+      stack: error?.stack,
+    }).catch(() => {});
     console.warn("Failed to load security settings for file rate limits");
   }
 
@@ -462,6 +469,12 @@ export async function serverRoutes(app: FastifyInstance) {
 
   // Set up security logger
   setSecurityLogger((event) => {
+    captureSystemError({
+      level: 'critical',
+      component: 'PathValidation',
+      message: 'Path validation security event',
+      metadata: { event },
+    }).catch(() => {});
     app.log.warn({
       ...event,
       type: 'security_event',
@@ -4624,6 +4637,13 @@ export async function serverRoutes(app: FastifyInstance) {
 
         reply.send({ success: true, data: result.data });
       } catch (error: any) {
+        captureSystemError({
+          level: 'warn',
+          component: 'ServerRoutes',
+          message: `Failed to read archive contents: ${error?.message || String(error)}`,
+          stack: error?.stack,
+          metadata: { archivePath },
+        }).catch(() => {});
         request.log.error({ err: error, archivePath }, "Failed to read archive contents");
         if (error?.message?.includes("timed out")) {
           return reply.status(504).send({ error: "Agent file operation timed out" });
@@ -5074,6 +5094,12 @@ export async function serverRoutes(app: FastifyInstance) {
             serverUuid: server.uuid,
           });
           if (!sent) {
+            captureSystemError({
+              level: 'warn',
+              component: 'ServerRoutes',
+              message: 'Agent offline during delete — container/data cleanup will be skipped',
+              metadata: { serverId: server.id, nodeId: server.nodeId },
+            }).catch(() => {});
             app.log.warn(
               { serverId: server.id, nodeId: server.nodeId },
               "Agent offline during delete — container/data cleanup will be skipped. " +
@@ -5264,8 +5290,14 @@ export async function serverRoutes(app: FastifyInstance) {
           html: emailContent.html,
           text: emailContent.text,
         });
-      } catch (emailErr) {
+      } catch (emailErr: any) {
         // Log but don't fail — the invite is already in the DB
+        captureSystemError({
+          level: 'warn',
+          component: 'ServerRoutes',
+          message: `Failed to send invite email: ${emailErr?.message || String(emailErr)}`,
+          stack: emailErr?.stack,
+        }).catch(() => {});
         app.log.warn(emailErr, "Failed to send invite email");
       }
 

@@ -3,6 +3,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { admin, bearer, twoFactor, jwt as jwtPlugin, genericOAuth, createAccessControl } from "better-auth/plugins";
 import { passkey } from "@better-auth/passkey";
 import { prisma } from "./db";
+import { captureSystemError } from "./services/error-logger";
 
 const baseUrl = process.env.BETTER_AUTH_URL || process.env.BACKEND_EXTERNAL_ADDRESS || "http://localhost:3000";
 const authSecret = process.env.BETTER_AUTH_SECRET;
@@ -18,6 +19,12 @@ function validateDiscoveryUrl(url: string, label: string): string {
     if (!['http:', 'https:'].includes(parsed.protocol)) return "";
     return url;
   } catch {
+    captureSystemError({
+      level: 'warn',
+      component: 'Auth',
+      message: `[SECURITY] ${label} is not a valid URL, skipping OAuth provider`,
+      metadata: { provider: label },
+    }).catch(() => {});
     console.warn(`[SECURITY] ${label} is not a valid URL, skipping OAuth provider`);
     return "";
   }

@@ -3,6 +3,7 @@ import { prisma } from "../db";
 import { auth } from "../auth";
 import { fromNodeHeaders } from "better-auth/node";
 import { z } from "zod";
+import { captureSystemError } from "../services/error-logger";
 
 const setupSchema = z.object({
 	email: z.string().email("Invalid email format"),
@@ -191,6 +192,13 @@ export async function setupRoutes(app: FastifyInstance) {
 					},
 				});
 			} catch (error: any) {
+				captureSystemError({
+					level: 'error',
+					component: 'SetupRoutes',
+					message: error?.message || 'Setup failed',
+					stack: error?.stack,
+					metadata: { context: 'setup' },
+				}).catch(() => {});
 				request.log.error({ error }, "Setup failed");
 				return reply.status(500).send({
 					error: "An unexpected error occurred during setup",

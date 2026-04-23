@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import type pino from 'pino';
+import { captureSystemError } from './error-logger';
 
 const MAX_RETENTION = 7 * 24 * 60 * 60 * 1000; // 7 days
 const BATCH_SIZE = 1000;
@@ -32,11 +33,15 @@ export const startStatRetention = (prisma: PrismaClient, logger: pino.Logger) =>
         log.info({ count: totalDeleted }, 'Pruned old server stats');
       }
     } catch (err) {
+      captureSystemError({ level: 'error', component: 'StatRetention', message: 'Failed to prune server stats', stack: err instanceof Error ? err.stack : undefined }).catch(() => {});
       log.error({ err }, 'Failed to prune server stats');
     }
   };
 
   // Run once on startup, then every hour
-  retain().catch((err) => log.error({ err }, 'Failed initial stat retention'));
+  retain().catch((err) => {
+    captureSystemError({ level: 'error', component: 'StatRetention', message: 'Failed initial stat retention', stack: err instanceof Error ? err.stack : undefined }).catch(() => {});
+    log.error({ err }, 'Failed initial stat retention');
+  });
   return setInterval(retain, 60 * 60 * 1000);
 };

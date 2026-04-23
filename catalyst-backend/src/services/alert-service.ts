@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import type pino from 'pino';
 import fetch from 'node-fetch';
 import { renderAlertEmail, sendEmail } from './mailer';
+import { captureSystemError } from '../services/error-logger';
 import { getWsGateway } from '../websocket/gateway';
 
 interface AlertConditions {
@@ -38,10 +39,12 @@ export class AlertService {
     // Check for alert conditions every 30 seconds
     this.checkInterval = setInterval(() => {
       this.evaluateAlerts().catch((err) => {
+        captureSystemError({ level: 'error', component: 'AlertService', message: 'Failed to evaluate alerts', stack: err?.stack }).catch(() => {});
         this.logger.error({ err }, 'Failed to evaluate alerts');
       });
 
       this.retryFailedDeliveries().catch((err) => {
+        captureSystemError({ level: 'error', component: 'AlertService', message: 'Failed to retry failed alert deliveries', stack: err?.stack }).catch(() => {});
         this.logger.error({ err }, 'Failed to retry failed alert deliveries');
       });
     }, 30000);
@@ -72,6 +75,7 @@ export class AlertService {
         await this.evaluateRule(rule);
       }
     } catch (error) {
+      captureSystemError({ level: 'error', component: 'AlertService', message: 'Failed to evaluate alerts', stack: error instanceof Error ? error.stack : undefined }).catch(() => {});
       this.logger.error(error, 'Failed to evaluate alerts');
     }
   }
@@ -101,6 +105,7 @@ export class AlertService {
           this.logger.warn(`Unknown alert rule type: ${rule.type}`);
       }
     } catch (error) {
+      captureSystemError({ level: 'error', component: 'AlertService', message: `Failed to evaluate rule ${rule.id}`, stack: error instanceof Error ? error.stack : undefined, metadata: { ruleId: rule.id } }).catch(() => {});
       this.logger.error(error, `Failed to evaluate rule ${rule.id}`);
     }
   }
@@ -597,6 +602,7 @@ export class AlertService {
           lastError: error instanceof Error ? error.message : 'Webhook delivery failed',
         },
       });
+      captureSystemError({ level: 'error', component: 'AlertService', message: `Failed to send webhook to ${webhookUrl}`, stack: error instanceof Error ? error.stack : undefined, metadata: { alertId, webhookUrl } }).catch(() => {});
       this.logger.error(error, `Failed to send webhook to ${webhookUrl}`);
     }
   }
@@ -640,6 +646,7 @@ export class AlertService {
           lastError: error instanceof Error ? error.message : 'Email delivery failed',
         },
       });
+      captureSystemError({ level: 'error', component: 'AlertService', message: `Failed to send alert email to ${email}`, stack: error instanceof Error ? error.stack : undefined, metadata: { alertId, email } }).catch(() => {});
       this.logger.error(error, `Failed to send alert email to ${email}`);
     }
   }
@@ -727,6 +734,7 @@ export class AlertService {
           lastError: error instanceof Error ? error.message : 'Webhook delivery failed',
         },
       });
+      captureSystemError({ level: 'error', component: 'AlertService', message: `Retry webhook failed for ${webhookUrl}`, stack: error instanceof Error ? error.stack : undefined, metadata: { deliveryId, webhookUrl } }).catch(() => {});
       this.logger.error(error, `Retry webhook failed for ${webhookUrl}`);
     }
   }
@@ -767,6 +775,7 @@ export class AlertService {
           lastError: error instanceof Error ? error.message : 'Email delivery failed',
         },
       });
+      captureSystemError({ level: 'error', component: 'AlertService', message: `Retry email failed for ${email}`, stack: error instanceof Error ? error.stack : undefined, metadata: { deliveryId, email } }).catch(() => {});
       this.logger.error(error, `Retry email failed for ${email}`);
     }
   }

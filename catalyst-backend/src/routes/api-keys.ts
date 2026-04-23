@@ -4,6 +4,7 @@ import { prisma } from "../db";
 import { createApiKey, deleteApiKey as deleteApiKeyService } from "../services/api-key-service";
 import { PERMISSION_CATEGORIES, hasPermission } from "../lib/permissions-catalog";
 import { serialize } from '../utils/serialize';
+import { captureSystemError } from "../services/error-logger";
 
 const createApiKeySchema = z.object({
   name: z.string().min(1).max(100),
@@ -118,6 +119,13 @@ export async function apiKeyRoutes(app: FastifyInstance) {
 
       return reply.send(serialize({ success: true, data: apiKeyData }));
     } catch (error: any) {
+      captureSystemError({
+        level: 'error',
+        component: 'ApiKeyRoutes',
+        message: error?.message || 'Failed to create API key',
+        stack: error?.stack,
+        metadata: { context: 'api_key_create' },
+      }).catch(() => {});
       request.log.error(error, "Failed to create API key");
       return reply.status(500).send({
         success: false,
@@ -159,6 +167,13 @@ export async function apiKeyRoutes(app: FastifyInstance) {
 
       return reply.send(serialize({ success: true, data: apiKeys }));
     } catch (error: any) {
+      captureSystemError({
+        level: 'error',
+        component: 'ApiKeyRoutes',
+        message: error?.message || 'Failed to list API keys',
+        stack: error?.stack,
+        metadata: { context: 'api_key_list' },
+      }).catch(() => {});
       request.log.error(error, "Failed to list API keys");
       return reply.status(500).send({ success: false, error: "Failed to list API keys" });
     }
@@ -187,6 +202,13 @@ export async function apiKeyRoutes(app: FastifyInstance) {
 
       return reply.send(serialize({ success: true, data: apiKey }));
     } catch (error: any) {
+      captureSystemError({
+        level: 'error',
+        component: 'ApiKeyRoutes',
+        message: error?.message || 'Failed to get API key',
+        stack: error?.stack,
+        metadata: { context: 'api_key_get' },
+      }).catch(() => {});
       request.log.error(error, "Failed to get API key");
       return reply.status(500).send({ success: false, error: "Failed to get API key" });
     }
@@ -251,6 +273,13 @@ export async function apiKeyRoutes(app: FastifyInstance) {
 
       return reply.send(serialize({ success: true, data: apiKey }));
     } catch (error: any) {
+      captureSystemError({
+        level: 'error',
+        component: 'ApiKeyRoutes',
+        message: error?.message || 'Failed to update API key',
+        stack: error?.stack,
+        metadata: { context: 'api_key_update' },
+      }).catch(() => {});
       request.log.error(error, "Failed to update API key");
       return reply.status(500).send({ success: false, error: "Failed to update API key" });
     }
@@ -297,6 +326,13 @@ export async function apiKeyRoutes(app: FastifyInstance) {
 
       return reply.send({ success: true, message: "API key deleted successfully" });
     } catch (error: any) {
+      captureSystemError({
+        level: 'error',
+        component: 'ApiKeyRoutes',
+        message: error?.message || 'Failed to delete API key',
+        stack: error?.stack,
+        metadata: { context: 'api_key_delete' },
+      }).catch(() => {});
       request.log.error(error, "Failed to delete API key");
       return reply.status(500).send({ success: false, error: "Failed to delete API key" });
     }
@@ -331,6 +367,13 @@ export async function apiKeyRoutes(app: FastifyInstance) {
         },
       }));
     } catch (error: any) {
+      captureSystemError({
+        level: 'error',
+        component: 'ApiKeyRoutes',
+        message: error?.message || 'Failed to get API key usage',
+        stack: error?.stack,
+        metadata: { context: 'api_key_usage' },
+      }).catch(() => {});
       request.log.error(error, "Failed to get API key usage");
       return reply.status(500).send({ success: false, error: "Failed to get API key usage" });
     }

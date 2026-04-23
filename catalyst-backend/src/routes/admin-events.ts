@@ -35,6 +35,7 @@ const ADMIN_EVENT_TYPES = [
   'security_settings_updated', 'smtp_settings_updated', 'theme_settings_updated',
   'system_settings_updated', 'oidc_settings_updated', 'plugin_updated',
   'audit_log_created', 'auth_lockout_created', 'auth_lockout_cleared',
+  'system_error',
   // Task CRUD events
   'task_created', 'task_updated', 'task_deleted',
   // Database events

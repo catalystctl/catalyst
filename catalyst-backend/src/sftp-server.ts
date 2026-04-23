@@ -10,6 +10,7 @@ import type { Logger } from "pino";
 import { auth } from "./auth";
 import { realpathSync } from "fs";
 import { validateSftpToken } from "./services/sftp-token-manager.js";
+import { captureSystemError } from "./services/error-logger";
 
 const { Server: SSHServer, utils } = ssh2;
 type SFTPStream = ssh2.SFTPStream;
@@ -39,6 +40,12 @@ try {
 		// Generate a new RSA key if none exists
 		// Use 4096-bit key for security (was 2048)
 		if (process.env.NODE_ENV === "production") {
+			captureSystemError({
+				level: 'warn',
+				component: 'SFTPServer',
+				message: '[SFTP SECURITY] Auto-generated RSA key in production! Set SFTP_HOST_KEY or SFTP_HOST_KEY_BASE64 environment variable.',
+				metadata: { env: 'production', hostKeyPath: HOST_KEY_PATH },
+			}).catch(() => {});
 			console.warn(
 				"[SFTP SECURITY] Auto-generated RSA key in production! Set SFTP_HOST_KEY or SFTP_HOST_KEY_BASE64 environment variable.",
 			);
@@ -310,6 +317,11 @@ function startSFTPServer(logger: Logger) {
 							const sftpStream = accept();
 
 							if (!session) {
+								captureSystemError({
+									level: 'warn',
+									component: 'SFTPServer',
+									message: 'SFTP session has no authentication data',
+								}).catch(() => {});
 								logger.error("SFTP session has no authentication data");
 								return;
 							}
@@ -345,6 +357,12 @@ function startSFTPServer(logger: Logger) {
 					});
 				})
 				.on("error", (err) => {
+					captureSystemError({
+						level: 'error',
+						component: 'SFTPServer',
+						message: `SFTP client error: ${err?.message || String(err)}`,
+						stack: err?.stack,
+					}).catch(() => {});
 					logger.error({ err }, "SFTP client error");
 				})
 				.on("close", () => {
@@ -454,6 +472,13 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
 						})
 						.catch(() => {});
 				} catch (err: any) {
+					captureSystemError({
+						level: 'warn',
+						component: 'SFTPServer',
+						message: `SFTP OPEN error: ${err?.message || String(err)}`,
+						stack: err?.stack,
+						metadata: { operation: 'OPEN', filename, serverId: session?.serverId },
+					}).catch(() => {});
 					console.error("SFTP OPEN error:", err);
 					sftpStream.status(reqid, utils.sftp.STATUS_CODE.FAILURE);
 				}
@@ -485,6 +510,13 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
 						sftpStream.data(reqid, buffer.slice(0, bytesRead));
 					}
 				} catch (err: any) {
+					captureSystemError({
+						level: 'warn',
+						component: 'SFTPServer',
+						message: `SFTP READ error: ${err?.message || String(err)}`,
+						stack: err?.stack,
+						metadata: { operation: 'READ', serverId: session?.serverId },
+					}).catch(() => {});
 					console.error("SFTP READ error:", err);
 					sftpStream.status(reqid, utils.sftp.STATUS_CODE.FAILURE);
 				}
@@ -517,6 +549,13 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
 
 					sftpStream.status(reqid, utils.sftp.STATUS_CODE.OK);
 				} catch (err: any) {
+					captureSystemError({
+						level: 'warn',
+						component: 'SFTPServer',
+						message: `SFTP WRITE error: ${err?.message || String(err)}`,
+						stack: err?.stack,
+						metadata: { operation: 'WRITE', serverId: session?.serverId },
+					}).catch(() => {});
 					console.error("SFTP WRITE error:", err);
 					sftpStream.status(reqid, utils.sftp.STATUS_CODE.FAILURE);
 				}
@@ -534,6 +573,13 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
 					}
 					sftpStream.status(reqid, utils.sftp.STATUS_CODE.OK);
 				} catch (err: any) {
+					captureSystemError({
+						level: 'warn',
+						component: 'SFTPServer',
+						message: `SFTP CLOSE error: ${err?.message || String(err)}`,
+						stack: err?.stack,
+						metadata: { operation: 'CLOSE', serverId: session?.serverId },
+					}).catch(() => {});
 					console.error("SFTP CLOSE error:", err);
 					sftpStream.status(reqid, utils.sftp.STATUS_CODE.FAILURE);
 				}
@@ -566,6 +612,13 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
 
 					sftpStream.handle(reqid, handle);
 				} catch (err: any) {
+					captureSystemError({
+						level: 'warn',
+						component: 'SFTPServer',
+						message: `SFTP OPENDIR error: ${err?.message || String(err)}`,
+						stack: err?.stack,
+						metadata: { operation: 'OPENDIR', filename: dirpath, serverId: session?.serverId },
+					}).catch(() => {});
 					console.error("SFTP OPENDIR error:", err);
 					sftpStream.status(reqid, utils.sftp.STATUS_CODE.FAILURE);
 				}
@@ -667,6 +720,13 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
 
 					sftpStream.name(reqid, fileList);
 				} catch (err: any) {
+					captureSystemError({
+						level: 'warn',
+						component: 'SFTPServer',
+						message: `SFTP READDIR error: ${err?.message || String(err)}`,
+						stack: err?.stack,
+						metadata: { operation: 'READDIR', serverId: session?.serverId },
+					}).catch(() => {});
 					console.error("SFTP READDIR error:", err);
 					sftpStream.status(reqid, utils.sftp.STATUS_CODE.FAILURE);
 				}
@@ -698,6 +758,13 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
 						mtime: Math.floor(stats.mtimeMs / 1000),
 					});
 				} catch (err: any) {
+					captureSystemError({
+						level: 'warn',
+						component: 'SFTPServer',
+						message: `SFTP STAT error: ${err?.message || String(err)}`,
+						stack: err?.stack,
+						metadata: { operation: 'STAT', filename: filepath, serverId: session?.serverId },
+					}).catch(() => {});
 					console.error("SFTP STAT error:", err);
 					sftpStream.status(reqid, utils.sftp.STATUS_CODE.NO_SUCH_FILE);
 				}
@@ -729,6 +796,13 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
 						mtime: Math.floor(stats.mtimeMs / 1000),
 					});
 				} catch (err: any) {
+					captureSystemError({
+						level: 'warn',
+						component: 'SFTPServer',
+						message: `SFTP LSTAT error: ${err?.message || String(err)}`,
+						stack: err?.stack,
+						metadata: { operation: 'LSTAT', filename: filepath, serverId: session?.serverId },
+					}).catch(() => {});
 					console.error("SFTP LSTAT error:", err);
 					sftpStream.status(reqid, utils.sftp.STATUS_CODE.NO_SUCH_FILE);
 				}
@@ -763,6 +837,13 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
 						})
 						.catch(() => {});
 				} catch (err: any) {
+					captureSystemError({
+						level: 'warn',
+						component: 'SFTPServer',
+						message: `SFTP REMOVE error: ${err?.message || String(err)}`,
+						stack: err?.stack,
+						metadata: { operation: 'REMOVE', filename: filepath, serverId: session?.serverId },
+					}).catch(() => {});
 					console.error("SFTP REMOVE error:", err);
 					sftpStream.status(reqid, utils.sftp.STATUS_CODE.FAILURE);
 				}
@@ -797,6 +878,13 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
 						})
 						.catch(() => {});
 				} catch (err: any) {
+					captureSystemError({
+						level: 'warn',
+						component: 'SFTPServer',
+						message: `SFTP RMDIR error: ${err?.message || String(err)}`,
+						stack: err?.stack,
+						metadata: { operation: 'RMDIR', filename: dirpath, serverId: session?.serverId },
+					}).catch(() => {});
 					console.error("SFTP RMDIR error:", err);
 					sftpStream.status(reqid, utils.sftp.STATUS_CODE.FAILURE);
 				}
@@ -831,6 +919,13 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
 						})
 						.catch(() => {});
 				} catch (err: any) {
+					captureSystemError({
+						level: 'warn',
+						component: 'SFTPServer',
+						message: `SFTP MKDIR error: ${err?.message || String(err)}`,
+						stack: err?.stack,
+						metadata: { operation: 'MKDIR', filename: dirpath, serverId: session?.serverId },
+					}).catch(() => {});
 					console.error("SFTP MKDIR error:", err);
 					sftpStream.status(reqid, utils.sftp.STATUS_CODE.FAILURE);
 				}
@@ -870,6 +965,13 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
 						})
 						.catch(() => {});
 				} catch (err: any) {
+					captureSystemError({
+						level: 'warn',
+						component: 'SFTPServer',
+						message: `SFTP RENAME error: ${err?.message || String(err)}`,
+						stack: err?.stack,
+						metadata: { operation: 'RENAME', oldPath, newPath, serverId: session?.serverId },
+					}).catch(() => {});
 					console.error("SFTP RENAME error:", err);
 					sftpStream.status(reqid, utils.sftp.STATUS_CODE.FAILURE);
 				}
@@ -884,6 +986,13 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
 					{ filename: normalized, longname: normalized, attrs: {} },
 				]);
 			} catch (err: any) {
+				captureSystemError({
+					level: 'warn',
+					component: 'SFTPServer',
+					message: `SFTP REALPATH error: ${err?.message || String(err)}`,
+					stack: err?.stack,
+					metadata: { operation: 'REALPATH', path, serverId: session?.serverId },
+				}).catch(() => {});
 				console.error("SFTP REALPATH error:", err);
 				sftpStream.status(reqid, utils.sftp.STATUS_CODE.FAILURE);
 			}

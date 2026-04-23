@@ -12,7 +12,7 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../stores/authStore';
 import { createAdminEventsStream, type AdminEventType } from '../services/api/admin-events';
-import type { AdminUser } from '../types/admin';
+import type { AdminUser, SystemError } from '../types/admin';
 import type { ServerTemplate } from '../types/template';
 
 export function useSseAdminEvents() {
@@ -370,6 +370,25 @@ export function useSseAdminEvents() {
           if (serverId) {
             q.invalidateQueries({ queryKey: ['mod-manager-installed'] });
           }
+        }
+
+        // ── System Error Events ─────────────────────────────────────
+        if (type === 'system_error') {
+          const error = data.error as SystemError;
+          if (!error) return;
+          // Prepend the new error to the cache
+          q.setQueriesData(
+            { predicate: (query: Query) =>
+              Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-system-errors' },
+            (prev: any) => {
+              if (!prev || typeof prev !== 'object') return prev;
+              if ('errors' in prev && Array.isArray(prev.errors)) {
+                if (prev.errors.some((e: SystemError) => e.id === error.id)) return prev;
+                return { ...prev, errors: [error, ...prev.errors] };
+              }
+              return prev;
+            },
+          );
         }
 
         // ── Plugin Manager Events ────────────────────────────────────

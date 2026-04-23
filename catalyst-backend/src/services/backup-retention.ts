@@ -10,6 +10,7 @@
 
 import type { PrismaClient } from "@prisma/client";
 import type pino from "pino";
+import { captureSystemError } from "./error-logger";
 
 const DEFAULT_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -22,6 +23,7 @@ export function startBackupRetention(
     try {
       await enforceRetention(prisma, logger);
     } catch (err: any) {
+      captureSystemError({ level: 'error', component: 'BackupRetention', message: 'Backup retention job failed', stack: err?.stack }).catch(() => {});
       logger.error({ err }, "Backup retention job failed");
     }
   };

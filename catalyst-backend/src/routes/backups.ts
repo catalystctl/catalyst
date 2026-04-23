@@ -13,6 +13,7 @@ import {
 } from "../services/backup-storage";
 import { randomUUID } from "crypto";
 import { serialize } from '../utils/serialize';
+import { captureSystemError } from '../services/error-logger';
 import { hasNodeAccess } from '../lib/permissions';
 
 export async function backupRoutes(app: FastifyInstance) {
@@ -248,7 +249,14 @@ export async function backupRoutes(app: FastifyInstance) {
               data: { sizeMb },
             });
             return updated;
-          } catch {
+          } catch (err: any) {
+            captureSystemError({
+              level: 'warn',
+              component: 'BackupRoutes',
+              message: `Failed to read backup size: ${err?.message || String(err)}`,
+              stack: err?.stack,
+              metadata: { backupId: backup.id, path: backup.path },
+            }).catch(() => {});
             request.log?.warn(
               { backupId: backup.id, path: backup.path },
               "Failed to read backup size",
@@ -572,6 +580,13 @@ export async function backupRoutes(app: FastifyInstance) {
         const finalize = (error?: Error) => {
           if (error) {
             request.log.error({ err: error, serverId, backupId }, "Backup download failed");
+            captureSystemError({
+              level: 'error',
+              component: 'BackupService',
+              message: `Backup download failed: ${backupId}`,
+              stack: error.stack,
+              metadata: { serverId, backupId },
+            }).catch(() => {});
           }
           if (!reply.raw.writableEnded) {
             stream.end();

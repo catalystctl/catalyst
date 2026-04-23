@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { qk } from '../lib/queryKeys';
 import { adminApi } from '../services/api/admin';
 
@@ -120,5 +120,70 @@ export function useOidcConfig() {
     queryKey: qk.adminOidcConfig(),
     queryFn: adminApi.getOidcConfig,
     staleTime: 300_000,
+  });
+}
+
+export function useSystemErrors(params?: {
+  page?: number;
+  limit?: number;
+  level?: string;
+  component?: string;
+  resolved?: boolean;
+  from?: string;
+  to?: string;
+}) {
+  return useQuery({
+    queryKey: qk.adminSystemErrors(params as Record<string, unknown> | undefined),
+    queryFn: () => adminApi.listSystemErrors(params),
+    refetchInterval: 15000,
+  });
+}
+
+export function useResolveSystemError() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => adminApi.resolveSystemError(id),
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-system-errors',
+      });
+      const previousData = queryClient.getQueriesData({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-system-errors',
+      });
+      queryClient.setQueriesData(
+        {
+          predicate: (query) =>
+            Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-system-errors',
+        },
+        (prev: any) => {
+          if (!prev || typeof prev !== 'object') return prev;
+          if ('errors' in prev && Array.isArray(prev.errors)) {
+            return {
+              ...prev,
+              errors: prev.errors.map((e: any) =>
+                e.id === id ? { ...e, resolved: true } : e,
+              ),
+            };
+          }
+          return prev;
+        },
+      );
+      return { previousData };
+    },
+    onError: (_err, _id, context: any) => {
+      if (context?.previousData) {
+        for (const [queryKey, data] of context.previousData) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-system-errors',
+      });
+    },
   });
 }

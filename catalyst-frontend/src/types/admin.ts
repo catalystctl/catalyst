@@ -273,6 +273,24 @@ export interface PermissionCategory {
   permissions: string[];
 }
 
+export interface SystemError {
+  id: string;
+  level: 'error' | 'warn' | 'critical';
+  component: string;
+  message: string;
+  stack?: string | null;
+  metadata?: Record<string, any> | null;
+  requestId?: string | null;
+  userId?: string | null;
+  resolved: boolean;
+  createdAt: string;
+}
+
+export interface SystemErrorsResponse {
+  errors: SystemError[];
+  pagination: PaginationMeta;
+}
+
 export interface RoleUsersResponse {
   user: {
     id: string;

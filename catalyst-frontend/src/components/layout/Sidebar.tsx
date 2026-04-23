@@ -27,6 +27,7 @@ import {
   Activity,
   Lock,
   ArrowRightLeft,
+  Bug,
 } from 'lucide-react';
 import { useState, MouseEvent, useMemo } from 'react';
 import { cn } from '@/lib/utils';
@@ -175,6 +176,12 @@ const adminSections = [
         to: '/admin/audit-logs',
         label: 'Audit Logs',
         icon: Activity,
+        permissions: ['admin.read', 'admin.write'],
+      },
+      {
+        to: '/admin/system-errors',
+        label: 'System Errors',
+        icon: Bug,
         permissions: ['admin.read', 'admin.write'],
       },
     ],

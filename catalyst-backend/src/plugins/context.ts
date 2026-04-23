@@ -18,6 +18,7 @@ import type { PluginRegistry } from './registry';
 import cron from 'node-cron';
 import type { ScheduledTask } from 'node-cron';
 import EventEmitter from 'events';
+import { captureSystemError } from '../services/error-logger';
 
 // ── Simple unique ID generator ──────────────────────────────────────────────
 function generateId(): string {
@@ -244,16 +245,34 @@ class ScopedPluginDBClient implements ScopedPluginDB {
 
   // BLOCKED: credentials, apiKeys, auditLogs - never accessible to plugins
   get credentials() {
+    captureSystemError({
+      level: 'critical',
+      component: 'PluginSecurity',
+      message: `Plugin ${this.pluginName} attempted to access credentials - BLOCKED`,
+      metadata: { plugin: this.pluginName, resource: 'credentials' },
+    }).catch(() => {});
     this.logger.error({ plugin: this.pluginName }, 'Plugin attempted to access credentials - BLOCKED');
     throw new Error('Access to credentials is prohibited for security reasons');
   }
 
   get apiKeys() {
+    captureSystemError({
+      level: 'critical',
+      component: 'PluginSecurity',
+      message: `Plugin ${this.pluginName} attempted to access apiKeys - BLOCKED`,
+      metadata: { plugin: this.pluginName, resource: 'apiKeys' },
+    }).catch(() => {});
     this.logger.error({ plugin: this.pluginName }, 'Plugin attempted to access apiKeys - BLOCKED');
     throw new Error('Access to API keys is prohibited for security reasons');
   }
 
   get auditLogs() {
+    captureSystemError({
+      level: 'critical',
+      component: 'PluginSecurity',
+      message: `Plugin ${this.pluginName} attempted to access auditLogs - BLOCKED`,
+      metadata: { plugin: this.pluginName, resource: 'auditLogs' },
+    }).catch(() => {});
     this.logger.error({ plugin: this.pluginName }, 'Plugin attempted to access auditLogs - BLOCKED');
     throw new Error('Access to audit logs is prohibited for security reasons');
   }
@@ -307,21 +326,45 @@ class ScopedPluginDBClient implements ScopedPluginDB {
 
   // Block all other tables
   get node() {
+    captureSystemError({
+      level: 'warn',
+      component: 'PluginSecurity',
+      message: `Plugin ${this.pluginName} attempted to access node - BLOCKED`,
+      metadata: { plugin: this.pluginName, resource: 'node' },
+    }).catch(() => {});
     this.logger.error({ plugin: this.pluginName }, 'Plugin attempted to access node - BLOCKED');
     throw new Error('Access to nodes is prohibited');
   }
 
   get role() {
+    captureSystemError({
+      level: 'warn',
+      component: 'PluginSecurity',
+      message: `Plugin ${this.pluginName} attempted to access role - BLOCKED`,
+      metadata: { plugin: this.pluginName, resource: 'role' },
+    }).catch(() => {});
     this.logger.error({ plugin: this.pluginName }, 'Plugin attempted to access role - BLOCKED');
     throw new Error('Access to roles is prohibited');
   }
 
   get session() {
+    captureSystemError({
+      level: 'warn',
+      component: 'PluginSecurity',
+      message: `Plugin ${this.pluginName} attempted to access session - BLOCKED`,
+      metadata: { plugin: this.pluginName, resource: 'session' },
+    }).catch(() => {});
     this.logger.error({ plugin: this.pluginName }, 'Plugin attempted to access session - BLOCKED');
     throw new Error('Access to sessions is prohibited');
   }
 
   get invite() {
+    captureSystemError({
+      level: 'warn',
+      component: 'PluginSecurity',
+      message: `Plugin ${this.pluginName} attempted to access invite - BLOCKED`,
+      metadata: { plugin: this.pluginName, resource: 'invite' },
+    }).catch(() => {});
     this.logger.error({ plugin: this.pluginName }, 'Plugin attempted to access invite - BLOCKED');
     throw new Error('Access to invites is prohibited');
   }
@@ -332,6 +375,12 @@ class ScopedPluginDBClient implements ScopedPluginDB {
       {},
       {
         get: () => {
+          captureSystemError({
+            level: 'warn',
+            component: 'PluginSecurity',
+            message: `Plugin ${this.pluginName} attempted to access undeclared table - BLOCKED`,
+            metadata: { plugin: this.pluginName, resource: '$' },
+          }).catch(() => {});
           this.logger.error(
             { plugin: this.pluginName },
             'Plugin attempted to access undeclared table - BLOCKED',
@@ -645,6 +694,13 @@ export function createPluginContext(
         try {
           client.socket.send(JSON.stringify(message));
         } catch (error: any) {
+          captureSystemError({
+            level: 'warn',
+            component: 'PluginWebSocket',
+            message: `Failed to send WebSocket message: ${error?.message || String(error)}`,
+            stack: error?.stack,
+            metadata: { plugin: manifest.name, target },
+          }).catch(() => {});
           pluginLogger.error({ error: error.message, target }, 'Failed to send WebSocket message');
         }
       } else {
@@ -664,6 +720,13 @@ export function createPluginContext(
         try {
           await handler();
         } catch (error: any) {
+          captureSystemError({
+            level: 'error',
+            component: 'PluginTaskScheduler',
+            message: `Plugin task execution failed: ${error?.message || String(error)}`,
+            stack: error?.stack,
+            metadata: { plugin: manifest.name, cron: cronExpression, taskId },
+          }).catch(() => {});
           pluginLogger.error({ error: error.message }, 'Task execution failed');
         }
       });

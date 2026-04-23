@@ -82,6 +82,7 @@ export const qk = {
   adminModManager: () => ['admin-mod-manager'] as const,
   adminSecuritySettings: () => ['admin-security-settings'] as const,
   adminAuthLockouts: (params?: Record<string, unknown>) => ['admin-auth-lockouts', params ?? null] as const,
+  adminSystemErrors: (params?: Record<string, unknown>) => ['admin-system-errors', params ?? null] as const,
   adminDatabaseHosts: () => ['admin-database-hosts'] as const,
   adminIpPools: (nodeId: string) => ['ip-pools', nodeId] as const,
   adminNodeAllocations: (nodeId: string) => ['node-allocations', nodeId] as const,

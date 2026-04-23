@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import type pino from 'pino';
 import { getSecuritySettings } from './mailer';
+import { captureSystemError } from './error-logger';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const BATCH_SIZE = 1000;
@@ -39,7 +40,10 @@ export const startAuditRetention = (prisma: PrismaClient, logger: pino.Logger) =
   };
 
   const run = () => {
-    prune().catch((err) => log.error({ err }, 'Failed to prune audit logs'));
+    prune().catch((err) => {
+      captureSystemError({ level: 'error', component: 'AuditRetention', message: 'Failed to prune audit logs', stack: err instanceof Error ? err.stack : undefined }).catch(() => {});
+      log.error({ err }, 'Failed to prune audit logs');
+    });
   };
 
   run();

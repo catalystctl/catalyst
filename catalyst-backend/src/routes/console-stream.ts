@@ -18,6 +18,7 @@ import { prisma } from '../db.js';
 import { auth } from '../auth.js';
 import { fromNodeHeaders } from 'better-auth/node';
 import { hasNodeAccess } from '../lib/permissions.js';
+import { captureSystemError } from '../services/error-logger.js';
 import { ErrorCodes } from '../shared-types.js';
 
 interface ConsoleCommandBody {
@@ -210,6 +211,13 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
         return reply.status(202).send({ success: true, timestamp: new Date().toISOString() });
       } catch (err: any) {
         app.log.error({ err, serverId, userId }, 'Failed to send console command via SSE route');
+        captureSystemError({
+          level: 'error',
+          component: 'ConsoleStream',
+          message: err.message || 'Failed to send console command via SSE route',
+          stack: err.stack,
+          metadata: { serverId, userId },
+        }).catch(() => {});
         reply.status(500).send({ error: err.message || 'Failed to send command' });
       }
     },

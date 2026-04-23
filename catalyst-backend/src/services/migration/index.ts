@@ -10,6 +10,7 @@ import { MigrationStateManager } from "./migration-state";
 import type { MigrationPhase } from "./types";
 import { MIGRATION_PHASES } from "./types";
 import crypto from "node:crypto";
+import { captureSystemError } from "../../services/error-logger";
 
 interface MigrationEvents {
   progress: [data: {
@@ -118,6 +119,7 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
         client.close();
       }
     } catch (err: any) {
+      captureSystemError({ level: 'error', component: 'MigrationService', message: `Migration failed: ${err.message}`, stack: err?.stack, metadata: { jobId } }).catch(() => {});
       this.logger.error({ jobId, error: err.message }, "Migration failed");
       await state.updateJobStatus(jobId, "failed", err.message);
       this.emit("error", { jobId, phase: "validate" as MigrationPhase, error: err.message });
@@ -154,6 +156,7 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
         client.close();
       }
     } catch (err: any) {
+      captureSystemError({ level: 'error', component: 'MigrationService', message: `Migration resume failed: ${err.message}`, stack: err?.stack, metadata: { jobId } }).catch(() => {});
       this.logger.error({ jobId, error: err.message }, "Migration resume failed");
       await state.updateJobStatus(jobId, "failed", err.message);
     } finally {
@@ -306,6 +309,7 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
           phase,
         });
       } catch (err: any) {
+        captureSystemError({ level: 'error', component: 'MigrationService', message: `Phase ${phase} failed: ${err.message}`, stack: err?.stack, metadata: { jobId, phase } }).catch(() => {});
         this.logger.error({ jobId, phase, error: err.message }, `Phase ${phase} failed`);
         this.emit("error", { jobId, phase, error: err.message });
 
@@ -483,6 +487,7 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
           durationMs: Date.now() - start,
         });
         failed++;
+        captureSystemError({ level: 'error', component: 'MigrationService', message: `Failed to import location: ${err.message}`, stack: err?.stack, metadata: { jobId, pteroId: ptero.id } }).catch(() => {});
         this.logger.error({ pteroId: ptero.id, error: err.message }, "Failed to import location");
       }
     }
@@ -645,6 +650,7 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
           });
           completed++;
         } catch (err: any) {
+          captureSystemError({ level: 'error', component: 'MigrationService', message: `Failed to import egg template: ${err.message}`, stack: err?.stack, metadata: { jobId, pteroEggId: pteroEgg.id, nestId: pteroNest.id } }).catch(() => {});
           this.logger.error({ pteroEggId: pteroEgg.id, nestId: pteroNest.id, err: err.message, stack: err.stack }, "Failed to import egg template");
           await state.updateStepStatus(step.id, "failed", {
             error: err.message,
@@ -1036,6 +1042,7 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
           durationMs: Date.now() - start,
         });
         failed++;
+        captureSystemError({ level: 'error', component: 'MigrationService', message: `Failed to import server: ${err.message}`, stack: err?.stack, metadata: { jobId, pteroId: ptero.id } }).catch(() => {});
         this.logger.error({ pteroId: ptero.id, error: err.message }, "Failed to import server");
       }
     }
@@ -1651,6 +1658,7 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
               "Backup created and completed"
             );
           } catch (err: any) {
+            captureSystemError({ level: 'error', component: 'MigrationService', message: `Failed to create backup: ${err.message}`, stack: err?.stack, metadata: { jobId, serverId: server.pteroServerId } }).catch(() => {});
             this.logger.error(
               { serverId: server.pteroServerId, error: err.message },
               "Failed to create backup"
@@ -1766,6 +1774,7 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
           durationMs: Date.now() - start,
         });
         failed++;
+        captureSystemError({ level: 'error', component: 'MigrationService', message: `Failed to migrate server files: ${err.message}`, stack: err?.stack, metadata: { jobId, serverId: server.pteroServerId } }).catch(() => {});
         this.logger.error(
           { serverId: server.pteroServerId, error: err.message },
           "Failed to migrate server files"
