@@ -12,6 +12,7 @@ import { getErrorMessage } from '../../../utils/errors';
 import { notifyError, notifySuccess } from '../../../utils/notify';
 import SectionDivider from './SectionDivider';
 import StatGrid from './StatGrid';
+import ServerStartupVariablesSection from './ServerStartupVariablesSection';
 
 type ConfigEntry = {
   key: string;
@@ -63,12 +64,6 @@ interface Props {
   startupCommandPending: boolean;
   onSaveStartupCommand: () => void;
   onResetStartupCommand: () => void;
-  envVars: { key: string; value: string }[];
-  onEnvVarsChange: (vars: { key: string; value: string }[]) => void;
-  envDirty: boolean;
-  onEnvDirtyChange: (dirty: boolean) => void;
-  envPending: boolean;
-  onSaveEnv: () => void;
 }
 
 export default function ServerConfigurationTab({
@@ -81,12 +76,6 @@ export default function ServerConfigurationTab({
   startupCommandPending,
   onSaveStartupCommand,
   onResetStartupCommand,
-  envVars,
-  onEnvVarsChange,
-  envDirty,
-  onEnvDirtyChange,
-  envPending,
-  onSaveEnv,
 }: Props) {
   // ── Config file state ──
   const [configFiles, setConfigFiles] = useState<ConfigFileState[]>([]);
@@ -472,9 +461,8 @@ export default function ServerConfigurationTab({
               onValueChange(event.target.checked ? 'true' : 'false')
             }
           />
-          <div className="h-5 w-10 rounded-full bg-surface-3 transition peer-checked:bg-primary-500 dark:bg-surface-2">
-            <div className="h-4 w-4 translate-x-0.5 translate-y-0.5 rounded-full bg-card shadow transition peer-checked:translate-x-5" />
-          </div>
+          <div className="h-5 w-10 rounded-full bg-surface-3 transition peer-checked:bg-primary-500 dark:bg-surface-2" />
+          <div className="pointer-events-none absolute left-0.5 h-4 w-4 rounded-full bg-card shadow transition peer-checked:translate-x-5" />
         </label>
       );
     }
@@ -570,169 +558,17 @@ export default function ServerConfigurationTab({
         </section>
       )}
 
-      {/* ── Server Overview & Environment ── */}
-      <section>
-        <SectionDivider title="Server" />
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {/* Server info */}
-          <div className="rounded-xl border border-border/50 bg-card/80 p-5 shadow-sm backdrop-blur-sm hover:shadow-md">
-            <div className="text-sm font-semibold text-foreground">Overview</div>
-            <div className="mt-4 divide-y divide-border">
-              {[
-                ['Template', server.template?.name ?? server.templateId],
-                [
-                  'Image',
-                  server.environment?.TEMPLATE_IMAGE ||
-                    server.template?.defaultImage ||
-                    server.template?.image ||
-                    'n/a',
-                ],
-                ['Memory', `${server.allocatedMemoryMb} MB`],
-                [
-                  'CPU',
-                  `${server.allocatedCpuCores} core${server.allocatedCpuCores === 1 ? '' : 's'}`,
-                ],
-                ['Port', server.primaryPort],
-                ['Network', server.networkMode],
-              ].map(([label, value]) => (
-                <div
-                  key={String(label)}
-                  className="flex items-center justify-between py-2 first:pt-0 last:pb-0"
-                >
-                  <span className="text-xs text-muted-foreground">{label}</span>
-                  <span className="text-xs font-medium text-foreground">
-                    {String(value)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Environment variables */}
-          <div className="rounded-xl border border-border/50 bg-card/80 p-5 shadow-sm backdrop-blur-sm hover:shadow-md">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold text-foreground">
-                Environment
-              </div>
-              {isAdmin && (
-                <button
-                  type="button"
-                  className="rounded-md bg-surface-2 px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-primary-50 hover:text-primary-600 dark:bg-surface-2 dark:hover:bg-primary-500/10 dark:hover:text-primary-400"
-                  onClick={() => {
-                    onEnvVarsChange([
-                      ...envVars,
-                      { key: '', value: '' },
-                    ]);
-                    onEnvDirtyChange(true);
-                  }}
-                  disabled={isSuspended}
-                >
-                  + Add variable
-                </button>
-              )}
-            </div>
-            {isAdmin ? (
-              <div className="mt-4 space-y-2">
-                {envVars.length === 0 && (
-                  <p className="py-4 text-center text-xs text-muted-foreground">
-                    No environment variables. Click "+ Add variable" to begin.
-                  </p>
-                )}
-                {envVars.map((row, idx) => (
-                  <div key={idx} className="group flex items-center gap-2">
-                    <input
-                      className="w-[130px] shrink-0 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] uppercase text-foreground transition-colors focus:border-primary-500 focus:bg-card focus:outline-none dark:focus:border-primary-400"
-                      value={row.key}
-                      onChange={(e) => {
-                        const next = [...envVars];
-                        next[idx] = { ...next[idx], key: e.target.value };
-                        onEnvVarsChange(next);
-                        onEnvDirtyChange(true);
-                      }}
-                      placeholder="KEY"
-                      disabled={isSuspended}
-                    />
-                    <span className="text-[10px] text-foreground">=</span>
-                    <input
-                      className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] text-foreground transition-colors focus:border-primary-500 focus:bg-card focus:outline-none dark:focus:border-primary-400"
-                      value={row.value}
-                      onChange={(e) => {
-                        const next = [...envVars];
-                        next[idx] = { ...next[idx], value: e.target.value };
-                        onEnvVarsChange(next);
-                        onEnvDirtyChange(true);
-                      }}
-                      placeholder="value"
-                      disabled={isSuspended}
-                    />
-                    <button
-                      type="button"
-                      className="shrink-0 rounded-md p-1 text-foreground opacity-0 transition-all group-hover:opacity-100 hover:text-danger dark:hover:text-danger"
-                      onClick={() => {
-                        onEnvVarsChange(
-                          envVars.filter((_, i) => i !== idx),
-                        );
-                        onEnvDirtyChange(true);
-                      }}
-                      disabled={isSuspended}
-                      title="Remove"
-                    >
-                      <svg
-                        className="h-3.5 w-3.5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-                {envDirty && (
-                  <div className="pt-2">
-                    <button
-                      type="button"
-                      className="rounded-lg bg-primary-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-primary-500 disabled:opacity-50"
-                      onClick={onSaveEnv}
-                      disabled={isSuspended || envPending}
-                    >
-                      {envPending ? 'Saving…' : 'Save environment'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="mt-4 divide-y divide-border">
-                {server.environment &&
-                Object.keys(server.environment).length > 0 ? (
-                  Object.entries(server.environment).map(([key, value]) => (
-                    <div
-                      key={key}
-                      className="flex items-center justify-between py-2 first:pt-0 last:pb-0"
-                    >
-                      <span className="font-mono text-[11px] uppercase text-muted-foreground">
-                        {key}
-                      </span>
-                      <span className="text-xs font-medium text-foreground">
-                        {String(value)}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <p className="py-4 text-center text-xs text-muted-foreground">
-                    No environment variables set.
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
+      {/* ── Startup Variables ── */}
+      {serverId && (
+        <section>
+          <SectionDivider title="Startup Variables" />
+          <ServerStartupVariablesSection
+            serverId={serverId}
+            isSuspended={isSuspended}
+            canEdit={isAdmin}
+          />
+        </section>
+      )}
 
       {/* ── Config Files ── */}
       <section>

@@ -1,12 +1,39 @@
 # Screenshot Crawl Test
 
-Automated Playwright test that captures screenshots of **every page** in the Catalyst frontend at 1080p.
+Automated Playwright test that **dynamically discovers** and captures screenshots of **every page, tab, and modal** in the Catalyst frontend at 1080p.
 
-## How It Works
+## How It Works (Fully Dynamic)
 
-The route map at the top of `screenshot-crawl.spec.ts` is the **single source of truth**. When you add a new `<Route>` in `App.tsx`, add a corresponding entry to the `STATIC_ROUTES` array (or `PUBLIC_ROUTES` for unauthenticated pages). The crawl logic handles navigation, error recovery, and screenshot naming automatically.
+### 1. Route Discovery (Zero Manual Maintenance)
+The crawler **parses your source code at test time** to find all routes:
+- **`src/App.tsx`** — extracts every `<Route path="...">`
+- **`src/components/layout/Sidebar.tsx`** — extracts every `to: '/...'` navigation link
 
-Entity pages (servers, nodes, templates) are **discovered at runtime** — the test resolves the first entity ID from the list page, then walks through every tab/sub-page. No hardcoding of entity IDs.
+When you add a new page, it is **automatically discovered** — no edits to this test needed.
+
+### 2. Tab Discovery (Detail Pages)
+On every page, the crawler scans the DOM for `[role="tab"]` elements:
+- **Link-based tabs** (e.g., `/servers/123/files`) → navigates to each URL and screenshots it
+- **Button-based tabs** (React state tabs) → clicks each tab, screenshots, then reverts
+
+When you add a new tab to a detail page, it is **automatically screenshotted**.
+
+### 3. Modal Discovery (Dialogs)
+On every page, the crawler finds buttons that look like modal triggers (text containing "Create", "New", "Edit", "Configure", etc.), clicks them, and screenshots any dialog that appears:
+- Supports Radix Dialog (`[role="dialog"]`)
+- Supports Radix AlertDialog (`[role="alertdialog"]`)
+- Supports custom `ModalPortal` components
+- Automatically closes modals after screenshot (Escape → Cancel → Close button)
+- Skips destructive actions (Delete, Remove, Destroy) to avoid unwanted side effects
+- Detects navigation vs. modal opening (clicks that change the URL are treated as navigation, not modals)
+
+When you add a new modal, it is **automatically discovered and screenshotted**.
+
+### 4. Entity Detail Pages
+The crawler visits list pages (`/servers`, `/admin/nodes`, `/admin/templates`), discovers the first entity ID dynamically, then adds the detail page to the crawl queue. All tabs on that detail page are also discovered automatically.
+
+### 5. Link Following
+After screenshotting each page, the crawler collects all internal `<a href="/...">` links and queues any unseen ones. This catches routes that might not be in App.tsx or Sidebar.tsx (e.g., plugin routes).
 
 ## Running
 
@@ -23,33 +50,40 @@ SKIP_WEB_SERVER=1 bun run test:screenshots
 
 ## Output
 
-Screenshots land in `screenshots/` as sequentially numbered PNGs:
+Screenshots are saved to `docs/screenshots/` organized by category:
 
 ```
-screenshots/
-  001-login.png
-  002-register.png
-  003-forgot-password.png
-  004-dashboard.png
-  005-profile.png
-  006-servers.png
-  ...
-  020-server-console.png
-  021-server-files.png
-  022-server-sftp.png
-  ...
+docs/screenshots/
+  auth/
+    login.png
+    register.png
+    forgot-password.png
+    ...
+  user/
+    dashboard.png
+    servers.png
+    server-myserver-tab-console.png
+    server-myserver-tab-files.png
+    ...
+    modals/
+      server-myserver-modal-create-backup.png
+      ...
+  admin/
+    admin-dashboard.png
+    admin-users.png
+    node-mynode-tab-allocations.png
+    ...
+    modals/
+      admin-users-modal-invite-user.png
+      ...
 ```
 
-## Adding a New Page
+## Architecture
 
-1. Add the `<Route>` in `App.tsx`.
-2. Add a matching entry to `STATIC_ROUTES` (or `PUBLIC_ROUTES`) in `screenshot-crawl.spec.ts`:
-
-```ts
-{ path: '/my-new-page', label: 'my-new-page' },
-```
-
-3. Re-run the test. Done.
+Three Playwright workers run in parallel:
+1. **Auth worker** — no login needed, screenshots public pages
+2. **User worker** — logs in once, crawls all user routes + tabs + modals + entities
+3. **Admin worker** — logs in once, crawls all admin routes + tabs + modals + entities
 
 ## Prerequisites
 
@@ -65,3 +99,4 @@ screenshots/
 | "No servers/nodes/templates found" | Seed the DB with sample data before running |
 | Blank screenshots | Increase `waitForTimeout` or check that the page has content |
 | Timeout errors | Run with `SKIP_WEB_SERVER=1` if you manage the dev server yourself |
+| Missing modal screenshots | Check that the modal trigger button text matches known keywords (see `discoverModalTriggers`) |

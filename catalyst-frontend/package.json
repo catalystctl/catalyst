@@ -15,7 +15,7 @@
     "format": "prettier --write .",
     "test": "vitest",
     "test:e2e": "playwright test",
-    "test:screenshots": "playwright test screenshot-crawl && node ../docs/screenshots-site/build.mjs",
+    "test:screenshots": "playwright test screenshot-crawl",
     "test:screenshots:headed": "playwright test screenshot-crawl --headed",
     "build:analyze": "vite build --mode analyze"
   },

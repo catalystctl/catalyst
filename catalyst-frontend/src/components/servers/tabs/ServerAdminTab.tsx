@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { qk } from '../../../lib/queryKeys';
 import {
   AlertTriangle,
@@ -290,6 +290,45 @@ export default function ServerAdminTab({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
+  // ── Environment variables state ──
+  const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>([]);
+  const [envDirty, setEnvDirty] = useState(false);
+
+  useEffect(() => {
+    if (!server?.environment) {
+      setEnvVars([]);
+      return;
+    }
+    const entries = Object.entries(server.environment).map(([key, value]) => ({
+      key,
+      value: String(value),
+    }));
+    setEnvVars(entries.length ? entries : [{ key: '', value: '' }]);
+    setEnvDirty(false);
+  }, [server?.id, server?.environment]);
+
+  const envMutation = useMutation({
+    mutationFn: () => {
+      const env: Record<string, string> = {};
+      for (const row of envVars) {
+        const k = row.key.trim();
+        if (k) env[k] = row.value;
+      }
+      return serversApi.update(serverId, { environment: env });
+    },
+    onSuccess: () => {
+      notifySuccess('Environment variables updated');
+      setEnvDirty(false);
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+    },
+    onError: (error: any) =>
+      notifyError(
+        error?.response?.data?.error ||
+          error?.message ||
+          'Failed to update environment',
+      ),
+  });
+
   // ── Derived ──
   const templateImages = server.template?.images ?? [];
   const currentImageVariant =
@@ -434,9 +473,131 @@ export default function ServerAdminTab({
         </div>
       </ServerTabCard>
 
-      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* Environment Variables */}
+      <ServerTabCard>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Database className="h-4 w-4 text-primary" />
+            <span className="text-sm font-semibold text-foreground">
+              Environment Variables
+            </span>
+          </div>
+          {canAdminWrite && (
+            <button
+              type="button"
+              className="rounded-md bg-surface-2 px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-primary-50 hover:text-primary-600 dark:bg-surface-2 dark:hover:bg-primary-500/10 dark:hover:text-primary-400"
+              onClick={() => {
+                setEnvVars([...envVars, { key: '', value: '' }]);
+                setEnvDirty(true);
+              }}
+              disabled={isSuspended}
+            >
+              + Add variable
+            </button>
+          )}
+        </div>
+        {canAdminWrite ? (
+          <div className="mt-4 space-y-2">
+            {envVars.length === 0 && (
+              <p className="py-4 text-center text-xs text-muted-foreground">
+                No environment variables. Click "+ Add variable" to begin.
+              </p>
+            )}
+            {envVars.map((row, idx) => (
+              <div key={idx} className="group flex items-center gap-2">
+                <input
+                  className="w-[130px] shrink-0 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] uppercase text-foreground transition-colors focus:border-primary-500 focus:bg-card focus:outline-none dark:focus:border-primary-400"
+                  value={row.key}
+                  onChange={(e) => {
+                    const next = [...envVars];
+                    next[idx] = { ...next[idx], key: e.target.value };
+                    setEnvVars(next);
+                    setEnvDirty(true);
+                  }}
+                  placeholder="KEY"
+                  disabled={isSuspended}
+                />
+                <span className="text-[10px] text-foreground">=</span>
+                <input
+                  className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] text-foreground transition-colors focus:border-primary-500 focus:bg-card focus:outline-none dark:focus:border-primary-400"
+                  value={row.value}
+                  onChange={(e) => {
+                    const next = [...envVars];
+                    next[idx] = { ...next[idx], value: e.target.value };
+                    setEnvVars(next);
+                    setEnvDirty(true);
+                  }}
+                  placeholder="value"
+                  disabled={isSuspended}
+                />
+                <button
+                  type="button"
+                  className="shrink-0 rounded-md p-1 text-foreground opacity-0 transition-all group-hover:opacity-100 hover:text-danger dark:hover:text-danger"
+                  onClick={() => {
+                    setEnvVars(envVars.filter((_, i) => i !== idx));
+                    setEnvDirty(true);
+                  }}
+                  disabled={isSuspended}
+                  title="Remove"
+                >
+                  <svg
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+            ))}
+            {envDirty && (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  className="rounded-lg bg-primary-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-primary-500 disabled:opacity-50"
+                  onClick={() => envMutation.mutate()}
+                  disabled={isSuspended || envMutation.isPending}
+                >
+                  {envMutation.isPending ? 'Saving…' : 'Save environment'}
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="mt-4 divide-y divide-border">
+            {server.environment &&
+            Object.keys(server.environment).length > 0 ? (
+              Object.entries(server.environment).map(([key, value]) => (
+                <div
+                  key={key}
+                  className="flex items-center justify-between py-2 first:pt-0 last:pb-0"
+                >
+                  <span className="font-mono text-[11px] uppercase text-muted-foreground">
+                    {key}
+                  </span>
+                  <span className="text-xs font-medium text-foreground">
+                    {String(value)}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="py-4 text-center text-xs text-muted-foreground">
+                No environment variables set.
+              </p>
+            )}
+          </div>
+        )}
+      </ServerTabCard>
+
+      {/* ═════════════════════════════════════════════════════════════════════════════════════════════════════════════════ */}
       {/* DOCKER & CONTAINER                                                 */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* ════════════════════════════════════════════════════════════════════════════════════════════════════════════════ */}
       <SectionDivider title="Docker & Container" />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

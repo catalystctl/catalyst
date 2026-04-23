@@ -24,10 +24,13 @@
 		"db:push": "bun --filter=catalyst-backend run db:push",
 		"db:migrate": "bun --filter=catalyst-backend run db:migrate",
 		"db:seed": "bun --filter=catalyst-backend run db:seed",
+		"db:seed:admin": "bun --filter=catalyst-backend run db:seed:admin",
 		"db:studio": "bun --filter=catalyst-backend run db:studio",
 		"lint": "bun --filter='*' run lint",
 		"test": "bun --filter='*' run test",
 		"test:e2e": "bun --filter=catalyst-frontend run test:e2e",
+		"test:screenshots": "bun --filter=catalyst-frontend run test:screenshots",
+		"test:screenshots:headed": "bun --filter=catalyst-frontend run test:screenshots:headed",
 		"clean": "rm -rf catalyst-backend/dist catalyst-backend/node_modules catalyst-frontend/dist catalyst-frontend/node_modules catalyst-shared/node_modules node_modules"
 	},
 	"devDependencies": {

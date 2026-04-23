@@ -25,6 +25,7 @@ import {
   Settings,
   Shield,
   FolderSync,
+  Activity,
 } from 'lucide-react';
 import { useServer } from '../../hooks/useServer';
 import { useServerMetrics } from '../../hooks/useServerMetrics';
@@ -69,6 +70,7 @@ const ServerUsersTab = lazy(() => import('../../components/servers/tabs/ServerUs
 const ServerConfigurationTab = lazy(() => import('../../components/servers/tabs/ServerConfigurationTab'));
 const ServerModManagerTab = lazy(() => import('../../components/servers/tabs/ServerModManagerTab'));
 const ServerPluginManagerTab = lazy(() => import('../../components/servers/tabs/ServerPluginManagerTab'));
+const ServerActivityLogTab = lazy(() => import('../../components/servers/tabs/ServerActivityLogTab'));
 const AlertsPage = lazy(() => import('../alerts/AlertsPage'));
 
 // ── Tab labels & icons ──
@@ -81,6 +83,7 @@ const tabLabels = {
   databases: 'Databases',
   metrics: 'Metrics',
   alerts: 'Alerts',
+  activity: 'Activity',
   modManager: 'Mod Manager',
   pluginManager: 'Plugin Manager',
   configuration: 'Configuration',
@@ -101,6 +104,7 @@ const tabIcons: Record<
   databases: Database,
   metrics: BarChart3,
   alerts: Bell,
+  activity: Activity,
   modManager: Package,
   pluginManager: Puzzle,
   configuration: Wrench,
@@ -284,8 +288,6 @@ function ServerDetailsPage() {
 
   // ── State: Configuration ──
   const [startupCommand, setStartupCommand] = useState('');
-  const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>([]);
-  const [envDirty, setEnvDirty] = useState(false);
 
   // ── State: Users ──
   const [inviteEmail, setInviteEmail] = useState('');
@@ -326,16 +328,6 @@ function ServerDetailsPage() {
       server.startupCommand ?? server.template?.startup ?? '',
     );
   }, [server?.id, server?.startupCommand, server?.template?.startup]);
-
-  useEffect(() => {
-    if (!server?.environment) return;
-    const entries = Object.entries(
-      server.environment as Record<string, string>,
-    ).map(([key, value]) => ({ key, value: String(value) }));
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing form from server data
-    setEnvVars(entries.length ? entries : [{ key: '', value: '' }]);
-    setEnvDirty(false);
-  }, [server?.id, server?.environment]);
 
   useEffect(() => {
     if (!permissionsData?.data) return;
@@ -671,29 +663,6 @@ function ServerDetailsPage() {
       ),
   });
 
-  const envMutation = useMutation({
-    mutationFn: () => {
-      if (!serverId) throw new Error('Missing server id');
-      const env: Record<string, string> = {};
-      for (const row of envVars) {
-        const k = row.key.trim();
-        if (k) env[k] = row.value;
-      }
-      return serversApi.update(serverId, { environment: env });
-    },
-    onSuccess: () => {
-      notifySuccess('Environment variables updated');
-      setEnvDirty(false);
-      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-    },
-    onError: (error: any) =>
-      notifyError(
-        error?.response?.data?.error ||
-          error?.message ||
-          'Failed to update environment',
-      ),
-  });
-
   const createInviteMutation = useMutation({
     mutationFn: () => {
       if (!serverId) throw new Error('Missing server id');
@@ -797,6 +766,7 @@ function ServerDetailsPage() {
       if (key === 'schedules') return hasServerPerm('server.schedule');
       if (key === 'modManager') return Boolean(modManagerConfig);
       if (key === 'pluginManager') return Boolean(pluginManagerConfig);
+      if (key === 'activity') return hasServerPerm('server.read');
       return true;
     });
   }, [
@@ -1044,6 +1014,10 @@ function ServerDetailsPage() {
             </div>
           )}
 
+          {activeTab === 'activity' && server && (
+            <ServerActivityLogTab serverId={server.id} />
+          )}
+
           {activeTab === 'modManager' && (
             <ServerModManagerTab
               serverId={serverId}
@@ -1102,12 +1076,6 @@ function ServerDetailsPage() {
               startupCommandPending={startupCommandMutation.isPending}
               onSaveStartupCommand={() => startupCommandMutation.mutate()}
               onResetStartupCommand={handleResetStartupCommand}
-              envVars={envVars}
-              onEnvVarsChange={setEnvVars}
-              envDirty={envDirty}
-              onEnvDirtyChange={setEnvDirty}
-              envPending={envMutation.isPending}
-              onSaveEnv={() => envMutation.mutate()}
             />
           )}
 

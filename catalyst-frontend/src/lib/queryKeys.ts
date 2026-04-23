@@ -96,6 +96,10 @@ export const qk = {
   profileSsoAccounts: () => ['profile-sso-accounts'] as const,
   profileAuditLog: (limit: number, offset: number) => ['profile-audit-log', limit, offset] as const,
 
+  // ── Server Activity / Variables ─────────────────────────────────────
+  serverActivity: (id: string, params?: Record<string, unknown>) => ['server-activity', id, params ?? null] as const,
+  serverVariables: (id: string) => ['server-variables', id] as const,
+
   // ── Migration ────────────────────────────────────────────────────────
   migrationJobs: () => ['migration-jobs'] as const,
   migrationJob: (id: string) => ['migration-job', id] as const,

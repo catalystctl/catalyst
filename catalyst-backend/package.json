@@ -17,6 +17,7 @@
     "db:studio": "prisma studio --config prisma/prisma.config.ts",
     "db:generate": "prisma generate --config prisma/prisma.config.ts",
     "db:seed": "bun prisma/seed.ts",
+    "db:seed:admin": "bun prisma/seed-admin.ts",
     "bulk-servers": "bun scripts/bulk-servers.ts",
     "lint": "eslint src --ext .ts",
     "test": "vitest run",

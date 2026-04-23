@@ -683,6 +683,7 @@ model AuditLog {
   timestamp  DateTime @default(now())
 
   @@index([userId, timestamp])
+  @@index([resourceId, timestamp])
   @@index([timestamp])
 }
 

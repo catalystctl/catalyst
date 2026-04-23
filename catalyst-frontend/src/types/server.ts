@@ -269,3 +269,40 @@ export interface ServerPermissionsResponse {
     full: string[];
   };
 }
+
+export interface ServerActivityLogEntry {
+  id: string;
+  userId: string | null;
+  action: string;
+  resource: string;
+  resourceId: string | null;
+  details: Record<string, unknown> | null;
+  timestamp: string;
+  user?: {
+    id: string;
+    username: string | null;
+    email: string;
+    name: string | null;
+  } | null;
+}
+
+export interface ServerActivityLogResponse {
+  success: boolean;
+  data: ServerActivityLogEntry[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface ServerStartupVariable {
+  name: string;
+  description: string;
+  default: string;
+  required: boolean;
+  input: 'text' | 'number' | 'select' | 'checkbox';
+  rules: string[];
+  value: string;
+}

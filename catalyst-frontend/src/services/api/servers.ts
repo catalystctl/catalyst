@@ -281,4 +281,31 @@ export const serversApi = {
     const data = await apiClient.get<ApiResponse<any>>(`/api/servers/${id}/backup-settings`);
     return data.data;
   },
+
+  activity: async (id: string, params?: { page?: number; limit?: number }) => {
+    const data = await apiClient.get<{
+      success: boolean;
+      data: import('../../types/server').ServerActivityLogEntry[];
+      pagination: import('../../types/server').ActivityPagination;
+    }>(
+      `/api/servers/${id}/activity`,
+      { params },
+    );
+    return data;
+  },
+
+  getVariables: async (id: string) => {
+    const data = await apiClient.get<ApiResponse<import('../../types/server').ServerStartupVariable[]>>(
+      `/api/servers/${id}/variables`,
+    );
+    return data.data || [];
+  },
+
+  updateVariables: async (id: string, payload: Record<string, string>) => {
+    const data = await apiClient.patch<ApiResponse<Record<string, string>>>(
+      `/api/servers/${id}/variables`,
+      payload,
+    );
+    return data;
+  },
 };
