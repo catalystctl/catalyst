@@ -68,6 +68,13 @@ export default [
     },
   },
   {
+    files: ['**/*.test.ts'],
+    rules: {
+      'no-console': 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
+    },
+  },
+  {
     ignores: [
       'dist/**',
       'node_modules/**',

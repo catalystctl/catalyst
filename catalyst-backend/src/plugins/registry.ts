@@ -112,7 +112,7 @@ export class PluginRegistry extends EventEmitter {
     if (!this.exposedApis.has(pluginName)) {
       this.exposedApis.set(pluginName, new Map());
     }
-    this.exposedApis.get(pluginName)!.set(apiName, handler);
+    this.exposedApis.get(pluginName)?.set(apiName, handler);
     this.emit('plugin:api-exposed', pluginName, apiName);
   }
 

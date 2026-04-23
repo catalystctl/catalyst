@@ -64,9 +64,9 @@ export const SFTP_TTL_OPTIONS = [
  * Resolve a TTL value, clamping to allowed range.
  */
 export function resolveSftpTtl(ttlMs?: number | null): number {
-  const val = typeof ttlMs === 'number' ? ttlMs : undefined;
-  if (!Number.isFinite(val) || val! <= 0) return DEFAULT_TTL_MS;
-  return Math.min(MAX_TTL_MS, Math.max(MIN_TTL_MS, val!));
+  if (ttlMs === null || ttlMs === undefined) return DEFAULT_TTL_MS;
+  if (!Number.isFinite(ttlMs) || ttlMs <= 0) return DEFAULT_TTL_MS;
+  return Math.min(MAX_TTL_MS, Math.max(MIN_TTL_MS, ttlMs));
 }
 
 /**

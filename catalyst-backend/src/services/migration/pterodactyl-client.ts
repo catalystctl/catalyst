@@ -448,7 +448,7 @@ export class PterodactylClient extends EventEmitter<ClientEvents> {
       const port = parseInt(this.baseUrl.port || (isHttps ? "443" : "80"), 10);
       const host = this.baseUrl.hostname;
       const basePath = this.baseUrl.pathname.replace(/\/+$/, "");
-      const fullPath = `${basePath}${opts.path.startsWith("/") ? opts.path : "/" + opts.path}`;
+      const fullPath = `${basePath}${opts.path.startsWith("/") ? opts.path : `/${  opts.path}`}`;
       const timeoutMs = opts.timeoutMs ?? 30000;
 
       const reqHeaders: Record<string, string> = {

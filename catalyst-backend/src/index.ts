@@ -603,7 +603,7 @@ async function bootstrap() {
 				];
 				if (
 					customAuthPaths.some(
-						(p) => request.url === p || request.url.startsWith(p + "/"),
+						(p) => request.url === p || request.url.startsWith(`${p  }/`),
 					)
 				) {
 					return reply.status(404).send({ error: "Not found" });

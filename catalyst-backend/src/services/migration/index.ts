@@ -852,7 +852,7 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
 
         // Resolve target Catalyst node
         // Per-server scope uses serverNodeMap; full/node scope uses nodeMap
-        let catalystNodeId = mapper.serverNodeMap.get(ptero.id)
+        const catalystNodeId = mapper.serverNodeMap.get(ptero.id)
           || mapper.nodeMap.get(ptero.node);
         if (!catalystNodeId) {
           throw new Error(`No Catalyst node mapped for server ${ptero.id} (node ${ptero.node})`);

@@ -810,7 +810,7 @@ export async function serverRoutes(app: FastifyInstance) {
       return "432";
     }
     if (curseforgeGameIdCache.has(gameSlug)) {
-      return curseforgeGameIdCache.get(gameSlug)!;
+      return curseforgeGameIdCache.get(gameSlug) as string;
     }
 
     const endpoint = providerConfig.endpoints.games || "/v1/games";
@@ -3456,7 +3456,7 @@ export async function serverRoutes(app: FastifyInstance) {
         await prisma.installedMod.upsert({
           where: { serverId_filename: { serverId, filename } },
           update: {
-            provider: provider!,
+            provider: provider as string,
             projectId: String(projectId),
             versionId: String(versionId),
             projectName: projectName || undefined,
@@ -3468,7 +3468,7 @@ export async function serverRoutes(app: FastifyInstance) {
           create: {
             serverId,
             filename,
-            provider: provider!,
+            provider: provider as string,
             projectId: String(projectId),
             versionId: String(versionId),
             projectName: projectName || null,
@@ -3795,7 +3795,7 @@ export async function serverRoutes(app: FastifyInstance) {
             const matching = resolvedGameVer
               ? versions.filter((v: any) =>
                   Array.isArray(v.game_versions) &&
-                  v.game_versions.some((gv: string) => gv === resolvedGameVer || gv.startsWith(resolvedGameVer + "."))
+                  v.game_versions.some((gv: string) => gv === resolvedGameVer || gv.startsWith(`${resolvedGameVer  }.`))
                 )
               : versions;
             // Prefer release versions, then most recent by date
@@ -3909,7 +3909,7 @@ export async function serverRoutes(app: FastifyInstance) {
             const matching = resolvedGameVer
               ? versions.filter((v: any) =>
                   Array.isArray(v.game_versions) &&
-                  v.game_versions.some((gv: string) => gv === resolvedGameVer || gv.startsWith(resolvedGameVer + "."))
+                  v.game_versions.some((gv: string) => gv === resolvedGameVer || gv.startsWith(`${resolvedGameVer  }.`))
                 )
               : versions;
             // Prefer release versions, then most recent by date
@@ -7851,7 +7851,7 @@ export async function serverRoutes(app: FastifyInstance) {
       // Fire webhook for server suspension
       const webhookService: any = (app as any).webhookService;
       if (webhookService) {
-        webhookService.serverSuspended(serverId, server!.name, updated.suspensionReason, userId).catch(() => {});
+        webhookService.serverSuspended(serverId, server.name, updated.suspensionReason, userId).catch(() => {});
       }
 
       const wsGatewayServerSuspended = (app as any).wsGateway;
@@ -7859,7 +7859,7 @@ export async function serverRoutes(app: FastifyInstance) {
         wsGatewayServerSuspended.pushToAdminSubscribers('server_suspended', {
           type: 'server_suspended',
           serverId,
-          serverName: server!.name,
+          serverName: server.name,
           suspendedBy: userId,
           timestamp: new Date().toISOString(),
         });
@@ -7868,7 +7868,7 @@ export async function serverRoutes(app: FastifyInstance) {
         wsGatewayServerSuspended.pushToGlobalSubscribers('server_suspended', {
           type: 'server_suspended',
           serverId,
-          serverName: server!.name,
+          serverName: server.name,
           suspendedBy: userId,
           timestamp: new Date().toISOString(),
         });
@@ -7948,7 +7948,7 @@ export async function serverRoutes(app: FastifyInstance) {
       // Fire webhook for server unsuspension
       const webhookService: any = (app as any).webhookService;
       if (webhookService) {
-        webhookService.serverUnsuspended(serverId, server!.name, userId).catch(() => {});
+        webhookService.serverUnsuspended(serverId, server.name, userId).catch(() => {});
       }
 
       const wsGatewayServerUnsuspended = (app as any).wsGateway;
@@ -7956,7 +7956,7 @@ export async function serverRoutes(app: FastifyInstance) {
         wsGatewayServerUnsuspended.pushToAdminSubscribers('server_unsuspended', {
           type: 'server_unsuspended',
           serverId,
-          serverName: server!.name,
+          serverName: server.name,
           unsuspendedBy: userId,
           timestamp: new Date().toISOString(),
         });
@@ -7965,7 +7965,7 @@ export async function serverRoutes(app: FastifyInstance) {
         wsGatewayServerUnsuspended.pushToGlobalSubscribers('server_unsuspended', {
           type: 'server_unsuspended',
           serverId,
-          serverName: server!.name,
+          serverName: server.name,
           unsuspendedBy: userId,
           timestamp: new Date().toISOString(),
         });

@@ -126,7 +126,7 @@ export async function createApiKey(params: CreateApiKeyParams): Promise<ApiKeyRe
     data: {
       name: name || null,
       key: hashedKey,
-      start: fullKey.slice(0, prefix.length + 3) + "...",
+      start: `${fullKey.slice(0, prefix.length + 3)  }...`,
       prefix,
       userId,
       enabled: true,

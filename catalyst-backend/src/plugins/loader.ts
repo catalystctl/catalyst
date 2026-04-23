@@ -205,7 +205,7 @@ export class PluginLoader {
       }
     }
 
-    return sorted.map((name) => nameToEntry.get(name)!).filter(Boolean);
+    return sorted.map((name) => nameToEntry.get(name) as typeof entries[number]).filter(Boolean);
   }
 
   /**

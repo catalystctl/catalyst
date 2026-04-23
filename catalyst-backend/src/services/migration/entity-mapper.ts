@@ -333,7 +333,7 @@ export class EntityMapper {
 
     // Resolve primary allocation from the allocation map
     let primaryPort = 25565;
-    let primaryIp: string | null = catalystNodeIp || null;
+    const primaryIp: string | null = catalystNodeIp || null;
     const allocationId = typeof ptero.allocation === 'number'
       ? ptero.allocation
       : (ptero.allocation as any)?.id;

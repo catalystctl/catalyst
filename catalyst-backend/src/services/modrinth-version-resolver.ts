@@ -72,7 +72,7 @@ export async function resolveModrinthGameVersion(
   if (exact) return exact.version;
 
   // 3. Partial prefix match — find the latest release starting with the input
-  const matching = allVersions.filter((v) => v.version.toLowerCase().startsWith(trimmed + ".") || v.version.toLowerCase() === trimmed);
+  const matching = allVersions.filter((v) => v.version.toLowerCase().startsWith(`${trimmed  }.`) || v.version.toLowerCase() === trimmed);
   if (matching.length) {
     // Prefer releases, sorted by date descending
     const releases = matching

@@ -235,7 +235,7 @@ export class FileTunnelService {
     this.pending.delete(requestId);
     const uploadEntry = this.uploads.get(requestId);
     if (uploadEntry) {
-      try { fs.unlinkSync(uploadEntry.filePath); } catch {}
+      try { fs.unlinkSync(uploadEntry.filePath); } catch { /* no-op */ }
       this.uploads.delete(requestId);
     }
     pending.resolve(response);
@@ -293,7 +293,7 @@ export class FileTunnelService {
     // Clean expired uploads
     for (const [id, entry] of this.uploads) {
       if (now - entry.createdAt > UPLOAD_TTL_MS) {
-        try { fs.unlinkSync(entry.filePath); } catch {}
+        try { fs.unlinkSync(entry.filePath); } catch { /* no-op */ }
         this.uploads.delete(id);
       }
     }
@@ -304,7 +304,7 @@ export class FileTunnelService {
         this.pending.delete(id);
         const uploadEntry = this.uploads.get(id);
         if (uploadEntry) {
-          try { fs.unlinkSync(uploadEntry.filePath); } catch {}
+          try { fs.unlinkSync(uploadEntry.filePath); } catch { /* no-op */ }
           this.uploads.delete(id);
         }
       }
@@ -330,10 +330,10 @@ export class FileTunnelService {
     this.queues.clear();
     // Clean up temp files
     for (const [, entry] of this.uploads) {
-      try { fs.unlinkSync(entry.filePath); } catch {}
+      try { fs.unlinkSync(entry.filePath); } catch { /* no-op */ }
     }
     this.uploads.clear();
     // Attempt to remove temp directory
-    try { fs.rmSync(this.tempDir, { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(this.tempDir, { recursive: true, force: true }); } catch { /* no-op */ }
   }
 }

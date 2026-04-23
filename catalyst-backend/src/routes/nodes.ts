@@ -1473,7 +1473,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 					type: 'node_unassigned',
 					nodeId,
 					targetType: assignment.userId ? 'user' : 'role',
-					targetId: assignment.userId || assignment.roleId!,
+					targetId: assignment.userId || assignment.roleId || '',
 					assignmentId,
 					removedBy: request.user.userId,
 					timestamp: new Date().toISOString(),

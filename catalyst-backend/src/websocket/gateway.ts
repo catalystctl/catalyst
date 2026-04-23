@@ -1997,7 +1997,7 @@ export class WebSocketGateway {
   async routeToClients(serverId: string, message: any): Promise<void> {
     // Use cached server access list
     const now = Date.now();
-    let cached = this.serverAccessCache.get(serverId);
+    const cached = this.serverAccessCache.get(serverId);
     let allowedUsers: Set<string>;
 
     if (cached && cached.expiresAt > now) {
@@ -2206,7 +2206,10 @@ export class WebSocketGateway {
       this.sseSubscribers.set(serverId, new Map());
     }
     const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    this.sseSubscribers.get(serverId)!.set(subscriberId, { push, lastActivity: Date.now() });
+    const sseSubs = this.sseSubscribers.get(serverId);
+    if (sseSubs) {
+      sseSubs.set(subscriberId, { push, lastActivity: Date.now() });
+    }
     this.logger.debug({ serverId, subscriberId }, 'SSE subscriber added');
 
     return () => {
@@ -2245,7 +2248,10 @@ export class WebSocketGateway {
       this.sseEventSubscribers.set(serverId, new Map());
     }
     const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    this.sseEventSubscribers.get(serverId)!.set(subscriberId, { eventTypes, push, lastActivity: Date.now() });
+    const sseEventSubs = this.sseEventSubscribers.get(serverId);
+    if (sseEventSubs) {
+      sseEventSubs.set(subscriberId, { eventTypes, push, lastActivity: Date.now() });
+    }
     this.logger.debug({ serverId, subscriberId, eventTypes }, 'SSE event subscriber added');
 
     return () => {

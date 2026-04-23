@@ -804,7 +804,7 @@ export async function roleRoutes(app: FastifyInstance) {
         let roleName: string | null = null;
         if (roleWildcard) {
           const role = await prisma.role.findUnique({
-            where: { id: roleWildcard.roleId! },
+            where: { id: roleWildcard.roleId || '' },
             select: { name: true },
           });
           roleName = role?.name ?? null;
