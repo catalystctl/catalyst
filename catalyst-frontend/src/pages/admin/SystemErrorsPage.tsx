@@ -9,6 +9,8 @@ import {
   X,
   CheckCircle2,
   Radio,
+  Copy,
+  Check,
 } from 'lucide-react';
 import EmptyState from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/input';
@@ -71,6 +73,68 @@ function levelLabel(level: string) {
   return level;
 }
 
+// ── Copy Helper ──
+function formatErrorForCopy(error: SystemError): string {
+  const lines: string[] = [];
+  lines.push(`## System Error Report`);
+  lines.push(`**ID:** ${error.id}`);
+  lines.push(`**Level:** ${levelLabel(error.level)}`);
+  lines.push(`**Component:** ${error.component}`);
+  lines.push(`**Status:** ${error.resolved ? 'Resolved' : 'Unresolved'}`);
+  lines.push(`**Timestamp:** ${new Date(error.createdAt).toLocaleString()}`);
+  if (error.requestId) lines.push(`**Request ID:** ${error.requestId}`);
+  if (error.userId) lines.push(`**User ID:** ${error.userId}`);
+  lines.push('');
+  lines.push(`### Message`);
+  lines.push('```');
+  lines.push(error.message);
+  lines.push('```');
+  if (error.stack) {
+    lines.push('');
+    lines.push(`### Stack Trace`);
+    lines.push('```');
+    lines.push(error.stack);
+    lines.push('```');
+  }
+  if (error.metadata && Object.keys(error.metadata).length > 0) {
+    lines.push('');
+    lines.push(`### Metadata`);
+    lines.push('```json');
+    lines.push(JSON.stringify(error.metadata, null, 2));
+    lines.push('```');
+  }
+  lines.push('');
+  lines.push(`---`);
+  lines.push(`_Copied from Catalyst System Errors_`);
+  return lines.join('\n');
+}
+
+function useCopyToClipboard() {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copy = useCallback(async (text: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId((prev) => (prev === id ? null : prev)), 2000);
+    } catch {
+      // fallback
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId((prev) => (prev === id ? null : prev)), 2000);
+    }
+  }, []);
+
+  return { copiedId, copy };
+}
+
 // ── SSE Connection Status Hook ──
 function useSseStatus() {
   const [status, setStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'closed' | 'error'>('closed');
@@ -103,6 +167,8 @@ function ErrorDetailModal({
   const metadata = error.metadata || {};
   const metadataEntries = Object.entries(metadata);
   const hasMetadata = metadataEntries.length > 0;
+  const { copiedId, copy } = useCopyToClipboard();
+  const isCopied = copiedId === error.id;
 
   return (
     <ModalPortal>
@@ -230,7 +296,16 @@ function ErrorDetailModal({
           </div>
 
           {/* Footer */}
-          <div className="flex justify-end border-t border-border/50 px-6 py-3">
+          <div className="flex justify-end gap-2 border-t border-border/50 px-6 py-3">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => copy(formatErrorForCopy(error), error.id)}
+            >
+              {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              {isCopied ? 'Copied!' : 'Copy for AI'}
+            </Button>
             <Button variant="outline" size="sm" onClick={onClose}>
               Close
             </Button>
@@ -255,6 +330,8 @@ function ErrorRow({
   isResolving: boolean;
   index: number;
 }) {
+  const { copiedId, copy } = useCopyToClipboard();
+  const isCopied = copiedId === error.id;
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -296,6 +373,16 @@ function ErrorRow({
           )}
           <button
             className="rounded-md p-1 text-muted-foreground opacity-0 transition-colors hover:bg-primary/5 hover:text-primary sm:group-hover:opacity-100"
+            onClick={(e) => {
+              e.stopPropagation();
+              copy(formatErrorForCopy(error), error.id);
+            }}
+            title={isCopied ? 'Copied!' : 'Copy for AI'}
+          >
+            {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+          </button>
+          <button
+            className="rounded-md p-1 text-muted-foreground opacity-0 transition-colors hover:bg-primary/5 hover:text-primary sm:group-hover:opacity-100"
             onClick={onView}
             title="View details"
           >
@@ -324,6 +411,16 @@ function ErrorRow({
             <span className="text-[11px] text-muted-foreground">
               {new Date(error.createdAt).toLocaleString()}
             </span>
+            <button
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
+              onClick={(e) => {
+                e.stopPropagation();
+                copy(formatErrorForCopy(error), error.id);
+              }}
+              title={isCopied ? 'Copied!' : 'Copy for AI'}
+            >
+              {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+            </button>
             <button
               className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
               onClick={onView}
