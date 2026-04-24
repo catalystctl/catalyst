@@ -14,6 +14,8 @@
  *   - CORS-friendly: same-origin requests don't need special headers
  */
 
+import { reportSystemError } from './systemErrors';
+
 export type ConsoleStreamEvent =
   | { type: 'connected'; serverId: string; timestamp: string }
   | { type: 'console_output'; serverId: string; stream: string; data: string; timestamp?: string }
@@ -143,6 +145,12 @@ class ConsoleSseClient {
       } catch {
         // use status text
       }
+      reportSystemError({
+        level: 'error',
+        component: 'ApiConsole',
+        message: errorMessage,
+        metadata: { action: 'sendCommand', status: res.status },
+      });
       throw new Error(errorMessage);
     }
   }

@@ -15,6 +15,7 @@ import { notifySuccess } from '../../utils/notify';
 import { formatBytes, formatPercent } from '../../utils/formatters';
 import { useBackupDownloadStore } from '../../stores/backupDownloadStore';
 import { useAuthStore } from '../../stores/authStore';
+import { reportSystemError } from '../../services/api/systemErrors';
 
 const formatProgress = (progress?: { loaded: number; total?: number }) => {
   if (!progress) return undefined;
@@ -125,6 +126,13 @@ function BackupSection({
       clearProgress(`${progressKeyPrefix}${backupId}`);
       notifyInfo('Backup download started');
     } catch (error: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'BackupSection',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { context: 'download backup' },
+      });
       clearProgress(`${progressKeyPrefix}${backupId}`);
       notifyError(getErrorMessage(error, 'Failed to download backup'));
     }
@@ -390,22 +398,28 @@ function BackupSection({
                 const parsedCount = retentionCount.trim() === '' ? undefined : Number(retentionCount);
                 const parsedDays = retentionDays.trim() === '' ? undefined : Number(retentionDays);
                 if (parsedCount !== undefined && (!Number.isFinite(parsedCount) || parsedCount < 0)) {
+                  reportSystemError({ level: 'error', component: 'BackupSection', message: 'Retention count must be 0 or more', metadata: { context: 'save settings' } });
                   throw new Error('Retention count must be 0 or more');
                 }
                 if (parsedDays !== undefined && (!Number.isFinite(parsedDays) || parsedDays < 0)) {
+                  reportSystemError({ level: 'error', component: 'BackupSection', message: 'Retention days must be 0 or more', metadata: { context: 'save settings' } });
                   throw new Error('Retention days must be 0 or more');
                 }
                 if (storageMode === 's3') {
                   if (!s3Bucket.trim()) {
+                    reportSystemError({ level: 'error', component: 'BackupSection', message: 'S3 bucket is required', metadata: { context: 'save settings' } });
                     throw new Error('S3 bucket is required');
                   }
                   if (!s3Region.trim()) {
+                    reportSystemError({ level: 'error', component: 'BackupSection', message: 'S3 region is required', metadata: { context: 'save settings' } });
                     throw new Error('S3 region is required');
                   }
                   if (!s3AccessKeyId.trim()) {
+                    reportSystemError({ level: 'error', component: 'BackupSection', message: 'S3 access key ID is required', metadata: { context: 'save settings' } });
                     throw new Error('S3 access key ID is required');
                   }
                   if (!s3SecretAccessKey.trim()) {
+                    reportSystemError({ level: 'error', component: 'BackupSection', message: 'S3 secret access key is required', metadata: { context: 'save settings' } });
                     throw new Error('S3 secret access key is required');
                   }
                 }
@@ -427,6 +441,7 @@ function BackupSection({
                   sftpPortValue !== undefined &&
                   (!Number.isFinite(sftpPortValue) || sftpPortValue <= 0 || sftpPortValue > 65535)
                 ) {
+                  reportSystemError({ level: 'error', component: 'BackupSection', message: 'SFTP port must be between 1 and 65535', metadata: { context: 'save settings' } });
                   throw new Error('SFTP port must be between 1 and 65535');
                 }
                 const sftpConfig =
@@ -443,12 +458,15 @@ function BackupSection({
                     : undefined;
                 if (storageMode === 'sftp') {
                   if (!sftpHost.trim()) {
+                    reportSystemError({ level: 'error', component: 'BackupSection', message: 'SFTP host is required', metadata: { context: 'save settings' } });
                     throw new Error('SFTP host is required');
                   }
                   if (!sftpUsername.trim()) {
+                    reportSystemError({ level: 'error', component: 'BackupSection', message: 'SFTP username is required', metadata: { context: 'save settings' } });
                     throw new Error('SFTP username is required');
                   }
                   if (!sftpPassword.trim() && !sftpPrivateKey.trim()) {
+                    reportSystemError({ level: 'error', component: 'BackupSection', message: 'SFTP password or private key is required', metadata: { context: 'save settings' } });
                     throw new Error('SFTP password or private key is required');
                   }
                 }
@@ -462,6 +480,13 @@ function BackupSection({
                 notifySuccess('Backup settings updated');
                 queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
               } catch (error: unknown) {
+                reportSystemError({
+                  level: 'error',
+                  component: 'BackupSection',
+                  message: error instanceof Error ? error.message : String(error),
+                  stack: error instanceof Error ? error.stack : undefined,
+                  metadata: { context: 'update backup settings' },
+                });
                 notifyError(getErrorMessage(error, 'Failed to update settings'));
               }
             }}

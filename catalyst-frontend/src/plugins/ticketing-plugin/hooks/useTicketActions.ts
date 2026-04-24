@@ -14,6 +14,7 @@ import type {
   TicketTemplate,
 } from '../types';
 import * as api from '../api';
+import { reportSystemError } from '../../../services/api/systemErrors';
 
 export interface TicketActions {
   // Ticket CRUD
@@ -64,6 +65,7 @@ export function useTicketActions(
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Action failed';
         setActionError(msg);
+        reportSystemError({ level: 'error', component: 'useTicketActions', message: err instanceof Error ? err.message : 'Action failed', metadata: { context: 'wrap mutation' } });
         throw err;
       } finally {
         setIsActionLoading(false);

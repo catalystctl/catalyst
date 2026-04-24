@@ -1,5 +1,6 @@
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component } from 'react';
+import { reportSystemError } from '../../services/api/systemErrors';
 
 interface Props {
   children: ReactNode;
@@ -23,6 +24,13 @@ class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo) {
     // Log to future observability pipeline
     console.error('UI error boundary caught error', { error, info });
+    reportSystemError({
+      level: 'error',
+      component: 'ReactErrorBoundary',
+      message: error.message,
+      stack: error.stack,
+      metadata: { componentStack: info.componentStack },
+    });
   }
 
   render() {

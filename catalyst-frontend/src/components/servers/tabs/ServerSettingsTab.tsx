@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { qk } from '../../../lib/queryKeys';
 import { serversApi } from '../../../services/api/servers';
 import { notifySuccess, notifyError } from '../../../utils/notify';
+import { reportSystemError } from '../../../services/api/systemErrors';
 
 interface Props {
   serverId: string;
@@ -32,6 +33,13 @@ export default function ServerSettingsTab({
       queryClient.invalidateQueries({ queryKey: ['servers'] });
       notifySuccess('Reinstall started');
     } catch (error: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'ServerSettingsTab',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { context: 'reinstall server' },
+      });
       notifyError(
         error instanceof Error ? error.message : 'Failed to reinstall server',
       );

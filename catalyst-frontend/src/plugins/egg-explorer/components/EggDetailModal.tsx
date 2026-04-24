@@ -1,6 +1,7 @@
 // src/plugins/egg-explorer/components/EggDetailModal.tsx
 
 import React, { useState, useEffect } from 'react';
+import { reportSystemError } from '../../../services/api/systemErrors';
 import {
   X,
   Download,
@@ -73,6 +74,13 @@ export function EggDetailModal({ egg, open, onClose }: Props) {
       await importEgg(fullEgg, selectedNestId || undefined);
       setInstalled(true);
     } catch (err: any) {
+      reportSystemError({
+        level: 'error',
+        component: 'EggDetailModal',
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'Egg installation failed' },
+      });
       setError(err?.message || 'Installation failed');
     } finally {
       setInstalling(false);

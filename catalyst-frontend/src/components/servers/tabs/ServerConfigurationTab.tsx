@@ -10,6 +10,7 @@ import {
 } from '../../../utils/configFormats';
 import { getErrorMessage } from '../../../utils/errors';
 import { notifyError, notifySuccess } from '../../../utils/notify';
+import { reportSystemError } from '../../../services/api/systemErrors';
 import SectionDivider from './SectionDivider';
 import StatGrid from './StatGrid';
 import ServerStartupVariablesSection from './ServerStartupVariablesSection';
@@ -206,6 +207,13 @@ export default function ServerConfigurationTab({
           rawContent: content,
         };
       } catch (error: unknown) {
+        reportSystemError({
+          level: 'error',
+          component: 'ServerConfigurationTab',
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          metadata: { context: 'load config file' },
+        });
         return {
           path: pathValue,
           sections: [],
@@ -257,10 +265,15 @@ export default function ServerConfigurationTab({
 
   const configMutation = useMutation({
     mutationFn: async (index: number) => {
-      if (!serverId) throw new Error('Missing server id');
+      if (!serverId) {
+        reportSystemError({ level: 'error', component: 'ServerConfigurationTab', message: 'Missing server id', metadata: { context: 'config mutation' } });
+        throw new Error('Missing server id');
+      }
       const target = configFiles[index];
-      if (!target || !target.format)
+      if (!target || !target.format) {
+        reportSystemError({ level: 'error', component: 'ServerConfigurationTab', message: 'Missing config file path', metadata: { context: 'config mutation' } });
         throw new Error('Missing config file path');
+      }
       if (target.viewMode === 'raw') {
         await filesApi.write(serverId, target.path, target.rawContent);
         return;

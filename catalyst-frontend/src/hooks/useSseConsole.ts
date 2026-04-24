@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { serversApi } from '../services/api/servers';
 import { consoleSseClient, type ConsoleStreamEvent, type StreamStatus } from '../services/api/console';
+import { reportSystemError } from '../services/api/systemErrors';
 import type { ServerLogEntry } from '../types/server';
 
 export type ConsoleEntry = {
@@ -81,7 +82,10 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
     queryFn: () =>
       serverId
         ? serversApi.logs(serverId, { lines: initialLines })
-        : Promise.reject(new Error('missing id')),
+        : (() => {
+            reportSystemError({ level: 'error', component: 'useSseConsole', message: 'missing id', metadata: { context: 'logs query' } });
+            return Promise.reject(new Error('missing id'));
+          })(),
     enabled: Boolean(serverId),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
@@ -207,6 +211,7 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
         };
         batchBuffer.current.push(errorEntry);
         scheduleFlush();
+        reportSystemError({ level: 'error', component: 'useSseConsole', message: err instanceof Error ? err.message : 'Failed to send command', metadata: { context: 'send command' } });
         throw err;
       }
     },

@@ -46,6 +46,7 @@ import { databasesApi } from '../../services/api/databases';
 import { tasksApi } from '../../services/api/tasks';
 import { getErrorMessage } from '../../utils/errors';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { reportSystemError } from '../../services/api/systemErrors';
 import type {
   ServerAccessEntry,
   ServerInvite,
@@ -384,7 +385,10 @@ function ServerDetailsPage() {
   // ── Mutations ──
   const pauseMutation = useMutation({
     mutationFn: (task: { id: string; enabled: boolean }) => {
-      if (!server?.id) throw new Error('Server not loaded');
+      if (!server?.id) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'pauseMutation' } });
+        throw new Error('Server not loaded');
+      }
       return tasksApi.update(server.id, task.id, { enabled: !task.enabled });
     },
     onSuccess: () => {
@@ -398,7 +402,10 @@ function ServerDetailsPage() {
 
   const deleteTaskMutation = useMutation({
     mutationFn: (taskId: string) => {
-      if (!server?.id) throw new Error('Server not loaded');
+      if (!server?.id) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'deleteTaskMutation' } });
+        throw new Error('Server not loaded');
+      }
       return tasksApi.remove(server.id, taskId);
     },
     onSuccess: () => {
@@ -412,8 +419,14 @@ function ServerDetailsPage() {
 
   const createDatabaseMutation = useMutation({
     mutationFn: () => {
-      if (!server?.id) throw new Error('Server not loaded');
-      if (!databaseHostId) throw new Error('Database host required');
+      if (!server?.id) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'createDatabaseMutation' } });
+        throw new Error('Server not loaded');
+      }
+      if (!databaseHostId) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Database host required', metadata: { context: 'createDatabaseMutation' } });
+        throw new Error('Database host required');
+      }
       return databasesApi.create(server.id, {
         hostId: databaseHostId,
         name: databaseName.trim() || undefined,
@@ -433,7 +446,10 @@ function ServerDetailsPage() {
 
   const rotateDatabaseMutation = useMutation({
     mutationFn: (databaseId: string) => {
-      if (!server?.id) throw new Error('Server not loaded');
+      if (!server?.id) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'rotateDatabaseMutation' } });
+        throw new Error('Server not loaded');
+      }
       return databasesApi.rotatePassword(server.id, databaseId);
     },
     onSuccess: () => {
@@ -451,7 +467,10 @@ function ServerDetailsPage() {
 
   const deleteDatabaseMutation = useMutation({
     mutationFn: (databaseId: string) => {
-      if (!server?.id) throw new Error('Server not loaded');
+      if (!server?.id) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'deleteDatabaseMutation' } });
+        throw new Error('Server not loaded');
+      }
       return databasesApi.remove(server.id, databaseId);
     },
     onSuccess: () => {
@@ -467,7 +486,10 @@ function ServerDetailsPage() {
 
   const suspendMutation = useMutation({
     mutationFn: (reason?: string) => {
-      if (!server?.id) throw new Error('Server not loaded');
+      if (!server?.id) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'suspendMutation' } });
+        throw new Error('Server not loaded');
+      }
       return serversApi.suspend(server.id, reason);
     },
     onSuccess: () => {
@@ -486,7 +508,10 @@ function ServerDetailsPage() {
 
   const unsuspendMutation = useMutation({
     mutationFn: () => {
-      if (!server?.id) throw new Error('Server not loaded');
+      if (!server?.id) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'unsuspendMutation' } });
+        throw new Error('Server not loaded');
+      }
       return serversApi.unsuspend(server.id);
     },
     onSuccess: () => {
@@ -504,13 +529,20 @@ function ServerDetailsPage() {
 
   const addAllocationMutation = useMutation({
     mutationFn: async () => {
-      if (!serverId) throw new Error('Missing server id');
+      if (!serverId) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'addAllocationMutation' } });
+        throw new Error('Missing server id');
+      }
       const containerPort = Number(newContainerPort);
       const hostPort = Number(newHostPort || newContainerPort);
-      if (!Number.isFinite(containerPort) || containerPort <= 0)
+      if (!Number.isFinite(containerPort) || containerPort <= 0) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Invalid container port', metadata: { context: 'addAllocationMutation' } });
         throw new Error('Invalid container port');
-      if (!Number.isFinite(hostPort) || hostPort <= 0)
+      }
+      if (!Number.isFinite(hostPort) || hostPort <= 0) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Invalid host port', metadata: { context: 'addAllocationMutation' } });
         throw new Error('Invalid host port');
+      }
       return serversApi.addAllocation(serverId, {
         containerPort,
         hostPort,
@@ -533,7 +565,10 @@ function ServerDetailsPage() {
 
   const removeAllocationMutation = useMutation({
     mutationFn: async (containerPort: number) => {
-      if (!serverId) throw new Error('Missing server id');
+      if (!serverId) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'removeAllocationMutation' } });
+        throw new Error('Missing server id');
+      }
       return serversApi.removeAllocation(serverId, containerPort);
     },
     onSuccess: () => {
@@ -549,7 +584,10 @@ function ServerDetailsPage() {
 
   const setPrimaryMutation = useMutation({
     mutationFn: async (containerPort: number) => {
-      if (!serverId) throw new Error('Missing server id');
+      if (!serverId) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'setPrimaryMutation' } });
+        throw new Error('Missing server id');
+      }
       return serversApi.setPrimaryAllocation(serverId, containerPort);
     },
     onSuccess: () => {
@@ -566,7 +604,10 @@ function ServerDetailsPage() {
 
   const restartPolicyMutation = useMutation({
     mutationFn: async () => {
-      if (!serverId) throw new Error('Missing server id');
+      if (!serverId) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'restartPolicyMutation' } });
+        throw new Error('Missing server id');
+      }
       const parsedMax =
         maxCrashCount.trim() === '' ? undefined : Number(maxCrashCount);
       const minCrashCount = restartPolicy === 'always' ? 1 : 0;
@@ -576,6 +617,7 @@ function ServerDetailsPage() {
           parsedMax < minCrashCount ||
           parsedMax > 100)
       ) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: `Max crash count must be between ${minCrashCount} and 100`, metadata: { context: 'restartPolicyMutation' } });
         throw new Error(
           `Max crash count must be between ${minCrashCount} and 100`,
         );
@@ -602,7 +644,10 @@ function ServerDetailsPage() {
 
   const resetCrashCountMutation = useMutation({
     mutationFn: async () => {
-      if (!serverId) throw new Error('Missing server id');
+      if (!serverId) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'resetCrashCountMutation' } });
+        throw new Error('Missing server id');
+      }
       return serversApi.resetCrashCount(serverId);
     },
     onSuccess: () => {
@@ -622,9 +667,15 @@ function ServerDetailsPage() {
 
   const renameServerMutation = useMutation({
     mutationFn: () => {
-      if (!serverId) throw new Error('Missing server id');
+      if (!serverId) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'renameServerMutation' } });
+        throw new Error('Missing server id');
+      }
       const nextName = serverName.trim();
-      if (!nextName) throw new Error('Server name is required');
+      if (!nextName) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server name is required', metadata: { context: 'renameServerMutation' } });
+        throw new Error('Server name is required');
+      }
       return serversApi.update(serverId, { name: nextName });
     },
     onSuccess: () => {
@@ -644,7 +695,10 @@ function ServerDetailsPage() {
 
   const startupCommandMutation = useMutation({
     mutationFn: () => {
-      if (!serverId) throw new Error('Missing server id');
+      if (!serverId) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'startupCommandMutation' } });
+        throw new Error('Missing server id');
+      }
       const trimmed = startupCommand.trim();
       const templateDefault = server?.template?.startup ?? '';
       return serversApi.update(serverId, {
@@ -665,7 +719,10 @@ function ServerDetailsPage() {
 
   const createInviteMutation = useMutation({
     mutationFn: () => {
-      if (!serverId) throw new Error('Missing server id');
+      if (!serverId) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'createInviteMutation' } });
+        throw new Error('Missing server id');
+      }
       return serversApi.createInvite(serverId, {
         email: inviteEmail.trim(),
         permissions:
@@ -687,7 +744,10 @@ function ServerDetailsPage() {
 
   const cancelInviteMutation = useMutation({
     mutationFn: (inviteId: string) => {
-      if (!serverId) throw new Error('Missing server id');
+      if (!serverId) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'cancelInviteMutation' } });
+        throw new Error('Missing server id');
+      }
       return serversApi.cancelInvite(serverId, inviteId);
     },
     onSuccess: () => {
@@ -704,7 +764,10 @@ function ServerDetailsPage() {
 
   const saveAccessMutation = useMutation({
     mutationFn: (entry: ServerAccessEntry) => {
-      if (!serverId) throw new Error('Missing server id');
+      if (!serverId) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'saveAccessMutation' } });
+        throw new Error('Missing server id');
+      }
       const permissions = accessPermissions[entry.userId] ?? [];
       return serversApi.upsertAccess(serverId, {
         targetUserId: entry.userId,
@@ -725,7 +788,10 @@ function ServerDetailsPage() {
 
   const removeAccessMutation = useMutation({
     mutationFn: (targetUserId: string) => {
-      if (!serverId) throw new Error('Missing server id');
+      if (!serverId) {
+        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'removeAccessMutation' } });
+        throw new Error('Missing server id');
+      }
       return serversApi.removeAccess(serverId, targetUserId);
     },
     onSuccess: () => {

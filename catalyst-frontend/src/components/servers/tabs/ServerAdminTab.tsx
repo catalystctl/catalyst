@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { serversApi } from '../../../services/api/servers';
 import { notifySuccess, notifyError } from '../../../utils/notify';
+import { reportSystemError } from '../../../services/api/systemErrors';
 import UpdateServerModal from '../UpdateServerModal';
 import TransferServerModal from '../TransferServerModal';
 import DeleteServerDialog from '../DeleteServerDialog';
@@ -374,6 +375,13 @@ export default function ServerAdminTab({
       queryClient.invalidateQueries({ queryKey: ['servers'] });
       setRebuildConfirm(false);
     } catch (err: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'ServerAdminTab',
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'rebuild container' },
+      });
       notifyError(err instanceof Error ? err.message : 'Failed to rebuild container');
     } finally {
       setRebuildPending(false);
@@ -389,6 +397,13 @@ export default function ServerAdminTab({
       queryClient.invalidateQueries({ queryKey: ['servers'] });
       setKillConfirm(false);
     } catch (err: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'ServerAdminTab',
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'kill server' },
+      });
       notifyError(err instanceof Error ? err.message : 'Failed to kill server');
     } finally {
       setKillPending(false);
@@ -404,6 +419,13 @@ export default function ServerAdminTab({
       queryClient.invalidateQueries({ queryKey: ['servers'] });
       setReinstallConfirm(false);
     } catch (err: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'ServerAdminTab',
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'reinstall server' },
+      });
       notifyError(err instanceof Error ? err.message : 'Failed to reinstall');
     } finally {
       setReinstallPending(false);
@@ -421,6 +443,13 @@ export default function ServerAdminTab({
       setNewOwnerId('');
       setTransferOwnerConfirm(false);
     } catch (err: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'ServerAdminTab',
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'transfer ownership' },
+      });
       notifyError(err instanceof Error ? err.message : 'Failed to transfer ownership');
     } finally {
       setTransferOwnerPending(false);

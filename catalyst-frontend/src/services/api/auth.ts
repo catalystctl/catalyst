@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { reportSystemError } from './systemErrors';
 import type { LoginSchema, RegisterSchema } from '../../validators/auth';
 import type { User } from '../../types/user';
 import { authClient } from '../authClient';
@@ -88,6 +89,12 @@ export const authApi = {
 
       // HTTP 202 — two-factor required (apiClient doesn't throw for 2xx)
       if (!response.success && response.data?.twoFactorRequired) {
+        reportSystemError({
+          level: 'error',
+          component: 'ApiAuth',
+          message: 'Two-factor authentication required',
+          metadata: { action: 'login', code: 'TWO_FACTOR_REQUIRED' },
+        });
         throw Object.assign(new Error('Two-factor authentication required'), {
           code: 'TWO_FACTOR_REQUIRED' as const,
           token: response.data.token,
@@ -95,6 +102,12 @@ export const authApi = {
       }
 
       if (!response.success || !response.data) {
+        reportSystemError({
+          level: 'error',
+          component: 'ApiAuth',
+          message: response.error || 'Login failed',
+          metadata: { action: 'login' },
+        });
         throw new Error(response.error || 'Login failed');
       }
 
@@ -118,8 +131,21 @@ export const authApi = {
       // Passkey-required errors come as HTTP 403 from the custom route.
       const err = error as { response?: { data?: { code?: string } }; code?: string; message?: string };
       if (err.response?.data?.code === 'PASSKEY_REQUIRED' || err.code === 'PASSKEY_REQUIRED' || err.message === 'Passkey required') {
+        reportSystemError({
+          level: 'error',
+          component: 'ApiAuth',
+          message: 'Passkey required',
+          metadata: { action: 'login', code: 'PASSKEY_REQUIRED' },
+        });
         throw createPasskeyRequiredError();
       }
+      reportSystemError({
+        level: 'error',
+        component: 'ApiAuth',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { action: 'login' },
+      });
       throw error;
     }
   },
@@ -161,6 +187,12 @@ export const authApi = {
       const msg = response.details
         ? response.details.map(d => `${d.field}: ${d.message}`).join(', ')
         : response.error || 'Registration failed';
+      reportSystemError({
+        level: 'error',
+        component: 'ApiAuth',
+        message: msg,
+        metadata: { action: 'register' },
+      });
       throw new Error(msg);
     }
 
@@ -184,6 +216,12 @@ export const authApi = {
   async refresh(): Promise<{ user: User }> {
     const data = await apiClient.get<{ success: boolean; data?: { id: string; email: string; username: string; name?: string; firstName?: string; lastName?: string; image?: string; role?: string; permissions?: string[] }; error?: string }>('/api/auth/me');
     if (!data?.success || !data?.data) {
+      reportSystemError({
+        level: 'error',
+        component: 'ApiAuth',
+        message: data?.error || 'Refresh failed',
+        metadata: { action: 'refresh' },
+      });
       throw new Error(data?.error || 'Refresh failed');
     }
     return {
@@ -213,6 +251,12 @@ export const authApi = {
     const data = extractResponse(response);
     const token = data.token || data.session?.token || '';
     if (!data.user || !token) {
+      reportSystemError({
+        level: 'error',
+        component: 'ApiAuth',
+        message: 'Two-factor verification failed',
+        metadata: { action: 'verifyTwoFactor' },
+      });
       throw new Error('Two-factor verification failed');
     }
 
@@ -259,6 +303,12 @@ export const authApi = {
   async forgotPassword(email: string): Promise<void> {
     const data = await apiClient.post<{ success: boolean; error?: string }>('/api/auth/forgot-password', { email });
     if (!data?.success) {
+      reportSystemError({
+        level: 'error',
+        component: 'ApiAuth',
+        message: data?.error || 'Failed to send reset email',
+        metadata: { action: 'forgotPassword' },
+      });
       throw new Error(data?.error || 'Failed to send reset email');
     }
   },
@@ -266,6 +316,12 @@ export const authApi = {
   async validateResetToken(token: string): Promise<boolean> {
     const data = await apiClient.get<{ success: boolean; valid?: boolean; error?: string }>(`/api/auth/reset-password/validate?token=${encodeURIComponent(token)}`);
     if (!data?.success || !data?.valid) {
+      reportSystemError({
+        level: 'error',
+        component: 'ApiAuth',
+        message: 'Invalid or expired token',
+        metadata: { action: 'validateResetToken' },
+      });
       throw new Error('Invalid or expired token');
     }
     return true;
@@ -274,6 +330,12 @@ export const authApi = {
   async resetPassword(token: string, password: string): Promise<void> {
     const data = await apiClient.post<{ success: boolean; error?: string }>('/api/auth/reset-password', { token, password });
     if (!data?.success) {
+      reportSystemError({
+        level: 'error',
+        component: 'ApiAuth',
+        message: data?.error || 'Failed to reset password',
+        metadata: { action: 'resetPassword' },
+      });
       throw new Error(data?.error || 'Failed to reset password');
     }
   },

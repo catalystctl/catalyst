@@ -3,6 +3,7 @@
 // Manages tickets, stats, comments, activities, tags, templates, users, servers, and settings.
 
 import { useState, useEffect, useCallback } from 'react';
+import { reportSystemError } from '../../../services/api/systemErrors';
 import type {
   Ticket,
   TicketComment,
@@ -110,6 +111,13 @@ export function useTicketingData(): TicketingDataState & TicketingDataActions {
       setTicketTotal(result.total);
       setTicketTotalPages(result.totalPages);
     } catch (err: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'useTicketingData',
+        message: err instanceof Error ? err.message : 'Failed to load tickets',
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'Failed to load tickets' },
+      });
       const msg = err instanceof Error ? err.message : 'Failed to load tickets';
       setError(msg);
     } finally {
@@ -137,6 +145,13 @@ export function useTicketingData(): TicketingDataState & TicketingDataActions {
       if (serversRes.status === 'fulfilled') setServers(serversRes.value);
       if (settingsRes.status === 'fulfilled') setSettings(settingsRes.value);
     } catch (err: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'useTicketingData',
+        message: err instanceof Error ? err.message : 'Failed to load reference data',
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'Failed to load reference data' },
+      });
       const msg = err instanceof Error ? err.message : 'Failed to load reference data';
       setError(msg);
     } finally {
@@ -189,21 +204,45 @@ export function useTicketingData(): TicketingDataState & TicketingDataActions {
     try {
       const s = await api.fetchStats();
       setStats(s);
-    } catch { /* silent */ }
+    } catch (err: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'useTicketingData',
+        message: err instanceof Error ? err.message : 'Failed to refresh stats',
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'Failed to refresh ticket stats' },
+      });
+    }
   }, []);
 
   const refreshTags = useCallback(async () => {
     try {
       const t = await api.fetchTags();
       setTags(t);
-    } catch { /* silent */ }
+    } catch (err: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'useTicketingData',
+        message: err instanceof Error ? err.message : 'Failed to refresh tags',
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'Failed to refresh tags' },
+      });
+    }
   }, []);
 
   const refreshTemplates = useCallback(async () => {
     try {
       const t = await api.fetchTemplates();
       setTemplates(t);
-    } catch { /* silent */ }
+    } catch (err: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'useTicketingData',
+        message: err instanceof Error ? err.message : 'Failed to refresh templates',
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'Failed to refresh templates' },
+      });
+    }
   }, []);
 
   const refreshDetail = useCallback(async () => {

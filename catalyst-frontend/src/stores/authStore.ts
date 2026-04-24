@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { StateCreator } from 'zustand/vanilla';
 import { authApi } from '../services/api/auth';
+import { reportSystemError } from '../services/api/systemErrors';
 import type { User } from '../types/user';
 import type { LoginSchema, RegisterSchema } from '../validators/auth';
 
@@ -93,12 +94,24 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         const error = err as { code?: string; response?: { data?: { error?: unknown } }; message?: string };
         if (error.code === 'TWO_FACTOR_REQUIRED' || error.code === 'PASSKEY_REQUIRED') {
           (set as AuthSet)({ isLoading: false, error: null, token: null, rememberMe: Boolean(values.rememberMe) });
+          reportSystemError({
+            level: 'error',
+            component: 'AuthStore:login',
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+          });
           throw err;
         }
         const rawError = error.response?.data?.error;
         const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || error.message || 'Login failed';
         (set as AuthSet)({ isLoading: false, error: message as string });
         loginGuard.active = false;
+        reportSystemError({
+          level: 'error',
+          component: 'AuthStore:login',
+          message: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+        });
         throw err;
       }
     },
@@ -116,6 +129,12 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || error.message || 'Registration failed';
         (set as AuthSet)({ isLoading: false, error: message as string });
         loginGuard.active = false;
+        reportSystemError({
+          level: 'error',
+          component: 'AuthStore:register',
+          message: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+        });
         throw err;
       } finally {
         setTimeout(() => { loginGuard.active = false; }, 3_000);
@@ -158,6 +177,12 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
           isReady: true,
           error: null,
           rememberMe: false,
+        });
+        reportSystemError({
+          level: 'error',
+          component: 'AuthStore:refresh',
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
         });
         throw error;
       } finally {
@@ -226,6 +251,12 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || error.message || 'Two-factor verification failed';
         (set as AuthSet)({ isLoading: false, error: message as string });
         loginGuard.active = false;
+        reportSystemError({
+          level: 'error',
+          component: 'AuthStore:verify2FA',
+          message: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+        });
         throw err;
       } finally {
         setTimeout(() => { loginGuard.active = false; }, 3_000);

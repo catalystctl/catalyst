@@ -1,5 +1,6 @@
 import type { FileEntry, FileListing } from '../../types/file';
 import { joinPath, normalizePath } from '../../utils/filePaths';
+import { reportSystemError } from './systemErrors';
 
 type ApiResponse<T> = {
   success: boolean;
@@ -128,6 +129,13 @@ async function assertOk(response: Response): Promise<void> {
   const message = await extractErrorMessage(response);
   const error = new Error(message);
   (error as any).status = response.status;
+  reportSystemError({
+    level: 'error',
+    component: 'ApiFiles',
+    message: error.message,
+    stack: error.stack,
+    metadata: { action: 'assertOk', status: response.status },
+  });
   throw error;
 }
 
@@ -192,12 +200,40 @@ export const filesApi = {
             if (xhr.status >= 200 && xhr.status < 300) {
               resolve();
             } else {
-              reject(new Error(`Upload failed: ${xhr.status}`));
+              const err = new Error(`Upload failed: ${xhr.status}`);
+              reportSystemError({
+                level: 'error',
+                component: 'ApiFiles',
+                message: err.message,
+                stack: err.stack,
+                metadata: { action: 'upload', status: xhr.status },
+              });
+              reject(err);
             }
           });
 
-          xhr.addEventListener('error', () => reject(new Error('Upload failed')));
-          xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
+          xhr.addEventListener('error', () => {
+            const err = new Error('Upload failed');
+            reportSystemError({
+              level: 'error',
+              component: 'ApiFiles',
+              message: err.message,
+              stack: err.stack,
+              metadata: { action: 'upload' },
+            });
+            reject(err);
+          });
+          xhr.addEventListener('abort', () => {
+            const err = new Error('Upload aborted');
+            reportSystemError({
+              level: 'error',
+              component: 'ApiFiles',
+              message: err.message,
+              stack: err.stack,
+              metadata: { action: 'upload' },
+            });
+            reject(err);
+          });
 
           xhr.open('POST', `/api/servers/${serverId}/files/upload`);
           xhr.withCredentials = true;

@@ -18,6 +18,7 @@ import { notifyError, notifySuccess } from '../../utils/notify';
 import { normalizeTemplateImport, parseEggContent } from '../../utils/pterodactylImport';
 import TemplateProviderEditor, { extractProviderIds } from './TemplateProviderEditor';
 import { ModalPortal } from '@/components/ui/modal-portal';
+import { reportSystemError } from '../../services/api/systemErrors';
 
 type VariableDraft = {
   name: string;
@@ -276,6 +277,13 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange }: Edi
         }
         applyTemplateImport(parsed);
       } catch (error) {
+        reportSystemError({
+          level: 'error',
+          component: 'TemplateEditModal',
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          metadata: { context: 'parse import file' },
+        });
         setImportError('Failed to parse file (must be JSON or YAML)');
       }
     };

@@ -29,6 +29,7 @@ import NodeAssignmentModal from '../../components/nodes/NodeAssignmentModal';
 import { nodesApi } from '../../services/api/nodes';
 import { useAuthStore } from '../../stores/authStore';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { reportSystemError } from '../../services/api/systemErrors';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
 // ── Animation Variants ──
@@ -130,7 +131,10 @@ function NodeDetailsPage() {
 
   const deployMutation = useMutation({
     mutationFn: async () => {
-      if (!node?.id) throw new Error('Missing node id');
+      if (!node?.id) {
+        reportSystemError({ level: 'error', component: 'NodeDetailsPage', message: 'Missing node id', metadata: { context: 'deploy mutation' } });
+        throw new Error('Missing node id');
+      }
       return nodesApi.deploymentToken(node.id);
     },
     onSuccess: (info) => {
@@ -145,7 +149,10 @@ function NodeDetailsPage() {
 
   const apiKeyMutation = useMutation({
     mutationFn: async () => {
-      if (!node?.id) throw new Error('Missing node id');
+      if (!node?.id) {
+        reportSystemError({ level: 'error', component: 'NodeDetailsPage', message: 'Missing node id', metadata: { context: 'api key mutation' } });
+        throw new Error('Missing node id');
+      }
       const regenerate = apiKeyStatus?.exists === true;
       return nodesApi.generateApiKey(node.id, regenerate);
     },

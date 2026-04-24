@@ -32,6 +32,7 @@ import { formatFileMode } from '../../utils/formatters';
 import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
 import { buildBreadcrumbs, getParentPath, joinPath, normalizePath } from '../../utils/filePaths';
 import { ModalPortal } from '@/components/ui/modal-portal';
+import { reportSystemError } from '../../services/api/systemErrors';
 
 type CreatePayload = {
   name: string;
@@ -346,6 +347,13 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
       const entries = await filesApi.listArchiveContents(serverId, archivePath);
       setArchiveEntries(entries);
     } catch (error: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'FileManager',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { context: 'read archive' },
+      });
       const bufErr = isBufferError(error);
       if (bufErr) {
         setBufferError(bufErr);

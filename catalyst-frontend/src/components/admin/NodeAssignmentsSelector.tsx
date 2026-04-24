@@ -5,6 +5,7 @@ import { queryClient } from '@/lib/queryClient';
 import { nodesApi } from '../../services/api/nodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
+import { reportSystemError } from '../../services/api/systemErrors';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
 export type NodeAssignmentWithExpiration = {
@@ -155,6 +156,13 @@ export function NodeAssignmentsSelector({
         queryClient.invalidateQueries({ queryKey: ['nodes'] }),
       ]);
     } catch (error: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'NodeAssignmentsSelector',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { context: 'update wildcard assignment' },
+      });
       // Revert on error
       notifyError(getErrorMessage(error, 'Failed to update wildcard assignment'));
       // Revert the optimistic update
@@ -203,6 +211,13 @@ export function NodeAssignmentsSelector({
         await addNodeAssignment(nodeId);
       }
     } catch (_error: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'NodeAssignmentsSelector',
+        message: _error instanceof Error ? _error.message : String(_error),
+        stack: _error instanceof Error ? _error.stack : undefined,
+        metadata: { context: 'toggle node' },
+      });
       // Revert on error
       onSelectionChange(previousSelection);
     }
@@ -228,6 +243,13 @@ export function NodeAssignmentsSelector({
       ]);
       return true;
     } catch (error: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'NodeAssignmentsSelector',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { context: 'assign node' },
+      });
       notifyError(getErrorMessage(error, 'Failed to assign node'));
       return false;
     }
@@ -257,6 +279,13 @@ export function NodeAssignmentsSelector({
       }
       return false;
     } catch (error: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'NodeAssignmentsSelector',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { context: 'unassign node' },
+      });
       notifyError(getErrorMessage(error, 'Failed to unassign node'));
       return false;
     }
@@ -303,6 +332,13 @@ export function NodeAssignmentsSelector({
         queryClient.invalidateQueries({ queryKey: ['nodes'] }),
       ]);
     } catch (error: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'NodeAssignmentsSelector',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { context: 'update expiration' },
+      });
       notifyError(getErrorMessage(error, 'Failed to update expiration'));
     }
   };

@@ -2,6 +2,7 @@
 // API client for the egg-explorer plugin.
 
 import { createPluginApiClient } from '../plugin-api';
+import { reportSystemError } from '../../services/api/systemErrors';
 import type { EggSummary, EggCategory, EggIndexStatus, EggListResponse } from './types';
 
 const api = createPluginApiClient('egg-explorer');
@@ -28,7 +29,10 @@ export async function fetchEggs(params?: {
   if (params?.pageSize) sp.set('pageSize', String(params.pageSize));
 
   const res = await api.get<EggListResponse>(`?${sp.toString()}`);
-  if (!res.success) throw new Error(res.error ?? 'Failed to fetch eggs');
+  if (!res.success) {
+    reportSystemError({ level: 'error', component: 'EggExplorerApi', message: res.error ?? 'Failed to fetch eggs', metadata: { context: 'fetchEggs' } });
+    throw new Error(res.error ?? 'Failed to fetch eggs');
+  }
   // pluginFetch pass-through: res IS { success, data, pagination, ... }
   // Destructure to get the full response shape the caller expects
   const { success: _s, error: _e, ...paginated } = res as any;
@@ -41,25 +45,37 @@ export async function fetchCategories(): Promise<{
   totalEggs: number;
 }> {
   const res = await api.get<any>('categories');
-  if (!res.success) throw new Error(res.error ?? 'Failed to fetch categories');
+  if (!res.success) {
+    reportSystemError({ level: 'error', component: 'EggExplorerApi', message: res.error ?? 'Failed to fetch categories', metadata: { context: 'fetchCategories' } });
+    throw new Error(res.error ?? 'Failed to fetch categories');
+  }
   const { success: _s, error: _e, ...rest } = res as any;
   return rest;
 }
 
 export async function fetchStatus(): Promise<EggIndexStatus> {
   const res = await api.get<EggIndexStatus>('status');
-  if (!res.success || !res.data) throw new Error(res.error ?? 'Failed to fetch status');
+  if (!res.success || !res.data) {
+    reportSystemError({ level: 'error', component: 'EggExplorerApi', message: res.error ?? 'Failed to fetch status', metadata: { context: 'fetchStatus' } });
+    throw new Error(res.error ?? 'Failed to fetch status');
+  }
   return res.data;
 }
 
 export async function triggerSync(): Promise<void> {
   const res = await api.post<void>('sync');
-  if (!res.success) throw new Error(res.error ?? 'Failed to trigger sync');
+  if (!res.success) {
+    reportSystemError({ level: 'error', component: 'EggExplorerApi', message: res.error ?? 'Failed to trigger sync', metadata: { context: 'triggerSync' } });
+    throw new Error(res.error ?? 'Failed to trigger sync');
+  }
 }
 
 export async function fetchFullEgg(filePath: string): Promise<any> {
   const res = await api.get<any>(`egg?path=${encodeURIComponent(filePath)}`);
-  if (!res.success || !res.data) throw new Error(res.error ?? 'Failed to fetch egg data');
+  if (!res.success || !res.data) {
+    reportSystemError({ level: 'error', component: 'EggExplorerApi', message: res.error ?? 'Failed to fetch egg data', metadata: { context: 'fetchFullEgg' } });
+    throw new Error(res.error ?? 'Failed to fetch egg data');
+  }
   return res.data;
 }
 
@@ -75,6 +91,7 @@ export async function importEgg(eggData: Record<string, any>, nestId?: string) {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    reportSystemError({ level: 'error', component: 'EggExplorerApi', message: body.error || 'Import failed', metadata: { context: 'importEgg' } });
     throw new Error(body.error || 'Import failed');
   }
 

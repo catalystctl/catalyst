@@ -1,6 +1,8 @@
 // src/plugins/plugin-api.ts
 // Shared API client that plugins can import instead of building their own fetch wrapper.
 
+import { reportSystemError } from '../services/api/systemErrors';
+
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
 interface PluginApiResponse<T> {
@@ -60,6 +62,13 @@ async function pluginFetch<T>(
     }
     return { success: true, data };
   } catch (err: unknown) {
+    reportSystemError({
+      level: 'error',
+      component: 'plugin-api',
+      message: err instanceof Error ? err.message : 'Network error',
+      stack: err instanceof Error ? err.stack : undefined,
+      metadata: { context: 'Plugin fetch network error' },
+    });
     const message = err instanceof Error ? err.message : 'Network error';
     return { success: false, error: message };
   }

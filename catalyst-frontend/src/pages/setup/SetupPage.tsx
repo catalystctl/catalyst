@@ -5,6 +5,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useThemeStore } from '../../stores/themeStore';
 import apiClient from '../../services/api/client';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
+import { reportSystemError } from '../../services/api/systemErrors';
 import { BrandFooter } from '../../components/shared/BrandFooter';
 import { cn } from '../../lib/utils';
 import {
@@ -112,7 +113,14 @@ function SetupPage() {
           setAlreadySetup(true);
           navigate('/login', { replace: true });
         }
-      } catch {
+      } catch (err) {
+        reportSystemError({
+          level: 'error',
+          component: 'SetupPage',
+          message: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+          metadata: { context: 'checkSetupStatus' },
+        });
         // Endpoint might not exist yet; allow the wizard to render
       }
     };
@@ -224,6 +232,13 @@ function SetupPage() {
 
       navigate('/dashboard', { replace: true });
     } catch (err: any) {
+      reportSystemError({
+        level: 'error',
+        component: 'SetupPage',
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'handleSubmit' },
+      });
       const message =
         err.response?.data?.error ||
         err.response?.data?.message ||

@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import type { RegisterSchema } from '../../validators/auth';
 import { registerSchema } from '../../validators/auth';
+import { reportSystemError } from '../../services/api/systemErrors';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
 
 function RegisterPage() {
@@ -28,6 +29,13 @@ function RegisterPage() {
         navigate('/servers');
       }, 100);
     } catch (err) {
+      reportSystemError({
+        level: 'error',
+        component: 'RegisterPage',
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'onSubmit' },
+      });
       // Error is already in the store
     }
   };

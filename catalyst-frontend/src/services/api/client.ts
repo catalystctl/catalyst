@@ -1,4 +1,5 @@
 import { useAuthStore } from '../../stores/authStore';
+import { reportSystemError } from './systemErrors';
 
 /** Module-level flag set by authStore.login() to suppress the 401 interceptor
  *  while a login request is in flight.  Without this, a stale server-side
@@ -90,15 +91,26 @@ class ApiClient {
       finalHeaders['Content-Type'] = 'application/json';
     }
 
-    const response = await fetch(url, {
-      method,
-      headers: finalHeaders,
-      credentials,
-      body: hasBody
-        ? (typeof body === 'string' ? body : JSON.stringify(body))
-        : undefined,
-      signal,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method,
+        headers: finalHeaders,
+        credentials,
+        body: hasBody
+          ? (typeof body === 'string' ? body : JSON.stringify(body))
+          : undefined,
+        signal,
+      });
+    } catch (networkError: any) {
+      reportSystemError({
+        level: 'error',
+        component: 'ApiClient',
+        message: networkError?.message || 'Network error',
+        metadata: { path, method },
+      });
+      throw networkError;
+    }
 
     // Handle errors — read body once, then throw with full error info
     if (!response.ok) {
@@ -122,6 +134,15 @@ class ApiClient {
             rememberMe: false,
           });
         }
+      }
+
+      if (response.status >= 500) {
+        reportSystemError({
+          level: 'error',
+          component: 'ApiClient',
+          message: errorData.message || errorData.error || `HTTP ${response.status}`,
+          metadata: { path, status: response.status, method },
+        });
       }
 
       const error: ApiError = {

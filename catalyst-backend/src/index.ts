@@ -1157,9 +1157,59 @@ async function bootstrap() {
 					},
 					// Extended theme customization stored in metadata
 					themeColors: (settings.metadata as any)?.themeColors || null,
+					customCss: settings.customCss || null,
 				},
 			});
 		});
+
+		// Frontend error reporting endpoint (unauthenticated, rate-limited)
+		app.post(
+			"/api/system-errors/report",
+			{
+				config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+			},
+			async (request, reply) => {
+				try {
+					const body = request.body as {
+						level?: "error" | "warn" | "critical";
+						component: string;
+						message: string;
+						stack?: string;
+						metadata?: any;
+					};
+
+					if (
+						typeof body.component !== "string" ||
+						body.component.trim().length === 0 ||
+						typeof body.message !== "string" ||
+						body.message.trim().length === 0
+					) {
+						return reply
+							.status(400)
+							.send({ error: "component and message are required" });
+					}
+
+					await captureSystemError({
+						level: body.level || "error",
+						component: body.component,
+						message: body.message,
+						stack: body.stack,
+						metadata: body.metadata,
+						...(request.user?.userId ? { userId: request.user.userId } : {}),
+					});
+
+					logger.info(
+						{ component: body.component, level: body.level || "error" },
+						"Frontend error reported",
+					);
+
+					return { success: true };
+				} catch (err: any) {
+					logger.error(err, "Failed to report frontend error");
+					return reply.status(500).send({ error: "Failed to report error" });
+				}
+			},
+		);
 
 		// Initialize plugin system BEFORE starting server
 		await pluginLoader.initialize();

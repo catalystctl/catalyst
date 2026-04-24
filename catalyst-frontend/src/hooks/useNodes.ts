@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { qk } from '../lib/queryKeys';
 import { nodesApi } from '../services/api/nodes';
+import { reportSystemError } from '../services/api/systemErrors';
 
 export function useNodes() {
   return useQuery({
@@ -29,7 +30,11 @@ export function useAccessibleNodes() {
 export function useNode(nodeId?: string) {
   return useQuery({
     queryKey: qk.node(nodeId!),
-    queryFn: () => (nodeId ? nodesApi.get(nodeId) : Promise.reject(new Error('missing node id'))),
+    queryFn: () => {
+      if (nodeId) return nodesApi.get(nodeId);
+      reportSystemError({ level: 'error', component: 'useNodes', message: 'missing node id', metadata: { context: 'useNode query' } });
+      return Promise.reject(new Error('missing node id'));
+    },
     enabled: Boolean(nodeId),
   });
 }
@@ -37,7 +42,11 @@ export function useNode(nodeId?: string) {
 export function useNodeStats(nodeId?: string) {
   return useQuery({
     queryKey: qk.nodeStats(nodeId!),
-    queryFn: () => (nodeId ? nodesApi.stats(nodeId) : Promise.reject(new Error('missing node id'))),
+    queryFn: () => {
+      if (nodeId) return nodesApi.stats(nodeId);
+      reportSystemError({ level: 'error', component: 'useNodes', message: 'missing node id', metadata: { context: 'useNodeStats query' } });
+      return Promise.reject(new Error('missing node id'));
+    },
     enabled: Boolean(nodeId),
     refetchInterval: 10000,
   });
@@ -46,8 +55,11 @@ export function useNodeStats(nodeId?: string) {
 export function useNodeMetrics(nodeId?: string) {
   return useQuery({
     queryKey: qk.nodeMetrics(nodeId!),
-    queryFn: () =>
-      nodeId ? nodesApi.metrics(nodeId, { hours: 1, limit: 60 }) : Promise.reject(new Error('missing node id')),
+    queryFn: () => {
+      if (nodeId) return nodesApi.metrics(nodeId, { hours: 1, limit: 60 });
+      reportSystemError({ level: 'error', component: 'useNodes', message: 'missing node id', metadata: { context: 'useNodeMetrics query' } });
+      return Promise.reject(new Error('missing node id'));
+    },
     enabled: Boolean(nodeId),
     refetchInterval: 30000,
   });

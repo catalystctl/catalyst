@@ -6,6 +6,7 @@
 // the background. Users can also click any egg to fetch full details on demand.
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { reportSystemError } from '../../../services/api/systemErrors';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -152,6 +153,13 @@ export function EggExplorer() {
         if (cancelled) return;
         setAllEggs(eggRes.data || []);
       } catch (err: any) {
+        reportSystemError({
+          level: 'error',
+          component: 'EggExplorer',
+          message: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+          metadata: { context: 'Failed to load egg index and categories' },
+        });
         if (!cancelled) setError(err.message);
       } finally {
         if (!cancelled) setLoading(false);
@@ -184,6 +192,13 @@ export function EggExplorer() {
         }
       }
     } catch (err: any) {
+      reportSystemError({
+        level: 'error',
+        component: 'EggExplorer',
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'Egg sync failed' },
+      });
       setError(err.message);
     } finally {
       setSyncing(false);

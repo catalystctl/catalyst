@@ -3,6 +3,7 @@
 // Listens for messages with type `plugin:{pluginName}:{eventType}` and auto-reconnects.
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { reportSystemError } from '../services/api/systemErrors';
 
 interface UsePluginWebSocketOptions {
   /** Whether the WebSocket connection is active (default: true) */
@@ -135,6 +136,13 @@ export function usePluginWebSocket(
         }
       };
     } catch (err: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'usePluginWebSocket',
+        message: err instanceof Error ? err.message : 'Failed to create WebSocket',
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'Failed to create WebSocket connection' },
+      });
       const msg = err instanceof Error ? err.message : 'Failed to create WebSocket';
       setError(msg);
       setConnected(false);

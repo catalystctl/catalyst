@@ -5,6 +5,7 @@ import { filesApi } from '../services/api/files';
 import type { FileEntry } from '../types/file';
 import { notifyError } from '../utils/notify';
 import { normalizePath } from '../utils/filePaths';
+import { reportSystemError } from '../services/api/systemErrors';
 
 type ActiveFile = {
   path: string;
@@ -25,7 +26,10 @@ export function useFileManager(serverId?: string, initialPath = '/') {
   const listQuery = useQuery({
     queryKey: qk.files(serverId!, path),
     queryFn: () => {
-      if (!serverId) throw new Error('missing server id');
+      if (!serverId) {
+        reportSystemError({ level: 'error', component: 'useFileManager', message: 'missing server id', metadata: { context: 'list files query' } });
+        throw new Error('missing server id');
+      }
       return filesApi.list(serverId, path);
     },
     enabled: Boolean(serverId),

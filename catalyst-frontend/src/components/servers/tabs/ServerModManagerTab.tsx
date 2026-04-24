@@ -20,6 +20,7 @@ import {
   notifyError,
   notifySuccess,
 } from '../../../utils/notify';
+import { reportSystemError } from '../../../services/api/systemErrors';
 import {
   titleCase,
   displayProviderName,
@@ -440,8 +441,10 @@ export default function ServerModManagerTab({
 
   const installModMutation = useMutation({
     mutationFn: () => {
-      if (!serverId || !selectedProject || !selectedVersion)
+      if (!serverId || !selectedProject || !selectedVersion) {
+        reportSystemError({ level: 'error', component: 'ServerModManagerTab', message: 'Missing mod selection', metadata: { context: 'install mod mutation' } });
         throw new Error('Missing mod selection');
+      }
       return modManagerApi.install(serverId, {
         provider: modProvider,
         game: modProviderGame,

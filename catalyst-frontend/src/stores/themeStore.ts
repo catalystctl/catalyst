@@ -295,6 +295,7 @@ export const useThemeStore = create<ThemeState>()(
 
       setThemeSettings: (settings, customCss) => {
         flushPreview();
+        console.log('[themeStore] setThemeSettings called, customCss length:', customCss?.length ?? 0);
         set({ themeSettings: settings });
         get().applyTheme();
         if (customCss !== undefined) {
@@ -304,16 +305,28 @@ export const useThemeStore = create<ThemeState>()(
 
       injectCustomCss: (css) => {
         const { customCssElement } = get();
+        console.log('[themeStore] injectCustomCss called, css length:', css?.length ?? 0);
+
+        // Remove tracked element
         if (customCssElement && customCssElement.parentNode) {
+          console.log('[themeStore] removing existing tracked style element');
           customCssElement.parentNode.removeChild(customCssElement);
+        }
+        // Also clean up any orphaned elements from previous sessions
+        const orphaned = document.getElementById('catalyst-custom-css');
+        if (orphaned && orphaned.parentNode) {
+          console.log('[themeStore] removing orphaned style element');
+          orphaned.parentNode.removeChild(orphaned);
         }
         if (css && css.trim()) {
           const style = document.createElement('style');
           style.id = 'catalyst-custom-css';
           style.textContent = css;
           document.head.appendChild(style);
+          console.log('[themeStore] injected style element into <head>, id:', style.id);
           set({ customCssElement: style });
         } else {
+          console.log('[themeStore] css empty/null — no style element injected');
           set({ customCssElement: null });
         }
       },

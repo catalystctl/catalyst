@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { serversApi } from '../services/api/servers';
+import { reportSystemError } from '../services/api/systemErrors';
 
 export interface MetricsTimeRange {
   hours: number;
@@ -12,10 +13,11 @@ export function useServerMetricsHistory(serverId?: string, timeRange?: MetricsTi
 
   return useQuery({
     queryKey: ['server-metrics', serverId, range.hours, range.limit],
-    queryFn: () =>
-      serverId
-        ? serversApi.metrics(serverId, { hours: range.hours, limit: range.limit })
-        : Promise.reject(new Error('missing server id')),
+    queryFn: () => {
+      if (serverId) return serversApi.metrics(serverId, { hours: range.hours, limit: range.limit });
+      reportSystemError({ level: 'error', component: 'useServerMetricsHistory', message: 'missing server id', metadata: { context: 'query' } });
+      return Promise.reject(new Error('missing server id'));
+    },
     enabled: Boolean(serverId),
     staleTime: 5 * 1000, // 5 seconds - data is considered fresh for 5 seconds
     refetchInterval: 10 * 1000, // Refetch every 10 seconds

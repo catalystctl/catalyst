@@ -120,9 +120,12 @@ const normalizeJsonNode = (value: unknown): ConfigNode => {
   return String(value);
 };
 
+import { reportSystemError } from '../services/api/systemErrors';
+
 export const parseJson = (content: string): ConfigMap => {
   const parsed = JSON.parse(content);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    reportSystemError({ level: 'error', component: 'configFormats', message: 'JSON config must be an object', metadata: { context: 'parseJson' } });
     throw new Error('JSON config must be an object');
   }
   return normalizeJsonNode(parsed) as ConfigMap;

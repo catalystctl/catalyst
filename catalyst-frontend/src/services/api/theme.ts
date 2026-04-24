@@ -45,6 +45,7 @@ export interface PublicThemeSettings {
     paymenter: boolean;
   };
   themeColors?: ThemeColors | null;
+  customCss?: string | null;
 }
 
 export interface ThemeSettings extends PublicThemeSettings {

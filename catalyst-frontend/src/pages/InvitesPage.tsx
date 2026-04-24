@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { serversApi } from '../services/api/servers';
 import { notifyError, notifySuccess } from '../utils/notify';
 import { useAuthStore } from '../stores/authStore';
+import { reportSystemError } from '../services/api/systemErrors';
 import type { ServerInvitePreview } from '../types/server';
 
 function InvitesPage() {
@@ -46,7 +47,10 @@ function InvitesPage() {
 
   const registerMutation = useMutation({
     mutationFn: async () => {
-      if (!token) throw new Error('Missing invite token');
+      if (!token) {
+        reportSystemError({ level: 'error', component: 'InvitesPage', message: 'Missing invite token', metadata: { context: 'register mutation' } });
+        throw new Error('Missing invite token');
+      }
       const response = await serversApi.registerInvite({
         token,
         username: registerUsername.trim(),

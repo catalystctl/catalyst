@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { authApi } from '../../services/api/auth';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
+import { reportSystemError } from '../../services/api/systemErrors';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { BrandFooter } from '../../components/shared/BrandFooter';
 
@@ -26,6 +27,13 @@ function ForgotPasswordPage() {
       setIsSubmitted(true);
       notifySuccess('Password reset email sent');
     } catch (error: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'ForgotPasswordPage',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { context: 'handleSubmit' },
+      });
       notifyError(getErrorMessage(error, 'Failed to send reset email'));
     } finally {
       setIsLoading(false);

@@ -4,6 +4,7 @@ import { authApi } from '../../services/api/auth';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
+import { reportSystemError } from '../../services/api/systemErrors';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
 
 function ResetPasswordPage() {
@@ -28,7 +29,14 @@ function ResetPasswordPage() {
     setIsValidating(true);
     authApi.validateResetToken(token)
       .then(() => setIsValid(true))
-      .catch(() => {
+      .catch((err) => {
+        reportSystemError({
+          level: 'error',
+          component: 'ResetPasswordPage',
+          message: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+          metadata: { context: 'validateResetToken' },
+        });
         setIsValid(false);
         notifyError('Invalid or expired reset link');
       })
@@ -59,6 +67,13 @@ function ResetPasswordPage() {
       setIsReset(true);
       notifySuccess('Password reset successfully');
     } catch (error: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'ResetPasswordPage',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { context: 'handleSubmit' },
+      });
       notifyError(getErrorMessage(error, 'Failed to reset password'));
     } finally {
       setIsLoading(false);

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import SetupPage from './pages/setup/SetupPage';
 import { useSetupStatus } from './hooks/useSetupStatus';
@@ -11,6 +11,7 @@ import ErrorBoundary from './components/shared/ErrorBoundary';
 import { useThemeStore } from './stores/themeStore';
 import { themeApi } from './services/api/theme';
 import { adminApi } from './services/api/admin';
+import { reportSystemError } from './services/api/systemErrors';
 import { useAuthStore } from './stores/authStore';
 
 import LoginPage from './pages/auth/LoginPage';
@@ -90,43 +91,66 @@ function App() {
   const isReady = useAuthStore((s) => s.isReady);
   const { setupRequired, isLoading: isSetupLoading } = useSetupStatus();
 
-  // Load public theme settings on mount
+  // Load public theme settings (including custom CSS) once on mount
+  const publicLoadedRef = useRef(false);
   useEffect(() => {
+    if (publicLoadedRef.current) return;
+    publicLoadedRef.current = true;
+
     const loadThemeSettings = async () => {
       try {
         const settings = await themeApi.getPublicSettings();
-        setThemeSettings(settings);
+        console.log('[App] public theme loaded, customCss length:', settings.customCss?.length ?? 0);
+        setThemeSettings(settings, settings.customCss);
       } catch (error) {
-        console.error('Failed to load theme settings:', error);
-        // Continue with defaults
+        reportSystemError({
+          level: 'error',
+          component: 'App',
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          metadata: { context: 'loadThemeSettings' },
+        });
+        console.error('[App] Failed to load public theme settings:', error);
       }
     };
     loadThemeSettings();
   }, [setThemeSettings]);
 
-  // Load custom CSS for admin users
+  // Admin fallback: load custom CSS once when auth becomes ready
+  const adminLoadedRef = useRef(false);
   useEffect(() => {
-    const loadCustomCss = async () => {
-      if (!isAuthenticated || !user) return;
+    if (!isAuthenticated || !user) return;
+    if (adminLoadedRef.current) return;
 
-      const hasAdminAccess =
-        user?.permissions?.includes('*') ||
-        user?.permissions?.includes('admin.write') ||
-        user?.permissions?.includes('admin.read') ||
-        hasAnyAdminPermission(user?.permissions);
+    const hasAdminAccess =
+      user?.permissions?.includes('*') ||
+      user?.permissions?.includes('admin.write') ||
+      user?.permissions?.includes('admin.read') ||
+      hasAnyAdminPermission(user?.permissions);
 
-      if (hasAdminAccess) {
-        try {
-          const fullSettings = await adminApi.getThemeSettings();
-          if (fullSettings.customCss) {
-            injectCustomCss(fullSettings.customCss);
-          }
-        } catch (error) {
-          console.error('Failed to load custom CSS:', error);
+    if (!hasAdminAccess) return;
+
+    adminLoadedRef.current = true;
+
+    const loadAdminCustomCss = async () => {
+      try {
+        const fullSettings = await adminApi.getThemeSettings();
+        console.log('[App] admin theme loaded, customCss length:', fullSettings.customCss?.length ?? 0);
+        if (fullSettings.customCss !== undefined) {
+          injectCustomCss(fullSettings.customCss);
         }
+      } catch (error) {
+        reportSystemError({
+          level: 'error',
+          component: 'App',
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          metadata: { context: 'loadAdminCustomCss' },
+        });
+        console.error('[App] Failed to load admin custom CSS:', error);
       }
     };
-    loadCustomCss();
+    loadAdminCustomCss();
   }, [isAuthenticated, user, injectCustomCss]);
 
   // Apply theme whenever it changes

@@ -11,6 +11,7 @@ import {
 } from "react-hook-form"
 
 import { cn } from "@/lib/utils"
+import { reportSystemError } from "@/services/api/systemErrors"
 import { Label } from "@/components/ui/label"
 
 const Form = FormProvider
@@ -43,10 +44,12 @@ const useFormField = () => {
   const { getFieldState, formState } = useFormContext()
 
   if (!fieldContext) {
+    reportSystemError({ level: 'error', component: 'form', message: 'useFormField should be used within <FormField>', metadata: { context: 'useFormField invariant' } });
     throw new Error("useFormField should be used within <FormField>")
   }
 
   if (!itemContext) {
+    reportSystemError({ level: 'error', component: 'form', message: 'useFormField should be used within <FormItem>', metadata: { context: 'useFormField invariant' } });
     throw new Error("useFormField should be used within <FormItem>")
   }
 

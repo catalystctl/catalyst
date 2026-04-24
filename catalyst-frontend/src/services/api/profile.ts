@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { reportSystemError } from './systemErrors';
 import { authClient } from '../authClient';
 
 // ── Types ──
@@ -81,7 +82,15 @@ export const profileApi = {
   // ── Profile ──
   async getProfile(): Promise<ProfileSummary> {
     const data = await apiClient.get<{ success: boolean; data: ProfileSummary }>('/api/auth/profile');
-    if (!data?.success) throw new Error('Failed to load profile');
+    if (!data?.success) {
+      reportSystemError({
+        level: 'error',
+        component: 'ApiProfile',
+        message: 'Failed to load profile',
+        metadata: { action: 'getProfile' },
+      });
+      throw new Error('Failed to load profile');
+    }
     return data.data;
   },
   async updateProfile(payload: { username?: string; firstName?: string; lastName?: string }) {
@@ -124,7 +133,15 @@ export const profileApi = {
   // ── Passkeys ──
   async listPasskeys(): Promise<Passkey[]> {
     const { data } = await apiClient.get('/api/auth/profile/passkeys');
-    if (!data?.success) throw new Error('Failed to load passkeys');
+    if (!data?.success) {
+      reportSystemError({
+        level: 'error',
+        component: 'ApiProfile',
+        message: 'Failed to load passkeys',
+        metadata: { action: 'listPasskeys' },
+      });
+      throw new Error('Failed to load passkeys');
+    }
     return data.data as Passkey[];
   },
   async createPasskey(payload: { name?: string; authenticatorAttachment?: 'platform' | 'cross-platform' }) {
@@ -135,7 +152,14 @@ export const profileApi = {
     const resp = response as Record<string, unknown> | null;
     if (resp && typeof resp === 'object' && 'error' in resp && resp.error) {
       const err = resp.error as { message?: string } | string | null;
-      throw new Error(typeof err === 'string' ? err : err?.message || 'Failed to add passkey');
+      const msg = typeof err === 'string' ? err : err?.message || 'Failed to add passkey';
+      reportSystemError({
+        level: 'error',
+        component: 'ApiProfile',
+        message: msg,
+        metadata: { action: 'createPasskey' },
+      });
+      throw new Error(msg);
     }
     return response;
   },
@@ -159,6 +183,12 @@ export const profileApi = {
     });
     if (!response.ok) {
       const err = await response.json().catch(() => ({ error: 'Upload failed' }));
+      reportSystemError({
+        level: 'error',
+        component: 'ApiProfile',
+        message: err.error || 'Upload failed',
+        metadata: { action: 'uploadAvatar' },
+      });
       throw new Error(err.error || 'Upload failed');
     }
     return response.json();
@@ -177,7 +207,15 @@ export const profileApi = {
   // ── Sessions ──
   async listSessions(): Promise<UserSession[]> {
     const data = await apiClient.get<{ success: boolean; data: UserSession[] }>('/api/auth/profile/sessions');
-    if (!data?.success) throw new Error('Failed to load sessions');
+    if (!data?.success) {
+      reportSystemError({
+        level: 'error',
+        component: 'ApiProfile',
+        message: 'Failed to load sessions',
+        metadata: { action: 'listSessions' },
+      });
+      throw new Error('Failed to load sessions');
+    }
     return data.data;
   },
   async revokeSession(id: string) {
@@ -194,7 +232,15 @@ export const profileApi = {
     const data = await apiClient.get<{ success: boolean; data: { logs: AuditLogEntry[]; total: number } }>(
       `/api/auth/profile/audit-log?limit=${limit}&offset=${offset}`,
     );
-    if (!data?.success) throw new Error('Failed to load audit log');
+    if (!data?.success) {
+      reportSystemError({
+        level: 'error',
+        component: 'ApiProfile',
+        message: 'Failed to load audit log',
+        metadata: { action: 'getAuditLog' },
+      });
+      throw new Error('Failed to load audit log');
+    }
     return data.data;
   },
 
@@ -203,7 +249,15 @@ export const profileApi = {
     const response = await fetch('/api/auth/profile/export', {
       headers: { ...(document.cookie ? { Cookie: document.cookie } : {}) },
     });
-    if (!response.ok) throw new Error('Export failed');
+    if (!response.ok) {
+      reportSystemError({
+        level: 'error',
+        component: 'ApiProfile',
+        message: 'Export failed',
+        metadata: { action: 'exportData' },
+      });
+      throw new Error('Export failed');
+    }
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -216,7 +270,15 @@ export const profileApi = {
   // ── API Keys overview ──
   async getApiKeys(): Promise<ApiKeySummary[]> {
     const data = await apiClient.get<{ success: boolean; data: ApiKeySummary[] }>('/api/auth/profile/api-keys');
-    if (!data?.success) throw new Error('Failed to load API keys');
+    if (!data?.success) {
+      reportSystemError({
+        level: 'error',
+        component: 'ApiProfile',
+        message: 'Failed to load API keys',
+        metadata: { action: 'getApiKeys' },
+      });
+      throw new Error('Failed to load API keys');
+    }
     return data.data;
   },
 
@@ -229,7 +291,15 @@ export const profileApi = {
   // ── SSO ──
   async listSsoAccounts(): Promise<ProfileAccount[]> {
     const { data } = await apiClient.get('/api/auth/profile/sso/accounts');
-    if (!data?.success) throw new Error('Failed to load SSO accounts');
+    if (!data?.success) {
+      reportSystemError({
+        level: 'error',
+        component: 'ApiProfile',
+        message: 'Failed to load SSO accounts',
+        metadata: { action: 'listSsoAccounts' },
+      });
+      throw new Error('Failed to load SSO accounts');
+    }
     return data.data;
   },
   async linkSso(providerId: string) {

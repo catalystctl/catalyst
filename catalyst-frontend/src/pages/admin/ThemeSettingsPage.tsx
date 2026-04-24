@@ -27,6 +27,7 @@ import {
   Info,
   Wand2,
   Shuffle,
+  Eye,
 } from 'lucide-react';
 
 // ─── Default color values matching the Obsidian design system ───
@@ -280,6 +281,7 @@ function ThemeSettingsPage() {
   const applyTheme = useThemeStore((s) => s.applyTheme);
   const previewColors = useThemeStore((s) => s.previewColors);
   const cancelPreview = useThemeStore((s) => s.cancelPreview);
+  const injectCustomCss = useThemeStore((s) => s.injectCustomCss);
 
   // ── Branding ──
   const [panelName, setPanelName] = useState('Catalyst');
@@ -360,6 +362,23 @@ function ThemeSettingsPage() {
     setThemeColors(savedColors ? { ...DEFAULTS.themeColors, ...savedColors } : { ...DEFAULTS.themeColors });
   }, [settings]);
 
+  // ── Explicit custom CSS preview / reset helpers ──
+  const handlePreviewCustomCss = () => {
+    console.log('[ThemeSettings] Preview clicked, css length:', customCss.trim().length);
+    if (customCss.trim()) {
+      injectCustomCss(customCss);
+    } else {
+      injectCustomCss(null);
+    }
+  };
+
+  const handleResetCustomCss = () => {
+    const saved = settings?.customCss || '';
+    console.log('[ThemeSettings] Reset clicked, restoring saved css length:', saved.length);
+    setCustomCss(saved);
+    injectCustomCss(saved || null);
+  };
+
   // ── Update a single ThemeColor key + live-preview ──
   const updateThemeColor = (key: keyof ThemeColors, value: string) => {
     const updated = { ...themeColors, [key]: value };
@@ -399,6 +418,7 @@ function ThemeSettingsPage() {
   const updateMutation = useMutation({
     mutationFn: (payload: any) => adminApi.updateThemeSettings(payload),
     onSuccess: (data) => {
+      console.log('[ThemeSettings] save onSuccess, customCss length:', data.customCss?.length ?? 0);
       queryClient.invalidateQueries({ queryKey: qk.adminThemeSettings() });
 
       // Admin PATCH returns the raw Prisma record — themeColors are in metadata.
@@ -421,6 +441,7 @@ function ThemeSettingsPage() {
       toast.success('Theme settings updated successfully');
     },
     onError: (error: any) => {
+      console.error('[ThemeSettings] save onError:', error);
       toast.error(error.response?.data?.error || 'Failed to update theme settings');
     },
   });
@@ -430,7 +451,7 @@ function ThemeSettingsPage() {
       ([key, val]) => val !== DEFAULTS.themeColors[key as keyof ThemeColors],
     );
 
-    updateMutation.mutate({
+    const payload = {
       panelName: panelName.trim() || undefined,
       logoUrl: logoUrl.trim() || null,
       faviconUrl: faviconUrl.trim() || null,
@@ -443,7 +464,9 @@ function ThemeSettingsPage() {
       metadata: {
         themeColors: hasCustomColors ? themeColors : undefined,
       },
-    });
+    };
+    console.log('[ThemeSettings] handleSave payload, customCss length:', payload.customCss?.length ?? 0);
+    updateMutation.mutate(payload);
   };
 
   // ── Reset helpers ──
@@ -1252,7 +1275,7 @@ function ThemeSettingsPage() {
         icon={Code2}
         defaultOpen={false}
       >
-        <div className="space-y-2">
+        <div className="space-y-3">
           <textarea
             value={customCss}
             onChange={(e) => setCustomCss(e.target.value)}
@@ -1260,8 +1283,26 @@ function ThemeSettingsPage() {
             rows={12}
             className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 font-mono text-xs text-zinc-800 placeholder:text-zinc-400 transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-zinc-700 dark:bg-surface-2 dark:text-zinc-100 dark:placeholder:text-zinc-500"
           />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handlePreviewCustomCss}
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-800 dark:border-zinc-700 dark:bg-surface-2 dark:text-zinc-400 dark:hover:bg-surface-3 dark:hover:text-zinc-200"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              Preview
+            </button>
+            <button
+              type="button"
+              onClick={handleResetCustomCss}
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-800 dark:border-zinc-700 dark:bg-surface-2 dark:text-zinc-400 dark:hover:bg-surface-3 dark:hover:text-zinc-200"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset to Saved
+            </button>
+          </div>
           <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
-            Maximum 100 KB. Custom CSS overrides all defaults — use with caution as it can break the UI.
+            Maximum 100 KB. Click <strong>Preview</strong> to see changes before saving. Custom CSS overrides all defaults — use with caution.
           </p>
         </div>
       </SectionCard>

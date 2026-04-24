@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { ModalPortal } from '@/components/ui/modal-portal';
+import { reportSystemError } from '../../services/api/systemErrors';
 
 interface EditApiKeyDialogProps {
   apiKey: ApiKey;
@@ -69,6 +70,13 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
       });
       onClose();
     } catch (err: any) {
+      reportSystemError({
+        level: 'error',
+        component: 'EditApiKeyDialog',
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'update API key' },
+      });
       setError(err?.message || 'Failed to update API key.');
     }
   };

@@ -1,3 +1,4 @@
+import { reportSystemError } from '../services/api/systemErrors';
 import type { PluginManifest, LoadedPlugin, PluginRouteConfig, PluginTabConfig, PluginComponentSlot } from './types';
 
 /**
@@ -94,6 +95,13 @@ export async function loadPluginFrontend(manifest: PluginManifest): Promise<Load
       }
     }
   } catch (error) {
+    reportSystemError({
+      level: 'error',
+      component: 'loader',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      metadata: { context: 'Failed to load plugin frontend' },
+    });
     console.error(`[PluginLoader] Failed to load frontend for "${manifest.name}":`, error);
   }
 

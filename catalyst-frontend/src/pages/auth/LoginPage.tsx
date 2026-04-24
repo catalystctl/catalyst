@@ -8,6 +8,7 @@ import { authApi } from '../../services/api/auth';
 import type { LoginSchema } from '../../validators/auth';
 import { loginSchema } from '../../validators/auth';
 import { authClient } from '../../services/authClient';
+import { reportSystemError } from '../../services/api/systemErrors';
 import { notifyError } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
 import { useThemeStore } from '../../stores/themeStore';
@@ -76,7 +77,14 @@ function LoginPage() {
       const { user } = await authApi.refresh();
       setSession({ user });
       return true;
-    } catch {
+    } catch (err) {
+      reportSystemError({
+        level: 'error',
+        component: 'LoginPage',
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'syncPasskeySession' },
+      });
       return false;
     }
   };
@@ -109,6 +117,13 @@ function LoginPage() {
       );
       setTimeout(() => navigate(from || '/servers'), 100);
     } catch (err) {
+      reportSystemError({
+        level: 'error',
+        component: 'LoginPage',
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'onSubmit' },
+      });
       const error = err as { code?: string };
       if (error.code === 'PASSKEY_REQUIRED') {
         setAuthStep('passkey');
@@ -141,6 +156,13 @@ function LoginPage() {
         },
       });
     } catch (err: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'LoginPage',
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'handlePasskeySignIn' },
+      });
       const error = err as { name?: string };
       if (error?.name === 'AbortError') {
         setAuthStep('passkey');
@@ -155,7 +177,14 @@ function LoginPage() {
   const handleProvider = async (providerId: 'whmcs' | 'paymenter') => {
     try {
       await authApi.signInWithProvider(providerId);
-    } catch {
+    } catch (err) {
+      reportSystemError({
+        level: 'error',
+        component: 'LoginPage',
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'handleProvider' },
+      });
       return;
     }
   };
@@ -179,6 +208,13 @@ function LoginPage() {
       setTotpTrustDevice(false);
       setTimeout(() => navigate(from || '/servers'), 100);
     } catch (err: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'LoginPage',
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        metadata: { context: 'handleTotpSubmit' },
+      });
       setTotpError(getErrorMessage(err, 'Two-factor verification failed'));
     } finally {
       setTotpSubmitting(false);

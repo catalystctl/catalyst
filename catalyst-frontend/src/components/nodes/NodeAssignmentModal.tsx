@@ -6,6 +6,7 @@ import { nodesApi } from '../../services/api/nodes';
 import { adminApi } from '../../services/api/admin';
 import { rolesApi } from '../../services/api/roles';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { reportSystemError } from '../../services/api/systemErrors';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
 type Props = {
@@ -40,6 +41,7 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
   const assignMutation = useMutation({
     mutationFn: async () => {
       if (!targetId) {
+        reportSystemError({ level: 'error', component: 'NodeAssignmentModal', message: 'Please select a target', metadata: { context: 'assign mutation' } });
         throw new Error('Please select a target');
       }
       return nodesApi.assignNode(nodeId, {

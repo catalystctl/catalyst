@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState } from 'react';
 import { usePluginStore } from './store';
 import { fetchPlugins } from './api';
 import { loadPluginFrontend } from './loader';
+import { reportSystemError } from '../services/api/systemErrors';
 import type { LoadedPlugin } from './types';
 
 interface PluginContextValue {
@@ -69,6 +70,7 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
 export function usePluginContext() {
   const context = useContext(PluginContext);
   if (!context) {
+    reportSystemError({ level: 'error', component: 'PluginProvider', message: 'usePluginContext must be used within PluginProvider', metadata: { context: 'usePluginContext invariant' } });
     throw new Error('usePluginContext must be used within PluginProvider');
   }
   return context;

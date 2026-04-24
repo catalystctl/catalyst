@@ -22,6 +22,7 @@ import {
   notifyError,
   notifySuccess,
 } from '../../../utils/notify';
+import { reportSystemError } from '../../../services/api/systemErrors';
 import {
   titleCase,
   normalizeVersionId,
@@ -327,8 +328,10 @@ export default function ServerPluginManagerTab({
 
   const installPluginMutation = useMutation({
     mutationFn: () => {
-      if (!serverId || !selectedPlugin || !selectedPluginVersion)
+      if (!serverId || !selectedPlugin || !selectedPluginVersion) {
+        reportSystemError({ level: 'error', component: 'ServerPluginManagerTab', message: 'Missing plugin selection', metadata: { context: 'install plugin mutation' } });
         throw new Error('Missing plugin selection');
+      }
       return pluginManagerApi.install(serverId, {
         provider: pluginProvider,
         projectId: selectedPlugin,

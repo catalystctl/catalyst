@@ -4,6 +4,7 @@ import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import { tasksApi } from '../../services/api/tasks';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { reportSystemError } from '../../services/api/systemErrors';
 import type { Task } from '../../types/task';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
@@ -60,6 +61,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
     mutationFn: () => {
       const schedule = buildCron(startDate, repeat, weekday);
       if (!schedule) {
+        reportSystemError({ level: 'error', component: 'CreateTaskModal', message: 'Invalid start time', metadata: { context: 'create task mutation' } });
         throw new Error('Invalid start time');
       }
       return tasksApi.create(serverId, {

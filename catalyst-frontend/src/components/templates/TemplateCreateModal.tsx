@@ -25,6 +25,7 @@ import { notifyError, notifySuccess } from '../../utils/notify';
 import { normalizeTemplateImport, parseEggContent } from '../../utils/pterodactylImport';
 import TemplateProviderEditor, { extractProviderIds } from './TemplateProviderEditor';
 import { ModalPortal } from '@/components/ui/modal-portal';
+import { reportSystemError } from '../../services/api/systemErrors';
 
 type VariableDraft = {
   name: string;
@@ -400,6 +401,13 @@ function TemplateCreateModal() {
           }
           applyTemplateImport(parsed);
         } catch (error) {
+          reportSystemError({
+            level: 'error',
+            component: 'TemplateCreateModal',
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            metadata: { context: 'parse import file' },
+          });
           setImportError('Failed to parse file (must be JSON or YAML)');
         }
       };
@@ -422,6 +430,13 @@ function TemplateCreateModal() {
           await templatesApi.create(payload);
           return { ok: true };
         } catch (error) {
+          reportSystemError({
+            level: 'error',
+            component: 'TemplateCreateModal',
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            metadata: { context: 'import template file' },
+          });
           return { ok: false };
         }
       }),
@@ -447,6 +462,7 @@ function TemplateCreateModal() {
     try {
       const response = await fetch(url);
       if (!response.ok) {
+        reportSystemError({ level: 'error', component: 'TemplateCreateModal', message: `HTTP ${response.status}`, metadata: { context: 'handleImportUrl' } });
         throw new Error(`HTTP ${response.status}`);
       }
       const content = await response.text();
@@ -462,6 +478,13 @@ function TemplateCreateModal() {
       setOpen(true);
       applyTemplateImport(parsed);
     } catch (error: any) {
+      reportSystemError({
+        level: 'error',
+        component: 'TemplateCreateModal',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { context: 'fetch import URL' },
+      });
       setImportUrlError(error?.message || 'Failed to fetch the URL. Check the link and try again.');
     } finally {
       setImportUrlLoading(false);

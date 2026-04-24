@@ -53,3 +53,4 @@ test-results/.last-run.json
 .pi-lens
 catalyst-bot/
 catalyst-plugins/egg-explorer/backend/egg-index.json
+catalyst-frontend/src/styles/material.css

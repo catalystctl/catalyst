@@ -2,6 +2,8 @@ import type { PluginManifest } from './types';
 
 // In dev, defaults to relative URL (uses Vite proxy) unless VITE_API_URL is explicitly set.
 // In prod, always uses relative URL (same-origin behind nginx).
+import { reportSystemError } from '../services/api/systemErrors';
+
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
 // Warn if someone set VITE_API_URL to an absolute URL — that bypasses the
@@ -37,7 +39,10 @@ async function apiFetch<T>(
           : JSON.stringify(body)
         : undefined,
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    reportSystemError({ level: 'error', component: 'PluginApi', message: `HTTP ${res.status}`, metadata: { context: 'apiFetch' } });
+    throw new Error(`HTTP ${res.status}`);
+  }
   return res.json() as Promise<T>;
 }
 
