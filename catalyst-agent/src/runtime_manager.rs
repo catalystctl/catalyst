@@ -2064,6 +2064,23 @@ impl ContainerdRuntime {
         let args = if let Some(entrypoint) = image_entrypoint {
             let mut args = entrypoint.to_vec();
             if !config.startup_command.is_empty() {
+                // Startup commands from templates often contain shell syntax
+                // (arithmetic expansion, command substitution, etc.) that must be
+                // parsed by a shell.  Passing them as a single argument to an
+                // image entrypoint that does `exec "$@"` causes the entire string
+                // to be treated as one binary name.  Wrap in `sh -c` so the
+                // entrypoint's exec/eval passes it to a shell.
+                let needs_shell = config.startup_command.contains("$(")
+                    || config.startup_command.contains("[[")
+                    || config.startup_command.contains("$((")
+                    || config.startup_command.contains('`')
+                    || config.startup_command.contains(';')
+                    || config.startup_command.contains("&&")
+                    || config.startup_command.contains("||");
+                if needs_shell {
+                    args.push("/bin/sh".to_string());
+                    args.push("-c".to_string());
+                }
                 args.push(config.startup_command.to_string());
             } else if let Some(cmd) = image_cmd {
                 args.extend(cmd.iter().cloned());
