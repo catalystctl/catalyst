@@ -270,8 +270,11 @@ function CustomConsole({
           prev.start === start && prev.end === end ? prev : { start, end },
         );
 
-        if (isProgrammaticScroll.current) return;
-        const nearBottom = totalSize - scrollTop - el.clientHeight < 40;
+        if (isProgrammaticScroll.current) {
+          isProgrammaticScroll.current = false;
+          return;
+        }
+        const nearBottom = el.scrollHeight - scrollTop - el.clientHeight < 40;
         if (nearBottom) {
           if (showScrollBtnRef.current) {
             showScrollBtnRef.current = false;
@@ -294,7 +297,7 @@ function CustomConsole({
       el.removeEventListener('scroll', update);
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [cumulative, totalSize]);
+  }, [cumulative]);
 
   // ── Auto-scroll ──
   const prevCountRef = useRef(processedEntries.length);
@@ -304,10 +307,11 @@ function CustomConsole({
       const el = parentRef.current;
       if (el) {
         isProgrammaticScroll.current = true;
+        const prev = el.scrollTop;
         el.scrollTop = el.scrollHeight;
-        requestAnimationFrame(() => {
+        if (el.scrollTop === prev) {
           isProgrammaticScroll.current = false;
-        });
+        }
       }
     }
     prevCountRef.current = processedEntries.length;
@@ -320,10 +324,11 @@ function CustomConsole({
     const el = parentRef.current;
     if (el) {
       isProgrammaticScroll.current = true;
+      const prev = el.scrollTop;
       el.scrollTop = el.scrollHeight;
-      requestAnimationFrame(() => {
+      if (el.scrollTop === prev) {
         isProgrammaticScroll.current = false;
-      });
+      }
     }
     onAutoScrollResumeRef.current?.();
   }, []);
