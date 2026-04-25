@@ -372,6 +372,10 @@ function startSFTPServer(logger: Logger) {
 		},
 	);
 
+	sshServer.on("error", (err: any) => {
+		logger.error({ err, port: SFTP_PORT }, "SFTP server failed to start");
+	});
+
 	sshServer.listen(SFTP_PORT, "0.0.0.0", () => {
 		logger.info({ port: SFTP_PORT }, "SFTP server listening");
 	});

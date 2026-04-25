@@ -115,6 +115,7 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
         return;
       }
 
+      let serverNodeId: string | undefined;
       if (!isGlobal) {
         // Per-server: verify access
         const server = await prisma.server.findUnique({
@@ -137,6 +138,7 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
             return;
           }
         }
+        serverNodeId = server.nodeId;
       }
       // Global subscription (all-servers) — just verify userId exists
 
@@ -172,9 +174,16 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
       };
 
       // Per-server subscription OR global subscription for AppLayout
+      const wasFirstSubscriber = !isGlobal && wsGateway.getSseEventSubscriberCount(serverId) === 0;
       const unsubscribe = isGlobal
         ? wsGateway.addGlobalSseSubscriber(EVENT_TYPES, push)
         : wsGateway.addSseEventSubscriber(serverId, EVENT_TYPES, push);
+
+      // If this is the first SSE subscriber for this server, request live
+      // metrics immediately so the user doesn't wait 30s for the next heartbeat.
+      if (wasFirstSubscriber && serverNodeId) {
+        wsGateway.sendToAgent(serverNodeId, { type: 'request_immediate_stats', serverId });
+      }
 
       // Keep-alive heartbeat
       const heartbeatTimer = setInterval(() => {

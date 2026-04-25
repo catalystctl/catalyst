@@ -965,16 +965,19 @@ export class WebSocketGateway {
         });
 
         // Persist to historical ServerStat table (fire-and-forget)
+        // Clamp to 32-bit signed int max to avoid Prisma overflow for large servers.
+        const INT32_MAX = 2_147_483_647;
+        const toStatBytes = (mb: number) => Math.min(Math.round(mb * 1024 * 1024), INT32_MAX);
         this.prisma.serverStat.create({
           data: {
             serverId: server.id,
             cpuPercent: metricsData.cpuPercent,
-            memoryUsed: Math.round(metricsData.memoryUsageMb * 1024 * 1024),
-            memoryLimit: server.allocatedMemoryMb * 1024 * 1024,
-            diskUsed: metricsData.diskUsageMb ? Math.round(metricsData.diskUsageMb * 1024 * 1024) : null,
+            memoryUsed: toStatBytes(metricsData.memoryUsageMb),
+            memoryLimit: toStatBytes(server.allocatedMemoryMb),
+            diskUsed: metricsData.diskUsageMb ? toStatBytes(metricsData.diskUsageMb) : null,
             netRx: Number(networkRxBytes) || null,
             netTx: Number(networkTxBytes) || null,
-            blockRead: Number.isFinite(diskIoMb) ? Math.round(diskIoMb * 1024 * 1024) : null,
+            blockRead: Number.isFinite(diskIoMb) ? toStatBytes(diskIoMb) : null,
             blockWrite: null,
           },
         }).catch((err) => {
@@ -1056,7 +1059,7 @@ export class WebSocketGateway {
           const dusg = Number(it.diskUsageMb) || 0;
           const ts = new Date(it.timestamp);
           tuples.push(
-            Prisma.sql`(DEFAULT, ${it.serverId}, ${cpu}, ${mem}, ${rx}, ${tx}, ${dio}, ${dusg}, ${ts})`
+            Prisma.sql`(${crypto.randomUUID()}, ${it.serverId}, ${cpu}, ${mem}, ${rx}, ${tx}, ${dio}, ${dusg}, ${ts})`
           );
         }
 
@@ -1893,6 +1896,7 @@ export class WebSocketGateway {
         if (server.nodeId) {
           await this.sendToAgent(server.nodeId, {
             type: "request_immediate_stats",
+            serverId: server.id,
           });
         }
         return;
