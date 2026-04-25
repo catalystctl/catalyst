@@ -2,19 +2,11 @@
 @import 'sonner/dist/styles.css';
 @config "../../tailwind.config.js";
 
-/* ═══════════════════════════════════════════════════════════
-   OBSIDIAN DESIGN SYSTEM
-   Dark-first industrial control panel with warm zinc surfaces,
-   vibrant teal accent, and clean geometric typography.
-   ═══════════════════════════════════════════════════════════ */
-
 :root {
-  /* ── Accent Palette ── */
   --accent-teal: 174 80% 46%;
   --accent-teal-light: 174 72% 56%;
   --accent-teal-muted: 174 80% 46% / 0.15;
 
-  /* ── Semantic Colors ── */
   --success: 160 84% 39%;
   --success-muted: 160 84% 39% / 0.15;
   --warning: 38 92% 50%;
@@ -24,7 +16,6 @@
   --info: 217 91% 60%;
   --info-muted: 217 91% 60% / 0.15;
 
-  /* ── Light Mode Tokens ── */
   --background: 0 0% 100%;
   --foreground: 240 10% 3.9%;
   --muted: 240 4.8% 95.9%;
@@ -46,7 +37,6 @@
   --ring: var(--accent-teal);
   --radius: 0.5rem;
 
-  /* ── Zinc Scale (Light) ── */
   --zinc-50: 0 0% 98%;
   --zinc-100: 240 4.8% 95.9%;
   --zinc-200: 240 5.9% 90%;
@@ -59,18 +49,15 @@
   --zinc-900: 240 10% 3.9%;
   --zinc-950: 240 10% 3.9%;
 
-  /* ── Surface Elevation ── */
   --surface-0: 0 0% 100%;
   --surface-1: 0 0% 100%;
   --surface-2: 240 4.8% 95.9%;
   --surface-3: 240 5.9% 90%;
 
-  /* ── Scrollbar ── */
   --scrollbar-track: 240 4.8% 95.9%;
   --scrollbar-thumb: 240 5.9% 83.9%;
   --scrollbar-thumb-hover: 240 4.9% 64.9%;
 
-  /* ── Sonner Toast ── */
   --sonner-background: hsl(var(--card));
   --sonner-border: hsl(var(--border));
   --sonner-text: hsl(var(--foreground));
@@ -83,7 +70,6 @@
 }
 
 .dark {
-  /* ── Dark Mode Tokens ── */
   --background: 240 10% 3.9%;
   --foreground: 0 0% 98%;
   --muted: 240 3.7% 15.9%;
@@ -104,31 +90,15 @@
   --destructive-foreground: 0 0% 100%;
   --ring: var(--accent-teal);
 
-  /* ── Zinc Scale (Dark) ── */
-  --zinc-50: 0 0% 98%;
-  --zinc-100: 240 4.8% 95.9%;
-  --zinc-200: 240 5.9% 90%;
-  --zinc-300: 240 4.9% 83.9%;
-  --zinc-400: 240 5% 64.9%;
-  --zinc-500: 240 3.8% 46.1%;
-  --zinc-600: 240 5.2% 33.9%;
-  --zinc-700: 240 5.9% 24%;
-  --zinc-800: 240 3.7% 15.9%;
-  --zinc-900: 240 10% 3.9%;
-  --zinc-950: 240 10% 3.9%;
-
-  /* ── Surface Elevation (Dark) ── */
   --surface-0: 240 10% 3.9%;
   --surface-1: 240 10% 5.9%;
   --surface-2: 240 3.7% 15.9%;
   --surface-3: 240 5.9% 24%;
 
-  /* ── Scrollbar ── */
   --scrollbar-track: transparent;
   --scrollbar-thumb: 240 3.7% 15.9%;
   --scrollbar-thumb-hover: 240 5% 33.9%;
 
-  /* ── Sonner Toast ── */
   --sonner-background: hsl(var(--surface-1));
   --sonner-border: hsl(var(--border));
   --sonner-text: hsl(var(--foreground));
@@ -144,9 +114,7 @@
   color-scheme: light;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   BASE STYLES
-   ═══════════════════════════════════════════════════════════ */
+/* ── Base ── */
 
 * {
   border-color: hsl(var(--border));
@@ -161,10 +129,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   TYPOGRAPHY SCALE
-   ═══════════════════════════════════════════════════════════ */
-
 .font-display {
   font-family: 'Outfit', system-ui, sans-serif;
 }
@@ -173,28 +137,11 @@ body {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   APP SHELL
-   ═══════════════════════════════════════════════════════════ */
-
 .app-shell {
   background: hsl(var(--background));
 }
 
-.light .app-shell {
-  background: hsl(var(--background));
-}
-
-.container {
-  margin-left: auto;
-  margin-right: auto;
-  padding-left: 1rem;
-  padding-right: 1rem;
-}
-
-/* ═══════════════════════════════════════════════════════════
-   SCROLLBAR STYLING
-   ═══════════════════════════════════════════════════════════ */
+/* ── Scrollbar ── */
 
 html,
 body {
@@ -207,35 +154,26 @@ body {
   scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
 }
 
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
+::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-html::-webkit-scrollbar-track,
-body::-webkit-scrollbar-track,
-*::-webkit-scrollbar-track {
+::-webkit-scrollbar-track {
   background: hsl(var(--scrollbar-track));
   border-radius: 3px;
 }
 
-html::-webkit-scrollbar-thumb,
-body::-webkit-scrollbar-thumb,
-*::-webkit-scrollbar-thumb {
+::-webkit-scrollbar-thumb {
   background: hsl(var(--scrollbar-thumb));
   border-radius: 3px;
 }
 
-html::-webkit-scrollbar-thumb:hover,
-body::-webkit-scrollbar-thumb:hover,
-*::-webkit-scrollbar-thumb:hover {
+::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--scrollbar-thumb-hover));
 }
 
-/* ═══════════════════════════════════════════════════════════
-   CUSTOM SELECT STYLING
-   ═══════════════════════════════════════════════════════════ */
+/* ── Select ── */
 
 select {
   appearance: none;
@@ -243,7 +181,7 @@ select {
   background-position: right 0.5rem center;
   background-repeat: no-repeat;
   background-size: 1.5em 1.5em;
-  padding-right: 2.5rem;
+  padding-right: 2rem;
   cursor: pointer;
 }
 
@@ -251,18 +189,9 @@ select {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%23a1a1aa' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
 }
 
-select:hover {
-  cursor: pointer;
-}
-
-select:focus {
-  outline: none;
-}
-
 select option {
   background-color: hsl(var(--card));
   color: hsl(var(--foreground));
-  padding: 0.5rem;
 }
 
 .dark select option {
@@ -275,23 +204,18 @@ select option {
     background-color: white;
     color: hsl(var(--foreground));
   }
-
   .dark select option {
     background-color: hsl(var(--surface-1));
     color: hsl(var(--foreground));
   }
-
   select option:checked {
     background-color: hsl(var(--primary));
     color: white;
   }
 }
 
-/* ═══════════════════════════════════════════════════════════
-   CONSOLE STYLES
-   ═══════════════════════════════════════════════════════════ */
+/* ── Console ── */
 
-/* Console — light mode */
 .console-output {
   background: hsl(var(--zinc-50));
   scrollbar-color: hsl(var(--zinc-200)) hsl(var(--zinc-50));
@@ -306,7 +230,6 @@ select option {
   border-color: hsl(var(--zinc-50));
 }
 
-/* Console — dark mode */
 .dark .console-output {
   background: hsl(var(--zinc-950));
   scrollbar-color: hsl(var(--zinc-800)) hsl(var(--zinc-950));
@@ -331,7 +254,7 @@ select option {
 }
 
 .dark .console-line:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .console-search-match {
@@ -346,88 +269,44 @@ select option {
   color: #fde68a;
 }
 
-/* Console syntax highlighting — light mode */
-.console-output .chl-error {
-  color: #dc2626;
-  font-weight: 600;
-}
+/* Console syntax — light */
+.console-output .chl-error { color: #dc2626; font-weight: 600; }
+.console-output .chl-warn  { color: #d97706; font-weight: 600; }
+.console-output .chl-info  { color: #2563eb; }
+.console-output .chl-time  { color: #7c3aed; }
+.console-output .chl-uuid  { color: #8b5cf6; opacity: 0.7; }
+.console-output .chl-ip    { color: #059669; }
+.console-output .chl-url   { color: #0284c7; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: rgba(2, 132, 199, 0.3); }
+.console-output .chl-num   { color: #ea580c; }
 
-.console-output .chl-warn {
-  color: #d97706;
-  font-weight: 600;
-}
+/* Console syntax — dark */
+.dark .console-output .chl-error { color: #f87171; }
+.dark .console-output .chl-warn  { color: #fbbf24; }
+.dark .console-output .chl-info  { color: #60a5fa; }
+.dark .console-output .chl-time  { color: #818cf8; }
+.dark .console-output .chl-uuid  { color: #a78bfa; }
+.dark .console-output .chl-ip    { color: #34d399; }
+.dark .console-output .chl-url   { color: #38bdf8; text-decoration-color: rgba(56, 189, 248, 0.3); }
+.dark .console-output .chl-num   { color: #fb923c; }
 
-.console-output .chl-info {
-  color: #2563eb;
-}
-
-.console-output .chl-time {
-  color: #7c3aed;
-}
-
-.console-output .chl-uuid {
-  color: #8b5cf6;
-  opacity: 0.7;
-}
-
-.console-output .chl-ip {
-  color: #059669;
-}
-
-.console-output .chl-url {
-  color: #0284c7;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  text-decoration-color: rgba(2, 132, 199, 0.3);
-}
-
-.console-output .chl-num {
-  color: #ea580c;
-}
-
-/* Console syntax highlighting — dark mode */
-.dark .console-output .chl-error {
-  color: #f87171;
-}
-
-.dark .console-output .chl-warn {
-  color: #fbbf24;
-}
-
-.dark .console-output .chl-info {
-  color: #60a5fa;
-}
-
-.dark .console-output .chl-time {
-  color: #818cf8;
-}
-
-.dark .console-output .chl-uuid {
-  color: #a78bfa;
-}
-
-.dark .console-output .chl-ip {
-  color: #34d399;
-}
-
-.dark .console-output .chl-url {
-  color: #38bdf8;
-  text-decoration-color: rgba(56, 189, 248, 0.3);
-}
-
-.dark .console-output .chl-num {
-  color: #fb923c;
-}
-
-/* ═══════════════════════════════════════════════════════════
-   UTILITY CLASSES
-   ═══════════════════════════════════════════════════════════ */
+/* ── Utilities ── */
 
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* ── Reduced motion ── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

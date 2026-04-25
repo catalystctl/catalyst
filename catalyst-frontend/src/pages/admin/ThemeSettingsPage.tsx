@@ -173,7 +173,7 @@ function OidcProviderSection() {
     oidcMutation.mutate(configs);
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center gap-2 py-4 text-xs text-zinc-400">
         <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-transparent" />

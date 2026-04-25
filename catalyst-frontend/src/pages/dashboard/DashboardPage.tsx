@@ -124,111 +124,102 @@ function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Hero */}
-      <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent p-8">
-        <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-primary/5 blur-3xl" />
-        
-        <div className="relative z-10">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 text-primary">
-                <Sparkles className="h-4 w-4" />
-                <span className="text-sm font-medium">Dashboard</span>
-              </div>
-              <h1 className="mt-2 font-display text-3xl font-bold text-foreground">
-                {getGreeting()}, {user?.firstName || user?.lastName
-                  ? [user.firstName, user.lastName].filter(Boolean).join(' ')
-                  : user?.username || 'there'}
-              </h1>
-              <p className="mt-2 max-w-lg text-sm text-muted-foreground">
-                Welcome back. Here's an overview of your infrastructure at a glance.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm text-success">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
-              System healthy
-            </div>
+      {/* Header */}
+      <div className="rounded-lg border border-border bg-card p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              {getGreeting()}, {user?.firstName || user?.lastName
+                ? [user.firstName, user.lastName].filter(Boolean).join(' ')
+                : user?.username || 'there'}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Overview of your infrastructure at a glance.
+            </p>
           </div>
+          <div className="flex items-center gap-2 rounded-full border border-success/30 bg-success/10 px-3 py-1.5 text-xs font-medium text-success">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
+            System healthy
+          </div>
+        </div>
 
-          <div className={`mt-8 grid grid-cols-1 gap-3 ${isAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+          <div className={`mt-6 grid grid-cols-1 gap-3 ${isAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
             <Link
               to="/servers"
-              className="group flex items-center gap-4 rounded-xl border border-border bg-card/50 p-4 backdrop-blur-sm transition-all hover:border-primary/30 hover:bg-card"
+              className="group flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:border-primary/30"
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                <Server className="h-5 w-5" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <Server className="h-4 w-4" />
               </div>
               <div className="flex-1">
                 {statsLoading ? (
-                  <Skeleton className="h-8 w-16" />
+                  <Skeleton className="h-7 w-14" />
                 ) : (
-                  <div className="font-display text-2xl font-bold text-foreground">{serversTotal}</div>
+                  <div className="text-xl font-bold text-foreground">{serversTotal}</div>
                 )}
-                <div className="text-sm text-muted-foreground">{serversOnline} running</div>
+                <div className="text-xs text-muted-foreground">{serversOnline} running</div>
               </div>
-              <ArrowRight className="h-5 w-5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+              <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
             </Link>
 
             {isAdmin && (
               <Link
                 to="/admin/nodes"
-                className="group flex items-center gap-4 rounded-xl border border-border bg-card/50 p-4 backdrop-blur-sm transition-all hover:border-primary/30 hover:bg-card"
+                className="group flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:border-primary/30"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                  <HardDrive className="h-5 w-5" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <HardDrive className="h-4 w-4" />
                 </div>
                 <div className="flex-1">
                   {statsLoading ? (
-                    <Skeleton className="h-8 w-16" />
+                    <Skeleton className="h-7 w-14" />
                   ) : (
-                    <div className="font-display text-2xl font-bold text-foreground">{nodesTotal}</div>
+                    <div className="text-xl font-bold text-foreground">{nodesTotal}</div>
                   )}
-                  <div className="text-sm text-muted-foreground">{nodesOnline} connected</div>
+                  <div className="text-xs text-muted-foreground">{nodesOnline} connected</div>
                 </div>
-                <ArrowRight className="h-5 w-5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
               </Link>
             )}
 
             {isAdmin && (
               <Link
                 to="/admin/alerts"
-                className="group flex items-center gap-4 rounded-xl border border-border bg-card/50 p-4 backdrop-blur-sm transition-all hover:border-primary/30 hover:bg-card"
+                className="group flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:border-primary/30"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/15 text-warning">
-                  <AlertTriangle className="h-5 w-5" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-warning/10 text-warning">
+                  <AlertTriangle className="h-4 w-4" />
                 </div>
                 <div className="flex-1">
                   {statsLoading ? (
-                    <Skeleton className="h-8 w-16" />
+                    <Skeleton className="h-7 w-14" />
                   ) : (
-                    <div className="font-display text-2xl font-bold text-foreground">{stats?.alerts ?? 0}</div>
+                    <div className="text-xl font-bold text-foreground">{stats?.alerts ?? 0}</div>
                   )}
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-xs text-muted-foreground">
                     {alertsUnacked > 0 ? `${alertsUnacked} unacknowledged` : 'All resolved'}
                   </div>
                 </div>
-                <ArrowRight className="h-5 w-5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
               </Link>
             )}
 
             {!isAdmin && (
               <Link
                 to="/profile"
-                className="group flex items-center gap-4 rounded-xl border border-border bg-card/50 p-4 backdrop-blur-sm transition-all hover:border-primary/30 hover:bg-card"
+                className="group flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:border-primary/30"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                  <Activity className="h-5 w-5" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <Activity className="h-4 w-4" />
                 </div>
                 <div className="flex-1">
-                  <div className="font-display text-2xl font-bold text-foreground">Account</div>
-                  <div className="text-sm text-muted-foreground">Manage your profile</div>
+                  <div className="text-xl font-bold text-foreground">Account</div>
+                  <div className="text-xs text-muted-foreground">Manage your profile</div>
                 </div>
-                <ArrowRight className="h-5 w-5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
               </Link>
             )}
           </div>
-        </div>
       </div>
 
       {/* Quick Actions */}
@@ -237,29 +228,29 @@ function DashboardPage() {
           <Link
             key={action.title}
             to={action.href}
-            className="group flex items-center gap-4 rounded-xl border border-border bg-card p-5 shadow-surface-light transition-all duration-200 hover:border-zinc-300 hover:shadow-elevated dark:shadow-surface-dark dark:hover:border-zinc-700 dark:hover:shadow-elevated-dark"
+            className="group flex items-center gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/30"
           >
-            <div className={`flex h-11 w-11 items-center justify-center rounded-lg ${action.color} text-white`}>
-              <action.icon className="h-5 w-5" />
+            <div className={`flex h-9 w-9 items-center justify-center rounded-md ${action.color} text-white`}>
+              <action.icon className="h-4 w-4" />
             </div>
             <div className="flex-1">
-              <div className="font-semibold text-foreground">{action.title}</div>
-              <div className="text-sm text-muted-foreground">{action.description}</div>
+              <div className="text-sm font-semibold text-foreground">{action.title}</div>
+              <div className="text-xs text-muted-foreground">{action.description}</div>
             </div>
-            <ArrowRight className="h-5 w-5 text-muted-foreground transition-all group-hover:text-primary group-hover:translate-x-1" />
+            <ArrowRight className="h-4 w-4 text-muted-foreground transition-all group-hover:text-primary group-hover:translate-x-0.5" />
           </Link>
         ))}
       </div>
 
       {/* Metrics + Activity */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <div className="lg:col-span-3 rounded-xl border border-border bg-card p-6 shadow-surface-light dark:shadow-surface-dark">
+        <div className="lg:col-span-3 rounded-lg border border-border bg-card p-5">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="font-display text-lg font-semibold text-foreground">Resource Utilization</h2>
-              <p className="text-sm text-muted-foreground">Live metrics across all nodes</p>
+              <h2 className="text-base font-semibold text-foreground">Resource Utilization</h2>
+              <p className="text-xs text-muted-foreground">Live metrics across all nodes</p>
             </div>
-            <div className="flex items-center gap-1.5 rounded-full bg-success/10 px-3 py-1 text-xs font-medium text-success">
+            <div className="flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-0.5 text-[11px] font-medium text-success">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
               Live
             </div>
@@ -305,9 +296,9 @@ function DashboardPage() {
           </div>
         </div>
 
-        <div className="lg:col-span-2 rounded-xl border border-border bg-card p-6 shadow-surface-light dark:shadow-surface-dark">
+        <div className="lg:col-span-2 rounded-lg border border-border bg-card p-5">
           <div className="flex items-center justify-between">
-            <h2 className="font-display text-lg font-semibold text-foreground">Recent Activity</h2>
+            <h2 className="text-base font-semibold text-foreground">Recent Activity</h2>
             {isAdmin && (
               <Link
                 to="/admin/audit-logs"

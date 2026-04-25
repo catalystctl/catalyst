@@ -79,7 +79,7 @@ export function processEntry(entry: RawEntry, searchQuery: string): ProcessedEnt
     id: entry.id,
     stream: entry.stream,
     timestamp: displayTs ? formatTime(displayTs) : '',
-    html: htmlParts.join(''),
+    html: htmlParts.join('<br>'),
     textLength: rawText.length,
   };
 }

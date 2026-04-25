@@ -2,32 +2,27 @@
  * CustomConsole — High-performance virtualized console output component.
  *
  * Architecture:
- *   1. Custom spacer-based virtualizer (no library) — a top spacer div and bottom
- *      spacer div create the scrollable height. Visible items sit in normal document
- *      flow between them. No absolute positioning, no transforms, no measureElement.
+ *   1. Custom spacer-based virtualizer (no library)
  *   2. Pre-computed Float64Array of cumulative heights — binary search (O(log n))
- *      to find the visible range on every scroll. Total size is a single array lookup.
- *   3. React.memo on ConsoleRow — rows that remain visible during scroll NEVER re-render.
- *      Only newly mounted/unmounted rows do work.
- *   4. requestAnimationFrame-throttled scroll handler — one range calculation per frame.
- *   5. ResizeObserver tracks container width for accurate chars-per-line calculation.
- *   6. Two-tier processing cache:
- *        Tier 1 (base): ANSI→HTML + syntax highlighting — computed once per entry ID
- *        Tier 2 (search): Cheap text-node-only regex applied on top of cached base HTML
- *   7. useLayoutEffect for auto-scroll — scroll position set before browser paints.
+ *   3. React.memo on ConsoleRow — rows that remain visible during scroll NEVER re-render
+ *   4. requestAnimationFrame-throttled scroll handler
+ *   5. ResizeObserver tracks container width for accurate chars-per-line calculation
+ *   6. Two-tier processing cache (base + search)
+ *   7. useLayoutEffect for auto-scroll
  */
 
 import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, Download, Trash2 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { RawEntry, ProcessedEntry } from './types';
 import { processEntry } from './processEntry';
 
 // ── Constants ──
 
-const LINE_HEIGHT = 22; // 13px × 1.7 line-height
-const ROW_PAD = 4; // border + vertical breathing room
-const MIN_ROW_HEIGHT = LINE_HEIGHT + ROW_PAD; // 26px
-const OVERSCAN = 200; // rows rendered outside viewport in each direction (~5200px)
+const LINE_HEIGHT = 22;
+const ROW_PAD = 4;
+const MIN_ROW_HEIGHT = LINE_HEIGHT + ROW_PAD;
+const OVERSCAN = 200;
 
 const STREAM_BORDER: Record<string, string> = {
   stdout: 'border-l-emerald-400/60',
@@ -50,22 +45,17 @@ const CHAR_WIDTH = (() => {
   }
 })();
 
-/**
- * Calculate how many monospace characters fit per visual line in the text area.
- * Conservative estimate (3-char safety margin) so we slightly overestimate row
- * count — tiny gap at the bottom of wrapped lines is far better than overlap.
- */
 function calcCharsPerLine(containerWidth: number, showLineNumbers: boolean): number {
   const textAreaWidth =
     containerWidth -
-    2 - // border-l-2
-    (showLineNumbers ? 60 : 0) - // w-12 + pr-3
-    80 - // timestamp column
-    16; // pr-4
+    2 -
+    (showLineNumbers ? 60 : 0) -
+    80 -
+    16;
   return Math.max(20, Math.floor(textAreaWidth / CHAR_WIDTH) - 3);
 }
 
-// ── Search highlighting (text-nodes only, never touches HTML tags) ──
+// ── Search highlighting (text-nodes only) ──
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -92,7 +82,7 @@ function highlightSearchInHtml(html: string, query: string): string {
   return result;
 }
 
-// ── Row component (memoized — skips re-render if entry object is the same) ──
+// ── Row component ──
 
 const ConsoleRow = memo(function ConsoleRow({
   entry,
@@ -108,7 +98,7 @@ const ConsoleRow = memo(function ConsoleRow({
       className={`console-line flex border-l-2 ${STREAM_BORDER[entry.stream] ?? 'border-l-zinc-300 dark:border-l-zinc-700'}`}
     >
       {showLineNumbers && (
-        <span className="flex w-12 shrink-0 select-none items-start justify-end pr-3 pt-px text-[11px] text-muted-foreground group-hover:text-muted-foreground dark:text-foreground dark:group-hover:text-muted-foreground">
+        <span className="flex w-12 shrink-0 select-none items-start justify-end pr-3 pt-px text-[11px] text-muted-foreground">
           {index + 1}
         </span>
       )}
@@ -168,13 +158,12 @@ function CustomConsole({
   const isProgrammaticScroll = useRef(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
 
-  // Keep callback refs in sync to avoid stale closures in the scroll handler
   const onUserScrollRef = useRef(onUserScroll);
   onUserScrollRef.current = onUserScroll;
   const onAutoScrollResumeRef = useRef(onAutoScrollResume);
   onAutoScrollResumeRef.current = onAutoScrollResume;
 
-  // ── Container width → chars-per-line (via ResizeObserver) ──
+  // ── Container width → chars-per-line ──
   const [charsPerLine, setCharsPerLine] = useState(100);
 
   useEffect(() => {
@@ -190,10 +179,10 @@ function CustomConsole({
     return () => ro.disconnect();
   }, [showLineNumbers]);
 
-  // ── Deferred search for responsive typing ──
+  // ── Deferred search ──
   const deferredSearch = useDeferredValue(searchQueryProp);
 
-  // ── Step 1: Filter entries (scrollback + stream) ──
+  // ── Step 1: Filter entries ──
   const filteredEntries = useMemo(() => {
     let result = entries.slice(-scrollback);
     if (streamFilter && streamFilter.size > 0) {
@@ -202,14 +191,14 @@ function CustomConsole({
     return result;
   }, [entries, scrollback, streamFilter]);
 
-  // ── Step 2: Search filter (deferred so typing isn't blocked) ──
+  // ── Step 2: Search filter ──
   const searchableEntries = useMemo(() => {
     if (!deferredSearch) return filteredEntries;
     const q = deferredSearch.toLowerCase();
     return filteredEntries.filter((e) => e.data.toLowerCase().includes(q));
   }, [filteredEntries, deferredSearch]);
 
-  // ── Step 3: Process entries with stable two-tier cache ──
+  // ── Step 3: Process entries with cache ──
   const baseCacheRef = useRef<Map<string, ProcessedEntry>>(new Map());
 
   const processedEntries = useMemo(() => {
@@ -232,10 +221,10 @@ function CustomConsole({
     });
   }, [searchableEntries, deferredSearch, scrollback]);
 
-  // ── Step 4: Pre-compute heights as Float64Array + cumulative prefix sums ──
+  // ── Step 4: Pre-compute heights ──
   const { cumulative, totalSize } = useMemo(() => {
     const n = processedEntries.length;
-    const c = new Float64Array(n + 1); // c[0]=0, c[i]=sum of heights 0..i-1
+    const c = new Float64Array(n + 1);
     for (let i = 0; i < n; i++) {
       const entry = processedEntries[i];
       const wrappedLines = Math.max(1, Math.ceil((entry?.textLength ?? 0) / charsPerLine));
@@ -244,7 +233,7 @@ function CustomConsole({
     return { cumulative: c, totalSize: c[n] };
   }, [processedEntries, charsPerLine]);
 
-  // ── Step 5: Visible range (binary search + RAF throttle) ──
+  // ── Step 5: Visible range ──
   const [range, setRange] = useState({ start: 0, end: 0 });
   const showScrollBtnRef = useRef(false);
 
@@ -262,7 +251,6 @@ function CustomConsole({
         const viewBottom = scrollTop + el.clientHeight;
         const bufferPx = OVERSCAN * MIN_ROW_HEIGHT;
 
-        // Binary search: first index where cumulative[i] > scrollTop
         let lo = 0;
         let hi = cumulative.length - 1;
         while (lo < hi) {
@@ -270,12 +258,9 @@ function CustomConsole({
           if (cumulative[mid] <= scrollTop) lo = mid + 1;
           else hi = mid;
         }
-        // lo-1 is the item containing scrollTop (or 0 if at very top)
         const anchorIdx = lo > 0 ? lo - 1 : 0;
-
         const start = Math.max(0, anchorIdx - OVERSCAN);
 
-        // Walk forward to find end of visible range + overscan
         let end = anchorIdx + 1;
         while (end < cumulative.length - 1 && cumulative[end] < viewBottom + bufferPx) {
           end++;
@@ -285,7 +270,6 @@ function CustomConsole({
           prev.start === start && prev.end === end ? prev : { start, end },
         );
 
-        // Scroll-to-bottom button logic
         if (isProgrammaticScroll.current) return;
         const nearBottom = totalSize - scrollTop - el.clientHeight < 40;
         if (nearBottom) {
@@ -304,7 +288,6 @@ function CustomConsole({
       });
     };
 
-    // Initial calculation + listen
     update();
     el.addEventListener('scroll', update, { passive: true });
     return () => {
@@ -313,7 +296,7 @@ function CustomConsole({
     };
   }, [cumulative, totalSize]);
 
-  // ── Auto-scroll (useLayoutEffect — fires before browser paints) ──
+  // ── Auto-scroll ──
   const prevCountRef = useRef(processedEntries.length);
 
   useLayoutEffect(() => {
@@ -330,7 +313,7 @@ function CustomConsole({
     prevCountRef.current = processedEntries.length;
   }, [autoScrollProp, processedEntries.length]);
 
-  // ── Scroll to bottom (user-initiated) ──
+  // ── Scroll to bottom ──
   const scrollToBottom = useCallback(() => {
     showScrollBtnRef.current = false;
     setShowScrollBtn(false);
@@ -368,91 +351,100 @@ function CustomConsole({
   const bottomSpacer = totalSize - (cumulative[range.end] ?? totalSize);
 
   return (
-    <div className={`relative ${className}`}>
-      {/* Toolbar */}
-      <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
-        <button
-          type="button"
-          onClick={handleExport}
-          disabled={!hasContent}
-          title="Export console log"
-          className="rounded border border-border bg-white/90 px-2 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-all hover:border-primary-500 hover:text-foreground disabled:opacity-50 dark:border-border dark:bg-surface-1/90 dark:text-zinc-300 dark:hover:border-primary-500/50 dark:hover:text-foreground"
+    <TooltipProvider delayDuration={300}>
+      <div className={`relative ${className}`}>
+        {/* Compact floating toolbar */}
+        <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 rounded-md border border-border/80 bg-card/90 p-0.5 shadow-sm backdrop-blur-sm">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={!hasContent}
+                className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Export log</TooltipContent>
+          </Tooltip>
+          {onClear && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={onClear}
+                  disabled={!hasContent}
+                  className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-40"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Clear console</TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+
+        {/* Console output */}
+        <div
+          ref={parentRef}
+          className="console-output h-full overflow-y-auto font-mono text-[13px] leading-[1.7] text-foreground dark:text-zinc-300"
         >
-          <Download className="h-3.5 w-3.5" />
-        </button>
-        {onClear && (
+          {isLoading && !hasContent && (
+            <div className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
+              <div className="h-3 w-3 animate-spin rounded-full border-2 border-border border-t-primary-400 dark:border-zinc-600" />
+              Loading recent logs…
+            </div>
+          )}
+
+          {isError && !hasContent && (
+            <div className="mx-4 my-3 flex items-center justify-between rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">
+              <span>Unable to load historical logs.</span>
+              <button
+                type="button"
+                className="rounded border border-rose-500/30 px-2 py-0.5 text-rose-400 transition-colors hover:bg-rose-500/20"
+                onClick={() => onRetry?.()}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {!isLoading && !hasContent && (
+            <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+              No console output yet.
+            </div>
+          )}
+
+          {hasContent && (
+            <>
+              <div style={{ height: topSpacer }} aria-hidden="true" />
+              {processedEntries.slice(range.start, range.end).map((entry, i) => (
+                <ConsoleRow
+                  key={entry.id}
+                  entry={entry}
+                  index={range.start + i}
+                  showLineNumbers={showLineNumbers}
+                />
+              ))}
+              <div style={{ height: bottomSpacer }} aria-hidden="true" />
+            </>
+          )}
+        </div>
+
+        {/* Scroll-to-bottom button */}
+        {showScrollBtn && !autoScrollProp && (
           <button
             type="button"
-            onClick={onClear}
-            disabled={!hasContent}
-            title="Clear console"
-            className="rounded border border-border bg-white/90 px-2 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-all hover:border-rose-500 hover:text-rose-600 disabled:opacity-50 dark:border-border dark:bg-surface-1/90 dark:text-zinc-300 dark:hover:border-rose-500/50 dark:hover:text-rose-400"
+            onClick={scrollToBottom}
+            className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-card/95 px-3 py-1.5 text-[11px] font-medium text-muted-foreground shadow-md backdrop-blur-sm transition-all hover:border-primary/40 hover:text-foreground"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <ArrowDown className="h-3 w-3" />
+            New output
           </button>
         )}
       </div>
-
-      {/* Console output */}
-      <div
-        ref={parentRef}
-        className="console-output h-full overflow-y-auto font-mono text-[13px] leading-[1.7] text-foreground dark:text-zinc-300"
-      >
-        {isLoading && !hasContent && (
-          <div className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
-            <div className="h-3 w-3 animate-spin rounded-full border-2 border-border border-t-primary-400 dark:border-zinc-600" />
-            Loading recent logs…
-          </div>
-        )}
-
-        {isError && !hasContent && (
-          <div className="mx-4 my-3 flex items-center justify-between rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">
-            <span>Unable to load historical logs.</span>
-            <button
-              type="button"
-              className="rounded border border-rose-500/30 px-2 py-0.5 text-rose-400 transition-colors hover:bg-rose-500/20"
-              onClick={() => onRetry?.()}
-            >
-              Retry
-            </button>
-          </div>
-        )}
-
-        {!isLoading && !hasContent && (
-          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-            No console output yet.
-          </div>
-        )}
-
-        {/* ── Spacer-based virtualizer ── */}
-        {hasContent && (
-          <>
-            <div style={{ height: topSpacer }} aria-hidden="true" />
-            {processedEntries.slice(range.start, range.end).map((entry, i) => (
-              <ConsoleRow
-                key={entry.id}
-                entry={entry}
-                index={range.start + i}
-                showLineNumbers={showLineNumbers}
-              />
-            ))}
-            <div style={{ height: bottomSpacer }} aria-hidden="true" />
-          </>
-        )}
-      </div>
-
-      {/* Scroll-to-bottom button */}
-      {showScrollBtn && !autoScrollProp && (
-        <button
-          type="button"
-          onClick={scrollToBottom}
-          className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-white/95 px-3 py-1.5 text-[11px] text-muted-foreground shadow-lg backdrop-blur-sm transition-all hover:border-primary-500/50 hover:text-foreground dark:border-border dark:bg-surface-1/95 dark:text-muted-foreground dark:hover:text-zinc-200"
-        >
-          <ArrowDown className="h-3 w-3" />
-          New output below
-        </button>
-      )}
-    </div>
+    </TooltipProvider>
   );
 }
 

@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { usePluginStore } from './store';
 import { fetchPlugins } from './api';
 import { loadPluginFrontend } from './loader';
+import { useAuthStore } from '../stores/authStore';
 import { reportSystemError } from '../services/api/systemErrors';
 import type { LoadedPlugin } from './types';
 
@@ -23,6 +24,7 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
   const setLoading = usePluginStore((s) => s.setLoading);
   const setError = usePluginStore((s) => s.setError);
   const [initialized, setInitialized] = useState(false);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const loadPlugins = async () => {
     setLoading(true);
@@ -55,6 +57,12 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!initialized && isAuthenticated) {
+      loadPlugins();
+    }
+  }, [initialized, isAuthenticated]);
 
   const value: PluginContextValue = React.useMemo(() => ({
     plugins,

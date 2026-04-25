@@ -30,8 +30,12 @@ type ConsoleOptions = {
   maxEntries?: number;
 };
 
-const FLUSH_INTERVAL = 32; // ~30fps — fast enough for perceived real-time
-const MAX_BATCH_SIZE = 50; // Flush immediately if batch exceeds this
+const FLUSH_INTERVAL = 32;
+const MAX_BATCH_SIZE = 50;
+
+// Module-level tracking so remounting the same server doesn't wipe logs.
+// Survives component unmounts — only changes when the actual serverId changes.
+let lastConnectedServerId: string | undefined = undefined;
 
 const normalizeData = (data: string) => data.replace(/\r\n/g, '\n');
 
@@ -42,7 +46,7 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
   const nextId = useRef(0);
   const maxEntries = options.maxEntries ?? 500;
   const initialLines = options.initialLines ?? 200;
-  const initialLoadedRef = useRef(false);
+  const loadedKeyRef = useRef('');
 
   // Batch buffer — accumulates SSE events between state flushes
   const batchBuffer = useRef<ConsoleEntry[]>([]);
@@ -92,9 +96,14 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
     refetchOnReconnect: false,
   });
 
-  // ── Load initial logs into state (once) ──
+  // ── Load initial logs into state ──
+  // Keyed by serverId + initialLines so remounting with the same params
+  // still loads cached data into the fresh state.
   useEffect(() => {
-    if (!serverId || !logsQuery.data || initialLoadedRef.current) return;
+    if (!serverId || !logsQuery.data) return;
+
+    const key = `${serverId}:${initialLines}`;
+    if (loadedKeyRef.current === key) return;
 
     const initialEntries: ConsoleEntry[] = logsQuery.data.map((log: ServerLogEntry) => ({
       id: String(nextId.current++),
@@ -103,22 +112,25 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
       timestamp: log.timestamp,
     }));
 
-    if (initialEntries.length > 0) {
-      setEntries(initialEntries.slice(-maxEntries));
-      initialLoadedRef.current = true;
-    }
-  }, [logsQuery.data, serverId, maxEntries]);
+    setEntries(initialEntries.slice(-maxEntries));
+    loadedKeyRef.current = key;
+  }, [logsQuery.data, serverId, initialLines, maxEntries]);
 
   // ── SSE Stream ──
   useEffect(() => {
     if (!serverId) return;
 
-    // Reset on server change
-    nextId.current = 0;
-    initialLoadedRef.current = false;
-    batchBuffer.current = [];
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setEntries([]);
+    const serverChanged = lastConnectedServerId !== serverId;
+    lastConnectedServerId = serverId;
+
+    if (serverChanged) {
+      // Only wipe state when switching to a different server.
+      // Remounting the same page (navigate away + back) preserves logs.
+      nextId.current = 0;
+      batchBuffer.current = [];
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEntries([]);
+    }
     setStreamStatus('connecting');
 
     consoleSseClient.connect(serverId);
@@ -164,7 +176,7 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
     return () => {
       unsubEvent();
       unsubStatus();
-      // Flush any remaining entries
+      consoleSseClient.disconnect();
       if (flushTimerRef.current !== null) {
         cancelAnimationFrame(flushTimerRef.current);
         flushTimerRef.current = null;

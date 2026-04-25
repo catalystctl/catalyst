@@ -220,7 +220,7 @@ function MenuItem({ to, label, icon: Icon, collapsed }: MenuItemProps) {
           'flex h-9 w-9 items-center justify-center rounded-lg transition-all duration-200',
           isActive
             ? 'bg-primary text-primary-foreground shadow-sm'
-            : 'text-zinc-500 hover:bg-surface-2 hover:text-zinc-100',
+            : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
         )}
         title={label}
       >
@@ -236,7 +236,7 @@ function MenuItem({ to, label, icon: Icon, collapsed }: MenuItemProps) {
         'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
         isActive
           ? 'bg-primary text-primary-foreground shadow-sm'
-          : 'text-zinc-400 hover:bg-surface-2 hover:text-zinc-100',
+          : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
       )}
     >
       <Icon className="h-4 w-4 flex-shrink-0" />
@@ -283,7 +283,7 @@ function Section({ title, links, defaultExpanded = false, collapsed }: SectionPr
       <button
         type="button"
         onClick={toggleExpanded}
-        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-zinc-500 transition-colors hover:text-zinc-300"
+        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
       >
         <span>{title}</span>
         {shouldExpand ? (
@@ -354,15 +354,15 @@ function Sidebar() {
   return (
     <aside
       className={cn(
-        'sticky top-0 flex h-screen flex-col border-r border-zinc-800 bg-surface-0 transition-all duration-300',
-        sidebarCollapsed ? 'w-16' : 'w-60',
+        'sticky top-0 flex h-screen flex-col border-r border-border bg-surface-0 transition-all duration-200',
+        sidebarCollapsed ? 'w-16' : 'w-56',
       )}
     >
       {/* Logo */}
       <div
         className={cn(
-          'flex items-center border-b border-zinc-800',
-          sidebarCollapsed ? 'justify-center p-3' : 'gap-3 px-4 py-4',
+          'flex items-center border-b border-border',
+          sidebarCollapsed ? 'justify-center px-3 py-3' : 'gap-2.5 px-4 py-3',
         )}
       >
         <Link
@@ -372,19 +372,19 @@ function Sidebar() {
           <img
             src={logoUrl}
             alt={`${panelName} logo`}
-            className="h-7 w-7 rounded-lg shadow-sm"
+            className="h-6 w-6 rounded-md"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
             }}
           />
           {!sidebarCollapsed && (
-            <span className="font-display text-lg font-bold text-zinc-100">{panelName}</span>
+            <span className="font-display text-base font-bold text-foreground">{panelName}</span>
           )}
         </Link>
       </div>
 
       {/* Navigation */}
-      <div className={cn('flex-1 overflow-y-auto', sidebarCollapsed ? 'px-2 py-4' : 'px-3 py-4')}>
+      <div className={cn('flex-1 overflow-y-auto', sidebarCollapsed ? 'px-2 py-3' : 'px-3 py-3')}>
         <div className="space-y-1">
           {mainLinks
             .filter((link) => link.to !== '/tickets' || hasUserTicketPage)
@@ -394,13 +394,8 @@ function Sidebar() {
         </div>
 
         {filteredSections.length > 0 && (
-          <div
-            className={cn(
-              'border-t border-zinc-800 pt-4',
-              sidebarCollapsed ? 'mt-4' : 'mt-6',
-            )}
-          >
-            <div className={cn('space-y-2', sidebarCollapsed ? 'space-y-3' : '')}>
+          <div className={cn('border-t border-border pt-3', sidebarCollapsed ? 'mt-3' : 'mt-4')}>
+            <div className={cn('space-y-1', sidebarCollapsed ? 'space-y-2' : '')}>
               {filteredSections.map((section) => (
                 <Section key={section.title} {...section} collapsed={sidebarCollapsed} />
               ))}
@@ -410,20 +405,15 @@ function Sidebar() {
       </div>
 
       {/* User Section */}
-      <div
-        className={cn(
-          'border-t border-zinc-800',
-          sidebarCollapsed ? 'p-2' : 'p-3',
-        )}
-      >
+      <div className={cn('border-t border-border', sidebarCollapsed ? 'p-2' : 'p-3')}>
         <NavLink
           to="/profile"
           className={cn(
-            'flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-surface-2',
+            'flex items-center gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-surface-2',
             sidebarCollapsed && 'justify-center',
           )}
         >
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground overflow-hidden">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground overflow-hidden">
             {user?.image
               ? <img src={user.image} alt="" className="h-full w-full object-cover" />
               : initials
@@ -431,62 +421,45 @@ function Sidebar() {
           </div>
           {!sidebarCollapsed && (
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-zinc-100">
-                {displayName}
-              </div>
-              <div className="truncate text-xs text-zinc-500">
-                {user?.role || 'Member'}
-              </div>
+              <div className="truncate text-sm font-medium text-foreground">{displayName}</div>
+              <div className="truncate text-[11px] text-muted-foreground">{user?.role || 'Member'}</div>
             </div>
           )}
         </NavLink>
 
-        <div className={cn('mt-2 flex', sidebarCollapsed ? 'flex-col gap-1' : 'gap-2')}>
+        <div className={cn('mt-1.5 flex', sidebarCollapsed ? 'flex-col gap-1' : 'gap-1.5')}>
           <button
             type="button"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             className={cn(
-              'flex h-8 items-center justify-center gap-2 rounded-lg border border-zinc-800 font-medium text-zinc-400 transition-all hover:bg-surface-2 hover:text-zinc-200',
-              sidebarCollapsed ? 'w-8 text-xs' : 'flex-1 px-3 text-xs',
+              'flex h-7 items-center justify-center gap-1.5 rounded-md border border-border text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground',
+              sidebarCollapsed ? 'w-7' : 'flex-1 px-2 text-[11px]',
             )}
             title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
           >
-            {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+            {theme === 'dark' ? <Sun className="h-3 w-3" /> : <Moon className="h-3 w-3" />}
             {!sidebarCollapsed && (theme === 'dark' ? 'Light' : 'Dark')}
           </button>
           <button
             type="button"
             onClick={toggleSidebar}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-800 font-medium text-zinc-400 transition-all hover:bg-surface-2 hover:text-zinc-200"
+            className="flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
             title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            {sidebarCollapsed ? (
-              <ChevronRight className="h-3.5 w-3.5" />
-            ) : (
-              <ChevronLeft className="h-3.5 w-3.5" />
-            )}
+            {sidebarCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
           </button>
-          {!sidebarCollapsed && (
-            <button
-              type="button"
-              onClick={logout}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-danger transition-all hover:bg-danger/10"
-              title="Logout"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-        {sidebarCollapsed && (
           <button
             type="button"
             onClick={logout}
-            className="mt-1 flex h-8 w-full items-center justify-center rounded-lg text-danger transition-all hover:bg-danger/10"
+            className={cn(
+              'flex h-7 items-center justify-center rounded-md text-danger transition-colors hover:bg-danger/10',
+              sidebarCollapsed ? 'w-7' : 'w-7',
+            )}
             title="Logout"
           >
-            <LogOut className="h-3.5 w-3.5" />
+            <LogOut className="h-3 w-3" />
           </button>
-        )}
+        </div>
       </div>
     </aside>
   );

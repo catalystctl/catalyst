@@ -24,13 +24,7 @@ function AppLayout() {
   useCmdK(() => setIsSearchOpen(true));
 
   return (
-    <div className="app-shell relative flex min-h-screen font-sans">
-      {/* Ambient glow - subtle background depth */}
-      <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute -left-24 top-12 h-64 w-64 rounded-full bg-primary/5 blur-3xl" />
-        <div className="absolute right-10 top-1/3 h-72 w-72 rounded-full bg-primary/3 blur-3xl" />
-      </div>
-
+    <div className="app-shell flex min-h-screen font-sans">
       {/* Mobile overlay */}
       {isMobileSidebarOpen && (
         <div
@@ -41,20 +35,20 @@ function AppLayout() {
       )}
 
       {/* Mobile header */}
-      <div className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between border-b border-zinc-200 bg-white/80 px-4 py-3 backdrop-blur-md dark:border-zinc-800 dark:bg-surface-0/80 lg:hidden">
+      <div className="fixed top-0 left-0 right-0 z-30 flex h-14 items-center justify-between border-b border-border bg-card/90 px-4 backdrop-blur-md lg:hidden">
         <button
           type="button"
           onClick={() => setIsMobileSidebarOpen(true)}
-          className="rounded-lg p-2 text-zinc-600 transition-colors hover:bg-surface-2 dark:text-zinc-400 dark:hover:bg-surface-2"
-          aria-label="Toggle menu"
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2"
+          aria-label="Open menu"
         >
           <Menu className="h-5 w-5" />
         </button>
-        <span className="font-display text-lg font-semibold text-zinc-900 dark:text-zinc-100">{panelName}</span>
+        <span className="text-base font-semibold text-foreground">{panelName}</span>
         <button
           type="button"
           onClick={() => setIsSearchOpen(true)}
-          className="rounded-lg p-2 text-zinc-600 transition-colors hover:bg-surface-2 dark:text-zinc-400 dark:hover:bg-surface-2"
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2"
           aria-label="Search"
         >
           <Search className="h-5 w-5" />
@@ -64,17 +58,17 @@ function AppLayout() {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 transform transition-all duration-300 ease-in-out lg:static lg:transform-none',
+          'fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 ease-out lg:static lg:transform-none',
           isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
       >
         <button
           type="button"
           onClick={() => setIsMobileSidebarOpen(false)}
-          className="absolute right-2 top-4 z-50 rounded-lg p-2 text-zinc-600 hover:bg-surface-2 lg:hidden dark:text-zinc-400 dark:hover:bg-surface-2"
+          className="absolute right-2 top-3 z-50 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-2 lg:hidden"
           aria-label="Close menu"
         >
-          <X className="h-5 w-5" />
+          <X className="h-4 w-4" />
         </button>
         <Sidebar />
       </aside>
@@ -82,7 +76,7 @@ function AppLayout() {
       {/* Main content */}
       <main
         className={cn(
-          'flex-1 overflow-y-auto px-4 py-4 pt-16 transition-all duration-300 lg:px-6 lg:py-6 lg:pt-6',
+          'flex-1 overflow-y-auto px-4 py-4 pt-[4.5rem] transition-all duration-200 lg:px-6 lg:py-6 lg:pt-6',
           sidebarCollapsed ? 'lg:pl-4' : 'lg:pl-6',
         )}
       >
@@ -92,12 +86,12 @@ function AppLayout() {
             <button
               type="button"
               onClick={() => setIsSearchOpen(true)}
-              className="hidden items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-400 shadow-sm transition-all duration-200 hover:border-zinc-300 hover:text-zinc-600 dark:border-zinc-800 dark:bg-surface-1 dark:text-zinc-500 dark:hover:border-zinc-700 dark:hover:text-zinc-300 lg:flex"
+              className="hidden items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-sm transition-colors hover:border-muted-foreground/30 hover:text-foreground lg:flex"
               aria-label="Open search (⌘K)"
             >
               <Search className="h-3.5 w-3.5" />
               <span>Search</span>
-              <kbd className="hidden rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400 sm:inline-block dark:border-zinc-700 dark:bg-surface-2 dark:text-zinc-500">⌘K</kbd>
+              <kbd className="hidden rounded border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-block">⌘K</kbd>
             </button>
           </div>
           <Outlet />

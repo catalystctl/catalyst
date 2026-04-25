@@ -845,30 +845,22 @@ function ServerDetailsPage() {
   // ── Error state (fatal — don't render anything) ──
   if (isError) {
     return (
-      <div className="relative min-h-screen overflow-hidden">
-        <div className="pointer-events-none fixed inset-0 overflow-hidden">
-          <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-primary-500/8 to-primary-300/8 blur-3xl dark:from-primary-500/15 dark:to-primary-300/15" />
-          <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-primary-400/8 to-primary-200/8 blur-3xl dark:from-primary-400/15 dark:to-primary-200/15" />
-        </div>
-        <div className="relative z-10 flex items-center justify-center p-8">
-          <div className="rounded-xl border border-danger/30 bg-danger-muted px-6 py-4 text-center">
-            <p className="text-sm text-danger">
-              Unable to load server details.
-            </p>
-            <div className="mt-3 flex items-center justify-center gap-2">
-              <button
-                onClick={() => refetch()}
-                className="rounded-md border border-border px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
-              >
-                Retry
-              </button>
-              <button
-                onClick={() => navigate('/servers')}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                ← Back to servers
-              </button>
-            </div>
+      <div className="flex items-center justify-center p-8">
+        <div className="rounded-lg border border-danger/30 bg-danger-muted px-6 py-4 text-center">
+          <p className="text-sm text-danger">Unable to load server details.</p>
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <button
+              onClick={() => refetch()}
+              className="rounded-md border border-border px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+            >
+              Retry
+            </button>
+            <button
+              onClick={() => navigate('/servers')}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              ← Back to servers
+            </button>
           </div>
         </div>
       </div>
@@ -893,41 +885,24 @@ function ServerDetailsPage() {
       variants={containerVariants}
       initial={false}
       animate="visible"
-      className="relative min-h-screen overflow-hidden"
+      className="min-h-screen"
     >
-      {/* Ambient background */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-primary-500/8 to-primary-300/8 blur-3xl dark:from-primary-500/15 dark:to-primary-300/15" />
-        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-primary-400/8 to-primary-200/8 blur-3xl dark:from-primary-400/15 dark:to-primary-200/15" />
-      </div>
-
-      <div className="relative z-10 space-y-5">
+      <div className="space-y-4">
         {/* ── Header ── */}
-        <motion.div
-          variants={itemVariants}
-          className="overflow-hidden rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-primary-500 to-primary-400 opacity-20 blur-sm" />
-                  <Terminal className="relative h-7 w-7 text-primary" />
-                </div>
-                {isLoading ? (
-                  <div className="h-8 w-48 animate-pulse rounded-md bg-muted" />
-                ) : (
-                  <>
-                    <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">
-                      {server.name}
-                    </h1>
-                    <ServerStatusBadge status={server.status} />
-                  </>
-                )}
-              </div>
-              <p className="ml-10 text-sm text-muted-foreground">
-                {isLoading ? 'Loading…' : `Node: ${nodeLabel} (IP: ${nodeIp}, Port: ${nodePort})`}
-              </p>
+        <motion.div variants={itemVariants} className="rounded-lg border border-border bg-card p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <Terminal className="h-5 w-5 shrink-0 text-primary" />
+              {isLoading ? (
+                <div className="h-7 w-48 animate-pulse rounded-md bg-muted" />
+              ) : (
+                <>
+                  <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
+                    {server.name}
+                  </h1>
+                  <ServerStatusBadge status={server.status} />
+                </>
+              )}
             </div>
             {server ? (
               <ServerControls
@@ -936,26 +911,22 @@ function ServerDetailsPage() {
                 permissions={server.effectivePermissions}
               />
             ) : (
-              <div className="h-9 w-32 animate-pulse rounded-md bg-muted" />
+              <div className="h-8 w-32 animate-pulse rounded-md bg-muted" />
             )}
           </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {isLoading ? 'Loading…' : `${nodeLabel} · ${nodeIp}:${nodePort}`}
+          </p>
           {isSuspended ? (
-            <div className="mt-4 rounded-lg border border-danger/30 bg-danger-muted px-4 py-3 text-xs text-danger">
-              <div className="font-semibold">Server suspended</div>
-              <div className="text-danger">
-                {server?.suspensionReason
-                  ? `Reason: ${server.suspensionReason}`
-                  : 'No reason provided.'}
-              </div>
+            <div className="mt-3 rounded-md border border-danger/30 bg-danger-muted px-3 py-2 text-xs text-danger">
+              <span className="font-semibold">Suspended</span>
+              {server?.suspensionReason ? ` — ${server.suspensionReason}` : null}
             </div>
           ) : null}
         </motion.div>
 
         {/* ── Tab navigation ── */}
-        <motion.div
-          variants={itemVariants}
-          className="flex flex-wrap gap-1.5 rounded-xl border border-border/50 bg-surface-2/40 p-1.5 backdrop-blur-sm"
-        >
+        <motion.div variants={itemVariants} className="flex flex-wrap gap-0.5 rounded-lg border border-border bg-surface-2/50 p-1">
           {visibleTabs.map(([key, label]) => {
             const isActive = activeTab === key;
             const Icon = tabIcons[key as keyof typeof tabLabels];
@@ -964,15 +935,15 @@ function ServerDetailsPage() {
                 key={key}
                 type="button"
                 title={label}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all duration-200 ${
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
                   isActive
-                    ? 'bg-primary-600 text-white shadow-sm'
-                    : 'text-muted-foreground hover:bg-surface-2/70 hover:text-foreground'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'
                 }`}
                 onClick={() => server && navigate(`/servers/${server.id}/${key}`)}
               >
-                <Icon className="h-4 w-4" />
-                <span className="font-medium">{label}</span>
+                <Icon className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{label}</span>
               </button>
             );
           })}
