@@ -430,18 +430,18 @@ export async function templateRoutes(app: FastifyInstance) {
 			}));
 
 			// Map images — handle both Pelican array format (egg.images) and Pterodactyl export format (egg.docker_images as Record)
-			let rawImages: string[];
+			let mappedImages: Array<{ name: string; image: string }> = [];
 			if (Array.isArray(egg.images)) {
-				rawImages = egg.images;
+				mappedImages = egg.images.map((img: string, i: number) => ({
+					name: `image-${i}`,
+					image: img,
+				}));
 			} else if (egg.docker_images && typeof egg.docker_images === "object") {
-				rawImages = Object.values(egg.docker_images);
-			} else {
-				rawImages = [];
+				mappedImages = Object.entries(egg.docker_images).map(([name, image]) => ({
+					name,
+					image: image as string,
+				}));
 			}
-			const mappedImages = rawImages.map((img: string, i: number) => ({
-				name: `image-${i}`,
-				image: img,
-			}));
 
 			// Build features from Pterodactyl egg data
 			const eggFeatures: Record<string, any> = {};
@@ -513,9 +513,9 @@ export async function templateRoutes(app: FastifyInstance) {
 					description: egg.description || null,
 					author: egg.author || "Pterodactyl Import",
 					version: egg.meta?.version || "PTDL_v2",
-					image: rawImages[0] || "",
+					image: mappedImages[0]?.image || "",
 					images: mappedImages,
-					defaultImage: rawImages[0] || null,
+					defaultImage: mappedImages[0]?.image || null,
 					installImage: egg.scripts?.installation?.container || null,
 					startup: sanitizeStartupCommand(egg.startup),
 					stopCommand: resolvedStopCommand,

@@ -179,6 +179,34 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
         ? wsGateway.addGlobalSseSubscriber(EVENT_TYPES, push)
         : wsGateway.addSseEventSubscriber(serverId, EVENT_TYPES, push);
 
+      // Push cached latest metric immediately so the client doesn't wait for the next agent tick
+      if (!isGlobal) {
+        const cached = wsGateway.getLatestResourceStats(serverId);
+        if (cached) {
+          push('resource_stats', cached);
+        } else {
+          // Fallback: query the DB for the most recent metric
+          const latest = await prisma.serverMetrics.findFirst({
+            where: { serverId },
+            orderBy: { timestamp: 'desc' },
+          });
+          if (latest) {
+            push('resource_stats', {
+              type: 'resource_stats',
+              serverId,
+              cpuPercent: latest.cpuPercent,
+              memoryUsageMb: latest.memoryUsageMb,
+              networkRxBytes: latest.networkRxBytes.toString(),
+              networkTxBytes: latest.networkTxBytes.toString(),
+              diskIoMb: latest.diskIoMb ?? 0,
+              diskUsageMb: latest.diskUsageMb,
+              diskTotalMb: 0,
+              timestamp: latest.timestamp.getTime(),
+            });
+          }
+        }
+      }
+
       // If this is the first SSE subscriber for this server, request live
       // metrics immediately so the user doesn't wait 30s for the next heartbeat.
       if (wasFirstSubscriber && serverNodeId) {

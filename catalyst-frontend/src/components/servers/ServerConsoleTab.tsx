@@ -1,5 +1,5 @@
 import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, Check, Copy, Search, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowDownLeft, ArrowUpRight, Check, Copy, Search, Trash2, X } from 'lucide-react';
 import CustomConsole from '../../components/console/CustomConsole';
 import { formatBytes } from '../../utils/formatters';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -153,46 +153,88 @@ export default function ServerConsoleTab({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex flex-col gap-3">
-        {/* Resource Stats — compact */}
-        {liveMetrics && (
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <StatCard
-              label="CPU"
-              value={`${liveMetrics.cpuPercent.toFixed(1)}%`}
-              percent={liveMetrics.cpuPercent}
-              barColor="bg-primary"
-            />
-            <StatCard
-              label="Memory"
-              value={`${liveMetrics.memoryPercent.toFixed(1)}%`}
-              percent={liveMetrics.memoryPercent}
-              barColor="bg-emerald-500"
-              subtext={`${liveMetrics.memoryUsageMb ?? 0} MB`}
-            />
-            <StatCard
-              label="Disk"
-              value={`${diskPercent}%`}
-              percent={liveDiskUsageMb != null && liveDiskTotalMb ? (liveDiskUsageMb / liveDiskTotalMb) * 100 : 0}
-              barColor="bg-amber-500"
-              subtext={`${liveDiskUsageMb ?? 0} / ${liveDiskTotalMb ?? 0} MB`}
-            />
-            <div className="flex flex-col justify-center gap-1 rounded-lg border border-border bg-card px-3 py-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Network</span>
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-muted-foreground">RX</span>
-                <span className="font-medium tabular-nums">{formatBytes(Number(liveMetrics.networkRxBytes ?? 0))}</span>
+      <div className="flex flex-col gap-3 md:flex-row md:items-stretch">
+        {/* Resource Stats */}
+        <div className="grid grid-cols-2 gap-2 md:flex md:flex-col md:w-44 lg:w-52 shrink-0 md:h-full">
+          {liveMetrics ? (
+            <>
+              <StatCard
+                label="CPU"
+                value={`${liveMetrics.cpuPercent.toFixed(1)}%`}
+                percent={liveMetrics.cpuPercent}
+                color="text-primary"
+                strokeColor="stroke-primary"
+              />
+              <StatCard
+                label="Memory"
+                value={`${liveMetrics.memoryPercent.toFixed(1)}%`}
+                percent={liveMetrics.memoryPercent}
+                color="text-emerald-500"
+                strokeColor="stroke-emerald-500"
+                subtext={`${liveMetrics.memoryUsageMb ?? 0} MB`}
+              />
+              <StatCard
+                label="Disk"
+                value={`${diskPercent}%`}
+                percent={liveDiskUsageMb != null && liveDiskTotalMb ? (liveDiskUsageMb / liveDiskTotalMb) * 100 : 0}
+                color="text-amber-500"
+                strokeColor="stroke-amber-500"
+                subtext={`${liveDiskUsageMb ?? 0} / ${liveDiskTotalMb ?? 0} MB`}
+              />
+              <div className="flex flex-col justify-center gap-3 rounded-lg border border-border bg-card px-3 py-2 md:flex-1 md:justify-center md:gap-4">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Network</span>
+                <div className="flex items-center gap-2 text-[11px]">
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
+                    <ArrowDownLeft className="h-3 w-3" />
+                  </span>
+                  <div className="flex min-w-0 flex-col">
+                    <span className="text-[10px] text-muted-foreground">RX</span>
+                    <span className="font-medium tabular-nums text-foreground">{formatBytes(Number(liveMetrics.networkRxBytes ?? 0))}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-[11px]">
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-500/10 text-sky-500">
+                    <ArrowUpRight className="h-3 w-3" />
+                  </span>
+                  <div className="flex min-w-0 flex-col">
+                    <span className="text-[10px] text-muted-foreground">TX</span>
+                    <span className="font-medium tabular-nums text-foreground">{formatBytes(Number(liveMetrics.networkTxBytes ?? 0))}</span>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-muted-foreground">TX</span>
-                <span className="font-medium tabular-nums">{formatBytes(Number(liveMetrics.networkTxBytes ?? 0))}</span>
+            </>
+          ) : (
+            <>
+              <StatSkeleton label="CPU" />
+              <StatSkeleton label="Memory" />
+              <StatSkeleton label="Disk" />
+              <div className="flex flex-col justify-center gap-3 rounded-lg border border-border bg-card px-3 py-2 md:flex-1 md:justify-center md:gap-4">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Network</span>
+                <div className="flex items-center gap-2 text-[11px]">
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
+                    <ArrowDownLeft className="h-3 w-3" />
+                  </span>
+                  <div className="flex min-w-0 flex-col">
+                    <span className="text-[10px] text-muted-foreground">RX</span>
+                    <span className="inline-block h-3 w-12 animate-pulse rounded bg-surface-3" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-[11px]">
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-500/10 text-sky-500">
+                    <ArrowUpRight className="h-3 w-3" />
+                  </span>
+                  <div className="flex min-w-0 flex-col">
+                    <span className="text-[10px] text-muted-foreground">TX</span>
+                    <span className="inline-block h-3 w-12 animate-pulse rounded bg-surface-3" />
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
 
         {/* Console */}
-        <div className="flex flex-col overflow-hidden rounded-lg border border-border">
+        <div className="flex flex-col overflow-hidden rounded-lg border border-border flex-1 min-w-0">
           {/* Toolbar */}
           <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-card px-2 py-1.5">
             {/* Left: Status + Streams */}
@@ -390,31 +432,96 @@ export default function ServerConsoleTab({
   );
 }
 
-// ── Compact stat card ──
+// ── Stat card with ring gauge ──
 
 function StatCard({
   label,
   value,
   percent,
-  barColor,
+  color,
+  strokeColor,
   subtext,
 }: {
   label: string;
   value: string;
   percent: number;
-  barColor: string;
+  color: string;
+  strokeColor: string;
   subtext?: string;
 }) {
+  const clamped = Math.min(100, Math.max(0, percent));
+  const r = 16;
+  const c = 2 * Math.PI * r;
+  const dash = c - (clamped / 100) * c;
+
   return (
-    <div className="flex flex-col justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 md:flex-1">
+      {/* Mobile: horizontal compact */}
+      <div className="flex w-full items-center justify-between md:hidden">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
-        <span className="text-sm font-bold tabular-nums text-foreground">{value}</span>
+        <span className={`text-sm font-bold tabular-nums ${color}`}>{value}</span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-surface-3">
-        <div className={`h-full rounded-full ${barColor} transition-all duration-300`} style={{ width: `${Math.min(100, percent)}%` }} />
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3 md:hidden">
+        <div className={`h-full rounded-full ${strokeColor.replace('stroke-', 'bg-')} transition-all duration-300`} style={{ width: `${clamped}%` }} />
       </div>
-      {subtext && <span className="text-[10px] text-muted-foreground">{subtext}</span>}
+      {subtext && <span className="w-full text-[10px] text-muted-foreground md:hidden">{subtext}</span>}
+
+      {/* Desktop: ring gauge */}
+      <div className="hidden flex-col items-center justify-center gap-2 md:flex md:flex-1">
+        <div className="relative">
+          <svg width="72" height="72" viewBox="0 0 36 36" className="-rotate-90">
+            <circle cx="18" cy="18" r={r} fill="none" stroke="currentColor" className="text-surface-3" strokeWidth="3" />
+            <circle
+              cx="18"
+              cy="18"
+              r={r}
+              fill="none"
+              className={`${strokeColor} transition-all duration-500`}
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeDasharray={c}
+              strokeDashoffset={dash}
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className={`text-sm font-bold tabular-nums ${color}`}>{value}</span>
+          </div>
+        </div>
+        <div className="text-center">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
+          {subtext && <p className="text-[10px] tabular-nums text-muted-foreground">{subtext}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Skeleton stat card ──
+
+function StatSkeleton({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 md:flex-1">
+      {/* Mobile */}
+      <div className="flex w-full items-center justify-between md:hidden">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
+        <span className="inline-block h-4 w-10 animate-pulse rounded bg-surface-3" />
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3 md:hidden" />
+
+      {/* Desktop */}
+      <div className="hidden flex-col items-center justify-center gap-2 md:flex md:flex-1">
+        <div className="relative">
+          <svg width="72" height="72" viewBox="0 0 36 36" className="-rotate-90">
+            <circle cx="18" cy="18" r="16" fill="none" stroke="currentColor" className="text-surface-3" strokeWidth="3" />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="inline-block h-3.5 w-10 animate-pulse rounded bg-surface-3" />
+          </div>
+        </div>
+        <div className="text-center">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
+        </div>
+      </div>
     </div>
   );
 }

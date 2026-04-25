@@ -4737,6 +4737,108 @@ impl WebSocketHandler {
     }
 
     pub async fn send_resource_stats(&self, target_server: Option<&str>) -> AgentResult<()> {
+        let writer_opt = { self.write.read().await.clone() };
+
+        // Fast path for targeted immediate requests — avoid listing all containers
+        if let Some(target) = target_server {
+            let is_running = match tokio::time::timeout(
+                Duration::from_secs(2),
+                self.runtime.is_container_running(target),
+            )
+            .await
+            {
+                Ok(Ok(r)) => r,
+                Ok(Err(e)) => {
+                    warn!(
+                        "Fast-path is_container_running failed for {}: {}",
+                        target, e
+                    );
+                    false
+                }
+                Err(_) => {
+                    warn!("Fast-path is_container_running timed out for {}", target);
+                    false
+                }
+            };
+
+            if is_running {
+                let stats = match tokio::time::timeout(
+                    Duration::from_secs(3),
+                    self.runtime.get_stats(target),
+                )
+                .await
+                {
+                    Ok(Ok(s)) => s,
+                    Ok(Err(err)) => {
+                        warn!("Fast-path get_stats failed for {}: {}", target, err);
+                        return Ok(());
+                    }
+                    Err(_) => {
+                        warn!("Fast-path get_stats timed out for {}", target);
+                        return Ok(());
+                    }
+                };
+
+                let cpu_percent = parse_percent(&stats.cpu_percent).unwrap_or(0.0);
+                let memory_usage_mb = parse_memory_usage_mb(&stats.memory_usage).unwrap_or(0);
+                let network_rx_bytes = stats.network_rx_bytes;
+                let network_tx_bytes = stats.network_tx_bytes;
+                let disk_io_mb = (stats.block_read_bytes + stats.block_write_bytes) / (1024 * 1024);
+
+                // For immediate requests use a very short df timeout — stale data is fine
+                let (disk_usage_mb, disk_total_mb) = match tokio::time::timeout(
+                    Duration::from_secs(1),
+                    self.runtime.exec(target, vec!["df", "-m", "/data"]),
+                )
+                .await
+                {
+                    Ok(Ok(output)) => parse_df_output_mb(&output).unwrap_or((disk_io_mb, 0)),
+                    _ => (disk_io_mb, 0),
+                };
+
+                let payload = json!({
+                    "type": "resource_stats",
+                    "serverUuid": target,
+                    "cpuPercent": cpu_percent,
+                    "memoryUsageMb": memory_usage_mb,
+                    "networkRxBytes": network_rx_bytes,
+                    "networkTxBytes": network_tx_bytes,
+                    "diskIoMb": disk_io_mb,
+                    "diskUsageMb": disk_usage_mb,
+                    "diskTotalMb": disk_total_mb,
+                    "timestamp": chrono::Utc::now().timestamp_millis(),
+                });
+
+                match &writer_opt {
+                    Some(ws) => {
+                        let mut w = ws.lock().await;
+                        match w.send(Message::Text(payload.to_string().into())).await {
+                            Ok(_) => {}
+                            Err(err) => {
+                                warn!("Failed to send resource stats: {}. Buffering to disk.", err);
+                                if let Err(e) =
+                                    self.storage_manager.append_buffered_metric(&payload).await
+                                {
+                                    warn!("Failed to buffer metric to disk: {}", e);
+                                }
+                            }
+                        }
+                    }
+                    None => {
+                        if let Err(e) = self.storage_manager.append_buffered_metric(&payload).await
+                        {
+                            warn!("Failed to buffer metric to disk: {}", e);
+                        }
+                    }
+                }
+                return Ok(());
+            }
+
+            // Not running — nothing to report
+            return Ok(());
+        }
+
+        // Slow path — periodic health check: list all containers
         let containers =
             match tokio::time::timeout(Duration::from_secs(10), self.runtime.list_containers())
                 .await
@@ -4758,9 +4860,6 @@ impl WebSocketHandler {
             return Ok(());
         }
 
-        let writer_opt = { self.write.read().await.clone() };
-        // writer_opt may be None if we're not connected; we will buffer metrics to disk in that case;
-
         for container in containers {
             if !container.status.contains("Up") || !container.managed {
                 continue;
@@ -4769,15 +4868,6 @@ impl WebSocketHandler {
             let server_uuid = normalize_container_name(&container.names);
             if server_uuid.is_empty() {
                 continue;
-            }
-
-            // When target_server is specified (immediate stats request), only
-            // compute stats for that server.  When None (periodic health check),
-            // compute for all running servers.
-            if let Some(target) = target_server {
-                if server_uuid != target {
-                    continue;
-                }
             }
 
             let stats = match tokio::time::timeout(

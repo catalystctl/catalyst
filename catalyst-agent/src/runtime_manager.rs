@@ -485,6 +485,7 @@ impl ContainerdRuntime {
 
         // Read image's default environment variables (PATH, JAVA_HOME, etc.)
         let image_env = self.get_image_env(&qualified_image).await;
+        let (image_entrypoint, image_cmd) = self.get_image_entrypoint(&qualified_image).await;
 
         // Prepare I/O paths
         let io_dir = PathBuf::from(CONSOLE_BASE_DIR).join(config.container_id);
@@ -524,7 +525,14 @@ impl ContainerdRuntime {
 
         // Build OCI spec
         let use_host_network = config.network_mode == Some("host");
-        let spec = self.build_oci_spec(&config, &io_dir, use_host_network, &image_env)?;
+        let spec = self.build_oci_spec(
+            &config,
+            &io_dir,
+            use_host_network,
+            &image_env,
+            image_entrypoint.as_deref(),
+            image_cmd.as_deref(),
+        )?;
         let spec_any = Any {
             type_url: SPEC_TYPE_URL.to_string(),
             value: spec.to_string().into_bytes(),
@@ -1793,6 +1801,53 @@ impl ContainerdRuntime {
             .unwrap_or_default())
     }
 
+    /// Read the OCI image config to extract Entrypoint and Cmd.
+    /// Falls back to (None, None) on any error (best-effort).
+    async fn get_image_entrypoint(
+        &self,
+        image: &str,
+    ) -> (Option<Vec<String>>, Option<Vec<String>>) {
+        match self.get_image_entrypoint_inner(image).await {
+            Ok(v) => v,
+            Err(e) => {
+                warn!("Failed to read image entrypoint for {}: {}", image, e);
+                (None, None)
+            }
+        }
+    }
+
+    async fn get_image_entrypoint_inner(
+        &self,
+        image: &str,
+    ) -> AgentResult<(Option<Vec<String>>, Option<Vec<String>>)> {
+        let config_digest = self.resolve_image_config_digest(image).await?;
+        let config_bytes = self.read_content_blob(&config_digest).await?;
+        let config: serde_json::Value = serde_json::from_slice(&config_bytes)
+            .map_err(|e| AgentError::ContainerError(format!("Bad config JSON: {}", e)))?;
+
+        let entrypoint = config
+            .get("config")
+            .and_then(|c| c.get("Entrypoint"))
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            });
+
+        let cmd = config
+            .get("config")
+            .and_then(|c| c.get("Cmd"))
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            });
+
+        Ok((entrypoint, cmd))
+    }
+
     async fn resolve_image_config_digest(&self, image: &str) -> AgentResult<String> {
         let mut images = ImagesClient::new(self.channel.clone());
         let req = GetImageRequest {
@@ -1963,6 +2018,8 @@ impl ContainerdRuntime {
         io_dir: &Path,
         use_host_network: bool,
         image_env: &[String],
+        image_entrypoint: Option<&[String]>,
+        image_cmd: Option<&[String]>,
     ) -> AgentResult<serde_json::Value> {
         // Start with image env as base, then overlay our defaults and config env.
         // This preserves image-specific PATH, JAVA_HOME, etc.
@@ -1996,12 +2053,23 @@ impl ContainerdRuntime {
         env_map.insert("TERM".to_string(), "xterm".to_string());
         // Runtime container runs as 1000:1000; set HOME to the data dir
         env_map.insert("HOME".to_string(), "/data".to_string());
+        if !config.startup_command.is_empty() {
+            env_map.insert("STARTUP".to_string(), config.startup_command.to_string());
+        }
         let env_list: Vec<String> = env_map
             .into_iter()
             .map(|(k, v)| format!("{}={}", k, v))
             .collect();
 
-        let args = if !config.startup_command.is_empty() {
+        let args = if let Some(entrypoint) = image_entrypoint {
+            let mut args = entrypoint.to_vec();
+            if !config.startup_command.is_empty() {
+                args.push(config.startup_command.to_string());
+            } else if let Some(cmd) = image_cmd {
+                args.extend(cmd.iter().cloned());
+            }
+            args
+        } else if !config.startup_command.is_empty() {
             let escaped_startup = shell_escape_value(config.startup_command);
             // Some templates (e.g. Hytale) use bash-specific process substitution or
             // other features that dash/sh cannot handle.  Detect those and use bash
@@ -2033,6 +2101,8 @@ impl ContainerdRuntime {
         // Runtime containers run as non-root (1000:1000) and need minimal capabilities.
         let caps = ["CAP_NET_BIND_SERVICE"];
         let mut mounts = base_mounts(config.data_dir);
+        // Pterodactyl images expect server data at /home/container; bind it to the same host dir as /data
+        mounts.push(serde_json::json!({"destination":"/home/container","type":"bind","source":config.data_dir,"options":["rbind","rw"]}));
         // Mount only stdin as rw; stdout/stderr are log sinks that the container
         // process should not write to directly.  This reduces the blast radius of
         // an RCE inside the game server.

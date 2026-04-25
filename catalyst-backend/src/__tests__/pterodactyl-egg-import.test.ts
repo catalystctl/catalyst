@@ -99,13 +99,12 @@ const STOP_SIGNAL_MAP: Record<string, 'SIGINT' | 'SIGTERM' | 'SIGKILL'> = {
 };
 
 function importEgg(egg: PterodactylEgg): ImportedTemplate {
-	let rawImages: string[] = [];
+	let mappedImages: Array<{ name: string; image: string }> = [];
 	if (Array.isArray(egg.images)) {
-		rawImages = egg.images;
+		mappedImages = egg.images.map((img, i) => ({ name: `image-${i}`, image: img }));
 	} else if (egg.docker_images && typeof egg.docker_images === 'object') {
-		rawImages = Object.values(egg.docker_images);
+		mappedImages = Object.entries(egg.docker_images).map(([name, image]) => ({ name, image: image as string }));
 	}
-	const mappedImages = rawImages.map((img, i) => ({ name: `image-${i}`, image: img }));
 
 	const pteroVariables: PterodactylEggVariable[] = Array.isArray(egg.variables) ? egg.variables : [];
 	const mappedVariables = pteroVariables.map((v) => ({
@@ -166,9 +165,9 @@ function importEgg(egg: PterodactylEgg): ImportedTemplate {
 		description: egg.description || null,
 		author: egg.author || 'Pterodactyl Import',
 		version: egg.meta?.version || 'PTDL_v2',
-		image: rawImages[0] || '',
+		image: mappedImages[0]?.image || '',
 		images: mappedImages,
-		defaultImage: rawImages[0] || null,
+		defaultImage: mappedImages[0]?.image || null,
 		installImage: egg.scripts?.installation?.container || null,
 		startup: egg.startup || '',
 		stopCommand: resolvedStopCommand,

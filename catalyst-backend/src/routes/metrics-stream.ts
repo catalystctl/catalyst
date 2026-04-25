@@ -117,6 +117,40 @@ export function metricsStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
         }
       };
 
+      // Push cached latest metric immediately so the client doesn't wait for the next agent tick
+      const cached = wsGateway.getLatestResourceStats(serverId);
+      if (cached) {
+        push('resource_stats', cached);
+      } else {
+        // Fallback: query the DB for the most recent metric
+        const latest = await prisma.serverMetrics.findFirst({
+          where: { serverId },
+          orderBy: { timestamp: 'desc' },
+        });
+        if (latest) {
+          push('resource_stats', {
+            type: 'resource_stats',
+            serverId,
+            cpuPercent: latest.cpuPercent,
+            memoryUsageMb: latest.memoryUsageMb,
+            networkRxBytes: latest.networkRxBytes.toString(),
+            networkTxBytes: latest.networkTxBytes.toString(),
+            diskIoMb: latest.diskIoMb ?? 0,
+            diskUsageMb: latest.diskUsageMb,
+            diskTotalMb: server.allocatedDiskMb ?? 0,
+            timestamp: latest.timestamp.getTime(),
+          });
+        }
+      }
+
+      // Ask the agent to send fresh stats immediately (don't wait for the 30s tick)
+      if (server.nodeId) {
+        wsGateway.sendToAgent(server.nodeId, {
+          type: 'request_immediate_stats',
+          serverId,
+        }).catch(() => {});
+      }
+
       // Subscribe to resource_stats for this server via the gateway's global list
       // Filter by serverId so we only receive metrics for this specific server
       const unsubscribe = wsGateway.addGlobalSseSubscriber(METRICS_EVENT_TYPES, push, [serverId]);

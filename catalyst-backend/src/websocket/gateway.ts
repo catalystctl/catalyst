@@ -114,6 +114,7 @@ export class WebSocketGateway {
   // Cache server access lists to avoid DB query on every routeToClients call.
   // Refreshed every 30 seconds per server.
   private serverAccessCache = new Map<string, { allowedUsers: Set<string>; expiresAt: number }>();
+  private latestResourceStats = new Map<string, Record<string, unknown>>();
   private static readonly SERVER_ACCESS_TTL_MS = 30_000;
   private serverConsoleBytes = new Map<string, { count: number; resetAt: number }>();
   private consoleResumeTimestamps = new Map<string, number>();
@@ -984,7 +985,7 @@ export class WebSocketGateway {
           this.logger.warn({ err, serverId: server.id }, 'Failed to persist ServerStat');
         });
 
-        await this.routeToClients(server.id, {
+        const payload = {
           type: "resource_stats",
           serverId: server.id,
           cpuPercent: Number.isFinite(cpuPercent) ? Math.min(Math.max(cpuPercent, 0), 100) : 0,
@@ -995,7 +996,9 @@ export class WebSocketGateway {
           diskUsageMb: Math.round(Number.isFinite(diskUsageMb) ? Math.max(diskUsageMb, 0) : 0),
           diskTotalMb: Math.round(Number.isFinite(diskTotalMb) ? Math.max(diskTotalMb, 0) : 0),
           timestamp: Date.now(),
-        });
+        };
+        this.latestResourceStats.set(server.id, payload);
+        await this.routeToClients(server.id, payload);
       } else if (message.type === "resource_stats_batch") {
         if (!this.allowAgentMetrics(nodeId, message.metrics.length)) {
           if (this.shouldWarnRateLimit(nodeId, this.agentMetricsLimit.windowMs)) {
@@ -1158,7 +1161,7 @@ export class WebSocketGateway {
         for (const sid of filteredIds) {
           const latest = await this.prisma.serverMetrics.findFirst({ where: { serverId: sid }, orderBy: { timestamp: 'desc' } });
           if (latest) {
-            await this.routeToClients(sid, {
+            const payload = {
               type: 'resource_stats',
               serverId: sid,
               cpuPercent: latest.cpuPercent,
@@ -1169,7 +1172,9 @@ export class WebSocketGateway {
               diskUsageMb: latest.diskUsageMb,
               diskTotalMb: 0,
               timestamp: latest.timestamp.getTime(),
-            });
+            };
+            this.latestResourceStats.set(sid, payload);
+            await this.routeToClients(sid, payload);
           }
         }
       } else if (message.type === "console_output") {
@@ -2412,6 +2417,10 @@ export class WebSocketGateway {
    * @param push - Function called with (eventType, eventData) when matching messages arrive
    * @param serverIds - Optional list of server IDs to filter events to (if non-empty, events from other servers are ignored)
    */
+  getLatestResourceStats(serverId: string): Record<string, unknown> | undefined {
+    return this.latestResourceStats.get(serverId);
+  }
+
   addGlobalSseSubscriber(
     eventTypes: string[],
     push: (event: string, data: any) => void,

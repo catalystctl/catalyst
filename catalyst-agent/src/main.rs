@@ -174,7 +174,7 @@ impl CatalystAgent {
     }
 
     async fn start_health_monitoring(&self, mut shutdown_rx: broadcast::Receiver<()>) {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
 
         loop {
             tokio::select! {
