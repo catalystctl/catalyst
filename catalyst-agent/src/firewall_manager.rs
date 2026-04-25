@@ -1,9 +1,23 @@
 use crate::errors::{AgentError, AgentResult};
 use std::collections::HashSet;
 use std::path::Path;
-use std::process::Command;
 use std::sync::Mutex;
+use std::time::Duration;
+use tokio::process::Command;
 use tracing::{info, warn};
+
+async fn run_firewall_command(cmd: &str, args: &[&str]) -> AgentResult<std::process::Output> {
+    let output = tokio::time::timeout(
+        Duration::from_secs(30),
+        Command::new(cmd).args(args).output(),
+    )
+    .await
+    .map_err(|_| AgentError::FirewallError(format!("{} command timed out", cmd)))?
+    .map_err(|e| AgentError::FirewallError(format!("Failed to run {}: {}", cmd, e)))?;
+    Ok(output)
+}
+
+static IPTABLES_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// Persistent state file that tracks which firewall rules the agent has
 /// created, so they can be reliably removed on server deletion and survive
@@ -42,10 +56,16 @@ pub struct FirewallRule {
 
 static TRACKED_RULES: Mutex<Vec<FirewallRule>> = Mutex::new(Vec::new());
 
+fn lock_rules() -> std::sync::MutexGuard<'static, Vec<FirewallRule>> {
+    TRACKED_RULES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// Load tracked rules from the persistent state file, merging with any
 /// already loaded in memory (used on agent startup).
 fn load_tracked_rules() {
-    let mut rules = TRACKED_RULES.lock().unwrap();
+    let mut rules = lock_rules();
     if !rules.is_empty() {
         return; // already loaded
     }
@@ -75,23 +95,28 @@ fn load_tracked_rules() {
 
 /// Persist tracked rules to disk.
 fn save_tracked_rules() {
-    let rules = TRACKED_RULES.lock().unwrap();
-    if let Err(e) = std::fs::write(
-        RULE_STATE_FILE,
-        rules
-            .iter()
-            .map(|r| serde_json::to_string(r).unwrap_or_default())
-            .collect::<Vec<_>>()
-            .join("\n")
-            + "\n",
-    ) {
+    let rules = lock_rules();
+    let temp = format!("{}.tmp", RULE_STATE_FILE);
+    let data = rules
+        .iter()
+        .map(|r| serde_json::to_string(r).unwrap_or_default())
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    drop(rules);
+    if let Err(e) = std::fs::write(&temp, data) {
         warn!("Could not save firewall rule state: {}", e);
+        return;
+    }
+    if let Err(e) = std::fs::rename(&temp, RULE_STATE_FILE) {
+        warn!("Could not atomically replace firewall rule state: {}", e);
+        let _ = std::fs::remove_file(&temp);
     }
 }
 
 /// Record that we added a firewall rule for a server port.
 fn track_rule(port: u16, proto: &str, server_id: &str, container_ip: &str) {
-    let mut rules = TRACKED_RULES.lock().unwrap();
+    let mut rules = lock_rules();
     // Avoid duplicates.
     let exists = rules.iter().any(|r| {
         r.port == port
@@ -113,7 +138,7 @@ fn track_rule(port: u16, proto: &str, server_id: &str, container_ip: &str) {
 
 /// Remove all tracked rules for a given server and return the removed rules.
 fn untrack_server_rules(server_id: &str) -> Vec<FirewallRule> {
-    let mut rules = TRACKED_RULES.lock().unwrap();
+    let mut rules = lock_rules();
     let mut removed = Vec::new();
     let original_len = rules.len();
     rules.retain(|r| {
@@ -137,8 +162,8 @@ fn untrack_server_rules(server_id: &str) -> Vec<FirewallRule> {
 
 impl FirewallManager {
     /// Detect which firewall is active on the system.
-    pub fn detect_firewall() -> FirewallType {
-        if let Ok(output) = Command::new("ufw").arg("status").output() {
+    pub async fn detect_firewall() -> FirewallType {
+        if let Ok(output) = run_firewall_command("ufw", &["status"]).await {
             let status = String::from_utf8_lossy(&output.stdout);
             if output.status.success() && status.contains("Status: active") {
                 info!("Detected active UFW firewall");
@@ -146,7 +171,7 @@ impl FirewallManager {
             }
         }
 
-        if let Ok(output) = Command::new("firewall-cmd").arg("--state").output() {
+        if let Ok(output) = run_firewall_command("firewall-cmd", &["--state"]).await {
             let status = String::from_utf8_lossy(&output.stdout);
             if output.status.success() && status.contains("running") {
                 info!("Detected active firewalld");
@@ -154,10 +179,8 @@ impl FirewallManager {
             }
         }
 
-        if Command::new("iptables")
-            .arg("-L")
-            .arg("-n")
-            .output()
+        if run_firewall_command("iptables", &["-L", "-n"])
+            .await
             .is_ok()
         {
             info!("Using iptables for firewall management");
@@ -195,7 +218,7 @@ impl FirewallManager {
         };
 
         for proto in &protos {
-            let firewall_type = Self::detect_firewall();
+            let firewall_type = Self::detect_firewall().await;
             let result = match firewall_type {
                 FirewallType::Ufw => Self::allow_port_ufw(port).await,
                 FirewallType::Firewalld => Self::allow_port_firewalld(port, proto).await,
@@ -243,7 +266,7 @@ impl FirewallManager {
         for rule in &rules {
             let key = (rule.port, rule.proto.clone());
             if seen.insert(key) {
-                let firewall_type = Self::detect_firewall();
+                let firewall_type = Self::detect_firewall().await;
                 let result = match firewall_type {
                     FirewallType::Ufw => Self::remove_port_ufw(rule.port).await,
                     FirewallType::Firewalld => {
@@ -268,7 +291,7 @@ impl FirewallManager {
     /// This is a safety net — rules are normally removed per-server.
     pub async fn remove_all_tracked() {
         let rules: Vec<_> = {
-            let guard = TRACKED_RULES.lock().unwrap();
+            let guard = lock_rules();
             guard.iter().cloned().collect()
         };
         if rules.is_empty() {
@@ -284,7 +307,7 @@ impl FirewallManager {
         for rule in &rules {
             let key = (rule.port, rule.proto.clone(), rule.container_ip.clone());
             if seen.insert(key) {
-                let firewall_type = Self::detect_firewall();
+                let firewall_type = Self::detect_firewall().await;
                 let _ = match firewall_type {
                     FirewallType::Ufw => Self::remove_port_ufw(rule.port).await,
                     FirewallType::Firewalld => {
@@ -303,7 +326,7 @@ impl FirewallManager {
     /// Used by iptables-based setups for macvlan/bridge networking.
     pub async fn allow_container_ip(container_ip: &str) -> AgentResult<()> {
         Self::validate_container_ip(container_ip)?;
-        let firewall_type = Self::detect_firewall();
+        let firewall_type = Self::detect_firewall().await;
 
         match firewall_type {
             FirewallType::Ufw | FirewallType::Firewalld | FirewallType::None => {
@@ -318,7 +341,7 @@ impl FirewallManager {
     /// Remove FORWARD rules for a container IP.
     pub async fn remove_container_ip(container_ip: &str) -> AgentResult<()> {
         Self::validate_container_ip(container_ip)?;
-        let firewall_type = Self::detect_firewall();
+        let firewall_type = Self::detect_firewall().await;
 
         match firewall_type {
             FirewallType::Ufw | FirewallType::Firewalld | FirewallType::None => Ok(()),
@@ -336,15 +359,16 @@ impl FirewallManager {
     async fn allow_port_ufw(port: u16) -> AgentResult<()> {
         info!("Configuring UFW to allow port {}", port);
 
-        let output = Command::new("ufw")
-            .args([
+        let output = run_firewall_command(
+            "ufw",
+            &[
                 "allow",
                 &port.to_string(),
                 "comment",
                 "catalyst-game-server",
-            ])
-            .output()
-            .map_err(|e| AgentError::FirewallError(format!("Failed to run ufw: {}", e)))?;
+            ],
+        )
+        .await?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -366,10 +390,7 @@ impl FirewallManager {
         info!("Removing UFW rule for port {}", port);
 
         // List rules with numbers and find ours.
-        let output = Command::new("ufw")
-            .args(["status", "numbered"])
-            .output()
-            .map_err(|e| AgentError::FirewallError(format!("Failed to list ufw rules: {}", e)))?;
+        let output = run_firewall_command("ufw", &["status", "numbered"]).await?;
 
         if !output.status.success() {
             warn!(
@@ -407,12 +428,7 @@ impl FirewallManager {
         // Delete from highest number to lowest to avoid index shifting.
         matching_numbers.sort_by(|a, b| b.cmp(a));
         for num in &matching_numbers {
-            let output = Command::new("ufw")
-                .args(["delete", num])
-                .output()
-                .map_err(|e| {
-                    AgentError::FirewallError(format!("Failed to delete ufw rule #{}", e))
-                })?;
+            let output = run_firewall_command("ufw", &["delete", num]).await?;
 
             if output.status.success() {
                 info!("✓ Removed UFW rule #{}", num);
@@ -435,14 +451,15 @@ impl FirewallManager {
     async fn allow_port_firewalld(port: u16, protocol: &str) -> AgentResult<()> {
         info!("Configuring firewalld to allow port {}/{}", port, protocol);
 
-        let output = Command::new("firewall-cmd")
-            .args([
+        let output = run_firewall_command(
+            "firewall-cmd",
+            &[
                 "--permanent",
                 "--add-port",
                 &format!("{}/{}", port, protocol),
-            ])
-            .output()
-            .map_err(|e| AgentError::FirewallError(format!("Failed to run firewall-cmd: {}", e)))?;
+            ],
+        )
+        .await?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -452,7 +469,7 @@ impl FirewallManager {
             )));
         }
 
-        Self::reload_firewalld()?;
+        Self::reload_firewalld().await?;
 
         info!("✓ firewalld configured to allow port {}/{}", port, protocol);
         Ok(())
@@ -461,14 +478,15 @@ impl FirewallManager {
     async fn remove_port_firewalld(port: u16, protocol: &str) -> AgentResult<()> {
         info!("Removing firewalld rule for port {}/{}", port, protocol);
 
-        let output = Command::new("firewall-cmd")
-            .args([
+        let output = run_firewall_command(
+            "firewall-cmd",
+            &[
                 "--permanent",
                 "--remove-port",
                 &format!("{}/{}", port, protocol),
-            ])
-            .output()
-            .map_err(|e| AgentError::FirewallError(format!("Failed to run firewall-cmd: {}", e)))?;
+            ],
+        )
+        .await?;
 
         if !output.status.success() {
             warn!(
@@ -478,15 +496,12 @@ impl FirewallManager {
             // Don't return error — try reload anyway.
         }
 
-        Self::reload_firewalld()?;
+        Self::reload_firewalld().await?;
         Ok(())
     }
 
-    fn reload_firewalld() -> AgentResult<()> {
-        let output = Command::new("firewall-cmd")
-            .arg("--reload")
-            .output()
-            .map_err(|e| AgentError::FirewallError(format!("Failed to reload firewalld: {}", e)))?;
+    async fn reload_firewalld() -> AgentResult<()> {
+        let output = run_firewall_command("firewall-cmd", &["--reload"]).await?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(AgentError::FirewallError(format!(
@@ -588,15 +603,9 @@ impl FirewallManager {
         for chain in &["INPUT", "FORWARD"] {
             loop {
                 // List rule numbers with line numbers to find our rules.
-                let output = Command::new("iptables")
-                    .args(["-L", chain, "-n", "--line-numbers"])
-                    .output()
-                    .map_err(|e| {
-                        AgentError::FirewallError(format!(
-                            "Failed to list iptables {} rules: {}",
-                            chain, e
-                        ))
-                    })?;
+                let output =
+                    run_firewall_command("iptables", &["-L", chain, "-n", "--line-numbers"])
+                        .await?;
 
                 if !output.status.success() {
                     break;
@@ -622,15 +631,9 @@ impl FirewallManager {
 
                 match found_num {
                     Some(num) => {
-                        let output = Command::new("iptables")
-                            .args(["-D", chain, &num.to_string()])
-                            .output()
-                            .map_err(|e| {
-                                AgentError::FirewallError(format!(
-                                    "Failed to delete iptables {} rule: {}",
-                                    chain, e
-                                ))
-                            })?;
+                        let output =
+                            run_firewall_command("iptables", &["-D", chain, &num.to_string()])
+                                .await?;
                         if !output.status.success() {
                             break; // no more rules to remove
                         }
@@ -696,15 +699,9 @@ impl FirewallManager {
     async fn remove_container_ip_iptables(container_ip: &str) -> AgentResult<()> {
         for chain in &["FORWARD"] {
             loop {
-                let output = Command::new("iptables")
-                    .args(["-L", chain, "-n", "--line-numbers"])
-                    .output()
-                    .map_err(|e| {
-                        AgentError::FirewallError(format!(
-                            "Failed to list iptables {} rules: {}",
-                            chain, e
-                        ))
-                    })?;
+                let output =
+                    run_firewall_command("iptables", &["-L", chain, "-n", "--line-numbers"])
+                        .await?;
 
                 if !output.status.success() {
                     break;
@@ -726,15 +723,9 @@ impl FirewallManager {
 
                 match found_num {
                     Some(num) => {
-                        let output = Command::new("iptables")
-                            .args(["-D", chain, &num.to_string()])
-                            .output()
-                            .map_err(|e| {
-                                AgentError::FirewallError(format!(
-                                    "Failed to delete iptables {} rule: {}",
-                                    chain, e
-                                ))
-                            })?;
+                        let output =
+                            run_firewall_command("iptables", &["-D", chain, &num.to_string()])
+                                .await?;
                         if !output.status.success() {
                             break;
                         }
@@ -747,8 +738,11 @@ impl FirewallManager {
     }
 
     /// Ensure an iptables rule exists — uses `-C` to check first, only
-    /// inserts if missing (idempotent).
+    /// inserts if missing (idempotent).  Uses a mutex to prevent races
+    /// between the check and the insert.
     async fn iptables_ensure_rule(args: &[&str]) -> AgentResult<()> {
+        let _guard = IPTABLES_MUTEX.lock().await;
+
         // Build the check command: replace -I with -C.
         let mut check_args: Vec<&str> = Vec::with_capacity(args.len());
         for arg in args {
@@ -759,7 +753,7 @@ impl FirewallManager {
             }
         }
 
-        let check = Command::new("iptables").args(&check_args).output();
+        let check = run_firewall_command("iptables", &check_args).await;
         if let Ok(output) = check {
             if output.status.success() {
                 return Ok(()); // rule already exists
@@ -767,10 +761,7 @@ impl FirewallManager {
         }
 
         // Rule doesn't exist — insert it.
-        let output = Command::new("iptables")
-            .args(args)
-            .output()
-            .map_err(|e| AgentError::FirewallError(format!("Failed to run iptables: {}", e)))?;
+        let output = run_firewall_command("iptables", args).await?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -799,9 +790,9 @@ impl FirewallManager {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_detect_firewall() {
-        let firewall = FirewallManager::detect_firewall();
+    #[tokio::test]
+    async fn test_detect_firewall() {
+        let firewall = FirewallManager::detect_firewall().await;
         assert!(matches!(
             firewall,
             FirewallType::Ufw
@@ -820,7 +811,7 @@ mod tests {
     #[test]
     fn test_track_and_untrack() {
         // Clear any existing rules in test.
-        TRACKED_RULES.lock().unwrap().clear();
+        lock_rules().clear();
 
         track_rule(25565, "tcp", "srv-1", "10.42.0.5");
         track_rule(25565, "udp", "srv-1", "10.42.0.5");
@@ -829,7 +820,7 @@ mod tests {
         // Duplicate should be ignored.
         track_rule(25565, "tcp", "srv-1", "10.42.0.5");
 
-        let rules = TRACKED_RULES.lock().unwrap();
+        let rules = lock_rules();
         assert_eq!(rules.len(), 3);
 
         drop(rules);
@@ -837,7 +828,7 @@ mod tests {
         let removed = untrack_server_rules("srv-1");
         assert_eq!(removed.len(), 2);
 
-        let remaining = TRACKED_RULES.lock().unwrap();
+        let remaining = lock_rules();
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].server_id, "srv-2");
     }

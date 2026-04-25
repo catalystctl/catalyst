@@ -15,7 +15,8 @@ use std::time::{Duration, Instant};
 use sysinfo::{Disks, Networks, System};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::RwLock;
-use tokio_tungstenite::connect_async;
+use tokio_tungstenite::connect_async_with_config;
+use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{debug, error, info, warn};
 
@@ -33,6 +34,7 @@ const CONTAINER_UID: u32 = 1000;
 const CONTAINER_GID: u32 = 1000;
 const MAX_BACKUP_UPLOAD_BYTES: u64 = 10 * 1024 * 1024 * 1024; // 10GB
 const BACKUP_UPLOAD_INACTIVITY_TIMEOUT: Duration = Duration::from_secs(600); // 10 minutes
+const MAX_CONSOLE_BATCH_BYTES: usize = 32768; // Max bytes to batch into a single console_output message
 
 /// Shell-escape a value for safe interpolation into a bash script.
 /// Wraps the value in single quotes and escapes any embedded single quotes.
@@ -80,6 +82,46 @@ fn normalize_startup_for_sh(command: &str) -> String {
         }
     })
     .into_owned()
+}
+
+/// Split terminal output into complete lines and a trailing partial fragment.
+///
+/// Handles three line-termination styles:
+/// - `\n`         → normal newline
+/// - `\r\n`       → Windows-style newline
+/// - `\r`         → carriage return (Paper/Minecraft overwrites current line)
+///
+/// For `\r` we emulate terminal behaviour: everything since the previous
+/// terminator (or start of slice) up to the `\r` is one line, and the next
+/// line starts fresh after it.  This prevents Paper's startup progress lines
+/// from being concatenated together.
+///
+/// Returns `(Vec<line_text>, trailing_fragment)`.
+/// `trailing_fragment` is the text after the *last* terminator; the caller
+/// should keep it for the next read cycle so partial lines are not split.
+fn split_terminal_lines(text: &str) -> (Vec<String>, &str) {
+    let mut lines = Vec::new();
+    let mut current_start = 0;
+
+    for (i, ch) in text.char_indices() {
+        if ch == '\n' {
+            let line = &text[current_start..i];
+            lines.push(line.to_string());
+            current_start = i + 1;
+        } else if ch == '\r' {
+            let line = &text[current_start..i];
+            lines.push(line.to_string());
+            // Also skip a following \n if present (\r\n)
+            if text.as_bytes().get(i + 1) == Some(&b'\n') {
+                current_start = i + 2;
+            } else {
+                current_start = i + 1;
+            }
+        }
+    }
+
+    let trailing = &text[current_start..];
+    (lines, trailing)
 }
 
 fn validate_safe_path_segment(value: &str, label: &str) -> AgentResult<()> {
@@ -486,7 +528,10 @@ impl WebSocketHandler {
         );
         info!("Using {} auth token for agent connection", token_type);
 
-        let (ws_stream, _) = connect_async(ws_url.as_str())
+        let ws_config = WebSocketConfig::default()
+            .max_frame_size(Some(4 * 1024 * 1024))
+            .max_message_size(Some(8 * 1024 * 1024));
+        let (ws_stream, _) = connect_async_with_config(ws_url.as_str(), Some(ws_config), false)
             .await
             .map_err(|e| AgentError::NetworkError(format!("Failed to connect: {}", e)))?;
 
@@ -505,6 +550,7 @@ impl WebSocketHandler {
             "token": auth_token,
             "nodeId": self.config.server.node_id,
             "tokenType": token_type,
+            "protocolVersion": "1.0",
         });
 
         {
@@ -601,14 +647,23 @@ impl WebSocketHandler {
                     // Binary frames are used for two purposes:
                     // 1. Pipe relay: raw tar data when active_restore_request_id is set
                     // 2. Upload backup chunks: first 16 bytes = requestId header
-                    if let Some(restore_id) =
-                        { self.active_restore_request_id.read().await.clone() }
-                    {
-                        // Active restore stream — route all binary frames to tar stdin
-                        if let Err(e) = self.write_restore_stream_chunk(&restore_id, &data).await {
-                            error!("Error writing restore stream chunk: {}", e);
+                    let restore_id = { self.active_restore_request_id.read().await.clone() };
+                    let mut routed = false;
+                    if let Some(restore_id) = restore_id {
+                        match self.write_restore_stream_chunk(&restore_id, &data).await {
+                            Ok(()) => routed = true,
+                            Err(AgentError::InvalidRequest(ref msg))
+                                if msg == "No active restore stream" =>
+                            {
+                                // Stream was closed between check and write; fall through to upload
+                            }
+                            Err(e) => {
+                                error!("Error writing restore stream chunk: {}", e);
+                                routed = true;
+                            }
                         }
-                    } else if data.len() > 16 {
+                    }
+                    if !routed && data.len() > 16 {
                         let request_id = String::from_utf8_lossy(&data[..16])
                             .trim_end_matches('\0')
                             .to_string();
@@ -705,11 +760,41 @@ impl WebSocketHandler {
 
         match msg["type"].as_str() {
             Some("server_control") => self.handle_server_control(&msg).await?,
-            Some("install_server") => self.install_server(&msg).await?,
-            Some("reinstall_server") => self.reinstall_server(&msg).await?,
-            Some("rebuild_server") => self.rebuild_server(&msg).await?,
+            Some("install_server") => {
+                let handler = self.clone();
+                let msg = msg.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = handler.install_server(&msg).await {
+                        error!("Error in install_server handler: {}", e);
+                    }
+                });
+            }
+            Some("reinstall_server") => {
+                let handler = self.clone();
+                let msg = msg.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = handler.reinstall_server(&msg).await {
+                        error!("Error in reinstall_server handler: {}", e);
+                    }
+                });
+            }
+            Some("rebuild_server") => {
+                let handler = self.clone();
+                let msg = msg.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = handler.rebuild_server(&msg).await {
+                        error!("Error in rebuild_server handler: {}", e);
+                    }
+                });
+            }
             Some("start_server") => {
-                self.start_server_with_details(&msg).await?;
+                let handler = self.clone();
+                let msg = msg.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = handler.start_server_with_details(&msg).await {
+                        error!("Error in start_server handler: {}", e);
+                    }
+                });
             }
             Some("stop_server") => {
                 let server_uuid = msg["serverUuid"]
@@ -730,16 +815,58 @@ impl WebSocketHandler {
                 self.kill_server(server_id, container_id).await?;
             }
             Some("restart_server") => {
-                let server_uuid = msg["serverUuid"]
-                    .as_str()
-                    .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
-                let server_id = msg["serverId"].as_str().unwrap_or(server_uuid);
-                let container_id = self.resolve_container_id(server_id, server_uuid).await;
-                let stop_policy = parse_stop_policy(&msg);
-                self.stop_server(server_id, container_id, &stop_policy)
-                    .await?;
-                tokio::time::sleep(Duration::from_secs(2)).await;
-                self.start_server_with_details(&msg).await?;
+                let handler = self.clone();
+                let msg = msg.clone();
+                tokio::spawn(async move {
+                    let Some(server_uuid) = msg["serverUuid"].as_str() else {
+                        error!("Error in restart_server handler: Missing serverUuid");
+                        return;
+                    };
+                    let server_id = msg["serverId"].as_str().unwrap_or(server_uuid);
+                    let container_id = handler.resolve_container_id(server_id, server_uuid).await;
+                    let stop_policy = parse_stop_policy(&msg);
+                    let container_id_clone = container_id.clone();
+                    if let Err(e) = handler
+                        .stop_server(server_id, container_id_clone.clone(), &stop_policy)
+                        .await
+                    {
+                        error!("Error in restart_server (stop) handler: {}", e);
+                        return;
+                    }
+                    // Wait for container to actually stop (up to 30s) instead of hardcoded 2s
+                    let wait_start = Instant::now();
+                    loop {
+                        if container_id_clone.is_empty() {
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                            break;
+                        }
+                        match handler
+                            .runtime
+                            .is_container_running(&container_id_clone)
+                            .await
+                        {
+                            Ok(false) => break,
+                            Ok(true) if wait_start.elapsed() > Duration::from_secs(30) => {
+                                warn!(
+                                    "Container {} did not stop within 30s, forcing kill",
+                                    container_id_clone
+                                );
+                                if let Err(e) = handler
+                                    .kill_server(server_id, container_id_clone.clone())
+                                    .await
+                                {
+                                    error!("Force kill failed during restart: {}", e);
+                                }
+                                break;
+                            }
+                            _ => {}
+                        }
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                    if let Err(e) = handler.start_server_with_details(&msg).await {
+                        error!("Error in restart_server (start) handler: {}", e);
+                    }
+                });
             }
             Some("delete_server") => {
                 let server_uuid = msg["serverUuid"].as_str().unwrap_or("");
@@ -748,8 +875,26 @@ impl WebSocketHandler {
             }
             Some("console_input") => self.handle_console_input(&msg).await?,
             Some("file_operation") => self.handle_file_operation(&msg).await?,
-            Some("create_backup") => self.handle_create_backup(&msg, write).await?,
-            Some("restore_backup") => self.handle_restore_backup(&msg, write).await?,
+            Some("create_backup") => {
+                let handler = self.clone();
+                let msg = msg.clone();
+                let write = Arc::clone(write);
+                tokio::spawn(async move {
+                    if let Err(e) = handler.handle_create_backup(&msg, &write).await {
+                        error!("Error in handle_create_backup handler: {}", e);
+                    }
+                });
+            }
+            Some("restore_backup") => {
+                let handler = self.clone();
+                let msg = msg.clone();
+                let write = Arc::clone(write);
+                tokio::spawn(async move {
+                    if let Err(e) = handler.handle_restore_backup(&msg, &write).await {
+                        error!("Error in handle_restore_backup handler: {}", e);
+                    }
+                });
+            }
             Some("delete_backup") => self.handle_delete_backup(&msg, write).await?,
             Some("download_backup_start") => self.handle_download_backup_start(&msg, write).await?,
             Some("download_backup") => self.handle_download_backup(&msg, write).await?,
@@ -758,7 +903,16 @@ impl WebSocketHandler {
             Some("upload_backup_complete") => {
                 self.handle_upload_backup_complete(&msg, write).await?
             }
-            Some("start_backup_stream") => self.handle_start_backup_stream(&msg, write).await?,
+            Some("start_backup_stream") => {
+                let handler = self.clone();
+                let msg = msg.clone();
+                let write = Arc::clone(write);
+                tokio::spawn(async move {
+                    if let Err(e) = handler.handle_start_backup_stream(&msg, &write).await {
+                        error!("Error in handle_start_backup_stream handler: {}", e);
+                    }
+                });
+            }
             Some("prepare_restore_stream") => {
                 self.handle_prepare_restore_stream(&msg, write).await?
             }
@@ -766,8 +920,12 @@ impl WebSocketHandler {
             Some("resize_storage") => self.handle_resize_storage(&msg, write).await?,
             Some("resume_console") => self.resume_console(&msg).await?,
             Some("request_immediate_stats") => {
-                info!("Received immediate stats request from backend");
-                if let Err(e) = self.send_resource_stats().await {
+                let target = msg["serverId"].as_str();
+                info!(
+                    target = target.unwrap_or("all"),
+                    "Received immediate stats request from backend"
+                );
+                if let Err(e) = self.send_resource_stats(target).await {
                     warn!("Failed to send immediate stats: {}", e);
                 }
             }
@@ -1390,10 +1548,20 @@ impl WebSocketHandler {
                 if prev != Some(healthy) {
                     health_states.insert(server_id.clone(), healthy);
                     drop(health_states); // Release lock before sending
-                    let status = if healthy { "healthy" } else { "unhealthy" };
-                    info!("Health check for {}: {} (port {})", server_id, status, port);
+                    let status = "running";
+                    let reason = if healthy {
+                        Some("Health check passed".to_string())
+                    } else {
+                        Some("Health check failed".to_string())
+                    };
+                    info!(
+                        "Health check for {}: {} (port {})",
+                        server_id,
+                        if healthy { "healthy" } else { "unhealthy" },
+                        port
+                    );
                     let _ = self
-                        .emit_server_state_update(server_id, status, None, None, None)
+                        .emit_server_state_update(server_id, status, reason, None, None)
                         .await;
                 }
             }
@@ -1525,47 +1693,103 @@ impl WebSocketHandler {
             // Read new stdout content
             if let Ok(content) = tokio::fs::read_to_string(&installer.stdout_path).await {
                 if (stdout_pos as usize) < content.len() {
-                    for line in content[stdout_pos as usize..].lines() {
+                    let new_text = &content[stdout_pos as usize..];
+                    let (lines, trailing) = split_terminal_lines(new_text);
+                    let processed_len = new_text.len() - trailing.len();
+                    let mut batch = String::new();
+                    for line in lines {
                         let payload = format!("{}\n", line);
                         stdout_buffer.push_str(&payload);
-                        self.emit_console_output(server_id, "stdout", &payload)
+                        batch.push_str(&payload);
+                        if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                            self.emit_console_output(server_id, "stdout", &batch)
+                                .await?;
+                            batch.clear();
+                        }
+                    }
+                    if !batch.is_empty() {
+                        self.emit_console_output(server_id, "stdout", &batch)
                             .await?;
                     }
-                    stdout_pos = content.len() as u64;
+                    stdout_pos += processed_len as u64;
                 }
             }
             // Read new stderr content
             if let Ok(content) = tokio::fs::read_to_string(&installer.stderr_path).await {
                 if (stderr_pos as usize) < content.len() {
-                    for line in content[stderr_pos as usize..].lines() {
+                    let new_text = &content[stderr_pos as usize..];
+                    let (lines, trailing) = split_terminal_lines(new_text);
+                    let processed_len = new_text.len() - trailing.len();
+                    let mut batch = String::new();
+                    for line in lines {
                         let payload = format!("{}\n", line);
                         stderr_buffer.push_str(&payload);
-                        self.emit_console_output(server_id, "stderr", &payload)
+                        batch.push_str(&payload);
+                        if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                            self.emit_console_output(server_id, "stderr", &batch)
+                                .await?;
+                            batch.clear();
+                        }
+                    }
+                    if !batch.is_empty() {
+                        self.emit_console_output(server_id, "stderr", &batch)
                             .await?;
                     }
-                    stderr_pos = content.len() as u64;
+                    stderr_pos += processed_len as u64;
                 }
             }
             // Check if the installer container has exited
             match tokio::time::timeout(Duration::from_millis(200), installer.wait()).await {
                 Ok(Ok(exit_code)) => {
-                    // Read any remaining output
+                    // Read any remaining output (including trailing partials)
                     if let Ok(content) = tokio::fs::read_to_string(&installer.stdout_path).await {
                         if (stdout_pos as usize) < content.len() {
-                            for line in content[stdout_pos as usize..].lines() {
+                            let new_text = &content[stdout_pos as usize..];
+                            let (lines, trailing) = split_terminal_lines(new_text);
+                            let mut batch = String::new();
+                            for line in lines {
                                 let payload = format!("{}\n", line);
                                 stdout_buffer.push_str(&payload);
-                                self.emit_console_output(server_id, "stdout", &payload)
+                                batch.push_str(&payload);
+                                if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                                    self.emit_console_output(server_id, "stdout", &batch)
+                                        .await?;
+                                    batch.clear();
+                                }
+                            }
+                            if !trailing.is_empty() {
+                                let payload = format!("{}\n", trailing);
+                                stdout_buffer.push_str(&payload);
+                                batch.push_str(&payload);
+                            }
+                            if !batch.is_empty() {
+                                self.emit_console_output(server_id, "stdout", &batch)
                                     .await?;
                             }
                         }
                     }
                     if let Ok(content) = tokio::fs::read_to_string(&installer.stderr_path).await {
                         if (stderr_pos as usize) < content.len() {
-                            for line in content[stderr_pos as usize..].lines() {
+                            let new_text = &content[stderr_pos as usize..];
+                            let (lines, trailing) = split_terminal_lines(new_text);
+                            let mut batch = String::new();
+                            for line in lines {
                                 let payload = format!("{}\n", line);
                                 stderr_buffer.push_str(&payload);
-                                self.emit_console_output(server_id, "stderr", &payload)
+                                batch.push_str(&payload);
+                                if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                                    self.emit_console_output(server_id, "stderr", &batch)
+                                        .await?;
+                                    batch.clear();
+                                }
+                            }
+                            if !trailing.is_empty() {
+                                let payload = format!("{}\n", trailing);
+                                stderr_buffer.push_str(&payload);
+                                batch.push_str(&payload);
+                            }
+                            if !batch.is_empty() {
+                                self.emit_console_output(server_id, "stderr", &batch)
                                     .await?;
                             }
                         }
@@ -1828,42 +2052,98 @@ impl WebSocketHandler {
 
             if let Ok(content) = tokio::fs::read_to_string(&stdout_path).await {
                 if (stdout_pos as usize) < content.len() {
-                    for line in content[stdout_pos as usize..].lines() {
-                        let payload = format!("{}\n", line);
-                        self.emit_console_output(server_id, "stdout", &payload)
+                    let new_text = &content[stdout_pos as usize..];
+                    let (lines, trailing) = split_terminal_lines(new_text);
+                    let processed_len = new_text.len() - trailing.len();
+                    let mut batch = String::new();
+                    for line in lines {
+                        batch.push_str(&line);
+                        batch.push('\n');
+                        if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                            self.emit_console_output(server_id, "stdout", &batch)
+                                .await?;
+                            batch.clear();
+                        }
+                    }
+                    if !batch.is_empty() {
+                        self.emit_console_output(server_id, "stdout", &batch)
                             .await?;
                     }
-                    stdout_pos = content.len() as u64;
-                    had_data = true;
+                    stdout_pos += processed_len as u64;
+                    had_data = !new_text.is_empty();
                 }
             }
             if let Ok(content) = tokio::fs::read_to_string(&stderr_path).await {
                 if (stderr_pos as usize) < content.len() {
-                    for line in content[stderr_pos as usize..].lines() {
-                        let payload = format!("{}\n", line);
-                        self.emit_console_output(server_id, "stderr", &payload)
+                    let new_text = &content[stderr_pos as usize..];
+                    let (lines, trailing) = split_terminal_lines(new_text);
+                    let processed_len = new_text.len() - trailing.len();
+                    let mut batch = String::new();
+                    for line in lines {
+                        batch.push_str(&line);
+                        batch.push('\n');
+                        if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                            self.emit_console_output(server_id, "stderr", &batch)
+                                .await?;
+                            batch.clear();
+                        }
+                    }
+                    if !batch.is_empty() {
+                        self.emit_console_output(server_id, "stderr", &batch)
                             .await?;
                     }
-                    stderr_pos = content.len() as u64;
-                    had_data = true;
+                    stderr_pos += processed_len as u64;
+                    had_data = had_data || !new_text.is_empty();
                 }
             }
 
             if !running {
-                // Read any final data
+                // Container stopped — flush any trailing partial lines too
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 if let Ok(content) = tokio::fs::read_to_string(&stdout_path).await {
                     if (stdout_pos as usize) < content.len() {
-                        for line in content[stdout_pos as usize..].lines() {
-                            self.emit_console_output(server_id, "stdout", &format!("{}\n", line))
+                        let new_text = &content[stdout_pos as usize..];
+                        let (lines, trailing) = split_terminal_lines(new_text);
+                        let mut batch = String::new();
+                        for line in lines {
+                            batch.push_str(&line);
+                            batch.push('\n');
+                            if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                                self.emit_console_output(server_id, "stdout", &batch)
+                                    .await?;
+                                batch.clear();
+                            }
+                        }
+                        if !trailing.is_empty() {
+                            batch.push_str(trailing);
+                            batch.push('\n');
+                        }
+                        if !batch.is_empty() {
+                            self.emit_console_output(server_id, "stdout", &batch)
                                 .await?;
                         }
                     }
                 }
                 if let Ok(content) = tokio::fs::read_to_string(&stderr_path).await {
                     if (stderr_pos as usize) < content.len() {
-                        for line in content[stderr_pos as usize..].lines() {
-                            self.emit_console_output(server_id, "stderr", &format!("{}\n", line))
+                        let new_text = &content[stderr_pos as usize..];
+                        let (lines, trailing) = split_terminal_lines(new_text);
+                        let mut batch = String::new();
+                        for line in lines {
+                            batch.push_str(&line);
+                            batch.push('\n');
+                            if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                                self.emit_console_output(server_id, "stderr", &batch)
+                                    .await?;
+                                batch.clear();
+                            }
+                        }
+                        if !trailing.is_empty() {
+                            batch.push_str(trailing);
+                            batch.push('\n');
+                        }
+                        if !batch.is_empty() {
+                            self.emit_console_output(server_id, "stderr", &batch)
                                 .await?;
                         }
                     }
@@ -3612,8 +3892,14 @@ impl WebSocketHandler {
             .spawn()
             .map_err(|e| AgentError::IoError(format!("Failed to spawn tar: {}", e)))?;
 
-        let mut stdout = child.stdout.take().expect("stdout was piped");
-        let stderr = child.stderr.take().expect("stderr was piped");
+        let mut stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| AgentError::IoError("Failed to capture tar stdout".to_string()))?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| AgentError::IoError("Failed to capture tar stderr".to_string()))?;
 
         // Read stderr in background to avoid deadlock
         let stderr_task = tokio::spawn(async move {
@@ -3854,7 +4140,7 @@ impl WebSocketHandler {
     ) -> AgentResult<()> {
         let network = self.parse_network_config(msg)?;
 
-        let result = NetworkManager::create_network(&network);
+        let result = NetworkManager::create_network(&network).await;
 
         let event = match &result {
             Ok(_) => json!({
@@ -3892,7 +4178,7 @@ impl WebSocketHandler {
 
         let network = self.parse_network_config(msg)?;
 
-        let result = NetworkManager::update_network(old_name, &network);
+        let result = NetworkManager::update_network(old_name, &network).await;
 
         let event = match &result {
             Ok(_) => json!({
@@ -3930,7 +4216,7 @@ impl WebSocketHandler {
             .as_str()
             .ok_or_else(|| AgentError::InvalidRequest("Missing networkName".to_string()))?;
 
-        let result = NetworkManager::delete_network(network_name);
+        let result = NetworkManager::delete_network(network_name).await;
 
         let event = match &result {
             Ok(_) => json!({
@@ -3995,7 +4281,10 @@ impl WebSocketHandler {
         if let Some(ws) = writer {
             let mut w = ws.lock().await;
             if let Err(err) = w.send(Message::Text(msg.to_string().into())).await {
-                error!("Failed to send state update: {}", err);
+                return Err(AgentError::NetworkError(format!(
+                    "Failed to send state update: {}",
+                    err
+                )));
             }
         }
 
@@ -4024,7 +4313,10 @@ impl WebSocketHandler {
         if let Some(ws) = writer {
             let mut w = ws.lock().await;
             if let Err(err) = w.send(Message::Text(msg.to_string().into())).await {
-                error!("Failed to send console output: {}", err);
+                return Err(AgentError::NetworkError(format!(
+                    "Failed to send console output: {}",
+                    err
+                )));
             }
         }
 
@@ -4056,7 +4348,10 @@ impl WebSocketHandler {
         if let Some(ws) = writer {
             let mut w = ws.lock().await;
             if let Err(err) = w.send(Message::Text(msg.to_string().into())).await {
-                error!("Failed to send eula_required: {}", err);
+                return Err(AgentError::NetworkError(format!(
+                    "Failed to send eula_required: {}",
+                    err
+                )));
             }
         }
 
@@ -4441,8 +4736,24 @@ impl WebSocketHandler {
         Ok(())
     }
 
-    pub async fn send_resource_stats(&self) -> AgentResult<()> {
-        let containers = self.runtime.list_containers().await?;
+    pub async fn send_resource_stats(&self, target_server: Option<&str>) -> AgentResult<()> {
+        let containers =
+            match tokio::time::timeout(Duration::from_secs(10), self.runtime.list_containers())
+                .await
+            {
+                Ok(Ok(c)) => c,
+                Ok(Err(e)) => {
+                    warn!("Failed to list containers for resource stats: {}", e);
+                    return Err(e);
+                }
+                Err(_) => {
+                    warn!("list_containers timed out after 10s");
+                    return Err(AgentError::NetworkError(
+                        "list_containers timed out".to_string(),
+                    ));
+                }
+            };
+
         if containers.is_empty() {
             return Ok(());
         }
@@ -4460,13 +4771,31 @@ impl WebSocketHandler {
                 continue;
             }
 
-            let stats = match self.runtime.get_stats(&container.id).await {
-                Ok(stats) => stats,
-                Err(err) => {
+            // When target_server is specified (immediate stats request), only
+            // compute stats for that server.  When None (periodic health check),
+            // compute for all running servers.
+            if let Some(target) = target_server {
+                if server_uuid != target {
+                    continue;
+                }
+            }
+
+            let stats = match tokio::time::timeout(
+                Duration::from_secs(5),
+                self.runtime.get_stats(&container.id),
+            )
+            .await
+            {
+                Ok(Ok(s)) => s,
+                Ok(Err(err)) => {
                     warn!(
                         "Failed to fetch stats for container {}: {}",
                         container.id, err
                     );
+                    continue;
+                }
+                Err(_) => {
+                    warn!("get_stats timed out for container {}", container.id);
                     continue;
                 }
             };
@@ -4476,17 +4805,27 @@ impl WebSocketHandler {
             let network_rx_bytes = stats.network_rx_bytes;
             let network_tx_bytes = stats.network_tx_bytes;
             let disk_io_mb = (stats.block_read_bytes + stats.block_write_bytes) / (1024 * 1024);
-            let (disk_usage_mb, disk_total_mb) = match self
-                .runtime
-                .exec(&container.id, vec!["df", "-m", "/data"])
-                .await
-                .ok()
-                .and_then(|output| parse_df_output_mb(&output))
+
+            // Run df with a strict timeout — containerd exec can hang if the
+            // filesystem is unresponsive, and we don't want one bad container to
+            // stall stats for everyone.
+            let (disk_usage_mb, disk_total_mb) = match tokio::time::timeout(
+                Duration::from_secs(3),
+                self.runtime.exec(&container.id, vec!["df", "-m", "/data"]),
+            )
+            .await
             {
-                Some(value) => value,
-                None => {
+                Ok(Ok(output)) => parse_df_output_mb(&output).unwrap_or((disk_io_mb, 0)),
+                Ok(Err(err)) => {
                     warn!(
-                        "Failed to read filesystem usage for container {}. Falling back to block IO stats.",
+                        "Failed to read filesystem usage for container {}: {}. Falling back to block IO stats.",
+                        container.id, err
+                    );
+                    (disk_io_mb, 0)
+                }
+                Err(_) => {
+                    warn!(
+                        "df exec timed out for container {}. Falling back to block IO stats.",
                         container.id
                     );
                     (disk_io_mb, 0)

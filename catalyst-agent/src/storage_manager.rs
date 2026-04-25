@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::task::spawn_blocking;
-use tracing::info;
+use tracing::{error, info, warn};
 
 use crate::{AgentError, AgentResult};
 use serde_json::Value;
@@ -75,11 +75,28 @@ impl StorageManager {
             return Ok(());
         }
 
-        if self.is_mounted(mount_dir).await? {
+        let was_mounted = self.is_mounted(mount_dir).await?;
+        if was_mounted {
             self.unmount(mount_dir).await?;
         }
 
-        self.shrink_image(&image_path, size_mb).await?;
+        if let Err(e) = self.shrink_image(&image_path, size_mb).await {
+            warn!(
+                "Shrink failed for {}, attempting to remount: {}",
+                server_uuid, e
+            );
+            if was_mounted {
+                if let Err(remount_err) = self.mount_image(&image_path, mount_dir).await {
+                    error!("Failed to remount after shrink failure: {}", remount_err);
+                    return Err(AgentError::FileSystemError(format!(
+                        "Shrink failed ({}), and remount failed ({})",
+                        e, remount_err
+                    )));
+                }
+            }
+            return Err(e);
+        }
+
         self.mount_image(&image_path, mount_dir).await?;
         Ok(())
     }
@@ -132,9 +149,20 @@ impl StorageManager {
         self.mount_image(image_path, &migrate_dir).await?;
         let src = format!("{}/", mount_dir.display());
         let dst = format!("{}/", migrate_dir.display());
-        spawn_blocking(move || run("rsync", &["-a", src.as_str(), dst.as_str()]))
-            .await
-            .map_err(|e| AgentError::FileSystemError(format!("rsync task failed: {}", e)))??;
+        let result = spawn_blocking(move || {
+            run_with_timeout("rsync", &["-a", src.as_str(), dst.as_str()], 3600)
+        })
+        .await
+        .map_err(|e| AgentError::FileSystemError(format!("rsync task failed: {}", e)))?;
+        if let Err(e) = result {
+            warn!(
+                "Migration rsync failed for {}, cleaning up: {}",
+                server_uuid, e
+            );
+            let _ = self.unmount(&migrate_dir).await;
+            let _ = fs::remove_dir_all(&migrate_dir).await;
+            return Err(e);
+        }
         self.unmount(&migrate_dir).await?;
         self.clear_dir(mount_dir).await?;
         fs::remove_dir_all(&migrate_dir).await?;
@@ -252,8 +280,12 @@ impl StorageManager {
         let target = mount_dir.to_string_lossy();
         for line in mounts.lines() {
             let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() > 1 && parts[1] == target {
-                return Ok(true);
+            if parts.len() > 1 {
+                // /proc/mounts encodes spaces as \040
+                let decoded = parts[1].replace("\\040", " ");
+                if decoded == target {
+                    return Ok(true);
+                }
             }
         }
         Ok(false)
@@ -341,15 +373,47 @@ impl StorageManager {
 }
 
 fn run(command: &str, args: &[&str]) -> AgentResult<()> {
-    let status = std::process::Command::new(command)
+    run_with_timeout(command, args, 600)
+}
+
+fn run_with_timeout(command: &str, args: &[&str], timeout_secs: u64) -> AgentResult<()> {
+    let mut child = std::process::Command::new(command)
         .args(args)
-        .status()
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
         .map_err(|e| AgentError::FileSystemError(format!("Failed to run {}: {}", command, e)))?;
-    if !status.success() {
-        return Err(AgentError::FileSystemError(format!(
-            "{} failed with status {}",
-            command, status
-        )));
+
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(timeout_secs);
+
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if status.success() {
+                    return Ok(());
+                }
+                return Err(AgentError::FileSystemError(format!(
+                    "{} failed with status {}",
+                    command, status
+                )));
+            }
+            Ok(None) => {
+                if start.elapsed() > timeout {
+                    let _ = child.kill();
+                    return Err(AgentError::FileSystemError(format!(
+                        "{} timed out after {}s",
+                        command, timeout_secs
+                    )));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Err(e) => {
+                return Err(AgentError::FileSystemError(format!(
+                    "Failed to wait for {}: {}",
+                    command, e
+                )));
+            }
+        }
     }
-    Ok(())
 }

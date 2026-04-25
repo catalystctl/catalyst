@@ -1,5 +1,8 @@
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::signal::ctrl_c;
+use tokio::signal::unix::{signal, SignalKind};
+use tokio::sync::{broadcast, RwLock};
+use tokio::task::JoinSet;
 use tracing::{error, info, warn};
 
 mod config;
@@ -86,39 +89,81 @@ impl CatalystAgent {
         })
     }
 
-    pub async fn run(&self) -> AgentResult<()> {
+    pub async fn run(&self, mut shutdown_rx: broadcast::Receiver<()>) -> AgentResult<()> {
         info!("Starting Catalyst Agent");
 
         // Run an initial resource snapshot immediately (captures current usage at startup)
-        if let Err(e) = self.ws_handler.send_resource_stats().await {
+        if let Err(e) = self.ws_handler.send_resource_stats(None).await {
             warn!("Initial resource snapshot failed: {}", e);
         }
 
+        let mut join_set = JoinSet::new();
+
         // Start WebSocket connection to backend
         let agent = self.clone_refs();
-        let ws_task = tokio::spawn(async move {
-            if let Err(e) = agent.ws_handler.connect_and_listen().await {
-                error!("WebSocket error: {}", e);
+        let mut ws_shutdown = shutdown_rx.resubscribe();
+        join_set.spawn(async move {
+            tokio::select! {
+                result = agent.ws_handler.connect_and_listen() => {
+                    if let Err(e) = result {
+                        error!("WebSocket error: {}", e);
+                    }
+                }
+                _ = ws_shutdown.recv() => {
+                    info!("WebSocket task shutting down");
+                }
             }
         });
 
         // Start health monitoring
         let agent = self.clone_refs();
-        let health_task = tokio::spawn(async move {
-            agent.start_health_monitoring().await;
+        let health_shutdown = shutdown_rx.resubscribe();
+        join_set.spawn(async move {
+            agent.start_health_monitoring(health_shutdown).await;
         });
 
         // Start file tunnel (HTTP-based file operations)
         let file_tunnel = self.file_tunnel.clone();
-        let tunnel_task = tokio::spawn(async move {
-            file_tunnel.run().await;
+        let mut tunnel_shutdown = shutdown_rx.resubscribe();
+        join_set.spawn(async move {
+            tokio::select! {
+                _ = file_tunnel.run() => {},
+                _ = tunnel_shutdown.recv() => {
+                    info!("File tunnel task shutting down");
+                }
+            }
         });
 
-        // Start HTTP server for local management
+        // Wait for either a shutdown signal or any task to exit
         tokio::select! {
-            _ = ws_task => {},
-            _ = health_task => {},
-            _ = tunnel_task => {},
+            _ = shutdown_rx.recv() => {
+                info!("Shutdown signal received");
+            }
+            result = join_set.join_next() => {
+                match result {
+                    Some(Ok(())) => info!("A task exited normally"),
+                    Some(Err(e)) => {
+                        if e.is_panic() {
+                            error!("A task panicked: {}", e);
+                        } else {
+                            error!("A task was cancelled: {}", e);
+                        }
+                    }
+                    None => info!("All tasks exited"),
+                }
+            }
+        }
+
+        // Explicitly abort all remaining tasks
+        join_set.abort_all();
+
+        // Wait for all tasks to finish
+        while let Some(result) = join_set.join_next().await {
+            if let Err(e) = result {
+                if e.is_panic() {
+                    error!("Task panicked during shutdown: {}", e);
+                }
+            }
         }
 
         // Clean up firewall rules on shutdown.
@@ -128,11 +173,17 @@ impl CatalystAgent {
         Ok(())
     }
 
-    async fn start_health_monitoring(&self) {
+    async fn start_health_monitoring(&self, mut shutdown_rx: broadcast::Receiver<()>) {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
 
         loop {
-            interval.tick().await;
+            tokio::select! {
+                _ = interval.tick() => {},
+                _ = shutdown_rx.recv() => {
+                    info!("Health monitoring shutting down");
+                    break;
+                }
+            }
 
             // Collect health metrics
             if let Err(err) = self.ws_handler.send_health_report().await {
@@ -140,7 +191,7 @@ impl CatalystAgent {
             }
 
             // Collect per-server resource stats
-            if let Err(err) = self.ws_handler.send_resource_stats().await {
+            if let Err(err) = self.ws_handler.send_resource_stats(None).await {
                 warn!("Failed to send resource stats: {}", err);
             }
         }
@@ -208,7 +259,36 @@ async fn main() -> AgentResult<()> {
 
     // Create and run agent
     let agent = CatalystAgent::new(config).await?;
-    agent.run().await?;
+
+    let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
+
+    // Spawn SIGTERM handler
+    let shutdown_tx_sigterm = shutdown_tx.clone();
+    tokio::spawn(async move {
+        let mut sigterm = match signal(SignalKind::terminate()) {
+            Ok(s) => s,
+            Err(e) => {
+                error!("Failed to create SIGTERM handler: {}", e);
+                return;
+            }
+        };
+        sigterm.recv().await;
+        info!("Received SIGTERM, initiating shutdown");
+        let _ = shutdown_tx_sigterm.send(());
+    });
+
+    // Spawn SIGINT handler
+    let shutdown_tx_sigint = shutdown_tx.clone();
+    tokio::spawn(async move {
+        if let Err(e) = ctrl_c().await {
+            error!("Failed to wait for ctrl-c: {}", e);
+            return;
+        }
+        info!("Received SIGINT, initiating shutdown");
+        let _ = shutdown_tx_sigint.send(());
+    });
+
+    agent.run(shutdown_rx).await?;
 
     Ok(())
 }

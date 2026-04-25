@@ -302,6 +302,7 @@ fn discover_cni_bin_dir() -> &'static str {
     CNI_BIN_DIRS[0]
 }
 const PORT_FWD_STATE_PREFIX: &str = "catalyst-";
+const MAX_CONTENT_BLOB_SIZE: usize = 100 * 1024 * 1024; // 100MB
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct PortForwardState {
@@ -1332,7 +1333,10 @@ impl ContainerdRuntime {
             ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
-        let resp = client.list(req).await.map_err(grpc_err)?;
+        let resp = tokio::time::timeout(Duration::from_secs(10), client.list(req))
+            .await
+            .map_err(|_| AgentError::ContainerError("list_containers timed out".to_string()))?
+            .map_err(grpc_err)?;
         let mut result = Vec::new();
         for c in resp.into_inner().containers {
             let running = self.is_container_running(&c.id).await.unwrap_or(false);
@@ -1358,7 +1362,10 @@ impl ContainerdRuntime {
             id: container_id.to_string(),
         };
         let req = with_namespace!(req, &self.namespace);
-        client.get(req).await.is_ok()
+        matches!(
+            tokio::time::timeout(Duration::from_secs(5), client.get(req)).await,
+            Ok(Ok(_))
+        )
     }
 
     pub async fn is_container_running(&self, container_id: &str) -> AgentResult<bool> {
@@ -1401,7 +1408,7 @@ impl ContainerdRuntime {
     pub async fn get_container_ip(&self, container_id: &str) -> AgentResult<String> {
         // Check CNI result file
         let cni_state = format!("/var/lib/cni/results/catalyst-{}", container_id);
-        if let Ok(content) = fs::read_to_string(&cni_state) {
+        if let Ok(content) = tokio::fs::read_to_string(&cni_state).await {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
                 if let Some(ips) = v.get("ips").and_then(|v| v.as_array()) {
                     for ip in ips {
@@ -1416,17 +1423,21 @@ impl ContainerdRuntime {
             }
         }
         // Fallback: scan CNI networks dir
-        if let Ok(entries) = fs::read_dir("/var/lib/cni/networks") {
-            for entry in entries.flatten() {
+        if let Ok(mut entries) = tokio::fs::read_dir("/var/lib/cni/networks").await {
+            while let Ok(Some(entry)) = entries.next_entry().await {
                 let d = entry.path();
-                if !d.is_dir() {
+                if let Ok(md) = tokio::fs::metadata(&d).await {
+                    if !md.is_dir() {
+                        continue;
+                    }
+                } else {
                     continue;
                 }
-                if let Ok(files) = fs::read_dir(&d) {
-                    for f in files.flatten() {
+                if let Ok(mut files) = tokio::fs::read_dir(&d).await {
+                    while let Ok(Some(f)) = files.next_entry().await {
                         let n = f.file_name().to_string_lossy().to_string();
                         if n.parse::<Ipv4Addr>().is_ok() {
-                            if let Ok(c) = fs::read_to_string(f.path()) {
+                            if let Ok(c) = tokio::fs::read_to_string(f.path()).await {
                                 if c.trim().contains(container_id) {
                                     return Ok(n);
                                 }
@@ -1442,7 +1453,17 @@ impl ContainerdRuntime {
     // -- Stats (cgroup v2) --
 
     pub async fn get_stats(&self, container_id: &str) -> AgentResult<ContainerStats> {
-        let cg = find_container_cgroup(container_id).unwrap_or_default();
+        tokio::time::timeout(Duration::from_secs(10), self.get_stats_inner(container_id))
+            .await
+            .map_err(|_| {
+                AgentError::ContainerError(format!("get_stats timed out for {}", container_id))
+            })?
+    }
+
+    async fn get_stats_inner(&self, container_id: &str) -> AgentResult<ContainerStats> {
+        let cg = find_container_cgroup(container_id)
+            .await
+            .unwrap_or_default();
         let cpu = if !cg.is_empty() {
             self.cpu_tracker.get_percent(container_id, &cg).await
         } else {
@@ -1562,7 +1583,12 @@ impl ContainerdRuntime {
             ],
         };
         let req = with_namespace!(req, &self.namespace);
-        let resp = client.subscribe(req).await.map_err(grpc_err)?;
+        let resp = tokio::time::timeout(Duration::from_secs(10), client.subscribe(req))
+            .await
+            .map_err(|_| {
+                AgentError::ContainerError("subscribe_to_container_events timed out".to_string())
+            })?
+            .map_err(grpc_err)?;
         Ok(EventStream {
             receiver: resp.into_inner(),
         })
@@ -1577,7 +1603,12 @@ impl ContainerdRuntime {
             ],
         };
         let req = with_namespace!(req, &self.namespace);
-        let resp = client.subscribe(req).await.map_err(grpc_err)?;
+        let resp = tokio::time::timeout(Duration::from_secs(10), client.subscribe(req))
+            .await
+            .map_err(|_| {
+                AgentError::ContainerError("subscribe_to_all_events timed out".to_string())
+            })?
+            .map_err(grpc_err)?;
         Ok(EventStream {
             receiver: resp.into_inner(),
         })
@@ -1587,7 +1618,7 @@ impl ContainerdRuntime {
 
     pub async fn clean_stale_ip_allocations(&self, network: &str) -> AgentResult<usize> {
         let dir = format!("/var/lib/cni/networks/{}", network);
-        let entries = match fs::read_dir(&dir) {
+        let mut entries = match tokio::fs::read_dir(&dir).await {
             Ok(e) => e,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
             Err(e) => return Err(AgentError::IoError(e.to_string())),
@@ -1610,8 +1641,7 @@ impl ContainerdRuntime {
             return Ok(0);
         }
         let mut removed = 0;
-        for entry in entries {
-            let entry = entry.map_err(|e| AgentError::IoError(e.to_string()))?;
+        while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
             let name = match entry.file_name().into_string() {
                 Ok(v) => v,
@@ -1624,7 +1654,7 @@ impl ContainerdRuntime {
                 continue;
             }
             if !active_ips.contains(&name) {
-                if let Ok(md) = fs::metadata(&path) {
+                if let Ok(md) = tokio::fs::metadata(&path).await {
                     if let Ok(m) = md.modified() {
                         if let Ok(age) = SystemTime::now().duration_since(m) {
                             if age < Duration::from_secs(60) {
@@ -1633,7 +1663,7 @@ impl ContainerdRuntime {
                         }
                     }
                 }
-                if fs::remove_file(&path).is_ok() {
+                if tokio::fs::remove_file(&path).await.is_ok() {
                     removed += 1;
                 }
             }
@@ -1654,7 +1684,12 @@ impl ContainerdRuntime {
             ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
-        let resp = tasks.wait(req).await.map_err(grpc_err)?;
+        let resp = tokio::time::timeout(Duration::from_secs(30), tasks.wait(req))
+            .await
+            .map_err(|_| {
+                AgentError::ContainerError(format!("wait_for_exit timed out for {}", container_id))
+            })?
+            .map_err(grpc_err)?;
         Ok(resp.into_inner().exit_status)
     }
 
@@ -1839,6 +1874,11 @@ impl ContainerdRuntime {
         let mut data = Vec::new();
         while let Some(chunk) = stream.message().await.map_err(grpc_err)? {
             data.extend_from_slice(&chunk.data);
+            if data.len() > MAX_CONTENT_BLOB_SIZE {
+                return Err(AgentError::InvalidRequest(
+                    "Content blob exceeds maximum size".to_string(),
+                ));
+            }
         }
         Ok(data)
     }
@@ -1864,7 +1904,7 @@ impl ContainerdRuntime {
             ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
-        if snaps.prepare(req).await.is_ok() {
+        if let Ok(Ok(_)) = tokio::time::timeout(Duration::from_secs(10), snaps.prepare(req)).await {
             return Ok(());
         }
 
@@ -1877,13 +1917,15 @@ impl ContainerdRuntime {
                 ..Default::default()
             };
             let req = with_namespace!(req, &self.namespace);
-            if snaps.prepare(req).await.is_ok() {
-                return Ok(());
+            match tokio::time::timeout(Duration::from_secs(10), snaps.prepare(req)).await {
+                Ok(Ok(_)) => return Ok(()),
+                _ => {
+                    warn!(
+                        "prepare snapshot with resolved parent {} failed for image {}",
+                        parent, image
+                    );
+                }
             }
-            warn!(
-                "prepare snapshot with resolved parent {} failed for image {}",
-                parent, image
-            );
         } else {
             warn!(
                 "No overlayfs snapshot parent label found for image {}",
@@ -2121,7 +2163,7 @@ impl ContainerdRuntime {
             } else {
                 // Fallback: synthesize a macvlan config from detected host network.
                 // This matches the structure used by NetworkManager with rangeStart/rangeEnd
-                let (iface, subnet, gateway) = detect_host_network().unwrap_or_else(|| {
+                let (iface, subnet, gateway) = detect_host_network().await.unwrap_or_else(|| {
                     warn!("Could not detect host network, falling back to eth0/10.0.0.0");
                     (
                         "eth0".to_string(),
@@ -2244,7 +2286,7 @@ impl ContainerdRuntime {
     /// Detects the default route interface dynamically instead of hardcoding it.
     async fn ensure_bridge_forward_rules(&self) {
         // Detect the host's default route interface
-        let external_iface = detect_default_route_interface().unwrap_or_else(|| {
+        let external_iface = detect_default_route_interface().await.unwrap_or_else(|| {
             warn!("Could not detect default route interface; bridge FORWARD rules may not work");
             String::new()
         });
@@ -2658,7 +2700,8 @@ impl ContainerdRuntime {
                 .as_str()
                 .unwrap_or("/var/lib/cni/networks");
             let ipam_dir = PathBuf::from(ipam_data_dir).join("catalyst");
-            let result_json = fs::read_to_string(&rp)
+            let result_json = tokio::fs::read_to_string(&rp)
+                .await
                 .ok()
                 .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
             if let Some(ref result) = result_json {
@@ -2680,8 +2723,8 @@ impl ContainerdRuntime {
                 }
             }
         }
-        let _ = fs::remove_file(&rp);
-        let _ = fs::remove_file(&cfg_path);
+        let _ = tokio::fs::remove_file(&rp).await;
+        let _ = tokio::fs::remove_file(&cfg_path).await;
         Ok(())
     }
 
@@ -2695,10 +2738,10 @@ impl ContainerdRuntime {
     pub async fn cleanup_stale_cni_leases(&self) {
         // --- Phase 1: Release leases via CNI result files ---
         let results_dir = Path::new("/var/lib/cni/results");
-        if results_dir.exists() {
-            if let Ok(entries) = fs::read_dir(results_dir) {
+        if tokio::fs::try_exists(results_dir).await.unwrap_or(false) {
+            if let Ok(mut entries) = tokio::fs::read_dir(results_dir).await {
                 let mut stale_results: Vec<(String, String)> = Vec::new();
-                for entry in entries.flatten() {
+                while let Ok(Some(entry)) = entries.next_entry().await {
                     let path = entry.path();
                     let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                     if let Some(cid) = fname.strip_prefix("catalyst-") {
@@ -2724,8 +2767,8 @@ impl ContainerdRuntime {
                         );
                     }
                     let cfg_path = format!("/var/lib/cni/results/catalyst-{}-config", container_id);
-                    let _ = fs::remove_file(result_path);
-                    let _ = fs::remove_file(&cfg_path);
+                    let _ = tokio::fs::remove_file(result_path).await;
+                    let _ = tokio::fs::remove_file(&cfg_path).await;
                 }
             }
         }
@@ -2735,18 +2778,23 @@ impl ContainerdRuntime {
         // host-local IPAM plugin may still hold lease files.  Cross-reference
         // each lease file's container ID against containerd.
         let ipam_base = Path::new("/var/lib/cni/networks/catalyst");
-        if !ipam_base.exists() {
+        if !tokio::fs::try_exists(ipam_base).await.unwrap_or(false) {
             return;
         }
-        if let Ok(entries) = fs::read_dir(ipam_base) {
-            for entry in entries.flatten() {
+        if let Ok(mut entries) = tokio::fs::read_dir(ipam_base).await {
+            while let Ok(Some(entry)) = entries.next_entry().await {
                 let path = entry.path();
-                if !path.is_file() {
+                if let Ok(md) = tokio::fs::metadata(&path).await {
+                    if !md.is_file() {
+                        continue;
+                    }
+                } else {
                     continue;
                 }
                 // Lease files are named by IP address (e.g. 10.42.0.15)
                 // and their contents hold the container ID.
-                let container_id = fs::read_to_string(&path)
+                let container_id = tokio::fs::read_to_string(&path)
+                    .await
                     .ok()
                     .map(|s| s.trim().to_string())
                     .unwrap_or_default();
@@ -2761,7 +2809,7 @@ impl ContainerdRuntime {
                     path.display(),
                     container_id
                 );
-                let _ = fs::remove_file(&path);
+                let _ = tokio::fs::remove_file(&path).await;
             }
         }
     }
@@ -2834,10 +2882,11 @@ fn load_named_cni_plugin_config(network: &str) -> Option<serde_json::Value> {
 /// Auto-detect the host's default network interface, subnet, and gateway.
 /// Detect the host's default route interface (e.g. "eth0", "ens192").
 /// Returns None if no default route can be found.
-fn detect_default_route_interface() -> Option<String> {
-    let output = std::process::Command::new("ip")
+async fn detect_default_route_interface() -> Option<String> {
+    let output = tokio::process::Command::new("ip")
         .args(["-4", "route", "show", "default"])
         .output()
+        .await
         .ok()?;
     if !output.status.success() {
         return None;
@@ -2852,11 +2901,12 @@ fn detect_default_route_interface() -> Option<String> {
     Some(iface)
 }
 
-fn detect_host_network() -> Option<(String, String, String)> {
+async fn detect_host_network() -> Option<(String, String, String)> {
     // Parse `ip -4 route show default` → "default via <gw> dev <iface> ..."
-    let output = std::process::Command::new("ip")
+    let output = tokio::process::Command::new("ip")
         .args(["-4", "route", "show", "default"])
         .output()
+        .await
         .ok()?;
     let route = String::from_utf8_lossy(&output.stdout);
     let parts: Vec<&str> = route.split_whitespace().collect();
@@ -2866,9 +2916,10 @@ fn detect_host_network() -> Option<(String, String, String)> {
     let iface = parts.get(if_idx + 1)?.to_string();
 
     // Parse interface address → "inet <ip>/<prefix> ..."
-    let output = std::process::Command::new("ip")
+    let output = tokio::process::Command::new("ip")
         .args(["-4", "-o", "addr", "show", &iface])
         .output()
+        .await
         .ok()?;
     let addr_line = String::from_utf8_lossy(&output.stdout);
     let cidr = addr_line
@@ -3136,19 +3187,30 @@ fn default_seccomp_profile() -> serde_json::Value {
     })
 }
 
-fn find_container_cgroup(container_id: &str) -> Option<String> {
-    find_cgroup_recursive("/sys/fs/cgroup", container_id)
+async fn find_container_cgroup(container_id: &str) -> Option<String> {
+    find_cgroup_recursive("/sys/fs/cgroup", container_id).await
 }
-fn find_cgroup_recursive(dir: &str, cid: &str) -> Option<String> {
-    for entry in fs::read_dir(dir).ok()?.flatten() {
+async fn find_cgroup_recursive(dir: &str, cid: &str) -> Option<String> {
+    let mut entries = tokio::fs::read_dir(dir).await.ok()?;
+    while let Ok(Some(entry)) = entries.next_entry().await {
         let p = entry.path();
         let n = entry.file_name().to_string_lossy().to_string();
-        if n.contains(cid) && p.is_dir() {
-            return Some(p.to_string_lossy().to_string());
+        if n.contains(cid) {
+            if let Ok(md) = tokio::fs::metadata(&p).await {
+                if md.is_dir() {
+                    return Some(p.to_string_lossy().to_string());
+                }
+            }
         }
-        if p.is_dir() && !n.starts_with('.') {
-            if let Some(f) = find_cgroup_recursive(&p.to_string_lossy(), cid) {
-                return Some(f);
+        if !n.starts_with('.') {
+            if let Ok(md) = tokio::fs::metadata(&p).await {
+                if md.is_dir() {
+                    if let Some(f) =
+                        Box::pin(find_cgroup_recursive(&p.to_string_lossy(), cid)).await
+                    {
+                        return Some(f);
+                    }
+                }
             }
         }
     }

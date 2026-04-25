@@ -1,8 +1,9 @@
+use parking_lot::Mutex;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
 use std::process::Command;
-use std::sync::Mutex;
+use tokio::io::AsyncWriteExt;
 use tracing::{error, info, warn};
 
 use sha2::{Digest, Sha256};
@@ -33,7 +34,7 @@ fn ensure_sudo_password() -> Result<(), AgentError> {
 
     // Fast path – already cached.
     {
-        let guard = SUDO_PASSWORD.lock().unwrap();
+        let guard = SUDO_PASSWORD.lock();
         if guard.is_some() {
             return Ok(());
         }
@@ -57,7 +58,7 @@ fn ensure_sudo_password() -> Result<(), AgentError> {
     if let Ok(status) = probe {
         if status.success() {
             // Passwordless sudo works – cache an empty marker.
-            let mut guard = SUDO_PASSWORD.lock().unwrap();
+            let mut guard = SUDO_PASSWORD.lock();
             *guard = Some(String::new());
             return Ok(());
         }
@@ -92,7 +93,7 @@ fn ensure_sudo_password() -> Result<(), AgentError> {
     }
     match verify.wait() {
         Ok(status) if status.success() => {
-            let mut guard = SUDO_PASSWORD.lock().unwrap();
+            let mut guard = SUDO_PASSWORD.lock();
             *guard = Some(password);
             Ok(())
         }
@@ -109,7 +110,7 @@ fn get_sudo_password() -> Result<Option<String>, AgentError> {
         return Ok(None);
     }
     ensure_sudo_password()?;
-    let guard = SUDO_PASSWORD.lock().unwrap();
+    let guard = SUDO_PASSWORD.lock();
     Ok(guard.clone())
 }
 
@@ -196,25 +197,33 @@ impl SystemSetup {
         warn!("Container runtime not found, installing...");
 
         let containerd_installed = match pkg_manager {
-            "apk" => Self::run_command_allow_failure("apk", &["add", "--no-cache", "containerd"]),
+            "apk" => {
+                Self::run_command_allow_failure("apk", &["add", "--no-cache", "containerd"]).await
+            }
             "apt" => {
-                let _ = Self::run_command_allow_failure("apt-get", &["update", "-qq"]);
+                let _ = Self::run_command_allow_failure("apt-get", &["update", "-qq"]).await;
                 Self::run_command_allow_failure("apt-get", &["install", "-y", "-qq", "containerd"])
+                    .await
                     || Self::run_command_allow_failure(
                         "apt-get",
                         &["install", "-y", "-qq", "containerd.io"],
                     )
+                    .await
             }
             "yum" | "dnf" => {
-                Self::run_command_allow_failure(pkg_manager, &["install", "-y", "containerd"])
+                Self::run_command_allow_failure(pkg_manager, &["install", "-y", "containerd"]).await
             }
             "pacman" => {
                 Self::run_command_allow_failure("pacman", &["-S", "--noconfirm", "containerd"])
+                    .await
             }
-            "zypper" => Self::run_command_allow_failure(
-                "zypper",
-                &["--non-interactive", "install", "containerd"],
-            ),
+            "zypper" => {
+                Self::run_command_allow_failure(
+                    "zypper",
+                    &["--non-interactive", "install", "containerd"],
+                )
+                .await
+            }
             _ => {
                 warn!("Automatic installation not supported for {}", pkg_manager);
                 return Err(AgentError::InternalError(format!(
@@ -256,17 +265,20 @@ impl SystemSetup {
 
         warn!("OCI runtime not found, installing runc...");
         let installed = match pkg_manager {
-            "apk" => Self::run_command_allow_failure("apk", &["add", "--no-cache", "runc"]),
+            "apk" => Self::run_command_allow_failure("apk", &["add", "--no-cache", "runc"]).await,
             "apt" => {
-                let _ = Self::run_command_allow_failure("apt-get", &["update", "-qq"]);
-                Self::run_command_allow_failure("apt-get", &["install", "-y", "-qq", "runc"])
+                let _ = Self::run_command_allow_failure("apt-get", &["update", "-qq"]).await;
+                Self::run_command_allow_failure("apt-get", &["install", "-y", "-qq", "runc"]).await
             }
             "yum" | "dnf" => {
-                Self::run_command_allow_failure(pkg_manager, &["install", "-y", "runc"])
+                Self::run_command_allow_failure(pkg_manager, &["install", "-y", "runc"]).await
             }
-            "pacman" => Self::run_command_allow_failure("pacman", &["-S", "--noconfirm", "runc"]),
+            "pacman" => {
+                Self::run_command_allow_failure("pacman", &["-S", "--noconfirm", "runc"]).await
+            }
             "zypper" => {
                 Self::run_command_allow_failure("zypper", &["--non-interactive", "install", "runc"])
+                    .await
             }
             _ => false,
         };
@@ -293,11 +305,8 @@ impl SystemSetup {
 
         // Ensure the socket is group-accessible.
         // containerd defaults to root:root 0600 which blocks non-root users.
-        if let Err(e) = Self::configure_containerd_socket_access(has_systemctl) {
-            warn!(
-                "Containerd socket access configuration failed (will try chmod fallback): {}",
-                e
-            );
+        if let Err(e) = Self::configure_containerd_socket_access(has_systemctl).await {
+            warn!("Containerd socket access configuration failed: {}", e);
         }
 
         // If the socket already exists, skip the restart — it was likely
@@ -307,8 +316,8 @@ impl SystemSetup {
         if Path::new("/run/containerd/containerd.sock").exists() {
             info!("✓ containerd socket already present");
         } else if has_systemctl {
-            Self::run_command("systemctl", &["daemon-reload"], None)?;
-            Self::run_command("systemctl", &["restart", "containerd"], None)?;
+            Self::run_command("systemctl", &["daemon-reload"], None).await?;
+            Self::run_command("systemctl", &["restart", "containerd"], None).await?;
         } else {
             warn!("systemctl not available; containerd must be managed manually");
         }
@@ -334,10 +343,12 @@ impl SystemSetup {
             let mode = meta.permissions().mode();
             let uid = meta.uid();
             if uid == 0 && (mode & 0o006) == 0 {
-                // Socket is owned by root with no other permissions.
-                // Fall back to chmod 0660 as a last resort.
-                warn!("containerd socket has restrictive permissions, adjusting...");
-                Self::run_command("chmod", &["666", "/run/containerd/containerd.sock"], None)?;
+                return Err(AgentError::PermissionDenied(
+                    "containerd socket is owned by root with no group/other access. \
+                     Please add the agent user to the 'containerd' group and restart the agent, \
+                     or run the agent as root."
+                        .to_string(),
+                ));
             }
         }
 
@@ -352,7 +363,7 @@ impl SystemSetup {
     /// Returns `Ok(())` on success, logs warnings on failure but does not
     /// hard-fail so that the chmod fallback in `ensure_containerd_running`
     /// can still run.
-    fn configure_containerd_socket_access(has_systemctl: bool) -> Result<(), AgentError> {
+    async fn configure_containerd_socket_access(has_systemctl: bool) -> Result<(), AgentError> {
         if is_root() {
             return Ok(());
         }
@@ -375,11 +386,11 @@ impl SystemSetup {
                 .unwrap_or(false);
             if !group_exists {
                 let created =
-                    Self::run_command_allow_failure("groupadd", &["--system", "containerd"]);
+                    Self::run_command_allow_failure("groupadd", &["--system", "containerd"]).await;
                 if !created {
                     // Retry without --system (Alpine busybox compat).
                     let created_plain =
-                        Self::run_command_allow_failure("groupadd", &["containerd"]);
+                        Self::run_command_allow_failure("groupadd", &["containerd"]).await;
                     if !created_plain {
                         warn!("Could not create containerd group (non-fatal)");
                     }
@@ -388,7 +399,8 @@ impl SystemSetup {
         }
 
         // 2. Add the current user to the group.
-        if let Err(e) = Self::run_command("usermod", &["-aG", "containerd", &username], None) {
+        if let Err(e) = Self::run_command("usermod", &["-aG", "containerd", &username], None).await
+        {
             warn!("Could not add user to containerd group (non-fatal): {}", e);
         }
 
@@ -403,7 +415,7 @@ impl SystemSetup {
             let exists = Path::new(&override_file).exists();
             if !exists {
                 // Create the directory via sudo (needs elevated privileges).
-                if let Err(e) = Self::run_command("mkdir", &["-p", override_dir], None) {
+                if let Err(e) = Self::run_command("mkdir", &["-p", override_dir], None).await {
                     warn!(
                         "Could not create containerd override dir (non-fatal): {}",
                         e
@@ -428,7 +440,7 @@ impl SystemSetup {
                     return Ok(());
                 }
 
-                if let Err(e) = Self::run_command("cp", &[tmp, &override_file], None) {
+                if let Err(e) = Self::run_command("cp", &[tmp, &override_file], None).await {
                     warn!("Could not install containerd override (non-fatal): {}", e);
                     let _ = fs::remove_file(tmp);
                     return Ok(());
@@ -457,24 +469,25 @@ impl SystemSetup {
 
         match pkg_manager {
             "apk" => {
-                Self::run_command("apk", &["add", "--no-cache", "iproute2"], None)?;
+                Self::run_command("apk", &["add", "--no-cache", "iproute2"], None).await?;
             }
             "apt" => {
-                Self::run_command("apt-get", &["update", "-qq"], None)?;
-                Self::run_command("apt-get", &["install", "-y", "-qq", "iproute2"], None)?;
+                Self::run_command("apt-get", &["update", "-qq"], None).await?;
+                Self::run_command("apt-get", &["install", "-y", "-qq", "iproute2"], None).await?;
             }
             "yum" | "dnf" => {
-                Self::run_command(pkg_manager, &["install", "-y", "iproute"], None)?;
+                Self::run_command(pkg_manager, &["install", "-y", "iproute"], None).await?;
             }
             "pacman" => {
-                Self::run_command("pacman", &["-S", "--noconfirm", "iproute2"], None)?;
+                Self::run_command("pacman", &["-S", "--noconfirm", "iproute2"], None).await?;
             }
             "zypper" => {
                 Self::run_command(
                     "zypper",
                     &["--non-interactive", "install", "iproute2"],
                     None,
-                )?;
+                )
+                .await?;
             }
             _ => {
                 warn!("Automatic installation not supported for {}", pkg_manager);
@@ -505,24 +518,25 @@ impl SystemSetup {
         warn!("iptables not found, installing...");
         match pkg_manager {
             "apk" => {
-                Self::run_command("apk", &["add", "--no-cache", "iptables"], None)?;
+                Self::run_command("apk", &["add", "--no-cache", "iptables"], None).await?;
             }
             "apt" => {
-                Self::run_command("apt-get", &["update", "-qq"], None)?;
-                Self::run_command("apt-get", &["install", "-y", "-qq", "iptables"], None)?;
+                Self::run_command("apt-get", &["update", "-qq"], None).await?;
+                Self::run_command("apt-get", &["install", "-y", "-qq", "iptables"], None).await?;
             }
             "yum" | "dnf" => {
-                Self::run_command(pkg_manager, &["install", "-y", "iptables"], None)?;
+                Self::run_command(pkg_manager, &["install", "-y", "iptables"], None).await?;
             }
             "pacman" => {
-                Self::run_command("pacman", &["-S", "--noconfirm", "iptables"], None)?;
+                Self::run_command("pacman", &["-S", "--noconfirm", "iptables"], None).await?;
             }
             "zypper" => {
                 Self::run_command(
                     "zypper",
                     &["--non-interactive", "install", "iptables"],
                     None,
-                )?;
+                )
+                .await?;
             }
             _ => {
                 warn!("Automatic installation not supported for {}", pkg_manager);
@@ -566,32 +580,37 @@ impl SystemSetup {
 
         match pkg_manager {
             "apk" => {
-                Self::run_command("apk", &["add", "--no-cache", "curl", "tar", "gzip"], None)?;
+                Self::run_command("apk", &["add", "--no-cache", "curl", "tar", "gzip"], None)
+                    .await?;
             }
             "apt" => {
-                Self::run_command("apt-get", &["update", "-qq"], None)?;
+                Self::run_command("apt-get", &["update", "-qq"], None).await?;
                 Self::run_command(
                     "apt-get",
                     &["install", "-y", "-qq", "curl", "tar", "gzip"],
                     None,
-                )?;
+                )
+                .await?;
             }
             "yum" | "dnf" => {
-                Self::run_command(pkg_manager, &["install", "-y", "curl", "tar", "gzip"], None)?;
+                Self::run_command(pkg_manager, &["install", "-y", "curl", "tar", "gzip"], None)
+                    .await?;
             }
             "pacman" => {
                 Self::run_command(
                     "pacman",
                     &["-S", "--noconfirm", "curl", "tar", "gzip"],
                     None,
-                )?;
+                )
+                .await?;
             }
             "zypper" => {
                 Self::run_command(
                     "zypper",
                     &["--non-interactive", "install", "curl", "tar", "gzip"],
                     None,
-                )?;
+                )
+                .await?;
             }
             _ => {
                 warn!("Automatic installation not supported for {}", pkg_manager);
@@ -664,24 +683,34 @@ impl SystemSetup {
 
         let packaged_install = match pkg_manager {
             "apt" => {
-                let _ = Self::run_command_allow_failure("apt-get", &["update", "-qq"]);
+                let _ = Self::run_command_allow_failure("apt-get", &["update", "-qq"]).await;
                 Self::run_command_allow_failure(
                     "apt-get",
                     &["install", "-y", "-qq", "containernetworking-plugins"],
                 )
+                .await
             }
-            "apk" => Self::run_command_allow_failure("apk", &["add", "--no-cache", "cni-plugins"]),
-            "yum" | "dnf" => Self::run_command_allow_failure(
-                pkg_manager,
-                &["install", "-y", "containernetworking-plugins"],
-            ),
+            "apk" => {
+                Self::run_command_allow_failure("apk", &["add", "--no-cache", "cni-plugins"]).await
+            }
+            "yum" | "dnf" => {
+                Self::run_command_allow_failure(
+                    pkg_manager,
+                    &["install", "-y", "containernetworking-plugins"],
+                )
+                .await
+            }
             "pacman" => {
                 Self::run_command_allow_failure("pacman", &["-S", "--noconfirm", "cni-plugins"])
+                    .await
             }
-            "zypper" => Self::run_command_allow_failure(
-                "zypper",
-                &["--non-interactive", "install", "cni-plugins"],
-            ),
+            "zypper" => {
+                Self::run_command_allow_failure(
+                    "zypper",
+                    &["--non-interactive", "install", "cni-plugins"],
+                )
+                .await
+            }
             _ => false,
         };
 
@@ -709,7 +738,7 @@ impl SystemSetup {
         fs::create_dir_all("/opt/cni/bin")
             .map_err(|e| AgentError::IoError(format!("Failed to create /opt/cni/bin: {}", e)))?;
         let archive_path = format!("/tmp/cni-plugins-{}-{}.tgz", version, arch);
-        Self::run_command("curl", &["-fsSL", "-o", &archive_path, &url], None)?;
+        Self::run_command("curl", &["-fsSL", "-o", &archive_path, &url], None).await?;
 
         // Verify download integrity before extracting as root.
         let expected_sha256 = match Self::expected_cni_plugins_sha256(version, arch) {
@@ -723,7 +752,8 @@ impl SystemSetup {
                     "curl",
                     &["-fsSL", "-o", &checksum_path, &checksum_url],
                     None,
-                )?;
+                )
+                .await?;
                 let raw = fs::read_to_string(&checksum_path).map_err(|e| {
                     AgentError::IoError(format!("Failed to read checksum file: {}", e))
                 })?;
@@ -749,7 +779,8 @@ impl SystemSetup {
             "tar",
             &["-xz", "-C", "/opt/cni/bin", "-f", &archive_path],
             None,
-        )?;
+        )
+        .await?;
         let _ = fs::remove_file(&archive_path);
 
         if !Self::has_required_cni_plugins() {
@@ -807,10 +838,9 @@ impl SystemSetup {
             let cni_config = format!("{}/{}.conflist", cni_dir, network.name);
             if Path::new(&cni_config).exists() {
                 info!(
-                    "✓ CNI static network configuration already exists for {}",
+                    "CNI static network configuration exists for {}, updating if changed",
                     network.name
                 );
-                continue;
             }
 
             let interface = if let Some(value) = network.interface {
@@ -833,34 +863,25 @@ impl SystemSetup {
                 None => Self::detect_default_gateway()?,
             };
 
-            let config = format!(
-                r#"{{
-  "cniVersion": "1.0.0",
-  "name": "{}",
-  "plugins": [
-    {{
-      "type": "macvlan",
-      "master": "{}",
-      "mode": "bridge",
-      "ipam": {{
-        "type": "host-local",
-        "ranges": [[
-          {{
-            "subnet": "{}",
-            "rangeStart": "{}",
-            "rangeEnd": "{}",
-            "gateway": "{}"
-          }}
-        ]],
-        "routes": [
-          {{ "dst": "0.0.0.0/0" }}
-        ]
-      }}
-    }}
-  ]
-}}"#,
-                network.name, interface, cidr, range_start, range_end, gateway
-            );
+            let config = serde_json::to_string_pretty(&serde_json::json!({
+                "cniVersion": "1.0.0",
+                "name": network.name,
+                "plugins": [{
+                    "type": "macvlan",
+                    "master": interface,
+                    "mode": "bridge",
+                    "ipam": {
+                        "type": "host-local",
+                        "ranges": [[{
+                            "subnet": cidr,
+                            "rangeStart": range_start,
+                            "rangeEnd": range_end,
+                            "gateway": gateway
+                        }]],
+                        "routes": [{"dst": "0.0.0.0/0"}]
+                    }
+                }]
+            }))?;
 
             fs::write(&cni_config, config)
                 .map_err(|e| AgentError::IoError(format!("Failed to write CNI config: {}", e)))?;
@@ -1055,17 +1076,17 @@ impl SystemSetup {
     /// Helper to run a command and check for errors
     /// Run a command that may need elevated privileges.
     /// Automatically prefixes with `sudo -S` when not root.
-    fn run_command(cmd: &str, args: &[&str], _stdin: Option<&str>) -> Result<(), AgentError> {
+    async fn run_command(cmd: &str, args: &[&str], _stdin: Option<&str>) -> Result<(), AgentError> {
         let sudo_pw = get_sudo_password()?;
 
         let mut command = if sudo_pw.is_some() {
-            let mut c = Command::new("sudo");
+            let mut c = tokio::process::Command::new("sudo");
             c.args(["-S", "-p", ""]);
             c.arg(cmd);
             c.args(args);
             c
         } else {
-            let mut c = Command::new(cmd);
+            let mut c = tokio::process::Command::new(cmd);
             c.args(args);
             c
         };
@@ -1079,13 +1100,17 @@ impl SystemSetup {
         // Feed the sudo password via stdin before waiting.
         if let Some(ref pw) = sudo_pw {
             if let Some(mut handle) = child.stdin.take() {
-                let _ = writeln!(handle, "{}", pw);
+                let _ = handle.write_all(format!("{}\n", pw).as_bytes()).await;
             }
         }
 
-        let output = child
-            .wait_with_output()
-            .map_err(|e| AgentError::IoError(format!("Failed to run {}: {}", cmd, e)))?;
+        let output = tokio::time::timeout(
+            std::time::Duration::from_secs(300),
+            child.wait_with_output(),
+        )
+        .await
+        .map_err(|_| AgentError::IoError(format!("Command {} timed out after 5 minutes", cmd)))?
+        .map_err(|e| AgentError::IoError(format!("Failed to run {}: {}", cmd, e)))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -1096,17 +1121,17 @@ impl SystemSetup {
         Ok(())
     }
 
-    fn run_command_allow_failure(cmd: &str, args: &[&str]) -> bool {
+    async fn run_command_allow_failure(cmd: &str, args: &[&str]) -> bool {
         let sudo_pw = get_sudo_password().ok().flatten();
 
         let mut command = if sudo_pw.is_some() {
-            let mut c = Command::new("sudo");
+            let mut c = tokio::process::Command::new("sudo");
             c.args(["-S", "-p", ""]);
             c.arg(cmd);
             c.args(args);
             c
         } else {
-            let mut c = Command::new(cmd);
+            let mut c = tokio::process::Command::new(cmd);
             c.args(args);
             c
         };
@@ -1120,10 +1145,18 @@ impl SystemSetup {
 
         if let Some(ref pw) = sudo_pw {
             if let Some(mut handle) = child.stdin.take() {
-                let _ = writeln!(handle, "{}", pw);
+                let _ = handle.write_all(format!("{}\n", pw).as_bytes()).await;
             }
         }
 
-        child.wait().map(|s| s.success()).unwrap_or(false)
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(300),
+            child.wait_with_output(),
+        )
+        .await
+        {
+            Ok(Ok(output)) => output.status.success(),
+            _ => false,
+        }
     }
 }

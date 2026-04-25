@@ -1,12 +1,24 @@
 use std::fs;
 use std::path::Path;
-use std::process::Command;
+use std::time::Duration;
+use tokio::process::Command;
 use tracing::{info, warn};
 
 use crate::config::CniNetworkConfig;
 use crate::AgentError;
 use serde_json::json;
 use toml::Value as TomlValue;
+
+async fn run_network_command(cmd: &str, args: &[&str]) -> Result<std::process::Output, AgentError> {
+    let output = tokio::time::timeout(
+        Duration::from_secs(30),
+        Command::new(cmd).args(args).output(),
+    )
+    .await
+    .map_err(|_| AgentError::IoError(format!("{} command timed out", cmd)))?
+    .map_err(|e| AgentError::IoError(format!("Failed to run {}: {}", cmd, e)))?;
+    Ok(output)
+}
 
 const CNI_DIR: &str = "/etc/cni/net.d";
 const CONFIG_PATH: &str = "/opt/catalyst-agent/config.toml";
@@ -94,7 +106,7 @@ impl NetworkManager {
     }
 
     /// Create a new CNI network configuration
-    pub fn create_network(network: &CniNetworkConfig) -> Result<(), AgentError> {
+    pub async fn create_network(network: &CniNetworkConfig) -> Result<(), AgentError> {
         Self::validate_network_name(&network.name)?;
         let cni_config_path = format!("{}/{}.conflist", CNI_DIR, network.name);
 
@@ -110,7 +122,7 @@ impl NetworkManager {
         let interface = if let Some(ref iface) = network.interface {
             Self::normalize_interface_name(iface)
         } else {
-            Self::detect_network_interface()?
+            Self::detect_network_interface().await?
         };
         Self::validate_interface_name(&interface)?;
 
@@ -118,7 +130,7 @@ impl NetworkManager {
         let cidr = if let Some(ref cidr) = network.cidr {
             Self::normalize_cidr(cidr)?
         } else {
-            Self::detect_interface_cidr(&interface)?
+            Self::detect_interface_cidr(&interface).await?
         };
 
         // Calculate IP range if not specified
@@ -130,7 +142,7 @@ impl NetworkManager {
         let gateway = if let Some(ref gw) = network.gateway {
             gw.clone()
         } else {
-            Self::detect_default_gateway()?
+            Self::detect_default_gateway().await?
         };
 
         // Validate network configuration
@@ -156,20 +168,26 @@ impl NetworkManager {
         );
 
         // Update config.toml to persist the network
-        Self::persist_to_config(
+        if let Err(e) = Self::persist_to_config(
             network,
             &interface,
             &cidr,
             &gateway,
             &range_start,
             &range_end,
-        )?;
+        ) {
+            let _ = fs::remove_file(&cni_config_path);
+            return Err(e);
+        }
 
         Ok(())
     }
 
     /// Update an existing CNI network configuration
-    pub fn update_network(old_name: &str, network: &CniNetworkConfig) -> Result<(), AgentError> {
+    pub async fn update_network(
+        old_name: &str,
+        network: &CniNetworkConfig,
+    ) -> Result<(), AgentError> {
         Self::validate_network_name(old_name)?;
         Self::validate_network_name(&network.name)?;
         let old_cni_path = format!("{}/{}.conflist", CNI_DIR, old_name);
@@ -197,7 +215,7 @@ impl NetworkManager {
         let interface = if let Some(ref iface) = network.interface {
             Self::normalize_interface_name(iface)
         } else {
-            Self::detect_network_interface()?
+            Self::detect_network_interface().await?
         };
         Self::validate_interface_name(&interface)?;
 
@@ -205,7 +223,7 @@ impl NetworkManager {
         let cidr = if let Some(ref cidr) = network.cidr {
             Self::normalize_cidr(cidr)?
         } else {
-            Self::detect_interface_cidr(&interface)?
+            Self::detect_interface_cidr(&interface).await?
         };
 
         // Calculate IP range if not specified
@@ -217,7 +235,7 @@ impl NetworkManager {
         let gateway = if let Some(ref gw) = network.gateway {
             gw.clone()
         } else {
-            Self::detect_default_gateway()?
+            Self::detect_default_gateway().await?
         };
 
         // Validate network configuration
@@ -243,7 +261,7 @@ impl NetworkManager {
         );
 
         // Update config.toml
-        Self::update_config(
+        if let Err(e) = Self::update_config(
             old_name,
             network,
             &interface,
@@ -251,13 +269,16 @@ impl NetworkManager {
             &gateway,
             &range_start,
             &range_end,
-        )?;
+        ) {
+            let _ = fs::remove_file(&cni_config_path);
+            return Err(e);
+        }
 
         Ok(())
     }
 
     /// Delete a CNI network configuration
-    pub fn delete_network(network_name: &str) -> Result<(), AgentError> {
+    pub async fn delete_network(network_name: &str) -> Result<(), AgentError> {
         Self::validate_network_name(network_name)?;
         let cni_config_path = format!("{}/{}.conflist", CNI_DIR, network_name);
 
@@ -519,12 +540,9 @@ impl NetworkManager {
     }
 
     /// Detect the primary network interface
-    fn detect_network_interface() -> Result<String, AgentError> {
+    async fn detect_network_interface() -> Result<String, AgentError> {
         // Try to get default route interface
-        let output = Command::new("ip")
-            .args(["route", "show", "default"])
-            .output()
-            .map_err(|e| AgentError::IoError(format!("Failed to detect default route: {}", e)))?;
+        let output = run_network_command("ip", &["route", "show", "default"]).await?;
 
         if output.status.success() {
             let interface = String::from_utf8_lossy(&output.stdout)
@@ -549,10 +567,7 @@ impl NetworkManager {
         }
 
         // Fallback: find first non-loopback interface
-        let output = Command::new("ip")
-            .args(["-o", "link", "show"])
-            .output()
-            .map_err(|e| AgentError::IoError(format!("Failed to detect interfaces: {}", e)))?;
+        let output = run_network_command("ip", &["-o", "link", "show"]).await?;
 
         if output.status.success() {
             let interface = String::from_utf8_lossy(&output.stdout)
@@ -583,11 +598,8 @@ impl NetworkManager {
     }
 
     /// Detect interface CIDR
-    fn detect_interface_cidr(interface: &str) -> Result<String, AgentError> {
-        let output = Command::new("ip")
-            .args(["addr", "show", interface])
-            .output()
-            .map_err(|e| AgentError::IoError(format!("Failed to detect interface CIDR: {}", e)))?;
+    async fn detect_interface_cidr(interface: &str) -> Result<String, AgentError> {
+        let output = run_network_command("ip", &["addr", "show", interface]).await?;
 
         if !output.status.success() {
             return Err(AgentError::InternalError(
@@ -621,31 +633,50 @@ impl NetworkManager {
 
     /// Calculate usable IP range from CIDR
     fn cidr_usable_range(cidr: &str) -> Result<(String, String), AgentError> {
-        let parts: Vec<&str> = cidr.split('/').collect();
-        if parts.len() != 2 {
-            return Err(AgentError::InternalError("Invalid CIDR format".to_string()));
+        let (addr, prefix) = cidr
+            .split_once('/')
+            .ok_or_else(|| AgentError::InternalError("Invalid CIDR format".to_string()))?;
+        let prefix: u8 = prefix
+            .parse()
+            .map_err(|_| AgentError::InternalError(format!("Invalid CIDR prefix: '{}'", prefix)))?;
+        let addr_u32 = u32::from(addr.parse::<std::net::Ipv4Addr>().map_err(|e| {
+            AgentError::InternalError(format!("Invalid IP address in CIDR: {}", e))
+        })?);
+        let mask = if prefix == 0 {
+            0
+        } else {
+            u32::MAX << (32 - prefix)
+        };
+        let network = addr_u32 & mask;
+        let broadcast = network | (!mask);
+
+        if broadcast <= network + 1 {
+            return Err(AgentError::InternalError(
+                "Subnet too small for usable range".to_string(),
+            ));
         }
 
-        let base_ip = parts[0];
-        let ip_parts: Vec<&str> = base_ip.split('.').collect();
+        // Usable range is network+1 to broadcast-1, but respect small subnets
+        let start = network + 1;
+        let end = broadcast - 1;
+        // For larger subnets, provide a reasonable default sub-range
+        let (start, end) = if prefix < 24 {
+            let default_start = network + 10;
+            let default_end = broadcast - 5;
+            (default_start.max(start), default_end.min(end))
+        } else {
+            (start, end)
+        };
 
-        if ip_parts.len() != 4 {
-            return Err(AgentError::InternalError("Invalid IP address".to_string()));
-        }
-
-        let _third_octet = ip_parts[2];
         Ok((
-            format!("{}.{}.10", ip_parts[0], ip_parts[1]),
-            format!("{}.{}.250", ip_parts[0], ip_parts[1]),
+            std::net::Ipv4Addr::from(start).to_string(),
+            std::net::Ipv4Addr::from(end).to_string(),
         ))
     }
 
     /// Detect default gateway
-    fn detect_default_gateway() -> Result<String, AgentError> {
-        let output = Command::new("ip")
-            .args(["route", "show", "default"])
-            .output()
-            .map_err(|e| AgentError::IoError(format!("Failed to detect gateway: {}", e)))?;
+    async fn detect_default_gateway() -> Result<String, AgentError> {
+        let output = run_network_command("ip", &["route", "show", "default"]).await?;
 
         if !output.status.success() {
             return Err(AgentError::InternalError(

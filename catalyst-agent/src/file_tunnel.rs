@@ -194,9 +194,17 @@ async fn poll_worker(
                             // Process each request concurrently, limited by semaphore
                             tokio::spawn(async move {
                                 // Acquire permit before processing to limit concurrency
-                                let _permit = semaphore.acquire().await.unwrap();
-                                process_request(client, base_url, node_id, api_key, fm, request)
-                                    .await;
+                                match semaphore.acquire().await {
+                                    Ok(_permit) => {
+                                        process_request(
+                                            client, base_url, node_id, api_key, fm, request,
+                                        )
+                                        .await;
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to acquire semaphore permit: {}", e);
+                                    }
+                                }
                             });
                         }
                     }
@@ -305,7 +313,7 @@ async fn handle_download(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequ
 }
 
 async fn handle_upload(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest) {
-    // Fetch upload data from backend
+    // Fetch upload data from backend and stream directly to file
     let upload_url = format!(
         "{}/api/internal/file-tunnel/upload/{}",
         ctx.base_url, req.request_id
@@ -315,33 +323,34 @@ async fn handle_upload(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelReques
         .get(&upload_url)
         .header("X-Node-Id", ctx.node_id)
         .header("X-Node-Api-Key", ctx.api_key)
+        .timeout(Duration::from_secs(300))
         .send()
         .await
     {
-        Ok(resp) if resp.status().is_success() => match resp.bytes().await {
-            Ok(data) => {
-                match fm
-                    .write_file_bytes(&req.server_uuid, &req.path, &data)
-                    .await
-                {
-                    Ok(()) => {
-                        send_json_response(ctx, true, None, None).await;
-                    }
-                    Err(e) => {
+        Ok(resp) if resp.status().is_success() => {
+            // Stream response body directly to a temp file, then atomically rename
+            let temp_path = format!("{}.tmp", req.path);
+            match fm
+                .write_file_stream(&req.server_uuid, &temp_path, resp)
+                .await
+            {
+                Ok(()) => {
+                    if let Err(e) = fm
+                        .rename_file(&req.server_uuid, &temp_path, &req.path)
+                        .await
+                    {
+                        let _ = fm.delete_file(&req.server_uuid, &temp_path).await;
                         send_json_response(ctx, false, None, Some(e.to_string())).await;
+                        return;
                     }
+                    send_json_response(ctx, true, None, None).await;
+                }
+                Err(e) => {
+                    let _ = fm.delete_file(&req.server_uuid, &temp_path).await;
+                    send_json_response(ctx, false, None, Some(e.to_string())).await;
                 }
             }
-            Err(e) => {
-                send_json_response(
-                    ctx,
-                    false,
-                    None,
-                    Some(format!("Failed to read upload data: {}", e)),
-                )
-                .await;
-            }
-        },
+        }
         Ok(resp) => {
             send_json_response(
                 ctx,

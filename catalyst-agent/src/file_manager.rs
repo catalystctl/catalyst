@@ -1,6 +1,7 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use tokio::fs;
+use tokio::io::AsyncWriteExt;
 use tracing::{debug, info, warn};
 
 use crate::{AgentError, AgentResult};
@@ -63,13 +64,7 @@ impl FileManager {
             canonical_base.join(requested_path)
         };
 
-        if normalized.exists() {
-            let canonical = normalized.canonicalize().map_err(|_| {
-                AgentError::PermissionDenied(format!(
-                    "Path traversal attempt detected: {}",
-                    requested_path
-                ))
-            })?;
+        if let Ok(canonical) = normalized.canonicalize() {
             if !canonical.starts_with(&canonical_base) {
                 return Err(AgentError::PermissionDenied(
                     "Access denied: path outside data directory".to_string(),
@@ -81,10 +76,7 @@ impl FileManager {
         let parent = normalized
             .parent()
             .ok_or_else(|| AgentError::InvalidRequest("Invalid path".to_string()))?;
-        if parent.exists() {
-            let parent_canon = parent.canonicalize().map_err(|_| {
-                AgentError::PermissionDenied("Path traversal attempt detected".to_string())
-            })?;
+        if let Ok(parent_canon) = parent.canonicalize() {
             if !parent_canon.starts_with(&canonical_base) {
                 return Err(AgentError::PermissionDenied(
                     "Access denied: path outside data directory".to_string(),
@@ -169,9 +161,13 @@ impl FileManager {
             )));
         }
 
-        fs::write(&full_path, data.as_bytes())
+        let temp_path = full_path.with_extension("tmp");
+        fs::write(&temp_path, data.as_bytes())
             .await
             .map_err(|e| AgentError::FileSystemError(format!("Failed to write file: {}", e)))?;
+        fs::rename(&temp_path, &full_path).await.map_err(|e| {
+            AgentError::FileSystemError(format!("Failed to rename temp file: {}", e))
+        })?;
 
         info!("File written successfully: {:?}", full_path);
 
@@ -183,7 +179,8 @@ impl FileManager {
 
         debug!("Deleting file: {:?}", full_path);
 
-        if full_path.is_dir() {
+        let meta = fs::symlink_metadata(&full_path).await?;
+        if meta.is_dir() && !meta.file_type().is_symlink() {
             fs::remove_dir_all(&full_path)
                 .await
                 .map_err(|e| AgentError::FileSystemError(format!("Failed to delete: {}", e)))?;
@@ -345,11 +342,58 @@ impl FileManager {
                 .map_err(|e| AgentError::FileSystemError(format!("Failed to create dir: {}", e)))?;
         }
 
-        fs::write(&full_path, data)
+        let temp_path = full_path.with_extension("tmp");
+        fs::write(&temp_path, data)
             .await
             .map_err(|e| AgentError::FileSystemError(format!("Failed to write file: {}", e)))?;
+        fs::rename(&temp_path, &full_path).await.map_err(|e| {
+            AgentError::FileSystemError(format!("Failed to rename temp file: {}", e))
+        })?;
 
         info!("File bytes written: {:?} ({} bytes)", full_path, data.len());
+        Ok(())
+    }
+
+    /// Stream response body directly to a file.
+    pub async fn write_file_stream(
+        &self,
+        server_id: &str,
+        path: &str,
+        mut response: reqwest::Response,
+    ) -> AgentResult<()> {
+        let full_path = self.resolve_path(server_id, path)?;
+        debug!("Streaming to file: {:?}", full_path);
+
+        if let Some(parent) = full_path.parent() {
+            fs::create_dir_all(parent)
+                .await
+                .map_err(|e| AgentError::FileSystemError(format!("Failed to create dir: {}", e)))?;
+        }
+
+        let mut file = fs::File::create(&full_path)
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("Failed to create file: {}", e)))?;
+
+        let mut total: u64 = 0;
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("Failed to read chunk: {}", e)))?
+        {
+            total += chunk.len() as u64;
+            if total > MAX_FILE_SIZE {
+                let _ = fs::remove_file(&full_path).await;
+                return Err(AgentError::FileSystemError(format!(
+                    "File too large: exceeds {}MB",
+                    MAX_FILE_SIZE / 1024 / 1024
+                )));
+            }
+            file.write_all(&chunk).await.map_err(|e| {
+                AgentError::FileSystemError(format!("Failed to write chunk: {}", e))
+            })?;
+        }
+
+        info!("File stream written: {:?} ({} bytes)", full_path, total);
         Ok(())
     }
 
@@ -399,6 +443,22 @@ impl FileManager {
         fs::create_dir_all(&normalized).await.map_err(|e| {
             AgentError::FileSystemError(format!("Failed to create directory: {}", e))
         })?;
+
+        // Verify the created path is still within the data directory (symlink race protection)
+        let canonical_base = self.data_dir.canonicalize().map_err(|_| {
+            AgentError::FileSystemError(format!(
+                "Data directory does not exist: {:?}",
+                self.data_dir
+            ))
+        })?;
+        let canonical_created = normalized.canonicalize().map_err(|e| {
+            AgentError::FileSystemError(format!("Failed to canonicalize created directory: {}", e))
+        })?;
+        if !canonical_created.starts_with(&canonical_base) {
+            return Err(AgentError::PermissionDenied(
+                "Created directory escapes data directory".to_string(),
+            ));
+        }
 
         info!("Directory created: {:?}", normalized);
         Ok(())
