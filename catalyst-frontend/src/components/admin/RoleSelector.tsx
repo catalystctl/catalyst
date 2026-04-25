@@ -59,6 +59,7 @@ export default function RoleSelector({
   const { data: roles = [], isLoading } = useQuery({
     queryKey: qk.adminRoles(),
     queryFn: rolesApi.list,
+    refetchInterval: 10000,
   });
 
   // Filter roles by search and exclude already selected

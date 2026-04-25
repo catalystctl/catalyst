@@ -15,6 +15,6 @@ export function useServers(params?: ServerListParams) {
         transitionalStatuses.has(server.status),
       )
         ? 2000
-        : false,
+        : 10000,
   });
 }

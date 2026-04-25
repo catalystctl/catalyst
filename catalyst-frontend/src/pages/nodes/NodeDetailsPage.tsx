@@ -127,6 +127,7 @@ function NodeDetailsPage() {
     queryKey: ['node-api-key', nodeId],
     queryFn: () => nodesApi.checkApiKey(nodeId!),
     enabled: !!nodeId,
+    refetchInterval: 30000,
   });
 
   const deployMutation = useMutation({

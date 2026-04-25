@@ -30,6 +30,7 @@ export default function ServerStartupVariablesSection({
     queryKey: qk.serverVariables(serverId),
     queryFn: () => serversApi.getVariables(serverId),
     enabled: Boolean(serverId),
+    refetchInterval: 15000,
   });
 
   // Sync local values when variables load

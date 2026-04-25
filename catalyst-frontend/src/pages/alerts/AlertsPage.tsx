@@ -284,11 +284,13 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
       serverId,
       scope,
     }),
+    refetchInterval: 10000,
   });
   const { data: alertStats } = useQuery({
     queryKey: ['alerts-stats', scope, serverId],
     queryFn: () => alertsApi.statsScoped({ scope }),
     enabled: !serverId,
+    refetchInterval: 10000,
   });
   const { data: alertRules = [] } = useAlertRules({
     scope,

@@ -102,6 +102,7 @@ export function useSseAdminEvents() {
           Promise.all([
             q.invalidateQueries({ queryKey: ['admin-servers'] }),
             q.invalidateQueries({ queryKey: ['servers'] }),
+            q.invalidateQueries({ queryKey: ['node-allocations'] }),
             q.invalidateQueries({ queryKey: ['dashboard-stats'] }),
             q.invalidateQueries({ queryKey: ['admin-stats'] }),
             q.invalidateQueries({ queryKey: ['dashboard-activity'] }),
@@ -114,6 +115,7 @@ export function useSseAdminEvents() {
           Promise.all([
             q.invalidateQueries({ queryKey: ['admin-servers'] }),
             q.invalidateQueries({ queryKey: ['servers'] }),
+            q.invalidateQueries({ queryKey: ['node-allocations'] }),
             q.invalidateQueries({ queryKey: ['dashboard-stats'] }),
             q.invalidateQueries({ queryKey: ['admin-stats'] }),
             q.invalidateQueries({ queryKey: ['dashboard-activity'] }),
@@ -132,6 +134,7 @@ export function useSseAdminEvents() {
             q.invalidateQueries({ queryKey: ['server'] }),
             q.invalidateQueries({ queryKey: ['servers'] }),
             q.invalidateQueries({ queryKey: ['admin-servers'] }),
+            q.invalidateQueries({ queryKey: ['node-allocations'] }),
             q.invalidateQueries({ queryKey: ['dashboard-stats'] }),
             q.invalidateQueries({ queryKey: ['admin-stats'] }),
             q.invalidateQueries({ queryKey: ['dashboard-activity'] }),
@@ -150,6 +153,8 @@ export function useSseAdminEvents() {
           Promise.all([
             q.invalidateQueries({ queryKey: ['admin-nodes'] }),
             q.invalidateQueries({ queryKey: ['nodes'] }),
+            q.invalidateQueries({ queryKey: ['nodes', 'accessible'] }),
+            q.invalidateQueries({ queryKey: ['node-allocations'] }),
             q.invalidateQueries({ queryKey: ['dashboard-stats'] }),
             q.invalidateQueries({ queryKey: ['admin-stats'] }),
             q.invalidateQueries({ queryKey: ['admin-health'] }),
@@ -160,6 +165,7 @@ export function useSseAdminEvents() {
             const nodeId = String(data.nodeId ?? '');
             if (nodeId) {
               q.removeQueries({ queryKey: ['node', nodeId] });
+              q.removeQueries({ queryKey: ['node-allocations', nodeId] });
             }
           }
         }
@@ -168,6 +174,8 @@ export function useSseAdminEvents() {
           Promise.all([
             q.invalidateQueries({ queryKey: ['admin-nodes'] }),
             q.invalidateQueries({ queryKey: ['nodes'] }),
+            q.invalidateQueries({ queryKey: ['nodes', 'accessible'] }),
+            q.invalidateQueries({ queryKey: ['node-allocations'] }),
             q.invalidateQueries({ queryKey: ['admin-health'] }),
             q.invalidateQueries({ queryKey: ['locations'] }),
             q.invalidateQueries({ queryKey: ['cluster-metrics'] }),
@@ -177,6 +185,7 @@ export function useSseAdminEvents() {
             q.invalidateQueries({ queryKey: ['node', nodeId] });
             q.invalidateQueries({ queryKey: ['node-stats', nodeId] });
             q.invalidateQueries({ queryKey: ['node-metrics', nodeId] });
+            q.invalidateQueries({ queryKey: ['node-allocations', nodeId] });
           }
         }
 

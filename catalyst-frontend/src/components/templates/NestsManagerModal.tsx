@@ -111,6 +111,7 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
   const { data: nests = [], isLoading } = useQuery({
     queryKey: qk.nests(),
     queryFn: nestsApi.list,
+    refetchInterval: 15000,
   });
 
   const createMutation = useMutation({

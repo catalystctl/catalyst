@@ -24,6 +24,7 @@ function InvitesPage() {
       return response.data;
     },
     enabled: Boolean(token),
+    refetchInterval: 10000,
   });
   useEffect(() => {
     if (!invitePreview?.email) return;

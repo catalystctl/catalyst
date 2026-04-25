@@ -130,11 +130,18 @@ export function useServerStateUpdates() {
         }
 
         if (
+          type === 'backup_started' ||
+          type === 'backup_restore_started' ||
+          type === 'backup_delete_started' ||
           type === 'backup_complete' ||
           type === 'backup_restore_complete' ||
           type === 'backup_delete_complete'
         ) {
           (queryClient as any).invalidateQueries({ queryKey: ['backups', serverId] });
+        }
+
+        if (type === 'server_files_changed') {
+          (queryClient as any).invalidateQueries({ queryKey: ['files', serverId] });
         }
 
         // Task execution events

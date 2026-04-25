@@ -1,0 +1,1345 @@
+/**
+ * ═══════════════════════════════════════════════════════════════
+ *  CATALYST BRUTALIST THEME
+ *  Raw. Industrial. Uncompromising.
+ *
+ *  Every selector below targets real Catalyst UI surfaces.
+ *  Paste the entire file into Admin → Theme Settings → Custom CSS.
+ *
+ *  Key Principles:
+ *  - NO border-radius (sharp corners everywhere)
+ *  - THICK solid borders (2-4px)
+ *  - HARD offset shadows (no blur, pure offset)
+ *  - HIGH contrast (black/white with stark accent)
+ *  - UPPERCASE typography on interactive elements
+ *  - MONOSPACE for data and inputs
+ * ═══════════════════════════════════════════════════════════════
+ */
+
+/* ═══════════════════════════════════════════════════════════
+   0.  KEYFRAME DEFINITIONS
+   ═══════════════════════════════════════════════════════════ */
+
+@keyframes hardBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes hardSlide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes strikeThrough {
+  0% { text-decoration: none; }
+  100% { text-decoration: line-through; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   1.  CSS VARIABLE OVERRIDES
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  /* Brutalist accent — stark yellow on black */
+  --brutal-yellow: 50 100% 50%;
+  --brutal-red: 0 85% 50%;
+  --brutal-green: 120 80% 40%;
+  --brutal-white: 0 0% 95%;
+  --brutal-black: 0 0% 5%;
+
+  --accent-teal: var(--brutal-yellow);
+  --accent-teal-light: var(--brutal-yellow);
+  --accent-teal-muted: var(--brutal-yellow) / 0.15;
+
+  --success: var(--brutal-green);
+  --success-muted: var(--brutal-green) / 0.15;
+  --warning: var(--brutal-yellow);
+  --warning-muted: var(--brutal-yellow) / 0.15;
+  --danger: var(--brutal-red);
+  --danger-muted: var(--brutal-red) / 0.15;
+  --info: 200 90% 45%;
+  --info-muted: 200 90% 45% / 0.15;
+
+  /* Brutalist design: NO radius */
+  --radius: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   2.  GLOBAL BRUTALIST RESET
+   ═══════════════════════════════════════════════════════════ */
+
+/* Kill all border-radius — brutalism demands sharp corners */
+.dark *, .light * {
+  border-radius: 0 !important;
+}
+
+/* Force brutalist box-shadows everywhere */
+.dark .rounded-xl,
+.dark .rounded-lg,
+.dark [class*="rounded-"],
+.dark aside,
+.dark header,
+.dark [role="dialog"],
+.dark [data-radix-popper-content-wrapper] > div,
+.dark [data-sonner-toast],
+.dark [class*="app-shell"] > div > div[class*="max-w-md"],
+.dark [class*="rounded-xl"][class*="border"],
+.dark .rounded-xl[class*="border"],
+.dark [class*="rounded-lg"][class*="border"] {
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   3.  DARK MODE — Pure black brutalist
+   ═══════════════════════════════════════════════════════════ */
+
+.dark {
+  --background: 0 0% 3%;
+  --foreground: 0 0% 95%;
+  --muted: 0 0% 8%;
+  --muted-foreground: 0 0% 50%;
+  --popover: 0 0% 5%;
+  --popover-foreground: 0 0% 95%;
+  --card: 0 0% 5%;
+  --card-foreground: 0 0% 95%;
+  --border: var(--brutal-yellow) / 0.6;
+  --input: 0 0% 15%;
+  --primary: var(--brutal-yellow);
+  --primary-foreground: 0 0% 0%;
+  --secondary: 0 0% 10%;
+  --secondary-foreground: 0 0% 95%;
+  --accent: var(--brutal-yellow);
+  --accent-foreground: 0 0% 0%;
+  --destructive: var(--brutal-red);
+  --destructive-foreground: 0 0% 100%;
+  --ring: var(--brutal-yellow);
+
+  --surface-0: 0 0% 3%;
+  --surface-1: 0 0% 6%;
+  --surface-2: 0 0% 10%;
+  --surface-3: 0 0% 14%;
+
+  --zinc-50: 0 0% 95%;
+  --zinc-100: 0 0% 90%;
+  --zinc-200: 0 0% 80%;
+  --zinc-300: 0 0% 65%;
+  --zinc-400: 0 0% 50%;
+  --zinc-500: 0 0% 40%;
+  --zinc-600: 0 0% 30%;
+  --zinc-700: 0 0% 20%;
+  --zinc-800: 0 0% 12%;
+  --zinc-900: 0 0% 8%;
+  --zinc-950: 0 0% 3%;
+
+  --scrollbar-track: 0 0% 3%;
+  --scrollbar-thumb: var(--brutal-yellow) / 0.5;
+
+  color-scheme: dark;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   4.  LIGHT MODE — Stark white brutalist
+   ═══════════════════════════════════════════════════════════ */
+
+.light {
+  --background: 0 0% 98%;
+  --foreground: 0 0% 5%;
+  --muted: 0 0% 94%;
+  --muted-foreground: 0 0% 40%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 5%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 5%;
+  --border: 0 0% 15%;
+  --input: 0 0% 90%;
+  --primary: 0 0% 0%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 92%;
+  --secondary-foreground: 0 0% 5%;
+  --accent: 0 0% 0%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: var(--brutal-red);
+  --destructive-foreground: 0 0% 100%;
+  --ring: 0 0% 0%;
+
+  --surface-0: 0 0% 98%;
+  --surface-1: 0 0% 100%;
+  --surface-2: 0 0% 92%;
+  --surface-3: 0 0% 85%;
+
+  --zinc-50: 0 0% 98%;
+  --zinc-100: 0 0% 92%;
+  --zinc-200: 0 0% 85%;
+  --zinc-300: 0 0% 70%;
+  --zinc-400: 0 0% 50%;
+  --zinc-500: 0 0% 40%;
+  --zinc-600: 0 0% 30%;
+  --zinc-700: 0 0% 20%;
+  --zinc-800: 0 0% 12%;
+  --zinc-900: 0 0% 8%;
+  --zinc-950: 0 0% 3%;
+
+  --scrollbar-track: 0 0% 98%;
+  --scrollbar-thumb: 0 0% 20%;
+
+  color-scheme: light;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   5.  SCROLLBAR — Solid brutalist track
+   ═══════════════════════════════════════════════════════════ */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
+}
+
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: hsl(var(--scrollbar-track)); }
+*::-webkit-scrollbar-thumb { background: hsl(var(--scrollbar-thumb)); }
+
+/* ═══════════════════════════════════════════════════════════
+   6.  APP SHELL & BODY — Flat brutalist background
+   ═══════════════════════════════════════════════════════════ */
+
+.dark body {
+  background: hsl(var(--background)) !important;
+  background-attachment: fixed;
+}
+
+.light body {
+  background: hsl(var(--background)) !important;
+  background-attachment: fixed;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   7.  HEADER — Heavy top bar with thick bottom border
+   ═══════════════════════════════════════════════════════════ */
+
+.dark header,
+.dark [class*="app-header"],
+.dark [class*="top-bar"] {
+  background: hsl(var(--surface-0)) !important;
+  border-bottom: 4px solid hsl(var(--border)) !important;
+}
+
+.light header,
+.light [class*="app-header"],
+.light [class*="top-bar"] {
+  background: hsl(var(--surface-1)) !important;
+  border-bottom: 4px solid hsl(var(--border)) !important;
+}
+
+/* Header logo text */
+.dark header h1,
+.dark header [class*="font-display"],
+.dark header span[class*="text-lg"] {
+  color: hsl(var(--brutal-yellow)) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-weight: 900;
+  font-size: 1.1rem !important;
+}
+
+/* Breadcrumb */
+.dark header nav,
+.dark header [class*="breadcrumb"] {
+  color: hsl(var(--muted-foreground)) !important;
+  text-transform: uppercase;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+}
+
+.dark header nav a,
+.dark header [class*="breadcrumb"] a {
+  color: hsl(var(--foreground)) !important;
+  font-weight: 700;
+}
+
+.dark header nav a:hover,
+.dark header [class*="breadcrumb"] a:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+/* User avatar */
+.dark header button[class*="rounded-full"],
+.dark header [class*="rounded-full"] {
+  border: 2px solid hsl(var(--border)) !important;
+  background: hsl(var(--surface-2)) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   8.  SIDEBAR — Brutalist panel with thick left border
+   ═══════════════════════════════════════════════════════════ */
+
+.dark aside,
+.dark [class*="sidebar"],
+.dark nav[class*="sidebar"] {
+  background: hsl(var(--surface-0)) !important;
+  border-right: 4px solid hsl(var(--border)) !important;
+}
+
+.light aside,
+.light [class*="sidebar"],
+.light nav[class*="sidebar"] {
+  background: hsl(var(--surface-2)) !important;
+  border-right: 4px solid hsl(var(--border)) !important;
+}
+
+/* Sidebar section headers */
+.dark aside h3,
+.dark [class*="sidebar"] h3,
+.dark aside [class*="uppercase"],
+.dark [class*="sidebar"] [class*="uppercase"] {
+  color: hsl(var(--brutal-yellow)) !important;
+  font-size: 0.6rem !important;
+  letter-spacing: 0.2em !important;
+  text-transform: uppercase !important;
+  font-weight: 900;
+}
+
+/* Sidebar links */
+.dark aside a,
+.dark [class*="sidebar"] a {
+  color: hsl(var(--foreground)) !important;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  border: none !important;
+  transition: all 0.1s ease;
+}
+
+.dark aside a:hover,
+.dark [class*="sidebar"] a:hover {
+  background: hsl(var(--border)) !important;
+  color: hsl(var(--background)) !important;
+}
+
+.dark aside a[class*="active"],
+.dark aside a[aria-current="page"],
+.dark [class*="sidebar"] a[class*="active"],
+.dark [class*="sidebar"] a[aria-current="page"] {
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  border-left: 4px solid hsl(var(--primary)) !important;
+  font-weight: 900;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   9.  CARDS — Hard box with offset shadow
+   ═══════════════════════════════════════════════════════════ */
+
+.dark [class*="rounded-xl"][class*="border"],
+.dark .rounded-xl[class*="border"],
+.dark [class*="rounded-lg"][class*="border"] {
+  border: 3px solid hsl(var(--foreground)) !important;
+  background: hsl(var(--surface-1)) !important;
+  box-shadow: 6px 6px 0px hsl(var(--border)) !important;
+}
+
+.dark [class*="rounded-xl"][class*="border"]:hover,
+.dark .rounded-xl[class*="border"]:hover {
+  transform: translate(-2px, -2px) !important;
+  box-shadow: 8px 8px 0px hsl(var(--border)) !important;
+}
+
+.dark [class*="rounded-xl"]:active,
+.dark [class*="rounded-lg"]:active {
+  transform: translate(3px, 3px) !important;
+  box-shadow: 3px 3px 0px hsl(var(--border)) !important;
+}
+
+/* Light mode cards */
+.light [class*="rounded-xl"][class*="border"],
+.light .rounded-xl[class*="border"] {
+  border: 3px solid hsl(var(--foreground)) !important;
+  background: hsl(var(--surface-1)) !important;
+  box-shadow: 6px 6px 0px hsl(var(--border)) !important;
+}
+
+/* Dashed border cards */
+.dark [class*="border-dashed"] {
+  border: 2px dashed hsl(var(--border)) !important;
+  background: hsl(var(--surface-1)) !important;
+}
+
+.dark [class*="border-dashed"]:hover {
+  border-color: hsl(var(--primary)) !important;
+  background: hsl(var(--primary)) / 0.05 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   10.  BUTTONS — Physical pressable blocks
+   ═══════════════════════════════════════════════════════════ */
+
+/* Primary CTA — THE main brutalist button */
+.dark button[class*="bg-primary"],
+.dark .bg-primary,
+.dark a[class*="bg-primary"] {
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  font-weight: 900 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.75rem !important;
+  border: 3px solid hsl(var(--foreground)) !important;
+  box-shadow: 4px 4px 0px hsl(var(--foreground)) !important;
+  transition: all 0.1s ease;
+}
+
+.dark button[class*="bg-primary"]:hover,
+.dark .bg-primary:hover {
+  transform: translate(-2px, -2px) !important;
+  box-shadow: 6px 6px 0px hsl(var(--foreground)) !important;
+}
+
+.dark button[class*="bg-primary"]:active,
+.dark .bg-primary:active {
+  transform: translate(3px, 3px) !important;
+  box-shadow: 1px 1px 0px hsl(var(--foreground)) !important;
+}
+
+/* Danger button */
+.dark button[class*="bg-danger"],
+.dark button[class*="bg-red"],
+.dark .bg-danger,
+.dark .bg-red-500 {
+  background: hsl(var(--danger)) !important;
+  color: white !important;
+  border: 3px solid hsl(var(--foreground)) !important;
+  box-shadow: 4px 4px 0px hsl(var(--foreground)) !important;
+  text-transform: uppercase;
+  font-weight: 900;
+}
+
+.dark button[class*="bg-danger"]:hover,
+.dark .bg-danger:hover {
+  transform: translate(-2px, -2px) !important;
+  box-shadow: 6px 6px 0px hsl(var(--foreground)) !important;
+}
+
+/* Secondary buttons — outlined brutalist */
+.dark button:not([class*="bg-primary"]):not([class*="bg-danger"]):not([class*="bg-transparent"]) {
+  border: 2px solid hsl(var(--foreground)) !important;
+  background: hsl(var(--surface-2)) !important;
+  color: hsl(var(--foreground)) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem !important;
+  font-weight: 700;
+  box-shadow: 3px 3px 0px hsl(var(--border)) !important;
+}
+
+.dark button:not([class*="bg-primary"]):not([class*="bg-danger"]):hover {
+  background: hsl(var(--foreground)) !important;
+  color: hsl(var(--background)) !important;
+  transform: translate(-1px, -1px) !important;
+  box-shadow: 4px 4px 0px hsl(var(--border)) !important;
+}
+
+.dark button:not([class*="bg-primary"]):not([class*="bg-danger"]):active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px hsl(var(--border)) !important;
+}
+
+/* Text buttons */
+.dark button[class*="text-zinc"]:hover,
+.dark button[class*="text-muted"]:hover {
+  background: hsl(var(--border)) !important;
+  color: hsl(var(--background)) !important;
+}
+
+/* Toggle buttons */
+.dark button[aria-pressed="true"],
+.dark [aria-pressed="true"] {
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  border: 2px solid hsl(var(--foreground)) !important;
+  box-shadow: 3px 3px 0px hsl(var(--foreground)) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   11.  FORM INPUTS — Raw underlined brutalist
+   ═══════════════════════════════════════════════════════════ */
+
+.dark input,
+.dark textarea,
+.dark select {
+  background: hsl(var(--surface-1)) !important;
+  border: none !important;
+  border-bottom: 3px solid hsl(var(--foreground)) !important;
+  color: hsl(var(--foreground)) !important;
+  font-family: 'JetBrains Mono', 'Courier New', monospace !important;
+  box-shadow: none !important;
+}
+
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus {
+  border-bottom-color: hsl(var(--primary)) !important;
+  box-shadow: 0 4px 0px hsl(var(--primary)) !important;
+  outline: none !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: hsl(var(--muted-foreground)) !important;
+  font-style: italic;
+}
+
+.dark input[type="checkbox"] {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid hsl(var(--foreground)) !important;
+  background: hsl(var(--surface-1)) !important;
+  position: relative;
+}
+
+.dark input[type="checkbox"]:checked {
+  background: hsl(var(--primary)) !important;
+}
+
+.dark input[type="checkbox"]:checked::after {
+  content: 'X';
+  position: absolute;
+  top: -3px;
+  left: 2px;
+  font-weight: 900;
+  font-size: 14px;
+  color: hsl(var(--primary-foreground));
+}
+
+.dark input[type="range"] {
+  accent-color: hsl(var(--primary));
+  border-bottom: none !important;
+}
+
+.light input,
+.light textarea,
+.light select {
+  background: hsl(var(--surface-1)) !important;
+  border: none !important;
+  border-bottom: 3px solid hsl(var(--foreground)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.light input:focus,
+.light textarea:focus {
+  border-bottom-color: hsl(var(--primary)) !important;
+  box-shadow: 0 4px 0px hsl(var(--foreground)) !important;
+}
+
+/* Select dropdown */
+.dark select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%23e5e5e5' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='M6 8l4 4 4-4'/%3E%3C/svg%3E") !important;
+  background-position: right 8px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  padding-right: 32px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   12.  LABELS & FORM HELPERS
+   ═══════════════════════════════════════════════════════════ */
+
+.dark label,
+.dark [class*="label"] {
+  color: hsl(var(--foreground)) !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.65rem !important;
+}
+
+.dark [class*="text-[11px]"][class*="text-zinc-400"],
+.dark [class*="text-xs"][class*="text-zinc-400"],
+.dark [class*="helper"] {
+  color: hsl(var(--muted-foreground)) !important;
+  font-size: 0.6rem !important;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   13.  STATUS BADGES — Block-style rectangles
+   ═══════════════════════════════════════════════════════════ */
+
+.dark [class*="bg-emerald"],
+.dark [class*="bg-green"],
+.dark [class*="bg-success"],
+.dark [class*="text-emerald"] {
+  background: hsl(var(--success)) !important;
+  color: hsl(0 0% 0%) !important;
+  border: 2px solid hsl(var(--foreground)) !important;
+  text-transform: uppercase;
+  font-weight: 900;
+  font-size: 0.6rem !important;
+  letter-spacing: 0.1em;
+  padding: 0.2rem 0.5rem !important;
+}
+
+.dark [class*="bg-amber"],
+.dark [class*="bg-yellow"],
+.dark [class*="bg-warning"] {
+  background: hsl(var(--warning)) !important;
+  color: hsl(0 0% 0%) !important;
+  border: 2px solid hsl(var(--foreground)) !important;
+  text-transform: uppercase;
+  font-weight: 900;
+  font-size: 0.6rem !important;
+  letter-spacing: 0.1em;
+  padding: 0.2rem 0.5rem !important;
+}
+
+.dark [class*="bg-red"],
+.dark [class*="bg-danger"] {
+  background: hsl(var(--danger)) !important;
+  color: hsl(0 0% 100%) !important;
+  border: 2px solid hsl(var(--foreground)) !important;
+  text-transform: uppercase;
+  font-weight: 900;
+  font-size: 0.6rem !important;
+  letter-spacing: 0.1em;
+  padding: 0.2rem 0.5rem !important;
+}
+
+.dark [class*="bg-blue"],
+.dark [class*="bg-info"],
+.dark [class*="bg-sky"] {
+  background: hsl(var(--info)) !important;
+  color: hsl(0 0% 100%) !important;
+  border: 2px solid hsl(var(--foreground)) !important;
+  text-transform: uppercase;
+  font-weight: 900;
+  font-size: 0.6rem !important;
+  letter-spacing: 0.1em;
+  padding: 0.2rem 0.5rem !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   14.  TABLES — Raw data grid
+   ═══════════════════════════════════════════════════════════ */
+
+.dark table {
+  border-collapse: collapse;
+  border: 3px solid hsl(var(--foreground)) !important;
+}
+
+.dark th {
+  background: hsl(var(--surface-2)) !important;
+  border: 2px solid hsl(var(--foreground)) !important;
+  color: hsl(var(--primary)) !important;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.6rem !important;
+  padding: 0.6rem 1rem !important;
+}
+
+.dark td {
+  border: 1px solid hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.8rem;
+  padding: 0.5rem 1rem !important;
+}
+
+.dark tr:hover td {
+  background: hsl(var(--surface-2)) !important;
+}
+
+.dark td [class*="font-mono"] {
+  color: hsl(var(--primary)) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   15.  MODALS & DIALOGS
+   ═══════════════════════════════════════════════════════════ */
+
+.dark [role="dialog"],
+.dark [role="alertdialog"],
+.dark [data-state="open"][class*="rounded-xl"] {
+  background: hsl(var(--surface-0)) !important;
+  border: 4px solid hsl(var(--primary)) !important;
+  box-shadow: 8px 8px 0px hsl(var(--primary)) !important;
+}
+
+.dark [role="dialog"] h2,
+.dark [role="alertdialog"] h2 {
+  color: hsl(var(--primary)) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 900;
+}
+
+/* Dialog overlay */
+.dark [data-state="open"][class*="fixed"][class*="inset-0"] {
+  background: hsl(0 0% 0% / 0.8) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   16.  DROPDOWN MENUS & POPOVERS
+   ═══════════════════════════════════════════════════════════ */
+
+.dark [data-radix-popper-content-wrapper] > div,
+.dark [data-radix-dropdown-menu-content],
+.dark [data-radix-popover-content] {
+  background: hsl(var(--surface-0)) !important;
+  border: 3px solid hsl(var(--foreground)) !important;
+  box-shadow: 6px 6px 0px hsl(var(--foreground)) !important;
+}
+
+.dark [data-radix-dropdown-menu-item],
+.dark [data-radix-popper-content-wrapper] [role="menuitem"] {
+  color: hsl(var(--foreground)) !important;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  border: none !important;
+}
+
+.dark [data-radix-dropdown-menu-item]:hover,
+.dark [data-radix-dropdown-menu-item][data-highlighted] {
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+.dark [data-radix-dropdown-menu-separator] {
+  background: hsl(var(--border)) !important;
+  height: 2px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   17.  TABS — Segmented control brutalist style
+   ═══════════════════════════════════════════════════════════ */
+
+.dark [role="tablist"] {
+  background: hsl(var(--surface-1)) !important;
+  border: 2px solid hsl(var(--foreground)) !important;
+  padding: 0;
+}
+
+.dark [role="tab"] {
+  color: hsl(var(--muted-foreground)) !important;
+  border: none !important;
+  border-right: 2px solid hsl(var(--foreground)) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem !important;
+  font-weight: 700;
+  padding: 0.6rem 1.2rem !important;
+}
+
+.dark [role="tab"]:last-child {
+  border-right: none !important;
+}
+
+.dark [role="tab"][data-state="active"],
+.dark [role="tab"][aria-selected="true"] {
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+.dark [role="tab"]:hover:not([data-state="active"]) {
+  background: hsl(var(--surface-2)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   18.  CONSOLE / TERMINAL — Brutalist command line
+   ═══════════════════════════════════════════════════════════ */
+
+.dark .console-output {
+  background: hsl(0 0% 0%) !important;
+  border: 3px solid hsl(var(--foreground)) !important;
+  font-family: 'JetBrains Mono', 'Courier New', monospace !important;
+  box-shadow: inset 0 0 30px hsl(var(--border)) !important;
+}
+
+.dark .console-line {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.8rem;
+}
+
+.dark .console-output .chl-error {
+  color: hsl(var(--danger));
+  font-weight: 900;
+}
+
+.dark .console-output .chl-warn {
+  color: hsl(var(--warning));
+  font-weight: 700;
+}
+
+.dark .console-output .chl-info {
+  color: hsl(var(--info));
+  font-weight: 700;
+}
+
+.dark .console-output .chl-time {
+  color: hsl(var(--muted-foreground));
+}
+
+.dark .console-output .chl-uuid {
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+
+.dark .console-output .chl-url {
+  color: hsl(var(--info));
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+
+.dark .console-output .chl-num {
+  color: hsl(var(--primary));
+  font-weight: 700;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   19.  TOOLTIPS — Hard box brutalist
+   ═══════════════════════════════════════════════════════════ */
+
+.dark [data-radix-tooltip-content] {
+  background: hsl(var(--surface-0)) !important;
+  border: 2px solid hsl(var(--foreground)) !important;
+  color: hsl(var(--foreground)) !important;
+  font-size: 0.65rem !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  box-shadow: 3px 3px 0px hsl(var(--foreground)) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   20.  SONNER TOASTS — Stackable notifications
+   ═══════════════════════════════════════════════════════════ */
+
+.dark [data-sonner-toast] {
+  background: hsl(var(--surface-0)) !important;
+  border: 3px solid hsl(var(--foreground)) !important;
+  box-shadow: 6px 6px 0px hsl(var(--foreground)) !important;
+}
+
+.dark [data-sonner-toast][data-type="success"] {
+  border-color: hsl(var(--success)) !important;
+  box-shadow: 6px 6px 0px hsl(var(--success)) !important;
+}
+
+.dark [data-sonner-toast][data-type="error"] {
+  border-color: hsl(var(--danger)) !important;
+  box-shadow: 6px 6px 0px hsl(var(--danger)) !important;
+}
+
+.dark [data-sonner-toast][data-type="info"] {
+  border-color: hsl(var(--info)) !important;
+  box-shadow: 6px 6px 0px hsl(var(--info)) !important;
+}
+
+.dark [data-sonner-toast][data-type="warning"] {
+  border-color: hsl(var(--warning)) !important;
+  box-shadow: 6px 6px 0px hsl(var(--warning)) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   21.  SERVER CARDS — Brutalist server blocks
+   ═══════════════════════════════════════════════════════════ */
+
+.dark [class*="server-card"],
+.dark [class*="ServerCard"] {
+  border: 3px solid hsl(var(--foreground)) !important;
+  background: hsl(var(--surface-1)) !important;
+  box-shadow: 6px 6px 0px hsl(var(--border)) !important;
+}
+
+.dark [class*="server-card"]:hover {
+  transform: translate(-2px, -2px) !important;
+  box-shadow: 8px 8px 0px hsl(var(--border)) !important;
+}
+
+/* Server status */
+.dark [class*="status"][class*="running"],
+.dark [class*="status"][class*="online"] {
+  color: hsl(var(--success)) !important;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.dark [class*="status"][class*="offline"],
+.dark [class*="status"][class*="stopped"] {
+  color: hsl(var(--danger)) !important;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.dark [class*="status"][class*="pending"],
+.dark [class*="status"][class*="installing"] {
+  color: hsl(var(--warning)) !important;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   22.  PROGRESS BARS — Raw blocks
+   ═══════════════════════════════════════════════════════════ */
+
+.dark [class*="progress"] > div,
+.dark progress::-webkit-progress-value,
+.dark [role="progressbar"] > div {
+  background: hsl(var(--primary)) !important;
+}
+
+.dark [class*="progress"],
+.dark progress,
+.dark [role="progressbar"] {
+  background: hsl(var(--surface-2)) !important;
+  border: 2px solid hsl(var(--foreground)) !important;
+  box-shadow: inset 0 0 10px hsl(var(--border)) !important;
+}
+
+/* Stat numbers */
+.dark [class*="text-2xl"][class*="font-bold"],
+.dark [class*="text-3xl"][class*="font-bold"] {
+  color: hsl(var(--primary)) !important;
+  font-weight: 900;
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   23.  FILE MANAGER
+   ═══════════════════════════════════════════════════════════ */
+
+.dark [class*="file-tree"] [class*="hover:bg"]:hover,
+.dark [class*="file-list"] [class*="hover:bg"]:hover {
+  background: hsl(var(--border)) !important;
+  color: hsl(var(--background)) !important;
+}
+
+.dark [class*="file-tree"] [class*="text-primary"],
+.dark [class*="file-list"] [class*="text-primary"] {
+  color: hsl(var(--primary)) !important;
+  font-weight: 700;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   24.  ALERTS / BANNERS — Hard edge callouts
+   ═══════════════════════════════════════════════════════════ */
+
+.dark [class*="bg-danger"][class*="border"],
+.dark [class*="bg-red"][class*="border"] {
+  background: hsl(var(--danger)) / 0.15 !important;
+  border: 3px solid hsl(var(--danger)) !important;
+  box-shadow: 4px 4px 0px hsl(var(--danger)) !important;
+}
+
+.dark [class*="bg-warning"][class*="border"] {
+  background: hsl(var(--warning)) / 0.15 !important;
+  border: 3px solid hsl(var(--warning)) !important;
+  box-shadow: 4px 4px 0px hsl(var(--warning)) !important;
+}
+
+.dark [class*="bg-info"][class*="border"] {
+  background: hsl(var(--info)) / 0.15 !important;
+  border: 3px solid hsl(var(--info)) !important;
+  box-shadow: 4px 4px 0px hsl(var(--info)) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   25.  DIVIDERS — Thick solid lines
+   ═══════════════════════════════════════════════════════════ */
+
+.dark hr,
+.dark [class*="border-t"],
+.dark [class*="border-b"] {
+  border: none !important;
+  border-top: 3px solid hsl(var(--foreground)) !important;
+}
+
+.dark [class*="border-l"] {
+  border-left: 3px solid hsl(var(--foreground)) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   26.  AVATARS — Square brutalist avatars
+   ═══════════════════════════════════════════════════════════ */
+
+.dark img[class*="rounded-full"],
+.dark [class*="avatar"] {
+  border: 3px solid hsl(var(--foreground)) !important;
+  box-shadow: 3px 3px 0px hsl(var(--border)) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   27.  CODE BLOCKS — Monospace raw blocks
+   ═══════════════════════════════════════════════════════════ */
+
+.dark code,
+.dark pre,
+.dark [class*="font-mono"][class*="bg-"] {
+  background: hsl(0 0% 0%) !important;
+  border: 2px solid hsl(var(--foreground)) !important;
+  color: hsl(var(--primary)) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  box-shadow: 3px 3px 0px hsl(var(--foreground)) !important;
+}
+
+.dark code {
+  padding: 0.15em 0.4em;
+  font-size: 0.85em;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   28.  LOADING / SKELETON
+   ═══════════════════════════════════════════════════════════ */
+
+.dark [class*="animate-pulse"] {
+  background: hsl(var(--surface-2)) !important;
+  animation: hardBlink 1s steps(1) infinite;
+}
+
+.dark [class*="animate-spin"] {
+  border: 3px solid hsl(var(--border)) !important;
+  border-top-color: hsl(var(--primary)) !important;
+}
+
+.dark [class*="skeleton"] {
+  background: hsl(var(--surface-2)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   29.  EMPTY STATES
+   ═══════════════════════════════════════════════════════════ */
+
+.dark [class*="empty"] svg,
+.dark [class*="empty-state"] svg {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.dark [class*="empty"] [class*="text-zinc-500"],
+.dark [class*="empty-state"] [class*="text-zinc-500"] {
+  color: hsl(var(--muted-foreground)) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   30.  SEARCH / COMMAND PALETTE
+   ═══════════════════════════════════════════════════════════ */
+
+.dark [class*="search"] input,
+.dark [class*="command"] input,
+.dark [role="combobox"] input {
+  background: hsl(var(--surface-1)) !important;
+  border: 3px solid hsl(var(--foreground)) !important;
+  color: hsl(var(--foreground)) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+.dark [class*="search"] input:focus,
+.dark [class*="command"] input:focus {
+  border-color: hsl(var(--primary)) !important;
+  box-shadow: 4px 4px 0px hsl(var(--primary)) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   31.  PAGE TITLES & HEADINGS
+   ═══════════════════════════════════════════════════════════ */
+
+.dark h1 {
+  color: hsl(var(--foreground)) !important;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  font-weight: 900;
+  font-size: clamp(1.5rem, 2vw, 2rem) !important;
+}
+
+.dark h2 {
+  color: hsl(var(--foreground)) !important;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  font-weight: 900;
+}
+
+.dark h3 {
+  color: hsl(var(--foreground)) !important;
+  text-transform: uppercase;
+  font-weight: 800;
+}
+
+.dark h1 [class*="text-primary"],
+.dark h2 [class*="text-primary"] {
+  color: hsl(var(--primary)) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   32.  LINKS
+   ═══════════════════════════════════════════════════════════ */
+
+.dark a:not([class*="bg-primary"]):not([class*="bg-danger"]) {
+  color: hsl(var(--primary)) !important;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  font-weight: 700;
+}
+
+.dark a:not([class*="bg-primary"]):not([class*="bg-danger"]):hover {
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  text-decoration: none;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   33.  PAGINATION
+   ═══════════════════════════════════════════════════════════ */
+
+.dark [class*="pagination"] button,
+.dark nav[role="navigation"] button {
+  border: 2px solid hsl(var(--foreground)) !important;
+  background: hsl(var(--surface-2)) !important;
+  color: hsl(var(--foreground)) !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.7rem !important;
+  box-shadow: 3px 3px 0px hsl(var(--border)) !important;
+}
+
+.dark [class*="pagination"] button:hover,
+.dark nav[role="navigation"] button:hover {
+  background: hsl(var(--foreground)) !important;
+  color: hsl(var(--background)) !important;
+}
+
+.dark [class*="pagination"] button[class*="active"],
+.dark nav[role="navigation"] button[aria-current="page"] {
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  border-color: hsl(var(--foreground)) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   34.  CONSOLE POWER BUTTONS
+   ═══════════════════════════════════════════════════════════ */
+
+.dark button[class*="Start"],
+.dark button[title*="Start"],
+.dark button[class*="start"] {
+  background: hsl(var(--success)) !important;
+  color: hsl(0 0% 0%) !important;
+  border: 2px solid hsl(var(--foreground)) !important;
+  font-weight: 900;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0px hsl(var(--foreground)) !important;
+}
+
+.dark button[class*="Stop"],
+.dark button[title*="Stop"],
+.dark button[class*="stop"] {
+  background: hsl(var(--danger)) !important;
+  color: hsl(0 0% 100%) !important;
+  border: 2px solid hsl(var(--foreground)) !important;
+  font-weight: 900;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0px hsl(var(--foreground)) !important;
+}
+
+.dark button[class*="Restart"],
+.dark button[title*="Restart"],
+.dark button[class*="restart"] {
+  background: hsl(var(--warning)) !important;
+  color: hsl(0 0% 0%) !important;
+  border: 2px solid hsl(var(--foreground)) !important;
+  font-weight: 900;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0px hsl(var(--foreground)) !important;
+}
+
+/* Console command input */
+.dark .console-output + div input,
+.dark [class*="console"] input[type="text"],
+.dark [class*="command"] input {
+  background: hsl(0 0% 0%) !important;
+  border: 2px solid hsl(var(--foreground)) !important;
+  border-top: none !important;
+  color: hsl(var(--primary)) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   35.  DASHBOARD STAT CARDS
+   ═══════════════════════════════════════════════════════════ */
+
+.dark [class*="Dashboard"] [class*="rounded-xl"][class*="bg-primary"],
+.dark [class*="Dashboard"] [class*="rounded-lg"][class*="bg-primary"] {
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  border: 3px solid hsl(var(--foreground)) !important;
+  box-shadow: 6px 6px 0px hsl(var(--foreground)) !important;
+}
+
+.dark [class*="Dashboard"] [class*="text-2xl"][class*="font-bold"],
+.dark [class*="Dashboard"] [class*="text-3xl"][class*="font-bold"] {
+  color: hsl(var(--primary)) !important;
+  font-weight: 900;
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   36.  GLOBAL TEXT SELECTION
+   ═══════════════════════════════════════════════════════════ */
+
+::selection {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.dark ::selection {
+  background: hsl(var(--primary));
+  color: hsl(0 0% 0%);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   37.  KBD / KEYBOARD SHORTCUTS
+   ═══════════════════════════════════════════════════════════ */
+
+.dark kbd,
+.dark [class*="kbd"] {
+  background: hsl(var(--surface-2)) !important;
+  border: 2px solid hsl(var(--foreground)) !important;
+  border-bottom: 4px solid hsl(var(--foreground)) !important;
+  color: hsl(var(--primary)) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15em 0.5em;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   38.  REDUCED MOTION
+   ═══════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   39.  AUTH PAGES — Brutalist login
+   ═══════════════════════════════════════════════════════════ */
+
+.dark [class*="app-shell"] > div > div[class*="max-w-md"],
+.dark [class*="app-shell"] > div > div[class*="max-w-sm"] {
+  background: hsl(var(--surface-0)) !important;
+  border: 4px solid hsl(var(--primary)) !important;
+  box-shadow: 10px 10px 0px hsl(var(--primary)) !important;
+}
+
+.dark [class*="app-shell"] h1[class*="text-2xl"] {
+  color: hsl(var(--primary)) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-weight: 900;
+}
+
+/* 2FA code inputs */
+.dark input[name*="code"],
+.dark input[placeholder*="0"],
+.dark input[maxLength="1"] {
+  background: hsl(var(--surface-1)) !important;
+  border: 3px solid hsl(var(--foreground)) !important;
+  color: hsl(var(--primary)) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 1.5rem !important;
+  font-weight: 900;
+  text-align: center;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   40.  LIGHT MODE SPECIFIC OVERRIDES
+   ═══════════════════════════════════════════════════════════ */
+
+.light button[class*="bg-primary"],
+.light .bg-primary {
+  background: hsl(var(--foreground)) !important;
+  color: hsl(var(--background)) !important;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border: 3px solid hsl(var(--foreground)) !important;
+  box-shadow: 4px 4px 0px hsl(var(--foreground)) !important;
+}
+
+.light button[class*="bg-primary"]:hover {
+  transform: translate(-2px, -2px) !important;
+  box-shadow: 6px 6px 0px hsl(var(--foreground)) !important;
+}
+
+.light header h1,
+.light header [class*="font-display"] {
+  color: hsl(var(--foreground)) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-weight: 900;
+}
+
+.light aside a[class*="active"],
+.light aside a[aria-current="page"] {
+  background: hsl(var(--foreground)) !important;
+  color: hsl(var(--background)) !important;
+}
+
+.light input:focus,
+.light textarea:focus {
+  border-bottom-color: hsl(var(--foreground)) !important;
+  box-shadow: 0 4px 0px hsl(var(--foreground)) !important;
+}
+
+.light [class*="text-2xl"][class*="font-bold"] {
+  color: hsl(var(--foreground)) !important;
+  font-weight: 900;
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   41.  RESPONSIVE / MOBILE ADJUSTMENTS
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  .dark [class*="rounded-xl"][class*="border"],
+  .dark .rounded-xl[class*="border"] {
+    box-shadow: 4px 4px 0px hsl(var(--border)) !important;
+  }
+
+  .dark aside,
+  .dark [class*="sidebar"] {
+    background: hsl(var(--surface-0)) !important;
+    border-right: 3px solid hsl(var(--foreground)) !important;
+  }
+
+  .dark button,
+  .light button {
+    font-size: 0.65rem !important;
+    padding: 0.5rem 0.8rem !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ═══════════════════════════════════════════════════════════
+   END OF BRUTALIST THEME
+   Raw. Industrial. Uncompromising.
+   ═══════════════════════════════════════════════════════════
+   ═══════════════════════════════════════════════════════════ */

@@ -155,6 +155,26 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         },
       });
 
+      const wsGateway = app.wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'allocation_added',
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (wsGateway?.pushToGlobalSubscribers) {
+        wsGateway.pushToGlobalSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'allocation_added',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       reply.send({
         success: true,
         data: {
@@ -224,6 +244,26 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         data: { portBindings: bindings },
       });
 
+      const wsGateway = app.wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'allocation_removed',
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (wsGateway?.pushToGlobalSubscribers) {
+        wsGateway.pushToGlobalSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'allocation_removed',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       reply.send({ success: true });
     }
   );
@@ -277,6 +317,26 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         where: { id: serverId },
         data: { primaryPort: parsedContainerPort },
       });
+
+      const wsGateway = app.wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'primary_allocation_changed',
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (wsGateway?.pushToGlobalSubscribers) {
+        wsGateway.pushToGlobalSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'primary_allocation_changed',
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       reply.send({
         success: true,

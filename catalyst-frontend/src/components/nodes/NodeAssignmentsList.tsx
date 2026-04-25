@@ -18,6 +18,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
   const { data: assignments = [], isLoading } = useQuery({
     queryKey: ['nodes', nodeId, 'assignments'],
     queryFn: () => nodesApi.getAssignments(nodeId),
+    refetchInterval: 10000,
   });
 
   const removeMutation = useMutation({

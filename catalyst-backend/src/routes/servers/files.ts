@@ -15,6 +15,26 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     return fileTunnel.queueRequest(nodeId, operation, serverUuid, filePath, data, uploadData);
   };
 
+  const notifyFileChange = (serverId: string, status: string, action: string, path?: string, from?: string, to?: string) => {
+    const wsGateway = app.wsGateway;
+    if (!wsGateway?.routeToClients) return;
+    wsGateway.routeToClients(serverId, {
+      type: 'server_files_changed',
+      serverId,
+      action,
+      ...(path ? { path } : {}),
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+      timestamp: Date.now(),
+    }).catch(() => {});
+    wsGateway.routeToClients(serverId, {
+      type: 'server_state_update',
+      serverId,
+      state: status,
+      timestamp: Date.now(),
+    }).catch(() => {});
+  };
+
   app.get(
     "/:serverId/files",
     {
@@ -211,6 +231,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (!result.success) {
           return reply.status(400).send({ error: result.error || "Failed to upload file" });
         }
+        notifyFileChange(server.id, server.status, 'upload', filePath);
         reply.send({ success: true });
       } catch (error: any) {
         if (error?.message?.includes("timed out")) {
@@ -280,6 +301,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (!result.success) {
           return reply.status(400).send({ error: result.error || "Failed to create item" });
         }
+        notifyFileChange(server.id, server.status, 'create', normalizedPath);
         reply.send({ success: true });
       } catch (error: any) {
         if (error?.message?.includes("timed out")) {
@@ -346,7 +368,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (!result.success) {
           return reply.status(500).send({ error: result.error || "Failed to compress files" });
         }
-
+        notifyFileChange(server.id, server.status, 'compress', normalizedArchive);
         reply.send({ success: true, data: { archivePath: normalizedArchive } });
       } catch (error: any) {
         if (error?.message?.includes("timed out")) {
@@ -412,7 +434,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (!result.success) {
           return reply.status(500).send({ error: result.error || "Failed to decompress archive" });
         }
-
+        notifyFileChange(server.id, server.status, 'decompress', normalizedArchive);
         reply.send({ success: true });
       } catch (error: any) {
         if (error?.message?.includes("timed out")) {
@@ -611,6 +633,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (!result.success) {
           return reply.status(400).send({ error: result.error || "Failed to write file" });
         }
+        notifyFileChange(server.id, server.status, 'write', normalizedPath);
       } catch (error: any) {
         if (error?.message?.includes("timed out")) {
           return reply.status(504).send({ error: "Agent file operation timed out" });
@@ -699,6 +722,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (!result.success) {
           return reply.status(400).send({ error: result.error || "Failed to update permissions" });
         }
+        notifyFileChange(server.id, server.status, 'permissions', normalizedPath);
       } catch (error: any) {
         if (error?.message?.includes("timed out")) {
           return reply.status(504).send({ error: "Agent file operation timed out" });
@@ -770,6 +794,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (!result.success) {
           return reply.status(400).send({ error: result.error || "Failed to delete selection" });
         }
+        notifyFileChange(server.id, server.status, 'delete', normalizedPath);
       } catch (error: any) {
         if (error?.message?.includes("timed out")) {
           return reply.status(504).send({ error: "Agent file operation timed out" });
@@ -847,6 +872,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (!result.success) {
           return reply.status(400).send({ error: result.error || "Failed to rename" });
         }
+        notifyFileChange(server.id, server.status, 'rename', undefined, normalizedFrom, normalizedTo);
       } catch (error: any) {
         if (error?.message?.includes("timed out")) {
           return reply.status(504).send({ error: "Agent file operation timed out" });

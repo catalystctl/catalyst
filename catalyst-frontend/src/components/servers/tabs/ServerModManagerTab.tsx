@@ -424,6 +424,7 @@ export default function ServerModManagerTab({
     queryKey: ['mod-manager-installed', serverId, modTarget],
     queryFn: () => modManagerApi.installed(serverId ?? '', modTarget),
     enabled: Boolean(serverId && modManagerConfig),
+    refetchInterval: 10000,
   });
 
   // ── Mutations ──

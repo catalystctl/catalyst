@@ -7,7 +7,7 @@ export function useNodes() {
   return useQuery({
     queryKey: qk.nodes(),
     queryFn: nodesApi.list,
-    refetchInterval: 30000,
+    refetchInterval: 15000,
   });
 }
 
@@ -24,6 +24,7 @@ export function useAccessibleNodes() {
         hasWildcard: data.hasWildcard || false,
       };
     },
+    refetchInterval: 15000,
   });
 }
 
@@ -36,6 +37,7 @@ export function useNode(nodeId?: string) {
       return Promise.reject(new Error('missing node id'));
     },
     enabled: Boolean(nodeId),
+    refetchInterval: 10000,
   });
 }
 
@@ -61,6 +63,6 @@ export function useNodeMetrics(nodeId?: string) {
       return Promise.reject(new Error('missing node id'));
     },
     enabled: Boolean(nodeId),
-    refetchInterval: 30000,
+    refetchInterval: 15000,
   });
 }

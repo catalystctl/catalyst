@@ -325,6 +325,7 @@ function AdminNodesPage() {
   const { data: locations = [] } = useQuery({
     queryKey: qk.locations(),
     queryFn: locationsApi.list,
+    refetchInterval: 30000,
   });
 
   const canWrite = useMemo(

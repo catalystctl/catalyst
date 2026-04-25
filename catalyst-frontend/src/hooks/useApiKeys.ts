@@ -10,6 +10,7 @@ export function useApiKeys() {
   return useQuery({
     queryKey: qk.apiKeys(),
     queryFn: () => apiKeyService.list(),
+    refetchInterval: 15000,
   });
 }
 
@@ -21,6 +22,7 @@ export function useApiKey(id: string | undefined) {
     queryKey: qk.apiKeyDetail(id!),
     queryFn: () => apiKeyService.get(id!),
     enabled: !!id,
+    refetchInterval: 15000,
   });
 }
 

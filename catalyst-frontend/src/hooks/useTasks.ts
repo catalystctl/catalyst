@@ -14,5 +14,6 @@ export function useTasks(serverId?: string) {
       return tasksApi.list(serverId);
     },
     enabled: Boolean(serverId),
+    refetchInterval: 10000,
   });
 }

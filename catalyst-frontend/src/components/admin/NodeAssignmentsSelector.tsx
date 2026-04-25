@@ -49,6 +49,7 @@ export function NodeAssignmentsSelector({
   const { data: nodes = [], isLoading: nodesLoading } = useQuery({
     queryKey: ['nodes'],
     queryFn: () => nodesApi.list(),
+    refetchInterval: 10000,
   });
 
   // Fetch current assignments for roles
@@ -63,6 +64,7 @@ export function NodeAssignmentsSelector({
       return { data: data.data || [], hasWildcard: data.hasWildcard || false };
     },
     enabled: !!roleId,
+    refetchInterval: 10000,
   });
 
   // Fetch current assignments for users
@@ -77,6 +79,7 @@ export function NodeAssignmentsSelector({
       return { data: data.data || [], hasWildcard: data.hasWildcard || false };
     },
     enabled: !!userId,
+    refetchInterval: 10000,
   });
 
   // Initialize selections from fetched data

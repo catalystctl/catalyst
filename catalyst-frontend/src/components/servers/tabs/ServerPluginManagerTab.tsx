@@ -309,6 +309,7 @@ export default function ServerPluginManagerTab({
     queryKey: ['plugin-manager-installed', serverId],
     queryFn: () => pluginManagerApi.installed(serverId ?? ''),
     enabled: Boolean(serverId && pluginManagerConfig),
+    refetchInterval: 10000,
   });
 
   // ── Mutations ──

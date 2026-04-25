@@ -1104,6 +1104,26 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         },
       });
 
+      const wsGateway = app.wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'storage_resize',
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (wsGateway?.pushToGlobalSubscribers) {
+        wsGateway.pushToGlobalSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'storage_resize',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       reply.send({ success: true, message: "Resize initiated" });
     }
   );

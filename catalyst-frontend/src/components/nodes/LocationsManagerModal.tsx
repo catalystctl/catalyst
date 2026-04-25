@@ -87,6 +87,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
   const { data: locations = [], isLoading } = useQuery({
     queryKey: qk.locations(),
     queryFn: locationsApi.list,
+    refetchInterval: 15000,
   });
 
   const createMutation = useMutation({

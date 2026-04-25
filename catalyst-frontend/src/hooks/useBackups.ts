@@ -55,7 +55,7 @@ export function useBackups(serverId?: string, options?: { page?: number; limit?:
       if (Array.isArray(backups) && backups.some((b: any) => b.status === 'in_progress' || b.status === 'processing')) {
         return 5000;
       }
-      return false;
+      return 15000;
     },
   });
 }

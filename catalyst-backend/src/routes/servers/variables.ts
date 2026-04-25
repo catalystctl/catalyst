@@ -170,6 +170,26 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
         },
       });
 
+      const wsGateway = app.wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'variables_updated',
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (wsGateway?.pushToGlobalSubscribers) {
+        wsGateway.pushToGlobalSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'variables_updated',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       return reply.send({ success: true, data: updated.environment });
     }
   );

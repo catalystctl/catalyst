@@ -28,6 +28,7 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
     queryKey: ['admin', 'users', 'list', search],
     queryFn: () => adminApi.listUsers({ search, limit: 50 }),
     enabled: open && targetType === 'user',
+    refetchInterval: 10000,
   });
 
   // Fetch roles for selection
@@ -35,6 +36,7 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
     queryKey: ['roles', 'list'],
     queryFn: () => rolesApi.list(),
     enabled: open && targetType === 'role',
+    refetchInterval: 10000,
   });
 
   // Create assignment mutation

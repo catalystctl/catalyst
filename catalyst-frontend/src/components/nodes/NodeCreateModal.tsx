@@ -38,6 +38,7 @@ function NodeCreateModal(_props: Props) {
   const { data: locations = [] } = useQuery({
     queryKey: qk.locations(),
     queryFn: locationsApi.list,
+    refetchInterval: 15000,
   });
 
   const mutation = useMutation({

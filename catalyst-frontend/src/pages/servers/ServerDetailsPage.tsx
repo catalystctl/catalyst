@@ -257,11 +257,13 @@ function ServerDetailsPage() {
     queryKey: qk.serverPermissions(serverId ?? ''),
     queryFn: () => serversApi.permissions(serverId ?? ''),
     enabled: Boolean(serverId),
+    refetchInterval: 10000,
   });
   const { data: invites = [] } = useQuery<ServerInvite[]>({
     queryKey: qk.serverInvites(serverId ?? ''),
     queryFn: () => serversApi.listInvites(serverId ?? ''),
     enabled: Boolean(serverId),
+    refetchInterval: 10000,
   });
 
   // ── Allocations (admin) ──
@@ -269,6 +271,7 @@ function ServerDetailsPage() {
     queryKey: qk.serverAllocations(serverId ?? ''),
     queryFn: () => serversApi.allocations(serverId ?? ''),
     enabled: Boolean(serverId),
+    refetchInterval: 10000,
   });
   const allocations = allocationsQuery.data ?? [];
   const allocationsError = allocationsQuery.error

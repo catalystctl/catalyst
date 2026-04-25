@@ -173,6 +173,26 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         },
       });
 
+      const wsGateway = app.wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'invite_created',
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (wsGateway?.pushToGlobalSubscribers) {
+        wsGateway.pushToGlobalSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'invite_created',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       reply.status(201).send({ success: true, data: invite });
     }
   );
@@ -220,6 +240,26 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
           details: { email: invite.email },
         },
       });
+
+      const wsGateway = app.wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'invite_cancelled',
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (wsGateway?.pushToGlobalSubscribers) {
+        wsGateway.pushToGlobalSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId,
+          updatedBy: userId,
+          change: 'invite_cancelled',
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       reply.send({ success: true });
     }
@@ -282,6 +322,26 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         details: { email: invite.email },
       },
     });
+
+    const wsGateway = app.wsGateway;
+    if (wsGateway?.pushToAdminSubscribers) {
+      wsGateway.pushToAdminSubscribers('server_updated', {
+        type: 'server_updated',
+        serverId: invite.serverId,
+        updatedBy: args.userId,
+        change: 'invite_accepted',
+        timestamp: new Date().toISOString(),
+      });
+    }
+    if (wsGateway?.pushToGlobalSubscribers) {
+      wsGateway.pushToGlobalSubscribers('server_updated', {
+        type: 'server_updated',
+        serverId: invite.serverId,
+        updatedBy: args.userId,
+        change: 'invite_accepted',
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     return invite;
   };

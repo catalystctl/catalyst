@@ -187,6 +187,17 @@ export async function backupRoutes(app: FastifyInstance) {
         backupName,
         backupId: backupRecord.id,
       }));
+
+      const wsGatewayBackup = app.wsGateway;
+      if (wsGatewayBackup?.routeToClients) {
+        wsGatewayBackup.routeToClients(server.id, {
+          type: 'backup_started',
+          serverId: server.id,
+          backupId: backupRecord.id,
+          backupName,
+          timestamp: Date.now(),
+        }).catch(() => {});
+      }
     }
   );
 
@@ -422,6 +433,16 @@ export async function backupRoutes(app: FastifyInstance) {
         success: true,
         message: "Backup restoration started",
       }));
+
+      const wsGatewayRestore = app.wsGateway;
+      if (wsGatewayRestore?.routeToClients) {
+        wsGatewayRestore.routeToClients(server.id, {
+          type: 'backup_restore_started',
+          serverId: server.id,
+          backupId,
+          timestamp: Date.now(),
+        }).catch(() => {});
+      }
     }
   );
 
@@ -483,6 +504,16 @@ export async function backupRoutes(app: FastifyInstance) {
       await prisma.backup.delete({ where: { id: backupId } });
 
       reply.send({ success: true, message: "Backup deleted" });
+
+      const wsGatewayDelete = app.wsGateway;
+      if (wsGatewayDelete?.routeToClients) {
+        wsGatewayDelete.routeToClients(server.id, {
+          type: 'backup_delete_started',
+          serverId: server.id,
+          backupId,
+          timestamp: Date.now(),
+        }).catch(() => {});
+      }
     }
   );
 

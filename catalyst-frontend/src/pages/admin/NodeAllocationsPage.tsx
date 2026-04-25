@@ -84,12 +84,14 @@ function NodeAllocationsPage() {
       return response.data ?? [];
     },
     enabled: !!nodeId,
+    refetchInterval: 10000,
   });
 
   // Fetch IP pools (IpAllocation via pools)
   const { data: allPools = [], isLoading: poolsLoading } = useQuery({
     queryKey: qk.adminIpPools(nodeId!),
     queryFn: adminApi.listIpPools,
+    refetchInterval: 15000,
   });
 
   const nodePools = useMemo(() => (allPools as IpPool[]).filter((p: IpPool) => p.nodeId === nodeId), [allPools, nodeId]);

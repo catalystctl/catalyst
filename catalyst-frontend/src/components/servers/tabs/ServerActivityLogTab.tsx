@@ -31,6 +31,7 @@ export default function ServerActivityLogTab({ serverId }: Props) {
     queryKey: qk.serverActivity(serverId, { page, limit }),
     queryFn: () => serversApi.activity(serverId, { page, limit }),
     enabled: Boolean(serverId),
+    refetchInterval: 10000,
   });
 
   const items = data?.data ?? [];

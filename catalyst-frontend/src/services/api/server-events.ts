@@ -19,6 +19,9 @@ export type ServerEventType =
   | 'backup_complete'
   | 'backup_restore_complete'
   | 'backup_delete_complete'
+  | 'backup_started'
+  | 'backup_restore_started'
+  | 'backup_delete_started'
   | 'eula_required'
   | 'alert'
   | 'console_output'
@@ -31,6 +34,7 @@ export type ServerEventType =
   | 'server_updated'
   | 'server_suspended'
   | 'server_unsuspended'
+  | 'server_files_changed'
   // Mod manager events
   | 'mod_install_complete'
   | 'mod_uninstall_complete'
@@ -50,6 +54,9 @@ const EVENT_TYPES: ServerEventType[] = [
   'backup_complete',
   'backup_restore_complete',
   'backup_delete_complete',
+  'backup_started',
+  'backup_restore_started',
+  'backup_delete_started',
   'eula_required',
   'alert',
   'console_output',
@@ -62,6 +69,7 @@ const EVENT_TYPES: ServerEventType[] = [
   'server_updated',
   'server_suspended',
   'server_unsuspended',
+  'server_files_changed',
   // Mod manager events
   'mod_install_complete',
   'mod_uninstall_complete',

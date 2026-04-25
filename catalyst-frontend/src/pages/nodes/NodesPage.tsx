@@ -85,6 +85,7 @@ function NodesPage({ hideHeader }: Props) {
   const { data: locations = [] } = useQuery({
     queryKey: qk.locations(),
     queryFn: locationsApi.list,
+    refetchInterval: 15000,
   });
 
   const [search, setSearch] = useState('');

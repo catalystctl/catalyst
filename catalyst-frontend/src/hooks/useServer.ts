@@ -18,7 +18,7 @@ export function useServer(id?: string) {
     staleTime: 15_000,
     refetchInterval: (query) => {
       const data = query.state.data as Server | undefined;
-      return data && transitionalStatuses.has(data.status) ? 2000 : false;
+      return data && transitionalStatuses.has(data.status) ? 2000 : 10000;
     },
   });
 }

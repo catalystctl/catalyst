@@ -57,6 +57,26 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         },
       });
 
+      const wsGateway = app.wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId: id,
+          updatedBy: request.user.userId,
+          change: 'restart_policy_updated',
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (wsGateway?.pushToGlobalSubscribers) {
+        wsGateway.pushToGlobalSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId: id,
+          updatedBy: request.user.userId,
+          change: 'restart_policy_updated',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       reply.send({
         success: true,
         restartPolicy: updated.restartPolicy,
@@ -99,6 +119,26 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
           lastCrashAt: null,
         },
       });
+
+      const wsGateway = app.wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId: id,
+          updatedBy: request.user.userId,
+          change: 'crash_count_reset',
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (wsGateway?.pushToGlobalSubscribers) {
+        wsGateway.pushToGlobalSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId: id,
+          updatedBy: request.user.userId,
+          change: 'crash_count_reset',
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       reply.send({ success: true, message: "Crash count reset" });
     }
@@ -194,6 +234,26 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
           backupSftpConfig: (encryptedSftpConfig ?? server.backupSftpConfig) as any,
         },
       });
+
+      const wsGateway = app.wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId: id,
+          updatedBy: request.user.userId,
+          change: 'backup_settings_updated',
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (wsGateway?.pushToGlobalSubscribers) {
+        wsGateway.pushToGlobalSubscribers('server_updated', {
+          type: 'server_updated',
+          serverId: id,
+          updatedBy: request.user.userId,
+          change: 'backup_settings_updated',
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       reply.send({
         success: true,

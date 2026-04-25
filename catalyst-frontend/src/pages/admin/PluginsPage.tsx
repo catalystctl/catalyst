@@ -202,6 +202,7 @@ function PluginSettingsModal({
     queryKey: qk.adminPlugin(pluginName),
     queryFn: () => fetchPluginDetails(pluginName),
     enabled: open,
+    refetchInterval: 10000,
   });
 
   // Use pluginDetails config as base, but allow local edits to override.
@@ -419,6 +420,7 @@ export default function PluginsPage() {
   const { data: plugins, isLoading } = useQuery({
     queryKey: ['admin-plugins'],
     queryFn: fetchPlugins,
+    refetchInterval: 15000,
   });
 
   const toggleMutation = useMutation({

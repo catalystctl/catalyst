@@ -299,6 +299,7 @@ function TemplatesPage({ hideHeader }: Props) {
   const { data: nests = [] } = useQuery({
     queryKey: qk.nests(),
     queryFn: nestsApi.list,
+    refetchInterval: 15000,
   });
 
   const [search, setSearch] = useState('');

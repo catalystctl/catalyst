@@ -504,12 +504,14 @@ function RolesPage() {
   const { data: roles = [], isLoading } = useQuery({
     queryKey: qk.adminRoles(),
     queryFn: rolesApi.list,
+    refetchInterval: 10000,
   });
 
   // Fetch presets
   const { data: presets = [] } = useQuery({
     queryKey: ['role-presets'],
     queryFn: rolesApi.getPresets,
+    refetchInterval: 30000,
   });
 
   const createMutation = useMutation({

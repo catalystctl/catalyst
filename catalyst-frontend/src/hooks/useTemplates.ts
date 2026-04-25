@@ -7,6 +7,7 @@ export function useTemplates() {
   return useQuery({
     queryKey: qk.templates(),
     queryFn: templatesApi.list,
+    refetchInterval: 15000,
   });
 }
 
@@ -19,5 +20,6 @@ export function useTemplate(templateId?: string) {
       return Promise.reject(new Error('missing template id'));
     },
     enabled: Boolean(templateId),
+    refetchInterval: 15000,
   });
 }
