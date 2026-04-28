@@ -199,7 +199,7 @@ function ModalShell({
   if (!open) return null;
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -208,17 +208,17 @@ function ModalShell({
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-4">
           <div>
-            <h2 className="text-lg font-semibold text-foreground dark:text-white">{title}</h2>
+            <h2 className="text-lg font-semibold text-foreground ">{title}</h2>
             {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
           </div>
           <button
-            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground dark:text-zinc-300"
+            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground dark:text-foreground"
             onClick={onClose}
           >
             Close
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5 text-sm text-foreground dark:text-zinc-100">
+        <div className="flex-1 overflow-y-auto px-6 py-5 text-sm text-foreground dark:text-foreground">
           {children}
         </div>
         {footer && (
@@ -260,24 +260,24 @@ function RoleCard({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 300, damping: 24, delay: index * 0.03 }}
-      className={`group relative overflow-hidden rounded-xl border p-5 backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg ${
+      className={`group relative overflow-hidden rounded-xl border p-5 transition-all duration-200 hover:shadow-md ${
         isActive
-          ? 'border-primary/40 bg-primary-50/30 dark:border-primary/20 dark:bg-primary-900/10'
-          : 'border-border bg-card/80 hover:border-primary/20'
+          ? 'border-primary/40 bg-primary/5 dark:bg-primary/10'
+          : 'border-border bg-card hover:border-primary/20'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2.5">
-            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isWildcard ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-violet-100 dark:bg-violet-900/30'}`}>
+            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isWildcard ? 'bg-warning-muted text-warning' : 'bg-primary/10 text-primary'}`}>
               {isWildcard ? (
-                <KeyRound className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <KeyRound className="h-4 w-4" />
               ) : (
-                <Shield className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                <Shield className="h-4 w-4" />
               )}
             </div>
             <div className="min-w-0">
-              <div className="truncate font-semibold text-foreground dark:text-zinc-100">
+              <div className="truncate font-semibold text-foreground dark:text-foreground">
                 {role.name}
               </div>
               {role.description && (
@@ -304,7 +304,7 @@ function RoleCard({
           </button>
           {canDelete ? (
             <button
-              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:pointer-events-none disabled:opacity-30"
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
               onClick={onDelete}
               disabled={isDeleting}
               title="Delete"
@@ -318,9 +318,9 @@ function RoleCard({
       {/* Permission preview */}
       <div className="mt-4 space-y-2">
         {isWildcard ? (
-          <div className="flex items-center gap-2 rounded-lg border border-amber-300/40 bg-amber-50/80 px-3 py-2 dark:border-amber-500/20 dark:bg-amber-900/15">
-            <Zap className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-            <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+          <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning-muted px-3 py-2">
+            <Zap className="h-3.5 w-3.5 shrink-0 text-warning" />
+            <span className="text-xs font-medium text-warning">
               Full Administrator Access
             </span>
           </div>
@@ -384,7 +384,7 @@ function PermissionSelector({
   }, [permissionSearch]);
 
   return (
-    <div className="rounded-lg border border-border/50 bg-surface-2/50 p-4 dark:bg-surface-2/30">
+    <div className="rounded-lg border border-border bg-muted/50 p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Permissions ({selectedPermissions.size})
@@ -403,8 +403,8 @@ function PermissionSelector({
           const someSelected = category.permissions.some((p) => selectedPermissions.has(p));
 
           return (
-            <div key={category.label} className="rounded-lg border border-border bg-white dark:border-border dark:bg-surface-1">
-              <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
+            <div key={category.label} className="rounded-lg border border-border bg-card">
+              <div className="flex items-center justify-between border-b border-border px-3 py-2">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -423,9 +423,9 @@ function PermissionSelector({
                       // We pass a sentinel; the real toggle happens below via parent
                       // Actually let's just handle this inline
                     }}
-                    className="h-4 w-4 rounded border-border bg-white text-primary-600 focus:ring-2 focus:ring-primary-500 dark:border-zinc-600 dark:bg-surface-2 dark:text-primary-400"
+                    className="h-4 w-4 rounded border-border bg-card text-primary focus:ring-2 focus:ring-ring"
                   />
-                  <span className="text-sm font-semibold text-foreground dark:text-zinc-200">
+                  <span className="text-sm font-semibold text-foreground dark:text-foreground">
                     {getCategoryIcon(category.label)} {category.label}
                   </span>
                 </label>
@@ -438,19 +438,19 @@ function PermissionSelector({
                 {category.permissions.map((permission) => (
                   <label
                     key={permission}
-                    className={`flex items-center gap-3 border-b border-border/30 px-3 py-2 last:border-b-0 transition-colors cursor-pointer ${
+                    className={`flex items-center gap-3 border-b border-border px-3 py-2 last:border-b-0 transition-colors cursor-pointer ${
                       selectedPermissions.has(permission)
-                        ? 'bg-primary-50/50 dark:bg-primary-500/10'
-                        : 'hover:bg-surface-2 dark:hover:bg-surface-2/50'
+                        ? 'bg-primary/5 dark:bg-primary/10'
+                        : 'hover:bg-muted'
                     }`}
                   >
                     <input
                       type="checkbox"
                       checked={selectedPermissions.has(permission)}
                       onChange={() => onToggle(permission)}
-                      className="h-4 w-4 rounded border-border bg-white text-primary-600 focus:ring-2 focus:ring-primary-500 dark:border-zinc-600 dark:bg-surface-2 dark:text-primary-400"
+                      className="h-4 w-4 rounded border-border bg-card text-primary focus:ring-2 focus:ring-ring"
                     />
-                    <span className="text-sm text-foreground dark:text-zinc-300">
+                    <span className="text-sm text-foreground dark:text-foreground">
                       {formatPermission(permission)}
                     </span>
                   </label>
@@ -465,18 +465,18 @@ function PermissionSelector({
       <label
         className={`flex items-center gap-3 rounded-lg border px-3 py-2 mt-3 transition-all cursor-pointer ${
           selectedPermissions.has('*')
-            ? 'border-amber-400/50 bg-amber-50/80 dark:bg-amber-900/15'
-            : 'border-border bg-white hover:border-border dark:border-border dark:bg-zinc-950/60'
+            ? 'border-warning/30 bg-warning-muted'
+            : 'border-border bg-card hover:border-border'
         }`}
       >
         <input
           type="checkbox"
           checked={selectedPermissions.has('*')}
           onChange={() => onToggle('*')}
-          className="h-4 w-4 rounded border-border bg-white text-amber-600 focus:ring-amber-500 dark:border-border dark:bg-surface-1 dark:text-amber-400"
+          className="h-4 w-4 rounded border-border bg-card text-warning focus:ring-warning/30"
         />
         <div>
-          <div className="text-xs font-medium text-amber-700 dark:text-amber-400">Wildcard (*)</div>
+          <div className="text-xs font-medium text-warning">Wildcard (*)</div>
           <div className="text-[10px] text-muted-foreground">Grants all permissions</div>
         </div>
       </label>
@@ -633,7 +633,7 @@ function RolesPage() {
                 <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-violet-500 to-purple-500 opacity-20 blur-sm" />
                 <Shield className="relative h-7 w-7 text-violet-600 dark:text-violet-400" />
               </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
                 Roles
               </h1>
             </div>
@@ -775,7 +775,7 @@ function RolesPage() {
                   <button
                     key={preset.key}
                     onClick={() => applyPreset(preset)}
-                    className="rounded-md border border-border bg-surface-2 px-3 py-1.5 text-xs text-foreground transition-colors hover:border-primary/50 dark:border-border dark:bg-surface-1/60 dark:text-zinc-300"
+                    className="rounded-md border border-border bg-muted px-3 py-1.5 text-xs text-foreground transition-colors hover:border-primary/50"
                   >
                     {preset.label}
                     <span className="ml-1 text-muted-foreground">({preset.permissions.length})</span>
@@ -831,15 +831,15 @@ function RolesPage() {
           </div>
 
           {viewingRole?.permissions?.includes('*') ? (
-            <div className="flex items-center gap-3 rounded-lg border border-amber-300/40 bg-amber-50/80 p-4 dark:border-amber-500/20 dark:bg-amber-900/15">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40">
-                <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            <div className="flex items-center gap-3 rounded-lg border border-warning/30 bg-warning-muted p-4">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning/20">
+                <Lock className="h-4 w-4 text-warning" />
               </div>
               <div>
-                <div className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+                <div className="text-sm font-semibold text-warning">
                   Full Administrator Access
                 </div>
-                <div className="text-xs text-amber-600/70 dark:text-amber-400/70">
+                <div className="text-xs text-warning/70">
                   This role has unrestricted access to all system permissions.
                 </div>
               </div>
@@ -847,9 +847,9 @@ function RolesPage() {
           ) : (
             <div className="space-y-3 max-h-72 overflow-y-auto">
               {getPermissionCategories(viewingRole?.permissions || []).map((cat) => (
-                <div key={cat.category} className="rounded-lg border border-border bg-white dark:border-border dark:bg-surface-1">
-                  <div className="flex items-center justify-between border-b border-border/50 px-4 py-2.5">
-                    <span className="text-sm font-semibold text-foreground dark:text-zinc-200">
+                <div key={cat.category} className="rounded-lg border border-border bg-card">
+                  <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+                    <span className="text-sm font-semibold text-foreground dark:text-foreground">
                       {getCategoryIcon(cat.category)} {cat.category}
                     </span>
                     <span className="text-xs text-muted-foreground">
@@ -865,7 +865,7 @@ function RolesPage() {
                         ) || cat.category.toLowerCase() === prefix;
                       })
                       .map((permission: string) => (
-                        <div key={permission} className="px-4 py-2 text-sm text-foreground dark:text-zinc-300">
+                        <div key={permission} className="px-4 py-2 text-sm text-foreground dark:text-foreground">
                           {formatPermission(permission)}
                         </div>
                       ))}
@@ -887,7 +887,7 @@ function RolesPage() {
               </div>
             )}
             {viewingRole?.userCount !== undefined && viewingRole.userCount > 0 && (
-              <div className="text-foreground dark:text-zinc-300">
+              <div className="text-foreground dark:text-foreground">
                 Assigned to {viewingRole.userCount} user{viewingRole.userCount === 1 ? '' : 's'}
               </div>
             )}

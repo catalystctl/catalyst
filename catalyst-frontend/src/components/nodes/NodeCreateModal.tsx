@@ -96,7 +96,7 @@ function NodeCreateModal(_props: Props) {
   return (
     <div>
       <button
-        className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500"
+        className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
         onClick={() => {
           setStep(1);
           setOpen(true);
@@ -108,12 +108,12 @@ function NodeCreateModal(_props: Props) {
       {/* ── Main Modal ── */}
       {open ? (
         <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10 backdrop-blur-sm">
-            <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl transition-all duration-300 dark:border-border dark:bg-surface-1">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 py-10 backdrop-blur-sm">
+            <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl transition-all duration-300 dark:border-border dark:bg-surface-1">
               {/* ── Header ── */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5 dark:border-border">
                 <div>
-                  <h2 className="text-lg font-semibold text-foreground dark:text-white">
+                  <h2 className="text-lg font-semibold text-foreground">
                     {step === 1 ? 'Register Node' : 'Node details'}
                   </h2>
                   <p className="text-xs text-muted-foreground dark:text-muted-foreground">
@@ -123,7 +123,7 @@ function NodeCreateModal(_props: Props) {
                   </p>
                 </div>
                 <button
-                  className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                  className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary dark:border-border dark:hover:border-primary/30"
                   onClick={() => {
                     setOpen(false);
                     resetForm();
@@ -139,7 +139,7 @@ function NodeCreateModal(_props: Props) {
                   className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 1 ? 'bg-primary/10 text-primary-600 dark:text-primary-400' : 'text-muted-foreground'}`}
                 >
                   <span
-                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 1 ? 'bg-primary text-white' : 'bg-surface-3 text-muted-foreground'}`}
+                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 1 ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground'}`}
                   >
                     1
                   </span>
@@ -150,7 +150,7 @@ function NodeCreateModal(_props: Props) {
                   className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 2 ? 'bg-primary/10 text-primary-600 dark:text-primary-400' : 'text-muted-foreground'}`}
                 >
                   <span
-                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 2 ? 'bg-primary text-white' : 'bg-surface-3 text-muted-foreground'}`}
+                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 2 ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground'}`}
                   >
                     2
                   </span>
@@ -162,13 +162,13 @@ function NodeCreateModal(_props: Props) {
               {step === 1 && (
                 <div className="flex flex-col items-center px-6 py-10 text-center">
                   <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 dark:from-emerald-500/20 dark:to-cyan-500/20">
-                    <MapPin className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
+                    <MapPin className="h-7 w-7 text-success dark:text-success" />
                   </div>
-                  <h3 className="text-base font-semibold text-foreground dark:text-white">
+                  <h3 className="text-base font-semibold text-foreground">
                     Assign this node to a location?
                   </h3>
                   <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-                    <span className="font-medium text-foreground dark:text-zinc-200">
+                    <span className="font-medium text-foreground">
                       Locations
                     </span>{' '}
                     represent where your nodes physically reside. For example,{' '}
@@ -192,7 +192,7 @@ function NodeCreateModal(_props: Props) {
                           {locations.map((location) => (
                             <SelectItem key={location.id} value={location.id}>
                               <span className="flex items-center gap-2">
-                                <MapPin className="h-3.5 w-3.5 text-emerald-500" />
+                                <MapPin className="h-3.5 w-3.5 text-success" />
                                 {location.name}
                                 {location.description && (
                                   <span className="text-muted-foreground">
@@ -211,7 +211,7 @@ function NodeCreateModal(_props: Props) {
                         No locations exist yet.{' '}
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1 font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+                          className="inline-flex items-center gap-1 font-medium text-primary-600 hover:text-primary dark:text-primary-400 dark:hover:text-primary-300"
                           onClick={() => {
                             setOpen(false);
                             setStep(1);
@@ -227,7 +227,7 @@ function NodeCreateModal(_props: Props) {
 
                   <div className="mt-8 flex items-center gap-3">
                     <button
-                      className="flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                      className="flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:hover:border-primary/30"
                       onClick={() => setStep(2)}
                     >
                       <SkipForward className="h-3.5 w-3.5" />
@@ -235,7 +235,7 @@ function NodeCreateModal(_props: Props) {
                     </button>
                     {locations.length > 0 && locationId && (
                       <button
-                        className="flex items-center gap-1.5 rounded-full bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500"
+                        className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
                         onClick={() => setStep(2)}
                       >
                         Continue
@@ -249,11 +249,11 @@ function NodeCreateModal(_props: Props) {
               {/* ── Step 2: Node Details Form ── */}
               {step === 2 && (
                 <>
-                  <div className="space-y-3 overflow-y-auto px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300">
+                  <div className="space-y-3 overflow-y-auto px-6 py-4 text-sm text-muted-foreground">
                     {locationId && (
-                      <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 dark:bg-emerald-900/20">
-                        <MapPin className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                        <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                      <div className="flex items-center gap-2 rounded-lg bg-success/5 px-3 py-2 dark:bg-success/20">
+                        <MapPin className="h-4 w-4 text-success dark:text-success" />
+                        <span className="text-xs font-medium text-success dark:text-success">
                           Location: {locations.find((l) => l.id === locationId)?.name || locationId}
                         </span>
                       </div>
@@ -261,7 +261,7 @@ function NodeCreateModal(_props: Props) {
                     <label className="block space-y-1">
                       <span className="text-muted-foreground dark:text-muted-foreground">Name</span>
                       <input
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
                         value={name}
                         onChange={(event) => setName(event.target.value)}
                         placeholder="production-1"
@@ -272,7 +272,7 @@ function NodeCreateModal(_props: Props) {
                         Description
                       </span>
                       <input
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
                         value={description}
                         onChange={(event) => setDescription(event.target.value)}
                         placeholder="Primary node"
@@ -283,7 +283,7 @@ function NodeCreateModal(_props: Props) {
                         Server data directory
                       </span>
                       <input
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 font-mono text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 font-mono text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
                         value={serverDataDir}
                         onChange={(event) => setServerDataDir(event.target.value)}
                         placeholder="/var/lib/catalyst/servers"
@@ -297,7 +297,7 @@ function NodeCreateModal(_props: Props) {
                         Hostname
                       </span>
                       <input
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
                         value={hostname}
                         onChange={(event) => setHostname(event.target.value)}
                         placeholder="node1.example.com"
@@ -308,7 +308,7 @@ function NodeCreateModal(_props: Props) {
                         Public address
                       </span>
                       <input
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
                         value={publicAddress}
                         onChange={(event) => setPublicAddress(event.target.value)}
                         placeholder="203.0.113.10"
@@ -320,7 +320,7 @@ function NodeCreateModal(_props: Props) {
                           Memory (MB)
                         </span>
                         <input
-                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
                           value={memory}
                           onChange={(event) => setMemory(event.target.value)}
                           type="number"
@@ -332,7 +332,7 @@ function NodeCreateModal(_props: Props) {
                           CPU cores
                         </span>
                         <input
-                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
                           value={cpu}
                           onChange={(event) => setCpu(event.target.value)}
                           type="number"
@@ -344,13 +344,13 @@ function NodeCreateModal(_props: Props) {
                   </div>
                   <div className="flex justify-between gap-2 border-t border-border px-6 py-4 text-xs dark:border-border">
                     <button
-                      className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                      className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:hover:border-primary/30"
                       onClick={() => setStep(1)}
                     >
                       &larr; Back
                     </button>
                     <button
-                      className="rounded-full bg-primary-600 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+                      className="rounded-full bg-primary px-6 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
                       onClick={() => mutation.mutate()}
                       disabled={disableSubmit}
                     >
@@ -367,24 +367,24 @@ function NodeCreateModal(_props: Props) {
       {/* ── Deploy Info Modal ── */}
       {deployInfo ? (
         <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10 backdrop-blur-sm">
-            <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl transition-all duration-300 dark:border-border dark:bg-surface-1">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 py-10 backdrop-blur-sm">
+            <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl transition-all duration-300 dark:border-border dark:bg-surface-1">
               <div className="flex items-center justify-between border-b border-border px-6 py-4 dark:border-border">
-                <h2 className="text-lg font-semibold text-foreground dark:text-white">
+                <h2 className="text-lg font-semibold text-foreground">
                   Deploy agent
                 </h2>
                 <button
-                  className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                  className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary dark:border-border dark:hover:border-primary/30"
                   onClick={() => setDeployInfo(null)}
                 >
                   Close
                 </button>
               </div>
-              <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300">
-                <div className="text-muted-foreground dark:text-zinc-300">
+              <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground">
+                <div className="text-muted-foreground">
                   Run this on the node to install and register the agent (valid for 24 hours).
                 </div>
-                <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 text-xs text-foreground dark:border-border dark:bg-zinc-950/40 dark:text-zinc-100">
+                <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 text-xs text-foreground dark:border-border dark:bg-surface-0/40">
                   <code className="whitespace-pre-wrap">
                     {`curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`}
                   </code>
@@ -395,7 +395,7 @@ function NodeCreateModal(_props: Props) {
               </div>
               <div className="flex justify-end border-t border-border px-6 py-4 text-xs dark:border-border">
                 <button
-                  className="rounded-full bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500"
+                  className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
                   onClick={() => setDeployInfo(null)}
                 >
                   Done

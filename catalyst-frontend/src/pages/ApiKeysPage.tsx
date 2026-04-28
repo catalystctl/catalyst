@@ -71,8 +71,8 @@ function PermissionsDisplay({
   if (apiKey.allPermissions) {
     return (
       <div className="flex items-center gap-1.5">
-        <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-        <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+        <ShieldCheck className="h-3.5 w-3.5 text-success" />
+        <span className="text-xs font-medium text-success">
           All creator permissions
         </span>
       </div>
@@ -101,7 +101,7 @@ function PermissionsDisplay({
       <div className="flex flex-wrap gap-1">
         {entries.map(([catId, { cat, perms: catPerms }]) => (
           <div key={catId} className="flex items-center gap-1">
-            <Badge variant="outline" className="text-[10px] border-primary-300/40 text-primary-700 dark:border-primary-500/30 dark:text-primary-400">
+            <Badge variant="outline" className="text-[10px] border-primary-300/40 text-primary-700 dark:border-primary/30 dark:text-primary-400">
               <Shield className="mr-1 h-2.5 w-2.5" />
               {cat.label}
               <span className="ml-1 text-[9px] opacity-60">{catPerms.length}</span>
@@ -111,7 +111,7 @@ function PermissionsDisplay({
         {grouped.size > maxShow && (
           <button
             onClick={onToggle}
-            className="text-[10px] text-primary-600 hover:underline dark:text-primary-400 flex items-center gap-0.5"
+            className="text-[10px] text-primary hover:underline flex items-center gap-0.5"
           >
             +{grouped.size - maxShow} more
           </button>
@@ -124,7 +124,7 @@ function PermissionsDisplay({
           {entries.map(([catId, { perms: catPerms }]) =>
             catPerms.map((perm) => (
               <div key={perm} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <span className="h-1 w-1 rounded-full bg-primary-400/60" />
+                <span className="h-1 w-1 rounded-full bg-primary/40" />
                 <span>{getPermissionLabel(perm, catalog)}</span>
               </div>
             ))
@@ -139,15 +139,15 @@ function PermissionsDisplay({
 function StatCard({ label, value, variant = 'default' }: { label: string; value: number; variant?: 'default' | 'active' | 'agent' | 'expired' }) {
   const colorMap = {
     default: 'border-border bg-card',
-    active: 'border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-900/10',
-    agent: 'border-amber-500/20 bg-amber-50/50 dark:bg-amber-900/10',
-    expired: 'border-rose-500/20 bg-rose-50/50 dark:bg-rose-900/10',
+    active: 'border-success/20 bg-success-muted',
+    agent: 'border-warning/20 bg-warning-muted',
+    expired: 'border-danger/20 bg-danger-muted',
   };
   const iconColorMap = {
     default: 'text-muted-foreground',
-    active: 'text-emerald-600 dark:text-emerald-400',
-    agent: 'text-amber-600 dark:text-amber-400',
-    expired: 'text-rose-600 dark:text-rose-400',
+    active: 'text-success',
+    agent: 'text-warning',
+    expired: 'text-danger',
   };
   return (
     <div className={`flex items-center gap-3 rounded-lg border px-3.5 py-2.5 ${colorMap[variant]}`}>
@@ -183,12 +183,12 @@ function ApiKeyRow({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 300, damping: 24, delay: index * 0.03 }}
-      className={`group relative overflow-hidden rounded-xl border p-5 backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg ${
+      className={`group relative overflow-hidden rounded-xl border p-5 transition-all duration-200 hover:shadow-md ${
         agent
-          ? 'border-amber-500/20 bg-amber-50/30 dark:bg-amber-900/5'
+          ? 'border-warning/20 bg-warning-muted'
           : expired
-          ? 'border-rose-500/15 bg-rose-50/20 dark:bg-rose-900/5'
-          : 'border-border bg-card/80'
+          ? 'border-danger/15 bg-danger-muted'
+          : 'border-border bg-card'
       }`}
     >
       <div className="flex items-start gap-4">
@@ -196,28 +196,28 @@ function ApiKeyRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2.5">
             <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-              agent ? 'bg-amber-100 dark:bg-amber-900/30' : expired ? 'bg-rose-100 dark:bg-rose-900/30' : 'bg-primary-100 dark:bg-primary-900/30'
+              agent ? 'bg-warning-muted' : expired ? 'bg-danger-muted' : 'bg-primary/10'
             }`}>
               {agent ? (
-                <Server className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <Server className="h-4 w-4 text-warning" />
               ) : expired ? (
-                <Clock className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                <Clock className="h-4 w-4 text-danger" />
               ) : (
-                <Key className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                <Key className="h-4 w-4 text-primary" />
               )}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold text-foreground dark:text-zinc-100 truncate">
+                <span className="font-semibold text-foreground truncate">
                   {apiKey.name || 'Unnamed Key'}
                 </span>
                 {agent && (
-                  <Badge variant="outline" className="border-amber-400/40 text-amber-700 dark:border-amber-500/30 dark:text-amber-400 text-[10px]">
+                  <Badge variant="outline" className="border-warning/30 text-warning text-[10px]">
                     <Server className="mr-1 h-2.5 w-2.5" /> Agent
                   </Badge>
                 )}
                 {apiKey.enabled && !expired ? (
-                  <Badge variant="outline" className="border-emerald-400/40 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400 text-[10px]">
+                  <Badge variant="outline" className="border-success/30 text-success text-[10px]">
                     Active
                   </Badge>
                 ) : !apiKey.enabled ? (
@@ -230,13 +230,13 @@ function ApiKeyRow({
               {agent && nodeId && (() => {
                 const nodeName = getNodeName(nodeId);
                 return (
-                  <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                  <div className="mt-1 text-xs text-warning">
                     Node:{' '}
                     {nodeName ? (
                       <span className="font-medium">{nodeName}</span>
                     ) : null}
                     {' '}
-                    <code className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-[11px] dark:bg-amber-900/30">{nodeId.slice(0, 12)}{nodeId.length > 12 ? '...' : ''}</code>
+                    <code className="rounded bg-warning-muted px-1.5 py-0.5 font-mono text-[11px]">{nodeId.slice(0, 12)}{nodeId.length > 12 ? '...' : ''}</code>
                     {!nodeName && (
                       <span className="ml-1 text-[11px] opacity-60">(unknown)</span>
                     )}
@@ -248,13 +248,13 @@ function ApiKeyRow({
 
           {/* Key Preview */}
           {apiKey.prefix && apiKey.start && (
-            <div className="mt-3 flex items-center gap-2 rounded-lg border border-border/50 bg-white px-3 py-2 font-mono text-sm dark:bg-surface-1">
-              <code className="flex-1 truncate text-foreground dark:text-zinc-300">
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 font-mono text-sm">
+              <code className="flex-1 truncate text-foreground">
                 {apiKey.start}{'*'.repeat(40)}
               </code>
               <button
                 onClick={() => navigator.clipboard.writeText(apiKey.start || '')}
-                className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Copy className="h-3.5 w-3.5" />
               </button>
@@ -275,19 +275,19 @@ function ApiKeyRow({
           <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-[11px]">
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <Activity className="h-3 w-3 shrink-0" />
-              <span>Created: <span className="font-medium text-foreground dark:text-zinc-300">{formatDate(apiKey.createdAt)}</span></span>
+              <span>Created: <span className="font-medium text-foreground">{formatDate(apiKey.createdAt)}</span></span>
             </div>
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <Clock className="h-3 w-3 shrink-0" />
-              <span>Last used: <span className="font-medium text-foreground dark:text-zinc-300">{formatDate(apiKey.lastRequest)}</span></span>
+              <span>Last used: <span className="font-medium text-foreground">{formatDate(apiKey.lastRequest)}</span></span>
             </div>
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <Zap className="h-3 w-3 shrink-0" />
-              <span>Requests: <span className="font-medium text-foreground dark:text-zinc-300">{apiKey.requestCount || 0}</span></span>
+              <span>Requests: <span className="font-medium text-foreground">{apiKey.requestCount || 0}</span></span>
             </div>
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <Clock className="h-3 w-3 shrink-0" />
-              <span>Expires: <span className="font-medium text-foreground dark:text-zinc-300">{apiKey.expiresAt ? formatDate(apiKey.expiresAt) : 'Never'}</span></span>
+              <span>Expires: <span className="font-medium text-foreground">{apiKey.expiresAt ? formatDate(apiKey.expiresAt) : 'Never'}</span></span>
             </div>
           </div>
 
@@ -296,7 +296,7 @@ function ApiKeyRow({
             <span>Rate limit: {apiKey.rateLimitMax} req/{apiKey.rateLimitTimeWindow / 1000}s</span>
             {apiKey.user && (
               <span>
-                by <span className="font-medium text-foreground dark:text-zinc-300">{apiKey.user.username || apiKey.user.email}</span>
+                by <span className="font-medium text-foreground">{apiKey.user.username || apiKey.user.email}</span>
               </span>
             )}
           </div>
@@ -306,14 +306,14 @@ function ApiKeyRow({
         <div className="flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
           <button
             onClick={onEdit}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             title="Edit key"
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={onDelete}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600"
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-danger-muted hover:text-danger"
             title="Revoke key"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -408,9 +408,9 @@ export function ApiKeysPage() {
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-rose-500 to-orange-500 opacity-20 blur-sm" />
-                <Key className="relative h-7 w-7 text-rose-600 dark:text-rose-400" />
+                <Key className="relative h-7 w-7 text-destructive dark:text-destructive" />
               </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-foreground">
                 API Keys
               </h1>
             </div>
@@ -433,7 +433,7 @@ export function ApiKeysPage() {
         </motion.div>
 
         {/* ── Filters ── */}
-        <motion.div variants={itemVariants} className="rounded-xl border border-border/50 bg-card/60 p-4 backdrop-blur-sm">
+        <motion.div variants={itemVariants} className="rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
             <Filter className="h-3.5 w-3.5" />
             Filters
@@ -455,7 +455,7 @@ export function ApiKeysPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'disabled' | 'expired')}
-                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-colors focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none"
               >
                 <option value="all">All statuses</option>
                 <option value="active">Active</option>
@@ -465,14 +465,14 @@ export function ApiKeysPage() {
             </div>
 
             {/* Agent keys toggle */}
-            <label className="flex items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 cursor-pointer transition-colors hover:border-primary/50 dark:border-border dark:bg-surface-1">
+            <label className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 cursor-pointer transition-colors hover:border-primary/50">
               <input
                 type="checkbox"
                 checked={showAgentKeys}
                 onChange={(e) => setShowAgentKeys(e.target.checked)}
-                className="rounded border-border text-primary-600 focus:ring-primary-500 dark:border-zinc-600"
+                className="rounded border-border text-primary focus:ring-ring"
               />
-              <span className="text-sm text-foreground dark:text-zinc-200">
+              <span className="text-sm text-foreground">
                 Show agent keys ({stats.agent})
               </span>
             </label>
@@ -480,10 +480,10 @@ export function ApiKeysPage() {
 
           {/* Active filter chips */}
           {(search || !showAgentKeys || statusFilter !== 'all') && (
-            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/50 pt-3">
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
               <span className="text-[11px] text-muted-foreground">Active filters:</span>
               {!showAgentKeys && (
-                <Badge variant="outline" className="border-amber-400/40 text-amber-700 dark:border-amber-500/30 dark:text-amber-400 text-[10px]">
+                <Badge variant="outline" className="border-warning/30 text-warning text-[10px]">
                   Hiding {stats.agent} agent keys
                 </Badge>
               )}
@@ -511,7 +511,7 @@ export function ApiKeysPage() {
         {isLoading ? (
           <motion.div variants={itemVariants} className="space-y-3">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="rounded-xl border border-border bg-card/80 p-5">
+              <div key={i} className="rounded-xl border border-border bg-card p-5">
                 <div className="flex items-start gap-3">
                   <div className="h-9 w-9 animate-pulse rounded-lg bg-surface-3" />
                   <div className="flex-1 space-y-2">
@@ -583,20 +583,20 @@ export function ApiKeysPage() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             className={`mx-4 w-full max-w-md rounded-xl border bg-card p-6 shadow-xl ${
-              isAgentKey(deleteKey) ? 'border-rose-500/50' : 'border-border'
+              isAgentKey(deleteKey) ? 'border-danger/50' : 'border-border'
             }`}
           >
-            <h3 className="text-lg font-semibold text-foreground dark:text-zinc-100">
+            <h3 className="text-lg font-semibold text-foreground">
               {confirmAgentDelete ? '⚠️ Final Warning' : 'Revoke API Key'}
             </h3>
 
             {isAgentKey(deleteKey) && !confirmAgentDelete ? (
               <>
-                <div className="mt-3 rounded-lg border border-rose-300/50 bg-rose-50 p-4 dark:border-rose-500/30 dark:bg-rose-900/20">
-                  <p className="text-sm font-semibold text-rose-800 dark:text-rose-300">
+                <div className="mt-3 rounded-lg border border-danger/30 bg-danger-muted p-4">
+                  <p className="text-sm font-semibold text-danger">
                     ⚠️ This is an Agent API Key
                   </p>
-                  <p className="mt-1 text-sm text-rose-700 dark:text-rose-400">
+                  <p className="mt-1 text-sm text-danger/80">
                     Revoking this key will <strong>immediately disconnect the agent</strong> and
                     prevent it from communicating with Catalyst. The node will become unmanageable
                     until a new API key is generated and configured.
@@ -608,11 +608,11 @@ export function ApiKeysPage() {
               </>
             ) : confirmAgentDelete ? (
               <>
-                <div className="mt-3 rounded-lg border border-rose-400/50 bg-rose-100 p-4 dark:border-rose-500/50 dark:bg-rose-900/40">
-                  <p className="text-sm font-bold text-rose-900 dark:text-rose-200">
+                <div className="mt-3 rounded-lg border border-danger/50 bg-danger-muted p-4">
+                  <p className="text-sm font-bold text-danger">
                     This will render the node&apos;s agent USELESS!
                   </p>
-                  <p className="mt-1 text-sm text-rose-800 dark:text-rose-300">
+                  <p className="mt-1 text-sm text-danger/80">
                     You will need physical or remote access to the node to reconfigure it with a new API key.
                   </p>
                 </div>

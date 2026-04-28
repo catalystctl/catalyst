@@ -29,7 +29,7 @@ function calculateStrength(password: string): { score: number; label: string; co
   const normalizedScore = Math.min(4, Math.floor(score / 2));
 
   const levels = [
-    { label: 'Weak', color: 'bg-red-500' },
+    { label: 'Weak', color: 'bg-destructive/50' },
     { label: 'Fair', color: 'bg-orange-500' },
     { label: 'Good', color: 'bg-yellow-500' },
     { label: 'Strong', color: 'bg-green-400' },
@@ -55,10 +55,10 @@ export function PasswordStrengthMeter({ password, className }: PasswordStrengthM
         <span
           className={cn(
             'font-medium',
-            strength.score <= 1 && 'text-red-600 dark:text-red-400',
+            strength.score <= 1 && 'text-destructive dark:text-destructive',
             strength.score === 2 && 'text-orange-600 dark:text-orange-400',
             strength.score === 3 && 'text-yellow-600 dark:text-yellow-400',
-            strength.score >= 4 && 'text-green-600 dark:text-green-400'
+            strength.score >= 4 && 'text-success dark:text-green-400'
           )}
         >
           {strength.label}

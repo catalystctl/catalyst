@@ -27,7 +27,7 @@ function CreateBackupModal({ serverId, disabled = false }: { serverId: string; d
     <div>
       <button
         type="button"
-        className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+        className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
         onClick={() => {
           if (!disabled) setOpen(true);
         }}
@@ -37,22 +37,22 @@ function CreateBackupModal({ serverId, disabled = false }: { serverId: string; d
       </button>
       {open ? (
         <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-md rounded-xl border border-border bg-white p-6 shadow-xl dark:border-border dark:bg-zinc-950">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4">
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl dark:border-border dark:bg-surface-0">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-foreground dark:text-zinc-100">Create backup</h2>
+              <h2 className="text-lg font-semibold text-foreground">Create backup</h2>
               <button
-                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:hover:border-primary/30"
                 onClick={() => setOpen(false)}
               >
                 Close
               </button>
             </div>
-            <div className="mt-4 space-y-3 text-sm text-foreground dark:text-zinc-100">
+            <div className="mt-4 space-y-3 text-sm text-foreground">
               <label className="block space-y-1">
-                <span className="text-muted-foreground dark:text-zinc-300">Backup name (optional)</span>
+                <span className="text-muted-foreground">Backup name (optional)</span>
                 <input
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="nightly-backup"
@@ -64,13 +64,13 @@ function CreateBackupModal({ serverId, disabled = false }: { serverId: string; d
             </div>
             <div className="mt-5 flex justify-end gap-2 text-xs">
               <button
-                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:hover:border-primary/30"
                 onClick={() => setOpen(false)}
               >
                 Cancel
               </button>
               <button
-                className="rounded-md bg-primary-600 px-4 py-2 font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+                className="rounded-md bg-primary px-4 py-2 font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
                 onClick={() => mutation.mutate()}
                 disabled={mutation.isPending || disabled}
               >

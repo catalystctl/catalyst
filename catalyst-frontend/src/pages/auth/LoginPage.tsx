@@ -245,7 +245,7 @@ function LoginPage() {
           )}
 
           {ssoError === 'login_required' && !authStep && (
-            <Alert className="mt-4 border-blue-500 bg-blue-50 text-blue-900 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-800">
+            <Alert className="mt-4 border-blue-500 bg-info/5 text-blue-900 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-800">
               <AlertDescription>
                 Please log in to your {ssoProvider === 'whmcs' ? 'WHMCS' : 'Paymenter'} account first, then click &quot;{ssoProvider === 'whmcs' ? 'Continue with WHMCS' : 'Continue with Paymenter'}&quot; again.
               </AlertDescription>
@@ -262,7 +262,7 @@ function LoginPage() {
                 placeholder="you@example.com"
                 {...register('email')}
               />
-              {errors.email && <p className="text-xs text-red-400">{errors.email.message}</p>}
+              {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
             </div>
 
             <div className="space-y-2">
@@ -270,7 +270,7 @@ function LoginPage() {
                 <Label htmlFor="password">Password</Label>
                 <Link
                   to="/forgot-password"
-                  className="text-xs font-medium text-primary-600 transition-all duration-300 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+                  className="text-xs font-medium text-primary-600 transition-all duration-300 hover:text-primary dark:text-primary-400 dark:hover:text-primary-300"
                 >
                   Forgot password?
                 </Link>
@@ -282,7 +282,7 @@ function LoginPage() {
                 placeholder="••••••••"
                 {...register('password')}
               />
-              {errors.password && <p className="text-xs text-red-400">{errors.password.message}</p>}
+              {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
             </div>
 
             <Button 

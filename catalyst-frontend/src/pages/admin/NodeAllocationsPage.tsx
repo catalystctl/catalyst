@@ -236,16 +236,16 @@ function NodeAllocationsPage() {
           Nodes
         </Link>
         <span>/</span>
-        <span className="text-foreground dark:text-white">{node?.name || 'Loading...'}</span>
+        <span className="text-foreground ">{node?.name || 'Loading...'}</span>
         <span>/</span>
-        <span className="text-foreground dark:text-white">Network Allocations</span>
+        <span className="text-foreground ">Network Allocations</span>
       </div>
 
       {/* Header */}
-      <div className="rounded-2xl border border-border bg-white p-6 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-surface-light transition-all duration-300 hover:border-primary dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground dark:text-white">
+            <h1 className="text-2xl font-semibold text-foreground ">
               Network Allocations
             </h1>
             <p className="text-sm text-muted-foreground dark:text-muted-foreground">
@@ -255,7 +255,7 @@ function NodeAllocationsPage() {
         </div>
         
         {/* Help text */}
-        <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-900/30 dark:bg-blue-950/20 dark:text-blue-300">
+        <div className="mt-4 rounded-lg border border-blue-200 bg-info/5 px-4 py-3 text-sm text-blue-900 dark:border-blue-900/30 dark:bg-blue-950/20 dark:text-blue-300">
           <strong>💡 Two allocation types:</strong>
           <ul className="ml-4 mt-1 list-disc space-y-1">
             <li><strong>Port Allocations</strong> - Track IP:Port combinations for proxy/NAT setups (like Pterodactyl)</li>
@@ -271,7 +271,7 @@ function NodeAllocationsPage() {
           className={`px-4 py-2 text-sm font-semibold transition-all ${
             activeTab === 'ports'
               ? 'border-b-2 border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
-              : 'text-muted-foreground hover:text-foreground dark:text-muted-foreground dark:hover:text-zinc-100'
+              : 'text-muted-foreground hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground'
           }`}
         >
           Port Allocations ({portStats.total})
@@ -281,7 +281,7 @@ function NodeAllocationsPage() {
           className={`px-4 py-2 text-sm font-semibold transition-all ${
             activeTab === 'ips'
               ? 'border-b-2 border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
-              : 'text-muted-foreground hover:text-foreground dark:text-muted-foreground dark:hover:text-zinc-100'
+              : 'text-muted-foreground hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground'
           }`}
         >
           IP Pools ({ipPoolStats.pools})
@@ -293,35 +293,35 @@ function NodeAllocationsPage() {
         <>
           {/* Stats */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-            <div className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
+            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-primary dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
               <div className="text-xs uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                 Total Ports
               </div>
-              <div className="mt-2 text-2xl font-semibold text-foreground dark:text-white">
+              <div className="mt-2 text-2xl font-semibold text-foreground ">
                 {portStats.total}
               </div>
             </div>
-            <div className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-emerald-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-emerald-500/40">
+            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-success dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-success/40">
               <div className="text-xs uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                 Available
               </div>
-              <div className="mt-2 text-2xl font-semibold text-foreground dark:text-white">
+              <div className="mt-2 text-2xl font-semibold text-foreground ">
                 {portStats.available}
               </div>
             </div>
-            <div className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-indigo-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-indigo-500/40">
+            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-indigo-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-indigo-500/40">
               <div className="text-xs uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                 Assigned
               </div>
-              <div className="mt-2 text-2xl font-semibold text-foreground dark:text-white">
+              <div className="mt-2 text-2xl font-semibold text-foreground ">
                 {portStats.assigned}
               </div>
             </div>
-            <div className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-amber-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-amber-500/40">
+            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-warning dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-warning/40">
               <div className="text-xs uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                 Unique IPs
               </div>
-              <div className="mt-2 text-2xl font-semibold text-foreground dark:text-white">
+              <div className="mt-2 text-2xl font-semibold text-foreground ">
                 {portStats.uniqueIps}
               </div>
             </div>
@@ -334,11 +334,11 @@ function NodeAllocationsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by IP, port, alias..."
-              className="flex-1 rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+              className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
             />
             <button
               onClick={() => setShowCreatePortModal(true)}
-              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500"
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
             >
               Create Allocations
             </button>
@@ -346,7 +346,7 @@ function NodeAllocationsPage() {
 
           {/* Port Allocations Table */}
           {allocationsLoading ? (
-            <div className="rounded-xl border border-border bg-white px-4 py-6 text-muted-foreground dark:border-border dark:bg-surface-1 dark:text-zinc-300">
+            <div className="rounded-xl border border-border bg-card px-4 py-6 text-muted-foreground dark:border-border dark:bg-surface-1 dark:text-foreground">
               Loading port allocations...
             </div>
           ) : filteredAllocations.length === 0 ? (
@@ -357,44 +357,44 @@ function NodeAllocationsPage() {
               {!search.trim() && (
                 <button
                   onClick={() => setShowCreatePortModal(true)}
-                  className="mt-3 text-sm text-primary-600 hover:text-primary-500 dark:text-primary-400"
+                  className="mt-3 text-sm text-primary-600 hover:text-primary dark:text-primary-400"
                 >
                   Create your first port allocations
                 </button>
               )}
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-border bg-white shadow-surface-light dark:border-border dark:bg-surface-1 dark:shadow-surface-dark">
+            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-surface-light dark:border-border dark:bg-surface-1 dark:shadow-surface-dark">
               <table className="w-full text-sm">
-                <thead className="border-b border-border bg-surface-2 dark:border-border dark:bg-zinc-950/60">
+                <thead className="border-b border-border bg-surface-2 dark:border-border dark:bg-surface-0/60">
                   <tr>
-                    <th className="px-4 py-3 text-left font-semibold text-foreground dark:text-white">
+                    <th className="px-4 py-3 text-left font-semibold text-foreground ">
                       IP Address
                     </th>
-                    <th className="px-4 py-3 text-left font-semibold text-foreground dark:text-white">
+                    <th className="px-4 py-3 text-left font-semibold text-foreground ">
                       Port
                     </th>
-                    <th className="px-4 py-3 text-left font-semibold text-foreground dark:text-white">
+                    <th className="px-4 py-3 text-left font-semibold text-foreground ">
                       Alias
                     </th>
-                    <th className="px-4 py-3 text-left font-semibold text-foreground dark:text-white">
+                    <th className="px-4 py-3 text-left font-semibold text-foreground ">
                       Status
                     </th>
-                    <th className="px-4 py-3 text-right font-semibold text-foreground dark:text-white">
+                    <th className="px-4 py-3 text-right font-semibold text-foreground ">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                <tbody className="divide-y divide-border dark:divide-border">
                   {filteredAllocations.map((allocation) => (
                     <tr
                       key={allocation.id}
-                      className="transition-colors hover:bg-surface-2 dark:hover:bg-zinc-950/40"
+                      className="transition-colors hover:bg-surface-2 dark:hover:bg-surface-0/40"
                     >
-                      <td className="px-4 py-3 font-mono text-foreground dark:text-white">
+                      <td className="px-4 py-3 font-mono text-foreground ">
                         {allocation.ip}
                       </td>
-                      <td className="px-4 py-3 font-mono text-foreground dark:text-white">
+                      <td className="px-4 py-3 font-mono text-foreground ">
                         {allocation.port}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground dark:text-muted-foreground">
@@ -406,7 +406,7 @@ function NodeAllocationsPage() {
                             Assigned
                           </span>
                         ) : (
-                          <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                          <span className="inline-flex items-center rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-semibold text-success dark:bg-success/40 dark:text-success">
                             Available
                           </span>
                         )}
@@ -416,7 +416,7 @@ function NodeAllocationsPage() {
                           <button
                             onClick={() => deletePortMutation.mutate(allocation.id)}
                             disabled={deletePortMutation.isPending}
-                            className="text-xs text-rose-600 hover:text-rose-500 dark:text-rose-400 dark:hover:text-rose-300"
+                            className="text-xs text-destructive hover:text-destructive dark:text-destructive dark:hover:text-destructive"
                           >
                             Delete
                           </button>
@@ -436,35 +436,35 @@ function NodeAllocationsPage() {
         <>
           {/* Stats */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-            <div className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
+            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-primary dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
               <div className="text-xs uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                 Total IPs
               </div>
-              <div className="mt-2 text-2xl font-semibold text-foreground dark:text-white">
+              <div className="mt-2 text-2xl font-semibold text-foreground ">
                 {ipPoolStats.total}
               </div>
             </div>
-            <div className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-emerald-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-emerald-500/40">
+            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-success dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-success/40">
               <div className="text-xs uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                 Available
               </div>
-              <div className="mt-2 text-2xl font-semibold text-foreground dark:text-white">
+              <div className="mt-2 text-2xl font-semibold text-foreground ">
                 {ipPoolStats.available}
               </div>
             </div>
-            <div className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-indigo-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-indigo-500/40">
+            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-indigo-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-indigo-500/40">
               <div className="text-xs uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                 Used
               </div>
-              <div className="mt-2 text-2xl font-semibold text-foreground dark:text-white">
+              <div className="mt-2 text-2xl font-semibold text-foreground ">
                 {ipPoolStats.used}
               </div>
             </div>
-            <div className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-amber-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-amber-500/40">
+            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-warning dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-warning/40">
               <div className="text-xs uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                 Reserved
               </div>
-              <div className="mt-2 text-2xl font-semibold text-foreground dark:text-white">
+              <div className="mt-2 text-2xl font-semibold text-foreground ">
                 {ipPoolStats.reserved}
               </div>
             </div>
@@ -474,7 +474,7 @@ function NodeAllocationsPage() {
           <div className="flex justify-end">
             <button
               onClick={() => setShowCreatePoolModal(true)}
-              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500"
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
             >
               Create IP Pool
             </button>
@@ -482,7 +482,7 @@ function NodeAllocationsPage() {
 
           {/* IP Pools List */}
           {poolsLoading ? (
-            <div className="rounded-xl border border-border bg-white px-4 py-6 text-muted-foreground dark:border-border dark:bg-surface-1 dark:text-zinc-300">
+            <div className="rounded-xl border border-border bg-card px-4 py-6 text-muted-foreground dark:border-border dark:bg-surface-1 dark:text-foreground">
               Loading IP pools...
             </div>
           ) : nodePools.length === 0 ? (
@@ -490,7 +490,7 @@ function NodeAllocationsPage() {
               <p className="text-muted-foreground dark:text-muted-foreground">No IP pools for this node yet</p>
               <button
                 onClick={() => setShowCreatePoolModal(true)}
-                className="mt-3 text-sm text-primary-600 hover:text-primary-500 dark:text-primary-400"
+                className="mt-3 text-sm text-primary-600 hover:text-primary dark:text-primary-400"
               >
                 Create your first IP pool
               </button>
@@ -500,11 +500,11 @@ function NodeAllocationsPage() {
               {nodePools.map((pool: IpPool) => (
                 <div
                   key={pool.id}
-                  className="rounded-2xl border border-border bg-white px-5 py-4 shadow-surface-light transition-all duration-300 hover:-translate-y-1 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30"
+                  className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:-translate-y-1 hover:border-primary dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
+                      <div className="text-sm font-semibold text-foreground dark:text-foreground">
                         {pool.networkName}
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
@@ -515,19 +515,19 @@ function NodeAllocationsPage() {
                       </div>
                     </div>
                     <button
-                      className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 transition-all duration-300 hover:border-rose-400 dark:border-rose-500/30 dark:text-rose-400"
+                      className="rounded-full border border-destructive/20 px-3 py-1 text-xs font-semibold text-destructive transition-all duration-300 hover:border-destructive dark:border-destructive/30 dark:text-destructive"
                       onClick={() => deletePoolMutation.mutate(pool.id)}
                       disabled={deletePoolMutation.isPending}
                     >
                       Delete
                     </button>
                   </div>
-                  <div className="mt-4 grid grid-cols-3 gap-2 text-xs text-muted-foreground dark:text-zinc-300">
+                  <div className="mt-4 grid grid-cols-3 gap-2 text-xs text-muted-foreground dark:text-foreground">
                     <div className="rounded-xl border border-border bg-surface-2 px-3 py-2 dark:border-border dark:bg-surface-1">
                       <div className="text-[10px] uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                         Available
                       </div>
-                      <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
+                      <div className="text-sm font-semibold text-foreground dark:text-foreground">
                         {pool.availableCount}
                       </div>
                     </div>
@@ -535,7 +535,7 @@ function NodeAllocationsPage() {
                       <div className="text-[10px] uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                         Used
                       </div>
-                      <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
+                      <div className="text-sm font-semibold text-foreground dark:text-foreground">
                         {pool.usedCount}
                       </div>
                     </div>
@@ -543,7 +543,7 @@ function NodeAllocationsPage() {
                       <div className="text-[10px] uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                         Reserved
                       </div>
-                      <div className="text-sm font-semibold text-foreground dark:text-zinc-100">
+                      <div className="text-sm font-semibold text-foreground dark:text-foreground">
                         {pool.reservedCount}
                       </div>
                     </div>
@@ -553,7 +553,7 @@ function NodeAllocationsPage() {
                   </div>
                   {pool.allocations && pool.allocations.length > 0 && (
                     <div className="mt-4 border-t border-border pt-3 dark:border-border">
-                      <div className="mb-2 text-xs font-semibold text-foreground dark:text-white">
+                      <div className="mb-2 text-xs font-semibold text-foreground ">
                         Assigned IPs ({pool.allocations.length})
                       </div>
                       <div className="max-h-32 space-y-1 overflow-y-auto">
@@ -563,7 +563,7 @@ function NodeAllocationsPage() {
                               {alloc.ip}
                             </span>
                             <span className="text-muted-foreground dark:text-muted-foreground">→</span>
-                            <span className="text-foreground dark:text-zinc-100">
+                            <span className="text-foreground dark:text-foreground">
                               {alloc.serverName}
                             </span>
                           </div>
@@ -581,9 +581,9 @@ function NodeAllocationsPage() {
       {/* Create Port Allocations Modal */}
       {showCreatePortModal && (
         <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-border bg-white p-6 shadow-xl dark:border-border dark:bg-surface-1">
-            <h2 className="text-xl font-semibold text-foreground dark:text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 p-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-border bg-card p-6 shadow-xl dark:border-border dark:bg-surface-1">
+            <h2 className="text-xl font-semibold text-foreground ">
               Create Port Allocations
             </h2>
             <p className="mt-1 text-sm text-muted-foreground dark:text-muted-foreground">
@@ -602,42 +602,42 @@ function NodeAllocationsPage() {
                 </p>
               </div>
 
-              <label className="block text-sm text-foreground dark:text-zinc-300">
+              <label className="block text-sm text-foreground dark:text-foreground">
                 IP Address(es)
                 <input
                   type="text"
                   value={ipInput}
                   onChange={(e) => setIpInput(e.target.value)}
                   placeholder="192.168.1.100 or 192.168.1.0/24"
-                  className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
                 />
               </label>
 
-              <label className="block text-sm text-foreground dark:text-zinc-300">
+              <label className="block text-sm text-foreground dark:text-foreground">
                 Port(s)
                 <input
                   type="text"
                   value={portsInput}
                   onChange={(e) => setPortsInput(e.target.value)}
                   placeholder="25565-25664 or 25565, 25566"
-                  className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
                 />
               </label>
 
-              <label className="block text-sm text-foreground dark:text-zinc-300">
+              <label className="block text-sm text-foreground dark:text-foreground">
                 Alias (optional)
                 <input
                   type="text"
                   value={aliasInput}
                   onChange={(e) => setAliasInput(e.target.value)}
                   placeholder="e.g., Main network"
-                  className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
                 />
               </label>
 
               <button
                 onClick={handleQuickFillPorts}
-                className="text-sm text-primary-600 hover:text-primary-500 dark:text-primary-400"
+                className="text-sm text-primary-600 hover:text-primary dark:text-primary-400"
               >
                 Quick fill: Use node IP + ports 25565-25664
               </button>
@@ -646,14 +646,14 @@ function NodeAllocationsPage() {
             <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => setShowCreatePortModal(false)}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-border dark:border-border dark:text-zinc-300 dark:hover:border-zinc-600"
+                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-border dark:border-border dark:text-foreground dark:hover:border-border"
               >
                 Cancel
               </button>
               <button
                 onClick={() => createPortMutation.mutate()}
                 disabled={!ipInput.trim() || !portsInput.trim() || createPortMutation.isPending}
-                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
               >
                 {createPortMutation.isPending ? 'Creating...' : 'Create Allocations'}
               </button>
@@ -666,9 +666,9 @@ function NodeAllocationsPage() {
       {/* Create IP Pool Modal */}
       {showCreatePoolModal && (
         <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-border bg-white p-6 shadow-xl dark:border-border dark:bg-surface-1">
-            <h2 className="text-xl font-semibold text-foreground dark:text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 p-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-border bg-card p-6 shadow-xl dark:border-border dark:bg-surface-1">
+            <h2 className="text-xl font-semibold text-foreground ">
               Create IP Pool
             </h2>
             <p className="mt-1 text-sm text-muted-foreground dark:text-muted-foreground">
@@ -683,59 +683,59 @@ function NodeAllocationsPage() {
                 </p>
               </div>
 
-              <label className="block text-sm text-foreground dark:text-zinc-300">
+              <label className="block text-sm text-foreground dark:text-foreground">
                 Network Name
                 <input
                   type="text"
                   value={networkName}
                   onChange={(e) => setNetworkName(e.target.value)}
                   placeholder="mc-lan"
-                  className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
                 />
               </label>
 
-              <label className="block text-sm text-foreground dark:text-zinc-300">
+              <label className="block text-sm text-foreground dark:text-foreground">
                 CIDR
                 <input
                   type="text"
                   value={cidr}
                   onChange={(e) => setCidr(e.target.value)}
                   placeholder="192.168.50.0/24"
-                  className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
                 />
               </label>
 
               <div className="grid grid-cols-2 gap-4">
-                <label className="block text-sm text-foreground dark:text-zinc-300">
+                <label className="block text-sm text-foreground dark:text-foreground">
                   Gateway
                   <input
                     type="text"
                     value={gateway}
                     onChange={(e) => setGateway(e.target.value)}
                     placeholder="192.168.50.1"
-                    className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                    className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
                   />
                 </label>
 
-                <label className="block text-sm text-foreground dark:text-zinc-300">
+                <label className="block text-sm text-foreground dark:text-foreground">
                   Start IP (optional)
                   <input
                     type="text"
                     value={startIp}
                     onChange={(e) => setStartIp(e.target.value)}
                     placeholder="192.168.50.10"
-                    className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                    className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
                   />
                 </label>
 
-                <label className="block text-sm text-foreground dark:text-zinc-300">
+                <label className="block text-sm text-foreground dark:text-foreground">
                   End IP (optional)
                   <input
                     type="text"
                     value={endIp}
                     onChange={(e) => setEndIp(e.target.value)}
                     placeholder="192.168.50.200"
-                    className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                    className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
                   />
                 </label>
 
@@ -743,32 +743,32 @@ function NodeAllocationsPage() {
                   <button
                     onClick={handleAutoFillPool}
                     disabled={!autoFillIp.trim()}
-                    className="w-full rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 disabled:opacity-60 dark:border-border dark:text-zinc-300"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary disabled:opacity-60 dark:border-border dark:text-foreground"
                   >
                     Autofill /24
                   </button>
                 </div>
               </div>
 
-              <label className="block text-sm text-foreground dark:text-zinc-300">
+              <label className="block text-sm text-foreground dark:text-foreground">
                 Quick Setup IP
                 <input
                   type="text"
                   value={autoFillIp}
                   onChange={(e) => setAutoFillIp(e.target.value)}
                   placeholder={node?.publicAddress || '0.0.0.0'}
-                  className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
                 />
               </label>
 
-              <label className="block text-sm text-foreground dark:text-zinc-300">
+              <label className="block text-sm text-foreground dark:text-foreground">
                 Reserved IPs (optional, comma-separated)
                 <textarea
                   value={reserved}
                   onChange={(e) => setReserved(e.target.value)}
                   rows={2}
                   placeholder="192.168.50.20, 192.168.50.21"
-                  className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
                 />
               </label>
             </div>
@@ -776,14 +776,14 @@ function NodeAllocationsPage() {
             <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => setShowCreatePoolModal(false)}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-border dark:border-border dark:text-zinc-300 dark:hover:border-zinc-600"
+                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-border dark:border-border dark:text-foreground dark:hover:border-border"
               >
                 Cancel
               </button>
               <button
                 onClick={() => createPoolMutation.mutate()}
                 disabled={!networkName || !cidr || createPoolMutation.isPending}
-                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
               >
                 {createPoolMutation.isPending ? 'Creating...' : 'Create Pool'}
               </button>

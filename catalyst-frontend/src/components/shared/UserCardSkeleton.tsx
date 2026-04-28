@@ -2,7 +2,7 @@ import { Skeleton } from './Skeleton';
 
 export function UserCardSkeleton() {
   return (
-    <div className="rounded-2xl border border-border bg-white p-5 shadow-surface-light dark:border-border dark:bg-zinc-950/60">
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-surface-light dark:border-border">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
           <Skeleton height={20} width="50%" className="h-5" />

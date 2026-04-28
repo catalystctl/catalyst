@@ -99,11 +99,11 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 const stepStatusConfig: Record<string, { label: string; color: string; icon: any; bg: string }> = {
-  pending: { label: 'Pending', color: 'text-zinc-500', icon: Clock, bg: '' },
-  running: { label: 'Running', color: 'text-blue-400', icon: Loader2, bg: 'bg-blue-500/10' },
-  completed: { label: 'Done', color: 'text-emerald-400', icon: CheckCircle2, bg: '' },
-  failed: { label: 'Failed', color: 'text-red-400', icon: XCircle, bg: 'bg-red-500/10' },
-  skipped: { label: 'Skipped', color: 'text-zinc-400', icon: Clock, bg: '' },
+  pending: { label: 'Pending', color: 'text-muted-foreground', icon: Clock, bg: '' },
+  running: { label: 'Running', color: 'text-info', icon: Loader2, bg: 'bg-info/50/10' },
+  completed: { label: 'Done', color: 'text-success', icon: CheckCircle2, bg: '' },
+  failed: { label: 'Failed', color: 'text-destructive', icon: XCircle, bg: 'bg-destructive/50/10' },
+  skipped: { label: 'Skipped', color: 'text-muted-foreground', icon: Clock, bg: '' },
 };
 
 // Human-readable step labels
@@ -175,21 +175,21 @@ function ProgressBar({ progress }: { progress: { total: number; completed: numbe
 
   return (
     <div className="space-y-1">
-      <div className="flex justify-between text-xs text-zinc-400">
+      <div className="flex justify-between text-xs text-muted-foreground">
         <span>{progress.completed} completed</span>
         <span>{progress.failed} failed</span>
         <span>{pct}%</span>
       </div>
-      <div className="h-2 w-full rounded-full bg-zinc-800 overflow-hidden">
+      <div className="h-2 w-full rounded-full bg-surface-2 overflow-hidden">
         <div className="flex h-full">
           <motion.div
-            className="h-full bg-emerald-500"
+            className="h-full bg-success/50"
             initial={{ width: 0 }}
             animate={{ width: `${completedPct}%` }}
             transition={{ duration: 0.5 }}
           />
           <motion.div
-            className="h-full bg-red-500"
+            className="h-full bg-destructive/50"
             initial={{ width: 0 }}
             animate={{ width: `${failedPct}%` }}
             transition={{ duration: 0.5 }}
@@ -212,7 +212,7 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
   const showExpanded = expanded || failedSteps.length > 0;
 
   return (
-    <div className="mt-2 ml-6 border-l border-zinc-700/50 pl-3 space-y-0.5">
+    <div className="mt-2 ml-6 border-l border-border/50 pl-3 space-y-0.5">
       {(showExpanded ? steps : steps.slice(0, 5)).map((step) => {
         const sc = stepStatusConfig[step.status] || stepStatusConfig.pending;
         const StepIcon = sc.icon;
@@ -226,30 +226,30 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
           >
             <div className="flex items-center gap-2">
               <StepIcon className={`h-3 w-3 flex-shrink-0 ${sc.color} ${step.status === 'running' ? 'animate-spin' : ''}`} />
-              <span className="text-xs text-zinc-300 flex-1 truncate">
+              <span className="text-xs text-foreground flex-1 truncate">
                 {stepLabel(step.action, step.metadata as Record<string, unknown>)}
                 {step.sourceId && (
-                  <span className="text-zinc-600"> #{step.sourceId}</span>
+                  <span className="text-muted-foreground"> #{step.sourceId}</span>
                 )}
                 {skipReason(step.status, step.metadata as Record<string, unknown>) && (
-                  <span className="text-zinc-500 ml-1.5">
+                  <span className="text-muted-foreground ml-1.5">
                     — {skipReason(step.status, step.metadata as Record<string, unknown>)}
                   </span>
                 )}
               </span>
-              <span className="text-xs text-zinc-600 flex-shrink-0">{formatDuration(step.durationMs)}</span>
+              <span className="text-xs text-muted-foreground flex-shrink-0">{formatDuration(step.durationMs)}</span>
               {step.status === 'failed' && (
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <button
                     onClick={() => setErrorStepId(showError ? null : step.id)}
-                    className="text-xs text-zinc-500 hover:text-zinc-300"
+                    className="text-xs text-muted-foreground hover:text-foreground"
                     title="Toggle error details"
                   >
                     {showError ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                   </button>
                   <button
                     onClick={() => onRetry(step.id)}
-                    className="text-xs text-blue-400 hover:text-blue-300"
+                    className="text-xs text-info hover:text-blue-300"
                     title="Retry"
                   >
                     <RefreshCw className="h-3 w-3" />
@@ -257,7 +257,7 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
                 </div>
               )}
               {step.status === 'completed' && step.metadata && (
-                <CheckCircle2 className="h-3 w-3 text-emerald-500/50 flex-shrink-0" />
+                <CheckCircle2 className="h-3 w-3 text-success/50 flex-shrink-0" />
               )}
             </div>
             {showError && step.error && (
@@ -266,7 +266,7 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
                 animate={{ opacity: 1, height: 'auto' }}
                 className="mt-1 pl-5"
               >
-                <p className="text-xs text-red-400 bg-red-950/40 border border-red-800/30 rounded px-2 py-1.5 break-all">
+                <p className="text-xs text-destructive bg-red-950/40 border border-red-800/30 rounded px-2 py-1.5 break-all">
                   {step.error}
                 </p>
               </motion.div>
@@ -277,7 +277,7 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
       {steps.length > 5 && failedSteps.length === 0 && (
         <button
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 mt-0.5"
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mt-0.5"
         >
           {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
           {expanded ? 'Show less' : `${steps.length - 5} more...`}
@@ -348,25 +348,25 @@ function WhatGetsMigratedCard() {
 
   return (
     <Card className="p-5 bg-card border border-border">
-      <h3 className="text-sm font-semibold text-zinc-200 mb-3 flex items-center gap-2">
+      <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
         <ArrowRightLeft className="h-4 w-4 text-primary" />
         What Gets Migrated
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {sections.map(section => (
           <div key={section.title}>
-            <div className={`text-xs font-semibold uppercase tracking-wider mb-1.5 ${section.dim ? 'text-zinc-600' : 'text-zinc-400'}`}>
+            <div className={`text-xs font-semibold uppercase tracking-wider mb-1.5 ${section.dim ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
               {section.title}
             </div>
             <ul className="space-y-1">
               {section.items.map(item => (
                 <li key={item} className="flex items-start gap-1.5 text-xs">
                   {section.dim ? (
-                    <XCircle className="h-3 w-3 text-zinc-700 mt-0.5 flex-shrink-0" />
+                    <XCircle className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
                   ) : (
-                    <CheckCircle2 className="h-3 w-3 text-emerald-500/50 mt-0.5 flex-shrink-0" />
+                    <CheckCircle2 className="h-3 w-3 text-success/50 mt-0.5 flex-shrink-0" />
                   )}
-                  <span className={section.dim ? 'text-zinc-600' : 'text-zinc-400'}>{item}</span>
+                  <span className={section.dim ? 'text-muted-foreground' : 'text-muted-foreground'}>{item}</span>
                 </li>
               ))}
             </ul>
@@ -397,14 +397,14 @@ function ServerImportSummary({ server }: { server: PterodactylServerInfo }) {
       {/* Server resources */}
       <div className="flex flex-wrap gap-x-4 gap-y-1">
         {items.map(item => (
-          <span key={item.label} className="flex items-center gap-1.5 text-xs text-zinc-400">
-            <item.icon className="h-3 w-3 text-zinc-600" />
-            <span className="text-zinc-500">{item.label}:</span>
-            <span className="text-zinc-300 font-medium">{item.value}</span>
+          <span key={item.label} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <item.icon className="h-3 w-3 text-muted-foreground" />
+            <span className="text-muted-foreground">{item.label}:</span>
+            <span className="text-foreground font-medium">{item.value}</span>
           </span>
         ))}
         {server.suspended && (
-          <span className="flex items-center gap-1.5 text-xs text-amber-400">
+          <span className="flex items-center gap-1.5 text-xs text-warning">
             <Pause className="h-3 w-3" />
             Suspended
           </span>
@@ -412,31 +412,31 @@ function ServerImportSummary({ server }: { server: PterodactylServerInfo }) {
       </div>
 
       {/* What gets imported */}
-      <div className="text-[11px] text-zinc-500 uppercase tracking-wider font-medium">Imports</div>
+      <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Imports</div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
         {/* Always imported */}
-        <span className="flex items-center gap-1.5 text-xs text-zinc-400">
-          <CheckCircle2 className="h-3 w-3 text-emerald-500/60" />
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <CheckCircle2 className="h-3 w-3 text-success/60" />
           Server config &amp; env vars
         </span>
-        <span className="flex items-center gap-1.5 text-xs text-zinc-400">
-          <CheckCircle2 className="h-3 w-3 text-emerald-500/60" />
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <CheckCircle2 className="h-3 w-3 text-success/60" />
           Port allocations
         </span>
-        <span className="flex items-center gap-1.5 text-xs text-zinc-400">
-          <CheckCircle2 className="h-3 w-3 text-emerald-500/60" />
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <CheckCircle2 className="h-3 w-3 text-success/60" />
           Startup command
         </span>
-        <span className="flex items-center gap-1.5 text-xs text-zinc-400">
-          <CheckCircle2 className="h-3 w-3 text-emerald-500/60" />
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <CheckCircle2 className="h-3 w-3 text-success/60" />
           Docker image override
         </span>
-        <span className="flex items-center gap-1.5 text-xs text-zinc-400">
-          <CheckCircle2 className="h-3 w-3 text-emerald-500/60" />
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <CheckCircle2 className="h-3 w-3 text-success/60" />
           Config file editor
         </span>
-        <span className="flex items-center gap-1.5 text-xs text-zinc-400">
-          <CheckCircle2 className="h-3 w-3 text-emerald-500/60" />
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <CheckCircle2 className="h-3 w-3 text-success/60" />
           Swap &amp; IO weight
         </span>
         {/* Conditional imports */}
@@ -445,21 +445,21 @@ function ServerImportSummary({ server }: { server: PterodactylServerInfo }) {
             key={item.label}
             className={`flex items-center gap-1.5 text-xs ${
               item.count > 0
-                ? 'text-zinc-400'
-                : 'text-zinc-600'
+                ? 'text-muted-foreground'
+                : 'text-muted-foreground'
             }`}
           >
             {item.count > 0 ? (
-              <CheckCircle2 className="h-3 w-3 text-emerald-500/60" />
+              <CheckCircle2 className="h-3 w-3 text-success/60" />
             ) : (
-              <XCircle className="h-3 w-3 text-zinc-700" />
+              <XCircle className="h-3 w-3 text-muted-foreground" />
             )}
             {item.label}
             {item.count > 0 && (
-              <span className="text-zinc-500 font-medium">({item.count})</span>
+              <span className="text-muted-foreground font-medium">({item.count})</span>
             )}
             {item.count === 0 && item.zeroLabel && (
-              <span className="text-zinc-700 text-[10px]">
+              <span className="text-muted-foreground text-[10px]">
                 — {item.zeroLabel}
               </span>
             )}
@@ -504,33 +504,33 @@ function NodeMappingSection({
       animate={{ opacity: 1, height: 'auto' }}
       className="space-y-2"
     >
-      <label className="text-sm font-medium text-zinc-300">
+      <label className="text-sm font-medium text-foreground">
         Map Pterodactyl Nodes to Catalyst Nodes
       </label>
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-muted-foreground">
         {scope === 'full'
           ? 'All Pterodactyl nodes must be mapped. Click a node to see what gets imported.'
           : 'Select which Pterodactyl nodes to map. Click to see server import details.'}
       </p>
-      <div className="max-h-80 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-900 divide-y divide-zinc-800">
+      <div className="max-h-80 overflow-y-auto rounded-lg border border-border bg-surface-1 divide-y divide-border">
         {nodes.map(node => {
           const expanded = expandedNodeId === node.id;
           const nodeServers = serversByNode.get(node.id) || [];
           return (
             <div key={node.id}>
               <div
-                className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-zinc-800/50 transition-colors"
+                className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-surface-2/50 transition-colors"
                 onClick={() => setExpandedNodeId(expanded ? null : node.id)}
               >
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm text-zinc-200 truncate flex items-center gap-2">
-                    {expanded ? <ChevronDown className="h-3.5 w-3.5 text-zinc-500" /> : <ChevronRight className="h-3.5 w-3.5 text-zinc-500" />}
+                  <div className="text-sm text-foreground truncate flex items-center gap-2">
+                    {expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
                     {node.name}
-                    <span className="text-xs text-zinc-500 font-normal">{node.serverCount} servers</span>
+                    <span className="text-xs text-muted-foreground font-normal">{node.serverCount} servers</span>
                   </div>
-                  <div className="text-xs text-zinc-500">{node.fqdn} · {node.memory} MB</div>
+                  <div className="text-xs text-muted-foreground">{node.fqdn} · {node.memory} MB</div>
                 </div>
-                <ArrowRight className="h-4 w-4 text-zinc-600 flex-shrink-0" />
+                <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 <div onClick={e => e.stopPropagation()}>
                   <Select
                     value={nodeMappings[String(node.id)] || ''}
@@ -538,16 +538,16 @@ function NodeMappingSection({
                       setNodeMappings(prev => ({ ...prev, [String(node.id)]: v }))
                     }
                   >
-                    <SelectTrigger className="w-48 bg-zinc-800 border-zinc-700 text-zinc-200 text-xs h-8">
+                    <SelectTrigger className="w-48 bg-surface-2 border-border text-foreground text-xs h-8">
                       <SelectValue placeholder="Select target node" />
                     </SelectTrigger>
                     <SelectContent>
                       {onlineNodes.map(cn => (
                         <SelectItem key={cn.id} value={cn.id}>
                           <span className="flex items-center gap-1.5">
-                            <Wifi className="h-3 w-3 text-emerald-400" />
+                            <Wifi className="h-3 w-3 text-success" />
                             {cn.name}
-                            <span className="text-zinc-500">({cn.locationName})</span>
+                            <span className="text-muted-foreground">({cn.locationName})</span>
                           </span>
                         </SelectItem>
                       ))}
@@ -559,20 +559,20 @@ function NodeMappingSection({
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
-                  className="border-t border-zinc-800/50 bg-zinc-900/50"
+                  className="border-t border-border/50 bg-surface-1/50"
                 >
                   <div className="px-4 py-2">
-                    <div className="text-[11px] text-zinc-500 uppercase tracking-wider font-medium mb-2">
+                    <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-2">
                       Servers on this node ({nodeServers.length})
                     </div>
                     <div className="space-y-3">
                       {nodeServers.map(s => (
-                        <div key={s.id} className="rounded-md border border-zinc-800/50 bg-zinc-900 px-3 py-2">
-                          <div className="text-xs text-zinc-300 font-medium">{s.name}</div>
-                          <div className="text-[11px] text-zinc-500">
+                        <div key={s.id} className="rounded-md border border-border/50 bg-surface-1 px-3 py-2">
+                          <div className="text-xs text-foreground font-medium">{s.name}</div>
+                          <div className="text-[11px] text-muted-foreground">
                             {s.nestName}/{s.eggName}
                             {s.suspended && (
-                              <span className="text-amber-400 ml-2">(suspended)</span>
+                              <span className="text-warning ml-2">(suspended)</span>
                             )}
                           </div>
                           <ServerImportSummary server={s} />
@@ -610,51 +610,51 @@ function ServerMappingList({
       animate={{ opacity: 1, height: 'auto' }}
       className="space-y-2"
     >
-      <label className="text-sm font-medium text-zinc-300">
+      <label className="text-sm font-medium text-foreground">
         Map Pterodactyl Servers to Catalyst Nodes
       </label>
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-muted-foreground">
         Click a server to see what gets imported automatically.
       </p>
-      <div className="max-h-96 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-900 divide-y divide-zinc-800">
+      <div className="max-h-96 overflow-y-auto rounded-lg border border-border bg-surface-1 divide-y divide-border">
         {servers.map(server => {
           const expanded = expandedId === server.id;
           return (
             <div key={server.id}>
               <div
-                className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-zinc-800/50 transition-colors"
+                className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-surface-2/50 transition-colors"
                 onClick={() => setExpandedId(expanded ? null : server.id)}
               >
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm text-zinc-200 truncate flex items-center gap-2">
-                    {expanded ? <ChevronDown className="h-3.5 w-3.5 text-zinc-500" /> : <ChevronRight className="h-3.5 w-3.5 text-zinc-500" />}
+                  <div className="text-sm text-foreground truncate flex items-center gap-2">
+                    {expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
                     {server.name}
                     {server.backupSlots === 0 && (
-                      <span className="inline-flex items-center gap-1 text-[10px] text-amber-400 bg-amber-950/50 border border-amber-800/30 rounded px-1.5 py-0">
+                      <span className="inline-flex items-center gap-1 text-[10px] text-warning bg-warning/50 border border-warning/30 rounded px-1.5 py-0">
                         <AlertTriangle className="h-2.5 w-2.5" />
                         no backups
                       </span>
                     )}
                     {server.backupSlots > 0 && server.currentBackups >= server.backupSlots && (
-                      <span className="inline-flex items-center gap-1 text-[10px] text-amber-400/80 bg-amber-950/30 border border-amber-800/20 rounded px-1.5 py-0">
+                      <span className="inline-flex items-center gap-1 text-[10px] text-warning/80 bg-warning/30 border border-warning/20 rounded px-1.5 py-0">
                         <AlertTriangle className="h-2.5 w-2.5" />
                         slots full
                       </span>
                     )}
                     {server.suspended && (
-                      <span className="inline-flex items-center gap-1 text-[10px] text-amber-400 bg-amber-950/30 border border-amber-800/20 rounded px-1.5 py-0">
+                      <span className="inline-flex items-center gap-1 text-[10px] text-warning bg-warning/30 border border-warning/20 rounded px-1.5 py-0">
                         Suspended
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-zinc-500">
+                  <div className="text-xs text-muted-foreground">
                     {server.nestName}/{server.eggName} · {server.nodeName}
-                    <span className="text-zinc-600 ml-2">
+                    <span className="text-muted-foreground ml-2">
                       {server.memory} MB · {server.disk} MB · {server.cpu}% CPU
                     </span>
                   </div>
                 </div>
-                <ArrowRight className="h-4 w-4 text-zinc-600 flex-shrink-0" />
+                <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 <div onClick={e => e.stopPropagation()}>
                   <Select
                     value={serverMappings[String(server.id)] || ''}
@@ -662,16 +662,16 @@ function ServerMappingList({
                       setServerMappings(prev => ({ ...prev, [String(server.id)]: v }))
                     }
                   >
-                    <SelectTrigger className="w-48 bg-zinc-800 border-zinc-700 text-zinc-200 text-xs h-8">
+                    <SelectTrigger className="w-48 bg-surface-2 border-border text-foreground text-xs h-8">
                       <SelectValue placeholder="Select target node" />
                     </SelectTrigger>
                     <SelectContent>
                       {onlineNodes.map(cn => (
                         <SelectItem key={cn.id} value={cn.id}>
                           <span className="flex items-center gap-1.5">
-                            <Wifi className="h-3 w-3 text-emerald-400" />
+                            <Wifi className="h-3 w-3 text-success" />
                             {cn.name}
-                            <span className="text-zinc-500">({cn.locationName})</span>
+                            <span className="text-muted-foreground">({cn.locationName})</span>
                           </span>
                         </SelectItem>
                       ))}
@@ -683,7 +683,7 @@ function ServerMappingList({
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
-                  className="px-4 pb-3 border-t border-zinc-800/50 bg-zinc-900/50"
+                  className="px-4 pb-3 border-t border-border/50 bg-surface-1/50"
                 >
                   <ServerImportSummary server={server} />
                 </motion.div>
@@ -710,31 +710,31 @@ function BackupSlotWarnings({ serversList }: { serversList?: Array<{ id: number;
       className="space-y-2"
     >
       {noSlotServers.length > 0 && (
-        <div className="rounded-lg border border-amber-800/50 bg-amber-950/30 p-3">
-          <div className="flex items-center gap-2 text-amber-400">
+        <div className="rounded-lg border border-warning/50 bg-warning/30 p-3">
+          <div className="flex items-center gap-2 text-warning">
             <AlertTriangle className="h-4 w-4" />
             <span className="text-sm font-medium">{noSlotServers.length} server{noSlotServers.length > 1 ? 's have' : ' has'} 0 backup slots</span>
           </div>
-          <p className="text-sm text-amber-400/80 mt-1">
+          <p className="text-sm text-warning/80 mt-1">
             The migration will automatically set the backup limit to 1 on these servers to create a migration backup.
           </p>
-          <ul className="text-xs text-amber-400/70 mt-1 space-y-0.5 ml-4 list-disc">
+          <ul className="text-xs text-warning/70 mt-1 space-y-0.5 ml-4 list-disc">
             {noSlotServers.slice(0, 5).map(s => (
               <li key={s.id}>{s.name}</li>
             ))}
             {noSlotServers.length > 5 && (
-              <li className="text-zinc-500">+{noSlotServers.length - 5} more</li>
+              <li className="text-muted-foreground">+{noSlotServers.length - 5} more</li>
             )}
           </ul>
         </div>
       )}
       {fullSlotServers.length > 0 && (
-        <div className="rounded-lg border border-amber-800/50 bg-amber-950/20 p-3">
-          <div className="flex items-center gap-2 text-amber-400/80">
+        <div className="rounded-lg border border-warning/50 bg-warning/20 p-3">
+          <div className="flex items-center gap-2 text-warning/80">
             <AlertTriangle className="h-4 w-4" />
             <span className="text-sm font-medium">{fullSlotServers.length} server{fullSlotServers.length > 1 ? 's have' : ' has'} all backup slots in use</span>
           </div>
-          <p className="text-xs text-amber-400/60 mt-1">
+          <p className="text-xs text-warning/60 mt-1">
             The migration will automatically increase the backup limit by 1 to make room for a migration backup.
           </p>
         </div>
@@ -982,18 +982,18 @@ export default function MigrationPage() {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-100 flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
             <ArrowRightLeft className="h-6 w-6 text-primary" />
             Migration
           </h1>
-          <p className="text-sm text-zinc-400 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             Migrate servers from Pterodactyl to Catalyst
           </p>
         </div>
       </div>
 
       {/* Tab Bar */}
-      <div className="flex gap-1 border-b border-zinc-800 pb-px">
+      <div className="flex gap-1 border-b border-border pb-px">
         {[
           { id: 'new' as const, label: 'New Migration' },
           { id: 'progress' as const, label: 'Active Migration', show: !!activeJobId },
@@ -1006,8 +1006,8 @@ export default function MigrationPage() {
               onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-2 text-sm font-medium transition-colors relative ${
                 activeTab === tab.id
-                  ? 'text-zinc-100'
-                  : 'text-zinc-500 hover:text-zinc-300'
+                  ? 'text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               {tab.label}
@@ -1033,8 +1033,8 @@ export default function MigrationPage() {
           >
             <WhatGetsMigratedCard />
             <Card className="p-6 bg-card border border-border mt-6">
-              <h2 className="text-lg font-semibold text-zinc-100 mb-1">Connect to Pterodactyl</h2>
-              <p className="text-sm text-zinc-400 mb-6">
+              <h2 className="text-lg font-semibold text-foreground mb-1">Connect to Pterodactyl</h2>
+              <p className="text-sm text-muted-foreground mb-6">
                 Enter your Pterodactyl panel URL and Application API key. After connecting,
                 you will map Pterodactyl nodes or servers to <strong>existing online Catalyst nodes</strong>.
               </p>
@@ -1042,29 +1042,29 @@ export default function MigrationPage() {
               <div className="space-y-4">
                 {/* Panel URL */}
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-zinc-300">Panel URL</label>
+                  <label className="text-sm font-medium text-foreground">Panel URL</label>
                   <Input
                     value={panelUrl}
                     onChange={(e) => setPanelUrl(e.target.value)}
                     placeholder="http://panel.example.com"
-                    className="bg-zinc-900 border-zinc-700 text-zinc-100"
+                    className="bg-surface-1 border-border text-foreground"
                   />
                 </div>
 
                 {/* API Key */}
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-zinc-300">Application API Key</label>
+                  <label className="text-sm font-medium text-foreground">Application API Key</label>
                   <div className="relative">
                     <Input
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
                       type={showKey ? 'text' : 'password'}
                       placeholder="ptla_..."
-                      className="bg-zinc-900 border-zinc-700 text-zinc-100 pr-10"
+                      className="bg-surface-1 border-border text-foreground pr-10"
                     />
                     <button
                       onClick={() => setShowKey(!showKey)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >
                       <Eye className="h-4 w-4" />
                     </button>
@@ -1073,9 +1073,9 @@ export default function MigrationPage() {
 
                 {/* Client API Key */}
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-zinc-300">
+                  <label className="text-sm font-medium text-foreground">
                     Client API Key{" "}
-                    <span className="text-zinc-500 font-normal">(for file migration)</span>
+                    <span className="text-muted-foreground font-normal">(for file migration)</span>
                   </label>
                   <div className="relative">
                     <Input
@@ -1083,16 +1083,16 @@ export default function MigrationPage() {
                       onChange={(e) => setClientApiKey(e.target.value)}
                       type={showClientKey ? 'text' : 'password'}
                       placeholder="ptlc_..."
-                      className="bg-zinc-900 border-zinc-700 text-zinc-100 pr-10"
+                      className="bg-surface-1 border-border text-foreground pr-10"
                     />
                     <button
                       onClick={() => setShowClientKey(!showClientKey)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >
                       <Eye className="h-4 w-4" />
                     </button>
                   </div>
-                  <p className="text-xs text-zinc-500">
+                  <p className="text-xs text-muted-foreground">
                     Required for backup creation and file migration. Create in Pterodactyl → API Credentials → Client API.
                   </p>
                 </div>
@@ -1104,22 +1104,22 @@ export default function MigrationPage() {
                     animate={{ opacity: 1, height: 'auto' }}
                     className={`rounded-lg border p-4 ${
                       testResult.success
-                        ? 'border-emerald-800/50 bg-emerald-950/30'
+                        ? 'border-success/50 bg-success/30'
                         : 'border-red-800/50 bg-red-950/30'
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-2">
                       {testResult.success ? (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                        <CheckCircle2 className="h-4 w-4 text-success" />
                       ) : (
-                        <XCircle className="h-4 w-4 text-red-400" />
+                        <XCircle className="h-4 w-4 text-destructive" />
                       )}
-                      <span className={`text-sm font-medium ${testResult.success ? 'text-emerald-300' : 'text-red-300'}`}>
+                      <span className={`text-sm font-medium ${testResult.success ? 'text-success' : 'text-destructive'}`}>
                         {testResult.success ? `Connected (v${testResult.version || '1.x'})` : 'Connection Failed'}
                       </span>
                     </div>
                     {!testResult.success ? (
-                      <p className="text-sm text-red-400">{testResult.error}</p>
+                      <p className="text-sm text-destructive">{testResult.error}</p>
                     ) : testResult.stats ? (
                       <div className="grid grid-cols-5 gap-3 mt-2">
                         {[
@@ -1130,9 +1130,9 @@ export default function MigrationPage() {
                           { label: 'Servers', value: testResult.stats.servers, icon: Server },
                         ].map(stat => (
                           <div key={stat.label} className="text-center">
-                            <stat.icon className="h-4 w-4 text-zinc-500 mx-auto mb-1" />
-                            <div className="text-lg font-semibold text-zinc-100">{stat.value}</div>
-                            <div className="text-xs text-zinc-500">{stat.label}</div>
+                            <stat.icon className="h-4 w-4 text-muted-foreground mx-auto mb-1" />
+                            <div className="text-lg font-semibold text-foreground">{stat.value}</div>
+                            <div className="text-xs text-muted-foreground">{stat.label}</div>
                           </div>
                         ))}
                       </div>
@@ -1151,7 +1151,7 @@ export default function MigrationPage() {
                     animate={{ opacity: 1, height: 'auto' }}
                     className="space-y-3"
                   >
-                    <label className="text-sm font-medium text-zinc-300">Migration Scope</label>
+                    <label className="text-sm font-medium text-foreground">Migration Scope</label>
                     <div className="grid grid-cols-3 gap-2">
                       {([
                         { value: 'full' as const, label: 'Full Migration', desc: 'Map all Ptero nodes to Catalyst nodes' },
@@ -1168,13 +1168,13 @@ export default function MigrationPage() {
                           className={`rounded-lg border p-3 text-left transition-colors ${
                             migrationScope === opt.value
                               ? 'border-primary bg-primary/10'
-                              : 'border-zinc-700 bg-zinc-900 hover:border-zinc-600'
+                              : 'border-border bg-surface-1 hover:border-border'
                           }`}
                         >
-                          <div className={`text-sm font-medium ${migrationScope === opt.value ? 'text-zinc-100' : 'text-zinc-300'}`}>
+                          <div className={`text-sm font-medium ${migrationScope === opt.value ? 'text-foreground' : 'text-foreground'}`}>
                             {opt.label}
                           </div>
-                          <div className="text-xs text-zinc-500 mt-0.5">{opt.desc}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">{opt.desc}</div>
                         </button>
                       ))}
                     </div>
@@ -1183,12 +1183,12 @@ export default function MigrationPage() {
 
                 {/* Online nodes warning */}
                 {testResult?.success && onlineNodes.length === 0 && (
-                  <div className="rounded-lg border border-amber-800/50 bg-amber-950/30 p-3">
-                    <div className="flex items-center gap-2 text-amber-400">
+                  <div className="rounded-lg border border-warning/50 bg-warning/30 p-3">
+                    <div className="flex items-center gap-2 text-warning">
                       <WifiOff className="h-4 w-4" />
                       <span className="text-sm font-medium">No online Catalyst nodes</span>
                     </div>
-                    <p className="text-sm text-amber-400/80 mt-1">
+                    <p className="text-sm text-warning/80 mt-1">
                       Migration requires at least one Catalyst node to be online. Start the agent on your nodes first.
                     </p>
                   </div>
@@ -1220,7 +1220,7 @@ export default function MigrationPage() {
 
                 {/* Mapping summary */}
                 {testResult?.success && onlineNodes.length > 0 && (
-                  <div className="text-xs text-zinc-500 space-y-1">
+                  <div className="text-xs text-muted-foreground space-y-1">
                     {migrationScope === 'server' && (
                       <p>{Object.keys(serverMappings).length} of {testResult.serversList?.length || 0} servers mapped</p>
                     )}
@@ -1288,12 +1288,12 @@ export default function MigrationPage() {
                 <div className="flex items-center gap-3">
                   <StatusBadge status={activeJob.status} />
                   <div>
-                    <h2 className="text-lg font-semibold text-zinc-100">Migration Progress</h2>
-                    <p className="text-sm text-zinc-400">
+                    <h2 className="text-lg font-semibold text-foreground">Migration Progress</h2>
+                    <p className="text-sm text-muted-foreground">
                       {activeJob.sourceUrl}
                       {activeJob.currentPhase && (
-                        <span className="text-zinc-500">
-                          {' '}— Phase: <span className="text-zinc-300">{activeJob.currentPhase}</span>
+                        <span className="text-muted-foreground">
+                          {' '}— Phase: <span className="text-foreground">{activeJob.currentPhase}</span>
                         </span>
                       )}
                     </p>
@@ -1347,33 +1347,33 @@ export default function MigrationPage() {
                 const runningStep = phaseSteps.find(s => s.status === 'running');
                 if (!runningStep) return null;
                 return (
-                  <div className="mt-3 flex items-center gap-2 text-xs text-blue-400">
+                  <div className="mt-3 flex items-center gap-2 text-xs text-info">
                     <Loader2 className="h-3 w-3 animate-spin" />
                     <span>
                       {stepLabel(runningStep.action, runningStep.metadata as Record<string, unknown>)}
-                      {runningStep.sourceId && <span className="text-blue-400/60"> #{runningStep.sourceId}</span>}
+                      {runningStep.sourceId && <span className="text-info/60"> #{runningStep.sourceId}</span>}
                     </span>
                   </div>
                 );
               })()}
               {activeJob.error && (
                 <div className="mt-4 rounded-lg border border-red-800/50 bg-red-950/30 p-3">
-                  <div className="flex items-center gap-2 text-red-400">
+                  <div className="flex items-center gap-2 text-destructive">
                     <AlertTriangle className="h-4 w-4" />
                     <span className="text-sm font-medium">Error</span>
                   </div>
-                  <p className="text-sm text-red-400/80 mt-1">{activeJob.error}</p>
+                  <p className="text-sm text-destructive/80 mt-1">{activeJob.error}</p>
                 </div>
               )}
 
               {/* Timing & Stats */}
-              <div className="flex gap-6 mt-4 text-xs text-zinc-500">
+              <div className="flex gap-6 mt-4 text-xs text-muted-foreground">
                 <span>Started: {activeJob.startedAt ? new Date(activeJob.startedAt).toLocaleString() : '—'}</span>
                 {['running', 'validating'].includes(activeJob.status) && elapsed > 0 && (
-                  <span className="text-zinc-400 font-medium">Elapsed: {formatDuration(elapsed)}</span>
+                  <span className="text-muted-foreground font-medium">Elapsed: {formatDuration(elapsed)}</span>
                 )}
                 {activeJob.completedAt && activeJob.startedAt && (
-                  <span className="text-zinc-400">
+                  <span className="text-muted-foreground">
                     Duration: {formatDuration(new Date(activeJob.completedAt).getTime() - new Date(activeJob.startedAt).getTime())}
                   </span>
                 )}
@@ -1382,8 +1382,8 @@ export default function MigrationPage() {
 
             {/* Phase List */}
             <Card className="bg-card border border-border overflow-hidden">
-              <div className="p-4 border-b border-zinc-800">
-                <h3 className="text-sm font-semibold text-zinc-200">Migration Phases</h3>
+              <div className="p-4 border-b border-border">
+                <h3 className="text-sm font-semibold text-foreground">Migration Phases</h3>
               </div>
               <motion.div
                 variants={containerVariants}
@@ -1404,8 +1404,8 @@ export default function MigrationPage() {
                       key={phase.id}
                       variants={itemVariants}
                       ref={isCurrentPhase ? activePhaseRef : undefined}
-                      className={`border-b border-zinc-800/50 last:border-0 ${
-                        isCurrentPhase ? 'bg-zinc-800/30' : ''
+                      className={`border-b border-border/50 last:border-0 ${
+                        isCurrentPhase ? 'bg-surface-2/30' : ''
                       }`}
                     >
                       <div className="flex items-center gap-3 px-4 py-3">
@@ -1418,12 +1418,12 @@ export default function MigrationPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-zinc-200">{phase.label}</span>
+                            <span className="text-sm font-medium text-foreground">{phase.label}</span>
                             {isCurrentPhase && (
                               <Badge variant="default" className="text-[10px] px-1.5 py-0">CURRENT</Badge>
                             )}
                           </div>
-                          <div className="text-xs text-zinc-500 mt-0.5">
+                          <div className="text-xs text-muted-foreground mt-0.5">
                             {(() => {
                               if (steps.length === 0) {
                                 return 'Waiting...';
@@ -1441,12 +1441,12 @@ export default function MigrationPage() {
                           {failedInPhase > 0 && status !== 'running' && (
                             <div className="mt-1.5">
                               {steps.filter(s => s.status === 'failed').slice(0, 2).map(s => (
-                                <div key={s.id} className="text-[11px] text-red-400/80 truncate max-w-md">
+                                <div key={s.id} className="text-[11px] text-destructive/80 truncate max-w-md">
                                   {stepLabel(s.action, s.metadata as Record<string, unknown>)}: {s.error}
                                 </div>
                               ))}
                               {failedInPhase > 2 && (
-                                <div className="text-[11px] text-zinc-600">
+                                <div className="text-[11px] text-muted-foreground">
                                   +{failedInPhase - 2} more errors
                                 </div>
                               )}
@@ -1478,9 +1478,9 @@ export default function MigrationPage() {
             transition={{ duration: 0.2 }}
           >
             <Card className="p-8 bg-card border border-border text-center">
-              <ArrowRightLeft className="h-8 w-8 text-zinc-600 mx-auto mb-3" />
-              <h3 className="text-sm font-medium text-zinc-300">No active migration</h3>
-              <p className="text-xs text-zinc-500 mt-1">Start a new migration to see progress here.</p>
+              <ArrowRightLeft className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+              <h3 className="text-sm font-medium text-foreground">No active migration</h3>
+              <p className="text-xs text-muted-foreground mt-1">Start a new migration to see progress here.</p>
             </Card>
           </motion.div>
         )}
@@ -1495,26 +1495,26 @@ export default function MigrationPage() {
             transition={{ duration: 0.2 }}
           >
             <Card className="bg-card border border-border overflow-hidden">
-              <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-zinc-200">Migration History</h3>
+              <div className="p-4 border-b border-border flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-foreground">Migration History</h3>
                 <button
                   onClick={() => queryClient.invalidateQueries({ queryKey: ['migration-jobs'] })}
-                  className="text-zinc-500 hover:text-zinc-300"
+                  className="text-muted-foreground hover:text-foreground"
                 >
                   <RefreshCw className="h-4 w-4" />
                 </button>
               </div>
               {loadingJobs ? (
-                <div className="p-8 text-center text-zinc-500">
+                <div className="p-8 text-center text-muted-foreground">
                   <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
                   Loading...
                 </div>
               ) : safeJobs.length === 0 ? (
-                <div className="p-8 text-center text-zinc-500">
+                <div className="p-8 text-center text-muted-foreground">
                   No migration jobs yet
                 </div>
               ) : (
-                <div className="divide-y divide-zinc-800/50">
+                <div className="divide-y divide-border/50">
                   {safeJobs.map(job => (
                     <button
                       key={job.id}
@@ -1522,21 +1522,21 @@ export default function MigrationPage() {
                         setActiveJobId(job.id);
                         setActiveTab('progress');
                       }}
-                      className="w-full flex items-center gap-4 px-4 py-3 hover:bg-zinc-800/30 transition-colors text-left"
+                      className="w-full flex items-center gap-4 px-4 py-3 hover:bg-surface-2/30 transition-colors text-left"
                     >
                       <StatusBadge status={job.status} />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm text-zinc-200 truncate">{job.sourceUrl}</div>
-                        <div className="text-xs text-zinc-500">
+                        <div className="text-sm text-foreground truncate">{job.sourceUrl}</div>
+                        <div className="text-xs text-muted-foreground">
                           {job.progress?.completed || 0}/{job.progress?.total || 0} steps
                           {' · '}
                           {new Date(job.createdAt).toLocaleDateString()}
                         </div>
                       </div>
                       {job.error && (
-                        <AlertTriangle className="h-4 w-4 text-red-400 flex-shrink-0" />
+                        <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0" />
                       )}
-                      <ChevronRight className="h-4 w-4 text-zinc-600 flex-shrink-0" />
+                      <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                     </button>
                   ))}
                 </div>

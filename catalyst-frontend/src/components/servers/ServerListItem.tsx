@@ -81,7 +81,7 @@ function ServerListItem({ server }: { server: Server }) {
       <div className="min-w-0 flex-1">
         <Link
           to={`/servers/${server.id}`}
-          className="block truncate text-sm font-semibold text-foreground transition-colors hover:text-primary dark:text-white"
+          className="block truncate text-sm font-semibold text-foreground transition-colors hover:text-primary"
         >
           {server.name}
         </Link>

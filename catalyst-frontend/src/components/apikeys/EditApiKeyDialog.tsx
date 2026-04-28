@@ -99,7 +99,7 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
               <Settings className="h-4 w-4 text-primary-600 dark:text-primary-400" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-foreground dark:text-white">
+              <h2 className="text-lg font-semibold text-foreground dark:text-foreground">
                 Edit API Key
               </h2>
               <p className="text-xs text-muted-foreground">
@@ -108,9 +108,9 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
             </div>
           </div>
           {isAgentKey && (
-            <div className="mt-2 flex items-center gap-1.5 rounded-md border border-amber-300/40 bg-amber-50 px-3 py-1.5 dark:border-amber-500/20 dark:bg-amber-900/15">
-              <Server className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-              <span className="text-xs text-amber-700 dark:text-amber-400">
+            <div className="mt-2 flex items-center gap-1.5 rounded-md border border-warning/30/40 bg-warning/5 px-3 py-1.5 dark:border-warning/20 dark:bg-warning/15">
+              <Server className="h-3.5 w-3.5 shrink-0 text-warning dark:text-warning" />
+              <span className="text-xs text-warning dark:text-warning">
                 Agent key — editing name and status is safe; rate limits affect agent behavior.
               </span>
             </div>
@@ -121,14 +121,14 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Error display */}
             {error && (
-              <div className="rounded-lg border border-rose-300/40 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-900/15 dark:text-rose-400">
+              <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive dark:border-destructive/20 dark:bg-destructive/15 dark:text-destructive">
                 {error}
               </div>
             )}
 
             {/* Name */}
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-foreground dark:text-zinc-100">Name *</label>
+              <label className="text-xs font-medium text-foreground dark:text-foreground">Name *</label>
               <Input
                 type="text"
                 placeholder="e.g., Billing System Integration"
@@ -142,7 +142,7 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
             {/* Enabled toggle */}
             <div className="flex items-center justify-between rounded-lg border border-border bg-surface-2/50 px-4 py-3 dark:bg-surface-2/30">
               <div>
-                <span className="text-sm font-medium text-foreground dark:text-zinc-100">Enabled</span>
+                <span className="text-sm font-medium text-foreground dark:text-foreground">Enabled</span>
                 <p className="text-[11px] text-muted-foreground">
                   Disabled keys will be rejected by the API.
                 </p>
@@ -155,7 +155,7 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
 
             {/* Rate Limit */}
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-foreground dark:text-zinc-100">Rate Limit</label>
+              <label className="text-xs font-medium text-foreground dark:text-foreground">Rate Limit</label>
               <div className="flex items-center gap-2">
                 <Input
                   type="number"

@@ -16,20 +16,20 @@
   --info: 217 91% 60%;
   --info-muted: 217 91% 60% / 0.15;
 
-  --background: 0 0% 100%;
-  --foreground: 240 10% 3.9%;
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 46.1%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 240 10% 3.9%;
-  --card: 0 0% 100%;
-  --card-foreground: 240 10% 3.9%;
-  --border: 240 5.9% 90%;
-  --input: 240 5.9% 90%;
+  --background: 40 10% 96%;
+  --foreground: 250 10% 11%;
+  --muted: 40 8% 93%;
+  --muted-foreground: 250 5% 45%;
+  --popover: 40 15% 98%;
+  --popover-foreground: 250 10% 11%;
+  --card: 40 15% 98%;
+  --card-foreground: 250 10% 11%;
+  --border: 40 8% 87%;
+  --input: 40 8% 87%;
   --primary: var(--accent-teal);
   --primary-foreground: 0 0% 100%;
-  --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: 240 10% 3.9%;
+  --secondary: 40 8% 93%;
+  --secondary-foreground: 250 10% 11%;
   --accent: var(--accent-teal);
   --accent-foreground: 0 0% 100%;
   --destructive: var(--danger);
@@ -37,26 +37,26 @@
   --ring: var(--accent-teal);
   --radius: 0.5rem;
 
-  --zinc-50: 0 0% 98%;
-  --zinc-100: 240 4.8% 95.9%;
-  --zinc-200: 240 5.9% 90%;
-  --zinc-300: 240 4.9% 83.9%;
-  --zinc-400: 240 5% 64.9%;
-  --zinc-500: 240 3.8% 46.1%;
-  --zinc-600: 240 5.2% 33.9%;
-  --zinc-700: 240 5.9% 24%;
-  --zinc-800: 240 3.7% 15.9%;
-  --zinc-900: 240 10% 3.9%;
-  --zinc-950: 240 10% 3.9%;
+  --zinc-50: 40 15% 98%;
+  --zinc-100: 40 10% 95%;
+  --zinc-200: 40 8% 90%;
+  --zinc-300: 40 5% 84%;
+  --zinc-400: 250 5% 60%;
+  --zinc-500: 250 3.8% 46%;
+  --zinc-600: 250 5.2% 34%;
+  --zinc-700: 250 5.9% 24%;
+  --zinc-800: 250 3.7% 16%;
+  --zinc-900: 250 10% 5%;
+  --zinc-950: 250 10% 5%;
 
-  --surface-0: 0 0% 100%;
-  --surface-1: 0 0% 100%;
-  --surface-2: 240 4.8% 95.9%;
-  --surface-3: 240 5.9% 90%;
+  --surface-0: 40 10% 96%;
+  --surface-1: 40 15% 98%;
+  --surface-2: 40 8% 93%;
+  --surface-3: 40 8% 87%;
 
-  --scrollbar-track: 240 4.8% 95.9%;
-  --scrollbar-thumb: 240 5.9% 83.9%;
-  --scrollbar-thumb-hover: 240 4.9% 64.9%;
+  --scrollbar-track: 40 10% 96%;
+  --scrollbar-thumb: 40 8% 85%;
+  --scrollbar-thumb-hover: 250 5% 60%;
 
   --sonner-background: hsl(var(--card));
   --sonner-border: hsl(var(--border));
@@ -70,30 +70,30 @@
 }
 
 .dark {
-  --background: 240 10% 3.9%;
-  --foreground: 0 0% 98%;
-  --muted: 240 3.7% 15.9%;
-  --muted-foreground: 240 5% 64.9%;
-  --popover: 240 10% 3.9%;
-  --popover-foreground: 0 0% 98%;
-  --card: 240 10% 3.9%;
-  --card-foreground: 0 0% 98%;
-  --border: 240 3.7% 15.9%;
-  --input: 240 3.7% 15.9%;
+  --background: 240 10% 7%;
+  --foreground: 240 10% 96%;
+  --muted: 240 8% 18%;
+  --muted-foreground: 240 5% 60%;
+  --popover: 240 10% 9%;
+  --popover-foreground: 240 10% 96%;
+  --card: 240 10% 9%;
+  --card-foreground: 240 10% 96%;
+  --border: 240 8% 20%;
+  --input: 240 8% 20%;
   --primary: var(--accent-teal);
-  --primary-foreground: 240 10% 3.9%;
-  --secondary: 240 3.7% 15.9%;
-  --secondary-foreground: 0 0% 98%;
+  --primary-foreground: 240 10% 5%;
+  --secondary: 240 8% 18%;
+  --secondary-foreground: 240 10% 96%;
   --accent: var(--accent-teal);
-  --accent-foreground: 240 10% 3.9%;
+  --accent-foreground: 240 10% 5%;
   --destructive: var(--danger);
   --destructive-foreground: 0 0% 100%;
   --ring: var(--accent-teal);
 
-  --surface-0: 240 10% 3.9%;
-  --surface-1: 240 10% 5.9%;
-  --surface-2: 240 3.7% 15.9%;
-  --surface-3: 240 5.9% 24%;
+  --surface-0: 240 10% 7%;
+  --surface-1: 240 10% 12%;
+  --surface-2: 240 8% 18%;
+  --surface-3: 240 8% 27%;
 
   --scrollbar-track: transparent;
   --scrollbar-thumb: 240 3.7% 15.9%;
@@ -217,31 +217,31 @@ select option {
 /* ── Console ── */
 
 .console-output {
-  background: hsl(var(--zinc-50));
-  scrollbar-color: hsl(var(--zinc-200)) hsl(var(--zinc-50));
+  background: hsl(var(--surface-1));
+  scrollbar-color: hsl(var(--surface-3)) hsl(var(--surface-1));
 }
 
 .console-output::-webkit-scrollbar-track {
-  background: hsl(var(--zinc-50));
+  background: hsl(var(--surface-1));
 }
 
 .console-output::-webkit-scrollbar-thumb {
-  background: hsl(var(--zinc-200));
-  border-color: hsl(var(--zinc-50));
+  background: hsl(var(--surface-3));
+  border-color: hsl(var(--surface-1));
 }
 
 .dark .console-output {
-  background: hsl(var(--zinc-950));
-  scrollbar-color: hsl(var(--zinc-800)) hsl(var(--zinc-950));
+  background: hsl(var(--surface-0));
+  scrollbar-color: hsl(var(--surface-2)) hsl(var(--surface-0));
 }
 
 .dark .console-output::-webkit-scrollbar-track {
-  background: hsl(var(--zinc-950));
+  background: hsl(var(--surface-0));
 }
 
 .dark .console-output::-webkit-scrollbar-thumb {
-  background: hsl(var(--zinc-800));
-  border-color: hsl(var(--zinc-950));
+  background: hsl(var(--surface-2));
+  border-color: hsl(var(--surface-0));
 }
 
 .console-line {

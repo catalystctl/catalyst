@@ -121,7 +121,7 @@ function ModalShell({
   if (!open) return null;
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -130,19 +130,19 @@ function ModalShell({
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-4">
           <div>
-            <h2 className="text-lg font-semibold text-foreground dark:text-white">{title}</h2>
+            <h2 className="text-lg font-semibold text-foreground ">{title}</h2>
             {subtitle && (
               <p className="text-xs text-muted-foreground">{subtitle}</p>
             )}
           </div>
           <button
-            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground dark:text-zinc-300"
+            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground dark:text-foreground"
             onClick={onClose}
           >
             Close
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5 text-sm text-foreground dark:text-zinc-100">
+        <div className="flex-1 overflow-y-auto px-6 py-5 text-sm text-foreground dark:text-foreground">
           {children}
         </div>
         {footer && (
@@ -573,7 +573,7 @@ function UsersPage() {
                 <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 opacity-20 blur-sm" />
                 <Users className="relative h-7 w-7 text-cyan-600 dark:text-cyan-400" />
               </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
                 User Management
               </h1>
             </div>
@@ -592,7 +592,7 @@ function UsersPage() {
             ) : (
               <>
                 <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
-                  <span className="h-2 w-2 rounded-full bg-zinc-400" />
+                  <span className="h-2 w-2 rounded-full bg-surface-3" />
                   {data?.pagination?.total ?? 0} users
                 </Badge>
                 {roles.length > 0 && (
@@ -787,7 +787,7 @@ function UsersPage() {
                       handleBulkBan(selectedIds, `${selectedIds.length} users`)
                     }
                     disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending}
-                    className="gap-1.5 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 dark:text-rose-400 dark:hover:bg-rose-950/30 dark:hover:border-rose-800"
+                    className="gap-1.5 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20 dark:text-destructive dark:hover:bg-destructive/30 dark:hover:border-destructive"
                   >
                     <Ban className="h-3 w-3" />
                     Ban
@@ -799,7 +799,7 @@ function UsersPage() {
                       handleBulkUnban(selectedIds, `${selectedIds.length} users`)
                     }
                     disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending}
-                    className="gap-1.5 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 dark:text-emerald-400 dark:hover:bg-emerald-950/30 dark:hover:border-emerald-800"
+                    className="gap-1.5 text-xs text-success hover:bg-success/5 hover:text-success hover:border-success/20 dark:text-success dark:hover:bg-success/30 dark:hover:border-success"
                   >
                     <CheckCircle className="h-3 w-3" />
                     Unban
@@ -846,7 +846,7 @@ function UsersPage() {
                           return Array.from(new Set([...prev, ...filteredIds]));
                         })
                       }
-                      className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+                      className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                     />
                     <span className="text-xs font-medium text-muted-foreground">
                       Select all
@@ -878,7 +878,7 @@ function UsersPage() {
                                 : [...prev, user.id],
                             )
                           }
-                          className="h-4 w-4 flex-shrink-0 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+                          className="h-4 w-4 flex-shrink-0 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                         />
 
                         {/* Avatar icon */}
@@ -889,7 +889,7 @@ function UsersPage() {
                         {/* User info — primary column */}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2.5">
-                            <span className="truncate font-semibold text-foreground transition-colors dark:text-zinc-100">
+                            <span className="truncate font-semibold text-foreground transition-colors dark:text-foreground">
                               {user.username}
                             </span>
                             {user.banned ? (
@@ -900,8 +900,8 @@ function UsersPage() {
                             ) : (
                               <Badge variant="success" className="gap-1 text-[11px]">
                                 <span className="relative flex h-1.5 w-1.5">
-                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+                                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success/50" />
                                 </span>
                                 Active
                               </Badge>
@@ -931,7 +931,7 @@ function UsersPage() {
                         <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                           {user.banned ? (
                             <button
-                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-emerald-50 hover:text-emerald-600 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-400"
+                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-success/5 hover:text-success disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-success/30 dark:hover:text-success"
                               onClick={() =>
                                 handleBulkUnban([user.id], user.username)
                               }
@@ -945,7 +945,7 @@ function UsersPage() {
                             </button>
                           ) : (
                             <button
-                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-rose-950/30 dark:hover:text-rose-400"
+                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-destructive/30 dark:hover:text-destructive"
                               onClick={() =>
                                 handleBulkBan([user.id], user.username)
                               }
@@ -987,7 +987,7 @@ function UsersPage() {
                                     banMutation.isPending ||
                                     unbanMutation.isPending
                                   }
-                                  className="gap-2 text-xs text-emerald-600 dark:text-emerald-400"
+                                  className="gap-2 text-xs text-success dark:text-success"
                                 >
                                   <CheckCircle className="h-3.5 w-3.5" />
                                   Unban
@@ -1001,7 +1001,7 @@ function UsersPage() {
                                     banMutation.isPending ||
                                     unbanMutation.isPending
                                   }
-                                  className="gap-2 text-xs text-rose-600 dark:text-rose-400"
+                                  className="gap-2 text-xs text-destructive dark:text-destructive"
                                 >
                                   <Ban className="h-3.5 w-3.5" />
                                   Ban
@@ -1016,7 +1016,7 @@ function UsersPage() {
                                   })
                                 }
                                 disabled={deleteMutation.isPending}
-                                className="gap-2 text-xs text-rose-600 dark:text-rose-400"
+                                className="gap-2 text-xs text-destructive dark:text-destructive"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                                 Delete
@@ -1174,7 +1174,7 @@ function UsersPage() {
                 {filteredModalRoles.map((role) => (
                   <label
                     key={role.id}
-                    className="flex items-center gap-2 rounded-md border border-border bg-white px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/50 dark:border-border dark:bg-zinc-950 dark:text-zinc-200"
+                    className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/50 dark:border-border dark:bg-surface-0 dark:text-foreground"
                   >
                     <input
                       type="checkbox"
@@ -1182,7 +1182,7 @@ function UsersPage() {
                       onChange={() =>
                         setCreateRoleIds((prev) => toggleItem(prev, role.id))
                       }
-                      className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+                      className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                     />
                     {role.name}
                   </label>
@@ -1208,7 +1208,7 @@ function UsersPage() {
                 {filteredModalServers.map((server) => (
                   <label
                     key={server.id}
-                    className="flex items-center gap-2 rounded-md border border-border bg-white px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/50 dark:border-border dark:bg-zinc-950 dark:text-zinc-200"
+                    className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/50 dark:border-border dark:bg-surface-0 dark:text-foreground"
                   >
                     <input
                       type="checkbox"
@@ -1216,7 +1216,7 @@ function UsersPage() {
                       onChange={() =>
                         setCreateServerIds((prev) => toggleItem(prev, server.id))
                       }
-                      className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+                      className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                     />
                     <span>{server.name}</span>
                     <span className="text-[10px] text-muted-foreground">
@@ -1331,7 +1331,7 @@ function UsersPage() {
                 {filteredEditRoles.map((role) => (
                   <label
                     key={role.id}
-                    className="flex items-center gap-2 rounded-md border border-border bg-white px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/50 dark:border-border dark:bg-zinc-950 dark:text-zinc-200"
+                    className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/50 dark:border-border dark:bg-surface-0 dark:text-foreground"
                   >
                     <input
                       type="checkbox"
@@ -1339,7 +1339,7 @@ function UsersPage() {
                       onChange={() =>
                         setEditRoleIds((prev) => toggleItem(prev, role.id))
                       }
-                      className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+                      className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                     />
                     {role.name}
                   </label>
@@ -1365,7 +1365,7 @@ function UsersPage() {
                 {filteredEditServers.map((server) => (
                   <label
                     key={server.id}
-                    className="flex items-center gap-2 rounded-md border border-border bg-white px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/50 dark:border-border dark:bg-zinc-950 dark:text-zinc-200"
+                    className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/50 dark:border-border dark:bg-surface-0 dark:text-foreground"
                   >
                     <input
                       type="checkbox"
@@ -1373,7 +1373,7 @@ function UsersPage() {
                       onChange={() =>
                         setEditServerIds((prev) => toggleItem(prev, server.id))
                       }
-                      className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+                      className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                     />
                     <span>{server.name}</span>
                     <span className="text-[10px] text-muted-foreground">
@@ -1409,11 +1409,11 @@ function UsersPage() {
               <span className="font-semibold">{banTargets?.label}</span>.
             </p>
             <label className="block space-y-1">
-              <span className="text-sm text-muted-foreground dark:text-zinc-300">
+              <span className="text-sm text-muted-foreground dark:text-foreground">
                 Reason (optional)
               </span>
               <input
-                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-200"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-2 dark:text-foreground"
                 value={banReason}
                 onChange={(event) => setBanReason(event.target.value)}
                 placeholder="e.g., Terms of service violation"

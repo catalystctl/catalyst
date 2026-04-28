@@ -35,7 +35,7 @@ export default function UpdateConfirmModal({
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
         <div className="mx-4 w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl">
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-warning-muted">
@@ -83,7 +83,7 @@ export default function UpdateConfirmModal({
             </button>
             <button
               type="button"
-              className="flex items-center gap-2 rounded-lg bg-warning px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-warning disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-warning px-4 py-2 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-warning disabled:opacity-50"
               disabled={isUpdating}
               onClick={onConfirm}
             >

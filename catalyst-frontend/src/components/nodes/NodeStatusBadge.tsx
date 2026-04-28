@@ -3,11 +3,11 @@ function NodeStatusBadge({ isOnline }: { isOnline: boolean }) {
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
         isOnline
-          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
+          ? 'bg-success/5 text-success dark:bg-success/50/10 dark:text-success'
           : 'bg-surface-2 text-muted-foreground dark:bg-surface-2 dark:text-muted-foreground'
       }`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-zinc-400 dark:bg-surface-20'}`} />
+      <span className={`h-1.5 w-1.5 rounded-full ${isOnline ? 'bg-success/50' : 'bg-muted-foreground dark:bg-muted-foreground'}`} />
       {isOnline ? 'Online' : 'Offline'}
     </span>
   );

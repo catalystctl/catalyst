@@ -84,6 +84,7 @@ function DashboardPage() {
           icon: Plus,
           href: '/servers',
           color: 'bg-primary',
+          textColor: 'text-primary-foreground',
           show: canCreateServer,
         },
         {
@@ -92,6 +93,7 @@ function DashboardPage() {
           icon: Server,
           href: '/servers',
           color: 'bg-primary',
+          textColor: 'text-primary-foreground',
           show: !canCreateServer,
         },
         {
@@ -100,6 +102,7 @@ function DashboardPage() {
           icon: HardDrive,
           href: '/admin/nodes',
           color: 'bg-primary',
+          textColor: 'text-primary-foreground',
           show: isAdmin,
         },
         {
@@ -107,7 +110,8 @@ function DashboardPage() {
           description: alertsUnacked > 0 ? `${alertsUnacked} need attention` : 'All clear',
           icon: Shield,
           href: isAdmin ? '/admin/alerts' : '/profile',
-          color: alertsUnacked > 0 ? 'bg-danger' : 'bg-zinc-600',
+          color: alertsUnacked > 0 ? 'bg-danger' : 'bg-muted-foreground',
+          textColor: alertsUnacked > 0 ? 'text-destructive-foreground' : 'text-primary-foreground',
           show: isAdmin,
         },
         {
@@ -115,7 +119,8 @@ function DashboardPage() {
           description: 'Manage your account',
           icon: Activity,
           href: '/profile',
-          color: 'bg-zinc-600',
+          color: 'bg-muted-foreground',
+          textColor: 'text-primary-foreground',
           show: !isAdmin,
         },
       ].filter((action) => action.show),
@@ -230,7 +235,7 @@ function DashboardPage() {
             to={action.href}
             className="group flex items-center gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/30"
           >
-            <div className={`flex h-9 w-9 items-center justify-center rounded-md ${action.color} text-white`}>
+            <div className={`flex h-9 w-9 items-center justify-center rounded-md ${action.color} ${action.textColor}`}>
               <action.icon className="h-4 w-4" />
             </div>
             <div className="flex-1">
@@ -339,7 +344,7 @@ function DashboardPage() {
                       <div className="truncate text-sm font-medium text-foreground">{item.title}</div>
                       <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
                         <span className="truncate">{item.detail}</span>
-                        <span className="shrink-0 text-zinc-600 dark:text-zinc-500">|</span>
+                        <span className="shrink-0 text-muted-foreground dark:text-muted-foreground">|</span>
                         <span className="flex items-center gap-1 shrink-0">
                           <Clock className="h-3 w-3" />
                           {item.time}

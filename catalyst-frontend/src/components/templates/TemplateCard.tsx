@@ -43,7 +43,7 @@ function TemplateCard({ template, index = 0 }: Props) {
               <div className="flex items-center gap-2">
                 <Link
                   to={`/admin/templates/${template.id}`}
-                  className="truncate font-semibold text-foreground transition-colors hover:text-primary dark:text-zinc-100 dark:hover:text-primary-400"
+                  className="truncate font-semibold text-foreground transition-colors hover:text-primary dark:text-foreground dark:hover:text-primary-400"
                 >
                   {template.name}
                 </Link>
@@ -62,7 +62,7 @@ function TemplateCard({ template, index = 0 }: Props) {
           <div className="flex shrink-0 items-center gap-1.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
             <Link
               to={`/admin/templates/${template.id}`}
-              className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary dark:text-zinc-300 dark:hover:text-primary-400"
+              className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary dark:text-foreground dark:hover:text-primary-400"
             >
               View
               <ExternalLink className="h-3 w-3" />
@@ -70,7 +70,7 @@ function TemplateCard({ template, index = 0 }: Props) {
             <TemplateDeleteDialog
               templateId={template.id}
               templateName={template.name}
-              buttonClassName="rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-all hover:border-rose-500/50 hover:bg-rose-50 hover:text-rose-600 dark:text-zinc-300 dark:hover:bg-rose-950/30 dark:hover:text-rose-400"
+              buttonClassName="rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-all hover:border-destructive/50 hover:bg-destructive/5 hover:text-destructive dark:text-foreground dark:hover:bg-destructive/30 dark:hover:text-destructive"
             />
           </div>
         </div>
@@ -85,7 +85,7 @@ function TemplateCard({ template, index = 0 }: Props) {
               <HardDrive className="h-3 w-3" />
               <span>Image</span>
             </div>
-            <div className="mt-1 truncate text-xs font-medium text-foreground dark:text-zinc-100">
+            <div className="mt-1 truncate text-xs font-medium text-foreground dark:text-foreground">
               {template.defaultImage || template.image}
             </div>
           </div>
@@ -94,7 +94,7 @@ function TemplateCard({ template, index = 0 }: Props) {
               <Cpu className="h-3 w-3" />
               <span>Resources</span>
             </div>
-            <div className="mt-1 text-xs font-medium text-foreground dark:text-zinc-100">
+            <div className="mt-1 text-xs font-medium text-foreground dark:text-foreground">
               {template.allocatedCpuCores} CPU · {template.allocatedMemoryMb} MB
             </div>
           </div>

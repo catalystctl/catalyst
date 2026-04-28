@@ -28,7 +28,7 @@ function RoleBadge({ role, onRemove, disabled }: RoleBadgeProps) {
           ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
           : role.name.toLowerCase() === 'moderator'
           ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-          : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+          : 'bg-surface-2 text-foreground dark:bg-surface-2 dark:text-foreground'
       }`}
     >
       <span>{role.name}</span>

@@ -97,13 +97,13 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-xl border border-border bg-white shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-xl border border-border bg-card shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4 dark:border-border">
-          <h2 className="text-lg font-semibold text-foreground dark:text-white">Assign Node</h2>
+          <h2 className="text-lg font-semibold text-foreground">Assign Node</h2>
           <button
-            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary dark:border-border dark:hover:border-primary/30"
             onClick={handleClose}
           >
             Close
@@ -111,7 +111,7 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
         </div>
 
         {/* Content */}
-        <div className="space-y-4 px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300">
+        <div className="space-y-4 px-6 py-4 text-sm text-muted-foreground">
           {/* Target Type Selection */}
           <div>
             <span className="text-muted-foreground dark:text-muted-foreground">Assign to</span>
@@ -119,8 +119,8 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
               <button
                 className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-all duration-300 ${
                   targetType === 'user'
-                    ? 'border-primary-500 bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400'
-                    : 'border-border text-muted-foreground hover:border-border dark:border-border dark:text-zinc-300 dark:hover:border-border'
+                    ? 'border-primary bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400'
+                    : 'border-border text-muted-foreground hover:border-border dark:border-border dark:hover:border-border'
                 }`}
                 onClick={() => {
                   setTargetType('user');
@@ -132,8 +132,8 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
               <button
                 className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-all duration-300 ${
                   targetType === 'role'
-                    ? 'border-primary-500 bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400'
-                    : 'border-border text-muted-foreground hover:border-border dark:border-border dark:text-zinc-300 dark:hover:border-border'
+                    ? 'border-primary bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400'
+                    : 'border-border text-muted-foreground hover:border-border dark:border-border dark:hover:border-border'
                 }`}
                 onClick={() => {
                   setTargetType('role');
@@ -151,7 +151,7 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
               Search {targetType === 'user' ? 'users' : 'roles'}
             </span>
             <input
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={targetType === 'user' ? 'Search by username or email...' : 'Search roles...'}
@@ -170,14 +170,14 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
                   No users found
                 </div>
               ) : (
-                <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                <div className="divide-y divide-border">
                   {filteredUsers.map((user) => (
                     <button
                       key={user.id}
                       className={`w-full px-4 py-2 text-left transition-all duration-200 hover:bg-surface-2 dark:hover:bg-surface-2/50 ${
                         targetId === user.id
                           ? 'bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400'
-                          : 'text-muted-foreground dark:text-zinc-300'
+                          : 'text-muted-foreground'
                       }`}
                       onClick={() => setTargetId(user.id)}
                     >
@@ -198,14 +198,14 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
                 No roles found
               </div>
             ) : (
-              <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              <div className="divide-y divide-border">
                 {filteredRoles.map((role) => (
                   <button
                     key={role.id}
                     className={`w-full px-4 py-2 text-left transition-all duration-200 hover:bg-surface-2 dark:hover:bg-surface-2/50 ${
                       targetId === role.id
                         ? 'bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400'
-                        : 'text-muted-foreground dark:text-zinc-300'
+                        : 'text-muted-foreground'
                     }`}
                     onClick={() => setTargetId(role.id)}
                   >
@@ -223,7 +223,7 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
 
           {/* Selected Target Display */}
           {targetId && (
-            <div className="rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 dark:border-primary-500/30 dark:bg-primary-500/10">
+            <div className="rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 dark:border-primary/30 dark:bg-primary-500/10">
               <span className="text-xs text-muted-foreground dark:text-muted-foreground">
                 Selected: {targetType === 'user'
                   ? filteredUsers.find((u) => u.id === targetId)?.username || 'Unknown user'
@@ -237,7 +237,7 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
           <div>
             <span className="text-muted-foreground dark:text-muted-foreground">Expiration (optional)</span>
             <input
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
               type="datetime-local"
               value={expiresAt}
               onChange={(e) => setExpiresAt(e.target.value)}
@@ -252,13 +252,13 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
         {/* Footer */}
         <div className="flex justify-end gap-2 border-t border-border px-6 py-4 text-xs dark:border-border">
           <button
-            className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+            className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:hover:border-primary/30"
             onClick={handleClose}
           >
             Cancel
           </button>
           <button
-            className="rounded-md bg-primary-600 px-4 py-2 font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+            className="rounded-md bg-primary px-4 py-2 font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
             onClick={handleSubmit}
             disabled={!targetId || assignMutation.isPending}
           >

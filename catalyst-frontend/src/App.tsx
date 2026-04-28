@@ -36,7 +36,6 @@ const TemplateDetailsPage = lazy(() => import('./pages/templates/TemplateDetails
 const AdminNodesPage = lazy(() => import('./pages/admin/NodesPage'));
 const AdminServersPage = lazy(() => import('./pages/admin/ServersPage'));
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
-const ActivityPage = lazy(() => import('./pages/admin/NetworkPage'));
 const DatabasePage = lazy(() => import('./pages/admin/DatabasePage'));
 const AdminAlertsPage = lazy(() => import('./pages/admin/AlertsPage'));
 const UsersPage = lazy(() => import('./pages/admin/UsersPage'));
@@ -421,18 +420,6 @@ function App() {
                     <Suspense fallback={<PageFallback />}>
                       <PageTransition>
                         <DatabasePage />
-                      </PageTransition>
-                    </Suspense>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="admin/network"
-                element={
-                  <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
-                    <Suspense fallback={<PageFallback />}>
-                      <PageTransition>
-                        <ActivityPage />
                       </PageTransition>
                     </Suspense>
                   </ProtectedRoute>

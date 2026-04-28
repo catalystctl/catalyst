@@ -127,7 +127,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
         {canStart && (
           <Button
             size="sm"
-            className="bg-success text-white hover:opacity-90"
+            className="bg-success text-success-foreground hover:opacity-90"
             disabled={start.isPending || status === 'running' || isSuspended}
             onClick={() => start.mutate()}
           >

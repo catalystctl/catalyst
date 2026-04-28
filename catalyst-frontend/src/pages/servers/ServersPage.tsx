@@ -99,8 +99,8 @@ function ServersPage() {
     >
       {/* Ambient background */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-primary-500/8 to-primary-300/8 blur-3xl dark:from-primary-500/15 dark:to-primary-300/15" />
-        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-primary-600/8 to-primary-400/8 blur-3xl dark:from-primary-600/15 dark:to-primary-400/15" />
+        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-violet-500/8 to-cyan-500/8 blur-3xl dark:from-violet-500/15 dark:to-cyan-500/15" />
+        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-sky-500/8 to-indigo-500/8 blur-3xl dark:from-sky-500/15 dark:to-indigo-500/15" />
       </div>
 
       <div className="relative z-10 space-y-5">
@@ -112,7 +112,7 @@ function ServersPage() {
                 <div className="absolute -inset-1 rounded-lg bg-primary opacity-20 blur-sm" />
                 <ServerIcon className="relative h-7 w-7 text-primary-600 dark:text-primary-400" />
               </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
                 Servers
               </h1>
               <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
@@ -166,7 +166,7 @@ function ServersPage() {
         <motion.div variants={itemVariants} className="space-y-3">
           {/* Access filter tabs + View toggle */}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-1 rounded-xl border border-border/50 bg-surface-2/40 p-1">
+            <div className="flex items-center gap-1 rounded-xl border border-border bg-muted/50 p-1">
               <AccessTab
                 active={accessFilter === 'all'}
                 onClick={() => setAccessFilter('all')}
@@ -193,13 +193,13 @@ function ServersPage() {
             </div>
 
             {/* View mode toggle */}
-            <div className="flex items-center gap-1 rounded-lg border border-border/50 bg-surface-2/40 p-1">
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/50 p-1">
               <button
                 type="button"
                 onClick={() => setServerViewMode('card')}
                 className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
                   serverViewMode === 'card'
-                    ? 'bg-primary-600 text-white shadow-sm'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -211,7 +211,7 @@ function ServersPage() {
                 onClick={() => setServerViewMode('list')}
                 className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
                   serverViewMode === 'list'
-                    ? 'bg-primary-600 text-white shadow-sm'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -222,7 +222,7 @@ function ServersPage() {
           </div>
 
           {/* Filters bar */}
-          <div className="overflow-hidden rounded-xl border border-border/50 bg-card/60 px-4 py-3 backdrop-blur-sm">
+          <div className="overflow-hidden rounded-xl border border-border bg-card px-4 py-3">
             <ServerFilters onChange={setFilters} />
           </div>
         </motion.div>
@@ -261,7 +261,7 @@ function AccessTab({
       onClick={onClick}
       className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
         active
-          ? 'bg-primary-600 text-white shadow-sm'
+          ? 'bg-primary text-primary-foreground shadow-sm'
           : 'text-muted-foreground hover:text-foreground'
       }`}
     >
@@ -270,7 +270,7 @@ function AccessTab({
       <span
         className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
           active
-            ? 'bg-white/20 text-white'
+            ? 'bg-white/20 text-primary-foreground'
             : 'bg-surface-2 text-muted-foreground'
         }`}
       >

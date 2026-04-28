@@ -18,7 +18,7 @@ const baseTabs: TabConfig[] = [
   { to: '/admin/nodes', label: 'Nodes', requiredPermissions: ['node.read', 'node.create', 'node.update', 'node.delete', 'admin.read', 'admin.write'] },
   { to: '/admin/templates', label: 'Templates', requiredPermissions: ['template.read', 'template.create', 'template.update', 'template.delete', 'admin.read', 'admin.write'] },
   { to: '/admin/database', label: 'Database', requiredPermissions: ['admin.read', 'admin.write'] },
-  { to: '/admin/network', label: 'Activity', requiredPermissions: ['admin.read', 'admin.write'] },
+  { to: '/admin/audit-logs', label: 'Audit Logs', requiredPermissions: ['admin.read', 'admin.write'] },
   { to: '/admin/api-keys', label: 'API Keys', requiredPermissions: ['apikey.manage', 'admin.read', 'admin.write'] },
   { to: '/admin/system', label: 'System', requiredPermissions: ['admin.write'] },
   { to: '/admin/security', label: 'Security', requiredPermissions: ['admin.read', 'admin.write'] },
@@ -67,7 +67,7 @@ function AdminTabs() {
   }
 
   return (
-    <div className="flex flex-wrap gap-2 rounded-xl border border-border bg-white px-3 py-2 text-xs shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+    <div className="flex flex-wrap gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
       {allTabs.map((tab) => (
         <NavLink
           key={tab.to}
@@ -76,8 +76,8 @@ function AdminTabs() {
           className={({ isActive }) =>
             `rounded-full px-3 py-1.5 font-semibold transition-all duration-300 ${
               isActive
-                ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/20'
-                : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground dark:text-zinc-300 dark:hover:bg-surface-2 dark:hover:text-foreground'
+                ? 'bg-primary text-primary-foreground shadow-lg shadow-primary-500/20'
+                : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground dark:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-foreground'
             }`
           }
         >

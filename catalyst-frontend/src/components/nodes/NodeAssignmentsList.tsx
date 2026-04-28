@@ -49,7 +49,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
       className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm"
     >
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-display text-sm font-semibold text-foreground dark:text-white">
+        <h2 className="font-display text-sm font-semibold text-foreground">
           Node Assignments
           {assignments.length > 0 && (
             <Badge variant="default" className="ml-2">
@@ -86,7 +86,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
                       <User className="h-3 w-3" />
                       User
                     </Badge>
-                    <span className="truncate text-sm font-medium text-foreground dark:text-white">
+                    <span className="truncate text-sm font-medium text-foreground">
                       {assignment.userId}
                     </span>
                   </>
@@ -96,7 +96,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
                       <Shield className="h-3 w-3" />
                       Role
                     </Badge>
-                    <span className="truncate text-sm font-medium text-foreground dark:text-white">
+                    <span className="truncate text-sm font-medium text-foreground">
                       {assignment.roleName || assignment.roleId}
                     </span>
                   </>
@@ -110,7 +110,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
                     <span
                       className={`ml-2 ${
                         new Date(assignment.expiresAt) < new Date()
-                          ? 'text-rose-500 dark:text-rose-400'
+                          ? 'text-destructive dark:text-destructive'
                           : ''
                       }`}
                     >
@@ -122,7 +122,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
 
                 {canManage && (
                   <button
-                    className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-rose-950/30 dark:hover:text-rose-400"
+                    className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-destructive/30 dark:hover:text-destructive"
                     onClick={() => handleRemove(assignment.id)}
                     disabled={removeMutation.isPending}
                     title="Remove assignment"

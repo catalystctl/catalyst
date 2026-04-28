@@ -33,16 +33,16 @@ function Breadcrumbs() {
 
   return (
     <nav className="flex items-center gap-1.5 text-sm text-muted-foreground" aria-label="Breadcrumb">
-      <Link className="font-medium text-zinc-500 transition-colors hover:text-foreground dark:text-zinc-400 dark:hover:text-zinc-100" to="/dashboard">
+      <Link className="font-medium text-muted-foreground transition-colors hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground" to="/dashboard">
         Dashboard
       </Link>
       {crumbs.map((crumb) => (
         <div key={crumb.href} className="flex items-center gap-1.5">
-          <ChevronRight className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-600" />
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground dark:text-muted-foreground" />
           {crumb.isLast ? (
             <span className="font-medium text-foreground">{crumb.label}</span>
           ) : (
-            <Link className="font-medium text-zinc-500 transition-colors hover:text-foreground dark:text-zinc-400 dark:hover:text-zinc-100" to={crumb.href}>
+            <Link className="font-medium text-muted-foreground transition-colors hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground" to={crumb.href}>
               {crumb.label}
             </Link>
           )}

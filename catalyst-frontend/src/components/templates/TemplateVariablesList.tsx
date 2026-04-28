@@ -22,9 +22,9 @@ function TemplateVariablesList({ variables }: Props) {
           className="rounded-lg border border-border/50 bg-surface-2/50 px-3 py-2.5 transition-colors hover:bg-surface-2 dark:bg-surface-2/30"
         >
           <div className="flex items-center justify-between gap-2">
-            <div className="text-sm font-medium text-foreground dark:text-zinc-100">
+            <div className="text-sm font-medium text-foreground dark:text-foreground">
               {variable.name}
-              {variable.required && <span className="ml-1 text-xs text-rose-400">*</span>}
+              {variable.required && <span className="ml-1 text-xs text-destructive">*</span>}
             </div>
             <Badge variant="outline" className="shrink-0 text-[11px]">
               {variable.input ?? 'text'}
@@ -34,11 +34,11 @@ function TemplateVariablesList({ variables }: Props) {
             <div className="mt-0.5 text-xs text-muted-foreground">{variable.description}</div>
           )}
           <div className="mt-1.5 text-xs text-muted-foreground">
-            Default: <span className="font-medium text-foreground dark:text-zinc-300">{variable.default || '—'}</span>
+            Default: <span className="font-medium text-foreground dark:text-foreground">{variable.default || '—'}</span>
           </div>
           {variable.rules && variable.rules.length > 0 && (
             <div className="mt-0.5 text-xs text-muted-foreground">
-              Rules: <span className="font-medium text-foreground dark:text-zinc-300">{variable.rules.join(', ')}</span>
+              Rules: <span className="font-medium text-foreground dark:text-foreground">{variable.rules.join(', ')}</span>
             </div>
           )}
         </div>

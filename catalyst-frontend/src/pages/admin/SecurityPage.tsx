@@ -37,7 +37,7 @@ function Tooltip({ text }: { text: string }) {
   return (
     <span className="group relative inline-flex">
       <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground/60" />
-      <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-border bg-popover px-3 py-2 text-xs leading-relaxed text-muted-foreground opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:text-zinc-300">
+      <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-64 -translate-x-1/2 rounded-lg border border-border bg-popover px-3 py-2 text-xs leading-relaxed text-muted-foreground opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:text-foreground">
         {text}
       </span>
     </span>
@@ -104,7 +104,7 @@ function Section({
             {icon}
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-foreground dark:text-white">{title}</h2>
+            <h2 className="text-sm font-semibold text-foreground ">{title}</h2>
             {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
           </div>
         </div>
@@ -140,15 +140,15 @@ function LockoutRow({
       className="group flex flex-wrap items-center gap-4 border-b border-border/30 px-5 py-3.5 last:border-b-0 transition-colors hover:bg-surface-2/30"
     >
       <div className="flex items-center gap-2.5 min-w-0 flex-1">
-        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isActive ? 'bg-rose-100 dark:bg-rose-900/30' : 'bg-amber-100 dark:bg-amber-900/30'}`}>
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isActive ? 'bg-destructive/10 dark:bg-destructive/30' : 'bg-warning/10 dark:bg-warning/30'}`}>
           {isActive ? (
-            <Lock className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+            <Lock className="h-3.5 w-3.5 text-destructive dark:text-destructive" />
           ) : (
-            <Unlock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+            <Unlock className="h-3.5 w-3.5 text-warning dark:text-warning" />
           )}
         </div>
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-foreground dark:text-zinc-100">{lockout.email}</div>
+          <div className="truncate text-sm font-medium text-foreground dark:text-foreground">{lockout.email}</div>
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
             <span className="font-mono">{lockout.ipAddress}</span>
             <span>·</span>
@@ -329,9 +329,9 @@ function SecurityPage() {
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-rose-500 to-red-500 opacity-20 blur-sm" />
-                <ShieldCheck className="relative h-7 w-7 text-rose-600 dark:text-rose-400" />
+                <ShieldCheck className="relative h-7 w-7 text-destructive dark:text-destructive" />
               </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
                 Security
               </h1>
             </div>
@@ -350,8 +350,8 @@ function SecurityPage() {
         <Section
           title="Rate Limits"
           subtitle="Requests per minute unless noted. Adjust to prevent abuse while allowing normal usage."
-          icon={<Zap className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
-          iconColor="bg-amber-100 dark:bg-amber-900/30"
+          icon={<Zap className="h-4 w-4 text-warning dark:text-warning" />}
+          iconColor="bg-warning/10 dark:bg-warning/30"
           footer={
             <Button size="sm" disabled={!canSubmit || updateMutation.isPending} onClick={() => updateMutation.mutate()}>
               {updateMutation.isPending ? 'Saving…' : 'Save settings'}
@@ -422,8 +422,8 @@ function SecurityPage() {
         <Section
           title="Lockout Policy"
           subtitle="Failed login attempts trigger temporary lockouts per email + IP combination."
-          icon={<Lock className="h-4 w-4 text-rose-600 dark:text-rose-400" />}
-          iconColor="bg-rose-100 dark:bg-rose-900/30"
+          icon={<Lock className="h-4 w-4 text-destructive dark:text-destructive" />}
+          iconColor="bg-destructive/10 dark:bg-destructive/30"
           footer={
             <Button size="sm" disabled={!canSubmit || updateMutation.isPending} onClick={() => updateMutation.mutate()}>
               {updateMutation.isPending ? 'Saving…' : 'Save settings'}
@@ -458,8 +458,8 @@ function SecurityPage() {
         <Section
           title="File Tunnel"
           subtitle="Limits for the agent file tunnel used for file operations."
-          icon={<FolderSync className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
-          iconColor="bg-blue-100 dark:bg-blue-900/30"
+          icon={<FolderSync className="h-4 w-4 text-info dark:text-info" />}
+          iconColor="bg-info/10 dark:bg-blue-900/30"
           footer={
             <Button size="sm" disabled={!canSubmit || updateMutation.isPending} onClick={() => updateMutation.mutate()}>
               {updateMutation.isPending ? 'Saving…' : 'Save settings'}
@@ -502,11 +502,11 @@ function SecurityPage() {
           <div className="border-b border-border/50 px-5 py-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-100 dark:bg-rose-900/30">
-                  <Lock className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-destructive/10 dark:bg-destructive/30">
+                  <Lock className="h-4 w-4 text-destructive dark:text-destructive" />
                 </div>
                 <div>
-                  <h2 className="text-sm font-semibold text-foreground dark:text-white">Auth Lockouts</h2>
+                  <h2 className="text-sm font-semibold text-foreground ">Auth Lockouts</h2>
                   <p className="text-xs text-muted-foreground">Track recent lockout entries.</p>
                 </div>
               </div>

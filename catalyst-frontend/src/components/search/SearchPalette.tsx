@@ -83,10 +83,10 @@ type SearchCategory =
   | 'Server Tabs';
 
 const CATEGORY_META: Record<SearchCategory, { label: string; icon: LucideIcon; color: string }> = {
-  Navigation:    { label: 'Pages',           icon: LayoutDashboard, color: 'text-blue-400' },
+  Navigation:    { label: 'Pages',           icon: LayoutDashboard, color: 'text-info' },
   Admin:         { label: 'Admin',           icon: Shield,          color: 'text-violet-400' },
-  Settings:      { label: 'Settings & Config', icon: Settings,      color: 'text-amber-400' },
-  Servers:       { label: 'Servers',         icon: Server,          color: 'text-emerald-400' },
+  Settings:      { label: 'Settings & Config', icon: Settings,      color: 'text-warning' },
+  Servers:       { label: 'Servers',         icon: Server,          color: 'text-success' },
   Nodes:         { label: 'Nodes',           icon: MonitorDot,      color: 'text-cyan-400' },
   Templates:     { label: 'Templates',       icon: FileText,        color: 'text-orange-400' },
   Profile:       { label: 'Account',         icon: Users,           color: 'text-pink-400' },
@@ -258,14 +258,14 @@ const STATIC_ITEMS: StaticItemDef[] = [
   {
     id: 'admin-activity',
     label: 'Activity Log',
-    description: 'Real-time platform event stream',
+    description: 'Track all platform events and user actions',
     icon: Activity,
-    to: '/admin/network',
+    to: '/admin/audit-logs',
     category: 'Admin',
-    keywords: ['activity', 'events', 'stream', 'log', 'audit'],
+    keywords: ['audit', 'logs', 'events', 'activity', 'stream', 'log'],
     permissions: ['admin.read'],
     badge: 'Admin',
-    path: '/admin/network',
+    path: '/admin/audit-logs',
   },
   {
     id: 'admin-system',
@@ -1039,7 +1039,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
       >
         {/* Backdrop */}
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-md"
+          className="fixed inset-0 bg-background/60 backdrop-blur-md"
           onClick={onClose}
           aria-hidden="true"
         />

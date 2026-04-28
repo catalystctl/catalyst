@@ -69,7 +69,7 @@ function StatCard({ label, value, icon, iconColor, accent }: {
         </div>
         <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
       </div>
-      <div className={`text-2xl font-bold tabular-nums ${accent || 'text-foreground dark:text-zinc-100'}`}>{value}</div>
+      <div className={`text-2xl font-bold tabular-nums ${accent || 'text-foreground'}`}>{value}</div>
     </motion.div>
   );
 }
@@ -104,8 +104,8 @@ function RuleRow({
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-sm text-foreground dark:text-zinc-100">{rule.name}</span>
-          <Badge variant={rule.enabled ? 'outline' : 'secondary'} className="text-[10px] border-emerald-400/40 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400">
+          <span className="font-medium text-sm text-foreground">{rule.name}</span>
+          <Badge variant={rule.enabled ? 'outline' : 'secondary'} className="text-[10px] border-success/40 text-success dark:border-success/30 dark:text-success">
             {rule.enabled ? 'Enabled' : 'Disabled'}
           </Badge>
           {showAdminTargets && (
@@ -135,7 +135,7 @@ function RuleRow({
               <Settings className="h-3.5 w-3.5" />
             </button>
             <button
-              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:pointer-events-none disabled:opacity-30"
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
               onClick={onDelete}
               disabled={isPending}
               title="Delete"
@@ -170,7 +170,7 @@ function AlertRow({ alert, showAdminTargets, onResolve, isPending, index }: {
               {severityIcon(alert.severity)}
               {alert.severity}
             </Badge>
-            <span className="text-sm font-semibold text-foreground dark:text-zinc-100">{alert.title}</span>
+            <span className="text-sm font-semibold text-foreground">{alert.title}</span>
             {alert.resolved && (
               <Badge variant="secondary" className="text-[10px]">Resolved</Badge>
             )}
@@ -209,15 +209,15 @@ function AlertRow({ alert, showAdminTargets, onResolve, isPending, index }: {
               <div className="flex items-center justify-between text-[11px]">
                 <span className="text-muted-foreground">{delivery.channel}</span>
                 <span className={
-                  delivery.status === 'failed' ? 'text-rose-500' :
-                  delivery.status === 'sent' ? 'text-emerald-500' : 'text-muted-foreground'
+                  delivery.status === 'failed' ? 'text-destructive' :
+                  delivery.status === 'sent' ? 'text-success' : 'text-muted-foreground'
                 }>
                   {delivery.status}
                 </span>
               </div>
               <div className="mt-0.5 text-[11px] text-muted-foreground">{delivery.target}</div>
               {delivery.lastError && (
-                <div className="mt-0.5 text-[10px] text-rose-500">{delivery.lastError}</div>
+                <div className="mt-0.5 text-[10px] text-destructive">{delivery.lastError}</div>
               )}
             </div>
           ))}
@@ -477,9 +477,9 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 opacity-20 blur-sm" />
-                <Bell className="relative h-7 w-7 text-amber-600 dark:text-amber-400" />
+                <Bell className="relative h-7 w-7 text-warning dark:text-warning" />
               </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
                 {showAdminTargets ? 'Alerts' : 'Server alerts'}
               </h1>
             </div>
@@ -508,7 +508,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
           <select
             value={filterResolved}
             onChange={(e) => setFilterResolved(e.target.value as 'false' | 'true' | 'all')}
-            className="rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-colors focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
+            className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground"
           >
             <option value="false">Unresolved</option>
             <option value="true">Resolved</option>
@@ -525,21 +525,21 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
             <StatCard
               label="Active alerts"
               value={alertStats?.unresolved ?? 0}
-              icon={<AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
-              iconColor="bg-amber-100 dark:bg-amber-900/30"
+              icon={<AlertCircle className="h-4 w-4 text-warning dark:text-warning" />}
+              iconColor="bg-warning/10 dark:bg-warning/30"
             />
             <StatCard
               label="Total alerts"
               value={alertStats?.total ?? 0}
-              icon={<Bell className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
-              iconColor="bg-blue-100 dark:bg-blue-900/30"
+              icon={<Bell className="h-4 w-4 text-info dark:text-info" />}
+              iconColor="bg-info/10 dark:bg-blue-900/30"
             />
             <StatCard
               label="Critical"
               value={alertStats?.bySeverity?.critical ?? 0}
-              icon={<AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />}
-              iconColor="bg-rose-100 dark:bg-rose-900/30"
-              accent="text-rose-600 dark:text-rose-400"
+              icon={<AlertTriangle className="h-4 w-4 text-destructive dark:text-destructive" />}
+              iconColor="bg-destructive/10 dark:bg-destructive/30"
+              accent="text-destructive dark:text-destructive"
             />
           </div>
         )}
@@ -552,7 +552,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                 <Settings className="h-4 w-4 text-violet-600 dark:text-violet-400" />
               </div>
               <div>
-                <h2 className="text-sm font-semibold text-foreground dark:text-white">Alert rules</h2>
+                <h2 className="text-sm font-semibold text-foreground ">Alert rules</h2>
                 <p className="text-xs text-muted-foreground">Manage thresholds and notification targets.</p>
               </div>
             </div>
@@ -588,11 +588,11 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
         <motion.div variants={itemVariants} className="overflow-hidden rounded-xl border border-border bg-card/80 backdrop-blur-sm">
           <div className="border-b border-border/50 px-5 py-4">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
-                <CircleDot className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-warning/10 dark:bg-warning/30">
+                <CircleDot className="h-4 w-4 text-warning dark:text-warning" />
               </div>
               <div>
-                <h2 className="text-sm font-semibold text-foreground dark:text-white">Alert history</h2>
+                <h2 className="text-sm font-semibold text-foreground ">Alert history</h2>
                 <p className="text-xs text-muted-foreground">Latest triggered alerts and delivery status.</p>
               </div>
             </div>
@@ -633,7 +633,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
       {/* ── Rule Create/Edit Modal ── */}
       {showRuleModal && (
         <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -641,7 +641,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
             className="mx-4 w-full max-w-2xl rounded-xl border border-border bg-card shadow-xl"
           >
             <div className="border-b border-border px-6 py-4">
-              <h2 className="text-lg font-semibold text-foreground dark:text-white">
+              <h2 className="text-lg font-semibold text-foreground ">
                 {editingRule ? 'Edit alert rule' : 'Create alert rule'}
               </h2>
               <p className="text-xs text-muted-foreground">Configure thresholds and notification targets.</p>
@@ -662,7 +662,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                       onClick={() => canNav && setRuleStep(key)}
                       className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${
                         isActive
-                          ? 'bg-primary-600 text-white shadow-sm'
+                          ? 'bg-primary text-primary-foreground shadow-sm'
                           : 'text-muted-foreground hover:text-foreground disabled:opacity-40'
                       }`}
                     >
@@ -694,7 +694,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                       <select
                         value={ruleType}
                         onChange={(e) => setRuleType(e.target.value as AlertType)}
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-colors focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground"
                       >
                         {ruleTypeOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                       </select>
@@ -705,7 +705,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                         value={ruleTarget}
                         onChange={(e) => setRuleTarget(e.target.value as 'global' | 'server' | 'node')}
                         disabled={!showAdminTargets}
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-colors focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 disabled:opacity-60"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground disabled:opacity-60"
                       >
                         <option value="global">Global</option>
                         <option value="server">Server</option>
@@ -718,7 +718,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                         value={ruleTargetId}
                         onChange={(e) => setRuleTargetId(e.target.value)}
                         disabled={!showAdminTargets || ruleTarget === 'global'}
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-colors focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 disabled:opacity-60"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground disabled:opacity-60"
                       >
                         <option value="">{ruleTarget === 'global' ? 'Not required' : selectedTargetLabel || 'Select target'}</option>
                         {targetOptions.map((opt) => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
@@ -772,7 +772,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                         <div key={`w-${i}`} className="flex items-center gap-2">
                           <Input value={value} onChange={(e) => setWebhookTargets((c) => updateTargetValue(c, i, e.target.value))} placeholder="https://discord.com/api/webhooks/..." />
                           {webhookTargets.length > 1 && (
-                            <button type="button" className="shrink-0 rounded p-1 text-muted-foreground hover:text-rose-500" onClick={() => setWebhookTargets((c) => c.filter((_, j) => j !== i))}>
+                            <button type="button" className="shrink-0 rounded p-1 text-muted-foreground hover:text-destructive" onClick={() => setWebhookTargets((c) => c.filter((_, j) => j !== i))}>
                               <X className="h-3.5 w-3.5" />
                             </button>
                           )}
@@ -788,7 +788,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                         <div key={`e-${i}`} className="flex items-center gap-2">
                           <Input value={value} onChange={(e) => setEmailTargets((c) => updateTargetValue(c, i, e.target.value))} placeholder="alerts@example.com" />
                           {emailTargets.length > 1 && (
-                            <button type="button" className="shrink-0 rounded p-1 text-muted-foreground hover:text-rose-500" onClick={() => setEmailTargets((c) => c.filter((_, j) => j !== i))}>
+                            <button type="button" className="shrink-0 rounded p-1 text-muted-foreground hover:text-destructive" onClick={() => setEmailTargets((c) => c.filter((_, j) => j !== i))}>
                               <X className="h-3.5 w-3.5" />
                             </button>
                           )}
@@ -798,7 +798,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-                      <input type="checkbox" checked={notifyOwner} onChange={(e) => setNotifyOwner(e.target.checked)} className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-zinc-600 dark:bg-surface-1 dark:text-primary-400" />
+                      <input type="checkbox" checked={notifyOwner} onChange={(e) => setNotifyOwner(e.target.checked)} className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400" />
                       Notify server owner
                     </label>
                     <label className="block space-y-1 sm:col-span-2">

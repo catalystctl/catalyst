@@ -71,7 +71,7 @@ function SectionCard({ title, description, icon: Icon, children, badge }: {
             <Icon className="h-4 w-4 text-primary-600 dark:text-primary-400" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-foreground dark:text-white">{title}</h3>
+            <h3 className="text-sm font-semibold text-foreground ">{title}</h3>
             {description && <p className="text-[11px] text-muted-foreground">{description}</p>}
           </div>
         </div>
@@ -92,14 +92,14 @@ function DangerZone() {
   });
 
   return (
-    <motion.div variants={itemVariants} className="rounded-xl border border-rose-500/20 bg-rose-50/30 px-5 py-5 backdrop-blur-sm dark:border-rose-500/10 dark:bg-rose-900/5">
+    <motion.div variants={itemVariants} className="rounded-xl border border-destructive/20 bg-destructive/5/30 px-5 py-5 backdrop-blur-sm dark:border-destructive/10 dark:bg-destructive/5">
       <div className="mb-3 flex items-center gap-2.5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 dark:bg-rose-900/30">
-          <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-destructive/10 dark:bg-destructive/30">
+          <AlertTriangle className="h-4 w-4 text-destructive dark:text-destructive" />
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-rose-700 dark:text-rose-400">Danger Zone</h3>
-          <p className="text-[11px] text-rose-600/70 dark:text-rose-400/60">Irreversible actions</p>
+          <h3 className="text-sm font-semibold text-destructive dark:text-destructive">Danger Zone</h3>
+          <p className="text-[11px] text-destructive/70 dark:text-destructive/60">Irreversible actions</p>
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -275,7 +275,7 @@ export default function ProfilePage() {
         <motion.div variants={itemVariants}>
           <div className="flex items-center gap-3">
             <div className="relative"><div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-violet-500 to-blue-500 opacity-20 blur-sm" /><User className="relative h-7 w-7 text-violet-600 dark:text-violet-400" /></div>
-            <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">Profile</h1>
+            <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">Profile</h1>
           </div>
           <p className="ml-10 text-sm text-muted-foreground">Manage your account, security, and preferences.</p>
         </motion.div>
@@ -290,8 +290,8 @@ export default function ProfilePage() {
               ) : (
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-gradient-to-br from-primary-100 to-primary-50 text-xl font-bold text-primary-700 shadow-sm dark:from-primary-900/40 dark:to-primary-900/20 dark:text-primary-300">{initials}</div>
               )}
-              <button onClick={() => fileRef.current?.click()} className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                <Camera className="h-5 w-5 text-white" />
+              <button onClick={() => fileRef.current?.click()} className="absolute inset-0 flex items-center justify-center rounded-2xl bg-background/60 opacity-0 transition-opacity group-hover:opacity-100">
+                <Camera className="h-5 w-5 text-foreground" />
               </button>
               <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) avatarMutation.mutate(f); e.target.value = ''; }} />
             </div>
@@ -313,19 +313,19 @@ export default function ProfilePage() {
               ) : (
                 <>
                   <div className="flex items-center gap-2">
-                    <span className="text-xl font-bold text-foreground dark:text-white">{profile?.username || 'User'}</span>
-                    {authUser?.permissions?.includes('*') && <Badge className="border-amber-400/40 bg-amber-50 text-amber-700 text-[10px] dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-400">Super Admin</Badge>}
+                    <span className="text-xl font-bold text-foreground ">{profile?.username || 'User'}</span>
+                    {authUser?.permissions?.includes('*') && <Badge className="border-warning/40 bg-warning/5 text-warning text-[10px] dark:border-warning/30 dark:bg-warning/20 dark:text-warning">Super Admin</Badge>}
                     <button onClick={startEditProfile} className="rounded-md p-1 text-muted-foreground hover:bg-surface-2 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{profile?.email}</span>
                     {!profile?.emailVerified && (
-                      <button onClick={() => resendVerifyMutation.mutate()} disabled={resendVerifyMutation.isPending} className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50">
+                      <button onClick={() => resendVerifyMutation.mutate()} disabled={resendVerifyMutation.isPending} className="flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning hover:bg-warning/20 dark:bg-warning/30 dark:text-warning dark:hover:bg-warning/50">
                         {resendVerifyMutation.isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <MailCheck className="h-2.5 w-2.5" />}
                         Verify email
                       </button>
                     )}
-                    {profile?.emailVerified && <Badge variant="outline" className="border-emerald-400/40 text-emerald-700 text-[10px] dark:border-emerald-500/30 dark:text-emerald-400"><Check className="mr-0.5 h-2.5 w-2.5" />Verified</Badge>}
+                    {profile?.emailVerified && <Badge variant="outline" className="border-success/40 text-success text-[10px] dark:border-success/30 dark:text-success"><Check className="mr-0.5 h-2.5 w-2.5" />Verified</Badge>}
                     <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />Joined {fmtDate(profile?.createdAt)}</span>
                   </div>
                 </>
@@ -335,13 +335,13 @@ export default function ProfilePage() {
             {/* Status badges */}
             <div className="flex flex-col items-end gap-2">
               <div className="flex gap-2">
-                <Badge variant={t2fa ? 'outline' : 'secondary'} className={t2fa ? 'border-emerald-400/40 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400' : ''}>
+                <Badge variant={t2fa ? 'outline' : 'secondary'} className={t2fa ? 'border-success/40 text-success dark:border-success/30 dark:text-success' : ''}>
                   {t2fa ? <ShieldCheck className="mr-1 h-3 w-3" /> : <ShieldOff className="mr-1 h-3 w-3" />}2FA
                 </Badge>
                 <Badge variant={hasPw ? 'outline' : 'secondary'}><Key className="mr-1 h-3 w-3" />Password {hasPw ? 'set' : 'unset'}</Badge>
               </div>
               {profile?.image && (
-                <button onClick={() => removeAvatarMutation.mutate()} className="text-[10px] text-muted-foreground hover:text-rose-500">Remove avatar</button>
+                <button onClick={() => removeAvatarMutation.mutate()} className="text-[10px] text-muted-foreground hover:text-destructive">Remove avatar</button>
               )}
             </div>
           </div>
@@ -350,8 +350,8 @@ export default function ProfilePage() {
         {/* Security Overview */}
         <motion.div variants={itemVariants} className="rounded-xl border border-border/50 bg-card/80 p-5 backdrop-blur-sm">
           <div className="mb-3 flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30"><Info className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" /></div>
-            <h3 className="text-sm font-semibold text-foreground dark:text-white">Security Overview</h3>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-info/10 dark:bg-blue-900/30"><Info className="h-3.5 w-3.5 text-info dark:text-info" /></div>
+            <h3 className="text-sm font-semibold text-foreground ">Security Overview</h3>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
@@ -362,7 +362,7 @@ export default function ProfilePage() {
             ].map((s) => (
               <div key={s.label} className="rounded-lg border border-border/50 bg-surface-2/30 px-3 py-2.5">
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{s.label}</div>
-                <div className="mt-0.5 text-lg font-bold tabular-nums text-foreground dark:text-white">{s.value}</div>
+                <div className="mt-0.5 text-lg font-bold tabular-nums text-foreground ">{s.value}</div>
                 {s.detail && <div className="text-[10px] text-muted-foreground">{s.detail}</div>}
               </div>
             ))}
@@ -403,14 +403,14 @@ export default function ProfilePage() {
             </SectionCard>
 
             {/* 2FA */}
-            <SectionCard title="Two-Factor Authentication" description={t2fa ? 'TOTP is enabled' : 'Add an extra layer of security'} icon={Shield} badge={t2fa ? <Badge variant="outline" className="border-emerald-400/40 text-emerald-700 text-[10px]">Enabled</Badge> : null}>
+            <SectionCard title="Two-Factor Authentication" description={t2fa ? 'TOTP is enabled' : 'Add an extra layer of security'} icon={Shield} badge={t2fa ? <Badge variant="outline" className="border-success/40 text-success text-[10px]">Enabled</Badge> : null}>
               <div className="space-y-3">
                 <Input type="password" value={tfaPw} onChange={(e) => setTfaPw(e.target.value)} placeholder="Confirm password" />
                 <div className="flex flex-wrap gap-2">
                   {!t2fa && <Button size="sm" onClick={() => enableTfaMutation.mutate()} disabled={!tfaPw || enableTfaMutation.isPending}>{enableTfaMutation.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <><QrCode className="mr-1.5 h-3.5 w-3.5" />Enable 2FA</>}</Button>}
                   {t2fa && (<>
                     <Button variant="outline" size="sm" onClick={() => genCodesMutation.mutate()} disabled={!tfaPw || genCodesMutation.isPending}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />New Codes</Button>
-                    <Button variant="outline" size="sm" onClick={() => disableTfaMutation.mutate()} disabled={!tfaPw || disableTfaMutation.isPending} className="text-rose-600 hover:text-rose-500 hover:bg-rose-50 dark:text-rose-400">Disable</Button>
+                    <Button variant="outline" size="sm" onClick={() => disableTfaMutation.mutate()} disabled={!tfaPw || disableTfaMutation.isPending} className="text-destructive hover:text-destructive hover:bg-destructive/5 dark:text-destructive">Disable</Button>
                   </>)}
                 </div>
               </div>
@@ -432,18 +432,18 @@ export default function ProfilePage() {
                           <Input value={editPkName} onChange={(e) => setEditPkName(e.target.value)} className="h-7 w-40 text-xs" autoFocus />
                         ) : (
                           <div className="min-w-0">
-                            <div className="text-xs font-medium text-foreground dark:text-zinc-200 truncate">{pk.name || 'Unnamed'}</div>
+                            <div className="text-xs font-medium text-foreground truncate">{pk.name || 'Unnamed'}</div>
                             <div className="text-[10px] text-muted-foreground">{pk.deviceType || 'Passkey'} · {fmtDate(pk.createdAt)}</div>
                           </div>
                         )}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         {editPkId === pk.id ? (
-                          <button onClick={() => updPkMutation.mutate()} disabled={!editPkName} className="rounded p-1 text-xs font-medium text-primary-600 hover:bg-primary-50 dark:text-primary-400">Save</button>
+                          <button onClick={() => updPkMutation.mutate()} disabled={!editPkName} className="rounded p-1 text-xs font-medium text-primary-600 hover:bg-primary/10 dark:text-primary-400">Save</button>
                         ) : (
                           <button onClick={() => { setEditPkId(pk.id); setEditPkName(pk.name || ''); }} className="rounded p-1 text-xs text-muted-foreground hover:text-foreground">Rename</button>
                         )}
-                        <button onClick={() => delPkMutation.mutate(pk.id)} className="rounded p-1 text-xs text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:text-rose-400"><Trash2 className="h-3 w-3" /></button>
+                        <button onClick={() => delPkMutation.mutate(pk.id)} className="rounded p-1 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/5 dark:hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
                       </div>
                     </div>
                   ))}
@@ -462,8 +462,8 @@ export default function ProfilePage() {
                   </div>
                   {(ssoAccounts ?? []).filter((a) => a.providerId !== 'credential').length === 0 ? <p className="py-2 text-center text-xs text-muted-foreground">No linked accounts</p> : (ssoAccounts ?? []).filter((a) => a.providerId !== 'credential').map((a) => (
                     <div key={a.id} className="flex items-center justify-between rounded-lg border border-border/50 bg-surface-2/30 px-3 py-2.5 dark:bg-surface-1/30">
-                      <span className="text-xs font-medium text-foreground dark:text-zinc-200">{a.providerId.toUpperCase()}</span>
-                      <button onClick={() => profileApi.unlinkSso(a.providerId, a.accountId).then(() => queryClient.invalidateQueries({ queryKey: ['profile-sso-accounts'] }))} className="text-xs text-rose-500 hover:text-rose-400">Unlink</button>
+                      <span className="text-xs font-medium text-foreground">{a.providerId.toUpperCase()}</span>
+                      <button onClick={() => profileApi.unlinkSso(a.providerId, a.accountId).then(() => queryClient.invalidateQueries({ queryKey: ['profile-sso-accounts'] }))} className="text-xs text-destructive hover:text-destructive">Unlink</button>
                     </div>
                   ))}
                 </div>
@@ -483,11 +483,11 @@ export default function ProfilePage() {
                       <div className="flex items-center gap-2.5 min-w-0">
                         <Monitor className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                         <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 text-xs font-medium text-foreground dark:text-zinc-200 truncate">{browser} on {os}{mobile && <Badge variant="secondary" className="text-[9px] px-1 py-0">{mobile}</Badge>}</div>
+                          <div className="flex items-center gap-1.5 text-xs font-medium text-foreground truncate">{browser} on {os}{mobile && <Badge variant="secondary" className="text-[9px] px-1 py-0">{mobile}</Badge>}</div>
                           <div className="text-[10px] text-muted-foreground">{s.ipAddress || 'Unknown IP'} · {fmtRelative(s.updatedAt)}</div>
                         </div>
                       </div>
-                      <button onClick={() => revokeSessionMutation.mutate(s.id)} className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/20 dark:hover:text-rose-400" title="Revoke"><LogOut className="h-3.5 w-3.5" /></button>
+                      <button onClick={() => revokeSessionMutation.mutate(s.id)} className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-destructive/5 hover:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive" title="Revoke"><LogOut className="h-3.5 w-3.5" /></button>
                     </div>
                   );
                 })}
@@ -506,7 +506,7 @@ export default function ProfilePage() {
                   {apiKeys.slice(0, 5).map((k) => (
                     <Link to="/admin/api-keys" key={k.id} className="flex items-center justify-between rounded-lg border border-border/50 bg-surface-2/30 px-3 py-2.5 hover:bg-surface-2/60 dark:bg-surface-1/30">
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2 text-xs font-medium text-foreground dark:text-zinc-200">
+                        <div className="flex items-center gap-2 text-xs font-medium text-foreground">
                           {k.name || 'Unnamed'}{!k.enabled && <Badge variant="secondary" className="text-[9px] px-1 py-0">Disabled</Badge>}
                         </div>
                         <div className="text-[10px] text-muted-foreground">
@@ -517,7 +517,7 @@ export default function ProfilePage() {
                     </Link>
                   ))}
                   {apiKeys.length > 5 && (
-                    <Link to="/admin/api-keys" className="block text-center text-xs text-primary-600 hover:text-primary-500 py-1 dark:text-primary-400">View all {apiKeys.length} keys →</Link>
+                    <Link to="/admin/api-keys" className="block text-center text-xs text-primary-600 hover:text-primary py-1 dark:text-primary-400">View all {apiKeys.length} keys →</Link>
                   )}
                 </div>
               ) : (
@@ -536,7 +536,7 @@ export default function ProfilePage() {
                     <span className="mt-0.5 text-sm shrink-0">{actionIcons[entry.action] || '📝'}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-foreground dark:text-zinc-200">{entry.action}</span>
+                        <span className="text-xs font-medium text-foreground">{entry.action}</span>
                         {entry.resourceId && <code className="text-[10px] text-muted-foreground truncate max-w-[100px]">{entry.resourceId}</code>}
                       </div>
                       <div className="text-[10px] text-muted-foreground">{fmtRelative(entry.timestamp)}</div>
@@ -555,25 +555,25 @@ export default function ProfilePage() {
       {/* 2FA QR Modal */}
       {tfaModalOpen && (
         <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', stiffness: 400, damping: 30 }} className="mx-4 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
               <div className="mb-4 flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30"><ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /></div>
-                <div><h3 className="text-sm font-semibold text-foreground dark:text-white">Set Up Authenticator</h3><p className="text-[11px] text-muted-foreground">Scan the QR code</p></div>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10 dark:bg-success/30"><ShieldCheck className="h-4 w-4 text-success dark:text-success" /></div>
+                <div><h3 className="text-sm font-semibold text-foreground ">Set Up Authenticator</h3><p className="text-[11px] text-muted-foreground">Scan the QR code</p></div>
               </div>
-              {qrValue && <div className="mb-4 flex justify-center"><img src={qrValue} alt="QR" className="rounded-lg border border-border bg-white p-3 dark:bg-surface-1" /></div>}
-              {tfaSetup?.otpAuthUrl && <a href={tfaSetup.otpAuthUrl} target="_blank" rel="noopener noreferrer" className="mb-3 flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-500"><ExternalLink className="h-3 w-3" /> Open in app</a>}
+              {qrValue && <div className="mb-4 flex justify-center"><img src={qrValue} alt="QR" className="rounded-lg border border-border bg-card p-3 dark:bg-surface-1" /></div>}
+              {tfaSetup?.otpAuthUrl && <a href={tfaSetup.otpAuthUrl} target="_blank" rel="noopener noreferrer" className="mb-3 flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary"><ExternalLink className="h-3 w-3" /> Open in app</a>}
               {tfaSetup?.secret && (
                 <div className="mb-4 rounded-lg border border-border/50 bg-surface-2/50 p-3 text-center">
                   <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Manual Key</div>
-                  <code className="mt-1 block text-sm font-mono font-semibold text-foreground dark:text-zinc-200 select-all">{tfaSetup.secret}</code>
+                  <code className="mt-1 block text-sm font-mono font-semibold text-foreground select-all">{tfaSetup.secret}</code>
                   <button onClick={() => { navigator.clipboard.writeText(tfaSetup.secret); notifySuccess('Copied'); }} className="mt-2 flex items-center gap-1 mx-auto text-[10px] text-muted-foreground hover:text-foreground"><Copy className="h-3 w-3" /> Copy</button>
                 </div>
               )}
               {(tfaSetup?.backupCodes?.length ?? 0) > 0 && (
-                <div className="mb-4 rounded-lg border border-amber-300/40 bg-amber-50 p-4 dark:border-amber-500/20 dark:bg-amber-900/15">
-                  <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300"><AlertTriangle className="h-3.5 w-3.5" /> Backup Codes — Save These Now</div>
-                  <div className="grid grid-cols-2 gap-1.5">{tfaSetup!.backupCodes!.map((code) => <code key={code} className="rounded bg-white px-2 py-1 text-center text-[11px] font-mono dark:bg-surface-2">{code}</code>)}</div>
+                <div className="mb-4 rounded-lg border border-warning/30/40 bg-warning/5 p-4 dark:border-warning/20 dark:bg-warning/15">
+                  <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-warning dark:text-warning"><AlertTriangle className="h-3.5 w-3.5" /> Backup Codes — Save These Now</div>
+                  <div className="grid grid-cols-2 gap-1.5">{tfaSetup!.backupCodes!.map((code) => <code key={code} className="rounded bg-card px-2 py-1 text-center text-[11px] font-mono dark:bg-surface-2">{code}</code>)}</div>
                 </div>
               )}
               <Button size="sm" onClick={() => { setTfaModalOpen(false); setTfaSetup(null); }} className="w-full">Done</Button>

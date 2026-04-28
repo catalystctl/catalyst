@@ -144,20 +144,20 @@ function getResourceIcon(resource: string) {
 
 function getResourceColor(resource: string) {
   const colors: Record<string, string> = {
-    server: 'text-indigo-500 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800/50',
-    node: 'text-emerald-500 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/50',
+    server: 'text-primary dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800/50',
+    node: 'text-success dark:text-success bg-success/5 dark:bg-success/40 border-success/20 dark:border-success/50',
     user: 'text-sky-500 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 border-sky-200 dark:border-sky-800/50',
     role: 'text-violet-500 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-800/50',
-    api_key: 'text-amber-500 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/50',
-    auth: 'text-rose-500 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800/50',
+    api_key: 'text-warning dark:text-warning bg-warning/5 dark:bg-warning/40 border-warning/20 dark:border-warning/50',
+    auth: 'text-destructive dark:text-destructive bg-destructive/5 dark:bg-destructive/40 border-destructive/20 dark:border-destructive/50',
     alert: 'text-orange-500 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-800/50',
     backup: 'text-cyan-500 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800/50',
     template: 'text-fuchsia-500 dark:text-fuchsia-400 bg-fuchsia-50 dark:bg-fuchsia-950/40 border-fuchsia-200 dark:border-fuchsia-800/50',
     smtp: 'text-pink-500 dark:text-pink-400 bg-pink-50 dark:bg-pink-950/40 border-pink-200 dark:border-pink-800/50',
-    security: 'text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800/50',
+    security: 'text-destructive dark:text-destructive bg-destructive/5 dark:bg-red-950/40 border-red-200 dark:border-red-800/50',
     database: 'text-teal-500 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800/50',
   };
-  return colors[resource] || 'text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-950/40 border-zinc-200 dark:border-zinc-800/50';
+  return colors[resource] || 'text-muted-foreground dark:text-muted-foreground bg-surface-0 dark:bg-surface-0/40 border-border dark:border-border/50';
 }
 
 function getActionTone(action: string): 'success' | 'warning' | 'danger' | 'neutral' {
@@ -169,10 +169,10 @@ function getActionTone(action: string): 'success' | 'warning' | 'danger' | 'neut
 
 function getDotColor(tone: 'success' | 'warning' | 'danger' | 'neutral') {
   switch (tone) {
-    case 'success': return 'bg-emerald-500';
-    case 'warning': return 'bg-amber-500';
-    case 'danger': return 'bg-rose-500';
-    case 'neutral': return 'bg-zinc-400 dark:bg-zinc-500';
+    case 'success': return 'bg-success/50';
+    case 'warning': return 'bg-warning/50';
+    case 'danger': return 'bg-destructive/50';
+    case 'neutral': return 'bg-surface-3 dark:bg-surface-3';
   }
 }
 
@@ -275,10 +275,10 @@ function ActivityPage() {
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="absolute -inset-1 rounded-lg bg-gradient-to-br from-indigo-500/20 to-violet-500/20 blur-sm" />
-                <Activity className="relative h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                <Activity className="relative h-6 w-6 text-primary dark:text-indigo-400" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold tracking-tight text-foreground dark:text-white">
+                <h1 className="text-2xl font-bold tracking-tight text-foreground ">
                   Activity
                 </h1>
                 <p className="text-sm text-muted-foreground dark:text-muted-foreground">
@@ -288,10 +288,10 @@ function ActivityPage() {
             </div>
             <div className="flex items-center gap-2">
               {livePoll && (
-                <Badge variant="outline" className="gap-1.5 border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-400">
+                <Badge variant="outline" className="gap-1.5 border-success/30 text-success dark:border-success dark:text-success">
                   <span className="relative flex h-1.5 w-1.5">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success/50" />
                   </span>
                   Live
                 </Badge>
@@ -307,10 +307,10 @@ function ActivityPage() {
       {/* ── Filters ── */}
       <motion.div variants={itemVariants}>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-white px-3 py-1.5 dark:border-border dark:bg-surface-1">
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 dark:border-border dark:bg-surface-1">
             <Filter className="h-3.5 w-3.5 text-muted-foreground" />
             <select
-              className="appearance-none bg-transparent text-sm font-medium text-foreground outline-none dark:text-zinc-200"
+              className="appearance-none bg-transparent text-sm font-medium text-foreground outline-none dark:text-foreground"
               value={resourceFilter}
               onChange={(e) => { setResourceFilter(e.target.value); setPage(1); }}
             >
@@ -324,7 +324,7 @@ function ActivityPage() {
             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
-              className="w-full rounded-lg border border-border bg-white py-1.5 pl-9 pr-3 text-sm text-foreground transition-colors focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
+              className="w-full rounded-lg border border-border bg-card py-1.5 pl-9 pr-3 text-sm text-foreground transition-colors focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground"
               placeholder="Search actions, users, resources…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -336,7 +336,7 @@ function ActivityPage() {
               variant="outline"
               size="sm"
               onClick={() => setLivePoll(!livePoll)}
-              className={`gap-1.5 text-xs ${livePoll ? 'border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-400' : ''}`}
+              className={`gap-1.5 text-xs ${livePoll ? 'border-success/30 text-success dark:border-success dark:text-success' : ''}`}
             >
               <RefreshCw className={`h-3 w-3 ${livePoll && isFetching ? 'animate-spin' : ''}`} />
               {livePoll ? 'Auto-refresh' : 'Paused'}
@@ -359,7 +359,7 @@ function ActivityPage() {
         {isLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex gap-3 rounded-xl border border-border bg-white p-4 dark:border-border dark:bg-surface-1">
+              <div key={i} className="flex gap-3 rounded-xl border border-border bg-card p-4 dark:border-border dark:bg-surface-1">
                 <Skeleton className="h-8 w-8 rounded-lg" />
                 <div className="flex-1 space-y-2">
                   <Skeleton className="h-4 w-64" />
@@ -370,8 +370,8 @@ function ActivityPage() {
             ))}
           </div>
         ) : isError ? (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-8 text-center">
-            <p className="text-sm text-rose-600 dark:text-rose-400">Failed to load activity feed.</p>
+          <div className="rounded-xl border border-destructive/30 bg-destructive/50/5 p-8 text-center">
+            <p className="text-sm text-destructive dark:text-destructive">Failed to load activity feed.</p>
             <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-3 text-xs">
               Retry
             </Button>
@@ -387,10 +387,10 @@ function ActivityPage() {
               <div key={dateLabel}>
                 {/* Date divider */}
                 <div className="mb-3 flex items-center gap-3">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground dark:text-zinc-500">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground dark:text-muted-foreground">
                     {dateLabel}
                   </h3>
-                  <div className="h-px flex-1 bg-border dark:bg-zinc-800" />
+                  <div className="h-px flex-1 bg-border dark:bg-surface-2" />
                   <Badge variant="outline" className="text-[10px]">
                     {entries.length}
                   </Badge>
@@ -432,7 +432,7 @@ function ActivityPage() {
                             initial="hidden"
                             animate="visible"
                             layout
-                            className={`group flex items-start gap-3 rounded-xl border border-border/60 bg-white px-4 py-3 transition-all hover:border-border hover:shadow-sm dark:border-zinc-800/60 dark:bg-surface-1/80 dark:hover:border-zinc-700`}
+                            className={`group flex items-start gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 transition-all hover:border-border hover:shadow-sm dark:border-border/60 dark:bg-surface-1/80 dark:hover:border-border`}
                           >
                             {/* Icon */}
                             <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${colorClass}`}>
@@ -442,16 +442,16 @@ function ActivityPage() {
                             {/* Content */}
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-foreground dark:text-zinc-100">
+                                <span className="text-sm font-medium text-foreground dark:text-foreground">
                                   {actionLabel}
                                 </span>
                                 <span className={`h-1.5 w-1.5 rounded-full ${getDotColor(tone)}`} />
                               </div>
 
-                              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground dark:text-zinc-400">
+                              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground dark:text-muted-foreground">
                                 {/* User */}
                                 {log.user?.username && (
-                                  <span className="font-medium text-foreground/70 dark:text-zinc-300">
+                                  <span className="font-medium text-foreground/70 dark:text-foreground">
                                     {log.user.username}
                                   </span>
                                 )}
@@ -460,7 +460,7 @@ function ActivityPage() {
                                 {resourceLink && resourceId ? (
                                   <Link
                                     to={resourceLink}
-                                    className="inline-flex items-center gap-1 font-mono text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+                                    className="inline-flex items-center gap-1 font-mono text-primary-600 transition-colors hover:text-primary dark:text-primary-400 dark:hover:text-primary-300"
                                   >
                                     {resourceType}:{resourceId.slice(0, 8)}
                                     <ExternalLink className="h-2.5 w-2.5" />
@@ -487,7 +487,7 @@ function ActivityPage() {
                             {/* Time */}
                             <div className="flex shrink-0 flex-col items-end gap-0.5">
                               <span
-                                className="text-[11px] text-muted-foreground dark:text-zinc-500"
+                                className="text-[11px] text-muted-foreground dark:text-muted-foreground"
                                 title={formatFullTime(log.timestamp)}
                               >
                                 {formatTimeAgo(log.timestamp)}

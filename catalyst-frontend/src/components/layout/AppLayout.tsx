@@ -28,7 +28,7 @@ function AppLayout() {
       {/* Mobile overlay */}
       {isMobileSidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-surface-0/50 backdrop-blur-sm lg:hidden"
           onClick={() => setIsMobileSidebarOpen(false)}
           aria-hidden="true"
         />

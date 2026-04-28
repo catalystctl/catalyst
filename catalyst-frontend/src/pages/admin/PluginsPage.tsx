@@ -83,22 +83,22 @@ function PluginCard({
         <div className="flex items-start gap-3 min-w-0 flex-1">
           <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
             plugin.enabled
-              ? 'bg-emerald-100 dark:bg-emerald-900/30'
+              ? 'bg-success/10 dark:bg-success/30'
               : plugin.error
-              ? 'bg-rose-100 dark:bg-rose-900/30'
+              ? 'bg-destructive/10 dark:bg-destructive/30'
               : 'bg-surface-3 dark:bg-surface-2'
           }`}>
             <Puzzle className={`h-5 w-5 ${
               plugin.enabled
-                ? 'text-emerald-600 dark:text-emerald-400'
+                ? 'text-success dark:text-success'
                 : plugin.error
-                ? 'text-rose-600 dark:text-rose-400'
+                ? 'text-destructive dark:text-destructive'
                 : 'text-muted-foreground'
             }`} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-foreground dark:text-zinc-100">{plugin.displayName}</span>
+              <span className="font-semibold text-foreground dark:text-foreground">{plugin.displayName}</span>
               <Badge variant={statusBadgeVariant(plugin.status, plugin.error)} className="text-[10px]">
                 {statusText(plugin.status)}
               </Badge>
@@ -115,9 +115,9 @@ function PluginCard({
 
       {/* Error */}
       {plugin.error && (
-        <div className="mt-3 flex items-start gap-2 rounded-lg border border-rose-300/40 bg-rose-50 p-2.5 dark:border-rose-500/20 dark:bg-rose-900/15">
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-600 dark:text-rose-400" />
-          <p className="text-xs text-rose-700 dark:text-rose-400">{plugin.error}</p>
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-2.5 dark:border-destructive/20 dark:bg-destructive/15">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive dark:text-destructive" />
+          <p className="text-xs text-destructive dark:text-destructive">{plugin.error}</p>
         </div>
       )}
 
@@ -260,7 +260,7 @@ function PluginSettingsModal({
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -273,9 +273,9 @@ function PluginSettingsModal({
               <Settings className="h-4 w-4 text-violet-600 dark:text-violet-400" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-foreground dark:text-white">Plugin Settings</h2>
+              <h2 className="text-lg font-semibold text-foreground ">Plugin Settings</h2>
               <p className="text-xs text-muted-foreground">
-                Configure <span className="font-medium text-foreground dark:text-zinc-100">{pluginDetails?.displayName}</span>
+                Configure <span className="font-medium text-foreground dark:text-foreground">{pluginDetails?.displayName}</span>
               </p>
             </div>
           </div>
@@ -321,7 +321,7 @@ function PluginSettingsModal({
                               ? { ...(value as Record<string, any>), default: e.target.checked }
                               : e.target.checked)
                           }
-                          className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-zinc-600 dark:bg-surface-1 dark:text-primary-400"
+                          className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                         />
                         <span className="text-sm text-muted-foreground">
                           {effectiveValue ? 'Enabled' : 'Disabled'}
@@ -469,7 +469,7 @@ export default function PluginsPage() {
                 <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-violet-500 to-purple-500 opacity-20 blur-sm" />
                 <Puzzle className="relative h-7 w-7 text-violet-600 dark:text-violet-400" />
               </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
                 Plugins
               </h1>
             </div>

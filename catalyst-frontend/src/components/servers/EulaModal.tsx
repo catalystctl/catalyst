@@ -28,7 +28,7 @@ export default function EulaModal({ eulaText, onAccept, onDecline, isLoading }: 
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
         <div className="w-full max-w-xl rounded-2xl border border-border bg-card shadow-2xl">
           {/* Header */}
           <div className="flex items-center gap-3 border-b border-border px-6 py-5">
@@ -36,7 +36,7 @@ export default function EulaModal({ eulaText, onAccept, onDecline, isLoading }: 
               <AlertTriangle className="h-5 w-5 text-warning" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-foreground dark:text-white">
+              <h2 className="text-lg font-bold text-foreground">
                 Minecraft EULA
               </h2>
               <p className="text-sm text-muted-foreground">

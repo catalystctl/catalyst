@@ -51,14 +51,14 @@ function FileContextMenu({
   };
 
   const itemClass =
-    'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:text-zinc-300 dark:hover:bg-surface-2 dark:hover:text-foreground';
+    'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-foreground';
   const dangerClass =
-    'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-rose-600 transition-colors hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10';
+    'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-destructive transition-colors hover:bg-destructive/5 dark:text-destructive dark:hover:bg-destructive/50/10';
 
   const menu = (
     <div
       ref={menuRef}
-      className="w-44 rounded-xl border border-border bg-white p-1 shadow-lg dark:border-border dark:bg-surface-1"
+      className="w-44 rounded-xl border border-border bg-card p-1 shadow-lg dark:border-border dark:bg-surface-1"
     >
       <button type="button" className={itemClass} onClick={wrap(onOpen)}>
         {entry.isDirectory ? <FolderOpen className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
@@ -149,7 +149,7 @@ function FileContextMenu({
   return (
     <details ref={detailsRef} className="relative" onClick={(e) => e.stopPropagation()}>
       <summary
-        className="list-none flex cursor-pointer items-center justify-center rounded-lg p-1 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-muted-foreground dark:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-zinc-300 [&::-webkit-details-marker]:hidden"
+        className="list-none flex cursor-pointer items-center justify-center rounded-lg p-1 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-muted-foreground dark:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-muted-foreground [&::-webkit-details-marker]:hidden"
         aria-label="File actions"
       >
         <MoreHorizontal className="h-4 w-4" />

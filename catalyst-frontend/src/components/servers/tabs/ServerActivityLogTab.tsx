@@ -80,7 +80,7 @@ export default function ServerActivityLogTab({ serverId }: Props) {
                 className="flex flex-wrap items-start gap-3 rounded-lg border border-border bg-surface-2 px-4 py-3 transition-all duration-300 hover:border-primary/20"
               >
                 <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-500/10">
-                  <User className="h-3.5 w-3.5 text-primary-500" />
+                  <User className="h-3.5 w-3.5 text-primary" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">

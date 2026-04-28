@@ -82,7 +82,7 @@ export default function ServerDatabasesTab({
         {canManageDatabases ? (
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <select
-              className="rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:focus:border-primary-400"
+              className="rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
               value={databaseHostId}
               onChange={(event) => onDatabaseHostIdChange(event.target.value)}
               disabled={disabled}
@@ -95,7 +95,7 @@ export default function ServerDatabasesTab({
               ))}
             </select>
             <input
-              className="rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:focus:border-primary-400"
+              className="rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
               value={databaseName}
               onChange={(event) => onDatabaseNameChange(event.target.value)}
               placeholder="database_name"
@@ -103,7 +103,7 @@ export default function ServerDatabasesTab({
             />
             <button
               type="button"
-              className="rounded-md bg-primary-600 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+              className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
               onClick={onCreate}
               disabled={
                 !databaseHostId || createPending || disabled || databaseLimitReached

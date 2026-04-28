@@ -54,9 +54,9 @@ function DeleteServerDialog({ serverId, serverName, disabled = false, open: cont
       )}
       {open ? (
         <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-xl">
-            <div className="text-lg font-semibold text-foreground dark:text-white">Delete server</div>
+            <div className="text-lg font-semibold text-foreground">Delete server</div>
             <p className="mt-2 text-sm text-muted-foreground">
               Are you sure you want to delete <span className="font-semibold text-foreground">{serverName}</span>? This
               action cannot be undone.

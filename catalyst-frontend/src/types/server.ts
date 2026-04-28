@@ -141,6 +141,7 @@ export interface CreateServerPayload {
   allocatedMemoryMb: number;
   allocatedCpuCores: number;
   allocatedDiskMb: number;
+  allocatedSwapMb?: number;
   backupAllocationMb?: number;
   databaseAllocation?: number;
   primaryPort: number;

@@ -141,7 +141,7 @@ function TemplateRow({
                 : [...prev, template.id],
             )
           }
-          className="h-4 w-4 flex-shrink-0 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+          className="h-4 w-4 flex-shrink-0 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
         />
       )}
 
@@ -161,7 +161,7 @@ function TemplateRow({
         <div className="flex items-center gap-2.5">
           <Link
             to={`/admin/templates/${template.id}`}
-            className="truncate font-semibold text-foreground transition-colors hover:text-primary dark:text-zinc-100 dark:hover:text-primary-400"
+            className="truncate font-semibold text-foreground transition-colors hover:text-primary dark:hover:text-primary-400"
           >
             {template.name}
           </Link>
@@ -187,14 +187,14 @@ function TemplateRow({
       {/* Resource stats — visible on larger screens */}
       <div className="hidden items-center gap-4 lg:flex">
         <div className="text-right">
-          <div className="flex items-center gap-1 text-xs font-medium text-foreground dark:text-zinc-100">
+          <div className="flex items-center gap-1 text-xs font-medium text-foreground">
             <Cpu className="h-3 w-3 text-muted-foreground" />
             {template.allocatedCpuCores}
           </div>
           <div className="text-[11px] text-muted-foreground">cores</div>
         </div>
         <div className="text-right">
-          <div className="flex items-center gap-1 text-xs font-medium text-foreground dark:text-zinc-100">
+          <div className="flex items-center gap-1 text-xs font-medium text-foreground">
             <HardDrive className="h-3 w-3 text-muted-foreground" />
             {template.allocatedMemoryMb >= 1024
               ? `${(template.allocatedMemoryMb / 1024).toFixed(1)} GB`
@@ -242,7 +242,7 @@ function TemplateRow({
               <DropdownMenuItem
                 onClick={() => handleBulkDelete([template.id], template.name)}
                 disabled={deleteMutation.isPending}
-                className="gap-2 text-xs text-rose-600 dark:text-rose-400"
+                className="gap-2 text-xs text-destructive dark:text-destructive"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 Delete
@@ -262,7 +262,7 @@ function NestSectionHeader({ nest, count }: { nest: Nest | null; count: number }
       <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
         <div className="flex items-center gap-2">
           {nest.icon && <img src={nest.icon} className="h-4 w-4 rounded" alt="" />}
-          <h3 className="text-sm font-semibold text-foreground dark:text-zinc-100">{nest.name}</h3>
+          <h3 className="text-sm font-semibold text-foreground">{nest.name}</h3>
           <Badge variant="secondary" className="text-[10px]">
             {count} template{count !== 1 ? 's' : ''}
           </Badge>
@@ -280,7 +280,7 @@ function NestSectionHeader({ nest, count }: { nest: Nest | null; count: number }
     <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
       <div className="flex items-center gap-2">
         <FolderOpen className="h-4 w-4 text-muted-foreground" />
-        <h3 className="text-sm font-semibold text-foreground dark:text-zinc-100">Ungrouped</h3>
+        <h3 className="text-sm font-semibold text-foreground">Ungrouped</h3>
         <Badge variant="secondary" className="text-[10px]">
           {count} template{count !== 1 ? 's' : ''}
         </Badge>
@@ -492,9 +492,9 @@ function TemplatesPage({ hideHeader }: Props) {
                 <div className="flex items-center gap-3">
                   <div className="relative">
                     <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-amber-500 to-rose-500 opacity-20 blur-sm" />
-                    <FileCode className="relative h-7 w-7 text-amber-600 dark:text-amber-400" />
+                    <FileCode className="relative h-7 w-7 text-warning dark:text-warning" />
                   </div>
-                  <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+                  <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
                     Templates
                   </h1>
                 </div>
@@ -513,7 +513,7 @@ function TemplatesPage({ hideHeader }: Props) {
                 ) : (
                   <>
                     <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
-                      <span className="h-2 w-2 rounded-full bg-zinc-400" />
+                      <span className="h-2 w-2 rounded-full bg-muted-foreground" />
                       {templates.length} templates
                     </Badge>
                     {authors.length > 0 && (
@@ -532,7 +532,7 @@ function TemplatesPage({ hideHeader }: Props) {
                 )}
                 {canWrite && (
                   <button
-                    className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                    className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:text-foreground dark:hover:border-primary/30"
                     onClick={() => setNestsModalOpen(true)}
                   >
                     <FolderOpen className="mr-1.5 inline h-4 w-4" />
@@ -831,7 +831,7 @@ function TemplatesPage({ hideHeader }: Props) {
                                   return Array.from(new Set([...prev, ...groupIds]));
                                 })
                               }
-                              className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+                              className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                             />
                             <span className="text-xs font-medium text-muted-foreground">
                               Select all in section
@@ -906,7 +906,7 @@ function TemplatesPage({ hideHeader }: Props) {
                               return Array.from(new Set([...prev, ...filteredIds]));
                             })
                           }
-                          className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+                          className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                         />
                         <span className="text-xs font-medium text-muted-foreground">
                           Select all

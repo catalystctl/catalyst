@@ -39,8 +39,8 @@ function LocationSectionHeader({ location, count }: { location: Location | null;
     return (
       <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
         <div className="flex items-center gap-2">
-          <MapPin className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          <h3 className="text-sm font-semibold text-foreground dark:text-zinc-100">
+          <MapPin className="h-4 w-4 text-success dark:text-success" />
+          <h3 className="text-sm font-semibold text-foreground">
             {location.name}
           </h3>
           <Badge variant="secondary" className="text-[10px]">
@@ -60,7 +60,7 @@ function LocationSectionHeader({ location, count }: { location: Location | null;
     <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
       <div className="flex items-center gap-2">
         <MapPin className="h-4 w-4 text-muted-foreground" />
-        <h3 className="text-sm font-semibold text-foreground dark:text-zinc-100">Unassigned</h3>
+        <h3 className="text-sm font-semibold text-foreground">Unassigned</h3>
         <Badge variant="secondary" className="text-[10px]">
           {count} node{count !== 1 ? 's' : ''}
         </Badge>
@@ -193,9 +193,9 @@ function NodesPage({ hideHeader }: Props) {
                 <div className="flex items-center gap-3">
                   <div className="relative">
                     <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 opacity-20 blur-sm" />
-                    <Server className="relative h-7 w-7 text-emerald-600 dark:text-emerald-400" />
+                    <Server className="relative h-7 w-7 text-success dark:text-success" />
                   </div>
-                  <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+                  <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
                     Nodes
                   </h1>
                 </div>
@@ -214,16 +214,16 @@ function NodesPage({ hideHeader }: Props) {
                 ) : (
                   <>
                     <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
-                      <span className="h-2 w-2 rounded-full bg-zinc-400" />
+                      <span className="h-2 w-2 rounded-full bg-muted-foreground" />
                       {nodes.length} nodes
                     </Badge>
                     <Badge variant="success" className="h-8 gap-1.5 px-3 text-xs">
-                      <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                      <span className="h-2 w-2 rounded-full bg-success" />
                       {onlineCount} online
                     </Badge>
                     {offlineCount > 0 && (
                       <Badge variant="destructive" className="h-8 gap-1.5 px-3 text-xs">
-                        <span className="h-2 w-2 rounded-full bg-rose-400" />
+                        <span className="h-2 w-2 rounded-full bg-destructive/60" />
                         {offlineCount} offline
                       </Badge>
                     )}
@@ -237,7 +237,7 @@ function NodesPage({ hideHeader }: Props) {
                 )}
                 {canWrite && (
                   <button
-                    className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                    className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:text-foreground dark:hover:border-primary/30"
                     onClick={() => setLocationsModalOpen(true)}
                   >
                     <MapPin className="mr-1.5 inline h-4 w-4" />

@@ -54,24 +54,24 @@ function TemplateProviderEditor({
 
   return (
     <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
-      <div className="text-sm font-semibold text-foreground dark:text-zinc-200">
+      <div className="text-sm font-semibold text-foreground dark:text-foreground">
         Mod &amp; Plugin Providers
       </div>
 
       {/* ── Mod Manager ── */}
-      <div className="space-y-2 rounded-lg border border-border bg-white p-3 transition-all duration-300 dark:border-border dark:bg-zinc-950/40">
+      <div className="space-y-2 rounded-lg border border-border bg-card p-3 transition-all duration-300 dark:border-border dark:bg-surface-0/40">
         <button
           type="button"
           onClick={() => onModManagerEnabledChange(!modManagerEnabled)}
           className={`${pillBase} ${
             modManagerEnabled
-              ? 'border-primary-500 bg-primary-600 text-white shadow-sm shadow-primary-500/25'
-              : 'border-border bg-white text-muted-foreground hover:border-primary-500 hover:text-foreground dark:border-border dark:bg-surface-1 dark:text-zinc-300'
+              ? 'border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/25'
+              : 'border-border bg-card text-muted-foreground hover:border-primary hover:text-foreground dark:border-border dark:bg-surface-1 dark:text-foreground'
           }`}
         >
           <span
             className={`inline-block h-1.5 w-1.5 rounded-full ${
-              modManagerEnabled ? 'bg-white' : 'bg-muted-foreground dark:bg-zinc-500'
+              modManagerEnabled ? 'bg-card' : 'bg-muted-foreground dark:bg-muted-foreground'
             }`}
           />
           Mod Manager
@@ -88,8 +88,8 @@ function TemplateProviderEditor({
                   onClick={() => toggleModProvider(id)}
                   className={`${pillBase} ${
                     active
-                      ? 'border-primary-400 bg-primary-50 text-primary-700 dark:border-primary-500/40 dark:bg-primary-500/10 dark:text-primary-300'
-                      : 'border-border bg-white text-muted-foreground hover:border-primary-500 hover:text-foreground dark:border-border dark:bg-surface-1 dark:text-zinc-400'
+                      ? 'border-primary-400 bg-primary-50 text-primary-700 dark:border-primary/40 dark:bg-primary-500/10 dark:text-primary-300'
+                      : 'border-border bg-card text-muted-foreground hover:border-primary hover:text-foreground dark:border-border dark:bg-surface-1 dark:text-muted-foreground'
                   }`}
                 >
                   {id}
@@ -106,19 +106,19 @@ function TemplateProviderEditor({
       </div>
 
       {/* ── Plugin Manager ── */}
-      <div className="space-y-2 rounded-lg border border-border bg-white p-3 transition-all duration-300 dark:border-border dark:bg-zinc-950/40">
+      <div className="space-y-2 rounded-lg border border-border bg-card p-3 transition-all duration-300 dark:border-border dark:bg-surface-0/40">
         <button
           type="button"
           onClick={() => onPluginManagerEnabledChange(!pluginManagerEnabled)}
           className={`${pillBase} ${
             pluginManagerEnabled
-              ? 'border-primary-500 bg-primary-600 text-white shadow-sm shadow-primary-500/25'
-              : 'border-border bg-white text-muted-foreground hover:border-primary-500 hover:text-foreground dark:border-border dark:bg-surface-1 dark:text-zinc-300'
+              ? 'border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/25'
+              : 'border-border bg-card text-muted-foreground hover:border-primary hover:text-foreground dark:border-border dark:bg-surface-1 dark:text-foreground'
           }`}
         >
           <span
             className={`inline-block h-1.5 w-1.5 rounded-full ${
-              pluginManagerEnabled ? 'bg-white' : 'bg-muted-foreground dark:bg-zinc-500'
+              pluginManagerEnabled ? 'bg-card' : 'bg-muted-foreground dark:bg-muted-foreground'
             }`}
           />
           Plugin Manager
@@ -135,8 +135,8 @@ function TemplateProviderEditor({
                   onClick={() => togglePluginProvider(id)}
                   className={`${pillBase} ${
                     active
-                      ? 'border-primary-400 bg-primary-50 text-primary-700 dark:border-primary-500/40 dark:bg-primary-500/10 dark:text-primary-300'
-                      : 'border-border bg-white text-muted-foreground hover:border-primary-500 hover:text-foreground dark:border-border dark:bg-surface-1 dark:text-zinc-400'
+                      ? 'border-primary-400 bg-primary-50 text-primary-700 dark:border-primary/40 dark:bg-primary-500/10 dark:text-primary-300'
+                      : 'border-border bg-card text-muted-foreground hover:border-primary hover:text-foreground dark:border-border dark:bg-surface-1 dark:text-muted-foreground'
                   }`}
                 >
                   {id}

@@ -145,7 +145,7 @@ function BackupSection({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-foreground dark:text-zinc-100">Backups</h2>
+          <h2 className="text-lg font-semibold text-foreground">Backups</h2>
           <p className="text-xs text-muted-foreground dark:text-muted-foreground">
             Create, restore, and manage server backups.
           </p>
@@ -156,33 +156,33 @@ function BackupSection({
         <CreateBackupModal serverId={serverId} disabled={isSuspended || backupBlocked || !canWrite} />
       </div>
       {backupAllocationMb <= 0 ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700 shadow-surface-light dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+        <div className="rounded-xl border border-warning/20 bg-warning/5 px-4 py-3 text-xs text-warning shadow-surface-light dark:border-warning/30 dark:bg-warning/50/10 dark:text-warning">
           Provider backup allocation is not available for this server. Configure your own S3 or SFTP
           storage to enable backups.
         </div>
       ) : null}
 
-      <div className="rounded-xl border border-border bg-white px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
+      <div className="rounded-xl border border-border bg-card px-4 py-4 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold text-foreground dark:text-zinc-100">Backup settings</div>
+            <div className="text-sm font-semibold text-foreground">Backup settings</div>
             <div className="text-xs text-muted-foreground dark:text-muted-foreground">
               Storage mode and retention rules.
             </div>
             {backupBlocked ? (
-              <div className="text-xs text-amber-600 dark:text-amber-300">
+              <div className="text-xs text-warning dark:text-warning">
                 Local backups disabled. Configure S3 or SFTP to enable backups.
               </div>
             ) : null}
           </div>
         </div>
-          <div className="mt-3 grid grid-cols-1 gap-3 text-xs text-muted-foreground dark:text-zinc-300 sm:grid-cols-3">
+          <div className="mt-3 grid grid-cols-1 gap-3 text-xs text-muted-foreground sm:grid-cols-3">
             <div>
               <label className="text-[11px] uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                 Storage mode
               </label>
               <select
-                className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1"
                 value={storageMode}
                 onChange={(event) => setStorageMode(event.target.value as BackupStorageMode)}
                 disabled={isSuspended || !canWrite}
@@ -198,7 +198,7 @@ function BackupSection({
               Keep last N
             </label>
             <input
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
+              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1"
               type="number"
               min={0}
               max={1000}
@@ -212,7 +212,7 @@ function BackupSection({
               Max age (days)
             </label>
             <input
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
+              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1"
               type="number"
               min={0}
               max={3650}
@@ -223,13 +223,13 @@ function BackupSection({
           </div>
         </div>
         {storageMode === 's3' ? (
-          <div className="mt-4 grid grid-cols-1 gap-3 text-xs text-muted-foreground dark:text-zinc-300 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-3 text-xs text-muted-foreground sm:grid-cols-2">
             <label className="block">
               <span className="text-[11px] uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                 Bucket
               </span>
               <input
-                className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1"
                 value={s3Bucket}
                 onChange={(event) => setS3Bucket(event.target.value)}
                 placeholder="catalyst-backups"
@@ -241,7 +241,7 @@ function BackupSection({
                 Region
               </span>
               <input
-                className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1"
                 value={s3Region}
                 onChange={(event) => setS3Region(event.target.value)}
                 placeholder="us-east-1"
@@ -253,7 +253,7 @@ function BackupSection({
                 Endpoint (optional)
               </span>
               <input
-                className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1"
                 value={s3Endpoint}
                 onChange={(event) => setS3Endpoint(event.target.value)}
                 placeholder="https://s3.amazonaws.com"
@@ -265,7 +265,7 @@ function BackupSection({
                 Access key ID
               </span>
               <input
-                className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1"
                 value={s3AccessKeyId}
                 onChange={(event) => setS3AccessKeyId(event.target.value)}
                 placeholder="AKIA..."
@@ -278,7 +278,7 @@ function BackupSection({
               </span>
               <input
                 type="password"
-                className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1"
                 value={s3SecretAccessKey}
                 onChange={(event) => setS3SecretAccessKey(event.target.value)}
                 placeholder="••••••••"
@@ -288,7 +288,7 @@ function BackupSection({
             <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-muted-foreground">
               <input
                 type="checkbox"
-                className="h-4 w-4 rounded border-border text-primary-600 focus:ring-primary-500"
+                className="h-4 w-4 rounded border-border text-primary-600 focus:ring-primary"
                 checked={s3PathStyle}
                 onChange={(event) => setS3PathStyle(event.target.checked)}
                 disabled={isSuspended || !canWrite}
@@ -298,13 +298,13 @@ function BackupSection({
           </div>
         ) : null}
         {storageMode === 'sftp' ? (
-          <div className="mt-4 grid grid-cols-1 gap-3 text-xs text-muted-foreground dark:text-zinc-300 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-3 text-xs text-muted-foreground sm:grid-cols-2">
             <label className="block">
               <span className="text-[11px] uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
                 Host
               </span>
               <input
-                className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1"
                 value={sftpHost}
                 onChange={(event) => setSftpHost(event.target.value)}
                 placeholder="sftp.example.com"
@@ -316,7 +316,7 @@ function BackupSection({
                 Port
               </span>
               <input
-                className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1"
                 value={sftpPort}
                 onChange={(event) => setSftpPort(event.target.value)}
                 type="number"
@@ -330,7 +330,7 @@ function BackupSection({
                 Username
               </span>
               <input
-                className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1"
                 value={sftpUsername}
                 onChange={(event) => setSftpUsername(event.target.value)}
                 placeholder="backup-user"
@@ -343,7 +343,7 @@ function BackupSection({
               </span>
               <input
                 type="password"
-                className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1"
                 value={sftpPassword}
                 onChange={(event) => setSftpPassword(event.target.value)}
                 placeholder="••••••••"
@@ -355,7 +355,7 @@ function BackupSection({
                 Private key (optional)
               </span>
               <textarea
-                className="mt-1 min-h-[88px] w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
+                className="mt-1 min-h-[88px] w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1"
                 value={sftpPrivateKey}
                 onChange={(event) => setSftpPrivateKey(event.target.value)}
                 placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
@@ -368,7 +368,7 @@ function BackupSection({
               </span>
               <input
                 type="password"
-                className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1"
                 value={sftpPrivateKeyPassphrase}
                 onChange={(event) => setSftpPrivateKeyPassphrase(event.target.value)}
                 placeholder="••••••••"
@@ -380,7 +380,7 @@ function BackupSection({
                 Base path
               </span>
               <input
-                className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1"
                 value={sftpBasePath}
                 onChange={(event) => setSftpBasePath(event.target.value)}
                 placeholder="/backups"
@@ -392,7 +392,7 @@ function BackupSection({
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
           <button
             type="button"
-            className="rounded-md bg-primary-600 px-3 py-2 font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+            className="rounded-md bg-primary px-3 py-2 font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
             onClick={async () => {
               try {
                 const parsedCount = retentionCount.trim() === '' ? undefined : Number(retentionCount);
@@ -500,7 +500,7 @@ function BackupSection({
       {isLoading ? (
         <LoadingSpinner />
       ) : isError ? (
-        <div className="rounded-xl border border-rose-800 bg-rose-950/40 px-4 py-4 text-sm text-rose-200">
+        <div className="rounded-xl border border-destructive bg-destructive/40 px-4 py-4 text-sm text-destructive-foreground">
           Unable to load backups.
         </div>
       ) : backups.length ? (
@@ -509,7 +509,7 @@ function BackupSection({
             <span>{data?.total ?? backups.length} backups</span>
             <div className="flex items-center gap-2">
               <button
-                className="rounded-md border border-border dark:border-border px-2 py-1 text-xs text-muted-foreground dark:text-zinc-200 hover:border-border dark:border-border disabled:opacity-60"
+                className="rounded-md border border-border dark:border-border px-2 py-1 text-xs text-muted-foreground hover:border-border dark:border-border disabled:opacity-60"
                 onClick={() => setPage((prev) => Math.max(1, prev - 1))}
                 disabled={page === 1}
               >
@@ -519,7 +519,7 @@ function BackupSection({
                 Page {page} of {totalPages}
               </span>
               <button
-                className="rounded-md border border-border dark:border-border px-2 py-1 text-xs text-muted-foreground dark:text-zinc-200 hover:border-border dark:border-border disabled:opacity-60"
+                className="rounded-md border border-border dark:border-border px-2 py-1 text-xs text-muted-foreground hover:border-border dark:border-border disabled:opacity-60"
                 onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
                 disabled={page >= totalPages}
               >
@@ -540,7 +540,7 @@ function BackupSection({
             />
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed border-border dark:border-border bg-white dark:bg-surface-1/50 px-6 py-10 text-center text-sm text-muted-foreground dark:text-muted-foreground">
+        <div className="rounded-lg border border-dashed border-border dark:border-border bg-card dark:bg-surface-1/50 px-6 py-10 text-center text-sm text-muted-foreground dark:text-muted-foreground">
           No backups yet. Create a backup to protect your server data.
         </div>
       )}

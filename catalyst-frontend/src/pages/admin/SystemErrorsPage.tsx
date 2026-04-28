@@ -53,16 +53,16 @@ const itemVariants: Variants = {
 
 // ── Level Color Helpers ──
 function levelColor(level: string) {
-  if (level === 'critical') return 'border-rose-400/40 text-rose-700 dark:border-rose-500/30 dark:text-rose-400';
+  if (level === 'critical') return 'border-destructive/40 text-destructive dark:border-destructive/30 dark:text-destructive';
   if (level === 'error') return 'border-orange-400/40 text-orange-700 dark:border-orange-500/30 dark:text-orange-400';
-  if (level === 'warn') return 'border-amber-400/40 text-amber-700 dark:border-amber-500/30 dark:text-amber-400';
+  if (level === 'warn') return 'border-warning/40 text-warning dark:border-warning/30 dark:text-warning';
   return 'border-border text-muted-foreground';
 }
 
 function levelBg(level: string) {
-  if (level === 'critical') return 'bg-rose-100 dark:bg-rose-900/20';
+  if (level === 'critical') return 'bg-destructive/10 dark:bg-destructive/20';
   if (level === 'error') return 'bg-orange-100 dark:bg-orange-900/20';
-  if (level === 'warn') return 'bg-amber-100 dark:bg-amber-900/20';
+  if (level === 'warn') return 'bg-warning/10 dark:bg-warning/20';
   return 'bg-surface-2/50';
 }
 
@@ -172,7 +172,7 @@ function ErrorDetailModal({
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -187,7 +187,7 @@ function ErrorDetailModal({
                   <Bug className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-base font-semibold text-foreground dark:text-white">
+                  <h2 className="text-base font-semibold text-foreground ">
                     {error.component}
                   </h2>
                   <p className="text-xs text-muted-foreground truncate">{error.id}</p>
@@ -214,7 +214,7 @@ function ErrorDetailModal({
               </div>
               <div className="space-y-1">
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status</span>
-                <Badge variant={error.resolved ? 'outline' : 'secondary'} className={`text-[11px] ${error.resolved ? 'border-emerald-400/40 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400' : ''}`}>
+                <Badge variant={error.resolved ? 'outline' : 'secondary'} className={`text-[11px] ${error.resolved ? 'border-success/40 text-success dark:border-success/30 dark:text-success' : ''}`}>
                   {error.resolved ? 'Resolved' : 'Unresolved'}
                 </Badge>
               </div>
@@ -235,7 +235,7 @@ function ErrorDetailModal({
             {/* Timestamp */}
             <div className="space-y-1">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Timestamp</span>
-              <div className="flex items-center gap-2 text-sm text-foreground dark:text-zinc-100">
+              <div className="flex items-center gap-2 text-sm text-foreground dark:text-foreground">
                 <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                 {new Date(error.createdAt).toLocaleString()}
               </div>
@@ -244,7 +244,7 @@ function ErrorDetailModal({
             {/* Message */}
             <div className="space-y-1">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Message</span>
-              <div className="rounded-lg border border-border/50 bg-surface-2/40 px-3 py-2 text-sm text-foreground dark:text-zinc-100">
+              <div className="rounded-lg border border-border/50 bg-surface-2/40 px-3 py-2 text-sm text-foreground dark:text-foreground">
                 {error.message}
               </div>
             </div>
@@ -253,7 +253,7 @@ function ErrorDetailModal({
             {error.stack && (
               <div className="space-y-1">
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Stack Trace</span>
-                <pre className="max-h-64 overflow-auto rounded-lg border border-border/50 bg-surface-0 p-3 text-[11px] font-mono leading-relaxed text-foreground dark:text-zinc-300">
+                <pre className="max-h-64 overflow-auto rounded-lg border border-border/50 bg-surface-0 p-3 text-[11px] font-mono leading-relaxed text-foreground dark:text-foreground">
                   {error.stack}
                 </pre>
               </div>
@@ -276,7 +276,7 @@ function ErrorDetailModal({
                     <tbody className="divide-y divide-border/30">
                       {metadataEntries.map(([key, value]) => (
                         <tr key={key} className="transition-colors hover:bg-surface-2/60">
-                          <td className="px-3 py-2 font-mono text-foreground dark:text-zinc-300">{key}</td>
+                          <td className="px-3 py-2 font-mono text-foreground dark:text-foreground">{key}</td>
                           <td className="max-w-xs truncate px-3 py-2 text-muted-foreground" title={JSON.stringify(value)}>
                             {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                           </td>
@@ -346,7 +346,7 @@ function ErrorRow({
             {levelLabel(error.level)}
           </Badge>
         </div>
-        <div className="col-span-2 truncate font-medium text-foreground dark:text-zinc-100">
+        <div className="col-span-2 truncate font-medium text-foreground dark:text-foreground">
           {error.component}
         </div>
         <div className="col-span-4 truncate text-muted-foreground">
@@ -360,7 +360,7 @@ function ErrorRow({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 gap-1 text-[11px] text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
+              className="h-7 gap-1 text-[11px] text-success hover:text-success dark:text-success dark:hover:text-success"
               onClick={(e) => {
                 e.stopPropagation();
                 onResolve();
@@ -379,7 +379,7 @@ function ErrorRow({
             }}
             title={isCopied ? 'Copied!' : 'Copy for AI'}
           >
-            {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+            {isCopied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
           </button>
           <button
             className="rounded-md p-1 text-muted-foreground opacity-0 transition-colors hover:bg-primary/5 hover:text-primary sm:group-hover:opacity-100"
@@ -399,7 +399,7 @@ function ErrorRow({
               <Badge variant="outline" className={`text-[10px] ${levelColor(error.level)}`}>
                 {levelLabel(error.level)}
               </Badge>
-              <span className="truncate font-medium text-foreground dark:text-zinc-100">
+              <span className="truncate font-medium text-foreground dark:text-foreground">
                 {error.component}
               </span>
             </div>
@@ -419,7 +419,7 @@ function ErrorRow({
               }}
               title={isCopied ? 'Copied!' : 'Copy for AI'}
             >
-              {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+              {isCopied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
             </button>
             <button
               className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
@@ -435,7 +435,7 @@ function ErrorRow({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 gap-1 text-[11px] text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
+              className="h-7 gap-1 text-[11px] text-success hover:text-success dark:text-success dark:hover:text-success"
               onClick={(e) => {
                 e.stopPropagation();
                 onResolve();
@@ -523,9 +523,9 @@ function SystemErrorsPage() {
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-red-500 to-orange-500 opacity-20 blur-sm" />
-                <Bug className="relative h-7 w-7 text-red-600 dark:text-red-400" />
+                <Bug className="relative h-7 w-7 text-destructive dark:text-destructive" />
               </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
                 System Errors
               </h1>
             </div>
@@ -535,10 +535,10 @@ function SystemErrorsPage() {
           </div>
           <div className="flex items-center gap-2">
             {isLive && (
-              <Badge variant="outline" className="gap-1.5 border-emerald-400/40 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400 text-xs">
+              <Badge variant="outline" className="gap-1.5 border-success/40 text-success dark:border-success/30 dark:text-success text-xs">
                 <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-success/50" />
                 </span>
                 Live
               </Badge>

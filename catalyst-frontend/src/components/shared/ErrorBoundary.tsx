@@ -36,7 +36,7 @@ class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex min-h-screen flex-col items-center justify-center bg-surface-2 px-4 text-center text-foreground transition-all duration-300 dark:bg-zinc-950 dark:text-zinc-100">
+        <div className="flex min-h-screen flex-col items-center justify-center bg-surface-2 px-4 text-center text-foreground transition-all duration-300 dark:bg-surface-0 dark:text-foreground">
           <h1 className="text-2xl font-semibold">Something went wrong</h1>
           <p className="mt-2 text-sm text-muted-foreground dark:text-muted-foreground">
             {this.state.message ?? 'Unexpected error encountered.'}
@@ -44,7 +44,7 @@ class ErrorBoundary extends Component<Props, State> {
           <button
             type="button"
             onClick={() => this.setState({ hasError: false, message: undefined })}
-            className="mt-4 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500"
+            className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all duration-300 hover:bg-primary/90"
           >
             Try again
           </button>

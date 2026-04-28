@@ -161,7 +161,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
               <Key className="h-4 w-4 text-primary-600 dark:text-primary-400" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-foreground dark:text-white">
+              <h2 className="text-lg font-semibold text-foreground dark:text-foreground">
                 {createdKey ? 'API Key Created' : 'Create API Key'}
               </h2>
               <p className="text-xs text-muted-foreground">
@@ -178,7 +178,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Name */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-foreground dark:text-zinc-100">Name *</label>
+                <label className="text-xs font-medium text-foreground dark:text-foreground">Name *</label>
                 <Input
                   type="text"
                   placeholder="e.g., Billing System Integration"
@@ -194,7 +194,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Shield className="h-4 w-4 text-primary-600 dark:text-primary-400" />
-                    <label className="text-xs font-medium text-foreground dark:text-zinc-100">Permissions</label>
+                    <label className="text-xs font-medium text-foreground dark:text-foreground">Permissions</label>
                   </div>
                   {selectedCount >= 0 && (
                     <Badge variant="outline" className="text-[10px]">
@@ -206,9 +206,9 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
                 {/* All permissions toggle */}
                 <div className="flex items-center justify-between rounded-lg border border-border bg-surface-2/50 px-4 py-3 dark:bg-surface-2/30">
                   <div className="flex items-center gap-2.5">
-                    <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    <ShieldCheck className="h-4 w-4 text-success dark:text-success" />
                     <div>
-                      <span className="text-sm font-medium text-foreground dark:text-zinc-100">
+                      <span className="text-sm font-medium text-foreground dark:text-foreground">
                         All my permissions
                       </span>
                       <p className="text-[11px] text-muted-foreground">
@@ -258,10 +258,10 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
                                   }}
                                   onChange={(e) => { e.stopPropagation(); selectCategoryAll(cat); }}
                                   onClick={(e) => e.stopPropagation()}
-                                  className="rounded border-border text-primary-600 focus:ring-primary-500 dark:border-zinc-600"
+                                  className="rounded border-border text-primary-600 focus:ring-primary dark:border-border"
                                 />
                                 <span className="flex-1">
-                                  <span className="text-sm font-medium text-foreground dark:text-zinc-100">{cat.label}</span>
+                                  <span className="text-sm font-medium text-foreground dark:text-foreground">{cat.label}</span>
                                   <span className="ml-2 text-[11px] text-muted-foreground">({cat.permissions.length})</span>
                                 </span>
                                 {expanded ? (
@@ -283,9 +283,9 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
                                         type="checkbox"
                                         checked={formData.permissions.includes(perm.value)}
                                         onChange={() => togglePermission(perm.value)}
-                                        className="rounded border-border text-primary-600 focus:ring-primary-500 dark:border-zinc-600"
+                                        className="rounded border-border text-primary-600 focus:ring-primary dark:border-border"
                                       />
-                                      <span className="text-foreground dark:text-zinc-200">{perm.label}</span>
+                                      <span className="text-foreground dark:text-foreground">{perm.label}</span>
                                       <code className="ml-auto text-[10px] text-muted-foreground">{perm.value}</code>
                                     </label>
                                   ))}
@@ -300,7 +300,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
                 )}
 
                 {!formData.allPermissions && selectedCount === 0 && (
-                  <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                  <p className="text-[11px] text-warning dark:text-warning">
                     ⚠ Select at least one permission above
                   </p>
                 )}
@@ -308,11 +308,11 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
 
               {/* Expiration */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-foreground dark:text-zinc-100">Expiration</label>
+                <label className="text-xs font-medium text-foreground dark:text-foreground">Expiration</label>
                 <select
                   value={formData.expiresIn}
                   onChange={(e) => setFormData({ ...formData, expiresIn: Number(e.target.value) })}
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-colors focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground"
                 >
                   {expirationOptions.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -322,7 +322,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
 
               {/* Rate Limit */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-foreground dark:text-zinc-100">Rate Limit</label>
+                <label className="text-xs font-medium text-foreground dark:text-foreground">Rate Limit</label>
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
@@ -348,21 +348,21 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
           ) : (
             <div className="space-y-4">
               {/* Warning */}
-              <div className="flex items-start gap-2.5 rounded-lg border border-amber-300/40 bg-amber-50 p-3 dark:border-amber-500/20 dark:bg-amber-900/15">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                <p className="text-sm text-amber-800 dark:text-amber-200">
+              <div className="flex items-start gap-2.5 rounded-lg border border-warning/30/40 bg-warning/5 p-3 dark:border-warning/20 dark:bg-warning/15">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning dark:text-warning" />
+                <p className="text-sm text-warning dark:text-warning">
                   Make sure to copy your API key now. You won&apos;t be able to see it again!
                 </p>
               </div>
 
               {/* Key display */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-foreground dark:text-zinc-100">Your API Key</label>
+                <label className="text-xs font-medium text-foreground dark:text-foreground">Your API Key</label>
                 <div className="flex gap-2">
                   <input
                     readOnly
                     value={createdKey}
-                    className="flex-1 rounded-lg border border-border bg-white px-3 py-2 font-mono text-sm text-foreground focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-100"
+                    className="flex-1 rounded-lg border border-border bg-card px-3 py-2 font-mono text-sm text-foreground focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground"
                     onFocus={(e) => e.target.select()}
                   />
                   <button
@@ -370,7 +370,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
                     className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:border-border"
                   >
                     {copied ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <CheckCircle2 className="h-4 w-4 text-success" />
                     ) : (
                       <Copy className="h-4 w-4" />
                     )}
@@ -380,8 +380,8 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
 
               {/* Usage example */}
               <div className="rounded-lg border border-border/50 bg-surface-2/50 p-4 dark:bg-surface-2/30">
-                <h4 className="mb-2 text-xs font-semibold text-foreground dark:text-zinc-100">Usage Example</h4>
-                <pre className="overflow-x-auto text-xs text-foreground dark:text-zinc-300">
+                <h4 className="mb-2 text-xs font-semibold text-foreground dark:text-foreground">Usage Example</h4>
+                <pre className="overflow-x-auto text-xs text-foreground dark:text-foreground">
                   <code>{`curl -H "Authorization: Bearer ${createdKey}" \\
   ${window.location.origin}/api/servers`}</code>
                 </pre>

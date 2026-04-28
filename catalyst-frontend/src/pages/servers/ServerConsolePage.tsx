@@ -358,7 +358,7 @@ function ServerConsolePage() {
             />
             <button
               type="submit"
-              className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!canSend || !command.trim()}
             >
               Send

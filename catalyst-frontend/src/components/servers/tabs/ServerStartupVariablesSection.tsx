@@ -157,7 +157,7 @@ export default function ServerStartupVariablesSection({
       'w-full rounded-md border bg-card px-2.5 py-1.5 text-xs text-foreground transition-all duration-300 focus:outline-none ' +
       (error
         ? 'border-danger focus:border-danger'
-        : 'border-border focus:border-primary-500 dark:focus:border-primary-400');
+        : 'border-border focus:border-primary');
 
     if (variable.input === 'checkbox') {
       const checked = value === 'true' || value === '1' || value === 'on';
@@ -170,7 +170,7 @@ export default function ServerStartupVariablesSection({
             onChange={(e) => handleChange(variable.name, e.target.checked ? 'true' : 'false')}
             disabled={disabled}
           />
-          <div className="h-5 w-10 rounded-full bg-surface-3 transition peer-checked:bg-primary-500 dark:bg-surface-2" />
+          <div className="h-5 w-10 rounded-full bg-surface-3 transition peer-checked:bg-primary dark:bg-surface-2" />
           <div className="pointer-events-none absolute left-0.5 h-4 w-4 rounded-full bg-card shadow transition peer-checked:translate-x-5" />
         </label>
       );
@@ -227,7 +227,7 @@ export default function ServerStartupVariablesSection({
             )}
             <button
               type="button"
-              className="flex items-center gap-1 rounded-md bg-primary-600 px-3 py-1.5 text-[10px] font-semibold text-white shadow-sm transition-colors hover:bg-primary-500 disabled:opacity-50"
+              className="flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
               onClick={handleSave}
               disabled={!hasChanges || isSuspended || updateMutation.isPending}
             >
@@ -282,7 +282,7 @@ export default function ServerStartupVariablesSection({
                       )}
                     </label>
                     {changed && !error && (
-                      <CheckCircle2 className="h-3 w-3 text-primary-500" />
+                      <CheckCircle2 className="h-3 w-3 text-primary" />
                     )}
                   </div>
                   {variable.description && (

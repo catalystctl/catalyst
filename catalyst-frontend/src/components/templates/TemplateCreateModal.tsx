@@ -539,7 +539,7 @@ function TemplateCreateModal() {
     <div>
       <div className="flex flex-wrap gap-2">
         <button
-          className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500"
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all duration-300 hover:bg-primary/90"
           onClick={() => {
             setImportError('');
             setStep(1);
@@ -549,7 +549,7 @@ function TemplateCreateModal() {
           New Template
         </button>
         <button
-          className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+          className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:text-foreground dark:hover:border-primary/30"
           onClick={() => {
             setImportUrl('');
             setImportUrlError('');
@@ -569,12 +569,12 @@ function TemplateCreateModal() {
       </div>
       {open ? (
         <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10 backdrop-blur-sm">
-            <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl transition-all duration-300 dark:border-border dark:bg-surface-1">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 py-10 backdrop-blur-sm">
+            <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl transition-all duration-300 dark:border-border dark:bg-surface-1">
               {/* ── Header ── */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5 dark:border-border">
                 <div>
-                  <h2 className="text-lg font-semibold text-foreground dark:text-white">
+                  <h2 className="text-lg font-semibold text-foreground">
                     {step === 1 ? 'New Template' : 'Create template'}
                   </h2>
                   <p className="text-xs text-muted-foreground dark:text-muted-foreground">
@@ -584,7 +584,7 @@ function TemplateCreateModal() {
                   </p>
                 </div>
                 <button
-                  className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                  className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary dark:border-border dark:text-foreground dark:hover:border-primary/30"
                   onClick={() => {
                     setOpen(false);
                     setImportError('');
@@ -601,7 +601,7 @@ function TemplateCreateModal() {
                   className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 1 ? 'bg-primary/10 text-primary-600 dark:text-primary-400' : 'text-muted-foreground'}`}
                 >
                   <span
-                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 1 ? 'bg-primary text-white' : 'bg-surface-3 text-muted-foreground'}`}
+                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 1 ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground'}`}
                   >
                     1
                   </span>
@@ -612,7 +612,7 @@ function TemplateCreateModal() {
                   className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 2 ? 'bg-primary/10 text-primary-600 dark:text-primary-400' : 'text-muted-foreground'}`}
                 >
                   <span
-                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 2 ? 'bg-primary text-white' : 'bg-surface-3 text-muted-foreground'}`}
+                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 2 ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground'}`}
                   >
                     2
                   </span>
@@ -624,13 +624,13 @@ function TemplateCreateModal() {
               {step === 1 && (
                 <div className="flex flex-col items-center px-6 py-10 text-center">
                   <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/10 to-rose-500/10 dark:from-amber-500/20 dark:to-rose-500/20">
-                    <FolderOpen className="h-7 w-7 text-amber-600 dark:text-amber-400" />
+                    <FolderOpen className="h-7 w-7 text-warning dark:text-warning" />
                   </div>
-                  <h3 className="text-base font-semibold text-foreground dark:text-white">
+                  <h3 className="text-base font-semibold text-foreground">
                     Assign this template to a nest?
                   </h3>
                   <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-                    <span className="font-medium text-foreground dark:text-zinc-200">Nests</span>{' '}
+                    <span className="font-medium text-foreground dark:text-foreground">Nests</span>{' '}
                     are categories that help you organize templates. For example, you might have a{' '}
                     <span className="font-medium">&ldquo;Minecraft&rdquo;</span> nest for all
                     Minecraft-related templates, or a{' '}
@@ -679,7 +679,7 @@ function TemplateCreateModal() {
                         No nests exist yet.{' '}
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1 font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+                          className="inline-flex items-center gap-1 font-medium text-primary-600 hover:text-primary dark:text-primary-400 dark:hover:text-primary-300"
                           onClick={() => {
                             setOpen(false);
                             setStep(1);
@@ -695,7 +695,7 @@ function TemplateCreateModal() {
 
                   <div className="mt-8 flex items-center gap-3">
                     <button
-                      className="flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                      className="flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:text-foreground dark:hover:border-primary/30"
                       onClick={() => setStep(2)}
                     >
                       <SkipForward className="h-3.5 w-3.5" />
@@ -703,7 +703,7 @@ function TemplateCreateModal() {
                     </button>
                     {nests.length > 0 && (
                       <button
-                        className="flex items-center gap-1.5 rounded-full bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500"
+                        className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all duration-300 hover:bg-primary/90"
                         onClick={() => setStep(2)}
                       >
                         Continue
@@ -717,9 +717,9 @@ function TemplateCreateModal() {
               {/* ── Step 2: Template Form ── */}
               {step === 2 && (
                 <>
-                  <div className="space-y-6 overflow-y-auto px-6 py-5 text-sm text-muted-foreground dark:text-zinc-300">
+                  <div className="space-y-6 overflow-y-auto px-6 py-5 text-sm text-muted-foreground dark:text-foreground">
                     {importError ? (
-                      <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-500 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
+                      <p className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive dark:border-destructive/30 dark:bg-destructive/50/10 dark:text-destructive">
                         {importError}
                       </p>
                     ) : null}
@@ -729,7 +729,7 @@ function TemplateCreateModal() {
                           Name
                         </span>
                         <input
-                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                           value={name}
                           onChange={(event) => setName(event.target.value)}
                           placeholder="Minecraft Paper"
@@ -740,7 +740,7 @@ function TemplateCreateModal() {
                           Author
                         </span>
                         <input
-                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                           value={author}
                           onChange={(event) => setAuthor(event.target.value)}
                           placeholder="Catalyst Maintainers"
@@ -751,7 +751,7 @@ function TemplateCreateModal() {
                           Version
                         </span>
                         <input
-                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                           value={version}
                           onChange={(event) => setVersion(event.target.value)}
                           placeholder="1.20.4"
@@ -762,7 +762,7 @@ function TemplateCreateModal() {
                           Icon URL (optional)
                         </span>
                         <input
-                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                           value={iconUrl}
                           onChange={(event) => setIconUrl(event.target.value)}
                           placeholder="https://example.com/icon.png"
@@ -773,13 +773,13 @@ function TemplateCreateModal() {
                           Import template (optional)
                         </span>
                         <input
-                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground transition-all duration-300 file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-muted-foreground hover:file:bg-surface-3 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:file:bg-surface-2 dark:file:text-muted-foreground dark:text-zinc-200 dark:hover:file:bg-surface-2"
+                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-muted-foreground hover:file:bg-surface-3 dark:border-border dark:bg-surface-1 dark:text-foreground dark:file:bg-surface-2 dark:file:text-muted-foreground dark:text-foreground dark:hover:file:bg-surface-2"
                           type="file"
                           accept="application/json,.json,application/x-yaml,.yaml,.yml"
                           onChange={handleImportFile}
                         />
                         {importError ? (
-                          <p className="text-xs text-rose-400">{importError}</p>
+                          <p className="text-xs text-destructive">{importError}</p>
                         ) : null}
                       </label>
                     </div>
@@ -788,7 +788,7 @@ function TemplateCreateModal() {
                         Description
                       </span>
                       <textarea
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                         rows={2}
                         value={description}
                         onChange={(event) => setDescription(event.target.value)}
@@ -796,7 +796,7 @@ function TemplateCreateModal() {
                       />
                     </label>
                     <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
-                      <div className="text-sm font-semibold text-foreground dark:text-zinc-200">
+                      <div className="text-sm font-semibold text-foreground dark:text-foreground">
                         Runtime images
                       </div>
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -805,7 +805,7 @@ function TemplateCreateModal() {
                             Container image
                           </span>
                           <input
-                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                             value={image}
                             onChange={(event) => setImage(event.target.value)}
                             placeholder="itzg/minecraft-server:latest"
@@ -816,7 +816,7 @@ function TemplateCreateModal() {
                             Default image (optional)
                           </span>
                           <input
-                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                             value={defaultImage}
                             onChange={(event) => setDefaultImage(event.target.value)}
                             placeholder="eclipse-temurin:21-jre"
@@ -827,20 +827,20 @@ function TemplateCreateModal() {
                             Install image (optional)
                           </span>
                           <input
-                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                             value={installImage}
                             onChange={(event) => setInstallImage(event.target.value)}
                             placeholder="alpine:3.19"
                           />
                         </label>
                       </div>
-                      <div className="space-y-3 rounded-lg border border-border bg-white p-3 transition-all duration-300 dark:border-border dark:bg-zinc-950/40">
+                      <div className="space-y-3 rounded-lg border border-border bg-card p-3 transition-all duration-300 dark:border-border dark:bg-surface-0/40">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="text-xs font-semibold text-muted-foreground dark:text-zinc-300">
+                          <div className="text-xs font-semibold text-muted-foreground dark:text-foreground">
                             Image variants
                           </div>
                           <button
-                            className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                            className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:text-foreground dark:hover:border-primary/30"
                             onClick={() =>
                               setImageOptions((prev) => [
                                 ...prev,
@@ -864,7 +864,7 @@ function TemplateCreateModal() {
                                     Name
                                   </span>
                                   <input
-                                    className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
+                                    className="w-full rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground"
                                     value={option.name}
                                     onChange={(event) =>
                                       setImageOptions((prev) =>
@@ -882,7 +882,7 @@ function TemplateCreateModal() {
                                     Label
                                   </span>
                                   <input
-                                    className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
+                                    className="w-full rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground"
                                     value={option.label ?? ''}
                                     onChange={(event) =>
                                       setImageOptions((prev) =>
@@ -900,7 +900,7 @@ function TemplateCreateModal() {
                                     Image
                                   </span>
                                   <input
-                                    className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
+                                    className="w-full rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground"
                                     value={option.image}
                                     onChange={(event) =>
                                       setImageOptions((prev) =>
@@ -914,7 +914,7 @@ function TemplateCreateModal() {
                                   />
                                 </label>
                                 <button
-                                  className="rounded-full border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-600 transition-all duration-300 hover:border-rose-400 dark:border-rose-500/30 dark:text-rose-300"
+                                  className="rounded-full border border-destructive/20 px-2 py-1 text-xs font-semibold text-destructive transition-all duration-300 hover:border-destructive dark:border-destructive/30 dark:text-destructive"
                                   onClick={() =>
                                     setImageOptions((prev) =>
                                       prev.filter((_, itemIndex) => itemIndex !== index),
@@ -935,7 +935,7 @@ function TemplateCreateModal() {
                       </div>
                     </div>
                     <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
-                      <div className="text-sm font-semibold text-foreground dark:text-zinc-200">
+                      <div className="text-sm font-semibold text-foreground dark:text-foreground">
                         Commands & config
                       </div>
                       <label className="block space-y-1">
@@ -943,7 +943,7 @@ function TemplateCreateModal() {
                           Config file path (optional)
                         </span>
                         <input
-                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                           value={configFile}
                           onChange={(event) => setConfigFile(event.target.value)}
                           placeholder="/config/server.properties"
@@ -954,7 +954,7 @@ function TemplateCreateModal() {
                           Config files (optional)
                         </span>
                         <input
-                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                           value={configFiles.join(', ')}
                           onChange={(event) => {
                             const next = event.target.value
@@ -971,7 +971,7 @@ function TemplateCreateModal() {
                           Startup command
                         </span>
                         <textarea
-                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                           rows={2}
                           value={startup}
                           onChange={(event) => setStartup(event.target.value)}
@@ -984,7 +984,7 @@ function TemplateCreateModal() {
                             Stop command
                           </span>
                           <input
-                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                             value={stopCommand}
                             onChange={(event) => setStopCommand(event.target.value)}
                             placeholder="stop"
@@ -995,7 +995,7 @@ function TemplateCreateModal() {
                             Signal
                           </span>
                           <select
-                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                             value={sendSignalTo}
                             onChange={(event) =>
                               setSendSignalTo(
@@ -1014,7 +1014,7 @@ function TemplateCreateModal() {
                           Install script (optional)
                         </span>
                         <textarea
-                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                           rows={5}
                           value={installScript}
                           onChange={(event) => setInstallScript(event.target.value)}
@@ -1023,7 +1023,7 @@ function TemplateCreateModal() {
                       </label>
                     </div>
                     <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
-                      <div className="text-sm font-semibold text-foreground dark:text-zinc-200">
+                      <div className="text-sm font-semibold text-foreground dark:text-foreground">
                         Resources & ports
                       </div>
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -1032,7 +1032,7 @@ function TemplateCreateModal() {
                             Ports (comma separated)
                           </span>
                           <input
-                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                             value={supportedPorts}
                             onChange={(event) => setSupportedPorts(event.target.value)}
                             placeholder="25565, 25566"
@@ -1043,7 +1043,7 @@ function TemplateCreateModal() {
                             Allocated memory (MB)
                           </span>
                           <input
-                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                             type="number"
                             min={128}
                             value={allocatedMemoryMb}
@@ -1055,7 +1055,7 @@ function TemplateCreateModal() {
                             Allocated CPU cores
                           </span>
                           <input
-                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                             type="number"
                             min={1}
                             step={1}
@@ -1067,11 +1067,11 @@ function TemplateCreateModal() {
                     </div>
                     <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h3 className="text-sm font-semibold text-foreground dark:text-zinc-200">
+                        <h3 className="text-sm font-semibold text-foreground dark:text-foreground">
                           Variables
                         </h3>
                         <button
-                          className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                          className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:text-foreground dark:hover:border-primary/30"
                           onClick={() => setVariables((prev) => [...prev, createVariableDraft()])}
                           type="button"
                         >
@@ -1081,15 +1081,15 @@ function TemplateCreateModal() {
                       {variables.map((variable, index) => (
                         <div
                           key={`${variable.name}-${index}`}
-                          className="rounded-xl border border-border bg-white p-3 transition-all duration-300 hover:border-primary-500 dark:border-border dark:bg-zinc-950/40 dark:hover:border-primary/30"
+                          className="rounded-xl border border-border bg-card p-3 transition-all duration-300 hover:border-primary dark:border-border dark:bg-surface-0/40 dark:hover:border-primary/30"
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <div className="text-xs font-semibold text-muted-foreground dark:text-zinc-300">
+                            <div className="text-xs font-semibold text-muted-foreground dark:text-foreground">
                               Variable {index + 1}
                             </div>
                             {variables.length > 1 ? (
                               <button
-                                className="text-xs text-rose-500 transition-all duration-300 hover:text-rose-400 dark:text-rose-300"
+                                className="text-xs text-destructive transition-all duration-300 hover:text-destructive dark:text-destructive"
                                 onClick={() =>
                                   setVariables((prev) =>
                                     prev.filter((_, itemIndex) => itemIndex !== index),
@@ -1107,7 +1107,7 @@ function TemplateCreateModal() {
                                 Name
                               </span>
                               <input
-                                className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                                className="w-full rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                                 value={variable.name}
                                 onChange={(event) =>
                                   setVariables((prev) =>
@@ -1125,7 +1125,7 @@ function TemplateCreateModal() {
                                 Default
                               </span>
                               <input
-                                className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                                className="w-full rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                                 value={variable.defaultValue}
                                 onChange={(event) =>
                                   setVariables((prev) =>
@@ -1143,7 +1143,7 @@ function TemplateCreateModal() {
                                 Description
                               </span>
                               <input
-                                className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                                className="w-full rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                                 value={variable.description}
                                 onChange={(event) =>
                                   setVariables((prev) =>
@@ -1156,10 +1156,10 @@ function TemplateCreateModal() {
                                 }
                               />
                             </label>
-                            <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-zinc-300">
+                            <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-foreground">
                               <input
                                 type="checkbox"
-                                className="rounded border-border bg-white text-primary-600 focus:ring-primary-500 dark:border-border dark:bg-surface-1 dark:text-primary-400 dark:focus:ring-primary-400"
+                                className="rounded border-border bg-card text-primary-600 focus:ring-primary dark:border-border dark:bg-surface-1 dark:text-primary-400 dark:focus:ring-primary-400"
                                 checked={variable.required}
                                 onChange={(event) =>
                                   setVariables((prev) =>
@@ -1178,7 +1178,7 @@ function TemplateCreateModal() {
                                 Input type
                               </span>
                               <select
-                                className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                                className="w-full rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                                 value={variable.input}
                                 onChange={(event) =>
                                   setVariables((prev) =>
@@ -1206,7 +1206,7 @@ function TemplateCreateModal() {
                                 Rules (semicolon separated)
                               </span>
                               <input
-                                className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                                className="w-full rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                                 value={variable.rules}
                                 onChange={(event) =>
                                   setVariables((prev) =>
@@ -1225,14 +1225,14 @@ function TemplateCreateModal() {
                       ))}
                     </div>
                     <div className="space-y-3 rounded-2xl border border-border bg-surface-2 p-4 transition-all duration-300 dark:border-border dark:bg-surface-1/40">
-                      <div className="text-sm font-semibold text-foreground dark:text-zinc-200">
+                      <div className="text-sm font-semibold text-foreground dark:text-foreground">
                         Advanced features
                       </div>
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                        <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-zinc-300">
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-foreground">
                           <input
                             type="checkbox"
-                            className="rounded border-border bg-white text-primary-600 focus:ring-primary-500 dark:border-border dark:bg-surface-1 dark:text-primary-400 dark:focus:ring-primary-400"
+                            className="rounded border-border bg-card text-primary-600 focus:ring-primary dark:border-border dark:bg-surface-1 dark:text-primary-400 dark:focus:ring-primary-400"
                             checked={restartOnExit}
                             onChange={(event) => setRestartOnExit(event.target.checked)}
                           />
@@ -1243,7 +1243,7 @@ function TemplateCreateModal() {
                             Max instances (optional)
                           </span>
                           <input
-                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                             type="number"
                             min={1}
                             value={maxInstances}
@@ -1251,10 +1251,10 @@ function TemplateCreateModal() {
                             placeholder="Unlimited"
                           />
                         </label>
-                        <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-zinc-300">
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground dark:text-foreground">
                           <input
                             type="checkbox"
-                            className="rounded border-border bg-white text-primary-600 focus:ring-primary-500 dark:border-border dark:bg-surface-1 dark:text-primary-400 dark:focus:ring-primary-400"
+                            className="rounded border-border bg-card text-primary-600 focus:ring-primary dark:border-border dark:bg-surface-1 dark:text-primary-400 dark:focus:ring-primary-400"
                             checked={fileEditorEnabled}
                             onChange={(event) => setFileEditorEnabled(event.target.checked)}
                           />
@@ -1265,7 +1265,7 @@ function TemplateCreateModal() {
                             File editor restricted paths (optional)
                           </span>
                           <input
-                            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                             value={fileEditorRestrictedPaths}
                             onChange={(event) => setFileEditorRestrictedPaths(event.target.value)}
                             placeholder="/sensitive, /config"
@@ -1277,7 +1277,7 @@ function TemplateCreateModal() {
                           Backup paths (optional)
                         </span>
                         <input
-                          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                           value={backupPaths}
                           onChange={(event) => setBackupPaths(event.target.value)}
                           placeholder="/world, /plugins, /config"
@@ -1301,7 +1301,7 @@ function TemplateCreateModal() {
                 <div className="flex items-center gap-3">
                   {step === 2 && (
                     <button
-                      className="rounded-full border border-border px-4 py-2 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                      className="rounded-full border border-border px-4 py-2 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:text-foreground dark:hover:border-primary/30"
                       onClick={() => setStep(1)}
                     >
                       {'\u2190'} Back
@@ -1314,7 +1314,7 @@ function TemplateCreateModal() {
                           <span className="text-muted-foreground dark:text-muted-foreground">
                             Missing required fields:{' '}
                           </span>
-                          <span className="text-amber-600 dark:text-amber-400 font-medium">
+                          <span className="text-warning dark:text-warning font-medium">
                             {missingFields.join(', ')}
                           </span>
                         </div>
@@ -1328,7 +1328,7 @@ function TemplateCreateModal() {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    className="rounded-full border border-border px-4 py-2 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                    className="rounded-full border border-border px-4 py-2 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:text-foreground dark:hover:border-primary/30"
                     onClick={() => {
                       setOpen(false);
                       setImportError('');
@@ -1339,7 +1339,7 @@ function TemplateCreateModal() {
                   </button>
                   {step === 2 && (
                     <button
-                      className="rounded-full bg-primary-600 px-4 py-2 font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+                      className="rounded-full bg-primary px-4 py-2 font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
                       onClick={() => mutation.mutate()}
                       disabled={disableSubmit}
                     >
@@ -1355,11 +1355,11 @@ function TemplateCreateModal() {
       {/* ── Import Modal ── */}
       {importModalOpen && (
         <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10 backdrop-blur-sm">
-            <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl dark:border-border dark:bg-surface-1">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 py-10 backdrop-blur-sm">
+            <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl dark:border-border dark:bg-surface-1">
               <div className="flex items-center justify-between border-b border-border px-6 py-4 dark:border-border">
                 <div>
-                  <h2 className="text-base font-semibold text-foreground dark:text-white">
+                  <h2 className="text-base font-semibold text-foreground">
                     Import Template
                   </h2>
                   <p className="text-xs text-muted-foreground">
@@ -1367,7 +1367,7 @@ function TemplateCreateModal() {
                   </p>
                 </div>
                 <button
-                  className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                  className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary dark:border-border dark:text-foreground dark:hover:border-primary/30"
                   onClick={() => setImportModalOpen(false)}
                 >
                   Close
@@ -1377,8 +1377,8 @@ function TemplateCreateModal() {
                 {/* URL Import */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <LinkIcon className="h-4 w-4 text-primary-500" />
-                    <span className="text-sm font-medium text-foreground dark:text-white">
+                    <LinkIcon className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium text-foreground">
                       From URL
                     </span>
                   </div>
@@ -1387,7 +1387,7 @@ function TemplateCreateModal() {
                   </p>
                   <div className="flex gap-2">
                     <input
-                      className="flex-1 rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                      className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground  dark:hover:border-primary/30"
                       value={importUrl}
                       onChange={(e) => {
                         setImportUrl(e.target.value);
@@ -1399,7 +1399,7 @@ function TemplateCreateModal() {
                       }}
                     />
                     <button
-                      className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+                      className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
                       onClick={handleImportUrl}
                       disabled={!importUrl.trim() || importUrlLoading}
                     >
@@ -1408,7 +1408,7 @@ function TemplateCreateModal() {
                     </button>
                   </div>
                   {importUrlError && (
-                    <p className="text-xs text-rose-500 dark:text-rose-400">{importUrlError}</p>
+                    <p className="text-xs text-destructive dark:text-destructive">{importUrlError}</p>
                   )}
                 </div>
 
@@ -1422,8 +1422,8 @@ function TemplateCreateModal() {
                 {/* Local Upload */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Upload className="h-4 w-4 text-primary-500" />
-                    <span className="text-sm font-medium text-foreground dark:text-white">
+                    <Upload className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium text-foreground">
                       From Local File
                     </span>
                   </div>
@@ -1431,7 +1431,7 @@ function TemplateCreateModal() {
                     Upload a .json or .yaml egg file from your computer.
                   </p>
                   <button
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-4 py-4 text-sm font-medium text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-4 py-4 text-sm font-medium text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:text-foreground dark:hover:border-primary/30"
                     onClick={() => importFileRef.current?.click()}
                   >
                     <Upload className="h-4 w-4" />

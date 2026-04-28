@@ -30,11 +30,11 @@ const variantConfig = {
   },
   danger: {
     icon: <AlertTriangle className="h-5 w-5 text-danger" />,
-    buttonClass: 'bg-danger hover:opacity-90 text-white',
+    buttonClass: 'bg-danger hover:opacity-90 text-destructive-foreground',
   },
   warning: {
     icon: <AlertTriangle className="h-5 w-5 text-warning" />,
-    buttonClass: 'bg-warning hover:opacity-90 text-zinc-900',
+    buttonClass: 'bg-warning hover:opacity-90 text-foreground',
   },
 };
 

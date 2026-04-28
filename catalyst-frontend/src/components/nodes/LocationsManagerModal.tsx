@@ -29,10 +29,10 @@ function LocationForm({
     <div className="space-y-3">
       <label className="block space-y-1">
         <span className="text-xs font-medium text-muted-foreground">
-          Name <span className="text-rose-500">*</span>
+          Name <span className="text-destructive">*</span>
         </span>
         <input
-          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="US-East"
@@ -42,7 +42,7 @@ function LocationForm({
       <label className="block space-y-1">
         <span className="text-xs font-medium text-muted-foreground">Description (optional)</span>
         <textarea
-          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
           rows={2}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -51,13 +51,13 @@ function LocationForm({
       </label>
       <div className="flex justify-end gap-2 pt-1">
         <button
-          className="rounded-full border border-border px-4 py-1.5 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+          className="rounded-full border border-border px-4 py-1.5 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:hover:border-primary/30"
           onClick={onCancel}
         >
           Cancel
         </button>
         <button
-          className="rounded-full bg-primary-600 px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+          className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
           onClick={() =>
             onSave({
               name: name.trim(),
@@ -158,17 +158,17 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
   return (
     <>
       <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10 backdrop-blur-sm">
-          <div className="flex w-full max-w-2xl max-h-[85vh] flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-2xl transition-all duration-300 dark:border-border dark:bg-surface-1">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 py-10 backdrop-blur-sm">
+          <div className="flex w-full max-w-2xl max-h-[85vh] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl transition-all duration-300 dark:border-border dark:bg-surface-1">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-border px-6 py-4 dark:border-border">
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 opacity-20 blur-sm" />
-                  <MapPin className="relative h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                  <MapPin className="relative h-5 w-5 text-success dark:text-success" />
                 </div>
                 <div>
-                  <h2 className="text-base font-semibold text-foreground dark:text-white">
+                  <h2 className="text-base font-semibold text-foreground">
                     Manage Locations
                   </h2>
                   <p className="text-xs text-muted-foreground">
@@ -177,7 +177,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
                 </div>
               </div>
               <button
-                className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary dark:border-border dark:hover:border-primary/30"
                 onClick={() => onOpenChange(false)}
               >
                 Close
@@ -190,7 +190,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
               {isFormActive && (
                 <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 p-4 dark:bg-primary/10">
                   <div className="mb-3 flex items-center justify-between">
-                    <span className="text-sm font-semibold text-foreground dark:text-white">
+                    <span className="text-sm font-semibold text-foreground">
                       {editingLocation ? 'Edit location' : 'New location'}
                     </span>
                     <button
@@ -248,13 +248,13 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
                       className="group flex items-center gap-3 rounded-xl border border-border px-4 py-3 transition-colors hover:bg-surface-2/50 dark:border-border"
                     >
                       {/* Icon */}
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                        <MapPin className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/10 dark:bg-success/30">
+                        <MapPin className="h-4 w-4 text-success dark:text-success" />
                       </div>
 
                       {/* Info */}
                       <div className="min-w-0 flex-1">
-                        <span className="font-medium text-foreground dark:text-white">
+                        <span className="font-medium text-foreground">
                           {location.name}
                         </span>
                         {location.description && (
@@ -281,7 +281,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
                         <button
-                          className="rounded-md p-1.5 text-rose-500 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
+                          className="rounded-md p-1.5 text-destructive transition-colors hover:bg-destructive/5 hover:text-destructive dark:hover:bg-destructive/50/10"
                           onClick={() => setDeleteTarget(location)}
                           title="Delete"
                         >
@@ -301,7 +301,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
                   {locations.length} location{locations.length !== 1 ? 's' : ''}
                 </span>
                 <button
-                  className="flex items-center gap-1.5 rounded-full bg-primary-600 px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500"
+                  className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
                   onClick={() => {
                     setEditingLocation(null);
                     setIsCreating(true);

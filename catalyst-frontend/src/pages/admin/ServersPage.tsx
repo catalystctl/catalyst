@@ -81,32 +81,32 @@ function getStatusConfig(serverStatus: string) {
     case 'running':
       return {
         variant: 'success' as const,
-        dot: 'bg-emerald-500',
+        dot: 'bg-success/50',
         label: 'Running',
       };
     case 'stopped':
       return {
         variant: 'secondary' as const,
-        dot: 'bg-zinc-400',
+        dot: 'bg-surface-3',
         label: 'Stopped',
       };
     case 'suspended':
       return {
         variant: 'destructive' as const,
-        dot: 'bg-rose-500',
+        dot: 'bg-destructive/50',
         label: 'Suspended',
       };
     case 'starting':
     case 'stopping':
       return {
         variant: 'warning' as const,
-        dot: 'bg-amber-500',
+        dot: 'bg-warning/50',
         label: serverStatus === 'starting' ? 'Starting' : 'Stopping',
       };
     default:
       return {
         variant: 'secondary' as const,
-        dot: 'bg-zinc-400',
+        dot: 'bg-surface-3',
         label: serverStatus,
       };
   }
@@ -119,7 +119,7 @@ function StatusBadge({ status }: { status: string }) {
     <Badge variant={config.variant} className="gap-1.5 font-medium">
       <span className={`relative flex h-1.5 w-1.5`}>
         {status === 'running' && (
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
         )}
         <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${config.dot}`} />
       </span>
@@ -328,7 +328,7 @@ function AdminServersPage() {
                 <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-violet-500 to-cyan-500 opacity-20 blur-sm" />
                 <Server className="relative h-7 w-7 text-violet-600 dark:text-violet-400" />
               </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
                 All Servers
               </h1>
             </div>
@@ -347,24 +347,24 @@ function AdminServersPage() {
             ) : (
               <>
                 <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
-                  <span className="h-2 w-2 rounded-full bg-zinc-400" />
+                  <span className="h-2 w-2 rounded-full bg-surface-3" />
                   {data?.pagination?.total ?? 0} total
                 </Badge>
                 {statusCounts['running'] ? (
                   <Badge variant="success" className="h-8 gap-1.5 px-3 text-xs">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                    <span className="h-2 w-2 rounded-full bg-success" />
                     {statusCounts['running']} running
                   </Badge>
                 ) : null}
                 {statusCounts['stopped'] ? (
                   <Badge variant="secondary" className="h-8 gap-1.5 px-3 text-xs">
-                    <span className="h-2 w-2 rounded-full bg-zinc-400" />
+                    <span className="h-2 w-2 rounded-full bg-surface-3" />
                     {statusCounts['stopped']} stopped
                   </Badge>
                 ) : null}
                 {statusCounts['suspended'] ? (
                   <Badge variant="destructive" className="h-8 gap-1.5 px-3 text-xs">
-                    <span className="h-2 w-2 rounded-full bg-rose-400" />
+                    <span className="h-2 w-2 rounded-full bg-destructive/60" />
                     {statusCounts['suspended']} suspended
                   </Badge>
                 ) : null}
@@ -559,7 +559,7 @@ function AdminServersPage() {
                     size="sm"
                     onClick={() => handleBulkAction('start', selectedIds, `${selectedIds.length} servers`)}
                     disabled={bulkActionMutation.isPending}
-                    className="gap-1.5 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 dark:text-emerald-400 dark:hover:bg-emerald-950/30 dark:hover:border-emerald-800"
+                    className="gap-1.5 text-xs text-success hover:bg-success/5 hover:text-success hover:border-success/20 dark:text-success dark:hover:bg-success/30 dark:hover:border-success"
                   >
                     <Play className="h-3 w-3" />
                     Start
@@ -569,7 +569,7 @@ function AdminServersPage() {
                     size="sm"
                     onClick={() => handleBulkAction('stop', selectedIds, `${selectedIds.length} servers`)}
                     disabled={bulkActionMutation.isPending}
-                    className="gap-1.5 text-xs text-amber-600 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200 dark:text-amber-400 dark:hover:bg-amber-950/30 dark:hover:border-amber-800"
+                    className="gap-1.5 text-xs text-warning hover:bg-warning/5 hover:text-warning hover:border-warning/20 dark:text-warning dark:hover:bg-warning/30 dark:hover:border-warning"
                   >
                     <Square className="h-3 w-3" />
                     Stop
@@ -590,7 +590,7 @@ function AdminServersPage() {
                     size="sm"
                     onClick={() => handleBulkAction('suspend', selectedIds, `${selectedIds.length} servers`)}
                     disabled={bulkActionMutation.isPending}
-                    className="gap-1.5 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 dark:text-rose-400 dark:hover:bg-rose-950/30 dark:hover:border-rose-800"
+                    className="gap-1.5 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20 dark:text-destructive dark:hover:bg-destructive/30 dark:hover:border-destructive"
                   >
                     <Ban className="h-3 w-3" />
                     Suspend
@@ -600,7 +600,7 @@ function AdminServersPage() {
                     size="sm"
                     onClick={() => handleBulkAction('unsuspend', selectedIds, `${selectedIds.length} servers`)}
                     disabled={bulkActionMutation.isPending}
-                    className="gap-1.5 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 dark:text-emerald-400 dark:hover:bg-emerald-950/30 dark:hover:border-emerald-800"
+                    className="gap-1.5 text-xs text-success hover:bg-success/5 hover:text-success hover:border-success/20 dark:text-success dark:hover:bg-success/30 dark:hover:border-success"
                   >
                     <CheckCircle className="h-3 w-3" />
                     Unsuspend
@@ -645,7 +645,7 @@ function AdminServersPage() {
                           return Array.from(new Set([...prev, ...filteredIds]));
                         })
                       }
-                      className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+                      className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                     />
                     <span className="text-xs font-medium text-muted-foreground">
                       Select all
@@ -681,7 +681,7 @@ function AdminServersPage() {
                                 : [...prev, server.id],
                             )
                           }
-                          className="h-4 w-4 flex-shrink-0 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+                          className="h-4 w-4 flex-shrink-0 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                         />
 
                         {/* Server info — primary column */}
@@ -689,7 +689,7 @@ function AdminServersPage() {
                           <div className="flex items-center gap-2.5">
                             <Link
                               to={`/servers/${server.id}/console`}
-                              className="truncate font-semibold text-foreground transition-colors hover:text-primary dark:text-zinc-100 dark:hover:text-primary-400"
+                              className="truncate font-semibold text-foreground transition-colors hover:text-primary dark:text-foreground dark:hover:text-primary-400"
                             >
                               {server.name}
                             </Link>
@@ -715,7 +715,7 @@ function AdminServersPage() {
                         <div className="flex items-center gap-1 opacity-100 transition-opacity group-hover:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
                           {!isSuspended && (
                             <button
-                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-emerald-50 hover:text-emerald-600 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-400"
+                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-success/5 hover:text-success disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-success/30 dark:hover:text-success"
                               onClick={() => handleBulkAction('start', [server.id], server.name)}
                               disabled={bulkActionMutation.isPending || isRunning || isBusy}
                               title="Start"
@@ -725,7 +725,7 @@ function AdminServersPage() {
                           )}
                           {!isSuspended && (
                             <button
-                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-amber-50 hover:text-amber-600 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-amber-950/30 dark:hover:text-amber-400"
+                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-warning/5 hover:text-warning disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-warning/30 dark:hover:text-warning"
                               onClick={() => handleBulkAction('stop', [server.id], server.name)}
                               disabled={bulkActionMutation.isPending || isStopped || isBusy}
                               title="Stop"
@@ -735,7 +735,7 @@ function AdminServersPage() {
                           )}
                           {isSuspended ? (
                             <button
-                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-emerald-50 hover:text-emerald-600 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-400"
+                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-success/5 hover:text-success disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-success/30 dark:hover:text-success"
                               onClick={() => handleBulkAction('unsuspend', [server.id], server.name)}
                               disabled={bulkActionMutation.isPending}
                               title="Unsuspend"
@@ -744,7 +744,7 @@ function AdminServersPage() {
                             </button>
                           ) : (
                             <button
-                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-rose-950/30 dark:hover:text-rose-400"
+                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-destructive/30 dark:hover:text-destructive"
                               onClick={() => handleBulkAction('suspend', [server.id], server.name)}
                               disabled={bulkActionMutation.isPending}
                               title="Suspend"
@@ -781,7 +781,7 @@ function AdminServersPage() {
                                 <DropdownMenuItem
                                   onClick={() => handleBulkAction('unsuspend', [server.id], server.name)}
                                   disabled={bulkActionMutation.isPending}
-                                  className="gap-2 text-xs text-emerald-600 dark:text-emerald-400"
+                                  className="gap-2 text-xs text-success dark:text-success"
                                 >
                                   <CheckCircle className="h-3.5 w-3.5" />
                                   Unsuspend
@@ -790,7 +790,7 @@ function AdminServersPage() {
                                 <DropdownMenuItem
                                   onClick={() => handleBulkAction('suspend', [server.id], server.name)}
                                   disabled={bulkActionMutation.isPending}
-                                  className="gap-2 text-xs text-rose-600 dark:text-rose-400"
+                                  className="gap-2 text-xs text-destructive dark:text-destructive"
                                 >
                                   <Ban className="h-3.5 w-3.5" />
                                   Suspend
@@ -809,7 +809,7 @@ function AdminServersPage() {
                               <DropdownMenuItem
                                 onClick={() => setDeleteServer({ id: server.id, name: server.name })}
                                 disabled={bulkActionMutation.isPending}
-                                className="gap-2 text-xs text-rose-600 dark:text-rose-400"
+                                className="gap-2 text-xs text-destructive dark:text-destructive"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                                 Delete
@@ -868,11 +868,11 @@ function AdminServersPage() {
               <span className="font-semibold">{suspendTargets?.label}</span>.
             </p>
             <label className="block space-y-1">
-              <span className="text-sm text-muted-foreground dark:text-zinc-300">
+              <span className="text-sm text-muted-foreground dark:text-foreground">
                 Reason (optional)
               </span>
               <input
-                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-2 dark:text-zinc-200"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-2 dark:text-foreground"
                 value={suspendReason}
                 onChange={(event) => setSuspendReason(event.target.value)}
                 placeholder="e.g., Billing issue"

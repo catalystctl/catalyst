@@ -196,15 +196,15 @@ function ConfirmAction({
 
   const btnClass =
     variant === 'danger'
-      ? 'bg-danger hover:bg-danger text-white shadow-lg shadow-danger/20'
+      ? 'bg-danger hover:bg-danger text-foreground shadow-lg shadow-danger/20'
       : variant === 'warning'
-        ? 'bg-warning hover:bg-warning text-white shadow-lg shadow-warning/20'
-        : 'bg-primary-600 hover:bg-primary-500 text-white shadow-lg shadow-primary-500/20';
+        ? 'bg-warning hover:bg-warning text-foreground shadow-lg shadow-warning/20'
+        : 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-background/60 backdrop-blur-sm"
         onClick={onCancel}
       />
       <div className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
@@ -361,7 +361,7 @@ export default function ServerAdminTab({
       case 'archived':
         return 'bg-surface-2 text-muted-foreground border-border';
       default:
-        return 'bg-primary-500/10 text-primary border-primary-500/20';
+        return 'bg-primary-500/10 text-primary border-primary/20';
     }
   })();
 
@@ -514,7 +514,7 @@ export default function ServerAdminTab({
           {canAdminWrite && (
             <button
               type="button"
-              className="rounded-md bg-surface-2 px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-primary-50 hover:text-primary-600 dark:bg-surface-2 dark:hover:bg-primary-500/10 dark:hover:text-primary-400"
+              className="rounded-md bg-surface-2 px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary dark:bg-surface-2 dark:hover:bg-primary/90/10 dark:hover:text-primary-400"
               onClick={() => {
                 setEnvVars([...envVars, { key: '', value: '' }]);
                 setEnvDirty(true);
@@ -535,7 +535,7 @@ export default function ServerAdminTab({
             {envVars.map((row, idx) => (
               <div key={idx} className="group flex items-center gap-2">
                 <input
-                  className="w-[130px] shrink-0 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] uppercase text-foreground transition-colors focus:border-primary-500 focus:bg-card focus:outline-none dark:focus:border-primary-400"
+                  className="w-[130px] shrink-0 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] uppercase text-foreground transition-colors focus:border-primary focus:bg-card focus:outline-none "
                   value={row.key}
                   onChange={(e) => {
                     const next = [...envVars];
@@ -548,7 +548,7 @@ export default function ServerAdminTab({
                 />
                 <span className="text-[10px] text-foreground">=</span>
                 <input
-                  className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] text-foreground transition-colors focus:border-primary-500 focus:bg-card focus:outline-none dark:focus:border-primary-400"
+                  className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] text-foreground transition-colors focus:border-primary focus:bg-card focus:outline-none "
                   value={row.value}
                   onChange={(e) => {
                     const next = [...envVars];
@@ -589,7 +589,7 @@ export default function ServerAdminTab({
               <div className="pt-2">
                 <button
                   type="button"
-                  className="rounded-lg bg-primary-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-primary-500 disabled:opacity-50"
+                  className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
                   onClick={() => envMutation.mutate()}
                   disabled={isSuspended || envMutation.isPending}
                 >
@@ -748,7 +748,7 @@ export default function ServerAdminTab({
                 type="button"
                 onClick={() => setRebuildConfirm(true)}
                 disabled={!canEdit}
-                className="shrink-0 rounded-md bg-primary-600 px-3 py-1.5 text-[10px] font-semibold text-white shadow-sm transition-all hover:bg-primary-500 disabled:opacity-50"
+                className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 disabled:opacity-50"
               >
                 Rebuild
               </button>
@@ -769,7 +769,7 @@ export default function ServerAdminTab({
                 type="button"
                 onClick={() => setReinstallConfirm(true)}
                 disabled={!canEditWhenStopped}
-                className="shrink-0 rounded-md bg-warning px-3 py-1.5 text-[10px] font-semibold text-white shadow-sm transition-all hover:bg-warning disabled:opacity-50"
+                className="shrink-0 rounded-md bg-warning px-3 py-1.5 text-[10px] font-semibold text-foreground shadow-sm transition-all hover:bg-warning disabled:opacity-50"
               >
                 Reinstall
               </button>
@@ -790,7 +790,7 @@ export default function ServerAdminTab({
                 type="button"
                 onClick={() => setKillConfirm(true)}
                 disabled={server.status !== 'running' && server.status !== 'starting' && server.status !== 'stopping'}
-                className="shrink-0 rounded-md border border-danger/30 bg-danger px-3 py-1.5 text-[10px] font-semibold text-white shadow-sm transition-all hover:border-danger/50 disabled:opacity-50"
+                className="shrink-0 rounded-md border border-danger/30 bg-danger px-3 py-1.5 text-[10px] font-semibold text-foreground shadow-sm transition-all hover:border-danger/50 disabled:opacity-50"
               >
                 Kill
               </button>
@@ -877,7 +877,7 @@ export default function ServerAdminTab({
           {/* Add allocation form */}
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
             <input
-              className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
               value={newContainerPort}
               onChange={(e) => onNewContainerPortChange(e.target.value)}
               placeholder="Container port"
@@ -887,7 +887,7 @@ export default function ServerAdminTab({
               disabled={!canEditWhenStopped}
             />
             <input
-              className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
               value={newHostPort}
               onChange={(e) => onNewHostPortChange(e.target.value)}
               placeholder="Host port (optional)"
@@ -899,7 +899,7 @@ export default function ServerAdminTab({
           </div>
           <button
             type="button"
-            className="mt-2 w-full rounded-md bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-primary-500 disabled:opacity-50"
+            className="mt-2 w-full rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 disabled:opacity-50"
             onClick={onAddAllocation}
             disabled={!canEditWhenStopped || addAllocationPending}
           >
@@ -1027,7 +1027,7 @@ export default function ServerAdminTab({
               Restart Policy
             </label>
             <select
-              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
               value={restartPolicy}
               onChange={(e) =>
                 onRestartPolicyChange(
@@ -1046,7 +1046,7 @@ export default function ServerAdminTab({
               Max Crash Count
             </label>
             <input
-              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
               type="number"
               min={0}
               max={100}
@@ -1058,7 +1058,7 @@ export default function ServerAdminTab({
           <div className="flex gap-2">
             <button
               type="button"
-              className="rounded-md bg-primary-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-primary-500 disabled:opacity-50"
+              className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 disabled:opacity-50"
               onClick={onSaveRestartPolicy}
               disabled={isSuspended || restartPolicyPending}
             >
@@ -1099,7 +1099,7 @@ export default function ServerAdminTab({
               New Owner User ID
             </label>
             <input
-              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 font-mono text-xs text-foreground transition-all focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 font-mono text-xs text-foreground transition-all focus:border-primary focus:outline-none"
               value={newOwnerId}
               onChange={(e) => setNewOwnerId(e.target.value)}
               placeholder="Enter user ID"
@@ -1110,7 +1110,7 @@ export default function ServerAdminTab({
             type="button"
             onClick={() => setTransferOwnerConfirm(true)}
             disabled={!newOwnerId.trim() || isSuspended}
-            className="rounded-md border border-warning/30 bg-warning px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-warning disabled:opacity-50"
+            className="rounded-md border border-warning/30 bg-warning px-3 py-2 text-xs font-semibold text-foreground shadow-sm transition-all hover:bg-warning disabled:opacity-50"
           >
             Transfer
           </button>
@@ -1160,7 +1160,7 @@ export default function ServerAdminTab({
               type="button"
               onClick={() => onUnsuspend()}
               disabled={unsuspendPending}
-              className="shrink-0 rounded-md border border-success/30 bg-success px-3 py-1.5 text-[10px] font-semibold text-white shadow-sm transition-all hover:bg-success disabled:opacity-50"
+              className="shrink-0 rounded-md border border-success/30 bg-success px-3 py-1.5 text-[10px] font-semibold text-foreground shadow-sm transition-all hover:bg-success disabled:opacity-50"
             >
               Unsuspend
             </button>
@@ -1172,7 +1172,7 @@ export default function ServerAdminTab({
                 Suspension reason (optional)
               </label>
               <input
-                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
                 value={suspendReason}
                 onChange={(e) => onSuspendReasonChange(e.target.value)}
                 placeholder="Billing, abuse, or admin notes"
@@ -1182,7 +1182,7 @@ export default function ServerAdminTab({
               type="button"
               onClick={() => onSuspend(suspendReason.trim() || undefined)}
               disabled={suspendPending}
-              className="rounded-md bg-danger px-3 py-2 text-xs font-semibold text-white shadow-lg shadow-danger/20 transition-all hover:bg-danger disabled:opacity-50"
+              className="rounded-md bg-danger px-3 py-2 text-xs font-semibold text-foreground shadow-lg shadow-danger/20 transition-all hover:bg-danger disabled:opacity-50"
             >
               Suspend server
             </button>

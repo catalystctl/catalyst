@@ -123,25 +123,25 @@ function FileEditor({
   if (!file) return null;
 
   const btnSecondary =
-    'inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 dark:border-border dark:text-zinc-300 dark:hover:bg-surface-2 dark:hover:text-foreground';
+    'inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 dark:border-border dark:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-foreground';
   const btnPrimary =
-    'inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-primary-500 disabled:opacity-50';
+    'inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50';
 
   return (
     <div className="flex h-full flex-col gap-2 sm:gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-foreground dark:text-zinc-100">
+            <h3 className="truncate text-sm font-semibold text-foreground dark:text-foreground">
               {file.name}
             </h3>
             {isDirty && (
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+              <span className="rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning dark:bg-warning/50/20 dark:text-warning">
                 Unsaved
               </span>
             )}
             {isSuspended && (
-              <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700 dark:bg-rose-500/20 dark:text-rose-300">
+              <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive dark:bg-destructive/50/20 dark:text-destructive">
                 Suspended
               </span>
             )}
@@ -183,7 +183,7 @@ function FileEditor({
           </button>
           <button
             type="button"
-            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-zinc-300"
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-muted-foreground"
             onClick={handleClose}
             title="Close"
           >

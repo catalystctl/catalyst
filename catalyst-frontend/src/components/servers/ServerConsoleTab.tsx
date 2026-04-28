@@ -28,13 +28,13 @@ const ALL_STREAMS = ['stdout', 'stderr', 'system', 'stdin'] as const;
 
 const STREAM_STYLES: Record<string, { dot: string; active: string; inactive: string }> = {
   stdout: {
-    dot: 'bg-emerald-500',
-    active: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
+    dot: 'bg-success/50',
+    active: 'bg-success/50/15 text-success dark:text-success border-success/30',
     inactive: 'border-transparent text-muted-foreground hover:bg-surface-2',
   },
   stderr: {
-    dot: 'bg-rose-500',
-    active: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30',
+    dot: 'bg-destructive/50',
+    active: 'bg-destructive/50/15 text-destructive dark:text-destructive border-destructive/30',
     inactive: 'border-transparent text-muted-foreground hover:bg-surface-2',
   },
   system: {
@@ -43,8 +43,8 @@ const STREAM_STYLES: Record<string, { dot: string; active: string; inactive: str
     inactive: 'border-transparent text-muted-foreground hover:bg-surface-2',
   },
   stdin: {
-    dot: 'bg-amber-500',
-    active: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30',
+    dot: 'bg-warning/50',
+    active: 'bg-warning/50/15 text-warning dark:text-warning border-warning/30',
     inactive: 'border-transparent text-muted-foreground hover:bg-surface-2',
   },
 };
@@ -169,7 +169,7 @@ export default function ServerConsoleTab({
                 label="Memory"
                 value={`${liveMetrics.memoryPercent.toFixed(1)}%`}
                 percent={liveMetrics.memoryPercent}
-                color="text-emerald-500"
+                color="text-success"
                 strokeColor="stroke-emerald-500"
                 subtext={`${liveMetrics.memoryUsageMb ?? 0} MB`}
               />
@@ -177,14 +177,14 @@ export default function ServerConsoleTab({
                 label="Disk"
                 value={`${diskPercent}%`}
                 percent={liveDiskUsageMb != null && liveDiskTotalMb ? (liveDiskUsageMb / liveDiskTotalMb) * 100 : 0}
-                color="text-amber-500"
+                color="text-warning"
                 strokeColor="stroke-amber-500"
                 subtext={`${liveDiskUsageMb ?? 0} / ${liveDiskTotalMb ?? 0} MB`}
               />
               <div className="flex flex-col justify-center gap-3 rounded-lg border border-border bg-card px-3 py-2 md:flex-1 md:justify-center md:gap-4 min-h-0">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Network</span>
                 <div className="flex items-center gap-2 text-[11px]">
-                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success/50/10 text-success">
                     <ArrowDownLeft className="h-3 w-3" />
                   </span>
                   <div className="flex min-w-0 flex-col">
@@ -211,7 +211,7 @@ export default function ServerConsoleTab({
               <div className="flex flex-col justify-center gap-3 rounded-lg border border-border bg-card px-3 py-2 md:flex-1 md:justify-center md:gap-4 min-h-0">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Network</span>
                 <div className="flex items-center gap-2 text-[11px]">
-                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success/50/10 text-success">
                     <ArrowDownLeft className="h-3 w-3" />
                   </span>
                   <div className="flex min-w-0 flex-col">
@@ -239,8 +239,8 @@ export default function ServerConsoleTab({
           <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-card px-2 py-1.5">
             {/* Left: Status + Streams */}
             <div className="flex items-center gap-1.5">
-              <span className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${isConnected ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'animate-pulse bg-emerald-500' : 'bg-amber-500'}`} />
+              <span className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${isConnected ? 'text-success dark:text-success' : 'text-warning dark:text-warning'}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'animate-pulse bg-success/50' : 'bg-warning/50'}`} />
                 {isConnected ? 'Live' : 'Connecting'}
               </span>
 
@@ -353,7 +353,7 @@ export default function ServerConsoleTab({
                   onClick={handleCopy}
                   className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
                 >
-                  {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom">{copied ? 'Copied!' : 'Copy output'}</TooltipContent>
@@ -364,7 +364,7 @@ export default function ServerConsoleTab({
                 <button
                   type="button"
                   onClick={() => { clearConsole(); setAutoScroll(true); }}
-                  className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-rose-500/10 hover:text-rose-500"
+                  className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/50/10 hover:text-destructive"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

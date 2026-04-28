@@ -82,13 +82,13 @@ export default function ServerUsersTab({
         </div>
         <div className="mt-4 grid grid-cols-1 gap-3 text-xs text-muted-foreground sm:grid-cols-3">
           <input
-            className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:focus:border-primary-400"
+            className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none "
             value={inviteEmail}
             onChange={(event) => onInviteEmailChange(event.target.value)}
             placeholder="user@example.com"
           />
           <select
-            className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:focus:border-primary-400"
+            className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none "
             value={invitePreset}
             onChange={(event) =>
               onInvitePresetChange(
@@ -103,7 +103,7 @@ export default function ServerUsersTab({
           </select>
           <button
             type="button"
-            className="rounded-md bg-primary-600 px-3 py-2 text-xs font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+            className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
             onClick={onCreateInvite}
             disabled={!inviteEmail.trim() || createInvitePending}
           >
@@ -206,7 +206,7 @@ export default function ServerUsersTab({
                   <div className="mt-3">
                     <button
                       type="button"
-                      className="rounded-md bg-primary-600 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+                      className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
                       onClick={() => onSaveAccess(entry)}
                       disabled={saveAccessPending}
                     >

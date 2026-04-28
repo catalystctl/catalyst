@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { motion, type Variants } from 'framer-motion';
+import { useState, useMemo, useEffect, createElement } from 'react';
+import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
   ScrollText,
   Search,
@@ -12,6 +12,14 @@ import {
   Clock,
   Hash,
   X,
+  Activity,
+  Server,
+  Shield,
+  Key,
+  AlertTriangle,
+  HardDrive,
+  RefreshCw,
+  ExternalLink,
 } from 'lucide-react';
 import EmptyState from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/input';
@@ -29,6 +37,7 @@ import { adminApi } from '../../services/api/admin';
 import type { AuditLogEntry } from '../../types/admin';
 import Pagination from '../../components/shared/Pagination';
 import { ModalPortal } from '@/components/ui/modal-portal';
+import { Link } from 'react-router-dom';
 
 const pageSize = 50;
 
@@ -53,151 +62,159 @@ const itemVariants: Variants = {
   visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
 };
 
-// ── Action Color Helper ──
-function actionColor(action: string) {
-  if (action.includes('.create') || action.includes('.start')) return 'border-emerald-400/40 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400';
-  if (action.includes('.delete') || action.includes('.suspend') || action.includes('.ban')) return 'border-rose-400/40 text-rose-700 dark:border-rose-500/30 dark:text-rose-400';
-  if (action.includes('.update') || action.includes('.edit')) return 'border-amber-400/40 text-amber-700 dark:border-amber-500/30 dark:text-amber-400';
-  return 'border-border text-muted-foreground';
+// ── Helpers ──
+function formatAction(action: string): string {
+  return action
+    .split(/[._]/g)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
 }
 
-function actionBg(action: string) {
-  if (action.includes('.create') || action.includes('.start')) return 'bg-emerald-100 dark:bg-emerald-900/20';
-  if (action.includes('.delete') || action.includes('.suspend') || action.includes('.ban')) return 'bg-rose-100 dark:bg-rose-900/20';
-  if (action.includes('.update') || action.includes('.edit')) return 'bg-amber-100 dark:bg-amber-900/20';
-  return 'bg-surface-2/50';
+function getResourceIcon(resource: string) {
+  const icons: Record<string, React.ElementType> = {
+    server: Server, node: HardDrive, user: User, role: Shield,
+    api_key: Key, auth: User, alert: AlertTriangle, backup: HardDrive,
+    template: Server, smtp: Zap, security: Shield, database: HardDrive,
+  };
+  return icons[resource] || Activity;
 }
 
-function resourceIcon(resource: string) {
-  if (resource === 'server') return <Zap className="h-3 w-3" />;
-  if (resource === 'node') return <Globe className="h-3 w-3" />;
-  if (resource === 'user') return <User className="h-3 w-3" />;
-  if (resource === 'role') return <Hash className="h-3 w-3" />;
-  return <ScrollText className="h-3 w-3" />;
+function getActionTone(action: string): 'success' | 'warning' | 'danger' | 'neutral' {
+  if (action.includes('delete') || action.includes('ban') || action.includes('failed') || action.includes('disconnect')) return 'danger';
+  if (action.includes('suspend')) return 'warning';
+  if (action.includes('start') || action.includes('create') || action.includes('resolve') || action.includes('connect') || action.includes('unsuspend') || action.includes('unban') || action.includes('success')) return 'success';
+  return 'neutral';
+}
+
+function toneDot(tone: 'success' | 'warning' | 'danger' | 'neutral') {
+  switch (tone) {
+    case 'success': return 'bg-success';
+    case 'warning': return 'bg-warning';
+    case 'danger': return 'bg-danger';
+    case 'neutral': return 'bg-muted-foreground/30';
+  }
+}
+
+function formatTimeAgo(date: string): string {
+  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+  return `${Math.floor(seconds / 86400)}d`;
+}
+
+function isToday(date: string): boolean {
+  const d = new Date(date);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+}
+
+function isYesterday(date: string): boolean {
+  const d = new Date(date);
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  return d.getFullYear() === yesterday.getFullYear() && d.getMonth() === yesterday.getMonth() && d.getDate() === yesterday.getDate();
+}
+
+function getDateLabel(date: string): string {
+  if (isToday(date)) return 'Today';
+  if (isYesterday(date)) return 'Yesterday';
+  return new Date(date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 }
 
 // ── Log Detail Modal ──
-function LogDetailModal({
-  log,
-  onClose,
-}: {
-  log: AuditLogEntry;
-  onClose: () => void;
-}) {
+function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => void }) {
   const metadata = log.metadata || {};
   const metadataEntries = Object.entries(metadata);
   const hasMetadata = metadataEntries.length > 0;
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ type: 'spring', stiffness: 400, damping: 30 }}
         className="mx-4 w-full max-w-2xl rounded-xl border border-border bg-card shadow-xl"
       >
-        {/* Header */}
-        <div className="border-b border-border/50 px-6 py-4">
+        <div className="border-b border-border px-6 py-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
-              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${actionBg(log.action)}`}>
-                {resourceIcon(log.resource)}
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                {createElement(getResourceIcon(log.resource), { className: 'h-4 w-4' })}
               </div>
               <div>
-                <h2 className="text-base font-semibold text-foreground dark:text-white">
-                  {log.action}
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  {log.resource} · {log.id}
-                </p>
+                <h2 className="text-base font-semibold text-foreground">{log.action}</h2>
+                <p className="text-xs text-muted-foreground">{log.resource} · {log.id}</p>
               </div>
             </div>
-            <button
-              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-              onClick={onClose}
-            >
+            <button className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" onClick={onClose}>
               <X className="h-4 w-4" />
             </button>
           </div>
         </div>
 
-        {/* Body */}
         <div className="space-y-5 px-6 py-5">
-          {/* User info */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">User</span>
               <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary-100 dark:bg-primary-900/30">
-                  <User className="h-3.5 w-3.5 text-primary-600 dark:text-primary-400" />
+                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
+                  <User className="h-3.5 w-3.5 text-primary" />
                 </div>
                 <div>
-                  <div className="text-sm font-medium text-foreground dark:text-zinc-100">
-                    {log.user?.username ?? 'Unknown'}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {log.user?.email ?? log.userId ?? 'n/a'}
-                  </div>
+                  <div className="text-sm font-medium text-foreground">{log.user?.username ?? 'Unknown'}</div>
+                  <div className="text-[11px] text-muted-foreground">{log.user?.email ?? log.userId ?? 'n/a'}</div>
                 </div>
               </div>
             </div>
             <div className="space-y-1">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Timestamp</span>
-              <div className="flex items-center gap-2 text-sm text-foreground dark:text-zinc-100">
+              <div className="flex items-center gap-2 text-sm text-foreground">
                 <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                 {new Date(log.timestamp).toLocaleString()}
               </div>
             </div>
           </div>
 
-          {/* Details grid */}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div className="space-y-1">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Action</span>
-              <Badge variant="outline" className={`text-[11px] ${actionColor(log.action)}`}>
-                {log.action}
-              </Badge>
+              <Badge variant="outline" className="text-[11px]">{log.action}</Badge>
             </div>
             <div className="space-y-1">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Resource</span>
               <Badge variant="secondary" className="gap-1 text-[11px]">
-                {resourceIcon(log.resource)}
+                {createElement(getResourceIcon(log.resource), { className: 'h-3 w-3' })}
                 {log.resource}
               </Badge>
             </div>
             <div className="space-y-1">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">IP Address</span>
-              <span className="block font-mono text-xs text-foreground dark:text-zinc-300">
-                {log.ipAddress ?? 'n/a'}
-              </span>
+              <span className="block text-xs text-foreground">{log.ipAddress ?? 'n/a'}</span>
             </div>
             <div className="space-y-1">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">User ID</span>
-              <span className="block font-mono text-[11px] text-muted-foreground truncate" title={log.userId ?? 'n/a'}>
-                {log.userId ?? 'n/a'}
-              </span>
+              <span className="block text-[11px] text-muted-foreground truncate" title={log.userId ?? 'n/a'}>{log.userId ?? 'n/a'}</span>
             </div>
           </div>
 
-          {/* Metadata */}
-          {hasMetadata && (
+          {hasMetadata ? (
             <div className="space-y-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Metadata ({metadataEntries.length} field{metadataEntries.length === 1 ? '' : 's'})
-              </span>
-              <div className="rounded-lg border border-border/50 bg-surface-2/40 overflow-hidden">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Metadata ({metadataEntries.length})</span>
+              <div className="rounded-lg border border-border bg-muted/30 overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-border/50 text-left">
+                    <tr className="border-b border-border text-left">
                       <th className="px-3 py-2 font-semibold text-muted-foreground">Key</th>
                       <th className="px-3 py-2 font-semibold text-muted-foreground">Value</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border/30">
+                  <tbody className="divide-y divide-border">
                     {metadataEntries.map(([key, value]) => (
-                      <tr key={key} className="transition-colors hover:bg-surface-2/60">
-                        <td className="px-3 py-2 font-mono text-foreground dark:text-zinc-300">{key}</td>
+                      <tr key={key} className="hover:bg-muted/50">
+                        <td className="px-3 py-2 text-foreground">{key}</td>
                         <td className="max-w-xs truncate px-3 py-2 text-muted-foreground" title={JSON.stringify(value)}>
                           {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                         </td>
@@ -207,129 +224,19 @@ function LogDetailModal({
                 </table>
               </div>
             </div>
-          )}
-
-          {!hasMetadata && (
-            <div className="rounded-lg border border-dashed border-border/50 bg-surface-2/20 px-4 py-3 text-center text-xs text-muted-foreground">
+          ) : (
+            <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-3 text-center text-xs text-muted-foreground">
               No metadata recorded for this event.
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex justify-end border-t border-border/50 px-6 py-3">
-          <Button variant="outline" size="sm" onClick={onClose}>
-            Close
-          </Button>
+        <div className="flex justify-end border-t border-border px-6 py-3">
+          <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
         </div>
       </motion.div>
     </div>
     </ModalPortal>
-  );
-}
-
-// ── Log Row ──
-function LogRow({
-  log,
-  onView,
-  index,
-}: {
-  log: AuditLogEntry;
-  onView: () => void;
-  index: number;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: index * 0.015 }}
-      className="group relative px-5 py-3.5 text-sm transition-colors hover:bg-surface-2/30"
-    >
-      {/* Desktop: grid */}
-      <div className="hidden grid-cols-12 items-center gap-3 md:grid">
-        <div className="col-span-3 min-w-0">
-          <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary-100 dark:bg-primary-900/30">
-              <User className="h-3 w-3 text-primary-600 dark:text-primary-400" />
-            </div>
-            <div className="min-w-0">
-              <div className="truncate font-medium text-foreground dark:text-zinc-100">
-                {log.user?.username ?? 'Unknown'}
-              </div>
-              <div className="truncate text-[11px] text-muted-foreground">
-                {log.user?.email ?? log.userId ?? 'n/a'}
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="col-span-3 min-w-0">
-          <Badge variant="outline" className={`text-[11px] ${actionColor(log.action)}`}>
-            {log.action}
-          </Badge>
-        </div>
-        <div className="col-span-2">
-          <Badge variant="secondary" className="gap-1 text-[11px]">
-            {resourceIcon(log.resource)}
-            {log.resource}
-          </Badge>
-        </div>
-        <div className="col-span-2 truncate font-mono text-xs text-muted-foreground">
-          {log.ipAddress ?? 'n/a'}
-        </div>
-        <div className="col-span-2 flex items-center justify-end gap-2">
-          <span className="text-xs text-muted-foreground">
-            {new Date(log.timestamp).toLocaleString()}
-          </span>
-          <button
-            className="rounded-md p-1 text-muted-foreground opacity-0 transition-colors hover:bg-primary/5 hover:text-primary sm:group-hover:opacity-100"
-            onClick={onView}
-            title="View details"
-          >
-            <Eye className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile: stacked */}
-      <div className="md:hidden">
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary-100 dark:bg-primary-900/30">
-                <User className="h-3 w-3 text-primary-600 dark:text-primary-400" />
-              </div>
-              <span className="truncate font-medium text-foreground dark:text-zinc-100">
-                {log.user?.username ?? 'Unknown'}
-              </span>
-            </div>
-            <div className="ml-8 mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Badge variant="outline" className={`text-[10px] ${actionColor(log.action)}`}>
-                {log.action}
-              </Badge>
-              <Badge variant="secondary" className="gap-1 text-[10px]">
-                {resourceIcon(log.resource)}
-                {log.resource}
-              </Badge>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-muted-foreground">
-              {new Date(log.timestamp).toLocaleString()}
-            </span>
-            <button
-              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
-              onClick={onView}
-              title="View details"
-            >
-              <Eye className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-        <div className="ml-8 mt-1 text-[11px] text-muted-foreground">
-          {log.user?.email ?? log.userId ?? 'n/a'} · {log.ipAddress ?? 'n/a'}
-        </div>
-      </div>
-    </motion.div>
   );
 }
 
@@ -339,13 +246,15 @@ function AuditLogsPage() {
   const [action, setAction] = useState('');
   const [resource, setResource] = useState('');
   const [userId, setUserId] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [defaultRange] = useState(buildDefaultRange);
   const [from, setFrom] = useState(defaultRange.from);
   const [to, setTo] = useState(defaultRange.to);
   const [range, setRange] = useState('24h');
   const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
+  const [livePoll, setLivePoll] = useState(false);
 
-  const { data, isLoading } = useAuditLogs({
+  const { data, isLoading, refetch, isFetching } = useAuditLogs({
     page,
     limit: pageSize,
     action: action || undefined,
@@ -355,14 +264,44 @@ function AuditLogsPage() {
     to: to ? new Date(to).toISOString() : undefined,
   });
 
+  useEffect(() => {
+    if (!livePoll) return;
+    const interval = setInterval(() => refetch(), 15000);
+    return () => clearInterval(interval);
+  }, [livePoll, refetch]);
+
   const logs = data?.logs ?? [];
   const pagination = data?.pagination;
   const hasFilters = action || resource || userId || from || to;
+
+  const filteredLogs = useMemo(() => {
+    if (!searchQuery.trim()) return logs;
+    const q = searchQuery.toLowerCase();
+    return logs.filter((log) =>
+      log.action.toLowerCase().includes(q) ||
+      log.resource.toLowerCase().includes(q) ||
+      log.user?.username?.toLowerCase().includes(q) ||
+      log.user?.email?.toLowerCase().includes(q) ||
+      log.resourceId?.toLowerCase().includes(q) ||
+      log.ipAddress?.toLowerCase().includes(q),
+    );
+  }, [logs, searchQuery]);
+
+  const grouped = useMemo(() => {
+    const groups = new Map<string, AuditLogEntry[]>();
+    for (const log of filteredLogs) {
+      const label = getDateLabel(log.timestamp);
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label)!.push(log);
+    }
+    return groups;
+  }, [filteredLogs]);
 
   const clearFilters = () => {
     setAction('');
     setResource('');
     setUserId('');
+    setSearchQuery('');
     const fresh = buildDefaultRange();
     setFrom(fresh.from);
     setTo(fresh.to);
@@ -399,8 +338,8 @@ function AuditLogsPage() {
     >
       {/* Ambient background */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-slate-500/8 to-zinc-500/8 blur-3xl dark:from-slate-500/15 dark:to-zinc-500/15" />
-        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-blue-500/8 to-indigo-500/8 blur-3xl dark:from-blue-500/15 dark:to-indigo-500/15" />
+        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-violet-500/8 to-cyan-500/8 blur-3xl dark:from-violet-500/15 dark:to-cyan-500/15" />
+        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-sky-500/8 to-indigo-500/8 blur-3xl dark:from-sky-500/15 dark:to-indigo-500/15" />
       </div>
 
       <div className="relative z-10 space-y-5">
@@ -409,10 +348,10 @@ function AuditLogsPage() {
           <div className="space-y-1.5">
             <div className="flex items-center gap-3">
               <div className="relative">
-                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-slate-500 to-zinc-500 opacity-20 blur-sm" />
-                <ScrollText className="relative h-7 w-7 text-slate-600 dark:text-slate-400" />
+                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-violet-500 to-cyan-500 opacity-20 blur-sm" />
+                <Activity className="relative h-7 w-7 text-violet-600 dark:text-violet-400" />
               </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
                 Audit Logs
               </h1>
             </div>
@@ -421,9 +360,22 @@ function AuditLogsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {livePoll && (
+              <Badge variant="outline" className="gap-1.5 border-success/30 text-success text-xs">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
+                </span>
+                Live
+              </Badge>
+            )}
             <Badge variant="outline" className="text-xs">
-              {data?.pagination?.total ?? logs.length} events
+              {pagination?.total ?? 0} events
             </Badge>
+            <Button variant="outline" size="sm" onClick={() => setLivePoll(!livePoll)} className="gap-1.5">
+              <RefreshCw className={`h-3.5 w-3.5 ${livePoll && isFetching ? 'animate-spin' : ''}`} />
+              {livePoll ? 'Auto' : 'Poll'}
+            </Button>
             <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1.5">
               <RotateCcw className="h-3.5 w-3.5" />
               Clear
@@ -436,76 +388,60 @@ function AuditLogsPage() {
         </motion.div>
 
         {/* ── Filters ── */}
-        <motion.div variants={itemVariants} className="overflow-hidden rounded-xl border border-border/50 bg-card/60 p-4 backdrop-blur-sm">
+        <motion.div variants={itemVariants} className="overflow-hidden rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
             <Search className="h-3.5 w-3.5" />
             Filters
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <label className="block space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">Action contains</span>
-              <Input value={action} onChange={(e) => { setAction(e.target.value); setPage(1); }} placeholder="server.create" />
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">Resource</span>
-              <Input value={resource} onChange={(e) => { setResource(e.target.value); setPage(1); }} placeholder="server" />
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">User ID</span>
-              <Input value={userId} onChange={(e) => { setUserId(e.target.value); setPage(1); }} placeholder="cuid" />
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">From</span>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
-                type="datetime-local"
-                value={from}
-                onChange={(e) => { setFrom(e.target.value); setRange(''); setPage(1); }}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search actions, users, IP…"
+                className="pl-9"
               />
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">To</span>
-              <Input
-                type="datetime-local"
-                value={to}
-                onChange={(e) => { setTo(e.target.value); setRange(''); setPage(1); }}
-              />
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">Quick range</span>
-              <Select
-                value={range || 'custom'}
-                onValueChange={(next) => {
-                  const value = next === 'custom' ? '' : next;
-                  setRange(value);
-                  if (!value) return;
-                  const now = new Date();
-                  const nextFrom = new Date(now);
-                  if (value === '1h') nextFrom.setHours(now.getHours() - 1);
-                  if (value === '6h') nextFrom.setHours(now.getHours() - 6);
-                  if (value === '24h') nextFrom.setHours(now.getHours() - 24);
-                  if (value === '7d') nextFrom.setDate(now.getDate() - 7);
-                  setFrom(nextFrom.toISOString().slice(0, 16));
-                  setTo(now.toISOString().slice(0, 16));
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Custom" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="custom">Custom</SelectItem>
-                  <SelectItem value="1h">Last 1h</SelectItem>
-                  <SelectItem value="6h">Last 6h</SelectItem>
-                  <SelectItem value="24h">Last 24h</SelectItem>
-                  <SelectItem value="7d">Last 7d</SelectItem>
-                </SelectContent>
-              </Select>
-            </label>
+            </div>
+            <Input value={action} onChange={(e) => { setAction(e.target.value); setPage(1); }} placeholder="Action contains…" />
+            <Input value={resource} onChange={(e) => { setResource(e.target.value); setPage(1); }} placeholder="Resource type…" />
+            <Input value={userId} onChange={(e) => { setUserId(e.target.value); setPage(1); }} placeholder="User ID…" />
+          </div>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Input type="datetime-local" value={from} onChange={(e) => { setFrom(e.target.value); setRange(''); setPage(1); }} />
+            <Input type="datetime-local" value={to} onChange={(e) => { setTo(e.target.value); setRange(''); setPage(1); }} />
+            <Select
+              value={range || 'custom'}
+              onValueChange={(next) => {
+                const value = next === 'custom' ? '' : next;
+                setRange(value);
+                if (!value) return;
+                const now = new Date();
+                const nextFrom = new Date(now);
+                if (value === '1h') nextFrom.setHours(now.getHours() - 1);
+                if (value === '6h') nextFrom.setHours(now.getHours() - 6);
+                if (value === '24h') nextFrom.setHours(now.getHours() - 24);
+                if (value === '7d') nextFrom.setDate(now.getDate() - 7);
+                setFrom(nextFrom.toISOString().slice(0, 16));
+                setTo(now.toISOString().slice(0, 16));
+                setPage(1);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Quick range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="custom">Custom</SelectItem>
+                <SelectItem value="1h">Last 1 hour</SelectItem>
+                <SelectItem value="6h">Last 6 hours</SelectItem>
+                <SelectItem value="24h">Last 24 hours</SelectItem>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Active filter chips */}
           {hasFilters && (
-            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/50 pt-3">
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
               <span className="text-[11px] text-muted-foreground">Active:</span>
               {action && <Badge variant="outline" className="text-[10px]">action: {action}</Badge>}
               {resource && <Badge variant="outline" className="text-[10px]">resource: {resource}</Badge>}
@@ -515,73 +451,109 @@ function AuditLogsPage() {
           )}
         </motion.div>
 
-        {/* ── Log Table ── */}
+        {/* ── Log Feed ── */}
         {isLoading ? (
-          <motion.div variants={itemVariants} className="overflow-hidden rounded-xl border border-border bg-card/80">
-            {/* Desktop header */}
-            <div className="hidden border-b border-border/50 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-12 md:gap-3">
-              <div className="col-span-3">User</div>
-              <div className="col-span-3">Action</div>
-              <div className="col-span-2">Resource</div>
-              <div className="col-span-2">IP</div>
-              <div className="col-span-2 text-right">Timestamp</div>
-            </div>
-            <div className="divide-y divide-border/30">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                <div key={i} className="px-5 py-3.5">
-                  <div className="hidden grid-cols-12 gap-3 md:grid">
-                    <div className="col-span-3 flex items-center gap-2">
-                      <div className="h-6 w-6 animate-pulse rounded-md bg-surface-3" />
-                      <div className="space-y-1">
-                        <div className="h-3 w-20 animate-pulse rounded bg-surface-3" />
-                        <div className="h-2.5 w-32 animate-pulse rounded bg-surface-2" />
-                      </div>
-                    </div>
-                    <div className="col-span-3"><div className="h-5 w-24 animate-pulse rounded-full bg-surface-2" /></div>
-                    <div className="col-span-2"><div className="h-5 w-16 animate-pulse rounded-full bg-surface-2" /></div>
-                    <div className="col-span-2"><div className="h-3 w-20 animate-pulse rounded bg-surface-2" /></div>
-                    <div className="col-span-2 flex justify-end"><div className="h-3 w-28 animate-pulse rounded bg-surface-2" /></div>
-                  </div>
+          <motion.div variants={itemVariants} className="space-y-2">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+              <div key={i} className="flex gap-3 rounded-xl border border-border bg-card p-4">
+                <div className="h-8 w-8 animate-pulse rounded-lg bg-muted" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-48 animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-32 animate-pulse rounded bg-muted" />
                 </div>
-              ))}
-            </div>
-          </motion.div>
-        ) : logs.length > 0 ? (
-          <motion.div variants={itemVariants} className="overflow-hidden rounded-xl border border-border bg-card/80 backdrop-blur-sm">
-            {/* Desktop header */}
-            <div className="hidden border-b border-border/50 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-12 md:gap-3">
-              <div className="col-span-3">User</div>
-              <div className="col-span-3">Action</div>
-              <div className="col-span-2">Resource</div>
-              <div className="col-span-2">IP</div>
-              <div className="col-span-2 text-right">Timestamp</div>
-            </div>
-            <div className="divide-y divide-border/30">
-              {logs.map((log, i) => (
-                <LogRow
-                  key={log.id}
-                  log={log}
-                  index={i}
-                  onView={() => setSelectedLog(log)}
-                />
-              ))}
-            </div>
-            {pagination && pagination.totalPages > 1 && (
-              <div className="flex justify-center border-t border-border/50 pt-3">
-                <Pagination
-                  page={pagination.page}
-                  totalPages={pagination.totalPages}
-                  onPageChange={setPage}
-                />
+                <div className="h-3 w-12 animate-pulse rounded bg-muted" />
               </div>
-            )}
+            ))}
           </motion.div>
+        ) : filteredLogs.length > 0 ? (
+          <div className="space-y-6">
+            {Array.from(grouped.entries()).map(([dateLabel, entries]) => (
+              <div key={dateLabel}>
+                <div className="mb-3 flex items-center gap-3">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{dateLabel}</h3>
+                  <div className="h-px flex-1 bg-border" />
+                  <Badge variant="outline" className="text-[10px]">{entries.length}</Badge>
+                </div>
+
+                <div className="space-y-2">
+                  <AnimatePresence mode="popLayout">
+                    {entries.map((log, i) => {
+                      const Icon = getResourceIcon(log.resource);
+                      const tone = getActionTone(log.action);
+                      const resourceLink = log.resource === 'server' && log.resourceId ? `/servers/${log.resourceId}` :
+                        log.resource === 'node' && log.resourceId ? `/admin/nodes/${log.resourceId}` : null;
+
+                      return (
+                        <motion.div
+                          key={log.id}
+                          variants={itemVariants}
+                          initial="hidden"
+                          animate="visible"
+                          layout
+                          className="group flex items-start gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:border-primary/20"
+                        >
+                          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <Icon className="h-4 w-4" />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-foreground">
+                                {formatAction(log.action)}
+                              </span>
+                              <span className={`h-1.5 w-1.5 rounded-full ${toneDot(tone)}`} />
+                              <Badge variant="secondary" className="text-[10px]">{log.resource}</Badge>
+                            </div>
+
+                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                              {log.user?.username && (
+                                <span className="font-medium text-foreground/70">{log.user.username}</span>
+                              )}
+                              {resourceLink ? (
+                                <Link to={resourceLink} className="inline-flex items-center gap-1 text-primary transition-colors hover:underline">
+                                  {log.resource}:{log.resourceId?.slice(0, 8)}
+                                  <ExternalLink className="h-2.5 w-2.5" />
+                                </Link>
+                              ) : log.resourceId ? (
+                                <span>{log.resource}:{log.resourceId.slice(0, 8)}</span>
+                              ) : null}
+                              {log.ipAddress && <span className="opacity-60">{log.ipAddress}</span>}
+                            </div>
+                          </div>
+
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            <span className="text-[11px] text-muted-foreground" title={new Date(log.timestamp).toLocaleString()}>
+                              {formatTimeAgo(log.timestamp)}
+                            </span>
+                            <button
+                              className="rounded-md p-1 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-primary/10 hover:text-primary"
+                              onClick={() => setSelectedLog(log)}
+                              title="View details"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
           <motion.div variants={itemVariants}>
             <EmptyState
               title="No audit logs"
-              description={hasFilters ? 'Try adjusting your filters.' : 'Audit events will appear once user actions are recorded.'}
+              description={hasFilters || searchQuery ? 'Try adjusting your filters.' : 'Audit events will appear once user actions are recorded.'}
             />
+          </motion.div>
+        )}
+
+        {/* ── Pagination ── */}
+        {pagination && pagination.totalPages > 1 && (
+          <motion.div variants={itemVariants} className="flex justify-center">
+            <Pagination page={page} totalPages={pagination.totalPages} onPageChange={setPage} />
           </motion.div>
         )}
       </div>

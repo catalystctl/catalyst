@@ -86,7 +86,7 @@ function InlineRenameInput({
   return (
     <input
       ref={inputRef}
-      className="w-full max-w-xs rounded border border-primary-500 bg-white px-1.5 py-0.5 text-sm text-foreground outline-none dark:bg-surface-2 dark:text-zinc-200"
+      className="w-full max-w-xs rounded border border-primary bg-card px-1.5 py-0.5 text-sm text-foreground outline-none dark:bg-surface-2 dark:text-foreground"
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onBlur={() => onSubmit(entry, value)}
@@ -169,7 +169,7 @@ function FileList({
 
   if (isError) {
     return (
-      <div className="px-4 py-8 text-center text-sm text-rose-600 dark:text-rose-400">
+      <div className="px-4 py-8 text-center text-sm text-destructive dark:text-destructive">
         Unable to load file listing.
       </div>
     );
@@ -182,7 +182,7 @@ function FileList({
   }
 
   const thClass =
-    'cursor-pointer select-none px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-muted-foreground dark:text-muted-foreground dark:hover:text-zinc-300';
+    'cursor-pointer select-none px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-muted-foreground dark:text-muted-foreground dark:hover:text-foreground';
 
   const totalHeight = files.length * ROW_HEIGHT;
   const innerHeight = virtualizer.getTotalSize();
@@ -197,7 +197,7 @@ function FileList({
               type="checkbox"
               checked={allSelected}
               onChange={onSelectAll}
-              className="h-3.5 w-3.5 rounded border-border text-primary-500 dark:border-zinc-600 dark:bg-surface-2"
+              className="h-3.5 w-3.5 rounded border-border text-primary dark:border-border dark:bg-surface-2"
             />
           </div>
           <div className={thClass} onClick={() => onSort('name')}>
@@ -259,7 +259,7 @@ function FileList({
                         onShiftSelect(entry);
                       }
                     }}
-                    className="h-3.5 w-3.5 rounded border-border text-primary-500 dark:border-zinc-600 dark:bg-surface-2"
+                    className="h-3.5 w-3.5 rounded border-border text-primary dark:border-border dark:bg-surface-2"
                   />
                 </div>
                 <div className="flex items-center gap-2 flex-1 min-w-0 px-3">
@@ -272,7 +272,7 @@ function FileList({
                     }}
                   >
                     {entry.isDirectory ? (
-                      <Folder className="h-4 w-4 shrink-0 text-primary-500" />
+                      <Folder className="h-4 w-4 shrink-0 text-primary" />
                     ) : (
                       <File className="h-4 w-4 shrink-0 text-muted-foreground dark:text-muted-foreground" />
                     )}
@@ -283,7 +283,7 @@ function FileList({
                         onCancel={onRenameCancel}
                       />
                     ) : (
-                      <span className="truncate text-sm text-foreground dark:text-zinc-200">
+                      <span className="truncate text-sm text-foreground dark:text-foreground">
                         {entry.name}
                       </span>
                     )}

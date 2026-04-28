@@ -26,15 +26,15 @@ function FileUploader({ path, isUploading, onUpload, onClose }: Props) {
   };
 
   return (
-    <div className="rounded-xl border border-border bg-white p-4 dark:border-border dark:bg-surface-1">
+    <div className="rounded-xl border border-border bg-card p-4 dark:border-border dark:bg-surface-1">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-foreground dark:text-white">Upload Files</h3>
+          <h3 className="text-sm font-semibold text-foreground dark:text-foreground">Upload Files</h3>
           <p className="text-xs text-muted-foreground dark:text-muted-foreground">Target: {path}</p>
         </div>
         <button
           type="button"
-          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-zinc-300"
+          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-muted-foreground"
           onClick={onClose}
         >
           <X className="h-4 w-4" />
@@ -43,7 +43,7 @@ function FileUploader({ path, isUploading, onUpload, onClose }: Props) {
       <div
         className={`mt-3 flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 transition-colors ${
           isDragActive
-            ? 'border-primary-500 bg-primary-500/5 text-primary-600 dark:text-primary-400'
+            ? 'border-primary bg-primary-500/5 text-primary-600 dark:text-primary-400'
             : 'border-border text-muted-foreground dark:border-border dark:text-muted-foreground'
         }`}
         onDragOver={(e) => {
@@ -72,7 +72,7 @@ function FileUploader({ path, isUploading, onUpload, onClose }: Props) {
           />
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-primary-500 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
             onClick={() => inputRef.current?.click()}
             disabled={isUploading}
           >
@@ -95,7 +95,7 @@ function FileUploader({ path, isUploading, onUpload, onClose }: Props) {
                 </span>
                 <div className="h-1.5 w-24 flex-shrink-0 overflow-hidden rounded-full bg-surface-2 dark:bg-surface-2">
                   <div
-                    className="h-full rounded-full bg-primary-600 transition-all duration-200"
+                    className="h-full rounded-full bg-primary transition-all duration-200"
                     style={{ width: `${pct}%` }}
                   />
                 </div>

@@ -53,7 +53,7 @@ function NodeDeleteDialog({ nodeId, nodeName, open: controlledOpen, onOpenChange
     <>
       {controlledOpen === undefined && (
         <button
-          className="w-full rounded-md bg-rose-600 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-rose-500/20 transition-all duration-300 hover:bg-rose-500"
+          className="w-full rounded-md bg-destructive px-3 py-1 text-xs font-semibold text-destructive-foreground shadow-lg shadow-destructive/20 transition-all duration-300 hover:bg-destructive/50"
           onClick={() => setOpen(true)}
         >
           Delete
@@ -61,22 +61,22 @@ function NodeDeleteDialog({ nodeId, nodeName, open: controlledOpen, onOpenChange
       )}
       {open ? (
         <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-xl border border-border bg-white p-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
-            <div className="text-lg font-semibold text-foreground dark:text-white">Delete node</div>
-            <p className="mt-2 text-sm text-muted-foreground dark:text-zinc-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-card dark:bg-surface-0/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
+            <div className="text-lg font-semibold text-foreground dark:text-foreground">Delete node</div>
+            <p className="mt-2 text-sm text-muted-foreground">
               Are you sure you want to delete <span className="font-semibold">{nodeName}</span>? This
               action cannot be undone.
             </p>
             <div className="mt-4 flex justify-end gap-2 text-xs">
               <button
-                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:hover:border-primary/30"
                 onClick={() => setOpen(false)}
               >
                 Cancel
               </button>
               <button
-                className="rounded-md bg-rose-600 px-4 py-2 font-semibold text-white shadow-lg shadow-rose-500/20 transition-all duration-300 hover:bg-rose-500 disabled:opacity-60"
+                className="rounded-md bg-destructive px-4 py-2 font-semibold text-destructive-foreground shadow-lg shadow-destructive/20 transition-all duration-300 hover:bg-destructive/50 disabled:opacity-60"
                 onClick={() => mutation.mutate()}
                 disabled={mutation.isPending}
               >

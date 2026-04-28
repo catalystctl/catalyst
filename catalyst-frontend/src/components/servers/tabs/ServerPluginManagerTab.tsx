@@ -140,7 +140,7 @@ function VersionSelector({
           <div className="flex items-end gap-2">
             <div className="relative flex-1">
               <select
-                className="w-full appearance-none rounded-lg border border-border bg-surface-2 px-3 py-2 pr-8 text-xs text-foreground transition-colors focus:border-primary-500 focus:outline-none"
+                className="w-full appearance-none rounded-lg border border-border bg-surface-2 px-3 py-2 pr-8 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
                 value={selectedVersion}
                 onChange={(event) => onVersionChange(event.target.value)}
                 disabled={isLoading}
@@ -523,7 +523,7 @@ export default function ServerPluginManagerTab({
               <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-violet-500 to-purple-500 opacity-20 blur-sm" />
               <Puzzle className="relative h-7 w-7 text-violet-600 dark:text-violet-400" />
             </div>
-            <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+            <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">
               Plugins
             </h1>
           </div>
@@ -555,7 +555,7 @@ export default function ServerPluginManagerTab({
             type="button"
             className={`relative flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all duration-200 ${
               pluginSubTab === tab
-                ? 'bg-primary text-white shadow-sm'
+                ? 'bg-primary text-primary-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
             onClick={() => {
@@ -823,7 +823,7 @@ export default function ServerPluginManagerTab({
                                     onClick={(e) => e.stopPropagation()}
                                     className="shrink-0 rounded-md p-0.5 opacity-0 transition-all hover:bg-surface-2 group-hover:opacity-100"
                                   >
-                                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-primary-500" />
+                                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
                                   </a>
                                 )}
                               </div>
@@ -905,7 +905,7 @@ export default function ServerPluginManagerTab({
                               type="button"
                               className={`h-8 min-w-8 rounded-lg px-2 text-xs font-medium transition-colors ${
                                 searchPage === pageNum
-                                  ? 'bg-primary text-white shadow-sm'
+                                  ? 'bg-primary text-primary-foreground shadow-sm'
                                   : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'
                               }`}
                               onClick={() => setSearchPage(pageNum)}
@@ -1162,7 +1162,7 @@ export default function ServerPluginManagerTab({
                           <div
                             className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${
                               isSelected
-                                ? 'border-primary bg-primary text-white'
+                                ? 'border-primary bg-primary text-primary-foreground'
                                 : 'border-border bg-background group-hover:border-primary/40'
                             }`}
                           >

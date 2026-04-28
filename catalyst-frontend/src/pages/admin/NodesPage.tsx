@@ -109,8 +109,8 @@ function LocationSectionHeader({ location, count }: { location: Location | null;
     return (
       <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
         <div className="flex items-center gap-2">
-          <MapPin className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          <h3 className="text-sm font-semibold text-foreground dark:text-zinc-100">
+          <MapPin className="h-4 w-4 text-success dark:text-success" />
+          <h3 className="text-sm font-semibold text-foreground dark:text-foreground">
             {location.name}
           </h3>
           <Badge variant="secondary" className="text-[10px]">
@@ -130,7 +130,7 @@ function LocationSectionHeader({ location, count }: { location: Location | null;
     <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
       <div className="flex items-center gap-2">
         <MapPin className="h-4 w-4 text-muted-foreground" />
-        <h3 className="text-sm font-semibold text-foreground dark:text-zinc-100">Unassigned</h3>
+        <h3 className="text-sm font-semibold text-foreground dark:text-foreground">Unassigned</h3>
         <Badge variant="secondary" className="text-[10px]">
           {count} node{count !== 1 ? 's' : ''}
         </Badge>
@@ -179,7 +179,7 @@ function NodeRow({
               prev.includes(node.id) ? prev.filter((id) => id !== node.id) : [...prev, node.id],
             )
           }
-          className="h-4 w-4 flex-shrink-0 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+          className="h-4 w-4 flex-shrink-0 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
         />
       )}
 
@@ -187,19 +187,19 @@ function NodeRow({
       <div className="flex items-center gap-2">
         <div
           className={`h-2 w-2 rounded-full transition-colors ${
-            node.isOnline ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-surface-3'
+            node.isOnline ? 'bg-success/50' : 'bg-surface-3 dark:bg-surface-3'
           }`}
         />
         <div
           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${
             node.isOnline
-              ? 'bg-emerald-100 dark:bg-emerald-900/30'
+              ? 'bg-success/10 dark:bg-success/30'
               : 'bg-surface-2 dark:bg-surface-2'
           }`}
         >
           <Server
             className={`h-4 w-4 transition-colors ${
-              node.isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'
+              node.isOnline ? 'text-success dark:text-success' : 'text-muted-foreground'
             }`}
           />
         </div>
@@ -210,7 +210,7 @@ function NodeRow({
         <div className="flex items-center gap-2.5">
           <Link
             to={`/admin/nodes/${node.id}`}
-            className="truncate font-semibold text-foreground transition-colors hover:text-primary dark:text-zinc-100 dark:hover:text-primary-400"
+            className="truncate font-semibold text-foreground transition-colors hover:text-primary dark:text-foreground dark:hover:text-primary-400"
           >
             {node.name}
           </Link>
@@ -220,11 +220,11 @@ function NodeRow({
           >
             <span className="relative flex h-1.5 w-1.5">
               {node.isOnline && (
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
               )}
               <span
                 className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
-                  node.isOnline ? 'bg-emerald-500' : 'bg-zinc-400'
+                  node.isOnline ? 'bg-success/50' : 'bg-surface-3'
                 }`}
               />
             </span>
@@ -243,19 +243,19 @@ function NodeRow({
       {/* Resource stats — visible on larger screens */}
       <div className="hidden items-center gap-4 lg:flex">
         <div className="text-right">
-          <div className="text-xs font-medium text-foreground dark:text-zinc-100">
+          <div className="text-xs font-medium text-foreground dark:text-foreground">
             {serverCount}
           </div>
           <div className="text-[11px] text-muted-foreground">servers</div>
         </div>
         <div className="text-right">
-          <div className="text-xs font-medium text-foreground dark:text-zinc-100">
+          <div className="text-xs font-medium text-foreground dark:text-foreground">
             {node.maxCpuCores ?? 0}
           </div>
           <div className="text-[11px] text-muted-foreground">cores</div>
         </div>
         <div className="text-right">
-          <div className="text-xs font-medium text-foreground dark:text-zinc-100">
+          <div className="text-xs font-medium text-foreground dark:text-foreground">
             {memoryGB} GB
           </div>
           <div className="text-[11px] text-muted-foreground">memory</div>
@@ -293,7 +293,7 @@ function NodeRow({
               <DropdownMenuItem
                 onClick={() => handleBulkDelete([node.id], node.name)}
                 disabled={deleteMutation.isPending}
-                className="gap-2 text-xs text-rose-600 dark:text-rose-400"
+                className="gap-2 text-xs text-destructive dark:text-destructive"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 Delete
@@ -491,7 +491,7 @@ function AdminNodesPage() {
                   return Array.from(new Set([...prev, ...groupIds]));
                 })
               }
-              className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+              className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
             />
             <span className="text-xs font-medium text-muted-foreground">Select all in section</span>
           </label>
@@ -537,9 +537,9 @@ function AdminNodesPage() {
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 opacity-20 blur-sm" />
-                <Server className="relative h-7 w-7 text-emerald-600 dark:text-emerald-400" />
+                <Server className="relative h-7 w-7 text-success dark:text-success" />
               </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
                 Nodes
               </h1>
             </div>
@@ -559,16 +559,16 @@ function AdminNodesPage() {
             ) : (
               <>
                 <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
-                  <span className="h-2 w-2 rounded-full bg-zinc-400" />
+                  <span className="h-2 w-2 rounded-full bg-surface-3" />
                   {nodes.length} nodes
                 </Badge>
                 <Badge variant="success" className="h-8 gap-1.5 px-3 text-xs">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                  <span className="h-2 w-2 rounded-full bg-success" />
                   {onlineNodes.length} online
                 </Badge>
                 {offlineNodes.length > 0 && (
                   <Badge variant="destructive" className="h-8 gap-1.5 px-3 text-xs">
-                    <span className="h-2 w-2 rounded-full bg-rose-400" />
+                    <span className="h-2 w-2 rounded-full bg-destructive/60" />
                     {offlineNodes.length} offline
                   </Badge>
                 )}
@@ -585,7 +585,7 @@ function AdminNodesPage() {
             {canWrite && <NodeCreateModal />}
             {canWrite && (
               <button
-                className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:text-foreground dark:hover:border-primary/30"
                 onClick={() => setLocationsModalOpen(true)}
               >
                 <MapPin className="mr-1.5 inline h-4 w-4" />
@@ -899,7 +899,7 @@ function AdminNodesPage() {
                               return Array.from(new Set([...prev, ...filteredIds]));
                             })
                           }
-                          className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+                          className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                         />
                         <span className="text-xs font-medium text-muted-foreground">
                           Select all

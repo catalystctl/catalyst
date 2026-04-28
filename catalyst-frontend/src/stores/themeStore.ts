@@ -42,22 +42,22 @@ export const defaultThemeColors: ThemeColors = {
   warningColor: '#f59e0b',
   dangerColor: '#ef4444',
   infoColor: '#3b82f6',
-  darkBackground: '#09090b',
-  darkForeground: '#fafafa',
-  darkCard: '#09090b',
-  darkSurface1: '#0f0f14',
-  darkSurface2: '#27272a',
-  darkSurface3: '#3f3f46',
-  darkBorder: '#27272a',
-  darkMuted: '#a1a1aa',
-  lightBackground: '#ffffff',
-  lightForeground: '#09090b',
-  lightCard: '#ffffff',
-  lightSurface1: '#ffffff',
-  lightSurface2: '#f4f4f5',
-  lightSurface3: '#e4e4e7',
-  lightBorder: '#e4e4e7',
-  lightMuted: '#71717a',
+  darkBackground: '#121217',
+  darkForeground: '#f5f5f7',
+  darkCard: '#18181f',
+  darkSurface1: '#1e1e28',
+  darkSurface2: '#2a2a36',
+  darkSurface3: '#40404e',
+  darkBorder: '#2e2e3a',
+  darkMuted: '#9999a6',
+  lightBackground: '#f6f5f4',
+  lightForeground: '#1a1a1f',
+  lightCard: '#faf9f8',
+  lightSurface1: '#fcfbfa',
+  lightSurface2: '#efeeec',
+  lightSurface3: '#dedddb',
+  lightBorder: '#dedddb',
+  lightMuted: '#767680',
   borderRadius: '0.5rem',
 };
 
@@ -130,6 +130,7 @@ function luminance(hsl: string): number {
 function applyThemeToDOM(
   theme: Theme,
   primaryColor: string,
+  secondaryColor: string,
   accentColor: string,
   colors: ThemeColors,
 ) {
@@ -146,6 +147,12 @@ function applyThemeToDOM(
   }
   const isLightPrimary = luminance(primaryHSL) > 0.55;
   root.style.setProperty('--primary-foreground', isLightPrimary ? '0 0% 9%' : '0 0% 100%');
+
+  // ── Secondary (brand) ──
+  const secondaryHSL = hexToHSL(secondaryColor);
+  root.style.setProperty('--secondary', secondaryHSL);
+  const isLightSecondary = luminance(secondaryHSL) > 0.55;
+  root.style.setProperty('--secondary-foreground', isLightSecondary ? '0 0% 9%' : '0 0% 100%');
 
   // ── Accent + ring ──
   const accentHSL = hexToHSL(accentColor);
@@ -209,8 +216,6 @@ function applyThemeToDOM(
   const fallbackFg = isDark ? '#fafafa' : '#09090b';
   root.style.setProperty('--popover', hexToHSL(colors[cardKey] || colors[bgKey] || fallbackBg));
   root.style.setProperty('--popover-foreground', hexToHSL(colors[fgKey] || fallbackFg));
-  root.style.setProperty('--secondary', hexToHSL(colors[s2Key] || fallbackBg));
-  root.style.setProperty('--secondary-foreground', hexToHSL(colors[fgKey] || fallbackFg));
   root.style.setProperty('--accent-foreground', hexToHSL(colors[bgKey] || fallbackBg));
   root.style.setProperty('--destructive-foreground', '0 0% 100%');
 
@@ -238,6 +243,7 @@ function applyThemeToDOM(
 let previewRafId: number | null = null;
 let pendingPreview: {
   primaryColor: string;
+  secondaryColor: string;
   accentColor: string;
   themeColors: ThemeColors;
 } | null = null;
@@ -248,6 +254,7 @@ function schedulePreview(getState: () => ThemeState) {
 
   pendingPreview = {
     primaryColor: pendingPreview?.primaryColor ?? base.primaryColor,
+    secondaryColor: pendingPreview?.secondaryColor ?? base.secondaryColor,
     accentColor: pendingPreview?.accentColor ?? base.accentColor,
     themeColors: pendingPreview?.themeColors ?? (base.themeColors || defaultThemeColors),
   };
@@ -260,7 +267,7 @@ function schedulePreview(getState: () => ThemeState) {
     pendingPreview = null;
     if (!data) return;
     const currentTheme = getState().theme;
-    applyThemeToDOM(currentTheme, data.primaryColor, data.accentColor, data.themeColors);
+    applyThemeToDOM(currentTheme, data.primaryColor, data.secondaryColor, data.accentColor, data.themeColors);
   });
 }
 
@@ -337,7 +344,7 @@ export const useThemeStore = create<ThemeState>()(
         const settings = themeSettings || defaultThemeSettings;
         const colors = settings.themeColors || defaultThemeColors;
 
-        applyThemeToDOM(theme, settings.primaryColor, settings.accentColor, colors);
+        applyThemeToDOM(theme, settings.primaryColor, settings.secondaryColor, settings.accentColor, colors);
 
         // ── Title & favicon (only from saved settings) ──
         document.title = settings.panelName;
@@ -361,6 +368,10 @@ export const useThemeStore = create<ThemeState>()(
         if (overrides.primaryColor !== undefined) {
           if (!pendingPreview) pendingPreview = null as any;
           pendingPreview = { ...pendingPreview, primaryColor: overrides.primaryColor };
+        }
+        if (overrides.secondaryColor !== undefined) {
+          if (!pendingPreview) pendingPreview = null as any;
+          pendingPreview = { ...pendingPreview, secondaryColor: overrides.secondaryColor };
         }
         if (overrides.accentColor !== undefined) {
           if (!pendingPreview) pendingPreview = null as any;

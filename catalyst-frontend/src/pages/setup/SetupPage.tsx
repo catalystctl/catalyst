@@ -260,9 +260,9 @@ function SetupPage() {
 
   // ── Input class ──
   const inputClass =
-    'w-full rounded-lg border border-border bg-white px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30';
+    'w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30';
 
-  const labelClass = 'block text-sm text-muted-foreground dark:text-zinc-300';
+  const labelClass = 'block text-sm text-muted-foreground dark:text-foreground';
 
   return (
     <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
@@ -275,7 +275,7 @@ function SetupPage() {
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
         className="relative z-10 w-full max-w-lg"
       >
-        <div className="rounded-xl border border-border bg-white px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
+        <div className="rounded-xl border border-border bg-card px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
           {/* ── Step indicator ── */}
           <div className="mb-8 flex items-center justify-center gap-2">
             {stepLabels.map((label, i) => {
@@ -300,7 +300,7 @@ function SetupPage() {
                     <span
                       className={cn(
                         'text-[11px] font-medium transition-colors',
-                        isActive ? 'text-foreground dark:text-white' : 'text-muted-foreground',
+                        isActive ? 'text-foreground ' : 'text-muted-foreground',
                       )}
                     >
                       {label}
@@ -326,7 +326,7 @@ function SetupPage() {
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
-                className="mb-4 rounded-lg border border-rose-200 bg-rose-100/60 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300"
+                className="mb-4 rounded-lg border border-destructive/20 bg-destructive/10/60 px-4 py-3 text-sm text-destructive dark:border-destructive/20 dark:bg-destructive/50/10 dark:text-destructive"
               >
                 {error}
               </motion.div>
@@ -347,7 +347,7 @@ function SetupPage() {
                 transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
               >
                 <div className="text-center">
-                  <h1 className="font-display text-2xl font-bold text-foreground dark:text-white">
+                  <h1 className="font-display text-2xl font-bold text-foreground ">
                     Welcome to Catalyst
                   </h1>
                   <p className="mt-2 text-sm text-muted-foreground">
@@ -385,7 +385,7 @@ function SetupPage() {
                           <button
                             type="button"
                             onClick={clearLogo}
-                            className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white shadow-sm transition-colors hover:bg-rose-600"
+                            className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive/50 text-destructive-foreground shadow-sm transition-colors hover:bg-destructive"
                           >
                             <X className="h-3 w-3" />
                           </button>
@@ -407,7 +407,7 @@ function SetupPage() {
                           Recommended: square image, at least 128x128px. Max 512KB.
                         </p>
                         {!logoDataUri && (
-                          <label className="mt-1.5 inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300">
+                          <label className="mt-1.5 inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-primary-600 transition-colors hover:text-primary dark:text-primary-400 dark:hover:text-primary-300">
                             Choose file
                             <input
                               type="file"
@@ -437,7 +437,7 @@ function SetupPage() {
                         )}
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-foreground dark:text-white">
+                        <p className="text-sm font-semibold text-foreground ">
                           {panelName || 'Catalyst'} Panel
                         </p>
                         <p className="text-xs text-muted-foreground">Game Server Management</p>
@@ -460,7 +460,7 @@ function SetupPage() {
                 transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
               >
                 <div className="text-center">
-                  <h1 className="font-display text-2xl font-bold text-foreground dark:text-white">
+                  <h1 className="font-display text-2xl font-bold text-foreground ">
                     Create Admin Account
                   </h1>
                   <p className="mt-2 text-sm text-muted-foreground">
@@ -569,7 +569,7 @@ function SetupPage() {
                       </button>
                     </div>
                     {confirmPassword && password !== confirmPassword && (
-                      <p className="text-xs text-red-400">Passwords do not match</p>
+                      <p className="text-xs text-destructive">Passwords do not match</p>
                     )}
                   </div>
                 </div>
@@ -588,7 +588,7 @@ function SetupPage() {
                 transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
               >
                 <div className="text-center">
-                  <h1 className="font-display text-2xl font-bold text-foreground dark:text-white">
+                  <h1 className="font-display text-2xl font-bold text-foreground ">
                     Appearance
                   </h1>
                   <p className="mt-2 text-sm text-muted-foreground">
@@ -789,8 +789,8 @@ function SetupPage() {
                         className="flex items-center gap-2 px-4 py-2.5"
                         style={{ backgroundColor: primaryColor }}
                       >
-                        <Monitor className="h-4 w-4 text-white/90" />
-                        <span className="text-sm font-semibold text-white/90">
+                        <Monitor className="h-4 w-4 text-primary-foreground" />
+                        <span className="text-sm font-semibold text-primary-foreground">
                           {panelName || 'Catalyst'}
                         </span>
                       </div>
@@ -815,13 +815,13 @@ function SetupPage() {
                         </div>
                         <div className="flex gap-2">
                           <div
-                            className="h-7 flex-1 rounded-md text-center text-[10px] font-medium leading-7 text-white"
+                            className="h-7 flex-1 rounded-md text-center text-[10px] font-medium leading-7 text-primary-foreground"
                             style={{ backgroundColor: primaryColor }}
                           >
                             Primary Button
                           </div>
                           <div
-                            className="h-7 flex-1 rounded-md text-center text-[10px] font-medium leading-7 text-white"
+                            className="h-7 flex-1 rounded-md text-center text-[10px] font-medium leading-7 text-primary-foreground"
                             style={{ backgroundColor: accentColor }}
                           >
                             Accent Button
@@ -854,7 +854,7 @@ function SetupPage() {
               <button
                 type="button"
                 onClick={goNext}
-                className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500"
+                className="flex items-center gap-1.5 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
               >
                 Next
                 <ArrowRight className="h-4 w-4" />
@@ -864,7 +864,7 @@ function SetupPage() {
                 type="button"
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-70"
+                className="flex items-center gap-1.5 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-70"
               >
                 {isSubmitting ? (
                   <>

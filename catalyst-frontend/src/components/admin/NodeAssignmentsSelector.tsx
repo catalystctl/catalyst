@@ -377,7 +377,7 @@ export function NodeAssignmentsSelector({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search nodes..."
-          className="w-48 rounded-lg border border-border bg-white px-2 py-1 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400"
+          className="w-48 rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground"
         />
       </div>
 
@@ -404,7 +404,7 @@ export function NodeAssignmentsSelector({
                     <svg className="h-4 w-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    <span className="text-xs font-medium text-foreground dark:text-zinc-200">{node.nodeName}</span>
+                    <span className="text-xs font-medium text-foreground">{node.nodeName}</span>
                     {node.roleName && (
                       <span className="text-[10px] text-purple-600 dark:text-purple-400">
                         via {node.roleName}
@@ -419,10 +419,10 @@ export function NodeAssignmentsSelector({
               {directAssignments.filter(n => !n.isWildcard).map(node => (
                 <div
                   key={node.nodeId}
-                  className="flex items-center justify-between rounded-md border border-border bg-white px-2 py-1.5 dark:border-border dark:bg-zinc-950"
+                  className="flex items-center justify-between rounded-md border border-border bg-card px-2 py-1.5 dark:border-border dark:bg-surface-0"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-foreground dark:text-zinc-200">{node.nodeName}</span>
+                    <span className="text-xs font-medium text-foreground">{node.nodeName}</span>
                     {node.expiresAt && (
                       <span className="text-[10px] text-muted-foreground dark:text-muted-foreground">
                         Expires: {new Date(node.expiresAt).toLocaleDateString()}
@@ -436,13 +436,13 @@ export function NodeAssignmentsSelector({
                           setExpirationNodeId(node.nodeId!);
                           setExpirationDate(node.expiresAt || '');
                         }}
-                        className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:hover:bg-surface-2 dark:hover:text-zinc-300"
+                        className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:hover:bg-surface-2 dark:hover:text-foreground"
                       >
                         Set Expiration
                       </button>
                       <button
                         onClick={() => toggleNode(node.nodeId!, node.nodeName)}
-                        className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/20 dark:hover:text-rose-400"
+                        className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive"
                       >
                         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -454,20 +454,20 @@ export function NodeAssignmentsSelector({
               ))}
               {/* Wildcard assignment badge */}
               {directAssignments.some(n => n.isWildcard) && (
-                <div className="flex items-center justify-between rounded-md border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/10">
+                <div className="flex items-center justify-between rounded-md border border-warning/20 bg-warning/5 px-3 py-2 dark:border-warning/30 dark:bg-warning/50/10">
                   <div className="flex items-center gap-2">
-                    <svg className="h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-4 w-4 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
                     <div className="flex flex-col">
-                      <span className="text-xs font-semibold text-amber-900 dark:text-amber-200">All Nodes (*)</span>
-                      <span className="text-[10px] text-amber-700 dark:text-amber-400">Access to all current and future nodes</span>
+                      <span className="text-xs font-semibold text-warning dark:text-warning">All Nodes (*)</span>
+                      <span className="text-[10px] text-warning dark:text-warning">Access to all current and future nodes</span>
                     </div>
                   </div>
                   {!disabled && (
                     <button
                       onClick={() => toggleWildcard()}
-                      className="rounded px-2 py-1 text-[10px] text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-300 dark:hover:bg-amber-900/20"
+                      className="rounded px-2 py-1 text-[10px] text-warning transition-colors hover:bg-warning/10 hover:text-warning dark:text-warning dark:hover:bg-warning/20"
                     >
                       Remove
                     </button>
@@ -482,8 +482,8 @@ export function NodeAssignmentsSelector({
             <label
               className={`flex items-center gap-2 rounded-md border px-2 py-2 text-xs transition-all cursor-pointer ${
                 hasWildcard
-                  ? 'border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10'
-                  : 'border-border bg-white hover:border-amber-500 hover:bg-amber-50/50 dark:border-border dark:bg-zinc-950 dark:hover:border-amber-500/30 dark:hover:bg-amber-500/5'
+                  ? 'border-warning/20 bg-warning/5 dark:border-warning/30 dark:bg-warning/50/10'
+                  : 'border-border bg-card hover:border-warning hover:bg-warning/5/50 dark:border-border dark:bg-surface-0 dark:hover:border-warning/30 dark:hover:bg-warning/50/5'
               }`}
             >
               <input
@@ -491,15 +491,15 @@ export function NodeAssignmentsSelector({
                 checked={hasWildcard}
                 disabled={disabled}
                 onChange={() => toggleWildcard()}
-                className="h-4 w-4 rounded border-border bg-white text-amber-600 focus:ring-2 focus:ring-amber-500 dark:border-border dark:bg-surface-1 dark:text-amber-400 disabled:opacity-50"
+                className="h-4 w-4 rounded border-border bg-card text-warning focus:ring-2 focus:ring-warning dark:border-border dark:bg-surface-1 dark:text-warning disabled:opacity-50"
               />
               <div className="flex flex-col">
-                <span className="font-semibold text-foreground dark:text-zinc-200">All Nodes (*)</span>
+                <span className="font-semibold text-foreground">All Nodes (*)</span>
                 <span className="text-[10px] text-muted-foreground dark:text-muted-foreground">Access to all current and future nodes</span>
               </div>
             </label>
             {hasWildcard && (
-              <div className="mt-1 text-[10px] text-amber-600 dark:text-amber-400 px-2">
+              <div className="mt-1 text-[10px] text-warning dark:text-warning px-2">
                 Individual node selection is disabled when wildcard is active
               </div>
             )}
@@ -530,8 +530,8 @@ export function NodeAssignmentsSelector({
                       isSelected && isInherited
                         ? 'border-purple-200 bg-purple-50 dark:border-purple-500/30 dark:bg-purple-500/10 cursor-default'
                         : isSelected
-                        ? 'border-primary-200 bg-primary-50 dark:border-primary-500/30 dark:bg-primary-500/10 cursor-pointer'
-                        : 'border-border bg-white hover:border-primary-500 hover:bg-surface-2 dark:border-border dark:bg-zinc-950 dark:hover:border-primary/30 dark:hover:bg-surface-1 cursor-pointer'
+                        ? 'border-primary-200 bg-primary-50 dark:border-primary/30 dark:bg-primary-500/10 cursor-pointer'
+                        : 'border-border bg-card hover:border-primary hover:bg-surface-2 dark:border-border dark:bg-surface-0 dark:hover:border-primary/30 dark:hover:bg-surface-1 cursor-pointer'
                     }`}
                   >
                     {isInherited ? (
@@ -544,10 +544,10 @@ export function NodeAssignmentsSelector({
                         checked={isSelected}
                         disabled={disabled || isInherited}
                         onChange={() => toggleNode(node.id, node.name)}
-                        className="h-4 w-4 rounded border-border bg-white text-primary-600 focus:ring-2 focus:ring-primary-500 dark:border-border dark:bg-surface-1 dark:text-primary-400 disabled:opacity-50"
+                        className="h-4 w-4 rounded border-border bg-card text-primary-600 focus:ring-2 focus:ring-primary dark:border-border dark:bg-surface-1 dark:text-primary-400 disabled:opacity-50"
                       />
                     )}
-                    <span className="flex-1 font-medium text-foreground dark:text-zinc-200">{node.name}</span>
+                    <span className="flex-1 font-medium text-foreground">{node.name}</span>
                     <span className="text-[10px] text-muted-foreground dark:text-muted-foreground">{node.location?.name}</span>
                   </label>
                 );
@@ -558,9 +558,9 @@ export function NodeAssignmentsSelector({
           {/* Expiration date modal */}
           {expirationNodeId && (
             <ModalPortal>
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-zinc-950/60 px-4 backdrop-blur-sm">
-              <div className="w-full max-w-sm rounded-xl border border-border bg-white p-4 shadow-surface-light dark:shadow-surface-dark dark:border-border dark:bg-surface-1">
-                <h3 className="text-sm font-semibold text-foreground dark:text-white mb-3">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
+              <div className="w-full max-w-sm rounded-xl border border-border bg-card p-4 shadow-surface-light dark:shadow-surface-dark dark:border-border dark:bg-surface-1">
+                <h3 className="text-sm font-semibold text-foreground mb-3">
                   Set Expiration for {nodes.find(n => n.id === expirationNodeId)?.name}
                 </h3>
                 <input
@@ -568,12 +568,12 @@ export function NodeAssignmentsSelector({
                   value={expirationDate}
                   onChange={(e) => setExpirationDate(e.target.value)}
                   min={new Date().toISOString().slice(0, 16)}
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none hover:border-primary-500 dark:border-border dark:bg-surface-1 dark:text-zinc-200 dark:focus:border-primary-400 dark:hover:border-primary/30"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
                 />
                 <div className="mt-4 flex justify-end gap-2">
                   <button
                     onClick={() => updateExpiration(expirationNodeId, expirationDate)}
-                    className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500"
+                    className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
                   >
                     Save
                   </button>
@@ -582,7 +582,7 @@ export function NodeAssignmentsSelector({
                       setExpirationNodeId(null);
                       setExpirationDate('');
                     }}
-                    className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
+                    className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:text-foreground dark:hover:border-primary/30"
                   >
                     Cancel
                   </button>

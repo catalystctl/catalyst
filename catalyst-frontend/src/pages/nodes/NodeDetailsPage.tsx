@@ -69,29 +69,29 @@ function ModalShell({
   if (!open) return null;
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: 'spring', stiffness: 400, damping: 30 }}
           className={`w-full max-w-2xl rounded-xl border bg-card shadow-xl ${
-            variant === 'danger' ? 'border-rose-500/50' : 'border-border'
+            variant === 'danger' ? 'border-destructive/50' : 'border-border'
           }`}
         >
           <div
             className={`flex items-center justify-between border-b px-6 py-4 ${
-              variant === 'danger' ? 'border-rose-500/30 bg-rose-500/5' : 'border-border'
+              variant === 'danger' ? 'border-destructive/30 bg-destructive/50/5' : 'border-border'
             }`}
           >
-            <h2 className="text-lg font-semibold text-foreground dark:text-white">{title}</h2>
+            <h2 className="text-lg font-semibold text-foreground ">{title}</h2>
             <button
-              className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground dark:text-zinc-300"
+              className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground dark:text-foreground"
               onClick={onClose}
             >
               Close
             </button>
           </div>
-          <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground dark:text-zinc-300">
+          <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground dark:text-foreground">
             {children}
           </div>
           {footer && (
@@ -207,8 +207,8 @@ function NodeDetailsPage() {
         animate={{ opacity: 1 }}
         className="flex items-center justify-center py-20"
       >
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 px-6 py-4 text-center">
-          <p className="text-sm font-medium text-rose-600 dark:text-rose-400">
+        <div className="rounded-xl border border-destructive/30 bg-destructive/50/5 px-6 py-4 text-center">
+          <p className="text-sm font-medium text-destructive dark:text-destructive">
             Unable to load node details.
           </p>
           <div className="mt-3 flex items-center justify-center gap-2">
@@ -273,22 +273,22 @@ function NodeDetailsPage() {
                   <Server
                     className={`relative h-7 w-7 ${
                       node.isOnline
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-zinc-400 dark:text-zinc-500'
+                        ? 'text-success dark:text-success'
+                        : 'text-muted-foreground dark:text-muted-foreground'
                     }`}
                   />
                 </div>
-                <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+                <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
                   {node.name}
                 </h1>
                 <Badge variant={node.isOnline ? 'success' : 'secondary'} className="gap-1.5">
                   <span className="relative flex h-1.5 w-1.5">
                     {node.isOnline && (
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
                     )}
                     <span
                       className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
-                        node.isOnline ? 'bg-emerald-500' : 'bg-zinc-400'
+                        node.isOnline ? 'bg-success/50' : 'bg-muted-foreground'
                       }`}
                     />
                   </span>
@@ -299,11 +299,11 @@ function NodeDetailsPage() {
                 <span className="font-mono text-xs opacity-70">
                   {node.hostname ?? 'hostname n/a'}
                 </span>
-                <span className="text-zinc-300 dark:text-zinc-700">·</span>
+                <span className="text-border">·</span>
                 <span>{node.publicAddress ?? 'address n/a'}</span>
                 {node.location && (
                   <>
-                    <span className="text-zinc-300 dark:text-zinc-700">·</span>
+                    <span className="text-border">·</span>
                     <span>{node.location.name}</span>
                   </>
                 )}
@@ -335,7 +335,7 @@ function NodeDetailsPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setShowDeleteModal(true)}
-                  className="gap-1.5 text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 dark:text-rose-400 dark:hover:bg-rose-950/30 dark:hover:border-rose-800"
+                  className="gap-1.5 text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20 dark:text-destructive dark:hover:bg-destructive/30 dark:hover:border-destructive"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Delete
@@ -381,7 +381,7 @@ function NodeDetailsPage() {
 
           <div className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm lg:col-span-2">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-display text-sm font-semibold text-foreground dark:text-white">
+              <h2 className="font-display text-sm font-semibold text-foreground ">
                 Capacity
               </h2>
               <Badge variant="outline" className="text-xs">
@@ -432,12 +432,12 @@ function NodeDetailsPage() {
         <motion.div variants={itemVariants}>
           <div className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-display text-sm font-semibold text-foreground dark:text-white">
+              <h2 className="font-display text-sm font-semibold text-foreground ">
                 Servers on node
               </h2>
               <Link
                 to="/servers"
-                className="text-xs font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400"
+                className="text-xs font-medium text-primary-600 transition-colors hover:text-primary dark:text-primary-400"
               >
                 View all
               </Link>
@@ -453,7 +453,7 @@ function NodeDetailsPage() {
                     <div className="min-w-0 flex-1">
                       <Link
                         to={`/servers/${server.id}`}
-                        className="truncate text-sm font-medium text-foreground transition-colors hover:text-primary dark:text-zinc-100 dark:hover:text-primary-400"
+                        className="truncate text-sm font-medium text-foreground transition-colors hover:text-primary dark:hover:text-primary-400"
                       >
                         {server.name}
                       </Link>
@@ -461,7 +461,7 @@ function NodeDetailsPage() {
                     </div>
                     <Link
                       to={`/servers/${server.id}`}
-                      className="ml-3 flex shrink-0 items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground opacity-0 transition-all hover:border-primary/50 hover:text-primary group-hover:opacity-100 dark:text-zinc-300 dark:hover:text-primary-400"
+                      className="ml-3 flex shrink-0 items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground opacity-0 transition-all hover:border-primary/50 hover:text-primary group-hover:opacity-100 dark:hover:text-primary-400"
                     >
                       Open
                       <ExternalLink className="h-3 w-3" />
@@ -501,7 +501,7 @@ function NodeDetailsPage() {
       {/* ── Deploy Script Modal ── */}
       <ModalShell open={!!deployInfo} onClose={() => setDeployInfo(null)} title="Deploy agent">
         <div>Run this on the node to install and register the agent (valid for 24 hours).</div>
-        <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 font-mono text-xs text-foreground dark:bg-zinc-950/40 dark:text-zinc-100">
+        <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 font-mono text-xs text-foreground dark:bg-surface-0/40 dark:text-foreground">
           <code className="whitespace-pre-wrap">
             {deployInfo
               ? `curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`
@@ -525,11 +525,11 @@ function NodeDetailsPage() {
         title="Agent API Key"
       >
         {apiKeyStatus?.exists && (
-          <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-amber-700 dark:text-amber-300">
+          <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/50/5 px-4 py-3 text-xs text-warning dark:text-warning">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span>
               The previous API key has been revoked. Update the agent's{' '}
-              <code className="rounded bg-amber-100 px-1 dark:bg-amber-900/30">config.toml</code>{' '}
+              <code className="rounded bg-warning/10 px-1 dark:bg-warning/30">config.toml</code>{' '}
               with the new key below.
             </span>
           </div>
@@ -538,12 +538,12 @@ function NodeDetailsPage() {
           Add this API key to your agent's{' '}
           <code className="rounded bg-surface-2 px-1 dark:bg-surface-2">config.toml</code> file:
         </div>
-        <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 font-mono text-xs text-foreground dark:bg-zinc-950/40 dark:text-zinc-100">
+        <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 font-mono text-xs text-foreground dark:bg-surface-0/40 dark:text-foreground">
           <code className="whitespace-pre-wrap break-all">
             api_key = &quot;{generatedApiKey}&quot;
           </code>
         </div>
-        <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-amber-700 dark:text-amber-300">
+        <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/50/5 px-4 py-3 text-xs text-warning dark:text-warning">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <strong>Important:</strong> Save this key now. It will not be shown again.
         </div>
@@ -617,7 +617,7 @@ function CapacityBlock({
         <Icon className="h-3 w-3" />
         <span>{label}</span>
       </div>
-      <div className="mt-1 text-sm font-semibold text-foreground dark:text-zinc-100">{value}</div>
+      <div className="mt-1 text-sm font-semibold text-foreground">{value}</div>
       {detail && <div className="mt-0.5 text-[11px] text-muted-foreground">{detail}</div>}
     </div>
   );

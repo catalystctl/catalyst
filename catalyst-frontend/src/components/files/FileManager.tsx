@@ -514,18 +514,18 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
 
   // Toolbar button style
   const tbtn =
-    'inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 dark:border-border dark:text-zinc-300 dark:hover:bg-surface-2 dark:hover:text-foreground';
+    'inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 dark:border-border dark:hover:bg-surface-2 dark:hover:text-foreground';
   const tbtnDanger =
-    'inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-medium text-rose-600 transition-colors hover:bg-rose-50 dark:border-rose-500/30 dark:text-rose-400 dark:hover:bg-rose-500/10';
+    'inline-flex items-center gap-1.5 rounded-lg border border-danger/30 px-2.5 py-1.5 text-xs font-medium text-danger transition-colors hover:bg-danger-muted dark:border-danger/30 dark:text-danger dark:hover:bg-danger-muted';
   const tbtnPrimary =
-    'inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-primary-500 disabled:opacity-50';
+    'inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50';
 
   return (
     <div className="flex flex-col lg:grid lg:grid-cols-[220px_1fr] gap-4">
       {/* Mobile sidebar toggle */}
       <button
         type="button"
-        className="lg:hidden flex items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-muted-foreground dark:border-border dark:bg-surface-2 dark:text-zinc-300"
+        className="lg:hidden flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-muted-foreground dark:border-border dark:bg-surface-2"
         onClick={() => setShowSidebar(!showSidebar)}
       >
         <Menu className="h-4 w-4" />
@@ -536,7 +536,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
       {/* Mobile overlay */}
       {showSidebar && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-surface-0/50 lg:hidden"
           onClick={() => setShowSidebar(false)}
         />
       )}
@@ -544,7 +544,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
       {/* Sidebar */}
       <div
         className={`
-          fixed inset-y-0 left-0 z-50 w-64 transform rounded-none border-r border-border bg-white p-3 transition-transform duration-300 dark:border-border dark:bg-surface-1
+          fixed inset-y-0 left-0 z-50 w-64 transform rounded-none border-r border-border bg-card p-3 transition-transform duration-300 dark:border-border dark:bg-surface-1
           lg:static lg:z-auto lg:w-auto lg:transform-none lg:rounded-xl lg:border lg:transition-none
           ${showSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
@@ -555,7 +555,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
           </div>
           <button
             type="button"
-            className="rounded p-1 text-muted-foreground hover:bg-surface-2 hover:text-muted-foreground lg:hidden dark:hover:bg-surface-2 dark:hover:text-zinc-300"
+            className="rounded p-1 text-muted-foreground hover:bg-surface-2 hover:text-muted-foreground lg:hidden dark:hover:bg-surface-2 dark:hover:text-foreground"
             onClick={() => setShowSidebar(false)}
           >
             <X className="h-4 w-4" />
@@ -570,7 +570,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
       {/* Main content */}
       <div className="space-y-3 min-w-0">
         {/* Breadcrumb + toolbar */}
-        <div className="rounded-xl border border-border bg-white px-4 py-3 dark:border-border dark:bg-surface-1">
+        <div className="rounded-xl border border-border bg-card px-4 py-3 dark:border-border dark:bg-surface-1">
           {/* Breadcrumbs */}
           <nav className="flex items-center gap-1 text-xs text-muted-foreground dark:text-muted-foreground overflow-x-auto">
             <button
@@ -583,10 +583,10 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
             </button>
             {breadcrumbs.map((crumb) => (
               <div key={crumb.path} className="flex items-center gap-1 shrink-0">
-                <ChevronRight className="h-3 w-3 text-zinc-300 dark:text-muted-foreground" />
+                <ChevronRight className="h-3 w-3 text-muted-foreground" />
                 <button
                   type="button"
-                  className="rounded px-1.5 py-0.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground dark:text-zinc-300 dark:hover:bg-surface-2 dark:hover:text-foreground whitespace-nowrap"
+                  className="rounded px-1.5 py-0.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground dark:hover:bg-surface-2 dark:hover:text-foreground whitespace-nowrap"
                   onClick={() => setPath(crumb.path)}
                 >
                   {crumb.name}
@@ -679,7 +679,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
                 </button>
                 <button
                   type="button"
-                  className="text-xs text-muted-foreground hover:text-muted-foreground dark:hover:text-zinc-200 p-1"
+                  className="text-xs text-muted-foreground hover:text-muted-foreground dark:hover:text-foreground p-1"
                   onClick={() => setSelectedPaths(new Set())}
                 >
                   <XCircle className="h-4 w-4" />
@@ -689,7 +689,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
           </div>
 
           {message && (
-            <div className="mt-2 text-xs text-amber-600 dark:text-amber-300">{message}</div>
+            <div className="mt-2 text-xs text-warning">{message}</div>
           )}
         </div>
 
@@ -708,11 +708,11 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
         {/* Create panel */}
         {createMode && (
           <form
-            className="rounded-xl border border-border bg-white p-3 sm:p-4 dark:border-border dark:bg-surface-1"
+            className="rounded-xl border border-border bg-card p-3 sm:p-4 dark:border-border dark:bg-surface-1"
             onSubmit={handleCreateSubmit}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-foreground dark:text-white">
+              <h3 className="text-sm font-semibold text-foreground dark:text-foreground">
                 {createMode === 'directory' ? 'Create Folder' : 'Create File'}
               </h3>
               <button type="button" className={tbtn} onClick={() => setCreateMode(null)}>
@@ -723,7 +723,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
               <label className="space-y-1">
                 <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">Name</span>
                 <input
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary-500 dark:border-border dark:bg-surface-2 dark:text-zinc-200 dark:focus:border-primary-400"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary dark:border-border dark:bg-surface-2"
                   value={createName}
                   onChange={(e) => setCreateName(e.target.value)}
                   placeholder={createMode === 'directory' ? 'configs' : 'server.properties'}
@@ -736,7 +736,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
                     Initial content
                   </span>
                   <textarea
-                    className="h-20 w-full rounded-lg border border-border bg-white px-3 py-2 font-mono text-sm text-foreground outline-none transition-colors focus:border-primary-500 dark:border-border dark:bg-surface-2 dark:text-zinc-200 dark:focus:border-primary-400"
+                    className="h-20 w-full rounded-lg border border-border bg-card px-3 py-2 font-mono text-sm text-foreground outline-none transition-colors focus:border-primary dark:border-border dark:bg-surface-2"
                     value={createContent}
                     onChange={(e) => setCreateContent(e.target.value)}
                     placeholder="# New file"
@@ -758,9 +758,9 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
 
         {/* Compress panel */}
         {showCompress && (
-          <div className="rounded-xl border border-border bg-white p-3 sm:p-4 dark:border-border dark:bg-surface-1">
+          <div className="rounded-xl border border-border bg-card p-3 sm:p-4 dark:border-border dark:bg-surface-1">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-foreground dark:text-white">
+              <h3 className="text-sm font-semibold text-foreground dark:text-foreground">
                 Compress {selectedEntries.length} item(s)
               </h3>
               <button type="button" className={tbtn} onClick={() => setShowCompress(false)}>
@@ -773,7 +773,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
                   Archive name
                 </span>
                 <input
-                  className="w-full sm:max-w-xs rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary-500 dark:border-border dark:bg-surface-2 dark:text-zinc-200 dark:focus:border-primary-400"
+                  className="w-full sm:max-w-xs rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary dark:border-border dark:bg-surface-2"
                   value={archiveName}
                   onChange={(e) => setArchiveName(e.target.value)}
                   placeholder="archive.tar.gz"
@@ -796,9 +796,9 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
 
         {/* Decompress panel */}
         {showDecompress && selectedArchive && (
-          <div className="rounded-xl border border-border bg-white p-3 sm:p-4 dark:border-border dark:bg-surface-1">
+          <div className="rounded-xl border border-border bg-card p-3 sm:p-4 dark:border-border dark:bg-surface-1">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-foreground dark:text-white truncate mr-2">
+              <h3 className="text-sm font-semibold text-foreground dark:text-foreground truncate mr-2">
                 Extract: {selectedArchive.name}
               </h3>
               <button type="button" className={tbtn} onClick={() => setShowDecompress(false)}>
@@ -811,7 +811,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
                   Target path
                 </span>
                 <input
-                  className="w-full sm:max-w-xs rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary-500 dark:border-border dark:bg-surface-2 dark:text-zinc-200 dark:focus:border-primary-400"
+                  className="w-full sm:max-w-xs rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary dark:border-border dark:bg-surface-2"
                   value={decompressTarget}
                   onChange={(e) => setDecompressTarget(e.target.value)}
                   placeholder="/"
@@ -834,8 +834,8 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
 
         {/* Delete confirmation */}
         {confirmDelete && selectedEntries.length > 0 && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 dark:border-rose-500/20 dark:bg-rose-500/5">
-            <span className="text-sm text-rose-700 dark:text-rose-300">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-danger/30 bg-danger-muted px-4 py-3 dark:border-danger/20 dark:bg-danger-muted/30">
+            <span className="text-sm text-danger dark:text-danger">
               Delete {selectedEntries.length} item(s)? This cannot be undone.
             </span>
             <div className="flex items-center gap-2">
@@ -855,7 +855,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
         )}
 
         {/* File list */}
-        <div className="rounded-xl border border-border bg-white dark:border-border dark:bg-surface-1 h-[calc(100vh-280px)] min-h-[200px]">
+        <div className="rounded-xl border border-border bg-card dark:border-border dark:bg-surface-1 h-[calc(100vh-280px)] min-h-[200px]">
           <FileList
             files={sortedFiles}
             selectedPaths={selectedPaths}
@@ -919,10 +919,10 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
         <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6">
           <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-surface-0/40 backdrop-blur-sm"
             onClick={closeActiveFile}
           />
-          <div className="relative z-10 flex h-[95vh] sm:h-[90vh] w-full max-w-6xl flex-col rounded-lg sm:rounded-xl border border-border bg-white shadow-2xl dark:border-border dark:bg-surface-1 p-2 sm:p-4">
+          <div className="relative z-10 flex h-[95vh] sm:h-[90vh] w-full max-w-6xl flex-col rounded-lg sm:rounded-xl border border-border bg-card shadow-2xl dark:border-border dark:bg-surface-1 p-2 sm:p-4">
               <FileEditor
                 file={activeFile}
                 isLoading={isFileLoading}
@@ -948,14 +948,14 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
         <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
           <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-surface-0/40 backdrop-blur-sm"
             onClick={() => setPermissionsEntry(null)}
           />
           <form
-            className="relative z-10 w-full max-w-md rounded-xl border border-border bg-white p-4 sm:p-5 shadow-2xl dark:border-border dark:bg-surface-1"
+            className="relative z-10 w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-5 shadow-2xl dark:border-border dark:bg-surface-1"
             onSubmit={handlePermissionsSubmit}
           >
-            <h3 className="text-sm font-semibold text-foreground dark:text-white">
+            <h3 className="text-sm font-semibold text-foreground dark:text-foreground">
               Edit Permissions
             </h3>
             <p className="mt-0.5 truncate text-xs text-muted-foreground dark:text-muted-foreground">
@@ -967,7 +967,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
                   Mode (octal)
                 </span>
                 <input
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 font-mono text-sm text-foreground outline-none transition-colors focus:border-primary-500 dark:border-border dark:bg-surface-2 dark:text-zinc-200 dark:focus:border-primary-400"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 font-mono text-sm text-foreground outline-none transition-colors focus:border-primary dark:border-border dark:bg-surface-2"
                   value={permissionsValue}
                   onChange={(e) => {
                     setPermissionsValue(e.target.value);
@@ -982,7 +982,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
               </p>
             </div>
             {permissionsError && (
-              <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/5 dark:text-rose-300">
+              <div className="mt-3 rounded-lg border border-danger/30 bg-danger-muted px-3 py-2 text-xs text-danger dark:border-danger/20 dark:bg-danger-muted/30 dark:text-danger">
                 {permissionsError}
               </div>
             )}
@@ -1008,22 +1008,22 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
         <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6">
           <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-surface-0/40 backdrop-blur-sm"
             onClick={() => setArchiveBrowsePath(null)}
           />
-          <div className="relative z-10 flex h-[95vh] sm:h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg sm:rounded-xl border border-border bg-white shadow-2xl dark:border-border dark:bg-surface-1">
+          <div className="relative z-10 flex h-[95vh] sm:h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg sm:rounded-xl border border-border bg-card shadow-2xl dark:border-border dark:bg-surface-1">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-border px-3 sm:px-4 py-3 dark:border-border">
               <div className="flex min-w-0 items-center gap-2">
                 <Archive className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="truncate text-sm font-semibold text-foreground dark:text-white">
+                <span className="truncate text-sm font-semibold text-foreground dark:text-foreground">
                   {archiveBrowsePath.split('/').pop()}
                 </span>
                 <span className="hidden sm:inline text-xs text-muted-foreground dark:text-muted-foreground">— read-only preview</span>
               </div>
               <button
                 type="button"
-                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-zinc-300"
+                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-foreground"
                 onClick={() => setArchiveBrowsePath(null)}
               >
                 <X className="h-4 w-4" />
@@ -1044,7 +1044,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
                   const segPath = '/' + arr.slice(0, i + 1).join('/');
                   return (
                     <span key={segPath} className="flex items-center gap-1 shrink-0">
-                      <ChevronRight className="h-3 w-3 text-zinc-300 dark:text-muted-foreground" />
+                      <ChevronRight className="h-3 w-3 text-muted-foreground" />
                       <button
                         type="button"
                         className="rounded px-1.5 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-foreground whitespace-nowrap"
@@ -1095,37 +1095,37 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
         <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
           <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-surface-0/40 backdrop-blur-sm"
             onClick={() => setBufferError(null)}
           />
-          <div className="relative w-full max-w-md rounded-xl sm:rounded-2xl border border-border bg-white p-4 sm:p-6 shadow-xl dark:border-border dark:bg-surface-1">
+          <div className="relative w-full max-w-md rounded-xl sm:rounded-2xl border border-border bg-card p-4 sm:p-6 shadow-xl dark:border-border dark:bg-surface-1">
             <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/20">
-                <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-warning-muted dark:bg-warning-muted/20">
+                <AlertTriangle className="h-5 w-5 text-warning dark:text-warning" />
               </div>
-              <h3 className="text-base sm:text-lg font-semibold text-foreground dark:text-white">Buffer Limit Exceeded</h3>
+              <h3 className="text-base sm:text-lg font-semibold text-foreground dark:text-foreground">Buffer Limit Exceeded</h3>
             </div>
-            <p className="mb-3 text-sm leading-relaxed text-muted-foreground dark:text-zinc-300">
+            <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
               This operation produced more output than the current buffer limit allows. This typically
               happens with large archives containing many files.
             </p>
             <div className="mb-4 rounded-lg border border-border bg-surface-2 p-3 dark:border-border dark:bg-surface-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground dark:text-muted-foreground">Current limit</span>
-                <span className="font-medium text-foreground dark:text-white">{bufferError.currentMaxBufferMb} MB</span>
+                <span className="font-medium text-foreground dark:text-foreground">{bufferError.currentMaxBufferMb} MB</span>
               </div>
               <div className="mt-1 flex justify-between text-sm">
                 <span className="text-muted-foreground dark:text-muted-foreground">Recommended</span>
-                <span className="font-medium text-primary-600 dark:text-primary-400">{bufferError.recommendedMaxBufferMb} MB</span>
+                <span className="font-medium text-primary">{bufferError.recommendedMaxBufferMb} MB</span>
               </div>
             </div>
             <p className="mb-4 text-xs leading-relaxed text-muted-foreground dark:text-muted-foreground">
-              An admin can increase the <span className="font-medium text-foreground dark:text-zinc-200">Max buffer (MB)</span> setting
-              under <span className="font-medium text-foreground dark:text-zinc-200">Admin → Security</span> to resolve this.
+              An admin can increase the <span className="font-medium text-foreground">Max buffer (MB)</span> setting
+              under <span className="font-medium text-foreground">Admin → Security</span> to resolve this.
             </p>
             <button
               onClick={() => setBufferError(null)}
-              className="w-full rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600"
+              className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               Got it
             </button>
@@ -1217,12 +1217,12 @@ function ArchiveListing({
             <td className="px-4 py-1.5">
               <button
                 type="button"
-                className="flex items-center gap-2 text-foreground transition-colors hover:text-foreground dark:text-zinc-300 dark:hover:text-foreground"
+                className="flex items-center gap-2 text-foreground transition-colors hover:text-foreground dark:hover:text-foreground"
                 onClick={() => item.isDirectory && onNavigate('/' + item.name)}
                 disabled={!item.isDirectory}
               >
                 {item.isDirectory ? (
-                  <Folder className="h-4 w-4 shrink-0 text-sky-500/70" />
+                  <Folder className="h-4 w-4 shrink-0 text-info/70" />
                 ) : (
                   <File className="h-4 w-4 shrink-0 text-muted-foreground dark:text-muted-foreground" />
                 )}

@@ -26,8 +26,8 @@ function NodeMetricsCard({ stats }: { stats: NodeStats }) {
 
   const metrics = [
     { label: 'CPU', value: cpuPercent, color: 'bg-primary-500' },
-    { label: 'Memory', value: memoryPercent, color: 'bg-emerald-500' },
-    { label: 'Disk', value: diskPercent, color: 'bg-amber-500' },
+    { label: 'Memory', value: memoryPercent, color: 'bg-success/50' },
+    { label: 'Disk', value: diskPercent, color: 'bg-warning/50' },
   ];
 
   return (
@@ -38,13 +38,13 @@ function NodeMetricsCard({ stats }: { stats: NodeStats }) {
       className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm"
     >
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="font-display text-sm font-semibold text-foreground dark:text-white">
+        <h3 className="font-display text-sm font-semibold text-foreground dark:text-foreground">
           Live usage
         </h3>
         <Badge variant="outline" className="gap-1.5 text-[11px]">
           <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success/50" />
           </span>
           Live
         </Badge>
@@ -55,7 +55,7 @@ function NodeMetricsCard({ stats }: { stats: NodeStats }) {
           <div key={metric.label} className="space-y-1.5">
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">{metric.label}</span>
-              <span className="font-semibold tabular-nums text-foreground dark:text-zinc-100">
+              <span className="font-semibold tabular-nums text-foreground dark:text-foreground">
                 {metric.value.toFixed(0)}%
               </span>
             </div>

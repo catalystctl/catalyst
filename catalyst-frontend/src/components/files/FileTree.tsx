@@ -69,7 +69,7 @@ function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, 
           onClick={() => onNavigate(entry.path)}
         >
           {isExpanded ? (
-            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-primary-500" />
+            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-primary" />
           ) : (
             <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground dark:text-muted-foreground" />
           )}
@@ -138,13 +138,13 @@ function FileTree({ serverId, activePath, onNavigate }: Props) {
         }`}
         onClick={() => onNavigate('/')}
       >
-        <FolderOpen className="h-3.5 w-3.5 shrink-0 text-primary-500" />
+        <FolderOpen className="h-3.5 w-3.5 shrink-0 text-primary" />
         <span>/</span>
       </button>
       {isLoading ? (
         <div className="px-2 text-[11px] text-muted-foreground dark:text-muted-foreground">Loading...</div>
       ) : isError ? (
-        <div className="px-2 text-[11px] text-rose-500">Unable to load.</div>
+        <div className="px-2 text-[11px] text-destructive">Unable to load.</div>
       ) : directories.length ? (
         directories.map((entry) => (
           <FileTreeNode

@@ -36,7 +36,7 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   return (
     <div className="flex items-center justify-between gap-4 py-1.5">
       <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="truncate text-right text-xs font-medium text-foreground dark:text-zinc-100">
+      <span className="truncate text-right text-xs font-medium text-foreground">
         {value}
       </span>
     </div>
@@ -74,8 +74,8 @@ function TemplateDetailsPage() {
         animate={{ opacity: 1 }}
         className="flex items-center justify-center py-20"
       >
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 px-6 py-4 text-center">
-          <p className="text-sm font-medium text-rose-600 dark:text-rose-400">
+        <div className="rounded-xl border border-destructive/30 bg-destructive/50/5 px-6 py-4 text-center">
+          <p className="text-sm font-medium text-destructive dark:text-destructive">
             Unable to load template details.
           </p>
           <div className="mt-3 flex items-center justify-center gap-2">
@@ -142,7 +142,7 @@ function TemplateDetailsPage() {
                   )}
                 </div>
                 <div>
-                  <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+                  <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
                     {template.name}
                   </h1>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -177,7 +177,7 @@ function TemplateDetailsPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setShowDeleteModal(true)}
-                  className="gap-1.5 text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 dark:text-rose-400 dark:hover:bg-rose-950/30 dark:hover:border-rose-800"
+                  className="gap-1.5 text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20 dark:text-destructive dark:hover:bg-destructive/30 dark:hover:border-destructive"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Delete
@@ -194,7 +194,7 @@ function TemplateDetailsPage() {
         >
           {/* Runtime card */}
           <div className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm">
-            <h2 className="font-display text-sm font-semibold text-foreground dark:text-white">
+            <h2 className="font-display text-sm font-semibold text-foreground ">
               Runtime
             </h2>
             <div className="mt-3 divide-y divide-border/50">
@@ -229,21 +229,21 @@ function TemplateDetailsPage() {
 
           {/* Startup card */}
           <div className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm">
-            <h2 className="font-display text-sm font-semibold text-foreground dark:text-white">
+            <h2 className="font-display text-sm font-semibold text-foreground ">
               Startup
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
               Variables are substituted before container start.
             </p>
-            <div className="mt-3 rounded-lg border border-border bg-surface-2 px-3 py-2.5 font-mono text-xs text-foreground dark:bg-zinc-950/40 dark:text-zinc-200">
+            <div className="mt-3 rounded-lg border border-border bg-surface-2 px-3 py-2.5 font-mono text-xs text-foreground dark:bg-surface-0/40 dark:text-foreground">
               {template.startup}
             </div>
             {template.installScript && (
               <>
-                <h3 className="mt-5 font-display text-sm font-semibold text-foreground dark:text-white">
+                <h3 className="mt-5 font-display text-sm font-semibold text-foreground ">
                   Install script
                 </h3>
-                <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-border bg-surface-2 px-3 py-2.5 font-mono text-xs text-foreground whitespace-pre-wrap dark:bg-zinc-950/40 dark:text-zinc-200">
+                <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-border bg-surface-2 px-3 py-2.5 font-mono text-xs text-foreground whitespace-pre-wrap dark:bg-surface-0/40 dark:text-foreground">
                   {template.installScript}
                 </div>
               </>
@@ -254,7 +254,7 @@ function TemplateDetailsPage() {
         {/* ── Variables ── */}
         <motion.div variants={itemVariants}>
           <div className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm">
-            <h2 className="font-display text-sm font-semibold text-foreground dark:text-white">
+            <h2 className="font-display text-sm font-semibold text-foreground ">
               Variables
               <Badge variant="outline" className="ml-2 text-xs">
                 {template.variables?.length ?? 0}

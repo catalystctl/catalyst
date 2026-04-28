@@ -136,8 +136,8 @@ const adminSections = [
         permissions: ['admin.read', 'admin.write'],
       },
       {
-        to: '/admin/network',
-        label: 'Activity',
+        to: '/admin/audit-logs',
+        label: 'Audit Logs',
         icon: Activity,
         permissions: ['admin.read', 'admin.write'],
       },
@@ -293,7 +293,7 @@ function Section({ title, links, defaultExpanded = false, collapsed }: SectionPr
         )}
       </button>
       {shouldExpand && (
-        <div className="space-y-1 border-l border-zinc-800 pl-3">
+        <div className="space-y-1 border-l border-border pl-3">
           <div className="absolute" />
           {links.map((link) => (
             <MenuItem key={link.to} {...link} />

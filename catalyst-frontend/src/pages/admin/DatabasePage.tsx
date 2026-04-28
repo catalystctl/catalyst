@@ -48,7 +48,7 @@ function ModalShell({
   if (!open) return null;
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -56,7 +56,7 @@ function ModalShell({
         className="mx-4 w-full max-w-lg rounded-xl border border-border bg-card shadow-xl"
       >
         <div className="border-b border-border px-6 py-4">
-          <h2 className="text-lg font-semibold text-foreground dark:text-white">{title}</h2>
+          <h2 className="text-lg font-semibold text-foreground ">{title}</h2>
           {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
         </div>
         <div className="px-6 py-5">{children}</div>
@@ -94,11 +94,11 @@ function HostCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0 flex-1">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-            <Server className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/10 dark:bg-success/30">
+            <Server className="h-4 w-4 text-success dark:text-success" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="font-semibold text-foreground dark:text-zinc-100">{host.name}</div>
+            <div className="font-semibold text-foreground dark:text-foreground">{host.name}</div>
             <div className="mt-0.5 text-xs text-muted-foreground font-mono">{host.host}:{host.port}</div>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
               <span className="flex items-center gap-1">
@@ -122,7 +122,7 @@ function HostCard({
             <Settings className="h-3.5 w-3.5" />
           </button>
           <button
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:pointer-events-none disabled:opacity-30"
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
             onClick={onDelete}
             disabled={isDeleting}
             title="Delete"
@@ -276,9 +276,9 @@ function DatabasePage() {
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 opacity-20 blur-sm" />
-                <Database className="relative h-7 w-7 text-emerald-600 dark:text-emerald-400" />
+                <Database className="relative h-7 w-7 text-success dark:text-success" />
               </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
                 Database
               </h1>
             </div>

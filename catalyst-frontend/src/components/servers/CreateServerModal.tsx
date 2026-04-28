@@ -8,6 +8,7 @@ import { useNodes, useAccessibleNodes } from '../../hooks/useNodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { nodesApi } from '../../services/api/nodes';
 import { useAuthStore } from '../../stores/authStore';
+import Combobox from '@/components/ui/combobox';
 
 function CreateServerModal() {
   const user = useAuthStore((s) => s.user);
@@ -15,7 +16,6 @@ function CreateServerModal() {
   const accessibleNodes = accessibleNodesData?.nodes || [];
   const hasNodeWildcard = accessibleNodesData?.hasWildcard || false;
 
-  // User can create server if they have explicit permission OR have access to any node
   const canCreateServer =
     user?.permissions?.includes('*') ||
     user?.permissions?.includes('admin.write') ||
@@ -26,7 +26,6 @@ function CreateServerModal() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [templateId, setTemplateId] = useState('');
-  const [templateSearch, setTemplateSearch] = useState('');
   const [nodeId, setNodeId] = useState('');
   const [description, setDescription] = useState('');
   const [memory, setMemory] = useState('1024');
@@ -34,11 +33,14 @@ function CreateServerModal() {
   const [disk, setDisk] = useState('10240');
   const [backupAllocationMb, setBackupAllocationMb] = useState('');
   const [databaseAllocation, setDatabaseAllocation] = useState('');
+  const [allocatedSwapMb, setAllocatedSwapMb] = useState('');
   const [port, setPort] = useState('25565');
-  const [portBindings, setPortBindings] = useState<string[]>([]);
+  const [additionalBindings, setAdditionalBindings] = useState<
+    Array<{ allocationId: string; containerPort: string }>
+  >([]);
   const [environment, setEnvironment] = useState<Record<string, string>>({});
   const [imageVariant, setImageVariant] = useState('');
-  const [networkMode, setNetworkMode] = useState('macvlan');
+  const [networkMode, setNetworkMode] = useState('host');
   const [macvlanInterface, setMacvlanInterface] = useState('');
   const [primaryIp, setPrimaryIp] = useState('');
   const [allocationId, setAllocationId] = useState('');
@@ -59,37 +61,41 @@ function CreateServerModal() {
   const [availableIps, setAvailableIps] = useState<string[]>([]);
   const [ipLoadError, setIpLoadError] = useState<string | null>(null);
 
-  // Determine which nodes to show - accessible nodes for non-admins, all nodes for admins or wildcard users
   const isAdmin = user?.permissions?.includes('*') || user?.permissions?.includes('admin.write');
   const availableNodes: Array<{ id: string; name: string; locationId?: string }> =
     isAdmin || hasNodeWildcard ? nodes : accessibleNodes;
 
-  // Get selected template
   const selectedTemplate = useMemo(
     () => templates.find((t) => t.id === templateId),
     [templates, templateId],
   );
 
-  // Filter templates by search
-  const filteredTemplates = useMemo(() => {
-    if (!templateSearch.trim()) return templates;
-    const search = templateSearch.toLowerCase();
-    return templates.filter(
-      (t) =>
-        t.name.toLowerCase().includes(search) ||
-        (t.description && t.description.toLowerCase().includes(search)),
-    );
-  }, [templates, templateSearch]);
+  // Auto-populate primary port from selected allocation in host mode
+  useEffect(() => {
+    if (networkMode === 'host' && allocationId) {
+      const allocation = availableAllocations.find((a) => a.id === allocationId);
+      if (allocation) {
+        setPort(String(allocation.port));
+      }
+    }
+  }, [allocationId, networkMode, availableAllocations]);
+
+  // Clear additional bindings when switching away from host mode
+  useEffect(() => {
+    if (networkMode !== 'host') {
+      setAdditionalBindings([]);
+    }
+  }, [networkMode]);
 
   // Set default port from template when template is selected
   useEffect(() => {
     if (selectedTemplate?.supportedPorts && selectedTemplate.supportedPorts.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPort(String(selectedTemplate.supportedPorts[0]));
+      if (networkMode !== 'host' || !allocationId) {
+        setPort(String(selectedTemplate.supportedPorts[0]));
+      }
     }
   }, [selectedTemplate]);
 
-  // Filter out SERVER_DIR from variables
   const templateVariables = useMemo(() => {
     if (!selectedTemplate?.variables) return [];
     return selectedTemplate.variables.filter((v) => v.name !== 'SERVER_DIR');
@@ -103,7 +109,6 @@ function CreateServerModal() {
 
   // Load macvlan interfaces (IP pools) for the selected node
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMacvlanInterface('');
     setNodeIpPools([]);
     if (!nodeId || networkMode !== 'macvlan') return;
@@ -126,7 +131,6 @@ function CreateServerModal() {
 
   // Load available IPs when macvlan interface is selected
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPrimaryIp('');
     if (!nodeId || networkMode !== 'macvlan' || !macvlanInterface) {
       setAvailableIps([]);
@@ -156,7 +160,6 @@ function CreateServerModal() {
 
   // Load allocations for host (port mapping) mode
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAllocationId('');
     let active = true;
     if (!nodeId || networkMode !== 'host') {
@@ -203,14 +206,12 @@ function CreateServerModal() {
 
   const mutation = useMutation({
     mutationFn: async () => {
-      // Create server first
-      const normalizedBindings = portBindings
-        .map((binding) => binding.trim())
-        .filter(Boolean)
-        .reduce<Record<number, number>>((acc, binding) => {
-          const [containerPortRaw, hostPortRaw] = binding.split(':');
-          const containerPort = Number(containerPortRaw);
-          const hostPort = Number(hostPortRaw ?? containerPortRaw);
+      const normalizedBindings = additionalBindings.reduce<Record<number, number>>(
+        (acc, binding) => {
+          const allocation = availableAllocations.find((a) => a.id === binding.allocationId);
+          if (!allocation) return acc;
+          const containerPort = Number(binding.containerPort);
+          const hostPort = allocation.port;
           if (
             Number.isFinite(containerPort) &&
             Number.isFinite(hostPort) &&
@@ -222,7 +223,9 @@ function CreateServerModal() {
             acc[containerPort] = hostPort;
           }
           return acc;
-        }, {});
+        },
+        {},
+      );
 
       const payload: Parameters<typeof serversApi.create>[0] = {
         name,
@@ -233,6 +236,7 @@ function CreateServerModal() {
         allocatedMemoryMb: Number(memory),
         allocatedCpuCores: Number(cpu),
         allocatedDiskMb: Number(disk),
+        allocatedSwapMb: parsedSwap,
         backupAllocationMb:
           backupAllocationMb.trim() === '' ? undefined : Number(backupAllocationMb),
         databaseAllocation:
@@ -261,7 +265,6 @@ function CreateServerModal() {
 
       const server = await serversApi.create(payload);
 
-      // Then trigger installation
       if (server?.id) {
         await serversApi.install(server.id);
       }
@@ -277,14 +280,14 @@ function CreateServerModal() {
       setName('');
       setDescription('');
       setTemplateId('');
-      setTemplateSearch('');
       setNodeId('');
       setEnvironment({});
       setImageVariant('');
-      setNetworkMode('macvlan');
+      setNetworkMode('host');
       setMacvlanInterface('');
       setPrimaryIp('');
-      setPortBindings([]);
+      setAdditionalBindings([]);
+      setAllocatedSwapMb('');
       setBackupAllocationMb('');
       setDatabaseAllocation('');
       setStep('details');
@@ -305,6 +308,7 @@ function CreateServerModal() {
   const parsedCpu = Number(cpu);
   const parsedDisk = Number(disk);
   const parsedPort = Number(port);
+  const parsedSwap = allocatedSwapMb.trim() === '' ? undefined : Number(allocatedSwapMb);
   const detailsValid = Boolean(name.trim() && templateId && nodeId);
   const resourcesValid =
     Number.isFinite(parsedMemory) &&
@@ -312,7 +316,8 @@ function CreateServerModal() {
     Number.isFinite(parsedCpu) &&
     parsedCpu >= 1 &&
     Number.isFinite(parsedDisk) &&
-    parsedDisk >= 1024;
+    parsedDisk >= 1024 &&
+    (parsedSwap === undefined || (Number.isFinite(parsedSwap) && parsedSwap >= 0));
   const buildValid = Number.isFinite(parsedPort) && parsedPort >= 1 && parsedPort <= 65535;
   const startupValid = !templateVariables.some((variable) => {
     if (!variable.required) return false;
@@ -339,36 +344,43 @@ function CreateServerModal() {
   if (!canCreateServer) {
     return null;
   }
+
   return (
     <>
+      <style>{`
+        @keyframes step-enter { from { opacity:0; transform:translateX(12px) } to { opacity:1; transform:translateX(0) } }
+        @keyframes modal-in { from { opacity:0; transform:scale(0.97) translateY(10px) } to { opacity:1; transform:scale(1) translateY(0) } }
+        .modal-enter { animation: modal-in .2s cubic-bezier(.16,1,.3,1) forwards }
+        .step-content-enter { animation: step-enter .25s cubic-bezier(.16,1,.3,1) forwards }
+      `}</style>
+
       <button
         className="flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-500/30 transition-all duration-300 hover:bg-primary-500 hover:shadow-xl hover:shadow-primary-500/40"
-        onClick={() => {
-          setStep('details');
-          setOpen(true);
-        }}
+        onClick={() => { setStep('details'); setOpen(true); }}
       >
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
         </svg>
         New Server
       </button>
+
       {open ? (
         <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-4xl max-h-[90vh] rounded-2xl border border-border bg-card shadow-2xl flex flex-col dark:border-border dark:bg-card">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-2 sm:px-4 backdrop-blur-sm">
+            <div className="modal-enter w-full max-w-4xl max-h-[100dvh] sm:max-h-[90vh] rounded-none sm:rounded-2xl border-0 sm:border border-border bg-card shadow-2xl flex flex-col overflow-hidden dark:border-border dark:bg-card">
+
               {/* Header */}
-              <div className="relative flex items-center justify-between border-b border-border bg-gradient-to-r from-primary-500/5 to-transparent px-8 py-6 dark:border-border">
-                <div>
-                  <h2 className="text-2xl font-bold text-foreground dark:text-white">
+              <div className="shrink-0 flex items-start justify-between gap-4 border-b border-border bg-gradient-to-r from-primary-500/[0.04] to-transparent px-5 sm:px-8 py-5 sm:py-6 dark:border-border">
+                <div className="min-w-0">
+                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground dark:text-white">
                     Create New Server
                   </h2>
-                  <p className="mt-1 text-sm text-muted-foreground dark:text-muted-foreground">
+                  <p className="mt-1 text-xs sm:text-sm text-muted-foreground dark:text-muted-foreground">
                     Deploy a new game server in just a few steps
                   </p>
                 </div>
                 <button
-                  className="rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-300 hover:border-danger/30 hover:bg-danger-muted hover:text-danger"
+                  className="shrink-0 rounded-lg border border-border bg-card px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-muted-foreground transition-all duration-200 hover:border-danger/30 hover:bg-danger-muted hover:text-danger dark:border-border"
                   onClick={() => setOpen(false)}
                 >
                   Cancel
@@ -376,80 +388,40 @@ function CreateServerModal() {
               </div>
 
               {/* Progress Stepper */}
-              <div className="border-b border-border bg-surface-2/50 px-8 py-4 dark:border-border dark:bg-surface-1/30">
-                <div className="flex items-center justify-between">
+              <div className="shrink-0 border-b border-border bg-muted/30 px-5 sm:px-8 py-3.5 dark:border-border dark:bg-muted/20">
+                <div className="flex items-center">
                   {stepOrder.map((key, index) => {
                     const isActive = step === key;
                     const isCompleted = stepValidMap[key] && stepIndex > index;
                     const canNavigate = canNavigateTo(index);
-
-                    const stepNames = {
-                      details: 'Details',
-                      resources: 'Resources',
-                      build: 'Network',
-                      startup: 'Startup',
-                    };
-
+                    const stepNames = { details: 'Details', resources: 'Resources', build: 'Network', startup: 'Startup' };
                     return (
-                      <div key={key} className="flex flex-1 items-center">
+                      <div key={key} className="flex flex-1 items-center min-w-0">
                         <button
                           type="button"
                           disabled={!canNavigate}
-                          onClick={() => {
-                            if (canNavigate) setStep(key);
-                          }}
-                          className={`group flex items-center gap-3 transition-all duration-300 ${
-                            canNavigate ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
-                          }`}
+                          onClick={() => { if (canNavigate) setStep(key); }}
+                          className={`flex items-center gap-2.5 transition-all duration-200 ${canNavigate ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'}`}
                         >
-                          <div
-                            className={`flex h-10 w-10 items-center justify-center rounded-full border-2 font-semibold transition-all duration-300 ${
-                              isActive
-                                ? 'border-primary-500 bg-primary-500 text-white shadow-lg shadow-primary-500/50'
-                                : isCompleted
-                                  ? 'border-success bg-success text-white'
-                                  : 'border-border bg-card text-muted-foreground'
-                            }`}
-                          >
+                          <div className={`flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold transition-all duration-300 ${
+                            isActive ? 'border-primary bg-primary text-primary-foreground shadow-md shadow-primary/25' :
+                            isCompleted ? 'border-success bg-success text-white' :
+                            'border-border bg-card text-muted-foreground'
+                          }`}>
                             {isCompleted ? (
-                              <svg
-                                className="h-5 w-5"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={3}
-                                  d="M5 13l4 4L19 7"
-                                />
-                              </svg>
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
                             ) : (
-                              <span className="text-sm">{index + 1}</span>
+                              index + 1
                             )}
                           </div>
-                          <div className="hidden text-left sm:block">
-                            <div className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">
-                              Step {index + 1}
-                            </div>
-                            <div
-                              className={`text-sm font-semibold ${
-                                isActive
-                                  ? 'text-primary-600 dark:text-primary-400'
-                                  : 'text-foreground dark:text-zinc-300'
-                              }`}
-                            >
-                              {stepNames[key]}
-                            </div>
-                          </div>
+                          <span className={`hidden sm:block text-xs font-semibold whitespace-nowrap ${
+                            isActive ? 'text-primary dark:text-primary-400' : isCompleted ? 'text-foreground dark:text-zinc-300' : 'text-muted-foreground'
+                          }`}>
+                            {stepNames[key]}
+                          </span>
                         </button>
                         {index < stepOrder.length - 1 && (
-                          <div
-                            className={`mx-2 h-0.5 flex-1 transition-all duration-300 ${
-                              isCompleted ? 'bg-success' : 'bg-surface-3 dark:bg-surface-2'
-                            }`}
-                          />
+                          <div className={`mx-2 sm:mx-3 h-px flex-1 transition-all duration-500 ${isCompleted ? 'bg-success' : 'bg-border'}`}/>
                         )}
                       </div>
                     );
@@ -458,498 +430,228 @@ function CreateServerModal() {
               </div>
 
               {/* Content Area */}
-              <div className="flex-1 overflow-y-auto px-8 py-6">
-                <div className="mx-auto max-w-2xl space-y-5">
-                  <>
+              <div className="flex-1 overflow-y-auto">
+                <div key={step} className="step-content-enter px-5 sm:px-8 py-5 sm:py-6">
+                  <div className="mx-auto max-w-2xl space-y-5">
+
+                    {/* --- DETAILS STEP --- */}
                     {step === 'details' ? (
                       <div className="space-y-5">
-                        <label className="block space-y-2">
-                          <span className="text-sm font-semibold text-foreground dark:text-zinc-300">
-                            Server Name
-                          </span>
-                          <input
-                            className="w-full rounded-lg border border-border bg-card px-4 py-3 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-border dark:text-foreground dark:focus:border-primary-400"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            placeholder="my-awesome-server"
-                          />
+                        <label className="block space-y-1.5">
+                          <span className="text-sm font-semibold text-foreground dark:text-zinc-300">Server Name</span>
+                          <input className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={name} onChange={(e) => setName(e.target.value)} placeholder="my-awesome-server"/>
                         </label>
-                        <label className="block space-y-2">
-                          <span className="text-sm font-semibold text-foreground dark:text-zinc-300">
-                            Description{' '}
-                            <span className="text-xs font-normal text-muted-foreground">
-                              (optional)
-                            </span>
-                          </span>
-                          <textarea
-                            rows={3}
-                            className="w-full rounded-lg border border-border bg-card px-4 py-3 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-border dark:text-foreground dark:focus:border-primary-400"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="Add notes or description for this server..."
-                          />
+                        <label className="block space-y-1.5">
+                          <span className="text-sm font-semibold text-foreground dark:text-zinc-300">Description <span className="text-xs font-normal text-muted-foreground">(optional)</span></span>
+                          <textarea rows={3} className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground resize-none transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Add notes or description for this server..."/>
                         </label>
-                        <div className="grid gap-5 md:grid-cols-2">
-                          <label className="block space-y-2">
-                            <span className="text-sm font-semibold text-foreground dark:text-zinc-300">
-                              Template
-                            </span>
-                            <input
-                              type="text"
-                              placeholder="Search templates..."
-                              value={templateSearch}
-                              onChange={(e) => setTemplateSearch(e.target.value)}
-                              className="mb-2 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:bg-surface-1 dark:text-zinc-200"
-                            />
-                            <select
-                              className="w-full rounded-lg border border-border bg-card px-4 py-3 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-border dark:text-foreground dark:focus:border-primary-400"
-                              value={templateId}
-                              onChange={(e) => {
-                                const newTemplateId = e.target.value;
-                                setTemplateId(newTemplateId);
-                                setImageVariant('');
-                                const template = templates.find((t) => t.id === newTemplateId);
-                                if (template?.variables) {
-                                  const defaultEnv: Record<string, string> = {};
-                                  template.variables
-                                    .filter((v) => v.name !== 'SERVER_DIR')
-                                    .forEach((v) => {
-                                      defaultEnv[v.name] = v.default;
-                                    });
-                                  setEnvironment(defaultEnv);
-                                } else {
-                                  setEnvironment({});
-                                }
-                              }}
-                            >
-                              <option value="">Select a template...</option>
-                              {filteredTemplates.length === 0 ? (
-                                <option disabled>No templates found</option>
-                              ) : (
-                                filteredTemplates.map((t) => (
-                                  <option key={t.id} value={t.id}>
-                                    {t.name}
-                                  </option>
-                                ))
-                              )}
-                            </select>
-                          </label>
-                          <label className="block space-y-2">
-                            <span className="text-sm font-semibold text-foreground dark:text-zinc-300">
-                              Node
-                            </span>
-                            <select
-                              className="w-full rounded-lg border border-border bg-card px-4 py-3 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-border dark:text-foreground dark:focus:border-primary-400"
-                              value={nodeId}
-                              onChange={(e) => setNodeId(e.target.value)}
-                            >
-                              <option value="">Select a node...</option>
-                              {availableNodes.map((n) => (
-                                <option key={n.id} value={n.id}>
-                                  {n.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <span className="text-sm font-semibold text-foreground dark:text-zinc-300">Template</span>
+                            <Combobox value={templateId} onChange={(newTemplateId) => { setTemplateId(newTemplateId); setImageVariant(''); const template = templates.find((t) => t.id === newTemplateId); if (template?.variables) { const defaultEnv: Record<string, string> = {}; template.variables.filter((v) => v.name !== 'SERVER_DIR').forEach((v) => { defaultEnv[v.name] = v.default; }); setEnvironment(defaultEnv); } else { setEnvironment({}); } }} options={templates.map((t) => ({ value: t.id, label: t.name, keywords: [t.name, t.description || ''].filter(Boolean) }))} placeholder="Select a template..." searchPlaceholder="Search templates..."/>
+                          </div>
+                          <div className="space-y-1.5">
+                            <span className="text-sm font-semibold text-foreground dark:text-zinc-300">Node</span>
+                            <Combobox value={nodeId} onChange={(newNodeId) => setNodeId(newNodeId)} options={availableNodes.map((n) => ({ value: n.id, label: n.name, keywords: [n.name] }))} placeholder="Select a node..." searchPlaceholder="Search nodes..."/>
+                          </div>
                         </div>
                         {selectedTemplate?.images?.length ? (
-                          <label className="block space-y-2">
-                            <span className="text-sm font-semibold text-foreground dark:text-zinc-300">
-                              Image Variant
-                            </span>
-                            <select
-                              className="w-full rounded-lg border border-border bg-card px-4 py-3 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-border dark:text-foreground dark:focus:border-primary-400"
-                              value={imageVariant}
-                              onChange={(e) => setImageVariant(e.target.value)}
-                            >
+                          <label className="block space-y-1.5">
+                            <span className="text-sm font-semibold text-foreground dark:text-zinc-300">Image Variant</span>
+                            <select className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={imageVariant} onChange={(e) => setImageVariant(e.target.value)}>
                               <option value="">Use default image</option>
-                              {selectedTemplate.images.map((option) => (
-                                <option key={option.name} value={option.name}>
-                                  {option.label ?? option.name}
-                                </option>
-                              ))}
+                              {selectedTemplate.images.map((option) => (<option key={option.name} value={option.name}>{option.label ?? option.name}</option>))}
                             </select>
                           </label>
                         ) : null}
                       </div>
                     ) : null}
+
+                    {/* --- RESOURCES STEP --- */}
                     {step === 'resources' ? (
                       <div className="space-y-5">
-                        <h3 className="text-base font-bold text-foreground dark:text-white">
-                          Resource Allocation
-                        </h3>
-                        <div className="grid gap-5 md:grid-cols-3">
-                          <label className="block space-y-2">
-                            <span className="text-sm font-semibold text-foreground dark:text-zinc-300">
-                              Memory (MB)
-                            </span>
-                            <input
-                              className="w-full rounded-lg border border-border bg-card px-4 py-3 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-border dark:text-foreground dark:focus:border-primary-400"
-                              value={memory}
-                              onChange={(e) => setMemory(e.target.value)}
-                              type="number"
-                              min={256}
-                            />
-                          </label>
-                          <label className="block space-y-1">
-                            <span className="text-muted-foreground dark:text-zinc-300">
-                              CPU cores
-                            </span>
-                            <input
-                              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:text-foreground dark:focus:border-primary-400"
-                              value={cpu}
-                              onChange={(e) => setCpu(e.target.value)}
-                              type="number"
-                              min={1}
-                              step={1}
-                            />
-                          </label>
-                          <label className="block space-y-1">
-                            <span className="text-muted-foreground dark:text-zinc-300">
-                              Disk (MB)
-                            </span>
-                            <input
-                              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:text-foreground dark:focus:border-primary-400"
-                              value={disk}
-                              onChange={(e) => setDisk(e.target.value)}
-                              type="number"
-                              min={1024}
-                              step={1024}
-                            />
-                          </label>
-                          <label className="block space-y-1">
-                            <span className="text-muted-foreground dark:text-zinc-300">
-                              Backup allocation (MB)
-                            </span>
-                            <input
-                              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:text-foreground dark:focus:border-primary-400"
-                              value={backupAllocationMb}
-                              onChange={(e) => setBackupAllocationMb(e.target.value)}
-                              type="number"
-                              min={0}
-                              step={128}
-                            />
-                            <span className="text-xs text-muted-foreground dark:text-muted-foreground">
-                              Leave blank to use provider allocation defaults.
-                            </span>
-                          </label>
-                          <label className="block space-y-1">
-                            <span className="text-muted-foreground dark:text-zinc-300">
-                              Database allocation
-                            </span>
-                            <input
-                              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:text-foreground dark:focus:border-primary-400"
-                              value={databaseAllocation}
-                              onChange={(e) => setDatabaseAllocation(e.target.value)}
-                              type="number"
-                              min={0}
-                              step={1}
-                            />
-                            <span className="text-xs text-muted-foreground dark:text-muted-foreground">
-                              Leave blank to use provider allocation defaults.
-                            </span>
-                          </label>
+                        <div className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-sm dark:border-border dark:bg-card">
+                          <h3 className="mb-5 text-sm font-bold tracking-tight text-foreground dark:text-white">Resource Allocation</h3>
+                          <div className="grid gap-4 sm:grid-cols-3">
+                            <label className="block space-y-1.5">
+                              <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">Memory (MB)</span>
+                              <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={memory} onChange={(e) => setMemory(e.target.value)} type="number" min={256}/>
+                            </label>
+                            <label className="block space-y-1.5">
+                              <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">CPU Cores</span>
+                              <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={cpu} onChange={(e) => setCpu(e.target.value)} type="number" min={1} step={1}/>
+                            </label>
+                            <label className="block space-y-1.5">
+                              <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">Disk (MB)</span>
+                              <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={disk} onChange={(e) => setDisk(e.target.value)} type="number" min={1024} step={1024}/>
+                            </label>
+                            <label className="block space-y-1.5">
+                              <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">Swap (MB)</span>
+                              <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={allocatedSwapMb} onChange={(e) => setAllocatedSwapMb(e.target.value)} type="number" min={0} step={128}/>
+                              <p className="text-[11px] text-muted-foreground/70 dark:text-muted-foreground">Leave blank to use provider defaults.</p>
+                            </label>
+                            <label className="block space-y-1.5">
+                              <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">Backup (MB)</span>
+                              <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={backupAllocationMb} onChange={(e) => setBackupAllocationMb(e.target.value)} type="number" min={0} step={128}/>
+                              <p className="text-[11px] text-muted-foreground/70 dark:text-muted-foreground">Leave blank to use provider defaults.</p>
+                            </label>
+                            <label className="block space-y-1.5">
+                              <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">Database Allocation</span>
+                              <input className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={databaseAllocation} onChange={(e) => setDatabaseAllocation(e.target.value)} type="number" min={0} step={1}/>
+                              <p className="text-[11px] text-muted-foreground/70 dark:text-muted-foreground">Leave blank to use provider defaults.</p>
+                            </label>
+                          </div>
                         </div>
                       </div>
                     ) : null}
+
+                    {/* --- NETWORK STEP --- */}
                     {step === 'build' ? (
-                      <>
-                        <label className="block space-y-1">
-                          <span className="text-muted-foreground dark:text-zinc-300">
-                            Primary Port
-                          </span>
-                          <input
-                            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:text-foreground dark:focus:border-primary-400"
-                            value={port}
-                            onChange={(e) => setPort(e.target.value)}
-                            type="number"
-                            min={1024}
-                            max={65535}
-                          />
-                        </label>
-                        <label className="block space-y-1">
-                          <span className="text-muted-foreground dark:text-zinc-300">
-                            Additional port bindings
-                          </span>
-                          <div className="space-y-2 text-xs text-muted-foreground dark:text-muted-foreground">
-                            <p>
-                              Format: container:host (example: 25566:25570). Host defaults to
-                              container.
-                            </p>
-                            {portBindings.map((binding, index) => (
-                              <div key={`${binding}-${index}`} className="flex items-center gap-2">
-                                <input
-                                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:text-foreground dark:focus:border-primary-400"
-                                  value={binding}
-                                  onChange={(event) => {
-                                    const next = [...portBindings];
-                                    next[index] = event.target.value;
-                                    setPortBindings(next);
-                                  }}
-                                  placeholder="25566:25570"
-                                />
-                                <button
-                                  type="button"
-                                  className="rounded-md border border-danger/30 px-2 py-1 text-[10px] font-semibold text-danger transition-all duration-300 hover:border-danger/50"
-                                  onClick={() => {
-                                    setPortBindings(portBindings.filter((_, i) => i !== index));
-                                  }}
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            ))}
-                            <button
-                              type="button"
-                              className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary-500 hover:text-foreground dark:border-border dark:text-zinc-300 dark:hover:border-primary/30"
-                              onClick={() => setPortBindings([...portBindings, ''])}
-                            >
-                              Add binding
-                            </button>
-                          </div>
-                        </label>
-                        <label className="block space-y-1">
-                          <span className="text-muted-foreground dark:text-zinc-300">Network</span>
-                          <select
-                            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:text-foreground dark:focus:border-primary-400"
-                            value={networkMode}
-                            onChange={(e) => setNetworkMode(e.target.value)}
-                          >
-                            <option value="macvlan">Macvlan</option>
+                      <div className="space-y-5">
+                        <label className="block space-y-1.5">
+                          <span className="text-sm font-semibold text-foreground dark:text-zinc-300">Network Mode</span>
+                          <select className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={networkMode} onChange={(e) => setNetworkMode(e.target.value)}>
                             <option value="host">Host (port mapping)</option>
+                            <option value="macvlan">Macvlan</option>
                           </select>
                         </label>
+                        <label className="block space-y-1.5">
+                          <span className="text-sm font-semibold text-foreground dark:text-zinc-300">Primary Port</span>
+                          <input className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400 disabled:opacity-50" value={port} onChange={(e) => setPort(e.target.value)} type="number" min={1024} max={65535} readOnly={networkMode === 'host'} disabled={networkMode === 'host'}/>
+                          <p className="text-[11px] text-muted-foreground/70 dark:text-muted-foreground">{networkMode === 'host' ? 'Auto-populated from the primary allocation below.' : 'Port the server will listen on.'}</p>
+                        </label>
+
                         {networkMode === 'macvlan' ? (
-                          <div className="space-y-3">
-                            <label className="block space-y-1">
-                              <span className="text-muted-foreground dark:text-zinc-300">
-                                Macvlan interface
-                              </span>
-                              <select
-                                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:text-foreground dark:focus:border-primary-400"
-                                value={macvlanInterface}
-                                onChange={(e) => setMacvlanInterface(e.target.value)}
-                              >
+                          <div className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-4 dark:border-border dark:bg-card">
+                            <h4 className="text-sm font-semibold text-foreground dark:text-zinc-200">Macvlan Configuration</h4>
+                            <label className="block space-y-1.5">
+                              <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">Interface</span>
+                              <select className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={macvlanInterface} onChange={(e) => setMacvlanInterface(e.target.value)}>
                                 <option value="">Select interface</option>
-                                {nodeIpPools.map((pool) => (
-                                  <option key={pool.id} value={pool.networkName}>
-                                    {pool.networkName} — {pool.cidr} ({pool.availableCount}{' '}
-                                    available)
-                                  </option>
-                                ))}
+                                {nodeIpPools.map((pool) => (<option key={pool.id} value={pool.networkName}>{pool.networkName} — {pool.cidr} ({pool.availableCount} available)</option>))}
                               </select>
                             </label>
-                            {nodeIpPools.length === 0 && nodeId ? (
-                              <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-                                No macvlan interfaces configured for this node.
-                              </p>
-                            ) : null}
+                            {nodeIpPools.length === 0 && nodeId ? (<p className="text-xs text-muted-foreground dark:text-muted-foreground">No macvlan interfaces configured for this node.</p>) : null}
                             {macvlanInterface ? (
-                              <div className="space-y-2">
-                                <label className="block space-y-1">
-                                  <span className="text-muted-foreground dark:text-zinc-300">
-                                    IP allocation
-                                  </span>
-                                  <select
-                                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:text-foreground dark:focus:border-primary-400"
-                                    value={primaryIp}
-                                    onChange={(e) => setPrimaryIp(e.target.value)}
-                                  >
-                                    <option value="">Auto-assign</option>
-                                    {availableIps.map((ip) => (
-                                      <option key={ip} value={ip}>
-                                        {ip}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                                {ipLoadError ? (
-                                  <p className="text-xs text-warning">{ipLoadError}</p>
-                                ) : null}
-                                {!ipLoadError && availableIps.length === 0 ? (
-                                  <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-                                    No available IPs found.
-                                  </p>
-                                ) : null}
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
-                        {networkMode === 'host' ? (
-                          <div className="space-y-2">
-                            <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-                              Choose a node allocation for the default IP and port.
-                            </p>
-                            <label className="block space-y-1">
-                              <span className="text-muted-foreground dark:text-zinc-300">
-                                Primary allocation
-                              </span>
-                              <div className="flex gap-2">
-                                <select
-                                  className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:text-foreground dark:focus:border-primary-400"
-                                  value={allocationId}
-                                  onChange={(event) => setAllocationId(event.target.value)}
-                                >
-                                  <option value="">Select allocation</option>
-                                  {availableAllocations.map((allocation) => (
-                                    <option key={allocation.id} value={allocation.id}>
-                                      {allocation.ip}:{allocation.port}
-                                      {allocation.alias ? ` (${allocation.alias})` : ''}
-                                    </option>
-                                  ))}
+                              <label className="block space-y-1.5">
+                                <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">IP Allocation</span>
+                                <select className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={primaryIp} onChange={(e) => setPrimaryIp(e.target.value)}>
+                                  <option value="">Auto-assign</option>
+                                  {availableIps.map((ip) => (<option key={ip} value={ip}>{ip}</option>))}
                                 </select>
-                                <a
-                                  href={`/admin/nodes/${nodeId}/allocations`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground transition-all hover:border-primary-500 hover:text-primary-600 dark:border-border dark:bg-surface-1 dark:text-zinc-300 dark:hover:border-primary-500/50 dark:hover:text-primary-400"
-                                  title="Create allocations in a new tab — dropdown refreshes when you return"
-                                >
-                                  <svg
-                                    className="h-3.5 w-3.5"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      d="M12 4v16m8-8H4"
-                                    />
-                                  </svg>
-                                  New
-                                </a>
-                              </div>
-                            </label>
-                            {allocLoadError ? (
-                              <p className="text-xs text-warning">{allocLoadError}</p>
-                            ) : null}
-                            {!allocLoadError && availableAllocations.length === 0 ? (
-                              <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-                                No available allocations found.{' '}
-                                <a
-                                  href={`/admin/nodes/${nodeId}/allocations`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary-500 hover:underline"
-                                >
-                                  Create one →
-                                </a>
-                              </p>
+                                {ipLoadError ? (<p className="text-xs text-warning">{ipLoadError}</p>) : null}
+                                {!ipLoadError && availableIps.length === 0 ? (<p className="text-xs text-muted-foreground dark:text-muted-foreground">No available IPs found.</p>) : null}
+                              </label>
                             ) : null}
                           </div>
                         ) : null}
-                      </>
+
+                        {networkMode === 'host' ? (
+                          <div className="space-y-4">
+                            <div className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-3 dark:border-border dark:bg-card">
+                              <div>
+                                <h4 className="text-sm font-semibold text-foreground dark:text-zinc-200">Primary Allocation</h4>
+                                <p className="mt-0.5 text-xs text-muted-foreground dark:text-muted-foreground">Choose a node allocation for the default IP and port.</p>
+                              </div>
+                              <label className="block space-y-1.5">
+                                <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">Allocation</span>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                  <select className="flex-1 rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={allocationId} onChange={(event) => setAllocationId(event.target.value)}>
+                                    <option value="">Select allocation</option>
+                                    {availableAllocations.map((allocation) => (<option key={allocation.id} value={allocation.id}>{allocation.ip}:{allocation.port}{allocation.alias ? ` (${allocation.alias})` : ''}</option>))}
+                                  </select>
+                                  <a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 shrink-0 rounded-lg border border-border bg-card px-4 py-2.5 text-xs font-medium text-muted-foreground transition-all duration-200 hover:border-primary-500 hover:text-primary-600 dark:border-border dark:hover:border-primary/30 dark:hover:text-primary-400" title="Create allocations — refreshes on return">
+                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg> New
+                                  </a>
+                                </div>
+                              </label>
+                              {allocLoadError ? (<p className="text-xs text-warning">{allocLoadError}</p>) : null}
+                              {!allocLoadError && availableAllocations.length === 0 ? (
+                                <p className="text-xs text-muted-foreground dark:text-muted-foreground">No available allocations.{' '}<a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">Create one →</a></p>
+                              ) : null}
+                            </div>
+
+                            <div className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-3 dark:border-border dark:bg-card">
+                              <div>
+                                <h4 className="text-sm font-semibold text-foreground dark:text-zinc-200">Additional Port Bindings</h4>
+                                <p className="mt-0.5 text-xs text-muted-foreground dark:text-muted-foreground">Map additional allocations to container ports.</p>
+                              </div>
+                              <div className="space-y-2.5">
+                                {additionalBindings.map((binding, index) => (
+                                  <div key={`${binding.allocationId}-${index}`} className="flex flex-col sm:flex-row gap-2">
+                                    <select className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" value={binding.allocationId} onChange={(event) => { const next = [...additionalBindings]; const allocation = availableAllocations.find((a) => a.id === event.target.value); next[index] = { allocationId: event.target.value, containerPort: allocation ? String(allocation.port) : binding.containerPort }; setAdditionalBindings(next); }}>
+                                      <option value="">Select allocation</option>
+                                      {availableAllocations.filter((a) => a.id !== allocationId && !additionalBindings.some((b, i) => i !== index && b.allocationId === a.id)).map((allocation) => (<option key={allocation.id} value={allocation.id}>{allocation.ip}:{allocation.port}{allocation.alias ? ` (${allocation.alias})` : ''}</option>))}
+                                    </select>
+                                    <div className="flex gap-2">
+                                      <input className="w-full sm:w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" type="number" min={1} max={65535} value={binding.containerPort} onChange={(event) => { const next = [...additionalBindings]; next[index] = { ...next[index], containerPort: event.target.value }; setAdditionalBindings(next); }} placeholder="Port"/>
+                                      <button type="button" className="shrink-0 rounded-lg border border-danger/20 px-2.5 py-2 text-xs font-semibold text-danger transition-all duration-200 hover:border-danger/40 hover:bg-danger-muted" onClick={() => { setAdditionalBindings(additionalBindings.filter((_, i) => i !== index)); }}>Remove</button>
+                                    </div>
+                                  </div>
+                                ))}
+                                <button type="button" className="rounded-lg border border-dashed border-border bg-transparent px-4 py-2 text-xs font-medium text-muted-foreground transition-all duration-200 hover:border-primary/40 hover:text-primary dark:hover:border-primary/30 dark:hover:text-primary-400" onClick={() => setAdditionalBindings([...additionalBindings, { allocationId: '', containerPort: '' }])}>
+                                  + Add binding
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
                     ) : null}
+
+                    {/* --- STARTUP STEP --- */}
                     {step === 'startup' ? (
                       <>
-                        {templateVariables.length > 0 && (
-                          <div className="space-y-3">
-                            <h3 className="text-sm font-semibold text-foreground dark:text-zinc-200">
-                              Environment Variables
-                            </h3>
+                        {templateVariables.length > 0 ? (
+                          <div className="space-y-4">
+                            <h3 className="text-sm font-semibold text-foreground dark:text-zinc-200">Environment Variables</h3>
                             {templateVariables.map((variable) => (
-                              <label key={variable.name} className="block space-y-1">
-                                <span className="text-muted-foreground dark:text-zinc-300">
-                                  {variable.name}
-                                  {variable.required && <span className="text-danger ml-1">*</span>}
-                                </span>
-                                {variable.description && (
-                                  <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-                                    {variable.description}
-                                  </p>
-                                )}
+                              <label key={variable.name} className="block space-y-1.5">
+                                <span className="text-sm font-medium text-muted-foreground dark:text-zinc-300">{variable.name}{variable.required ? <span className="ml-1 text-danger">*</span> : null}</span>
+                                {variable.description ? (<p className="text-xs text-muted-foreground dark:text-muted-foreground">{variable.description}</p>) : null}
                                 {variable.input === 'checkbox' ? (
-                                  <input
-                                    type="checkbox"
-                                    className="rounded border-border bg-card text-primary-600 focus:ring-primary-500 dark:border-border dark:bg-surface-1 dark:text-primary-400"
-                                    checked={
-                                      environment[variable.name] === 'true' ||
-                                      environment[variable.name] === '1'
-                                    }
-                                    onChange={(e) => {
-                                      const useNumeric =
-                                        variable.default === '1' || variable.default === '0';
-                                      setEnvironment((prev) => ({
-                                        ...prev,
-                                        [variable.name]: e.target.checked
-                                          ? useNumeric
-                                            ? '1'
-                                            : 'true'
-                                          : useNumeric
-                                            ? '0'
-                                            : 'false',
-                                      }));
-                                    }}
-                                  />
+                                  <input type="checkbox" className="h-4 w-4 rounded border-border bg-card text-primary focus:ring-primary/30 focus:ring-offset-0 dark:border-border dark:bg-surface-1 dark:text-primary-400" checked={environment[variable.name] === 'true' || environment[variable.name] === '1'} onChange={(e) => { const useNumeric = variable.default === '1' || variable.default === '0'; setEnvironment((prev) => ({ ...prev, [variable.name]: e.target.checked ? (useNumeric ? '1' : 'true') : (useNumeric ? '0' : 'false') })); }}/>
                                 ) : (
-                                  <input
-                                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:border-border dark:text-foreground dark:focus:border-primary-400"
-                                    type={variable.input === 'number' ? 'number' : 'text'}
-                                    value={environment[variable.name] || ''}
-                                    onChange={(e) =>
-                                      setEnvironment((prev) => ({
-                                        ...prev,
-                                        [variable.name]: e.target.value,
-                                      }))
-                                    }
-                                    placeholder={variable.default}
-                                  />
+                                  <input className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 dark:border-border dark:text-foreground dark:focus:border-primary-400" type={variable.input === 'number' ? 'number' : 'text'} value={environment[variable.name] || ''} onChange={(e) => setEnvironment((prev) => ({ ...prev, [variable.name]: e.target.value }))} placeholder={variable.default}/>
                                 )}
                               </label>
                             ))}
                           </div>
+                        ) : (
+                          <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground dark:border-border dark:bg-muted/20 dark:text-muted-foreground">No startup variables for this template.</div>
                         )}
-                        {templateVariables.length === 0 ? (
-                          <div className="rounded-md border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground dark:border-border dark:bg-surface-1 dark:text-muted-foreground">
-                            No startup variables for this template.
-                          </div>
-                        ) : null}
                       </>
                     ) : null}
-                  </>
+
+                  </div>
                 </div>
               </div>
 
               {/* Footer */}
-              <div className="border-t border-border bg-surface-2/50 px-8 py-5 dark:border-border dark:bg-surface-1/30">
+              <div className="shrink-0 border-t border-border bg-muted/30 px-5 sm:px-8 py-4 dark:border-border dark:bg-muted/20">
                 <div className="flex items-center justify-between gap-3">
-                  <button
-                    className="rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-danger/30 hover:bg-danger-muted hover:text-danger"
-                    onClick={() => setOpen(false)}
-                  >
+                  <button className="rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-muted-foreground transition-all duration-200 hover:border-danger/30 hover:bg-danger-muted hover:text-danger dark:border-border" onClick={() => setOpen(false)}>
                     Cancel
                   </button>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2.5">
                     {stepIndex > 0 ? (
-                      <button
-                        className="rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-all duration-300 hover:border-primary/30 hover:bg-primary-muted hover:text-primary"
-                        onClick={() => setStep(stepOrder[stepIndex - 1])}
-                      >
+                      <button className="rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-all duration-200 hover:border-primary/30 hover:bg-primary-muted hover:text-primary dark:border-border" onClick={() => setStep(stepOrder[stepIndex - 1])}>
                         Back
                       </button>
                     ) : null}
                     {stepIndex < stepOrder.length - 1 ? (
-                      <button
-                        className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-500/30 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
-                        onClick={() => setStep(stepOrder[stepIndex + 1])}
-                        disabled={!canGoNext}
-                      >
+                      <button className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-500/25 transition-all duration-200 hover:bg-primary-500 disabled:opacity-50" onClick={() => setStep(stepOrder[stepIndex + 1])} disabled={!canGoNext}>
                         Next →
                       </button>
                     ) : (
-                      <button
-                        className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-500/30 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
-                        onClick={() => mutation.mutate()}
-                        disabled={disableSubmit}
-                      >
+                      <button className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-500/25 transition-all duration-200 hover:bg-primary-500 disabled:opacity-50" onClick={() => mutation.mutate()} disabled={disableSubmit}>
                         {mutation.isPending ? 'Creating...' : 'Create Server'}
                       </button>
                     )}
                   </div>
                 </div>
               </div>
+
             </div>
           </div>
         </ModalPortal>

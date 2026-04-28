@@ -83,7 +83,7 @@ function ServerCard({ server }: { server: Server }) {
             <div className="flex items-center gap-2">
               <Link
                 to={`/servers/${server.id}`}
-                className="font-display text-xl font-bold text-foreground transition-colors hover:text-primary dark:text-white"
+                className="font-display text-xl font-bold text-foreground transition-colors hover:text-primary"
               >
                 {server.name}
               </Link>

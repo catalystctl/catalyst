@@ -95,7 +95,7 @@ const ConsoleRow = memo(function ConsoleRow({
 }) {
   return (
     <div
-      className={`console-line flex border-l-2 ${STREAM_BORDER[entry.stream] ?? 'border-l-zinc-300 dark:border-l-zinc-700'}`}
+      className={`console-line flex border-l-2 ${STREAM_BORDER[entry.stream] ?? 'border-l-border dark:border-l-border'}`}
     >
       {showLineNumbers && (
         <span className="flex w-12 shrink-0 select-none items-start justify-end pr-3 pt-px text-[11px] text-muted-foreground">
@@ -393,21 +393,21 @@ function CustomConsole({
         {/* Console output */}
         <div
           ref={parentRef}
-          className="console-output h-full overflow-y-auto font-mono text-[13px] leading-[1.7] text-foreground dark:text-zinc-300"
+          className="console-output h-full overflow-y-auto font-mono text-[13px] leading-[1.7] text-foreground dark:text-foreground"
         >
           {isLoading && !hasContent && (
             <div className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
-              <div className="h-3 w-3 animate-spin rounded-full border-2 border-border border-t-primary-400 dark:border-zinc-600" />
+              <div className="h-3 w-3 animate-spin rounded-full border-2 border-border border-t-primary-400 dark:border-muted" />
               Loading recent logs…
             </div>
           )}
 
           {isError && !hasContent && (
-            <div className="mx-4 my-3 flex items-center justify-between rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">
+            <div className="mx-4 my-3 flex items-center justify-between rounded-md border border-destructive/30 bg-destructive/50/10 px-3 py-2 text-xs text-destructive">
               <span>Unable to load historical logs.</span>
               <button
                 type="button"
-                className="rounded border border-rose-500/30 px-2 py-0.5 text-rose-400 transition-colors hover:bg-rose-500/20"
+                className="rounded border border-destructive/30 px-2 py-0.5 text-destructive transition-colors hover:bg-destructive/50/20"
                 onClick={() => onRetry?.()}
               >
                 Retry

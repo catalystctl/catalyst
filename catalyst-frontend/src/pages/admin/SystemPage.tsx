@@ -62,7 +62,7 @@ function Section({
             {icon}
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-foreground dark:text-white">{title}</h2>
+            <h2 className="text-sm font-semibold text-foreground ">{title}</h2>
             {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
           </div>
         </div>
@@ -102,7 +102,7 @@ function HealthStatCard({
         </div>
         <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
       </div>
-      <div className="text-xl font-bold tabular-nums text-foreground dark:text-zinc-100">{value}</div>
+      <div className="text-xl font-bold tabular-nums text-foreground dark:text-foreground">{value}</div>
       {sub && <div className="mt-1 text-[11px] text-muted-foreground">{sub}</div>}
     </motion.div>
   );
@@ -216,9 +216,9 @@ function SystemPage() {
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 opacity-20 blur-sm" />
-                <Settings className="relative h-7 w-7 text-indigo-600 dark:text-indigo-400" />
+                <Settings className="relative h-7 w-7 text-primary dark:text-indigo-400" />
               </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground dark:text-white">
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
                 System
               </h1>
             </div>
@@ -243,17 +243,17 @@ function SystemPage() {
             value={health?.status ?? 'loading'}
             sub={`Database: ${dbStatus} · Checked ${health ? new Date(health.timestamp).toLocaleTimeString() : '…'}`}
             icon={isHealthy
-              ? <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              : <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              ? <CheckCircle className="h-4 w-4 text-success dark:text-success" />
+              : <AlertTriangle className="h-4 w-4 text-warning dark:text-warning" />
             }
-            iconColor={isHealthy ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-amber-100 dark:bg-amber-900/30'}
+            iconColor={isHealthy ? 'bg-success/10 dark:bg-success/30' : 'bg-warning/10 dark:bg-warning/30'}
           />
           <HealthStatCard
             label="Nodes"
             value={`${health?.nodes.online ?? 0} / ${health?.nodes.total ?? 0}`}
             sub={`Offline: ${health?.nodes.offline ?? 0} · Stale: ${health?.nodes.stale ?? 0}`}
-            icon={<Server className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
-            iconColor="bg-blue-100 dark:bg-blue-900/30"
+            icon={<Server className="h-4 w-4 text-info dark:text-info" />}
+            iconColor="bg-info/10 dark:bg-blue-900/30"
           />
           <HealthStatCard
             label="System totals"
@@ -268,8 +268,8 @@ function SystemPage() {
         <Section
           title="SMTP Configuration"
           subtitle="Configure outbound email for invites, alerts, and notifications."
-          icon={<Mail className="h-4 w-4 text-rose-600 dark:text-rose-400" />}
-          iconColor="bg-rose-100 dark:bg-rose-900/30"
+          icon={<Mail className="h-4 w-4 text-destructive dark:text-destructive" />}
+          iconColor="bg-destructive/10 dark:bg-destructive/30"
           footer={
             <Button size="sm" disabled={updateSmtpMutation.isPending} onClick={() => updateSmtpMutation.mutate()}>
               {updateSmtpMutation.isPending ? 'Saving…' : 'Save SMTP settings'}
@@ -335,7 +335,7 @@ function SystemPage() {
                   type="checkbox"
                   checked={smtpSecure}
                   onChange={(e) => setSmtpSecure(e.target.checked)}
-                  className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-zinc-600 dark:bg-surface-1 dark:text-primary-400"
+                  className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                 />
                 Use SSL/TLS
               </label>
@@ -344,7 +344,7 @@ function SystemPage() {
                   type="checkbox"
                   checked={smtpRequireTls}
                   onChange={(e) => setSmtpRequireTls(e.target.checked)}
-                  className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-zinc-600 dark:bg-surface-1 dark:text-primary-400"
+                  className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                 />
                 Require STARTTLS
               </label>
@@ -353,7 +353,7 @@ function SystemPage() {
                   type="checkbox"
                   checked={smtpPool}
                   onChange={(e) => setSmtpPool(e.target.checked)}
-                  className="h-4 w-4 rounded border-border bg-white text-primary-600 dark:border-zinc-600 dark:bg-surface-1 dark:text-primary-400"
+                  className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                 />
                 Use connection pool
               </label>
@@ -365,8 +365,8 @@ function SystemPage() {
         <Section
           title="Mod Manager API Keys"
           subtitle="Provide API keys for CurseForge and Modrinth to enable mod downloads."
-          icon={<Key className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
-          iconColor="bg-amber-100 dark:bg-amber-900/30"
+          icon={<Key className="h-4 w-4 text-warning dark:text-warning" />}
+          iconColor="bg-warning/10 dark:bg-warning/30"
           footer={
             <Button size="sm" disabled={updateModManagerMutation.isPending} onClick={() => updateModManagerMutation.mutate()}>
               {updateModManagerMutation.isPending ? 'Saving…' : 'Save mod manager keys'}

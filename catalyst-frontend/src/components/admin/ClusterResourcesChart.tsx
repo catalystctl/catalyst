@@ -315,7 +315,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
                       if (!active || !payload?.length) return null;
                       return (
                         <div className="rounded-lg border border-border bg-card/95 px-3 py-2 shadow-lg backdrop-blur-sm">
-                          <p className="mb-2 text-xs font-semibold text-foreground dark:text-zinc-300">
+                          <p className="mb-2 text-xs font-semibold text-foreground">
                             {label}
                           </p>
                           {payload.map((entry, index) => (
@@ -327,7 +327,7 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
                               <span className="text-muted-foreground">
                                 {String(entry.name ?? '').replace(/_/g, ' ')}:
                               </span>
-                              <span className="font-semibold text-foreground dark:text-white">
+                              <span className="font-semibold text-foreground dark:text-foreground">
                                 {typeof entry.value === 'number'
                                   ? entry.value.toFixed(1)
                                   : entry.value}
@@ -397,23 +397,23 @@ export function ClusterResourcesChart({ data, isLoading }: ClusterResourcesChart
         {/* ── Footer stats ── */}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-xs">
           <div className="flex items-center gap-4">
-            <span className="font-semibold text-foreground dark:text-zinc-300">
+            <span className="font-semibold text-foreground">
               {getMetricLabel()}
             </span>
             {data && (
               <>
                 {metric === 'cpu' && (
-                  <span className="rounded-full bg-surface-2 px-2 py-0.5 font-medium text-foreground dark:text-zinc-300">
+                  <span className="rounded-full bg-surface-2 px-2 py-0.5 font-medium text-foreground">
                     Avg: {data.totalCpu}%
                   </span>
                 )}
                 {metric === 'memory' && (
-                  <span className="rounded-full bg-surface-2 px-2 py-0.5 font-medium text-foreground dark:text-zinc-300">
+                  <span className="rounded-full bg-surface-2 px-2 py-0.5 font-medium text-foreground">
                     Avg: {data.totalMemory}%
                   </span>
                 )}
                 {metric === 'network' && (
-                  <span className="rounded-full bg-surface-2 px-2 py-0.5 font-medium text-foreground dark:text-zinc-300">
+                  <span className="rounded-full bg-surface-2 px-2 py-0.5 font-medium text-foreground">
                     RX: {data.avgNetworkRx.toFixed(1)} MB/s | TX: {data.avgNetworkTx.toFixed(1)} MB/s
                   </span>
                 )}

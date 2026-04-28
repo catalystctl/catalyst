@@ -54,10 +54,10 @@ function TransferServerModal({ serverId, disabled = false }: Props) {
       </Button>
       {open ? (
         <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-foreground dark:text-white">Transfer server</h2>
+              <h2 className="text-lg font-semibold text-foreground">Transfer server</h2>
               <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>Close</Button>
             </div>
             <div className="mt-4 space-y-3 text-sm text-muted-foreground">

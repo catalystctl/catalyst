@@ -58,7 +58,7 @@ export default function ServerSettingsTab({
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
             <input
-              className="min-w-[220px] flex-1 rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary-500 focus:outline-none dark:focus:border-primary-400"
+              className="min-w-[220px] flex-1 rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
               value={serverName}
               onChange={(event) => onServerNameChange(event.target.value)}
               placeholder="Server name"
@@ -66,7 +66,7 @@ export default function ServerSettingsTab({
             />
             <button
               type="button"
-              className="rounded-md bg-primary-600 px-3 py-2 font-semibold text-white shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary-500 disabled:opacity-60"
+              className="rounded-md bg-primary px-3 py-2 font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
               onClick={onRename}
               disabled={renamePending || isSuspended || !serverName.trim()}
             >
@@ -85,7 +85,7 @@ export default function ServerSettingsTab({
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
             <button
               type="button"
-              className="rounded-md bg-warning px-3 py-1 font-semibold text-white shadow-lg shadow-warning/20 transition-all duration-300 hover:bg-warning disabled:opacity-60"
+              className="rounded-md bg-warning px-3 py-1 font-semibold text-foreground shadow-lg shadow-warning/20 transition-all duration-300 hover:bg-warning disabled:opacity-60"
               disabled={serverStatus !== 'stopped' || isSuspended}
               onClick={handleReinstall}
             >

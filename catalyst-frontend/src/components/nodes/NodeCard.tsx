@@ -26,14 +26,14 @@ function NodeCard({ node, index = 0 }: Props) {
       }}
       className={`group relative overflow-hidden rounded-xl border bg-card/80 backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg ${
         node.isOnline
-          ? 'border-border hover:border-emerald-500/50'
+          ? 'border-border hover:border-success/50'
           : 'border-border hover:border-border'
       }`}
     >
       {/* Online indicator strip */}
       <div
         className={`absolute left-0 top-0 h-full w-1 transition-colors ${
-          node.isOnline ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-surface-3'
+          node.isOnline ? 'bg-success/50' : 'bg-muted dark:bg-surface-3'
         }`}
       />
 
@@ -44,14 +44,14 @@ function NodeCard({ node, index = 0 }: Props) {
             <div
               className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${
                 node.isOnline
-                  ? 'bg-emerald-100 dark:bg-emerald-900/30'
+                  ? 'bg-success/10 dark:bg-success/30'
                   : 'bg-surface-2 dark:bg-surface-2'
               }`}
             >
               <Server
                 className={`h-4.5 w-4.5 transition-colors ${
                   node.isOnline
-                    ? 'text-emerald-600 dark:text-emerald-400'
+                    ? 'text-success dark:text-success'
                     : 'text-muted-foreground'
                 }`}
               />
@@ -60,7 +60,7 @@ function NodeCard({ node, index = 0 }: Props) {
               <div className="flex items-center gap-2.5">
                 <Link
                   to={`/admin/nodes/${node.id}`}
-                  className="truncate font-semibold text-foreground transition-colors hover:text-primary dark:text-zinc-100 dark:hover:text-primary-400"
+                  className="truncate font-semibold text-foreground transition-colors hover:text-primary dark:hover:text-primary-400"
                 >
                   {node.name}
                 </Link>
@@ -70,11 +70,11 @@ function NodeCard({ node, index = 0 }: Props) {
                 >
                   <span className="relative flex h-1.5 w-1.5">
                     {node.isOnline && (
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
                     )}
                     <span
                       className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
-                        node.isOnline ? 'bg-emerald-500' : 'bg-zinc-400'
+                        node.isOnline ? 'bg-success/50' : 'bg-muted'
                       }`}
                     />
                   </span>
@@ -85,11 +85,11 @@ function NodeCard({ node, index = 0 }: Props) {
                 <span className="font-mono text-[11px] opacity-70">{node.hostname ?? 'hostname n/a'}</span>
                 {node.location && (
                   <>
-                    <span className="text-zinc-300 dark:text-zinc-700">·</span>
+                    <span className="text-muted-foreground">·</span>
                     <span>{node.location.name}</span>
                   </>
                 )}
-                <span className="text-zinc-300 dark:text-zinc-700">·</span>
+                <span className="text-muted-foreground">·</span>
                 <span>Last seen {lastSeen}</span>
               </div>
             </div>
@@ -111,7 +111,7 @@ function NodeCard({ node, index = 0 }: Props) {
               <Server className="h-3 w-3" />
               <span>Servers</span>
             </div>
-            <div className="mt-1 text-lg font-semibold text-foreground dark:text-zinc-100">
+            <div className="mt-1 text-lg font-semibold text-foreground">
               {serverCount}
             </div>
           </div>
@@ -120,7 +120,7 @@ function NodeCard({ node, index = 0 }: Props) {
               <Cpu className="h-3 w-3" />
               <span>CPU</span>
             </div>
-            <div className="mt-1 text-lg font-semibold text-foreground dark:text-zinc-100">
+            <div className="mt-1 text-lg font-semibold text-foreground">
               {node.maxCpuCores ?? 0}
               <span className="ml-1 text-xs font-normal text-muted-foreground">cores</span>
             </div>
@@ -130,7 +130,7 @@ function NodeCard({ node, index = 0 }: Props) {
               <HardDrive className="h-3 w-3" />
               <span>Memory</span>
             </div>
-            <div className="mt-1 text-lg font-semibold text-foreground dark:text-zinc-100">
+            <div className="mt-1 text-lg font-semibold text-foreground">
               {memoryGB}
               <span className="ml-1 text-xs font-normal text-muted-foreground">GB</span>
             </div>
