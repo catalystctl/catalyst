@@ -2280,8 +2280,12 @@ export class WebSocketGateway {
         continue;
       }
       if (allowedUsers.includes(client.userId)) {
-        if (client.socket.readyState === 1) {
-          client.socket.send(JSON.stringify(sanitizedMessage));
+        try {
+          if (client.socket.readyState === 1) {
+            client.socket.send(JSON.stringify(sanitizedMessage));
+          }
+        } catch {
+          // Stale socket — ignore
         }
       }
     }
@@ -2326,7 +2330,11 @@ export class WebSocketGateway {
 
       for (const [, sub] of sseSubs) {
         sub.lastActivity = Date.now();
-        sub.push(event, eventData);
+        try {
+          sub.push(event, eventData);
+        } catch {
+          // Stale subscriber — ignore
+        }
       }
     }
   }
@@ -2337,7 +2345,10 @@ export class WebSocketGateway {
    * Register an SSE subscriber for a server's console output.
    * Returns an unsubscribe function to call when the SSE connection closes.
    */
-  addSseSubscriber(serverId: string, push: (event: string, data: string) => void): () => void {
+  addSseSubscriber(
+    serverId: string,
+    push: (event: string, data: string) => void,
+  ): { unsubscribe: () => void; touch: () => void } {
     if (!this.sseSubscribers.has(serverId)) {
       this.sseSubscribers.set(serverId, new Map());
     }
@@ -2348,7 +2359,7 @@ export class WebSocketGateway {
     }
     this.logger.debug({ serverId, subscriberId }, 'SSE subscriber added');
 
-    return () => {
+    const unsubscribe = () => {
       const subs = this.sseSubscribers.get(serverId);
       if (subs) {
         subs.delete(subscriberId);
@@ -2358,6 +2369,18 @@ export class WebSocketGateway {
         this.logger.debug({ serverId, subscriberId }, 'SSE subscriber removed');
       }
     };
+
+    const touch = () => {
+      const subs = this.sseSubscribers.get(serverId);
+      if (subs) {
+        const sub = subs.get(subscriberId);
+        if (sub) {
+          sub.lastActivity = Date.now();
+        }
+      }
+    };
+
+    return { unsubscribe, touch };
   }
 
   /**
@@ -2569,9 +2592,13 @@ export class WebSocketGateway {
 
   private sweepSseSubscribers() {
     const now = Date.now();
+    // Console SSE connections are long-lived by design (agents may be offline for
+    // extended periods while browsers stay connected). Use a 30-minute sweep to
+    // avoid deleting active subscribers during agent reconnections.
+    const SWEEP_MS = 1_800_000;
     for (const [serverId, subs] of this.sseSubscribers) {
       for (const [subId, sub] of subs) {
-        if (now - sub.lastActivity > 300_000) {
+        if (now - sub.lastActivity > SWEEP_MS) {
           subs.delete(subId);
         }
       }

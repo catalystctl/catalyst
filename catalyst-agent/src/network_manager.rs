@@ -1,6 +1,5 @@
-use std::fs;
-use std::path::Path;
 use std::time::Duration;
+use tokio::fs;
 use tokio::process::Command;
 use tracing::{info, warn};
 
@@ -27,41 +26,47 @@ const CONFIG_PATH: &str = "/opt/catalyst-agent/config.toml";
 pub struct NetworkManager;
 
 impl NetworkManager {
-    fn validate_network_name(name: &str) -> Result<(), AgentError> {
+    fn validate_label(name: &str, max_len: usize, context: &str) -> Result<(), AgentError> {
         let name = name.trim();
-        if name.is_empty() || name.len() > 63 {
-            return Err(AgentError::InvalidRequest(
-                "Invalid network name: must be 1-63 characters".to_string(),
-            ));
+        if name.is_empty() || name.len() > max_len {
+            return Err(AgentError::InvalidRequest(format!(
+                "Invalid {}: must be 1-{} characters",
+                context, max_len
+            )));
         }
         if name.contains('/') || name.contains('\\') {
-            return Err(AgentError::InvalidRequest(
-                "Invalid network name: must not contain path separators".to_string(),
-            ));
+            return Err(AgentError::InvalidRequest(format!(
+                "Invalid {}: must not contain path separators",
+                context
+            )));
         }
-
         let mut chars = name.chars();
         let Some(first) = chars.next() else {
-            return Err(AgentError::InvalidRequest(
-                "Invalid network name: must not be empty".to_string(),
-            ));
+            return Err(AgentError::InvalidRequest(format!(
+                "Invalid {}: must not be empty",
+                context
+            )));
         };
         if !first.is_ascii_alphanumeric() {
-            return Err(AgentError::InvalidRequest(
-                "Invalid network name: must start with an alphanumeric character".to_string(),
-            ));
+            return Err(AgentError::InvalidRequest(format!(
+                "Invalid {}: must start with an alphanumeric character",
+                context
+            )));
         }
         if !name
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
         {
-            return Err(AgentError::InvalidRequest(
-                "Invalid network name: allowed characters are a-z, A-Z, 0-9, '-', '_', '.'"
-                    .to_string(),
-            ));
+            return Err(AgentError::InvalidRequest(format!(
+                "Invalid {}: allowed characters are a-z, A-Z, 0-9, '-', '_', '.'",
+                context
+            )));
         }
-
         Ok(())
+    }
+
+    fn validate_network_name(name: &str) -> Result<(), AgentError> {
+        Self::validate_label(name, 63, "network name")
     }
 
     fn normalize_interface_name(interface: &str) -> String {
@@ -71,38 +76,7 @@ impl NetworkManager {
     }
 
     fn validate_interface_name(interface: &str) -> Result<(), AgentError> {
-        let interface = interface.trim();
-        if interface.is_empty() || interface.len() > 15 {
-            return Err(AgentError::InvalidRequest(
-                "Invalid interface name: must be 1-15 characters".to_string(),
-            ));
-        }
-        if interface.contains('/') || interface.contains('\\') {
-            return Err(AgentError::InvalidRequest(
-                "Invalid interface name: must not contain path separators".to_string(),
-            ));
-        }
-        let mut chars = interface.chars();
-        let Some(first) = chars.next() else {
-            return Err(AgentError::InvalidRequest(
-                "Invalid interface name: must not be empty".to_string(),
-            ));
-        };
-        if !first.is_ascii_alphanumeric() {
-            return Err(AgentError::InvalidRequest(
-                "Invalid interface name: must start with an alphanumeric character".to_string(),
-            ));
-        }
-        if !interface
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
-        {
-            return Err(AgentError::InvalidRequest(
-                "Invalid interface name: allowed characters are a-z, A-Z, 0-9, '-', '_', '.'"
-                    .to_string(),
-            ));
-        }
-        Ok(())
+        Self::validate_label(interface, 15, "interface name")
     }
 
     /// Create a new CNI network configuration
@@ -111,7 +85,7 @@ impl NetworkManager {
         let cni_config_path = format!("{}/{}.conflist", CNI_DIR, network.name);
 
         // Check if network already exists
-        if Path::new(&cni_config_path).exists() {
+        if fs::try_exists(&cni_config_path).await.unwrap_or(false) {
             return Err(AgentError::InternalError(format!(
                 "Network '{}' already exists",
                 network.name
@@ -160,6 +134,7 @@ impl NetworkManager {
 
         // Write CNI config file
         fs::write(&cni_config_path, cni_config)
+            .await
             .map_err(|e| AgentError::IoError(format!("Failed to write CNI config: {}", e)))?;
 
         info!(
@@ -175,8 +150,10 @@ impl NetworkManager {
             &gateway,
             &range_start,
             &range_end,
-        ) {
-            let _ = fs::remove_file(&cni_config_path);
+        )
+        .await
+        {
+            let _ = fs::remove_file(&cni_config_path).await;
             return Err(e);
         }
 
@@ -193,7 +170,7 @@ impl NetworkManager {
         let old_cni_path = format!("{}/{}.conflist", CNI_DIR, old_name);
 
         // Check if old network exists
-        if !Path::new(&old_cni_path).exists() {
+        if !fs::try_exists(&old_cni_path).await.unwrap_or(false) {
             return Err(AgentError::InternalError(format!(
                 "Network '{}' does not exist",
                 old_name
@@ -202,7 +179,7 @@ impl NetworkManager {
 
         // If name changed, delete old config
         if old_name != network.name {
-            fs::remove_file(&old_cni_path).map_err(|e| {
+            fs::remove_file(&old_cni_path).await.map_err(|e| {
                 AgentError::IoError(format!("Failed to remove old CNI config: {}", e))
             })?;
             info!("✓ Removed old CNI network '{}'", old_name);
@@ -253,6 +230,7 @@ impl NetworkManager {
 
         // Write CNI config file
         fs::write(&cni_config_path, cni_config)
+            .await
             .map_err(|e| AgentError::IoError(format!("Failed to write CNI config: {}", e)))?;
 
         info!(
@@ -269,8 +247,10 @@ impl NetworkManager {
             &gateway,
             &range_start,
             &range_end,
-        ) {
-            let _ = fs::remove_file(&cni_config_path);
+        )
+        .await
+        {
+            let _ = fs::remove_file(&cni_config_path).await;
             return Err(e);
         }
 
@@ -283,7 +263,7 @@ impl NetworkManager {
         let cni_config_path = format!("{}/{}.conflist", CNI_DIR, network_name);
 
         // Check if network exists
-        if !Path::new(&cni_config_path).exists() {
+        if !fs::try_exists(&cni_config_path).await.unwrap_or(false) {
             return Err(AgentError::InternalError(format!(
                 "Network '{}' does not exist",
                 network_name
@@ -292,12 +272,13 @@ impl NetworkManager {
 
         // Remove CNI config file
         fs::remove_file(&cni_config_path)
+            .await
             .map_err(|e| AgentError::IoError(format!("Failed to remove CNI config: {}", e)))?;
 
         info!("✓ Deleted CNI network '{}'", network_name);
 
         // Remove from config.toml
-        Self::remove_from_config(network_name)?;
+        Self::remove_from_config(network_name).await?;
 
         Ok(())
     }
@@ -342,7 +323,7 @@ impl NetworkManager {
     }
 
     /// Persist network configuration to config.toml
-    fn persist_to_config(
+    async fn persist_to_config(
         network: &CniNetworkConfig,
         interface: &str,
         cidr: &str,
@@ -350,7 +331,7 @@ impl NetworkManager {
         range_start: &str,
         range_end: &str,
     ) -> Result<(), AgentError> {
-        let mut config = Self::load_agent_config_toml()?;
+        let mut config = Self::load_agent_config_toml().await?;
         let networks = Self::networks_array_mut(&mut config)?;
 
         // If already present, treat as idempotent.
@@ -377,13 +358,13 @@ impl NetworkManager {
             range_end,
         ));
 
-        Self::store_agent_config_toml(&config)?;
+        Self::store_agent_config_toml(&config).await?;
         info!("✓ Persisted network '{}' to {}", network.name, CONFIG_PATH);
         Ok(())
     }
 
     /// Update network configuration in config.toml
-    fn update_config(
+    async fn update_config(
         old_name: &str,
         network: &CniNetworkConfig,
         interface: &str,
@@ -392,7 +373,7 @@ impl NetworkManager {
         range_start: &str,
         range_end: &str,
     ) -> Result<(), AgentError> {
-        let mut config = Self::load_agent_config_toml()?;
+        let mut config = Self::load_agent_config_toml().await?;
         let networks = Self::networks_array_mut(&mut config)?;
 
         let mut updated = false;
@@ -432,18 +413,18 @@ impl NetworkManager {
             ));
         }
 
-        Self::store_agent_config_toml(&config)?;
+        Self::store_agent_config_toml(&config).await?;
         info!("✓ Updated network '{}' in {}", network.name, CONFIG_PATH);
         Ok(())
     }
 
     /// Remove network configuration from config.toml
-    fn remove_from_config(network_name: &str) -> Result<(), AgentError> {
-        if !Path::new(CONFIG_PATH).exists() {
+    async fn remove_from_config(network_name: &str) -> Result<(), AgentError> {
+        if !fs::try_exists(CONFIG_PATH).await.unwrap_or(false) {
             return Ok(());
         }
 
-        let mut config = Self::load_agent_config_toml()?;
+        let mut config = Self::load_agent_config_toml().await?;
         let Ok(networks) = Self::networks_array_mut(&mut config) else {
             return Ok(());
         };
@@ -456,25 +437,27 @@ impl NetworkManager {
                 != Some(network_name)
         });
 
-        Self::store_agent_config_toml(&config)?;
+        Self::store_agent_config_toml(&config).await?;
         info!("✓ Removed network '{}' from {}", network_name, CONFIG_PATH);
         Ok(())
     }
 
-    fn load_agent_config_toml() -> Result<TomlValue, AgentError> {
-        if !Path::new(CONFIG_PATH).exists() {
+    async fn load_agent_config_toml() -> Result<TomlValue, AgentError> {
+        if !fs::try_exists(CONFIG_PATH).await.unwrap_or(false) {
             return Ok(TomlValue::Table(toml::value::Table::new()));
         }
         let raw = fs::read_to_string(CONFIG_PATH)
+            .await
             .map_err(|e| AgentError::IoError(format!("Failed to read config: {}", e)))?;
         toml::from_str::<TomlValue>(&raw)
             .map_err(|e| AgentError::IoError(format!("Failed to parse config TOML: {}", e)))
     }
 
-    fn store_agent_config_toml(value: &TomlValue) -> Result<(), AgentError> {
+    async fn store_agent_config_toml(value: &TomlValue) -> Result<(), AgentError> {
         let raw = toml::to_string_pretty(value)
             .map_err(|e| AgentError::IoError(format!("Failed to serialize config TOML: {}", e)))?;
         fs::write(CONFIG_PATH, raw)
+            .await
             .map_err(|e| AgentError::IoError(format!("Failed to write config: {}", e)))
     }
 
@@ -687,10 +670,12 @@ impl NetworkManager {
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines() {
             if line.contains("default") {
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if let Some(idx) = parts.iter().position(|&p| p == "via") {
-                    if let Some(gateway) = parts.get(idx + 1) {
-                        return Ok(gateway.to_string());
+                let mut parts = line.split_whitespace();
+                while let Some(part) = parts.next() {
+                    if part == "via" {
+                        if let Some(gateway) = parts.next() {
+                            return Ok(gateway.to_string());
+                        }
                     }
                 }
             }

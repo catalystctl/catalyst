@@ -1,8 +1,8 @@
-use parking_lot::Mutex;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
 use std::process::Command;
+use std::sync::Mutex;
 use tokio::io::AsyncWriteExt;
 use tracing::{error, info, warn};
 
@@ -34,7 +34,7 @@ fn ensure_sudo_password() -> Result<(), AgentError> {
 
     // Fast path – already cached.
     {
-        let guard = SUDO_PASSWORD.lock();
+        let guard = SUDO_PASSWORD.lock().unwrap();
         if guard.is_some() {
             return Ok(());
         }
@@ -58,7 +58,7 @@ fn ensure_sudo_password() -> Result<(), AgentError> {
     if let Ok(status) = probe {
         if status.success() {
             // Passwordless sudo works – cache an empty marker.
-            let mut guard = SUDO_PASSWORD.lock();
+            let mut guard = SUDO_PASSWORD.lock().unwrap();
             *guard = Some(String::new());
             return Ok(());
         }
@@ -93,7 +93,7 @@ fn ensure_sudo_password() -> Result<(), AgentError> {
     }
     match verify.wait() {
         Ok(status) if status.success() => {
-            let mut guard = SUDO_PASSWORD.lock();
+            let mut guard = SUDO_PASSWORD.lock().unwrap();
             *guard = Some(password);
             Ok(())
         }
@@ -110,7 +110,7 @@ fn get_sudo_password() -> Result<Option<String>, AgentError> {
         return Ok(None);
     }
     ensure_sudo_password()?;
-    let guard = SUDO_PASSWORD.lock();
+    let guard = SUDO_PASSWORD.lock().unwrap();
     Ok(guard.clone())
 }
 
@@ -639,11 +639,13 @@ impl SystemSetup {
             }
             hasher.update(&buffer[..read]);
         }
-        Ok(hasher
-            .finalize()
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<String>())
+        let result = hasher.finalize();
+        let mut hex = String::with_capacity(result.len() * 2);
+        for b in result.iter() {
+            use std::fmt::Write;
+            let _ = write!(&mut hex, "{:02x}", b);
+        }
+        Ok(hex)
     }
 
     fn extract_sha256_hex(text: &str) -> Option<String> {

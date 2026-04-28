@@ -153,9 +153,9 @@ export default function ServerConsoleTab({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex flex-col gap-3 md:flex-row md:items-stretch">
+      <div className="flex flex-col flex-nowrap gap-3 md:flex-row md:items-stretch">
         {/* Resource Stats */}
-        <div className="grid grid-cols-2 gap-2 md:flex md:flex-col md:w-44 lg:w-52 shrink-0 md:h-full">
+        <div className="grid grid-cols-2 gap-2 self-start md:flex md:flex-col md:self-stretch md:w-44 lg:w-52 shrink-0">
           {liveMetrics ? (
             <>
               <StatCard
@@ -181,7 +181,7 @@ export default function ServerConsoleTab({
                 strokeColor="stroke-amber-500"
                 subtext={`${liveDiskUsageMb ?? 0} / ${liveDiskTotalMb ?? 0} MB`}
               />
-              <div className="flex flex-col justify-center gap-3 rounded-lg border border-border bg-card px-3 py-2 md:flex-1 md:justify-center md:gap-4">
+              <div className="flex flex-col justify-center gap-3 rounded-lg border border-border bg-card px-3 py-2 md:flex-1 md:justify-center md:gap-4 min-h-0">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Network</span>
                 <div className="flex items-center gap-2 text-[11px]">
                   <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
@@ -208,7 +208,7 @@ export default function ServerConsoleTab({
               <StatSkeleton label="CPU" />
               <StatSkeleton label="Memory" />
               <StatSkeleton label="Disk" />
-              <div className="flex flex-col justify-center gap-3 rounded-lg border border-border bg-card px-3 py-2 md:flex-1 md:justify-center md:gap-4">
+              <div className="flex flex-col justify-center gap-3 rounded-lg border border-border bg-card px-3 py-2 md:flex-1 md:justify-center md:gap-4 min-h-0">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Network</span>
                 <div className="flex items-center gap-2 text-[11px]">
                   <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">

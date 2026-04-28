@@ -2989,48 +2989,62 @@ async fn detect_default_route_interface() -> Option<String> {
 }
 
 async fn detect_host_network() -> Option<(String, String, String)> {
-    // Parse `ip -4 route show default` → "default via <gw> dev <iface> ..."
-    let output = tokio::process::Command::new("ip")
-        .args(["-4", "route", "show", "default"])
-        .output()
-        .await
-        .ok()?;
-    let route = String::from_utf8_lossy(&output.stdout);
-    let parts: Vec<&str> = route.split_whitespace().collect();
-    let gw_idx = parts.iter().position(|&p| p == "via")?;
-    let if_idx = parts.iter().position(|&p| p == "dev")?;
-    let gateway = parts.get(gw_idx + 1)?.to_string();
-    let iface = parts.get(if_idx + 1)?.to_string();
+    static CACHED: tokio::sync::OnceCell<Option<(String, String, String)>> =
+        tokio::sync::OnceCell::const_new();
+    CACHED
+        .get_or_init(|| async {
+            // Parse `ip -4 route show default` → "default via <gw> dev <iface> ..."
+            let output = tokio::process::Command::new("ip")
+                .args(["-4", "route", "show", "default"])
+                .output()
+                .await
+                .ok()?;
+            let route = String::from_utf8_lossy(&output.stdout);
+            let mut parts = route.split_whitespace();
+            let mut gateway = None;
+            let mut iface = None;
+            while let Some(part) = parts.next() {
+                if part == "via" {
+                    gateway = parts.next().map(|s| s.to_string());
+                } else if part == "dev" {
+                    iface = parts.next().map(|s| s.to_string());
+                }
+            }
+            let gateway = gateway?;
+            let iface = iface?;
 
-    // Parse interface address → "inet <ip>/<prefix> ..."
-    let output = tokio::process::Command::new("ip")
-        .args(["-4", "-o", "addr", "show", &iface])
-        .output()
-        .await
-        .ok()?;
-    let addr_line = String::from_utf8_lossy(&output.stdout);
-    let cidr = addr_line
-        .split_whitespace()
-        .find(|s| {
-            s.contains('/')
-                && s.chars()
-                    .next()
-                    .map(|c| c.is_ascii_digit())
-                    .unwrap_or(false)
-        })?
-        .to_string();
-    let (ip_str, prefix_str) = cidr.split_once('/')?;
-    let ip: Ipv4Addr = ip_str.parse().ok()?;
-    let prefix: u32 = prefix_str.parse().ok()?;
-    let mask = if prefix == 0 {
-        0u32
-    } else {
-        !0u32 << (32 - prefix)
-    };
-    let net_addr = Ipv4Addr::from(u32::from(ip) & mask);
-    let subnet = format!("{}/{}", net_addr, prefix);
+            // Parse interface address → "inet <ip>/<prefix> ..."
+            let output = tokio::process::Command::new("ip")
+                .args(["-4", "-o", "addr", "show", &iface])
+                .output()
+                .await
+                .ok()?;
+            let addr_line = String::from_utf8_lossy(&output.stdout);
+            let cidr = addr_line
+                .split_whitespace()
+                .find(|s| {
+                    s.contains('/')
+                        && s.chars()
+                            .next()
+                            .map(|c| c.is_ascii_digit())
+                            .unwrap_or(false)
+                })?
+                .to_string();
+            let (ip_str, prefix_str) = cidr.split_once('/')?;
+            let ip: Ipv4Addr = ip_str.parse().ok()?;
+            let prefix: u32 = prefix_str.parse().ok()?;
+            let mask = if prefix == 0 {
+                0u32
+            } else {
+                !0u32 << (32 - prefix)
+            };
+            let net_addr = Ipv4Addr::from(u32::from(ip) & mask);
+            let subnet = format!("{}/{}", net_addr, prefix);
 
-    Some((iface, subnet, gateway))
+            Some((iface, subnet, gateway))
+        })
+        .await
+        .clone()
 }
 
 /// Calculate usable IP range from a subnet CIDR (e.g., "192.168.1.0/24" -> ("192.168.1.10", "192.168.1.250"))

@@ -102,7 +102,7 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       reply.raw.write(formatSseMessage('connected', { serverId, timestamp: new Date().toISOString() }));
 
       // Register SSE subscriber — pushes events to this HTTP connection
-      const unsubscribe = wsGateway.addSseSubscriber(serverId, (event, data) => {
+      const { unsubscribe, touch } = wsGateway.addSseSubscriber(serverId, (event, data) => {
         try {
           reply.raw.write(formatSseMessage(event, data));
         } catch {
@@ -114,6 +114,12 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       const heartbeat = setInterval(() => {
         try {
           reply.raw.write(formatSseComment('heartbeat'));
+          // Touch the subscriber so the backend sweep knows this connection is
+          // still alive even when the agent is offline and no console data is
+          // flowing. Without this, subscribers are deleted after 5 min of agent
+          // downtime, creating a zombie SSE connection that receives heartbeats
+          // but no actual console output.
+          touch();
         } catch {
           // Connection already dead
           clearInterval(heartbeat);

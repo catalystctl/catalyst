@@ -26,10 +26,11 @@ impl StorageManager {
         fs::create_dir_all(self.images_dir()).await?;
         fs::create_dir_all(mount_dir).await?;
 
-        if self.is_mounted(mount_dir).await? {
+        let (mounted, noexec) = self.get_mount_info(mount_dir).await?;
+        if mounted {
             // If an older mount still has noexec (from before the fix), remount
             // with exec so game binaries can run from /data.
-            if self.mount_has_noexec(mount_dir).await? {
+            if noexec {
                 info!(
                     "Remounting {} to remove noexec (game binaries need exec)",
                     mount_dir.display()
@@ -189,7 +190,8 @@ impl StorageManager {
         size_mb: u64,
         allow_online_grow: bool,
     ) -> AgentResult<()> {
-        if allow_online_grow && self.is_mounted(mount_dir).await? {
+        let mounted = self.is_mounted(mount_dir).await?;
+        if allow_online_grow && mounted {
             let image = image_path
                 .to_str()
                 .ok_or_else(|| AgentError::FileSystemError("Invalid image path".to_string()))?
@@ -208,7 +210,7 @@ impl StorageManager {
             .map_err(|e| AgentError::FileSystemError(format!("Resize task failed: {}", e)))??;
             return Ok(());
         }
-        if self.is_mounted(mount_dir).await? {
+        if mounted {
             self.unmount(mount_dir).await?;
         }
         let image = image_path
@@ -275,33 +277,29 @@ impl StorageManager {
         Ok(())
     }
 
-    async fn is_mounted(&self, mount_dir: &Path) -> AgentResult<bool> {
+    /// Returns (is_mounted, has_noexec) by parsing /proc/mounts once.
+    async fn get_mount_info(&self, mount_dir: &Path) -> AgentResult<(bool, bool)> {
         let mounts = fs::read_to_string("/proc/mounts").await?;
         let target = mount_dir.to_string_lossy();
         for line in mounts.lines() {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() > 1 {
-                // /proc/mounts encodes spaces as \040
-                let decoded = parts[1].replace("\\040", " ");
-                if decoded == target {
-                    return Ok(true);
-                }
+            let mut parts = line.split_whitespace();
+            let _source = parts.next();
+            let mount_point = match parts.next() {
+                Some(p) => p.replace("\\040", " "),
+                None => continue,
+            };
+            if mount_point == target {
+                let _fs_type = parts.next();
+                let opts = parts.next().unwrap_or("");
+                let noexec = opts.split(',').any(|o| o == "noexec");
+                return Ok((true, noexec));
             }
         }
-        Ok(false)
+        Ok((false, false))
     }
 
-    async fn mount_has_noexec(&self, mount_dir: &Path) -> AgentResult<bool> {
-        let mounts = fs::read_to_string("/proc/mounts").await?;
-        let target = mount_dir.to_string_lossy();
-        for line in mounts.lines() {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() > 3 && parts[1] == target {
-                let opts = parts[3];
-                return Ok(opts.split(',').any(|o| o == "noexec"));
-            }
-        }
-        Ok(false)
+    async fn is_mounted(&self, mount_dir: &Path) -> AgentResult<bool> {
+        Ok(self.get_mount_info(mount_dir).await?.0)
     }
 
     async fn remount_exec(&self, mount_dir: &Path) -> AgentResult<()> {
@@ -323,17 +321,18 @@ impl StorageManager {
         self.data_dir.join("metrics_buffer.jsonl")
     }
 
-    pub async fn append_buffered_metric(&self, value: &Value) -> AgentResult<()> {
+    pub async fn append_buffered_metric(&self, line: &str) -> AgentResult<()> {
         fs::create_dir_all(&self.data_dir).await?;
         let path = self.metrics_buffer_path();
-        let mut file = fs::OpenOptions::new()
+        let file = fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(&path)
             .await?;
-        let mut line = value.to_string();
-        line.push('\n');
-        file.write_all(line.as_bytes()).await?;
+        let mut writer = tokio::io::BufWriter::new(file);
+        writer.write_all(line.as_bytes()).await?;
+        writer.write_all(b"\n").await?;
+        writer.flush().await?;
         Ok(())
     }
 

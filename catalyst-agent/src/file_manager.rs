@@ -415,52 +415,11 @@ impl FileManager {
     /// Create a directory within a server's data directory.
     /// Unlike other operations, this creates the server base dir if it doesn't exist.
     pub async fn mkdir(&self, server_id: &str, path: &str) -> AgentResult<()> {
-        // Validate server_id for traversal
-        if server_id.contains('/') || server_id.contains('\\') {
-            return Err(AgentError::InvalidRequest("Invalid server id".to_string()));
-        }
-        let requested = PathBuf::from(path);
-        if requested
-            .components()
-            .any(|component| matches!(component, std::path::Component::ParentDir))
-        {
-            return Err(AgentError::PermissionDenied(format!(
-                "Path traversal attempt detected: {}",
-                path
-            )));
-        }
-
-        // Build the full path: data_dir / server_id / path
-        let server_base = self.data_dir.join(server_id);
-        let normalized = if requested.is_absolute() {
-            server_base.join(path.trim_start_matches('/'))
-        } else {
-            server_base.join(path)
-        };
-
-        debug!("Creating directory: {:?}", normalized);
-
-        fs::create_dir_all(&normalized).await.map_err(|e| {
+        let resolved = self.resolve_path(server_id, path)?;
+        fs::create_dir_all(&resolved).await.map_err(|e| {
             AgentError::FileSystemError(format!("Failed to create directory: {}", e))
         })?;
-
-        // Verify the created path is still within the data directory (symlink race protection)
-        let canonical_base = self.data_dir.canonicalize().map_err(|_| {
-            AgentError::FileSystemError(format!(
-                "Data directory does not exist: {:?}",
-                self.data_dir
-            ))
-        })?;
-        let canonical_created = normalized.canonicalize().map_err(|e| {
-            AgentError::FileSystemError(format!("Failed to canonicalize created directory: {}", e))
-        })?;
-        if !canonical_created.starts_with(&canonical_base) {
-            return Err(AgentError::PermissionDenied(
-                "Created directory escapes data directory".to_string(),
-            ));
-        }
-
-        info!("Directory created: {:?}", normalized);
+        info!("Directory created: {:?}", resolved);
         Ok(())
     }
 
@@ -627,10 +586,11 @@ impl FileManager {
 
         if !dangerous_symlinks.is_empty() {
             // Log the dangerous symlinks found
-            for symlink in &dangerous_symlinks {
+            for (path, target) in &dangerous_symlinks {
                 warn!(
-                    "Dangerous symlink detected in extracted archive: {:?}",
-                    symlink
+                    "Dangerous symlink detected in extracted archive: {} -> {}",
+                    path.display(),
+                    target.display()
                 );
             }
 
@@ -652,85 +612,54 @@ impl FileManager {
         &self,
         dir: &std::path::Path,
         canonical_base: &std::path::Path,
-        dangerous_symlinks: &mut Vec<String>,
+        dangerous_symlinks: &mut Vec<(PathBuf, PathBuf)>,
     ) -> AgentResult<()> {
-        let mut entries = match fs::read_dir(dir).await {
-            Ok(e) => e,
-            Err(e) => {
-                debug!("Cannot read directory {:?}: {}", dir, e);
-                return Ok(()); // Skip directories we can't read
-            }
-        };
+        let mut stack = vec![dir.to_path_buf()];
+        while let Some(current) = stack.pop() {
+            let mut entries = match fs::read_dir(&current).await {
+                Ok(e) => e,
+                Err(e) => {
+                    debug!("Cannot read directory {:?}: {}", current, e);
+                    continue;
+                }
+            };
 
-        while let Some(entry) = entries
-            .next_entry()
-            .await
-            .map_err(|e| AgentError::FileSystemError(format!("Error reading dir: {}", e)))?
-        {
-            let path = entry.path();
+            while let Some(entry) = entries
+                .next_entry()
+                .await
+                .map_err(|e| AgentError::FileSystemError(format!("Error reading dir: {}", e)))?
+            {
+                let path = entry.path();
 
-            // Check if this entry is a symlink
-            match entry.file_type().await {
-                Ok(ft) if ft.is_symlink() => {
-                    // Read the symlink target
-                    match std::fs::read_link(&path) {
-                        Ok(target) => {
-                            // Resolve the symlink to its absolute target
-                            let parent = path.parent().unwrap_or(dir);
+                match entry.file_type().await {
+                    Ok(ft) if ft.is_symlink() => {
+                        if let Ok(target) = std::fs::read_link(&path) {
+                            let parent = path.parent().unwrap_or(&current);
                             let resolved = parent.join(&target);
-
-                            // Try to canonicalize - this will fail if target doesn't exist
-                            // but we still want to check the path
-                            if let Ok(canon_target) = resolved.canonicalize() {
-                                // Check if the resolved target is outside the server base
-                                if !canon_target.starts_with(canonical_base) {
-                                    dangerous_symlinks.push(format!(
-                                        "{} -> {}",
-                                        path.display(),
-                                        target.display()
-                                    ));
-                                }
+                            let is_dangerous = if let Ok(canon_target) = resolved.canonicalize() {
+                                !canon_target.starts_with(canonical_base)
                             } else if resolved.is_absolute() {
-                                // Absolute symlink to non-existent path - still dangerous
-                                if !resolved.starts_with(canonical_base) {
-                                    dangerous_symlinks.push(format!(
-                                        "{} -> {}",
-                                        path.display(),
-                                        target.display()
-                                    ));
-                                }
+                                !resolved.starts_with(canonical_base)
                             } else {
-                                // Relative symlink - resolve against base and check
                                 let full_resolved = canonical_base.join(&target);
                                 if let Ok(canon) = full_resolved.canonicalize() {
-                                    if !canon.starts_with(canonical_base) {
-                                        dangerous_symlinks.push(format!(
-                                            "{} -> {}",
-                                            path.display(),
-                                            target.display()
-                                        ));
-                                    }
+                                    !canon.starts_with(canonical_base)
+                                } else {
+                                    false
                                 }
+                            };
+                            if is_dangerous {
+                                dangerous_symlinks.push((path, target));
                             }
                         }
-                        Err(e) => {
-                            debug!("Cannot read symlink {:?}: {}", path, e);
-                        }
                     }
+                    Ok(ft) if ft.is_dir() => {
+                        stack.push(path);
+                    }
+                    _ => {}
                 }
-                Ok(ft) if ft.is_dir() => {
-                    // Recurse into subdirectories
-                    Box::pin(self.check_symlinks_recursive(
-                        &path,
-                        canonical_base,
-                        dangerous_symlinks,
-                    ))
-                    .await?;
-                }
-                _ => {}
             }
         }
-
         Ok(())
     }
 

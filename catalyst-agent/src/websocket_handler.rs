@@ -36,6 +36,96 @@ const MAX_BACKUP_UPLOAD_BYTES: u64 = 10 * 1024 * 1024 * 1024; // 10GB
 const BACKUP_UPLOAD_INACTIVITY_TIMEOUT: Duration = Duration::from_secs(600); // 10 minutes
 const MAX_CONSOLE_BATCH_BYTES: usize = 32768; // Max bytes to batch into a single console_output message
 
+// ---------------------------------------------------------------------------
+// Typed message structs for hot-path serialization (avoids json! allocation)
+// ---------------------------------------------------------------------------
+
+#[derive(serde::Serialize)]
+#[allow(non_snake_case)]
+struct ConsoleOutput<'a> {
+    #[serde(rename = "type")]
+    ty: &'static str,
+    serverId: &'a str,
+    stream: &'a str,
+    data: &'a str,
+    timestamp: i64,
+}
+
+#[derive(serde::Serialize)]
+#[allow(non_snake_case)]
+struct ServerStateUpdate<'a> {
+    #[serde(rename = "type")]
+    ty: &'static str,
+    serverId: &'a str,
+    state: &'a str,
+    timestamp: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    portBindings: Option<HashMap<u16, u16>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    exitCode: Option<i32>,
+}
+
+#[derive(serde::Serialize)]
+#[allow(non_snake_case)]
+struct EulaRequired<'a> {
+    #[serde(rename = "type")]
+    ty: &'static str,
+    serverId: &'a str,
+    serverUuid: &'a str,
+    eulaText: &'a str,
+    serverDir: &'a str,
+    timestamp: i64,
+}
+
+#[derive(serde::Serialize)]
+#[allow(non_snake_case)]
+struct HealthReport<'a> {
+    #[serde(rename = "type")]
+    ty: &'static str,
+    nodeId: &'a str,
+    timestamp: i64,
+    cpuPercent: f32,
+    memoryUsageMb: u64,
+    memoryTotalMb: u64,
+    diskUsageMb: u64,
+    diskTotalMb: u64,
+    containerCount: usize,
+    uptimeSeconds: u64,
+    networkRxBytes: u64,
+    networkTxBytes: u64,
+}
+
+#[derive(serde::Serialize)]
+#[allow(non_snake_case)]
+struct ResourceStats<'a> {
+    #[serde(rename = "type")]
+    ty: &'static str,
+    serverUuid: &'a str,
+    cpuPercent: f64,
+    memoryUsageMb: u64,
+    networkRxBytes: u64,
+    networkTxBytes: u64,
+    diskIoMb: u64,
+    diskUsageMb: u64,
+    diskTotalMb: u64,
+    timestamp: i64,
+}
+
+#[derive(serde::Serialize)]
+#[allow(non_snake_case)]
+struct ServerStateSync<'a> {
+    #[serde(rename = "type")]
+    ty: &'static str,
+    serverUuid: &'a str,
+    containerId: &'a str,
+    state: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    exitCode: Option<i32>,
+    timestamp: i64,
+}
+
 /// Shell-escape a value for safe interpolation into a bash script.
 /// Wraps the value in single quotes and escapes any embedded single quotes.
 fn shell_escape_value(value: &str) -> String {
@@ -567,6 +657,11 @@ impl WebSocketHandler {
         if let Err(e) = self.runtime.restore_console_writers().await {
             warn!("Failed to restore console writers: {}", e);
         }
+
+        // Restart console log streams for running containers.
+        // After an agent reboot, the previous log streaming tasks are gone but
+        // containers may still be running and writing to stdout/stderr files.
+        self.restart_console_streams().await;
 
         // Reconcile server states to prevent drift after reconnection
         if let Err(e) = self.reconcile_server_states().await {
@@ -1208,6 +1303,52 @@ impl WebSocketHandler {
         let mut streams = self.active_log_streams.write().await;
         // Remove all stream keys that start with server_id:
         streams.retain(|key| !key.starts_with(&format!("{}:", server_id)));
+    }
+
+    /// Restart console log streams for all running containers.
+    /// This is critical after agent reboot/reconnect because the log streaming
+    /// tasks are not persisted across process restarts, yet containers may still
+    /// be running (managed by containerd) and writing to their stdout/stderr files.
+    async fn restart_console_streams(&self) {
+        let containers = match self.runtime.list_containers().await {
+            Ok(c) => c,
+            Err(e) => {
+                warn!(
+                    "Failed to list containers for console stream restart: {}",
+                    e
+                );
+                return;
+            }
+        };
+        let mut restarted = 0;
+        for container in containers {
+            if !container.status.contains("Up") || !container.managed {
+                continue;
+            }
+            let server_id = normalize_container_name(&container.names);
+            if server_id.is_empty() {
+                continue;
+            }
+            // spawn_log_stream deduplicates internally, so this is safe to call
+            // even if streams are already active (e.g. after a transient disconnect).
+            self.spawn_log_stream(&server_id, &container.id);
+            // Emit a system message so the frontend has a chance to re-associate
+            // the console subscription with this new agent session.
+            let _ = self
+                .emit_console_output(
+                    &server_id,
+                    "system",
+                    "[Catalyst] Agent reconnected. Console stream resumed.\n",
+                )
+                .await;
+            restarted += 1;
+        }
+        if restarted > 0 {
+            info!(
+                "Restarted console streams for {} running container(s)",
+                restarted
+            );
+        }
     }
 
     fn spawn_exit_monitor(&self, server_id: &str, container_id: &str) {
@@ -2041,6 +2182,11 @@ impl WebSocketHandler {
         let mut stdout_pos = 0u64;
         let mut stderr_pos = 0u64;
 
+        info!(
+            "Console log stream started for server {} (container {})",
+            server_id, container_id
+        );
+
         // Tail the stdout/stderr files
         loop {
             let running = self
@@ -2071,6 +2217,13 @@ impl WebSocketHandler {
                     }
                     stdout_pos += processed_len as u64;
                     had_data = !new_text.is_empty();
+                    debug!(
+                        "server {} stdout: read {} bytes, emitted {} bytes, pos now {}",
+                        server_id,
+                        new_text.len(),
+                        processed_len,
+                        stdout_pos
+                    );
                 }
             }
             if let Ok(content) = tokio::fs::read_to_string(&stderr_path).await {
@@ -2094,6 +2247,13 @@ impl WebSocketHandler {
                     }
                     stderr_pos += processed_len as u64;
                     had_data = had_data || !new_text.is_empty();
+                    debug!(
+                        "server {} stderr: read {} bytes, emitted {} bytes, pos now {}",
+                        server_id,
+                        new_text.len(),
+                        processed_len,
+                        stderr_pos
+                    );
                 }
             }
 
@@ -3216,40 +3376,44 @@ impl WebSocketHandler {
         canonical_base: &std::path::Path,
         dangerous: &mut Vec<String>,
     ) -> AgentResult<()> {
-        let mut entries = tokio::fs::read_dir(dir)
-            .await
-            .map_err(|e| AgentError::FileSystemError(format!("Cannot read dir: {}", e)))?;
-        while let Some(entry) = entries
-            .next_entry()
-            .await
-            .map_err(|e| AgentError::FileSystemError(format!("Error reading entry: {}", e)))?
-        {
-            let path = entry.path();
-            match entry.file_type().await {
-                Ok(ft) if ft.is_symlink() => match std::fs::read_link(&path) {
-                    Ok(target) => {
-                        let parent = path.parent().unwrap_or(dir);
-                        let resolved = parent.join(&target);
-                        if let Ok(canon) = resolved.canonicalize() {
-                            if !canon.starts_with(canonical_base) {
+        let mut stack = vec![dir.to_path_buf()];
+        while let Some(current) = stack.pop() {
+            let mut entries = tokio::fs::read_dir(&current)
+                .await
+                .map_err(|e| AgentError::FileSystemError(format!("Cannot read dir: {}", e)))?;
+            while let Some(entry) = entries
+                .next_entry()
+                .await
+                .map_err(|e| AgentError::FileSystemError(format!("Error reading entry: {}", e)))?
+            {
+                let path = entry.path();
+                match entry.file_type().await {
+                    Ok(ft) if ft.is_symlink() => {
+                        if let Ok(target) = tokio::fs::read_link(&path).await {
+                            let parent = path.parent().unwrap_or(&current);
+                            let resolved = parent.join(&target);
+                            let is_dangerous =
+                                if let Ok(canon) = tokio::fs::canonicalize(&resolved).await {
+                                    !canon.starts_with(canonical_base)
+                                } else if resolved.is_absolute() {
+                                    !resolved.starts_with(canonical_base)
+                                } else {
+                                    false
+                                };
+                            if is_dangerous {
                                 dangerous.push(format!(
                                     "{} -> {}",
                                     path.display(),
                                     target.display()
                                 ));
                             }
-                        } else if resolved.is_absolute() && !resolved.starts_with(canonical_base) {
-                            dangerous.push(format!("{} -> {}", path.display(), target.display()));
                         }
                     }
-                    Err(e) => {
-                        debug!("Cannot read symlink {:?}: {}", path, e);
+                    Ok(ft) if ft.is_dir() => {
+                        stack.push(path);
                     }
-                },
-                Ok(ft) if ft.is_dir() => {
-                    Box::pin(self.check_restore_symlinks(&path, canonical_base, dangerous)).await?;
+                    _ => {}
                 }
-                _ => {}
             }
         }
         Ok(())
@@ -3763,11 +3927,11 @@ impl WebSocketHandler {
             })?;
         }
 
-        let base_canon = base_dir
-            .canonicalize()
+        let base_canon = tokio::fs::canonicalize(&base_dir)
+            .await
             .map_err(|_| AgentError::FileSystemError("Backup directory missing".to_string()))?;
-        let parent_canon = parent
-            .canonicalize()
+        let parent_canon = tokio::fs::canonicalize(&parent)
+            .await
             .map_err(|_| AgentError::InvalidRequest("Invalid backup path".to_string()))?;
         if !parent_canon.starts_with(&base_canon) {
             return Err(AgentError::PermissionDenied(
@@ -4265,22 +4429,23 @@ impl WebSocketHandler {
         port_bindings: Option<HashMap<u16, u16>>,
         exit_code: Option<i32>,
     ) -> AgentResult<()> {
-        let msg = json!({
-            "type": "server_state_update",
-            "serverId": server_id,
-            "state": state,
-            "timestamp": chrono::Utc::now().timestamp_millis(),
-            "reason": reason,
-            "portBindings": port_bindings,
-            "exitCode": exit_code,
-        });
+        let msg = ServerStateUpdate {
+            ty: "server_state_update",
+            serverId: server_id,
+            state,
+            timestamp: chrono::Utc::now().timestamp_millis(),
+            reason,
+            portBindings: port_bindings,
+            exitCode: exit_code,
+        };
+        let text = serde_json::to_string(&msg).unwrap_or_default();
 
-        debug!("Emitting state update: {}", msg);
+        debug!("Emitting state update: {}", text);
 
         let writer = { self.write.read().await.clone() };
         if let Some(ws) = writer {
             let mut w = ws.lock().await;
-            if let Err(err) = w.send(Message::Text(msg.to_string().into())).await {
+            if let Err(err) = w.send(Message::Text(text.into())).await {
                 return Err(AgentError::NetworkError(format!(
                     "Failed to send state update: {}",
                     err
@@ -4301,23 +4466,34 @@ impl WebSocketHandler {
             return Ok(());
         }
 
-        let msg = json!({
-            "type": "console_output",
-            "serverId": server_id,
-            "stream": stream,
-            "data": data,
-            "timestamp": chrono::Utc::now().timestamp_millis(),
-        });
+        let msg = ConsoleOutput {
+            ty: "console_output",
+            serverId: server_id,
+            stream,
+            data,
+            timestamp: chrono::Utc::now().timestamp_millis(),
+        };
+        let text = serde_json::to_string(&msg).unwrap_or_default();
 
         let writer = { self.write.read().await.clone() };
         if let Some(ws) = writer {
             let mut w = ws.lock().await;
-            if let Err(err) = w.send(Message::Text(msg.to_string().into())).await {
+            if let Err(err) = w.send(Message::Text(text.into())).await {
                 return Err(AgentError::NetworkError(format!(
                     "Failed to send console output: {}",
                     err
                 )));
             }
+            debug!(
+                "console_output sent for server {} ({} bytes)",
+                server_id,
+                data.len()
+            );
+        } else {
+            debug!(
+                "console_output dropped for server {} — no active WebSocket",
+                server_id
+            );
         }
 
         Ok(())
@@ -4333,21 +4509,22 @@ impl WebSocketHandler {
         eula_text: &str,
         server_dir: &str,
     ) -> AgentResult<()> {
-        let msg = json!({
-            "type": "eula_required",
-            "serverId": server_id,
-            "serverUuid": server_uuid,
-            "eulaText": eula_text,
-            "serverDir": server_dir,
-            "timestamp": chrono::Utc::now().timestamp_millis(),
-        });
+        let msg = EulaRequired {
+            ty: "eula_required",
+            serverId: server_id,
+            serverUuid: server_uuid,
+            eulaText: eula_text,
+            serverDir: server_dir,
+            timestamp: chrono::Utc::now().timestamp_millis(),
+        };
+        let text = serde_json::to_string(&msg).unwrap_or_default();
 
         info!("Emitting eula_required for server {}", server_id);
 
         let writer = { self.write.read().await.clone() };
         if let Some(ws) = writer {
             let mut w = ws.lock().await;
-            if let Err(err) = w.send(Message::Text(msg.to_string().into())).await {
+            if let Err(err) = w.send(Message::Text(text.into())).await {
                 return Err(AgentError::NetworkError(format!(
                     "Failed to send eula_required: {}",
                     err
@@ -4443,27 +4620,28 @@ impl WebSocketHandler {
             total_network_tx_bytes += data.total_transmitted();
         }
 
-        let health = json!({
-            "type": "health_report",
-            "nodeId": self.config.server.node_id,
-            "timestamp": chrono::Utc::now().timestamp_millis(),
-            "cpuPercent": cpu_percent,
-            "memoryUsageMb": memory_usage_mb,
-            "memoryTotalMb": memory_total_mb,
-            "diskUsageMb": disk_usage_mb,
-            "diskTotalMb": disk_total_mb,
-            "containerCount": containers.iter().filter(|c| c.managed).count(),
-            "uptimeSeconds": get_uptime(),
-            "networkRxBytes": total_network_rx_bytes,
-            "networkTxBytes": total_network_tx_bytes,
-        });
+        let health = HealthReport {
+            ty: "health_report",
+            nodeId: &self.config.server.node_id,
+            timestamp: chrono::Utc::now().timestamp_millis(),
+            cpuPercent: cpu_percent,
+            memoryUsageMb: memory_usage_mb,
+            memoryTotalMb: memory_total_mb,
+            diskUsageMb: disk_usage_mb,
+            diskTotalMb: disk_total_mb,
+            containerCount: containers.iter().filter(|c| c.managed).count(),
+            uptimeSeconds: get_uptime().await,
+            networkRxBytes: total_network_rx_bytes,
+            networkTxBytes: total_network_tx_bytes,
+        };
+        let health_text = serde_json::to_string(&health).unwrap_or_default();
 
-        debug!("Health report: {}", health);
+        debug!("Health report: {}", health_text);
 
         let writer = { self.write.read().await.clone() };
         if let Some(ws) = writer {
             let mut w = ws.lock().await;
-            w.send(Message::Text(health.to_string().into()))
+            w.send(Message::Text(health_text.into()))
                 .await
                 .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         }
@@ -4539,32 +4717,43 @@ impl WebSocketHandler {
                 container.names, server_uuid, container.status, state
             );
 
-            let msg = json!({
-                "type": "server_state_sync",
-                "serverUuid": server_uuid,
-                "containerId": server_uuid,  // Use container name (CUID), not internal container ID
-                "state": state,
-                "exitCode": exit_code,
-                "timestamp": chrono::Utc::now().timestamp_millis(),
-            });
+            let msg = ServerStateSync {
+                ty: "server_state_sync",
+                serverUuid: &server_uuid,
+                containerId: &server_uuid,
+                state,
+                exitCode: exit_code,
+                timestamp: chrono::Utc::now().timestamp_millis(),
+            };
+            let text = serde_json::to_string(&msg).unwrap_or_default();
 
             let mut w = ws.lock().await;
-            if let Err(err) = w.send(Message::Text(msg.to_string().into())).await {
+            if let Err(err) = w.send(Message::Text(text.into())).await {
                 warn!("Failed to send state sync: {}", err);
                 break;
             }
         }
 
         // Send reconciliation complete message so backend knows which servers are missing
-        let complete_msg = json!({
-            "type": "server_state_sync_complete",
-            "nodeId": self.config.server.node_id,
-            "foundContainers": found_uuids,
-            "timestamp": chrono::Utc::now().timestamp_millis(),
-        });
+        #[derive(serde::Serialize)]
+        #[allow(non_snake_case)]
+        struct ServerStateSyncComplete<'a> {
+            #[serde(rename = "type")]
+            ty: &'static str,
+            nodeId: &'a str,
+            foundContainers: &'a [String],
+            timestamp: i64,
+        }
+        let complete_msg = ServerStateSyncComplete {
+            ty: "server_state_sync_complete",
+            nodeId: &self.config.server.node_id,
+            foundContainers: &found_uuids,
+            timestamp: chrono::Utc::now().timestamp_millis(),
+        };
+        let complete_text = serde_json::to_string(&complete_msg).unwrap_or_default();
 
         let mut w = ws.lock().await;
-        if let Err(err) = w.send(Message::Text(complete_msg.to_string().into())).await {
+        if let Err(err) = w.send(Message::Text(complete_text.into())).await {
             warn!("Failed to send reconciliation complete: {}", err);
         }
 
@@ -4694,17 +4883,18 @@ impl WebSocketHandler {
             "stopped"
         };
 
-        let msg = json!({
-            "type": "server_state_sync",
-            "serverUuid": container_name,
-            "containerId": container_name,
-            "state": state,
-            "exitCode": exit_code,
-            "timestamp": chrono::Utc::now().timestamp_millis(),
-        });
+        let msg = ServerStateSync {
+            ty: "server_state_sync",
+            serverUuid: container_name,
+            containerId: container_name,
+            state,
+            exitCode: exit_code,
+            timestamp: chrono::Utc::now().timestamp_millis(),
+        };
+        let text = serde_json::to_string(&msg).unwrap_or_default();
 
         let mut w = ws.lock().await;
-        w.send(Message::Text(msg.to_string().into()))
+        w.send(Message::Text(text.into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -4719,16 +4909,18 @@ impl WebSocketHandler {
             return Ok(()); // No connection, skip
         };
 
-        let msg = json!({
-            "type": "server_state_sync",
-            "serverUuid": container_name,
-            "containerId": container_name,
-            "state": "stopped",
-            "timestamp": chrono::Utc::now().timestamp_millis(),
-        });
+        let msg = ServerStateSync {
+            ty: "server_state_sync",
+            serverUuid: container_name,
+            containerId: container_name,
+            state: "stopped",
+            exitCode: None,
+            timestamp: chrono::Utc::now().timestamp_millis(),
+        };
+        let text = serde_json::to_string(&msg).unwrap_or_default();
 
         let mut w = ws.lock().await;
-        w.send(Message::Text(msg.to_string().into()))
+        w.send(Message::Text(text.into()))
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
@@ -4796,28 +4988,31 @@ impl WebSocketHandler {
                     _ => (disk_io_mb, 0),
                 };
 
-                let payload = json!({
-                    "type": "resource_stats",
-                    "serverUuid": target,
-                    "cpuPercent": cpu_percent,
-                    "memoryUsageMb": memory_usage_mb,
-                    "networkRxBytes": network_rx_bytes,
-                    "networkTxBytes": network_tx_bytes,
-                    "diskIoMb": disk_io_mb,
-                    "diskUsageMb": disk_usage_mb,
-                    "diskTotalMb": disk_total_mb,
-                    "timestamp": chrono::Utc::now().timestamp_millis(),
-                });
+                let payload = ResourceStats {
+                    ty: "resource_stats",
+                    serverUuid: target,
+                    cpuPercent: cpu_percent,
+                    memoryUsageMb: memory_usage_mb,
+                    networkRxBytes: network_rx_bytes,
+                    networkTxBytes: network_tx_bytes,
+                    diskIoMb: disk_io_mb,
+                    diskUsageMb: disk_usage_mb,
+                    diskTotalMb: disk_total_mb,
+                    timestamp: chrono::Utc::now().timestamp_millis(),
+                };
+                let payload_text = serde_json::to_string(&payload).unwrap_or_default();
 
                 match &writer_opt {
                     Some(ws) => {
                         let mut w = ws.lock().await;
-                        match w.send(Message::Text(payload.to_string().into())).await {
+                        match w.send(Message::Text(payload_text.clone().into())).await {
                             Ok(_) => {}
                             Err(err) => {
                                 warn!("Failed to send resource stats: {}. Buffering to disk.", err);
-                                if let Err(e) =
-                                    self.storage_manager.append_buffered_metric(&payload).await
+                                if let Err(e) = self
+                                    .storage_manager
+                                    .append_buffered_metric(&payload_text)
+                                    .await
                                 {
                                     warn!("Failed to buffer metric to disk: {}", e);
                                 }
@@ -4825,7 +5020,10 @@ impl WebSocketHandler {
                         }
                     }
                     None => {
-                        if let Err(e) = self.storage_manager.append_buffered_metric(&payload).await
+                        if let Err(e) = self
+                            .storage_manager
+                            .append_buffered_metric(&payload_text)
+                            .await
                         {
                             warn!("Failed to buffer metric to disk: {}", e);
                         }
@@ -4922,29 +5120,32 @@ impl WebSocketHandler {
                 }
             };
 
-            let payload = json!({
-                "type": "resource_stats",
-                "serverUuid": server_uuid,
-                "cpuPercent": cpu_percent,
-                "memoryUsageMb": memory_usage_mb,
-                "networkRxBytes": network_rx_bytes,
-                "networkTxBytes": network_tx_bytes,
-                "diskIoMb": disk_io_mb,
-                "diskUsageMb": disk_usage_mb,
-                "diskTotalMb": disk_total_mb,
-                "timestamp": chrono::Utc::now().timestamp_millis(),
-            });
+            let payload = ResourceStats {
+                ty: "resource_stats",
+                serverUuid: &server_uuid,
+                cpuPercent: cpu_percent,
+                memoryUsageMb: memory_usage_mb,
+                networkRxBytes: network_rx_bytes,
+                networkTxBytes: network_tx_bytes,
+                diskIoMb: disk_io_mb,
+                diskUsageMb: disk_usage_mb,
+                diskTotalMb: disk_total_mb,
+                timestamp: chrono::Utc::now().timestamp_millis(),
+            };
+            let payload_text = serde_json::to_string(&payload).unwrap_or_default();
 
             // If we have a live write handle, send; otherwise buffer to disk immediately
             match &writer_opt {
                 Some(ws) => {
                     let mut w = ws.lock().await;
-                    match w.send(Message::Text(payload.to_string().into())).await {
+                    match w.send(Message::Text(payload_text.clone().into())).await {
                         Ok(_) => {}
                         Err(err) => {
                             warn!("Failed to send resource stats: {}. Buffering to disk.", err);
-                            if let Err(e) =
-                                self.storage_manager.append_buffered_metric(&payload).await
+                            if let Err(e) = self
+                                .storage_manager
+                                .append_buffered_metric(&payload_text)
+                                .await
                             {
                                 warn!("Failed to buffer metric to disk: {}", e);
                             }
@@ -4953,7 +5154,11 @@ impl WebSocketHandler {
                 }
                 None => {
                     // No connection - persist metric locally for later flush
-                    if let Err(e) = self.storage_manager.append_buffered_metric(&payload).await {
+                    if let Err(e) = self
+                        .storage_manager
+                        .append_buffered_metric(&payload_text)
+                        .await
+                    {
                         warn!("Failed to buffer metric to disk: {}", e);
                     }
                 }
@@ -4964,9 +5169,9 @@ impl WebSocketHandler {
     }
 }
 
-fn get_uptime() -> u64 {
-    // Simplified uptime calculation
-    std::fs::read_to_string("/proc/uptime")
+async fn get_uptime() -> u64 {
+    tokio::fs::read_to_string("/proc/uptime")
+        .await
         .ok()
         .and_then(|s| {
             s.split_whitespace()

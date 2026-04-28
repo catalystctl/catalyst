@@ -1,5 +1,6 @@
 use crate::errors::{AgentError, AgentResult};
 use std::collections::HashSet;
+use std::io::Write;
 use std::path::Path;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -114,6 +115,19 @@ fn save_tracked_rules() {
     }
 }
 
+/// Append a single rule to the state file without rewriting the whole file.
+fn append_tracked_rule(rule: &FirewallRule) {
+    let line = format!("{}\n", serde_json::to_string(rule).unwrap_or_default());
+    if let Err(e) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(RULE_STATE_FILE)
+        .and_then(|mut f| f.write_all(line.as_bytes()))
+    {
+        warn!("Could not append firewall rule state: {}", e);
+    }
+}
+
 /// Record that we added a firewall rule for a server port.
 fn track_rule(port: u16, proto: &str, server_id: &str, container_ip: &str) {
     let mut rules = lock_rules();
@@ -125,14 +139,15 @@ fn track_rule(port: u16, proto: &str, server_id: &str, container_ip: &str) {
             && r.container_ip == container_ip
     });
     if !exists {
-        rules.push(FirewallRule {
+        let rule = FirewallRule {
             port,
             proto: proto.to_string(),
             server_id: server_id.to_string(),
             container_ip: container_ip.to_string(),
-        });
+        };
+        rules.push(rule.clone());
         drop(rules);
-        save_tracked_rules();
+        append_tracked_rule(&rule);
     }
 }
 
@@ -217,8 +232,8 @@ impl FirewallManager {
             _ => vec!["tcp", "udp"],
         };
 
+        let firewall_type = Self::detect_firewall().await;
         for proto in &protos {
-            let firewall_type = Self::detect_firewall().await;
             let result = match firewall_type {
                 FirewallType::Ufw => Self::allow_port_ufw(port).await,
                 FirewallType::Firewalld => Self::allow_port_firewalld(port, proto).await,
@@ -261,12 +276,12 @@ impl FirewallManager {
             server_id
         );
 
+        let firewall_type = Self::detect_firewall().await;
         // Deduplicate by (port, proto) to avoid redundant calls.
         let mut seen: HashSet<(u16, String)> = HashSet::new();
         for rule in &rules {
             let key = (rule.port, rule.proto.clone());
             if seen.insert(key) {
-                let firewall_type = Self::detect_firewall().await;
                 let result = match firewall_type {
                     FirewallType::Ufw => Self::remove_port_ufw(rule.port).await,
                     FirewallType::Firewalld => {
@@ -303,11 +318,11 @@ impl FirewallManager {
             rules.len()
         );
 
+        let firewall_type = Self::detect_firewall().await;
         let mut seen: HashSet<(u16, String, String)> = HashSet::new();
         for rule in &rules {
             let key = (rule.port, rule.proto.clone(), rule.container_ip.clone());
             if seen.insert(key) {
-                let firewall_type = Self::detect_firewall().await;
                 let _ = match firewall_type {
                     FirewallType::Ufw => Self::remove_port_ufw(rule.port).await,
                     FirewallType::Firewalld => {
@@ -523,6 +538,7 @@ impl FirewallManager {
             "Configuring iptables to allow port {}/{} for container {}",
             port, protocol, container_ip
         );
+        let port_str = port.to_string();
 
         // INPUT rule — allow traffic to the host port.
         Self::iptables_ensure_rule(&[
@@ -531,7 +547,7 @@ impl FirewallManager {
             "-p",
             protocol,
             "--dport",
-            &port.to_string(),
+            &port_str,
             "-m",
             "comment",
             "--comment",
@@ -548,7 +564,7 @@ impl FirewallManager {
             "-p",
             protocol,
             "--dport",
-            &port.to_string(),
+            &port_str,
             "-d",
             container_ip,
             "-m",
@@ -567,7 +583,7 @@ impl FirewallManager {
             "-p",
             protocol,
             "--sport",
-            &port.to_string(),
+            &port_str,
             "-s",
             container_ip,
             "-m",
@@ -597,6 +613,7 @@ impl FirewallManager {
             "Removing iptables rules for port {}/{} container {}",
             port, protocol, container_ip
         );
+        let port_str = port.to_string();
 
         // Remove all rules in the chain that match our comment + port + protocol.
         // Loop until no more matches remain (handles duplicate insertions).
@@ -616,7 +633,7 @@ impl FirewallManager {
 
                 for line in stdout.lines() {
                     if line.contains("catalyst-game-server")
-                        && line.contains(&port.to_string())
+                        && line.contains(&port_str)
                         && line.contains(protocol)
                     {
                         // First token is the line number.
