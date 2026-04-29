@@ -143,13 +143,23 @@ body {
 
 /* ── Scrollbar ── */
 
+/* Scrollbar styling — only apply to explicitly scrollable containers.
+ * Applying scrollbar-width globally forces visible scrollbar tracks on
+ * elements with overflow-y-auto even when there's no overflow content.
+ */
+
 html,
 body {
-  scrollbar-width: thin;
   scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
 }
 
-* {
+/* Only elements that actually scroll get thin scrollbars */
+.overflow-y-auto,
+.overflow-auto,
+.overflow-scroll,
+.overflow-x-auto,
+.overflow-x-scroll,
+.console-output {
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
 }
