@@ -201,7 +201,7 @@ function SystemPage() {
       variants={containerVariants}
       initial={false}
       animate="visible"
-      className="relative min-h-screen overflow-hidden"
+      className="relative overflow-hidden"
     >
       {/* Ambient background */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">

@@ -24,7 +24,7 @@ function AppLayout() {
   useCmdK(() => setIsSearchOpen(true));
 
   return (
-    <div className="app-shell flex min-h-screen font-sans">
+    <div className="app-shell flex h-[100dvh] font-sans">
       {/* Mobile overlay */}
       {isMobileSidebarOpen && (
         <div
@@ -76,11 +76,11 @@ function AppLayout() {
       {/* Main content */}
       <main
         className={cn(
-          'flex-1 overflow-y-auto px-4 py-4 pt-[4.5rem] transition-all duration-200 lg:px-6 lg:py-6 lg:pt-6',
+          'flex flex-1 flex-col overflow-y-auto px-4 py-4 pt-[4.5rem] transition-all duration-200 lg:px-6 lg:py-6 lg:pt-6',
           sidebarCollapsed ? 'lg:pl-4' : 'lg:pl-6',
         )}
       >
-        <div className="space-y-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
           <div className="flex items-center justify-between">
             <Breadcrumbs />
             <button
@@ -94,7 +94,9 @@ function AppLayout() {
               <kbd className="hidden rounded border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-block">⌘K</kbd>
             </button>
           </div>
-          <Outlet />
+          <div className="min-h-0 flex-1">
+            <Outlet />
+          </div>
         </div>
       </main>
 

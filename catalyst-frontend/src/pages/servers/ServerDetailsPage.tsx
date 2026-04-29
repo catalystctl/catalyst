@@ -888,7 +888,7 @@ function ServerDetailsPage() {
       variants={containerVariants}
       initial={false}
       animate="visible"
-      className="min-h-screen"
+      className=""
     >
       <div className="space-y-4">
         {/* ── Header ── */}

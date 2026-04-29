@@ -256,7 +256,7 @@ export default function ProfilePage() {
   };
 
   if (isLoading) {
-    return <div className="relative min-h-screen space-y-5"><Skeleton className="h-8 w-48" /><Skeleton className="h-32 w-full rounded-xl" /><div className="grid gap-5 lg:grid-cols-2"><Skeleton className="h-48 rounded-xl" /><Skeleton className="h-48 rounded-xl" /></div></div>;
+    return <div className="relative space-y-5"><Skeleton className="h-8 w-48" /><Skeleton className="h-32 w-full rounded-xl" /><div className="grid gap-5 lg:grid-cols-2"><Skeleton className="h-48 rounded-xl" /><Skeleton className="h-48 rounded-xl" /></div></div>;
   }
 
   const t2fa = profile?.twoFactorEnabled ?? false;
@@ -264,7 +264,7 @@ export default function ProfilePage() {
   const initials = (profile?.username?.slice(0, 2) || profile?.email?.slice(0, 2) || 'U').toUpperCase();
 
   return (
-    <motion.div variants={containerVariants} initial="hidden" animate="visible" className="relative min-h-screen overflow-hidden">
+    <motion.div variants={containerVariants} initial="hidden" animate="visible" className="relative overflow-hidden">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-violet-500/8 to-blue-500/8 blur-3xl dark:from-violet-500/12 dark:to-blue-500/12" />
         <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-emerald-500/8 to-cyan-500/8 blur-3xl dark:from-emerald-500/12 dark:to-cyan-500/12" />
