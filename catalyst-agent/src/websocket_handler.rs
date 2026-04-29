@@ -194,6 +194,11 @@ fn split_terminal_lines(text: &str) -> (Vec<String>, &str) {
     let mut current_start = 0;
 
     for (i, ch) in text.char_indices() {
+        // If we already advanced current_start past this character (e.g. after
+        // a \r\n pair where \r set current_start = i + 2), skip it.
+        if i < current_start {
+            continue;
+        }
         if ch == '\n' {
             let line = &text[current_start..i];
             lines.push(line.to_string());
