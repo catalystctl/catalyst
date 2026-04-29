@@ -1,0 +1,10 @@
+{
+  "name": "{{pluginName}}",
+  "version": "1.0.0",
+  "displayName": "{{PluginName}}",
+  "description": "A minimal Catalyst plugin",
+  "author": "{{author}}",
+  "catalystVersion": ">=1.0.0",
+  "permissions": [],
+  "dependencies": {}
+}

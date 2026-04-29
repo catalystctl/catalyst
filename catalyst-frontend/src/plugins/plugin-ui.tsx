@@ -107,7 +107,7 @@ export {
 } from '../components/ui/popover';
 
 // ── ScrollArea ──
-export { ScrollArea } from '../components/ui/scroll-area';
+export { ScrollArea, ScrollBar } from '../components/ui/scroll-area';
 
 // ── Separator ──
 export { Separator } from '../components/ui/separator';

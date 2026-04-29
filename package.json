@@ -7,7 +7,8 @@
 		"catalyst-backend",
 		"catalyst-frontend",
 		"catalyst-shared",
-		"catalyst-plugins/*"
+		"catalyst-plugins/*",
+		"packages/*"
 	],
 	"scripts": {
 		"dev": "bun run dev:infra && bun --filter='catalyst-backend' --filter='catalyst-frontend' --parallel run dev --host",

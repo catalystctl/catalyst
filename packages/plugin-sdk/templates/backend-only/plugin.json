@@ -1,0 +1,13 @@
+{
+  "name": "{{pluginName}}",
+  "version": "1.0.0",
+  "displayName": "{{PluginName}}",
+  "description": "A Catalyst plugin created with the SDK",
+  "author": "{{author}}",
+  "catalystVersion": ">=1.0.0",
+  "permissions": ["server.read"],
+  "backend": {
+    "entry": "src/index.js"
+  },
+  "dependencies": {}
+}

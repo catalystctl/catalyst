@@ -1,0 +1,21 @@
+{
+  "name": "{{name}}",
+  "version": "{{version}}",
+  "description": "{{description}}",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@catalyst/plugin-sdk": "^0.1.0",
+    "react": "^18.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.0",
+    "@types/react": "^18.0.0",
+    "vitest": "^2.0.0"
+  }
+}

@@ -98,6 +98,8 @@ export interface PluginManifest {
   author: string;
   catalystVersion: string;
   permissions: string[];
+  runtime?: 'legacy' | 'isolated';
+  storageEngine?: 'legacy' | 'dedicated';
   backend?: {
     entry: string;
   };
@@ -258,6 +260,8 @@ export interface LoadedPlugin {
   originalHandlers?: Map<string, RouteOptions['handler']>;
   /** Runtime ref toggled on enable/disable to gate route handlers */
   enabledRef?: { value: boolean };
+  /** Worker thread host for isolated runtime */
+  workerHost?: any;
 }
 
 /**

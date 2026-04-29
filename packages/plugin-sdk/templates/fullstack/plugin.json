@@ -1,0 +1,17 @@
+{
+  "name": "{{pluginName}}",
+  "version": "1.0.0",
+  "displayName": "{{PluginName}}",
+  "description": "A fullstack Catalyst plugin created with the SDK",
+  "author": "{{author}}",
+  "catalystVersion": ">=1.0.0",
+  "permissions": ["server.read", "admin.read"],
+  "backend": {
+    "entry": "src/index.js"
+  },
+  "frontend": {
+    "entry": "frontend/index.js",
+    "hasTabs": true
+  },
+  "dependencies": {}
+}

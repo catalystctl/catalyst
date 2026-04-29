@@ -74,6 +74,9 @@ async function pluginFetch<T>(
   }
 }
 
+/** Return type of createPluginApiClient — re-exported for plugin authors. */
+export type PluginApiClient = ReturnType<typeof createPluginApiClient>;
+
 /**
  * Create a scoped API client for a specific plugin.
  *

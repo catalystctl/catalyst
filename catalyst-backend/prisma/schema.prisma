@@ -907,3 +907,37 @@ model MigrationStep {
   @@index([jobId, phase, status])
   @@index([jobId, status])
 }
+
+// ============================================================================
+// PLUGIN SYSTEM — Audit & Storage
+// ============================================================================
+
+model PluginActionAudit {
+  id           String   @id @default(cuid())
+  pluginName   String
+  action       String
+  details      Json?
+  userId       String?
+  ipAddress    String?
+  duration     Int?
+  success      Boolean  @default(true)
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  @@index([pluginName, createdAt])
+  @@index([action, createdAt])
+}
+
+model PluginCollectionItem {
+  id             String   @id @default(cuid())
+  pluginName     String
+  collectionName String
+  docId          String
+  document       Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([pluginName, collectionName, docId])
+  @@index([pluginName, collectionName])
+  @@index([pluginName, collectionName, docId])
+}

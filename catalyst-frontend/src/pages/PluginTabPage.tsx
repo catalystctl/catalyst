@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { usePluginTabs } from '../plugins/hooks';
 import { usePluginContext } from '../plugins/PluginProvider';
+import PluginErrorBoundary from '../plugins/PluginErrorBoundary';
 
 interface PluginTabPageProps {
   location: 'admin' | 'server';
@@ -18,9 +19,9 @@ export default function PluginTabPage({ location, serverId }: PluginTabPageProps
       reloadPlugins();
     }
   }, [initialized, loading, reloadPlugins]);
-  
+
   const tab = pluginTabs.find((t) => t.id === pluginTabId);
-  
+
   if (!tab) {
     return (
       <div className="rounded-lg border border-border bg-card p-12 text-center">
@@ -33,7 +34,15 @@ export default function PluginTabPage({ location, serverId }: PluginTabPageProps
       </div>
     );
   }
-  
+
   const TabComponent = tab.component;
-  return <TabComponent serverId={serverId} />;
+
+  // Extract plugin name from tab id (format: {pluginName}-{location})
+  const pluginName = tab.id.replace(/-(admin|server)$/, '');
+
+  return (
+    <PluginErrorBoundary pluginName={pluginName}>
+      <TabComponent serverId={serverId} />
+    </PluginErrorBoundary>
+  );
 }

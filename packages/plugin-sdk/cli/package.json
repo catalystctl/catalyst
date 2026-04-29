@@ -1,0 +1,23 @@
+{
+  "name": "@catalyst/plugin-sdk-cli",
+  "version": "0.1.0",
+  "description": "CLI for scaffolding, building, and testing Catalyst plugins",
+  "type": "module",
+  "bin": {
+    "catalyst-plugin": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch"
+  },
+  "dependencies": {
+    "@catalyst/plugin-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.0",
+    "@types/node": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

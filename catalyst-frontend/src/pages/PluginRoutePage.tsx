@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { usePluginRoutes } from '../plugins/hooks';
 import { usePluginContext } from '../plugins/PluginProvider';
 import { useParams, Navigate } from 'react-router-dom';
+import PluginErrorBoundary from '../plugins/PluginErrorBoundary';
 
 /**
  * Renders the plugin page that matches the current dynamic route.
@@ -31,5 +32,9 @@ export default function PluginRoutePage() {
   }
 
   const Component = matched.component;
-  return <Component />;
+  return (
+    <PluginErrorBoundary pluginName={matched.path}>
+      <Component />
+    </PluginErrorBoundary>
+  );
 }

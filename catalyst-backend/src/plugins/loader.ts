@@ -10,6 +10,8 @@ import { validateManifest, isVersionCompatible, validateDependencies } from './v
 import { createPluginContext, runMiddleware } from './context';
 import { captureSystemError } from '../services/error-logger';
 import { PluginRegistry } from './registry';
+import { createGatedHandler, DEFAULT_GATE_CONFIG } from './runtime/request-gate';
+import { PluginWorkerHost } from './runtime/plugin-worker-host';
 import EventEmitter from 'events';
 
 const CATALYST_VERSION = '1.0.0';
@@ -24,6 +26,8 @@ export class PluginLoader {
   private eventEmitter: EventEmitter;
   private watcher?: ReturnType<typeof watch>;
   private hotReloadEnabled: boolean;
+  private hotReloadDebounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private readonly HOT_RELOAD_DEBOUNCE_MS = 500;
 
   constructor(
     pluginsDir: string,
@@ -337,6 +341,29 @@ export class PluginLoader {
         }
       }
 
+      // ── Isolated runtime: spawn worker thread ───────────────────────────
+      if (manifest.runtime === 'isolated' && manifest.backend?.entry) {
+        this.logger.info({ plugin: manifest.name }, 'Starting isolated runtime worker');
+        try {
+          const workerHost = new PluginWorkerHost(manifest, resolvedPath, (err) => {
+            captureSystemError({
+              level: 'error',
+              component: 'PluginWorker',
+              message: `Plugin worker crashed: ${err.message}`,
+              metadata: { plugin: manifest.name },
+            }).catch(() => {});
+            this.logger.error({ plugin: manifest.name, error: err.message }, 'Plugin worker crashed');
+          });
+          await workerHost.start();
+          loadedPlugin.workerHost = workerHost;
+          this.logger.info({ plugin: manifest.name }, 'Isolated runtime worker started');
+        } catch (err: any) {
+          this.logger.error({ plugin: manifest.name, error: err.message }, 'Failed to start isolated runtime');
+          // Fall back to legacy runtime
+          loadedPlugin.workerHost = undefined;
+        }
+      }
+
       // ── Apply middleware wrapping to all routes ─────────────────────────
       const globalMiddlewares = loadedPlugin.middlewares.filter((m) => m.scope === 'global');
 
@@ -350,7 +377,7 @@ export class PluginLoader {
         }
 
         // Build wrapped handler: middleware chain → enabled check → original handler
-        route.handler = async (request: FastifyRequest, reply: FastifyReply) => {
+        const coreHandler = async (request: FastifyRequest, reply: FastifyReply) => {
           // Run global middleware chain
           for (const mw of globalMiddlewares) {
             try {
@@ -378,6 +405,16 @@ export class PluginLoader {
           // Call original handler
           return (originalHandler as Function)(request, reply);
         };
+
+        // Wrap with request gate for timeout, memory, and concurrency limits
+        const gateConfig = {
+          ...DEFAULT_GATE_CONFIG,
+          pluginName: manifest.name,
+          requestTimeoutMs: manifest.config?.requestTimeoutMs?.default ?? DEFAULT_GATE_CONFIG.requestTimeoutMs,
+          memoryLimitMb: manifest.config?.memoryLimitMb?.default ?? DEFAULT_GATE_CONFIG.memoryLimitMb,
+          maxConcurrentRequests: manifest.config?.maxConcurrentRequests?.default ?? DEFAULT_GATE_CONFIG.maxConcurrentRequests,
+        };
+        route.handler = createGatedHandler(gateConfig, coreHandler);
 
         // Register route with Fastify
         this.fastify.route(route);
@@ -442,8 +479,10 @@ export class PluginLoader {
         plugin.enabledRef.value = true;
       }
 
-      // Call onEnable lifecycle hook
-      if (plugin.backend?.onEnable) {
+      // Call onEnable lifecycle hook (legacy or isolated)
+      if (plugin.workerHost) {
+        await plugin.workerHost.callMethod('onEnable', [plugin.context], 30000);
+      } else if (plugin.backend?.onEnable) {
         await plugin.backend.onEnable(plugin.context);
       }
 
@@ -500,8 +539,10 @@ export class PluginLoader {
         plugin.enabledRef.value = false;
       }
 
-      // Call onDisable lifecycle hook
-      if (plugin.backend?.onDisable) {
+      // Call onDisable lifecycle hook (legacy or isolated)
+      if (plugin.workerHost) {
+        await plugin.workerHost.callMethod('onDisable', [plugin.context], 30000);
+      } else if (plugin.backend?.onDisable) {
         await plugin.backend.onDisable(plugin.context);
       }
 
@@ -558,8 +599,11 @@ export class PluginLoader {
         await this.disablePlugin(name);
       }
 
-      // Call onUnload lifecycle hook
-      if (plugin.backend?.onUnload) {
+      // Call onUnload lifecycle hook (legacy or isolated)
+      if (plugin.workerHost) {
+        await plugin.workerHost.callMethod('onUnload', [plugin.context], 30000).catch(() => {});
+        await plugin.workerHost.terminate();
+      } else if (plugin.backend?.onUnload) {
         await plugin.backend.onUnload(plugin.context);
       }
 
@@ -678,20 +722,29 @@ export class PluginLoader {
 
       if (!this.registry.has(pluginName)) return;
 
-      this.logger.info({ plugin: pluginName, file: filePath }, 'Plugin file changed, reloading');
+      // Debounce: clear existing timer and set new one
+      const existing = this.hotReloadDebounceTimers.get(pluginName);
+      if (existing) clearTimeout(existing);
 
-      try {
-        await this.reloadPlugin(pluginName);
-      } catch (error: any) {
-        captureSystemError({
-          level: 'warn',
-          component: 'PluginLoader',
-          message: `Hot-reload failed: ${error?.message || String(error)}`,
-          stack: error?.stack,
-          metadata: { plugin: pluginName, file: filePath },
-        }).catch(() => {});
-        this.logger.warn({ plugin: pluginName, error: error.message }, 'Hot-reload failed');
-      }
+      const timer = setTimeout(async () => {
+        this.hotReloadDebounceTimers.delete(pluginName);
+        this.logger.info({ plugin: pluginName, file: filePath }, 'Plugin file changed, reloading');
+
+        try {
+          await this.reloadPlugin(pluginName);
+        } catch (error: any) {
+          captureSystemError({
+            level: 'warn',
+            component: 'PluginLoader',
+            message: `Hot-reload failed: ${error?.message || String(error)}`,
+            stack: error?.stack,
+            metadata: { plugin: pluginName, file: filePath },
+          }).catch(() => {});
+          this.logger.warn({ plugin: pluginName, error: error.message }, 'Hot-reload failed');
+        }
+      }, this.HOT_RELOAD_DEBOUNCE_MS);
+
+      this.hotReloadDebounceTimers.set(pluginName, timer);
     });
   }
 

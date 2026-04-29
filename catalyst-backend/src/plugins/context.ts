@@ -19,6 +19,7 @@ import cron from 'node-cron';
 import type { ScheduledTask } from 'node-cron';
 import EventEmitter from 'events';
 import { captureSystemError } from '../services/error-logger';
+import { createCollectionStorage } from './storage/collection-storage';
 
 // ── Simple unique ID generator ──────────────────────────────────────────────
 function generateId(): string {
@@ -26,6 +27,62 @@ function generateId(): string {
   const counter = ((Math.random() * 1679616) | 0).toString(36).padStart(4, '0');
   const random = Math.random().toString(36).substring(2, 10);
   return `${timestamp}${counter}${random}`;
+}
+
+// ── Allowed fields for plugin database queries ──────────────────────────────
+const SERVER_ALLOWED_SELECT_FIELDS = new Set([
+  'id', 'name', 'uuid', 'description', 'status', 'createdAt', 'updatedAt',
+  'nodeId', 'userId', 'dockerImage', 'allocationId', 'oomKilled',
+  'memory', 'cpu', 'disk', 'snapshotLimit', 'backupLimit',
+  'databaseLimit', 'allocationLimit', 'nests', 'environment',
+  'installing', 'suspended', 'installedAt', 'skipScripts',
+  'skipStartup', 'skipUpdate',
+]);
+
+const USER_ALLOWED_SELECT_FIELDS = new Set([
+  'id', 'username', 'email', 'name', 'image', 'banned', 'createdAt', 'roleIds',
+]);
+
+/**
+ * Sanitizes user-supplied select object, allowing only known-safe fields.
+ * If user supplies an empty select, returns the full allowed set.
+ * Any disallowed keys are silently dropped.
+ */
+function sanitizeServerSelect(userSelect?: Record<string, boolean>): Record<string, boolean> {
+  if (!userSelect || typeof userSelect !== 'object') {
+    const allowed: Record<string, boolean> = {};
+    for (const f of SERVER_ALLOWED_SELECT_FIELDS) allowed[f] = true;
+    return allowed;
+  }
+  const sanitized: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(userSelect)) {
+    if (SERVER_ALLOWED_SELECT_FIELDS.has(key)) {
+      sanitized[key] = value;
+    }
+  }
+  if (Object.keys(sanitized).length === 0) {
+    // Fallback to allowed set if user selects nothing valid
+    for (const f of SERVER_ALLOWED_SELECT_FIELDS) sanitized[f] = true;
+  }
+  return sanitized;
+}
+
+function sanitizeUserSelect(userSelect?: Record<string, boolean>): Record<string, boolean> {
+  if (!userSelect || typeof userSelect !== 'object') {
+    const allowed: Record<string, boolean> = {};
+    for (const f of USER_ALLOWED_SELECT_FIELDS) allowed[f] = true;
+    return allowed;
+  }
+  const sanitized: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(userSelect)) {
+    if (USER_ALLOWED_SELECT_FIELDS.has(key)) {
+      sanitized[key] = value;
+    }
+  }
+  if (Object.keys(sanitized).length === 0) {
+    for (const f of USER_ALLOWED_SELECT_FIELDS) sanitized[f] = true;
+  }
+  return sanitized;
 }
 
 // ── Filter matching engine for collection queries ───────────────────────────
@@ -114,16 +171,7 @@ class ScopedPluginDBClient implements ScopedPluginDB {
       findMany: async (args?: any) =>
         prisma.server.findMany({
           ...args,
-          select: {
-            id: true,
-            name: true,
-            uuid: true,
-            description: true,
-            status: true,
-            createdAt: true,
-            updatedAt: true,
-            ...(args?.select || {}),
-          },
+          select: sanitizeServerSelect(args?.select),
           ...(args?.where ? { where: args.where } : {}),
           ...(args?.take ? { take: args.take } : {}),
           ...(args?.skip ? { skip: args.skip } : {}),
@@ -132,16 +180,7 @@ class ScopedPluginDBClient implements ScopedPluginDB {
       findUnique: async (args: any) => {
         const result = await prisma.server.findUnique({
           ...args,
-          select: {
-            id: true,
-            name: true,
-            uuid: true,
-            description: true,
-            status: true,
-            createdAt: true,
-            updatedAt: true,
-            ...(args?.select || {}),
-          },
+          select: sanitizeServerSelect(args?.select),
         });
         return result;
       },
@@ -186,16 +225,7 @@ class ScopedPluginDBClient implements ScopedPluginDB {
       findMany: async (args?: any) =>
         prisma.user.findMany({
           ...args,
-          select: {
-            id: true,
-            username: true,
-            email: true,
-            name: true,
-            image: true,
-            banned: true,
-            createdAt: true,
-            ...(args?.select || {}),
-          },
+          select: sanitizeUserSelect(args?.select),
           ...(args?.where ? { where: args.where } : {}),
           ...(args?.take ? { take: args.take } : {}),
           ...(args?.skip ? { skip: args.skip } : {}),
@@ -204,16 +234,7 @@ class ScopedPluginDBClient implements ScopedPluginDB {
       findUnique: async (args: any) => {
         const result = await prisma.user.findUnique({
           ...args,
-          select: {
-            id: true,
-            username: true,
-            email: true,
-            name: true,
-            image: true,
-            banned: true,
-            createdAt: true,
-            ...(args?.select || {}),
-          },
+          select: sanitizeUserSelect(args?.select),
         });
         return result;
       },
@@ -584,6 +605,35 @@ class PluginCollectionImpl implements PluginCollectionAPI {
   }
 }
 
+/**
+ * Fire-and-forget audit trail recording for plugin actions.
+ * Records plugin activity without blocking or failing the main operation.
+ */
+async function recordAudit(
+  prisma: PrismaClient,
+  pluginName: string,
+  action: string,
+  details?: any,
+  options?: { userId?: string; ipAddress?: string; duration?: number; success?: boolean; errorMessage?: string },
+): Promise<void> {
+  try {
+    await prisma.pluginActionAudit.create({
+      data: {
+        pluginName,
+        action,
+        details: details ? (details as any) : null,
+        userId: options?.userId ?? null,
+        ipAddress: options?.ipAddress ?? null,
+        duration: options?.duration ?? null,
+        success: options?.success ?? true,
+        errorMessage: options?.errorMessage ?? null,
+      },
+    });
+  } catch {
+    // Audit logging must never affect the main operation
+  }
+}
+
 // Permission to table mapping
 const PERMISSION_TO_TABLES: Record<string, string[]> = {
   'server.read': ['servers'],
@@ -655,10 +705,55 @@ export function createPluginContext(
         ...options,
         url: prefixedPath,
       };
-      // Auto-inject auth middleware if authenticate is available and route doesn't already have it
-      if (authenticate && !options.preHandler && !options.onRequest) {
-        (routeOptions as any).preHandler = [authenticate];
+      // SECURITY: Always inject host authentication middleware.
+      // Plugin-provided preHandler/onRequest are run AFTER the host auth check.
+      if (authenticate) {
+        const existingPreHandler = options.preHandler;
+        const existingOnRequest = options.onRequest;
+        if (existingPreHandler || existingOnRequest) {
+          pluginLogger.warn(
+            { route: prefixedPath },
+            'Plugin attempted to set its own preHandler/onRequest — host auth will still be enforced first',
+          );
+        }
+        (routeOptions as any).preHandler = [
+          authenticate,
+          ...(Array.isArray(existingPreHandler) ? existingPreHandler : existingPreHandler ? [existingPreHandler] : []),
+        ];
+        if (existingOnRequest) {
+          (routeOptions as any).onRequest = [
+            ...(Array.isArray(existingOnRequest) ? existingOnRequest : [existingOnRequest]),
+          ];
+        }
       }
+      // Wrap handler with audit trail
+      const originalHandler = routeOptions.handler;
+      routeOptions.handler = async (request: FastifyRequest, reply: FastifyReply) => {
+        const start = Date.now();
+        let success = true;
+        let errorMessage: string | undefined;
+        try {
+          const result = await (originalHandler as Function)(request, reply);
+          return result;
+        } catch (err: any) {
+          success = false;
+          errorMessage = err?.message || String(err);
+          throw err;
+        } finally {
+          recordAudit(prisma, manifest.name, 'route.accessed', {
+            route: prefixedPath,
+            method: options.method,
+            userId: (request as any).user?.id,
+            ipAddress: (request as any).ip,
+          }, {
+            duration: Date.now() - start,
+            success,
+            errorMessage,
+            userId: (request as any).user?.id,
+            ipAddress: (request as any).ip,
+          });
+        }
+      };
       routes.push(routeOptions);
       pluginLogger.info({ route: prefixedPath, method: options.method }, 'Registered route');
     },
@@ -756,6 +851,7 @@ export function createPluginContext(
     },
 
     async setConfig<T = any>(key: string, value: T): Promise<void> {
+      const start = Date.now();
       // Update plugin config in database
       await prisma.plugin.update({
         where: { name: manifest.name },
@@ -774,9 +870,15 @@ export function createPluginContext(
       manifest.config[key] = value;
 
       pluginLogger.info({ key }, 'Updated config');
+
+      recordAudit(prisma, manifest.name, 'config.updated', { key, value }, {
+        duration: Date.now() - start,
+        success: true,
+      });
     },
 
     async getStorage<T = any>(key: string): Promise<T | null> {
+      const start = Date.now();
       const storage = await prisma.pluginStorage.findUnique({
         where: {
           pluginName_key: {
@@ -786,10 +888,16 @@ export function createPluginContext(
         },
       });
 
+      recordAudit(prisma, manifest.name, 'storage.read', { key }, {
+        duration: Date.now() - start,
+        success: true,
+      });
+
       return storage ? (storage.value as T) : null;
     },
 
     async setStorage<T = any>(key: string, value: T): Promise<void> {
+      const start = Date.now();
       await prisma.pluginStorage.upsert({
         where: {
           pluginName_key: {
@@ -808,9 +916,15 @@ export function createPluginContext(
       });
 
       pluginLogger.debug({ key }, 'Updated storage');
+
+      recordAudit(prisma, manifest.name, 'storage.write', { key }, {
+        duration: Date.now() - start,
+        success: true,
+      });
     },
 
     async deleteStorage(key: string): Promise<void> {
+      const start = Date.now();
       await prisma.pluginStorage.deleteMany({
         where: {
           pluginName: manifest.name,
@@ -819,10 +933,45 @@ export function createPluginContext(
       });
 
       pluginLogger.debug({ key }, 'Deleted storage');
+
+      recordAudit(prisma, manifest.name, 'storage.delete', { key }, {
+        duration: Date.now() - start,
+        success: true,
+      });
     },
 
     // ── Structured storage ─────────────────────────────────────────────────
     collection(name: string): PluginCollectionAPI {
+      // Opt-in to dedicated table storage via manifest field
+      if ((manifest as any).storageEngine === 'dedicated') {
+        const dedicated = createCollectionStorage(prisma, manifest.name)(name);
+        // Wrap with audit for collection operations
+        return new Proxy(dedicated, {
+          get(target, prop) {
+            const method = (target as any)[prop];
+            if (typeof method !== 'function') return method;
+            return async (...args: any[]) => {
+              const start = Date.now();
+              let success = true;
+              let errorMessage: string | undefined;
+              try {
+                const result = await method.apply(target, args);
+                return result;
+              } catch (err: any) {
+                success = false;
+                errorMessage = err?.message || String(err);
+                throw err;
+              } finally {
+                recordAudit(prisma, manifest.name, `collection.${String(prop)}`, { collection: name, args }, {
+                  duration: Date.now() - start,
+                  success,
+                  errorMessage,
+                });
+              }
+            };
+          },
+        });
+      }
       return scopedDb.collection(name);
     },
 

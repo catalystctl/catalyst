@@ -24,6 +24,7 @@ export default defineConfig(async ({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
+        '@plugins': path.resolve(__dirname, '../catalyst-plugins'),
       },
     },
     server: {

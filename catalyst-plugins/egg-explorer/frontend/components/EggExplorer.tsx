@@ -1,12 +1,4 @@
-// src/plugins/egg-explorer/components/EggExplorer.tsx
-// Main admin tab component for browsing and installing Pterodactyl eggs.
-//
-// The backend builds a basic index from the GitHub Tree API in a single call,
-// so the UI is usable almost instantly. Full metadata enrichment happens in
-// the background. Users can also click any egg to fetch full details on demand.
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { reportSystemError } from '../../../services/api/systemErrors';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -20,11 +12,15 @@ import {
   Filter,
   Key,
 } from 'lucide-react';
-import { Badge } from '../../../components/ui/badge';
-import { Button } from '../../../components/ui/button';
-import { Input } from '../../../components/ui/input';
-import { Skeleton } from '../../../components/ui/skeleton';
-import { ScrollArea, ScrollBar } from '../../../components/ui/scroll-area';
+import { reportSystemError } from '@/services/api/systemErrors';
+import {
+  Badge,
+  Button,
+  Input,
+  Skeleton,
+  ScrollArea,
+  ScrollBar,
+} from '@/plugins/plugin-ui';
 import { EggCard, EggCardSkeleton } from './EggCard';
 import { EggDetailModal } from './EggDetailModal';
 import { IMAGE_FAMILIES, POPULAR_FAMILIES } from '../constants';
@@ -34,8 +30,6 @@ import {
   triggerSync,
 } from '../api';
 import type { EggSummary, EggCategory, EggIndexStatus } from '../types';
-
-// ─── Animation variants ─────────────────────────────────────────────────────
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -50,8 +44,6 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 280, damping: 22 } },
 };
 
-// ─── Client-side filter ─────────────────────────────────────────────────────
-
 function filterEggs(
   allEggs: EggSummary[],
   search: string,
@@ -60,7 +52,6 @@ function filterEggs(
   family: string | null,
 ): EggSummary[] {
   let filtered = allEggs;
-
   if (category) filtered = filtered.filter((e) => e.category === category);
   if (subcategory) filtered = filtered.filter((e) => e.subcategory === subcategory);
   if (family) filtered = filtered.filter((e) => e.imageFamily === family);
@@ -75,40 +66,31 @@ function filterEggs(
         (e.subcategoryName && e.subcategoryName.toLowerCase().includes(q)),
     );
   }
-
   return filtered;
 }
-
-// ─── Component ──────────────────────────────────────────────────────────────
 
 const PAGE_SIZE = 48;
 
 export function EggExplorer() {
-  // ── All eggs (fetched once) ──
   const [allEggs, setAllEggs] = useState<EggSummary[]>([]);
   const [categories, setCategories] = useState<EggCategory[]>([]);
-
-  // ── Filter state ──
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
   const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-
-  // ── UI state ──
   const [status, setStatus] = useState<EggIndexStatus | null>(null);
   const [selectedEgg, setSelectedEgg] = useState<EggSummary | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showTokenBanner, setShowTokenBanner] = useState(true);
 
-  // ── Reset visible count when filters change ──
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [search, selectedCategory, selectedSubcategory, selectedFamily]);
 
-  // ── Client-side filtered results (memoized) ──
   const filteredEggs = useMemo(
     () => filterEggs(allEggs, search, selectedCategory, selectedSubcategory, selectedFamily),
     [allEggs, search, selectedCategory, selectedSubcategory, selectedFamily],
@@ -121,13 +103,11 @@ export function EggExplorer() {
 
   const hasMore = visibleCount < filteredEggs.length;
 
-  // ── Fetch status + eggs on mount ──
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
-        // Poll status until ready (should be very fast — single Tree API call)
         let s: EggIndexStatus | null = null;
         for (let i = 0; i < 15; i++) {
           s = await fetchStatus();
@@ -142,12 +122,11 @@ export function EggExplorer() {
           return;
         }
 
-        // Fetch categories + all eggs
         const catRes = await fetchCategories();
         if (cancelled) return;
         setCategories(catRes.data || []);
 
-        const eggRes = await fetch(`/api/plugins/egg-explorer/?pageSize=999`, {
+        const eggRes = await fetch('/api/plugins/egg-explorer/?pageSize=999', {
           credentials: 'include',
         }).then((r) => r.json());
         if (cancelled) return;
@@ -169,12 +148,10 @@ export function EggExplorer() {
     return () => { cancelled = true; };
   }, []);
 
-  // ── Handlers ──
   const handleSync = useCallback(async () => {
     setSyncing(true);
     try {
       await triggerSync();
-      // Poll until ready
       let ready = false;
       while (!ready) {
         await new Promise((r) => setTimeout(r, 2000));
@@ -182,7 +159,6 @@ export function EggExplorer() {
         setStatus(s);
         if (s.ready) {
           ready = true;
-          // Re-fetch everything
           const catRes = await fetchCategories();
           setCategories(catRes.data || []);
           const eggRes = await fetch('/api/plugins/egg-explorer/?pageSize=999', {
@@ -217,15 +193,11 @@ export function EggExplorer() {
     setSelectedFamily(null);
   }, []);
 
-  // ── Derived ──
   const activeCategory = categories.find((c) => c.id === selectedCategory);
   const activeFiltersCount = [selectedCategory, selectedSubcategory, selectedFamily, search].filter(Boolean).length;
   const enrichedCount = allEggs.filter((e) => e.enriched).length;
-  const showTokenBanner = status && !status.hasToken && enrichedCount < allEggs.length;
+  const showBanner = status && !status.hasToken && enrichedCount < allEggs.length;
 
-  // ─── Render ────────────────────────────────────────────────────────────
-
-  // Loading screen
   if (loading && allEggs.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-24">
@@ -234,12 +206,8 @@ export function EggExplorer() {
           <Egg className="relative h-12 w-12 animate-pulse text-amber-500" />
         </div>
         <div className="text-center">
-          <h2 className="text-lg font-semibold text-foreground dark:text-white">
-            Loading Egg Explorer
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Fetching egg index from GitHub…
-          </p>
+          <h2 className="text-lg font-semibold text-foreground dark:text-white">Loading Egg Explorer</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Fetching egg index from GitHub…</p>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" />
@@ -250,22 +218,15 @@ export function EggExplorer() {
   }
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="relative min-h-screen"
-    >
-      {/* Ambient glow */}
+    <motion.div variants={containerVariants} initial="hidden" animate="visible" className="relative min-h-screen">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-gradient-to-br from-amber-500/6 to-orange-500/6 blur-3xl" />
         <div className="absolute bottom-0 -left-40 h-96 w-96 rounded-full bg-gradient-to-tr from-violet-500/6 to-cyan-500/6 blur-3xl" />
       </div>
 
       <div className="relative z-10 space-y-5">
-        {/* ─── GitHub Token banner ─── */}
         <AnimatePresence>
-          {showTokenBanner && (
+          {showBanner && showTokenBanner && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
@@ -285,12 +246,7 @@ export function EggExplorer() {
                     increase the rate limit from 60/hr to 5,000/hr.
                   </p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowTokenBanner(false)}
-                  className="shrink-0 h-6 w-6 p-0 text-amber-500 hover:text-amber-600"
-                >
+                <Button variant="ghost" size="sm" onClick={() => setShowTokenBanner(false)} className="shrink-0 h-6 w-6 p-0 text-amber-500 hover:text-amber-600">
                   <X className="h-3 w-3" />
                 </Button>
               </div>
@@ -298,7 +254,6 @@ export function EggExplorer() {
           )}
         </AnimatePresence>
 
-        {/* ─── Header ─── */}
         <motion.div variants={itemVariants} className="flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-1.5">
             <div className="flex items-center gap-3">
@@ -340,7 +295,6 @@ export function EggExplorer() {
           </div>
         </motion.div>
 
-        {/* ─── Search + Filter bar ─── */}
         <motion.div variants={itemVariants} className="flex flex-wrap items-center gap-2.5">
           <div className="relative min-w-[200px] flex-1 max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -352,7 +306,6 @@ export function EggExplorer() {
             />
           </div>
 
-          {/* Image family filter */}
           <div className="flex items-center gap-1.5 overflow-x-auto">
             <Filter className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             {POPULAR_FAMILIES.map((fam) => {
@@ -386,7 +339,6 @@ export function EggExplorer() {
           <span className="text-xs text-muted-foreground">{filteredEggs.length} results</span>
         </motion.div>
 
-        {/* ─── Category pills ─── */}
         <motion.div variants={itemVariants}>
           <ScrollArea className="w-full">
             <div className="flex items-center gap-1.5 pb-1">
@@ -420,7 +372,6 @@ export function EggExplorer() {
           </ScrollArea>
         </motion.div>
 
-        {/* ─── Subcategory pills ─── */}
         <AnimatePresence>
           {activeCategory?.subcategories && activeCategory.subcategories.length > 1 && (
             <motion.div
@@ -462,16 +413,12 @@ export function EggExplorer() {
           )}
         </AnimatePresence>
 
-        {/* ─── Error state ─── */}
         {error && (
           <div className="rounded-xl border border-danger/20 bg-danger/5 p-4">
-            <div className="flex items-center gap-2 text-sm text-danger">
-              {error}
-            </div>
+            <div className="flex items-center gap-2 text-sm text-danger">{error}</div>
           </div>
         )}
 
-        {/* ─── Egg grid ─── */}
         <motion.div variants={itemVariants}>
           {loading && allEggs.length === 0 ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -483,22 +430,12 @@ export function EggExplorer() {
             <>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {visibleEggs.map((egg, i) => (
-                  <EggCard
-                    key={egg.id}
-                    egg={egg}
-                    index={i}
-                    onClick={() => openEgg(egg)}
-                  />
+                  <EggCard key={egg.id} egg={egg} index={i} onClick={() => openEgg(egg)} />
                 ))}
               </div>
-
               {hasMore && (
                 <div className="mt-6 flex justify-center">
-                  <Button
-                    variant="outline"
-                    onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                    className="gap-2"
-                  >
+                  <Button variant="outline" onClick={() => setVisibleCount((c) => c + PAGE_SIZE)} className="gap-2">
                     <Gamepad2 className="h-4 w-4" />
                     Show More ({visibleEggs.length} of {filteredEggs.length})
                   </Button>
@@ -508,9 +445,7 @@ export function EggExplorer() {
           ) : (
             <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card/50 py-16">
               <Search className="h-10 w-10 text-muted-foreground/40" />
-              <h3 className="text-lg font-medium text-foreground dark:text-zinc-200">
-                No eggs found
-              </h3>
+              <h3 className="text-lg font-medium text-foreground dark:text-zinc-200">No eggs found</h3>
               <p className="text-sm text-muted-foreground">
                 {search || selectedCategory || selectedFamily
                   ? 'Try adjusting your search or filters.'
@@ -527,7 +462,6 @@ export function EggExplorer() {
         </motion.div>
       </div>
 
-      {/* ─── Detail modal ─── */}
       <EggDetailModal
         egg={selectedEgg}
         open={detailOpen}

@@ -21,6 +21,6 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src"],
+  "include": ["src", "../catalyst-plugins/**/frontend"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
