@@ -63,9 +63,9 @@ export class CollectionStorage implements PluginCollectionAPI {
           docs.sort((a, b) => {
             const aVal = a[sortField];
             const bVal = b[sortField];
-            if (aVal == null && bVal == null) return 0;
-            if (aVal == null) return sortOrder;
-            if (bVal == null) return -sortOrder;
+            if ((aVal === null || aVal === undefined) && (bVal === null || bVal === undefined)) return 0;
+            if (aVal === null || aVal === undefined) return sortOrder;
+            if (bVal === null || bVal === undefined) return -sortOrder;
             return aVal < bVal ? -sortOrder : aVal > bVal ? sortOrder : 0;
           });
         }
