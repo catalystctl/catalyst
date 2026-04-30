@@ -153,9 +153,9 @@ export default function ServerConsoleTab({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex flex-col flex-nowrap gap-3 md:flex-row md:items-stretch">
+      <div className="flex flex-row flex-nowrap gap-3 items-stretch">
         {/* Resource Stats */}
-        <div className="grid grid-cols-2 gap-2 self-start md:flex md:flex-col md:self-stretch md:w-44 lg:w-52 shrink-0">
+        <div className="flex flex-col gap-2 self-stretch w-44 lg:w-52 shrink-0">
           {liveMetrics ? (
             <>
               <StatCard
