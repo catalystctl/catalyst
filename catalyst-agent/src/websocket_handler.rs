@@ -1714,6 +1714,151 @@ impl WebSocketHandler {
         }
     }
 
+    /// Detect whether installer output indicates a SteamCMD self-update restart.
+    fn is_steamcmd_restart(stdout: &str, stderr: &str) -> bool {
+        let combined = format!("{} {}", stdout, stderr);
+        combined.contains("Restarting steamcmd")
+            || combined.contains("Restarting SteamCMD")
+            || (combined.contains("steamcmd.sh") && combined.contains("Restarting"))
+    }
+
+    /// Run a single install attempt and return (exit_code, stdout_buffer, stderr_buffer).
+    async fn run_installer_attempt(
+        &self,
+        server_id: &str,
+        install_image: &str,
+        final_script: &str,
+        env_map: &HashMap<String, String>,
+        host_server_dir: &str,
+    ) -> AgentResult<(i32, String, String)> {
+        let installer = self
+            .runtime
+            .spawn_installer_container(install_image, final_script, env_map, host_server_dir)
+            .await
+            .map_err(|e| {
+                AgentError::IoError(format!("Failed to spawn installer container: {}", e))
+            })?;
+
+        let mut stdout_pos = 0u64;
+        let mut stderr_pos = 0u64;
+        let mut stdout_buffer = String::new();
+        let mut stderr_buffer = String::new();
+
+        loop {
+            if let Ok(content) = tokio::fs::read_to_string(&installer.stdout_path).await {
+                if (stdout_pos as usize) < content.len() {
+                    let new_text = &content[stdout_pos as usize..];
+                    let (lines, trailing) = split_terminal_lines(new_text);
+                    let processed_len = new_text.len() - trailing.len();
+                    let mut batch = String::new();
+                    for line in lines {
+                        let payload = format!("{}\n", line);
+                        stdout_buffer.push_str(&payload);
+                        batch.push_str(&payload);
+                        if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                            self.emit_console_output(server_id, "stdout", &batch)
+                                .await?;
+                            batch.clear();
+                        }
+                    }
+                    if !batch.is_empty() {
+                        self.emit_console_output(server_id, "stdout", &batch)
+                            .await?;
+                    }
+                    stdout_pos += processed_len as u64;
+                }
+            }
+
+            if let Ok(content) = tokio::fs::read_to_string(&installer.stderr_path).await {
+                if (stderr_pos as usize) < content.len() {
+                    let new_text = &content[stderr_pos as usize..];
+                    let (lines, trailing) = split_terminal_lines(new_text);
+                    let processed_len = new_text.len() - trailing.len();
+                    let mut batch = String::new();
+                    for line in lines {
+                        let payload = format!("{}\n", line);
+                        stderr_buffer.push_str(&payload);
+                        batch.push_str(&payload);
+                        if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                            self.emit_console_output(server_id, "stderr", &batch)
+                                .await?;
+                            batch.clear();
+                        }
+                    }
+                    if !batch.is_empty() {
+                        self.emit_console_output(server_id, "stderr", &batch)
+                            .await?;
+                    }
+                    stderr_pos += processed_len as u64;
+                }
+            }
+
+            match tokio::time::timeout(Duration::from_millis(200), installer.wait()).await {
+                Ok(Ok(exit_code)) => {
+                    if let Ok(content) = tokio::fs::read_to_string(&installer.stdout_path).await {
+                        if (stdout_pos as usize) < content.len() {
+                            let new_text = &content[stdout_pos as usize..];
+                            let (lines, trailing) = split_terminal_lines(new_text);
+                            let mut batch = String::new();
+                            for line in lines {
+                                let payload = format!("{}\n", line);
+                                stdout_buffer.push_str(&payload);
+                                batch.push_str(&payload);
+                                if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                                    self.emit_console_output(server_id, "stdout", &batch)
+                                        .await?;
+                                    batch.clear();
+                                }
+                            }
+                            if !trailing.is_empty() {
+                                let payload = format!("{}\n", trailing);
+                                stdout_buffer.push_str(&payload);
+                                batch.push_str(&payload);
+                            }
+                            if !batch.is_empty() {
+                                self.emit_console_output(server_id, "stdout", &batch)
+                                    .await?;
+                            }
+                        }
+                    }
+                    if let Ok(content) = tokio::fs::read_to_string(&installer.stderr_path).await {
+                        if (stderr_pos as usize) < content.len() {
+                            let new_text = &content[stderr_pos as usize..];
+                            let (lines, trailing) = split_terminal_lines(new_text);
+                            let mut batch = String::new();
+                            for line in lines {
+                                let payload = format!("{}\n", line);
+                                stderr_buffer.push_str(&payload);
+                                batch.push_str(&payload);
+                                if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                                    self.emit_console_output(server_id, "stderr", &batch)
+                                        .await?;
+                                    batch.clear();
+                                }
+                            }
+                            if !trailing.is_empty() {
+                                let payload = format!("{}\n", trailing);
+                                stderr_buffer.push_str(&payload);
+                                batch.push_str(&payload);
+                            }
+                            if !batch.is_empty() {
+                                self.emit_console_output(server_id, "stderr", &batch)
+                                    .await?;
+                            }
+                        }
+                    }
+                    let _ = installer.cleanup().await;
+                    return Ok((exit_code, stdout_buffer, stderr_buffer));
+                }
+                Ok(Err(e)) => {
+                    let _ = installer.cleanup().await;
+                    return Err(AgentError::IoError(format!("Installer wait failed: {}", e)));
+                }
+                Err(_) => continue,
+            }
+        }
+    }
+
     async fn install_server(&self, msg: &Value) -> AgentResult<()> {
         let server_uuid = msg["serverUuid"]
             .as_str()
@@ -1819,164 +1964,55 @@ impl WebSocketHandler {
         self.emit_console_output(server_id, "system", "[Catalyst] Starting installation...\n")
             .await?;
 
-        // Execute the install script in an ephemeral container for complete isolation
-        // The container mounts the server directory at /data and runs the script there
-        let installer = self
-            .runtime
-            .spawn_installer_container(install_image, &final_script, &env_map, &host_server_dir)
-            .await
-            .map_err(|e| {
-                AgentError::IoError(format!("Failed to spawn installer container: {}", e))
-            })?;
-
-        // Tail stdout/stderr files from the installer container
-        let mut stdout_pos = 0u64;
-        let mut stderr_pos = 0u64;
-        let mut stdout_buffer = String::new();
-        let mut stderr_buffer = String::new();
-
-        loop {
-            // Read new stdout content
-            if let Ok(content) = tokio::fs::read_to_string(&installer.stdout_path).await {
-                if (stdout_pos as usize) < content.len() {
-                    let new_text = &content[stdout_pos as usize..];
-                    let (lines, trailing) = split_terminal_lines(new_text);
-                    let processed_len = new_text.len() - trailing.len();
-                    let mut batch = String::new();
-                    for line in lines {
-                        let payload = format!("{}\n", line);
-                        stdout_buffer.push_str(&payload);
-                        batch.push_str(&payload);
-                        if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
-                            self.emit_console_output(server_id, "stdout", &batch)
-                                .await?;
-                            batch.clear();
-                        }
-                    }
-                    if !batch.is_empty() {
-                        self.emit_console_output(server_id, "stdout", &batch)
-                            .await?;
-                    }
-                    stdout_pos += processed_len as u64;
-                }
-            }
-            // Read new stderr content
-            if let Ok(content) = tokio::fs::read_to_string(&installer.stderr_path).await {
-                if (stderr_pos as usize) < content.len() {
-                    let new_text = &content[stderr_pos as usize..];
-                    let (lines, trailing) = split_terminal_lines(new_text);
-                    let processed_len = new_text.len() - trailing.len();
-                    let mut batch = String::new();
-                    for line in lines {
-                        let payload = format!("{}\n", line);
-                        stderr_buffer.push_str(&payload);
-                        batch.push_str(&payload);
-                        if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
-                            self.emit_console_output(server_id, "stderr", &batch)
-                                .await?;
-                            batch.clear();
-                        }
-                    }
-                    if !batch.is_empty() {
-                        self.emit_console_output(server_id, "stderr", &batch)
-                            .await?;
-                    }
-                    stderr_pos += processed_len as u64;
-                }
-            }
-            // Check if the installer container has exited
-            match tokio::time::timeout(Duration::from_millis(200), installer.wait()).await {
-                Ok(Ok(exit_code)) => {
-                    // Read any remaining output (including trailing partials)
-                    if let Ok(content) = tokio::fs::read_to_string(&installer.stdout_path).await {
-                        if (stdout_pos as usize) < content.len() {
-                            let new_text = &content[stdout_pos as usize..];
-                            let (lines, trailing) = split_terminal_lines(new_text);
-                            let mut batch = String::new();
-                            for line in lines {
-                                let payload = format!("{}\n", line);
-                                stdout_buffer.push_str(&payload);
-                                batch.push_str(&payload);
-                                if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
-                                    self.emit_console_output(server_id, "stdout", &batch)
-                                        .await?;
-                                    batch.clear();
-                                }
-                            }
-                            if !trailing.is_empty() {
-                                let payload = format!("{}\n", trailing);
-                                stdout_buffer.push_str(&payload);
-                                batch.push_str(&payload);
-                            }
-                            if !batch.is_empty() {
-                                self.emit_console_output(server_id, "stdout", &batch)
-                                    .await?;
-                            }
-                        }
-                    }
-                    if let Ok(content) = tokio::fs::read_to_string(&installer.stderr_path).await {
-                        if (stderr_pos as usize) < content.len() {
-                            let new_text = &content[stderr_pos as usize..];
-                            let (lines, trailing) = split_terminal_lines(new_text);
-                            let mut batch = String::new();
-                            for line in lines {
-                                let payload = format!("{}\n", line);
-                                stderr_buffer.push_str(&payload);
-                                batch.push_str(&payload);
-                                if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
-                                    self.emit_console_output(server_id, "stderr", &batch)
-                                        .await?;
-                                    batch.clear();
-                                }
-                            }
-                            if !trailing.is_empty() {
-                                let payload = format!("{}\n", trailing);
-                                stderr_buffer.push_str(&payload);
-                                batch.push_str(&payload);
-                            }
-                            if !batch.is_empty() {
-                                self.emit_console_output(server_id, "stderr", &batch)
-                                    .await?;
-                            }
-                        }
-                    }
-                    let _ = installer.cleanup().await;
-                    if exit_code != 0 {
-                        let stderr_trimmed = stderr_buffer.trim();
-                        let stdout_trimmed = stdout_buffer.trim();
-                        let reason = if !stderr_trimmed.is_empty() {
-                            stderr_trimmed.to_string()
-                        } else if !stdout_trimmed.is_empty() {
-                            stdout_trimmed.to_string()
-                        } else {
-                            "Install script failed".to_string()
-                        };
-                        self.emit_console_output(server_id, "stderr", &format!("{}\n", reason))
-                            .await?;
-                        self.emit_server_state_update(
-                            server_id,
-                            "error",
-                            Some(reason.clone()),
-                            None,
-                            None,
-                        )
-                        .await?;
-                        return Err(AgentError::InstallationError(format!(
-                            "Install script failed: {}",
-                            reason
-                        )));
-                    }
-                    break;
-                }
-                Ok(Err(e)) => {
-                    let _ = installer.cleanup().await;
-                    return Err(AgentError::IoError(format!("Installer wait failed: {}", e)));
-                }
-                Err(_) => {
-                    // Timeout: container still running, continue tailing
+        // Execute the install script with SteamCMD self-update retry support.
+        // SteamCMD frequently self-updates and restarts on first run, causing
+        // non-zero exit codes. We detect this pattern and retry once.
+        let mut attempt = 0;
+        let (exit_code, stdout_buffer, stderr_buffer) = loop {
+            attempt += 1;
+            match self
+                .run_installer_attempt(
+                    server_id,
+                    install_image,
+                    &final_script,
+                    &env_map,
+                    &host_server_dir,
+                )
+                .await
+            {
+                Ok((0, out, err)) => break (0, out, err),
+                Ok((_code, out, err)) if attempt < 2 && Self::is_steamcmd_restart(&out, &err) => {
+                    self.emit_console_output(
+                        server_id,
+                        "system",
+                        "[Catalyst] SteamCMD self-updated and restarted. Retrying installation...\n",
+                    )
+                    .await?;
                     continue;
                 }
+                Ok((code, out, err)) => break (code, out, err),
+                Err(e) => return Err(e),
             }
+        };
+
+        if exit_code != 0 {
+            let stderr_trimmed = stderr_buffer.trim();
+            let stdout_trimmed = stdout_buffer.trim();
+            let reason = if !stderr_trimmed.is_empty() {
+                stderr_trimmed.to_string()
+            } else if !stdout_trimmed.is_empty() {
+                stdout_trimmed.to_string()
+            } else {
+                "Install script failed".to_string()
+            };
+            self.emit_console_output(server_id, "stderr", &format!("{}\n", reason))
+                .await?;
+            self.emit_server_state_update(server_id, "error", Some(reason.clone()), None, None)
+                .await?;
+            return Err(AgentError::InstallationError(format!(
+                "Install script failed: {}",
+                reason
+            )));
         }
 
         if stdout_buffer.trim().is_empty() && stderr_buffer.trim().is_empty() {
