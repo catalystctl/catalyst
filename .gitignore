@@ -55,4 +55,5 @@ catalyst-bot/
 catalyst-plugins/egg-explorer/backend/egg-index.json
 catalyst-frontend/src/styles/material.css
 .pi-tavily-temp/
+eggs/
 progress.md

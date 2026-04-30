@@ -354,7 +354,7 @@ function Sidebar() {
   return (
     <aside
       className={cn(
-        'sticky top-0 flex h-[100dvh] flex-col border-r border-border bg-surface-0 transition-all duration-200',
+        'flex h-full flex-col border-r border-border bg-surface-0 transition-all duration-200',
         sidebarCollapsed ? 'w-16' : 'w-56',
       )}
     >
