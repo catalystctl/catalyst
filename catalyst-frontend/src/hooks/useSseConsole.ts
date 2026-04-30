@@ -124,12 +124,13 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
     lastConnectedServerId = serverId;
 
     if (serverChanged) {
-      // Only wipe state when switching to a different server.
-      // Remounting the same page (navigate away + back) preserves logs.
+      // Reset bookkeeping refs for the new server.
+      // Do NOT setEntries([]) here — the initial-logs effect (above)
+      // runs first and owns state population. Clearing here would be
+      // batched after it in React 18, overwriting cached data with [].
       nextId.current = 0;
       batchBuffer.current = [];
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setEntries([]);
+      loadedKeyRef.current = ''; // force initial-logs effect to always repopulate
     }
     setStreamStatus('connecting');
 

@@ -1,17 +1,16 @@
 /**
- * CustomConsole — High-performance virtualized console output component.
+ * CustomConsole — Virtualized console output powered by @tanstack/react-virtual.
  *
  * Architecture:
- *   1. Custom spacer-based virtualizer (no library)
- *   2. Pre-computed Float64Array of cumulative heights — binary search (O(log n))
- *   3. React.memo on ConsoleRow — rows that remain visible during scroll NEVER re-render
- *   4. requestAnimationFrame-throttled scroll handler
- *   5. ResizeObserver tracks container width for accurate chars-per-line calculation
- *   6. Two-tier processing cache (base + search)
- *   7. useLayoutEffect for auto-scroll
+ *   1. @tanstack/react-virtual for scroll virtualization (dynamic row heights)
+ *   2. ResizeObserver tracks container width for accurate chars-per-line calc
+ *   3. Two-tier processing cache (base + search-highlighted)
+ *   4. React.memo on ConsoleRow — rows that remain visible during scroll NEVER re-render
+ *   5. Auto-scroll with user-scroll detection and resume button
  */
 
-import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown, Download, Trash2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { RawEntry, ProcessedEntry } from './types';
@@ -22,7 +21,7 @@ import { processEntry } from './processEntry';
 const LINE_HEIGHT = 22;
 const ROW_PAD = 4;
 const MIN_ROW_HEIGHT = LINE_HEIGHT + ROW_PAD;
-const OVERSCAN = 200;
+const OVERSCAN = 15;
 
 const STREAM_BORDER: Record<string, string> = {
   stdout: 'border-l-emerald-400/60',
@@ -156,28 +155,35 @@ function CustomConsole({
 }: CustomConsoleProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const isProgrammaticScroll = useRef(false);
+  const showScrollBtnRef = useRef(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
 
+  // Stable callback refs (avoid effect re-registration)
   const onUserScrollRef = useRef(onUserScroll);
   onUserScrollRef.current = onUserScroll;
   const onAutoScrollResumeRef = useRef(onAutoScrollResume);
   onAutoScrollResumeRef.current = onAutoScrollResume;
 
   // ── Container width → chars-per-line ──
-  const [charsPerLine, setCharsPerLine] = useState(100);
+  const [containerWidth, setContainerWidth] = useState(0);
 
   useEffect(() => {
     const el = parentRef.current;
     if (!el) return;
     const update = () => {
       const w = el.clientWidth;
-      if (w > 0) setCharsPerLine(calcCharsPerLine(w, showLineNumbers));
+      if (w > 0) setContainerWidth(w);
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
   }, [showLineNumbers]);
+
+  const charsPerLine = useMemo(() => {
+    if (!containerWidth) return 100;
+    return calcCharsPerLine(containerWidth, showLineNumbers);
+  }, [containerWidth, showLineNumbers]);
 
   // ── Deferred search ──
   const deferredSearch = useDeferredValue(searchQueryProp);
@@ -198,7 +204,7 @@ function CustomConsole({
     return filteredEntries.filter((e) => e.data.toLowerCase().includes(q));
   }, [filteredEntries, deferredSearch]);
 
-  // ── Step 3: Process entries with cache ──
+  // ── Step 3: Process entries with base cache ──
   const baseCacheRef = useRef<Map<string, ProcessedEntry>>(new Map());
 
   const processedEntries = useMemo(() => {
@@ -206,12 +212,14 @@ function CustomConsole({
     for (const entry of searchableEntries) {
       if (!cache.has(entry.id)) cache.set(entry.id, processEntry(entry, ''));
     }
+    // Evict stale entries
     if (cache.size > scrollback * 2) {
       const activeIds = new Set(searchableEntries.map((e) => e.id));
       for (const key of cache.keys()) {
         if (!activeIds.has(key)) cache.delete(key);
       }
     }
+    // Return base entries or search-highlighted variants
     if (!deferredSearch) {
       return searchableEntries.map((e) => cache.get(e.id)!);
     }
@@ -221,117 +229,93 @@ function CustomConsole({
     });
   }, [searchableEntries, deferredSearch, scrollback]);
 
-  // ── Step 4: Pre-compute heights ──
-  const { cumulative, totalSize } = useMemo(() => {
-    const n = processedEntries.length;
-    const c = new Float64Array(n + 1);
-    for (let i = 0; i < n; i++) {
-      const entry = processedEntries[i];
-      const wrappedLines = Math.max(1, Math.ceil((entry?.textLength ?? 0) / charsPerLine));
-      c[i + 1] = c[i] + wrappedLines * MIN_ROW_HEIGHT;
-    }
-    return { cumulative: c, totalSize: c[n] };
-  }, [processedEntries, charsPerLine]);
+  // ── Step 4: Virtualizer (dynamic heights via estimateSize) ──
+  const estimateSize = useCallback(
+    (index: number) => {
+      const entry = processedEntries[index];
+      if (!entry) return MIN_ROW_HEIGHT;
+      const wrappedLines = Math.max(1, Math.ceil(entry.textLength / charsPerLine));
+      return wrappedLines * MIN_ROW_HEIGHT;
+    },
+    [processedEntries, charsPerLine],
+  );
 
-  // ── Step 5: Visible range ──
-  const [range, setRange] = useState({ start: 0, end: 0 });
-  const showScrollBtnRef = useRef(false);
+  const getItemKey = useCallback(
+    (index: number) => processedEntries[index]?.id ?? `console-row-${index}`,
+    [processedEntries],
+  );
+
+  const measureElement = useCallback((el: Element) => el.getBoundingClientRect().height, []);
+
+  const virtualizer = useVirtualizer({
+    count: processedEntries.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize,
+    overscan: OVERSCAN,
+    getItemKey,
+    measureElement,
+  });
+
+  const virtualItems = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+
+  // ── Auto-scroll to bottom when new entries arrive ──
+  const prevCountRef = useRef(0);
 
   useEffect(() => {
-    const el = parentRef.current;
-    if (!el || cumulative.length <= 1) return;
+    const count = processedEntries.length;
+    if (!autoScrollProp || count === 0 || count <= prevCountRef.current) return;
 
-    let rafId = 0;
-
-    const update = () => {
-      cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        rafId = 0;
-        const scrollTop = el.scrollTop;
-        const viewBottom = scrollTop + el.clientHeight;
-        const bufferPx = OVERSCAN * MIN_ROW_HEIGHT;
-
-        let lo = 0;
-        let hi = cumulative.length - 1;
-        while (lo < hi) {
-          const mid = (lo + hi) >> 1;
-          if (cumulative[mid] <= scrollTop) lo = mid + 1;
-          else hi = mid;
-        }
-        const anchorIdx = lo > 0 ? lo - 1 : 0;
-        const start = Math.max(0, anchorIdx - OVERSCAN);
-
-        let end = anchorIdx + 1;
-        while (end < cumulative.length - 1 && cumulative[end] < viewBottom + bufferPx) {
-          end++;
-        }
-
-        setRange((prev) =>
-          prev.start === start && prev.end === end ? prev : { start, end },
-        );
-
-        if (isProgrammaticScroll.current) {
-          isProgrammaticScroll.current = false;
-          return;
-        }
-        const nearBottom = el.scrollHeight - scrollTop - el.clientHeight < 40;
-        if (nearBottom) {
-          if (showScrollBtnRef.current) {
-            showScrollBtnRef.current = false;
-            setShowScrollBtn(false);
-            onAutoScrollResumeRef.current?.();
-          }
-        } else {
-          if (!showScrollBtnRef.current) {
-            showScrollBtnRef.current = true;
-            setShowScrollBtn(true);
-            onUserScrollRef.current?.();
-          }
-        }
-      });
-    };
-
-    update();
-    el.addEventListener('scroll', update, { passive: true });
-    return () => {
-      el.removeEventListener('scroll', update);
-      if (rafId) cancelAnimationFrame(rafId);
-    };
-  }, [cumulative]);
-
-  // ── Auto-scroll ──
-  const prevCountRef = useRef(processedEntries.length);
-
-  useLayoutEffect(() => {
-    if (autoScrollProp && processedEntries.length > prevCountRef.current) {
+    // Defer to next frame so the virtualizer's DOM has been laid out
+    const raf = requestAnimationFrame(() => {
       const el = parentRef.current;
-      if (el) {
-        isProgrammaticScroll.current = true;
-        const prev = el.scrollTop;
-        el.scrollTop = el.scrollHeight;
-        if (el.scrollTop === prev) {
-          isProgrammaticScroll.current = false;
+      if (!el) return;
+      isProgrammaticScroll.current = true;
+      virtualizer.scrollToIndex(count - 1, { align: 'end', behavior: 'auto' });
+    });
+
+    prevCountRef.current = count;
+    return () => cancelAnimationFrame(raf);
+  }, [autoScrollProp, processedEntries.length, virtualizer]);
+
+  // ── User-scroll detection ──
+  useEffect(() => {
+    const el = parentRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+      if (isProgrammaticScroll.current) {
+        isProgrammaticScroll.current = false;
+        return;
+      }
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+      if (nearBottom) {
+        if (showScrollBtnRef.current) {
+          showScrollBtnRef.current = false;
+          setShowScrollBtn(false);
+          onAutoScrollResumeRef.current?.();
+        }
+      } else {
+        if (!showScrollBtnRef.current) {
+          showScrollBtnRef.current = true;
+          setShowScrollBtn(true);
+          onUserScrollRef.current?.();
         }
       }
-    }
-    prevCountRef.current = processedEntries.length;
-  }, [autoScrollProp, processedEntries.length]);
+    };
 
-  // ── Scroll to bottom ──
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // ── Scroll to bottom (button click) ──
   const scrollToBottom = useCallback(() => {
     showScrollBtnRef.current = false;
     setShowScrollBtn(false);
-    const el = parentRef.current;
-    if (el) {
-      isProgrammaticScroll.current = true;
-      const prev = el.scrollTop;
-      el.scrollTop = el.scrollHeight;
-      if (el.scrollTop === prev) {
-        isProgrammaticScroll.current = false;
-      }
-    }
+    isProgrammaticScroll.current = true;
+    virtualizer.scrollToIndex(processedEntries.length - 1, { align: 'end' });
     onAutoScrollResumeRef.current?.();
-  }, []);
+  }, [processedEntries.length, virtualizer]);
 
   // ── Export ──
   const handleExport = useCallback(() => {
@@ -351,9 +335,8 @@ function CustomConsole({
     URL.revokeObjectURL(url);
   }, [filteredEntries, serverId]);
 
+  // ── Render ──
   const hasContent = processedEntries.length > 0;
-  const topSpacer = cumulative[range.start] ?? 0;
-  const bottomSpacer = totalSize - (cumulative[range.end] ?? totalSize);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -395,6 +378,7 @@ function CustomConsole({
           ref={parentRef}
           className="console-output h-full overflow-y-auto font-mono text-[13px] leading-[1.7] text-foreground dark:text-foreground"
         >
+          {/* Loading / Error / Empty states */}
           {isLoading && !hasContent && (
             <div className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
               <div className="h-3 w-3 animate-spin rounded-full border-2 border-border border-t-primary-400 dark:border-muted" />
@@ -421,24 +405,33 @@ function CustomConsole({
             </div>
           )}
 
+          {/* Virtualized rows */}
           {hasContent && (
-            <>
-              <div style={{ height: topSpacer }} aria-hidden="true" />
-              {processedEntries.slice(range.start, range.end).map((entry, i) => (
-                <ConsoleRow
-                  key={entry.id}
-                  entry={entry}
-                  index={range.start + i}
-                  showLineNumbers={showLineNumbers}
-                />
-              ))}
-              <div style={{ height: bottomSpacer }} aria-hidden="true" />
-            </>
+            <div style={{ height: totalSize, position: 'relative', width: '100%' }}>
+              {virtualItems.map((virtualRow) => {
+                const entry = processedEntries[virtualRow.index];
+                return (
+                  <div
+                    key={virtualRow.key}
+                    ref={virtualizer.measureElement}
+                    data-index={virtualRow.index}
+                    className="absolute left-0 right-0 top-0"
+                    style={{ transform: `translateY(${virtualRow.start}px)`, willChange: 'transform' }}
+                  >
+                    <ConsoleRow
+                      entry={entry}
+                      index={virtualRow.index}
+                      showLineNumbers={showLineNumbers}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
         {/* Scroll-to-bottom button */}
-        {showScrollBtn && !autoScrollProp && (
+        {showScrollBtn && !autoScrollProp && hasContent && (
           <button
             type="button"
             onClick={scrollToBottom}
