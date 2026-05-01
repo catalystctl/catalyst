@@ -1,33 +1,46 @@
 {
-  "name": "@catalyst/plugin-sdk",
-  "version": "0.1.0",
-  "description": "SDK for building Catalyst plugins",
-  "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" },
-    "./testing": { "import": "./dist/testing.js", "types": "./dist/testing.d.ts" },
-    "./frontend": { "import": "./dist/frontend/index.js", "types": "./dist/frontend/index.d.ts" }
-  },
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch"
-  },
-  "dependencies": {
-    "zod": "^4.4.0"
-  },
-  "peerDependencies": {
-    "fastify": "^5.0.0",
-    "react": "^19.0.0"
-  },
-  "peerDependenciesMeta": {
-    "fastify": { "optional": true },
-    "react": { "optional": true }
-  },
-  "devDependencies": {
-    "typescript": "^6.0.0",
-    "@types/node": "^22.0.0",
-    "@types/react": "^19.0.0"
-  }
+	"name": "@catalyst/plugin-sdk",
+	"version": "1.1.0",
+	"description": "SDK for building Catalyst plugins",
+	"type": "module",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"import": "./dist/index.js",
+			"types": "./dist/index.d.ts"
+		},
+		"./testing": {
+			"import": "./dist/testing.js",
+			"types": "./dist/testing.d.ts"
+		},
+		"./frontend": {
+			"import": "./dist/frontend/index.js",
+			"types": "./dist/frontend/index.d.ts"
+		}
+	},
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch"
+	},
+	"dependencies": {
+		"zod": "^4.4.0"
+	},
+	"peerDependencies": {
+		"fastify": "^5.0.0",
+		"react": "^19.0.0"
+	},
+	"peerDependenciesMeta": {
+		"fastify": {
+			"optional": true
+		},
+		"react": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"typescript": "^6.0.0",
+		"@types/node": "^22.0.0",
+		"@types/react": "^19.0.0"
+	}
 }

@@ -1,21 +1,21 @@
 {
-  "name": "{{name}}",
-  "version": "{{version}}",
-  "description": "{{description}}",
-  "type": "module",
-  "main": "dist/index.js",
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
-    "test": "vitest run"
-  },
-  "dependencies": {
-    "@catalyst/plugin-sdk": "^0.1.0",
-    "react": "^19.0.0"
-  },
-  "devDependencies": {
-    "typescript": "^6.0.0",
-    "@types/react": "^19.0.0",
-    "vitest": "^4.0.0"
-  }
+	"name": "{{name}}",
+	"version": "1.1.0",
+	"description": "{{description}}",
+	"type": "module",
+	"main": "dist/index.js",
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@catalyst/plugin-sdk": "^0.1.0",
+		"react": "^19.0.0"
+	},
+	"devDependencies": {
+		"typescript": "^6.0.0",
+		"@types/react": "^19.0.0",
+		"vitest": "^4.0.0"
+	}
 }

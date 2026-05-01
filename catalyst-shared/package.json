@@ -1,12 +1,12 @@
 {
-  "name": "catalyst-shared",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "main": "./types.ts",
-  "types": "./types.ts",
-  "exports": {
-    ".": "./types.ts",
-    "./*": "./*"
-  }
+	"name": "catalyst-shared",
+	"version": "1.1.0",
+	"private": true,
+	"type": "module",
+	"main": "./types.ts",
+	"types": "./types.ts",
+	"exports": {
+		".": "./types.ts",
+		"./*": "./*"
+	}
 }
