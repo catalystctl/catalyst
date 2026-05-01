@@ -35,6 +35,6 @@
 		"clean": "rm -rf catalyst-backend/dist catalyst-backend/node_modules catalyst-frontend/dist catalyst-frontend/node_modules catalyst-shared/node_modules node_modules"
 	},
 	"devDependencies": {
-		"typescript": "~6.0.2"
+		"typescript": "~6.0.3"
 	}
 }

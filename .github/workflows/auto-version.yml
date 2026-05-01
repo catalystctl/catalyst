@@ -1,0 +1,147 @@
+name: Auto Version
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine version bump
+        id: bump
+        run: |
+          # Get the latest tag (fallback to root package.json version)
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -z "$LATEST_TAG" ]; then
+            CURRENT_VERSION=$(node -p "require('./package.json').version")
+            echo "No previous tag found. Using package.json version: $CURRENT_VERSION"
+          else
+            CURRENT_VERSION=${LATEST_TAG#v}
+            echo "Latest tag: $LATEST_TAG"
+          fi
+
+          echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+
+          # Determine commit range
+          if [ -z "$LATEST_TAG" ]; then
+            COMMIT_RANGE=$(git rev-list --max-parents=0 HEAD)..HEAD
+          else
+            COMMIT_RANGE="${LATEST_TAG}..HEAD"
+          fi
+
+          # Analyze commits for bump type
+          BUMP="none"
+
+          while IFS= read -r msg; do
+            [ -z "$msg" ] && continue
+
+            # Check for breaking changes (minor bump in your scheme)
+            if echo "$msg" | grep -qE '^[a-z]+(\([^)]*\))?!:' || \
+               echo "$msg" | grep -qiE 'BREAKING CHANGE|BREAKING-CHANGE'; then
+              BUMP="minor"
+              echo "Found breaking change in commit: $msg"
+              break
+            fi
+
+            # Check for feat or fix (patch bump)
+            if echo "$msg" | grep -qE '^(feat|fix)(\([^)]*\))?:'; then
+              BUMP="patch"
+              echo "Found feat/fix in commit: $msg"
+            fi
+          done < <(git log "$COMMIT_RANGE" --pretty=format:"%s%n%b" --)
+
+          echo "bump=$BUMP" >> "$GITHUB_OUTPUT"
+          echo "Detected bump type: $BUMP"
+
+      - name: Bump version
+        id: version
+        if: steps.bump.outputs.bump != 'none'
+        run: |
+          CURRENT="${{ steps.bump.outputs.current_version }}"
+          BUMP="${{ steps.bump.outputs.bump }}"
+
+          MAJOR=$(echo "$CURRENT" | cut -d. -f1)
+          MINOR=$(echo "$CURRENT" | cut -d. -f2)
+          PATCH=$(echo "$CURRENT" | cut -d. -f3)
+
+          if [ "$BUMP" = "minor" ]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          elif [ "$BUMP" = "patch" ]; then
+            PATCH=$((PATCH + 1))
+          fi
+
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Bumping $CURRENT → $NEW_VERSION"
+
+      - name: Update package.json files
+        if: steps.bump.outputs.bump != 'none'
+        run: |
+          VERSION="${{ steps.version.outputs.new_version }}"
+
+          # Find all package.json files (excluding node_modules)
+          mapfile -t FILES < <(find . -name 'package.json' -not -path '*/node_modules/*' -not -path './catalyst-agent/*')
+
+          for file in "${FILES[@]}"; do
+            # Skip if not a regular file
+            [ -f "$file" ] || continue
+
+            node -e "
+              const fs = require('fs');
+              const path = '$file';
+              const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+              if (pkg.version) {
+                pkg.version = '$VERSION';
+                fs.writeFileSync(path, JSON.stringify(pkg, null, '\t') + '\n');
+                console.log('Updated', path, '→', '$VERSION');
+              }
+            " 2>/dev/null || true
+          done
+
+      - name: Update Cargo.toml
+        if: steps.bump.outputs.bump != 'none'
+        run: |
+          VERSION="${{ steps.version.outputs.new_version }}"
+          if [ -f catalyst-agent/Cargo.toml ]; then
+            sed -i "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" catalyst-agent/Cargo.toml
+            echo "Updated catalyst-agent/Cargo.toml → $VERSION"
+          fi
+
+      - name: Commit, tag and push
+        if: steps.bump.outputs.bump != 'none'
+        run: |
+          VERSION="${{ steps.version.outputs.new_version }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+          git commit -m "chore(release): bump version to $VERSION [skip ci]" || true
+
+          git tag -a "v$VERSION" -m "Release v$VERSION"
+          git push origin main --follow-tags
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.bump != 'none'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.new_version }}
+          name: v${{ steps.version.outputs.new_version }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

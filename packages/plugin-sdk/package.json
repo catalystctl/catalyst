@@ -15,7 +15,7 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "zod": "^4.3.0"
+    "zod": "^4.4.0"
   },
   "peerDependencies": {
     "fastify": "^5.0.0",

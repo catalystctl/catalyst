@@ -5,14 +5,14 @@
  * by the Catalyst frontend plugin system.
  */
 
-import { ExampleAdminTab, ExampleServerTab } from './components';
+import { AdminTab, ServerTab } from './components';
 
 export const tabs = [
   {
     id: 'example-admin',
     label: 'Example Plugin',
     icon: 'Puzzle',
-    component: ExampleAdminTab,
+    component: AdminTab,
     location: 'admin',
     order: 100,
     requiredPermissions: ['admin.read'],
@@ -21,7 +21,7 @@ export const tabs = [
     id: 'example-server',
     label: 'Plugin Demo',
     icon: 'Zap',
-    component: ExampleServerTab,
+    component: ServerTab,
     location: 'server',
     order: 100,
     requiredPermissions: ['server.read'],

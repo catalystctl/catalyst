@@ -199,5 +199,5 @@ export function initAuth() {
         config: buildOAuthConfig(),
       }),
     ],
-  }) as AuthInstance;
+  }) as unknown as AuthInstance;
 }

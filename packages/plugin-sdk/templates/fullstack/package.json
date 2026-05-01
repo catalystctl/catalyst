@@ -11,11 +11,11 @@
   },
   "dependencies": {
     "@catalyst/plugin-sdk": "^0.1.0",
-    "react": "^18.0.0"
+    "react": "^19.0.0"
   },
   "devDependencies": {
     "typescript": "^6.0.0",
-    "@types/react": "^18.0.0",
-    "vitest": "^2.0.0"
+    "@types/react": "^19.0.0",
+    "vitest": "^4.0.0"
   }
 }

@@ -18,6 +18,7 @@
     "baseUrl": ".",
     "ignoreDeprecations": "6.0",
     "paths": {
+      "@prisma/client": ["./node_modules/@prisma/client"],
       "catalyst-shared": ["../catalyst-shared/types.ts"],
       "catalyst-shared/*": ["../catalyst-shared/*"]
     },
