@@ -14,7 +14,7 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use sysinfo::{Disks, Networks, System};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Semaphore};
 use tokio_tungstenite::connect_async_with_config;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::tungstenite::Message;
@@ -110,6 +110,29 @@ struct ResourceStats<'a> {
     diskIoMb: u64,
     diskUsageMb: u64,
     diskTotalMb: u64,
+    timestamp: i64,
+}
+
+#[derive(serde::Serialize)]
+#[allow(non_snake_case)]
+struct ResourceStatsEntry {
+    serverUuid: String,
+    cpuPercent: f64,
+    memoryUsageMb: u64,
+    networkRxBytes: u64,
+    networkTxBytes: u64,
+    diskIoMb: u64,
+    diskUsageMb: u64,
+    diskTotalMb: u64,
+    timestamp: i64,
+}
+
+#[derive(serde::Serialize)]
+#[allow(non_snake_case)]
+struct ResourceStatsBatch {
+    #[serde(rename = "type")]
+    ty: &'static str,
+    metrics: Vec<ResourceStatsEntry>,
     timestamp: i64,
 }
 
@@ -535,10 +558,18 @@ impl WebSocketHandler {
 
         let batch_size = 500usize;
         for chunk in buffered.chunks(batch_size) {
-            let metrics_value = serde_json::Value::Array(chunk.to_vec());
-            let payload = json!({ "type": "resource_stats_batch", "metrics": metrics_value });
+            // If the chunk is a single pre-batched message, send it directly
+            let payload_text = if chunk.len() == 1
+                && chunk[0].get("type").and_then(|t| t.as_str()) == Some("resource_stats_batch")
+            {
+                serde_json::to_string(&chunk[0]).unwrap_or_default()
+            } else {
+                let metrics_value = serde_json::Value::Array(chunk.to_vec());
+                let payload = json!({ "type": "resource_stats_batch", "metrics": metrics_value });
+                payload.to_string()
+            };
             let mut w = write.lock().await;
-            if let Err(e) = w.send(Message::Text(payload.to_string().into())).await {
+            if let Err(e) = w.send(Message::Text(payload_text.into())).await {
                 warn!("Failed to send buffered metrics batch: {}", e);
                 // leave buffer intact - will retry on next connect
                 return Ok(());
@@ -2367,6 +2398,15 @@ impl WebSocketHandler {
             let server_uuid = msg["serverUuid"]
                 .as_str()
                 .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
+
+            // Enforce max servers per node
+            let current_servers = self.runtime.list_containers().await?.len();
+            if current_servers >= self.config.server.max_connections {
+                return Err(AgentError::InvalidRequest(format!(
+                    "Node at capacity: {}/{} servers",
+                    current_servers, self.config.server.max_connections
+                )));
+            }
 
             let template = msg["template"]
                 .as_object()
@@ -5099,6 +5139,9 @@ impl WebSocketHandler {
             return Ok(());
         }
 
+        let sem = Arc::new(Semaphore::new(10));
+        let mut handles = Vec::new();
+
         for container in containers {
             if !container.status.contains("Up") || !container.managed {
                 continue;
@@ -5109,99 +5152,104 @@ impl WebSocketHandler {
                 continue;
             }
 
-            let stats = match tokio::time::timeout(
-                Duration::from_secs(5),
-                self.runtime.get_stats(&container.id),
-            )
-            .await
-            {
-                Ok(Ok(s)) => s,
-                Ok(Err(err)) => {
-                    warn!(
-                        "Failed to fetch stats for container {}: {}",
-                        container.id, err
-                    );
-                    continue;
-                }
-                Err(_) => {
-                    warn!("get_stats timed out for container {}", container.id);
-                    continue;
-                }
-            };
+            let runtime = self.runtime.clone();
+            let sem = sem.clone();
+            let handle = tokio::spawn(async move {
+                let _permit = match sem.acquire().await {
+                    Ok(p) => p,
+                    Err(_) => return None,
+                };
+                let stats = match tokio::time::timeout(
+                    Duration::from_secs(5),
+                    runtime.get_stats(&container.id),
+                )
+                .await
+                {
+                    Ok(Ok(s)) => s,
+                    Ok(Err(err)) => {
+                        warn!(
+                            "Failed to fetch stats for container {}: {}",
+                            container.id, err
+                        );
+                        return None;
+                    }
+                    Err(_) => {
+                        warn!("get_stats timed out for container {}", container.id);
+                        return None;
+                    }
+                };
 
-            let cpu_percent = parse_percent(&stats.cpu_percent).unwrap_or(0.0);
-            let memory_usage_mb = parse_memory_usage_mb(&stats.memory_usage).unwrap_or(0);
-            let network_rx_bytes = stats.network_rx_bytes;
-            let network_tx_bytes = stats.network_tx_bytes;
-            let disk_io_mb = (stats.block_read_bytes + stats.block_write_bytes) / (1024 * 1024);
+                let cpu_percent = parse_percent(&stats.cpu_percent).unwrap_or(0.0);
+                let memory_usage_mb = parse_memory_usage_mb(&stats.memory_usage).unwrap_or(0);
+                let network_rx_bytes = stats.network_rx_bytes;
+                let network_tx_bytes = stats.network_tx_bytes;
+                let disk_io_mb = (stats.block_read_bytes + stats.block_write_bytes) / (1024 * 1024);
 
-            // Run df with a strict timeout — containerd exec can hang if the
-            // filesystem is unresponsive, and we don't want one bad container to
-            // stall stats for everyone.
-            let (disk_usage_mb, disk_total_mb) = match tokio::time::timeout(
-                Duration::from_secs(3),
-                self.runtime.exec(&container.id, vec!["df", "-m", "/data"]),
-            )
-            .await
-            {
-                Ok(Ok(output)) => parse_df_output_mb(&output).unwrap_or((disk_io_mb, 0)),
-                Ok(Err(err)) => {
-                    warn!(
-                        "Failed to read filesystem usage for container {}: {}. Falling back to block IO stats.",
-                        container.id, err
-                    );
-                    (disk_io_mb, 0)
-                }
-                Err(_) => {
-                    warn!(
-                        "df exec timed out for container {}. Falling back to block IO stats.",
-                        container.id
-                    );
-                    (disk_io_mb, 0)
-                }
-            };
+                // Skip df exec in hot path; use block IO as a proxy for disk usage
+                let disk_usage_mb = disk_io_mb;
+                let disk_total_mb = 0u64;
 
-            let payload = ResourceStats {
-                ty: "resource_stats",
-                serverUuid: &server_uuid,
-                cpuPercent: cpu_percent,
-                memoryUsageMb: memory_usage_mb,
-                networkRxBytes: network_rx_bytes,
-                networkTxBytes: network_tx_bytes,
-                diskIoMb: disk_io_mb,
-                diskUsageMb: disk_usage_mb,
-                diskTotalMb: disk_total_mb,
-                timestamp: chrono::Utc::now().timestamp_millis(),
-            };
-            let payload_text = serde_json::to_string(&payload).unwrap_or_default();
+                Some(ResourceStatsEntry {
+                    serverUuid: server_uuid,
+                    cpuPercent: cpu_percent,
+                    memoryUsageMb: memory_usage_mb,
+                    networkRxBytes: network_rx_bytes,
+                    networkTxBytes: network_tx_bytes,
+                    diskIoMb: disk_io_mb,
+                    diskUsageMb: disk_usage_mb,
+                    diskTotalMb: disk_total_mb,
+                    timestamp: chrono::Utc::now().timestamp_millis(),
+                })
+            });
+            handles.push(handle);
+        }
 
-            // If we have a live write handle, send; otherwise buffer to disk immediately
-            match &writer_opt {
-                Some(ws) => {
-                    let mut w = ws.lock().await;
-                    match w.send(Message::Text(payload_text.clone().into())).await {
-                        Ok(_) => {}
-                        Err(err) => {
-                            warn!("Failed to send resource stats: {}. Buffering to disk.", err);
-                            if let Err(e) = self
-                                .storage_manager
-                                .append_buffered_metric(&payload_text)
-                                .await
-                            {
-                                warn!("Failed to buffer metric to disk: {}", e);
-                            }
+        let mut metrics: Vec<ResourceStatsEntry> = Vec::new();
+        for handle in handles {
+            if let Ok(Some(entry)) = handle.await {
+                metrics.push(entry);
+            }
+        }
+
+        if metrics.is_empty() {
+            return Ok(());
+        }
+
+        let batch = ResourceStatsBatch {
+            ty: "resource_stats_batch",
+            metrics,
+            timestamp: chrono::Utc::now().timestamp_millis(),
+        };
+        let payload_text = serde_json::to_string(&batch).unwrap_or_default();
+
+        match &writer_opt {
+            Some(ws) => {
+                let mut w = ws.lock().await;
+                match w.send(Message::Text(payload_text.clone().into())).await {
+                    Ok(_) => {}
+                    Err(err) => {
+                        warn!(
+                            "Failed to send resource stats batch: {}. Buffering to disk.",
+                            err
+                        );
+                        if let Err(e) = self
+                            .storage_manager
+                            .append_buffered_metric(&payload_text)
+                            .await
+                        {
+                            warn!("Failed to buffer metric to disk: {}", e);
                         }
                     }
                 }
-                None => {
-                    // No connection - persist metric locally for later flush
-                    if let Err(e) = self
-                        .storage_manager
-                        .append_buffered_metric(&payload_text)
-                        .await
-                    {
-                        warn!("Failed to buffer metric to disk: {}", e);
-                    }
+            }
+            None => {
+                // No connection - persist metric locally for later flush
+                if let Err(e) = self
+                    .storage_manager
+                    .append_buffered_metric(&payload_text)
+                    .await
+                {
+                    warn!("Failed to buffer metric to disk: {}", e);
                 }
             }
         }

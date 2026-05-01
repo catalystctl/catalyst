@@ -4,6 +4,8 @@ use tokio::io::AsyncWriteExt;
 use tokio::task::spawn_blocking;
 use tracing::{error, info, warn};
 
+const MAX_METRICS_BUFFER_BYTES: u64 = 100 * 1024 * 1024;
+
 use crate::{AgentError, AgentResult};
 use serde_json::Value;
 
@@ -324,6 +326,14 @@ impl StorageManager {
     pub async fn append_buffered_metric(&self, line: &str) -> AgentResult<()> {
         fs::create_dir_all(&self.data_dir).await?;
         let path = self.metrics_buffer_path();
+        // Rotate if buffer exceeds cap; drop oldest backup
+        if let Ok(meta) = fs::metadata(&path).await {
+            if meta.len() > MAX_METRICS_BUFFER_BYTES {
+                let rotated = self.data_dir.join("metrics_buffer.jsonl.1");
+                let _ = fs::remove_file(&rotated).await;
+                let _ = fs::rename(&path, &rotated).await;
+            }
+        }
         let file = fs::OpenOptions::new()
             .create(true)
             .append(true)

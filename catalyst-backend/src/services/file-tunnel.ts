@@ -45,6 +45,8 @@ interface WaitingPoller {
 const REQUEST_TIMEOUT_MS = 60_000;
 const POLL_TIMEOUT_MS = 30_000;
 const UPLOAD_TTL_MS = 5 * 60_000;
+const MAX_QUEUE_PER_NODE = 100;
+const MAX_POLLERS_PER_NODE = 10;
 
 export class FileTunnelService {
   /** Pending requests waiting for agent response, keyed by requestId */
@@ -91,6 +93,11 @@ export class FileTunnelService {
     const queueLength = this.queues.get(nodeId)?.length ?? 0;
     if (pendingCount + queueLength >= settings.fileTunnelMaxPendingPerNode) {
       throw new Error(`Too many pending requests for node ${nodeId}`);
+    }
+
+    // Enforce hard queue cap
+    if (queueLength >= MAX_QUEUE_PER_NODE) {
+      throw new Error(`File tunnel queue full for node ${nodeId}`);
     }
 
     // Check upload size limit
@@ -194,22 +201,28 @@ export class FileTunnelService {
       return Promise.resolve(batch);
     }
 
+    // Enforce poller cap — reject with empty array immediately if at limit
+    const pollerList = this.pollers.get(nodeId);
+    if (pollerList && pollerList.length >= MAX_POLLERS_PER_NODE) {
+      return Promise.resolve([]);
+    }
+
     // Wait for new requests
     return new Promise<FileTunnelRequest[]>((resolve) => {
       const timer = setTimeout(() => {
-        const pollerList = this.pollers.get(nodeId);
-        if (pollerList) {
-          const idx = pollerList.findIndex((p) => p.resolve === resolve);
-          if (idx !== -1) pollerList.splice(idx, 1);
-          if (pollerList.length === 0) this.pollers.delete(nodeId);
+        const currentPollerList = this.pollers.get(nodeId);
+        if (currentPollerList) {
+          const idx = currentPollerList.findIndex((p) => p.resolve === resolve);
+          if (idx !== -1) currentPollerList.splice(idx, 1);
+          if (currentPollerList.length === 0) this.pollers.delete(nodeId);
         }
         resolve([]);
       }, POLL_TIMEOUT_MS);
 
       const poller: WaitingPoller = { resolve, timer };
-      const pollerList = this.pollers.get(nodeId);
-      if (pollerList) {
-        pollerList.push(poller);
+      const currentPollerList = this.pollers.get(nodeId);
+      if (currentPollerList) {
+        currentPollerList.push(poller);
       } else {
         this.pollers.set(nodeId, [poller]);
       }

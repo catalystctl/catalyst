@@ -17,6 +17,8 @@ pub struct ServerConfig {
     pub api_key: String,
     pub hostname: String,
     pub data_dir: PathBuf,
+    /// Maximum number of game servers allowed on this node.
+    /// Previously named `max_connections`; now enforces server count.
     pub max_connections: usize,
 }
 

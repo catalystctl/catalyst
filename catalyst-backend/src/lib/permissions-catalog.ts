@@ -213,6 +213,10 @@ export function hasAnyPermission(request: any, permissions: string[]): boolean {
 }
 
 import { prisma } from '../db';
+import { SimpleCache } from './cache';
+
+// 30-second TTL cache for resolved user permissions
+const permissionsCache = new SimpleCache<string, string[]>(30_000);
 
 /**
  * Resolve a user's effective permissions from their roles.
@@ -221,6 +225,9 @@ import { prisma } from '../db';
 export async function resolveUserPermissions(
   userId: string,
 ): Promise<string[]> {
+  const cached = permissionsCache.get(userId);
+  if (cached) return cached;
+
   const roles = await prisma.role.findMany({
     where: { users: { some: { id: userId } } },
     select: { permissions: true },
@@ -231,5 +238,21 @@ export async function resolveUserPermissions(
       permissions.add(perm);
     }
   }
-  return [...permissions];
+  const result = [...permissions];
+  permissionsCache.set(userId, result);
+  return result;
+}
+
+/**
+ * Invalidate cached permissions for a specific user.
+ */
+export function invalidateUserPermissions(userId: string): void {
+  permissionsCache.delete(userId);
+}
+
+/**
+ * Flush the entire permissions cache.
+ */
+export function flushPermissionsCache(): void {
+  permissionsCache.clear();
 }

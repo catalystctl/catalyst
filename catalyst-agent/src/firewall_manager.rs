@@ -2,7 +2,7 @@ use crate::errors::{AgentError, AgentResult};
 use std::collections::HashSet;
 use std::io::Write;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tokio::process::Command;
 use tracing::{info, warn};
@@ -38,10 +38,13 @@ pub struct FirewallManager;
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum FirewallType {
     Ufw,
+    Ipset,
     Iptables,
     Firewalld,
     None,
 }
+
+static DETECTED_FIREWALL: OnceLock<FirewallType> = OnceLock::new();
 
 // ---------------------------------------------------------------------------
 // Rule tracking
@@ -177,33 +180,78 @@ fn untrack_server_rules(server_id: &str) -> Vec<FirewallRule> {
 
 impl FirewallManager {
     /// Detect which firewall is active on the system.
+    /// The result is cached after the first call.
     pub async fn detect_firewall() -> FirewallType {
-        if let Ok(output) = run_firewall_command("ufw", &["status"]).await {
+        if let Some(ft) = DETECTED_FIREWALL.get() {
+            return *ft;
+        }
+
+        let ft = if let Ok(output) = run_firewall_command("ufw", &["status"]).await {
             let status = String::from_utf8_lossy(&output.stdout);
             if output.status.success() && status.contains("Status: active") {
                 info!("Detected active UFW firewall");
-                return FirewallType::Ufw;
+                FirewallType::Ufw
+            } else {
+                FirewallType::None
             }
+        } else {
+            FirewallType::None
+        };
+
+        if ft != FirewallType::None {
+            let _ = DETECTED_FIREWALL.set(ft);
+            return ft;
         }
 
-        if let Ok(output) = run_firewall_command("firewall-cmd", &["--state"]).await {
+        let ft = if let Ok(output) = run_firewall_command("firewall-cmd", &["--state"]).await {
             let status = String::from_utf8_lossy(&output.stdout);
             if output.status.success() && status.contains("running") {
                 info!("Detected active firewalld");
-                return FirewallType::Firewalld;
+                FirewallType::Firewalld
+            } else {
+                FirewallType::None
             }
+        } else {
+            FirewallType::None
+        };
+
+        if ft != FirewallType::None {
+            let _ = DETECTED_FIREWALL.set(ft);
+            return ft;
         }
 
-        if run_firewall_command("iptables", &["-L", "-n"])
+        let ft = if run_firewall_command("ipset", &["list"]).await.is_ok() {
+            if run_firewall_command("iptables", &["-L", "-n"])
+                .await
+                .is_ok()
+            {
+                info!("Using ipset + iptables for firewall management");
+                FirewallType::Ipset
+            } else {
+                FirewallType::None
+            }
+        } else {
+            FirewallType::None
+        };
+
+        if ft != FirewallType::None {
+            let _ = DETECTED_FIREWALL.set(ft);
+            return ft;
+        }
+
+        let ft = if run_firewall_command("iptables", &["-L", "-n"])
             .await
             .is_ok()
         {
             info!("Using iptables for firewall management");
-            return FirewallType::Iptables;
-        }
+            FirewallType::Iptables
+        } else {
+            warn!("No firewall detected or iptables not available");
+            FirewallType::None
+        };
 
-        warn!("No firewall detected or iptables not available");
-        FirewallType::None
+        let _ = DETECTED_FIREWALL.set(ft);
+        ft
     }
 
     /// Ensure tracked rules are loaded from disk.  Call once at startup.
@@ -237,6 +285,7 @@ impl FirewallManager {
             let result = match firewall_type {
                 FirewallType::Ufw => Self::allow_port_ufw(port).await,
                 FirewallType::Firewalld => Self::allow_port_firewalld(port, proto).await,
+                FirewallType::Ipset => Self::allow_port_ipset(port, proto, container_ip).await,
                 FirewallType::Iptables => {
                     Self::allow_port_iptables(port, proto, container_ip).await
                 }
@@ -287,6 +336,9 @@ impl FirewallManager {
                     FirewallType::Firewalld => {
                         Self::remove_port_firewalld(rule.port, &rule.proto).await
                     }
+                    FirewallType::Ipset => {
+                        Self::remove_port_ipset(rule.port, &rule.proto, &rule.container_ip).await
+                    }
                     FirewallType::Iptables => {
                         Self::remove_port_iptables(rule.port, &rule.proto, &rule.container_ip).await
                     }
@@ -328,6 +380,9 @@ impl FirewallManager {
                     FirewallType::Firewalld => {
                         Self::remove_port_firewalld(rule.port, &rule.proto).await
                     }
+                    FirewallType::Ipset => {
+                        Self::remove_port_ipset(rule.port, &rule.proto, &rule.container_ip).await
+                    }
                     FirewallType::Iptables => {
                         Self::remove_port_iptables(rule.port, &rule.proto, &rule.container_ip).await
                     }
@@ -349,7 +404,9 @@ impl FirewallManager {
                 // No FORWARD rules needed for port-based allow rules.
                 Ok(())
             }
-            FirewallType::Iptables => Self::allow_container_ip_iptables(container_ip).await,
+            FirewallType::Ipset | FirewallType::Iptables => {
+                Self::allow_container_ip_iptables(container_ip).await
+            }
         }
     }
 
@@ -360,7 +417,9 @@ impl FirewallManager {
 
         match firewall_type {
             FirewallType::Ufw | FirewallType::Firewalld | FirewallType::None => Ok(()),
-            FirewallType::Iptables => Self::remove_container_ip_iptables(container_ip).await,
+            FirewallType::Ipset | FirewallType::Iptables => {
+                Self::remove_container_ip_iptables(container_ip).await
+            }
         }
     }
 
@@ -602,62 +661,47 @@ impl FirewallManager {
         Ok(())
     }
 
-    /// Remove iptables rules by comment match.  Safer than `-D` with exact
-    /// args because we might not know the exact rule position or parameters.
+    /// Remove iptables rules by comment match.  Parses all rule numbers in
+    /// one pass and deletes from highest to lowest to avoid O(n²) behaviour.
     async fn remove_port_iptables(
         port: u16,
         protocol: &str,
-        container_ip: &str,
+        _container_ip: &str,
     ) -> AgentResult<()> {
         info!(
             "Removing iptables rules for port {}/{} container {}",
-            port, protocol, container_ip
+            port, protocol, _container_ip
         );
         let port_str = port.to_string();
 
-        // Remove all rules in the chain that match our comment + port + protocol.
-        // Loop until no more matches remain (handles duplicate insertions).
         for chain in &["INPUT", "FORWARD"] {
-            loop {
-                // List rule numbers with line numbers to find our rules.
-                let output =
-                    run_firewall_command("iptables", &["-L", chain, "-n", "--line-numbers"])
-                        .await?;
+            let output =
+                run_firewall_command("iptables", &["-L", chain, "-n", "--line-numbers"]).await?;
 
-                if !output.status.success() {
-                    break;
-                }
+            if !output.status.success() {
+                continue;
+            }
 
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                let mut found_num: Option<usize> = None;
-
-                for line in stdout.lines() {
-                    if line.contains("catalyst-game-server")
-                        && line.contains(&port_str)
-                        && line.contains(protocol)
-                    {
-                        // First token is the line number.
-                        if let Some(num_str) = line.split_whitespace().next() {
-                            if let Ok(num) = num_str.parse::<usize>() {
-                                found_num = Some(num);
-                                break;
-                            }
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let mut numbers: Vec<usize> = Vec::new();
+            for line in stdout.lines() {
+                if line.contains("catalyst-game-server")
+                    && line.contains(&port_str)
+                    && line.contains(protocol)
+                {
+                    if let Some(num_str) = line.split_whitespace().next() {
+                        if let Ok(num) = num_str.parse::<usize>() {
+                            numbers.push(num);
                         }
                     }
                 }
+            }
 
-                match found_num {
-                    Some(num) => {
-                        let output =
-                            run_firewall_command("iptables", &["-D", chain, &num.to_string()])
-                                .await?;
-                        if !output.status.success() {
-                            break; // no more rules to remove
-                        }
-                        // continue loop — there might be more duplicates
-                    }
-                    None => break, // no matching rules left
-                }
+            // Delete from highest number to lowest to avoid index shifting
+            numbers.sort_unstable_by(|a, b| b.cmp(a));
+            numbers.dedup();
+            for num in numbers {
+                let _ = run_firewall_command("iptables", &["-D", chain, &num.to_string()]).await;
             }
         }
 
@@ -789,6 +833,104 @@ impl FirewallManager {
         } else {
             Ok(())
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // ipset implementation
+    // -----------------------------------------------------------------------
+
+    async fn allow_port_ipset(port: u16, _protocol: &str, _container_ip: &str) -> AgentResult<()> {
+        let _guard = IPTABLES_MUTEX.lock().await;
+
+        // Ensure the ipset exists
+        let create = run_firewall_command(
+            "ipset",
+            &[
+                "create",
+                "catalyst_ports",
+                "bitmap:port",
+                "range",
+                "1-65535",
+                "-exist",
+            ],
+        )
+        .await?;
+        if !create.status.success() {
+            let stderr = String::from_utf8_lossy(&create.stderr);
+            return Err(AgentError::FirewallError(format!(
+                "ipset create failed: {}",
+                stderr
+            )));
+        }
+
+        // Ensure iptables references the set (INPUT and FORWARD)
+        for chain in &["INPUT", "FORWARD"] {
+            let check = run_firewall_command(
+                "iptables",
+                &[
+                    "-C",
+                    chain,
+                    "-m",
+                    "set",
+                    "--match-set",
+                    "catalyst_ports",
+                    "dst",
+                    "-j",
+                    "ACCEPT",
+                ],
+            )
+            .await;
+            if check.is_err() || !check.unwrap().status.success() {
+                let _ = run_firewall_command(
+                    "iptables",
+                    &[
+                        "-I",
+                        chain,
+                        "-m",
+                        "set",
+                        "--match-set",
+                        "catalyst_ports",
+                        "dst",
+                        "-j",
+                        "ACCEPT",
+                    ],
+                )
+                .await;
+            }
+        }
+
+        let output = run_firewall_command(
+            "ipset",
+            &["add", "catalyst_ports", &port.to_string(), "-exist"],
+        )
+        .await?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(AgentError::FirewallError(format!(
+                "ipset add failed: {}",
+                stderr
+            )));
+        }
+
+        info!("✓ ipset configured to allow port {}", port);
+        Ok(())
+    }
+
+    async fn remove_port_ipset(port: u16, _protocol: &str, _container_ip: &str) -> AgentResult<()> {
+        let _guard = IPTABLES_MUTEX.lock().await;
+        let output = run_firewall_command(
+            "ipset",
+            &["del", "catalyst_ports", &port.to_string(), "-exist"],
+        )
+        .await?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(AgentError::FirewallError(format!(
+                "ipset del failed: {}",
+                stderr
+            )));
+        }
+        Ok(())
     }
 
     // -----------------------------------------------------------------------

@@ -18,6 +18,9 @@ import type { PrismaClient } from "@prisma/client";
 import type { Permission } from "../shared-types";
 import { SimpleCache } from "./cache";
 
+// 30-second TTL cache for isAdminUser results
+const adminUserCache = new SimpleCache<string, boolean>(30_000);
+
 // In-memory permission caches to avoid N+1 queries.
 // TTL of 30s balances freshness with query reduction.
 const nodeAccessCache = new SimpleCache<string, boolean>(30_000);
@@ -270,6 +273,10 @@ export async function isAdminUser(
   userId: string,
   requireWrite: boolean = false
 ): Promise<boolean> {
+  const cacheKey = `${userId}:${requireWrite}`;
+  const cached = adminUserCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
   const userRoles = await prisma.role.findMany({
     where: {
       users: {
@@ -283,15 +290,25 @@ export async function isAdminUser(
     const permissions = role.permissions;
 
     // Wildcard grants admin access
-    if (permissions.includes("*")) return true;
+    if (permissions.includes("*")) {
+      adminUserCache.set(cacheKey, true);
+      return true;
+    }
 
     // admin.write grants all admin access
-    if (permissions.includes("admin.write")) return true;
+    if (permissions.includes("admin.write")) {
+      adminUserCache.set(cacheKey, true);
+      return true;
+    }
 
     // admin.read grants read-only admin access
-    if (!requireWrite && permissions.includes("admin.read")) return true;
+    if (!requireWrite && permissions.includes("admin.read")) {
+      adminUserCache.set(cacheKey, true);
+      return true;
+    }
   }
 
+  adminUserCache.set(cacheKey, false);
   return false;
 }
 

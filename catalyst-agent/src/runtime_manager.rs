@@ -31,7 +31,7 @@ use containerd_client::services::v1::{
 use containerd_client::with_namespace;
 use prost_types::Any;
 use tokio::process::Command;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tokio::task::spawn_blocking;
 use tonic::Request;
 use tracing::{debug, error, info, warn};
@@ -46,10 +46,10 @@ use crate::firewall_manager::FirewallManager;
 
 const RUNTIME_NAME: &str = "io.containerd.runc.v2";
 const SPEC_TYPE_URL: &str = "types.containerd.io/opencontainers/runtime-spec/1/Spec";
-const CONSOLE_BASE_DIR: &str = "/tmp/catalyst-console";
+const CONSOLE_BASE_DIR: &str = "/var/log/catalyst/console";
 const PORT_FWD_STATE_DIR: &str = "/var/lib/cni/results";
-const MAX_LOG_SIZE: u64 = 50 * 1024 * 1024; // 50MB per file
-const LOG_BACKUP_COUNT: usize = 3;
+const MAX_LOG_SIZE: u64 = 10 * 1024 * 1024; // 10MB per file
+const LOG_BACKUP_COUNT: usize = 2;
 
 /// Tracks CPU usage samples per container to compute real percentage over time
 pub struct CpuTracker {
@@ -187,7 +187,7 @@ pub async fn rotate_logs(container_id: &str) {
         let log_path = io_dir.join(log_name);
         if let Ok(metadata) = tokio::fs::metadata(&log_path).await {
             if metadata.len() > MAX_LOG_SIZE {
-                // Rotate: stdout -> stdout.1 -> stdout.2 -> stdout.3 (drop oldest)
+                // Rotate: stdout -> stdout.1 -> stdout.2 (drop oldest)
                 for i in (1..=LOG_BACKUP_COUNT).rev() {
                     let src = if i == 1 {
                         log_path.clone()
@@ -197,6 +197,13 @@ pub async fn rotate_logs(container_id: &str) {
                     let dst = io_dir.join(format!("{}.{}", log_name, i));
                     let _ = tokio::fs::rename(&src, &dst).await;
                 }
+                // Compress the oldest rotated log
+                let oldest = io_dir.join(format!("{}.{}", log_name, LOG_BACKUP_COUNT));
+                let _ = tokio::process::Command::new("gzip")
+                    .arg("-f")
+                    .arg(&oldest)
+                    .status()
+                    .await;
                 // Create new empty log file
                 let _ = tokio::fs::File::create(&log_path).await;
                 info!(
@@ -341,7 +348,7 @@ struct ContainerIo {
     stdin_writer: Option<File>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ContainerInfo {
     pub id: String,
     pub names: String,
@@ -443,6 +450,8 @@ pub struct ContainerdRuntime {
     container_io: Arc<Mutex<HashMap<String, ContainerIo>>>,
     dns_servers: Vec<String>,
     cpu_tracker: Arc<CpuTracker>,
+    cgroup_paths: Arc<RwLock<HashMap<String, String>>>,
+    container_list_cache: Arc<RwLock<(Vec<ContainerInfo>, Instant)>>,
 }
 
 impl ContainerdRuntime {
@@ -470,6 +479,11 @@ impl ContainerdRuntime {
             container_io: Arc::new(Mutex::new(HashMap::new())),
             dns_servers,
             cpu_tracker: Arc::new(CpuTracker::new()),
+            cgroup_paths: Arc::new(RwLock::new(HashMap::new())),
+            container_list_cache: Arc::new(RwLock::new((
+                Vec::new(),
+                Instant::now() - Duration::from_secs(10),
+            ))),
         })
     }
 
@@ -562,6 +576,13 @@ impl ContainerdRuntime {
         };
         let req = with_namespace!(req, &self.namespace);
         client.create(req).await.map_err(grpc_err)?;
+
+        // Cache cgroup path for fast stats lookups
+        let cached_cg = format!("/sys/fs/cgroup/{}/{}", self.namespace, config.container_id);
+        {
+            let mut cg_map = self.cgroup_paths.write().await;
+            cg_map.insert(config.container_id.to_string(), cached_cg);
+        }
 
         // Get rootfs mounts and create task
         let mounts = self.get_snapshot_mounts(&snap_key).await?;
@@ -1148,6 +1169,10 @@ impl ContainerdRuntime {
         {
             self.container_io.lock().await.remove(container_id);
         }
+        {
+            let mut cg_map = self.cgroup_paths.write().await;
+            cg_map.remove(container_id);
+        }
         let _ = fs::remove_dir_all(PathBuf::from(CONSOLE_BASE_DIR).join(container_id));
         Ok(())
     }
@@ -1287,24 +1312,81 @@ impl ContainerdRuntime {
     where
         F: FnMut(String) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>,
     {
+        use tokio::io::{AsyncBufReadExt, AsyncSeekExt, SeekFrom};
+
         let base = PathBuf::from(CONSOLE_BASE_DIR).join(container_id);
-        let mut positions = [0u64; 2];
-        let paths = [base.join("stdout"), base.join("stderr")];
+        let stdout_path = base.join("stdout");
+        let stderr_path = base.join("stderr");
+
+        let mut stdout_file = tokio::fs::File::open(&stdout_path).await.ok();
+        let mut stderr_file = tokio::fs::File::open(&stderr_path).await.ok();
+        let mut stdout_pos = 0u64;
+        let mut stderr_pos = 0u64;
+        let mut stdout_buf = stdout_file.take().map(tokio::io::BufReader::new);
+        let mut stderr_buf = stderr_file.take().map(tokio::io::BufReader::new);
+        let mut line = String::new();
+
         loop {
             let running = self
                 .is_container_running(container_id)
                 .await
                 .unwrap_or(false);
-            for i in 0..2 {
-                if let Ok(content) = tokio::fs::read_to_string(&paths[i]).await {
-                    if (positions[i] as usize) < content.len() {
-                        for line in content[positions[i] as usize..].lines() {
-                            callback(line.to_string()).await;
+
+            if let Some(ref mut buf) = stdout_buf {
+                line.clear();
+                match tokio::time::timeout(Duration::from_millis(100), buf.read_line(&mut line))
+                    .await
+                {
+                    Ok(Ok(0)) => {
+                        // EOF — file may have been rotated; reopen and seek
+                        drop(stdout_buf);
+                        stdout_file = tokio::fs::File::open(&stdout_path).await.ok();
+                        if let Some(ref mut f) = stdout_file {
+                            if let Ok(meta) = f.metadata().await {
+                                if meta.len() < stdout_pos {
+                                    stdout_pos = 0;
+                                }
+                                let _ = f.seek(SeekFrom::Start(stdout_pos)).await;
+                            }
                         }
-                        positions[i] = content.len() as u64;
+                        stdout_buf = stdout_file.take().map(tokio::io::BufReader::new);
                     }
+                    Ok(Ok(_)) => {
+                        stdout_pos += line.len() as u64;
+                        callback(line.clone()).await;
+                    }
+                    Ok(Err(_)) => {}
+                    Err(_) => {}
                 }
             }
+
+            if let Some(ref mut buf) = stderr_buf {
+                line.clear();
+                match tokio::time::timeout(Duration::from_millis(100), buf.read_line(&mut line))
+                    .await
+                {
+                    Ok(Ok(0)) => {
+                        drop(stderr_buf);
+                        stderr_file = tokio::fs::File::open(&stderr_path).await.ok();
+                        if let Some(ref mut f) = stderr_file {
+                            if let Ok(meta) = f.metadata().await {
+                                if meta.len() < stderr_pos {
+                                    stderr_pos = 0;
+                                }
+                                let _ = f.seek(SeekFrom::Start(stderr_pos)).await;
+                            }
+                        }
+                        stderr_buf = stderr_file.take().map(tokio::io::BufReader::new);
+                    }
+                    Ok(Ok(_)) => {
+                        stderr_pos += line.len() as u64;
+                        callback(line.clone()).await;
+                    }
+                    Ok(Err(_)) => {}
+                    Err(_) => {}
+                }
+            }
+
             if !running {
                 break;
             }
@@ -1336,6 +1418,14 @@ impl ContainerdRuntime {
     // -- Info & status --
 
     pub async fn list_containers(&self) -> AgentResult<Vec<ContainerInfo>> {
+        // Return cached result if still fresh (2 seconds)
+        {
+            let cache = self.container_list_cache.read().await;
+            if cache.1.elapsed() < Duration::from_secs(2) {
+                return Ok(cache.0.clone());
+            }
+        }
+
         let mut client = ContainersClient::new(self.channel.clone());
         let req = ListContainersRequest {
             ..Default::default()
@@ -1360,6 +1450,11 @@ impl ContainerdRuntime {
                 image: c.image.clone(),
                 command: String::new(),
             });
+        }
+
+        {
+            let mut cache = self.container_list_cache.write().await;
+            *cache = (result.clone(), Instant::now());
         }
         Ok(result)
     }
@@ -1469,9 +1564,22 @@ impl ContainerdRuntime {
     }
 
     async fn get_stats_inner(&self, container_id: &str) -> AgentResult<ContainerStats> {
-        let cg = find_container_cgroup(container_id)
-            .await
-            .unwrap_or_default();
+        let cg = {
+            let cache = self.cgroup_paths.read().await;
+            cache.get(container_id).cloned()
+        };
+        let cg = match cg {
+            Some(path) => path,
+            None => {
+                if let Some(path) = find_container_cgroup(container_id).await {
+                    let mut cache = self.cgroup_paths.write().await;
+                    cache.insert(container_id.to_string(), path.clone());
+                    path
+                } else {
+                    String::new()
+                }
+            }
+        };
         let cpu = if !cg.is_empty() {
             self.cpu_tracker.get_percent(container_id, &cg).await
         } else {
@@ -2106,6 +2214,7 @@ impl ContainerdRuntime {
         };
 
         let mem_limit = (config.memory_mb as i64) * 1024 * 1024;
+        let mem_high = (mem_limit as f64 * 0.9) as i64;
         // Swap: memory + swap (0 means no swap limit). OCI spec uses
         // memory.swap as the total (memory + swap), not swap alone.
         let mem_swap = if config.swap_mb > 0 {
@@ -2114,6 +2223,7 @@ impl ContainerdRuntime {
             None
         };
         let cpu_quota = (config.cpu_cores as i64) * 100_000;
+        let cpu_weight = config.cpu_cores * 100;
         let cgroup_path = format!("/{}/{}", self.namespace, config.container_id);
         // Runtime containers run as non-root (1000:1000) and need minimal capabilities.
         let caps = ["CAP_NET_BIND_SERVICE"];
@@ -2180,8 +2290,9 @@ impl ContainerdRuntime {
                 "noNewPrivileges":true,"rlimits":[{"type":"RLIMIT_NOFILE","hard":65536u64,"soft":65536u64}]},
             "root":{"path":"rootfs","readonly":false},"hostname":config.container_id,"mounts":mounts,
             "linux":{"cgroupsPath":cgroup_path,"resources":{"memory":{"limit":mem_limit,
-                "swap":mem_swap},"cpu":{"quota":cpu_quota,"period":100000u64},
+                "high":mem_high,"swap":mem_swap},"cpu":{"quota":cpu_quota,"period":100000u64,"weight":cpu_weight},
                 "blockIO":{"weight":config.io_weight},
+                "pids":{"limit":512},
                 "devices":devices},
                 "namespaces":ns,"maskedPaths":masked_paths(),"readonlyPaths":readonly_paths(),
                 "seccomp": default_seccomp_profile()}

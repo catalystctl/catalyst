@@ -44,7 +44,8 @@ export class PluginLoader {
     this.fastify = fastify;
     this.registry = new PluginRegistry();
     this.eventEmitter = new EventEmitter();
-    this.hotReloadEnabled = options.hotReload ?? true;
+    this.hotReloadEnabled = process.env.NODE_ENV === 'production' ? false : (options.hotReload ?? true);
+    this.eventEmitter.setMaxListeners(100);
   }
 
   /**
@@ -416,8 +417,12 @@ export class PluginLoader {
         };
         route.handler = createGatedHandler(gateConfig, coreHandler);
 
-        // Register route with Fastify
-        this.fastify.route(route);
+        // Register route with Fastify, prefixing with /api/plugins/{name}
+        const prefixedRoute = {
+          ...route,
+          url: `/api/plugins/${manifest.name}${route.url}`,
+        };
+        this.fastify.route(prefixedRoute);
       }
 
       // Register plugin in registry

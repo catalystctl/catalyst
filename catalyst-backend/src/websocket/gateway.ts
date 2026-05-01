@@ -18,6 +18,26 @@ import { ServerStateMachine } from "../services/state-machine";
 import { normalizeHostIp } from "../utils/ipam";
 import { captureSystemError } from "../services/error-logger";
 
+/**
+ * Simple capped Map that evicts the oldest entries when max size is reached.
+ * Used as a lightweight LRU when lru-cache is not available.
+ */
+class CappedMap<K, V> extends Map<K, V> {
+  constructor(private maxSize: number) {
+    super();
+  }
+
+  set(key: K, value: V): this {
+    if (this.size >= this.maxSize && !this.has(key)) {
+      const first = this.keys().next().value;
+      if (first !== undefined) {
+        this.delete(first);
+      }
+    }
+    return super.set(key, value);
+  }
+}
+
 const DEFAULT_CONSOLE_OUTPUT_BYTE_LIMIT = 2 * 1024 * 1024; // 2MB/s per server
 const MIN_CONSOLE_OUTPUT_BYTE_LIMIT = 256 * 1024;
 const MAX_CONSOLE_OUTPUT_BYTE_LIMIT = 10 * 1024 * 1024;
@@ -113,8 +133,8 @@ export class WebSocketGateway {
 
   // Cache server access lists to avoid DB query on every routeToClients call.
   // Refreshed every 30 seconds per server.
-  private serverAccessCache = new Map<string, { allowedUsers: Set<string>; expiresAt: number }>();
-  private latestResourceStats = new Map<string, Record<string, unknown>>();
+  private serverAccessCache = new CappedMap<string, { allowedUsers: Set<string>; expiresAt: number }>(5000);
+  private latestResourceStats = new CappedMap<string, Record<string, unknown>>(5000);
   private static readonly SERVER_ACCESS_TTL_MS = 30_000;
   private serverConsoleBytes = new Map<string, { count: number; resetAt: number }>();
   private consoleResumeTimestamps = new Map<string, number>();
@@ -123,8 +143,8 @@ export class WebSocketGateway {
   private readonly consoleLimitRefreshIntervalMs = 5000;
   private consoleInputLimit = { max: 10, windowMs: 1000 };
   private agentMessageLimit = { max: 10000, windowMs: 1000 };
-  private agentMetricsLimit = { max: 10000, windowMs: 1000 };
-  private serverMetricsLimit = { max: 60, windowMs: 1000 };
+  private agentMetricsLimit = { max: 1000, windowMs: 1000 };
+  private serverMetricsLimit = { max: 1, windowMs: 1000 };
   private readonly agentConsoleBytesLimit = { maxBytes: resolveConsoleOutputByteLimit() };
   private readonly pendingAgentRequestLimit = 2000;
   private readonly autoRestartingServers = new Set<string>();
@@ -192,15 +212,19 @@ export class WebSocketGateway {
     { handler: (data: any, clientId?: string, userId?: string) => Promise<void> | void; pluginName: string }
   >();
 
-  // Connection limits
-  private readonly MAX_AGENT_CONNECTIONS = 1000;  // Max agent connections
-  private readonly MAX_CLIENT_CONNECTIONS = 5000; // Max client connections
-  private readonly MAX_CONNECTIONS_PER_USER = 50; // Max connections per user
+  // Connection limits (environment-driven with safe defaults)
+  private readonly MAX_AGENT_CONNECTIONS = Number(process.env.MAX_AGENT_CONNECTIONS || 1000);
+  private readonly MAX_CLIENT_CONNECTIONS = Number(process.env.MAX_CLIENT_CONNECTIONS || 10000);
+  private readonly MAX_CONNECTIONS_PER_USER = Number(process.env.MAX_CONNECTIONS_PER_USER || 10);
+
+  // SSE hard caps
+  private readonly MAX_SSE_CONSOLE_PER_SERVER = 50;
+  private readonly MAX_SSE_EVENTS_PER_SERVER = 100;
 
   constructor(private prisma: PrismaClient, logger: pino.Logger) {
     this.logger = logger.child({ component: "WebSocketGateway" });
     this.startHeartbeatCheck();
-    this.startSubscriberSweep();
+    this.startMaintenanceSweep();
     this.refreshConsoleLimits().catch((err) =>
       this.logger.warn({ err }, "Failed to load console rate limits")
     );
@@ -2352,8 +2376,11 @@ export class WebSocketGateway {
     if (!this.sseSubscribers.has(serverId)) {
       this.sseSubscribers.set(serverId, new Map());
     }
-    const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const sseSubs = this.sseSubscribers.get(serverId);
+    if (sseSubs && sseSubs.size >= this.MAX_SSE_CONSOLE_PER_SERVER) {
+      throw new Error(`SSE console subscriber cap reached for server ${serverId}`);
+    }
+    const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     if (sseSubs) {
       sseSubs.set(subscriberId, { push, lastActivity: Date.now() });
     }
@@ -2406,8 +2433,11 @@ export class WebSocketGateway {
     if (!this.sseEventSubscribers.has(serverId)) {
       this.sseEventSubscribers.set(serverId, new Map());
     }
-    const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const sseEventSubs = this.sseEventSubscribers.get(serverId);
+    if (sseEventSubs && sseEventSubs.size >= this.MAX_SSE_EVENTS_PER_SERVER) {
+      throw new Error(`SSE event subscriber cap reached for server ${serverId}`);
+    }
+    const subscriberId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     if (sseEventSubs) {
       sseEventSubs.set(subscriberId, { eventTypes, push, lastActivity: Date.now() });
     }
@@ -2581,21 +2611,45 @@ export class WebSocketGateway {
     }, 10000); // Check every 10 seconds
   }
 
-  private startSubscriberSweep() {
+  private sweepCounters() {
+    const now = Date.now();
+    for (const [key, val] of this.consoleOutputCounters) {
+      if (now >= val.resetAt) this.consoleOutputCounters.delete(key);
+    }
+    for (const [key, val] of this.clientCommandCounters) {
+      if (now >= val.resetAt) this.clientCommandCounters.delete(key);
+    }
+    for (const [key, val] of this.agentMessageCounters) {
+      if (now >= val.resetAt) this.agentMessageCounters.delete(key);
+    }
+    for (const [key, val] of this.agentMetricsCounters) {
+      if (now >= val.resetAt) this.agentMetricsCounters.delete(key);
+    }
+    for (const [key, val] of this.serverMetricsCounters) {
+      if (now >= val.resetAt) this.serverMetricsCounters.delete(key);
+    }
+    for (const [key, val] of this.consoleResumeTimestamps) {
+      // Resume timestamps are single-use; expire after 60 seconds
+      if (now - val > 60_000) this.consoleResumeTimestamps.delete(key);
+    }
+  }
+
+  private startMaintenanceSweep() {
     this.subscriberSweepInterval = setInterval(() => {
       this.sweepSseSubscribers();
       this.sweepSseEventSubscribers();
       this.sweepGlobalSubscribers();
       this.sweepAdminSubscribers();
+      this.sweepCounters();
     }, 60000);
   }
 
   private sweepSseSubscribers() {
     const now = Date.now();
     // Console SSE connections are long-lived by design (agents may be offline for
-    // extended periods while browsers stay connected). Use a 30-minute sweep to
+    // extended periods while browsers stay connected). Use a 5-minute sweep to
     // avoid deleting active subscribers during agent reconnections.
-    const SWEEP_MS = 1_800_000;
+    const SWEEP_MS = 300_000;
     for (const [serverId, subs] of this.sseSubscribers) {
       for (const [subId, sub] of subs) {
         if (now - sub.lastActivity > SWEEP_MS) {

@@ -222,6 +222,7 @@ model ServerAccessInvite {
 
   @@index([serverId, email])
   @@index([expiresAt])
+  @@index([serverId])
 }
 
 model NodeAssignment {
@@ -409,6 +410,8 @@ model DeploymentToken {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+
+  @@index([nodeId])
 }
 
 // ============================================================================
@@ -533,6 +536,10 @@ model Server {
 
   @@index([status])
   @@index([nodeId])
+  @@index([ownerId])
+  @@index([locationId])
+  @@index([templateId])
+  @@index([status, nodeId])
 }
 
 // ============================================================================
@@ -645,6 +652,7 @@ model ServerLog {
   timestamp DateTime @default(now())
 
   @@index([serverId, timestamp])
+  @@index([timestamp])
 }
 
 // ============================================================================
@@ -729,6 +737,7 @@ model ServerStat {
   server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
 
   @@index([serverId, createdAt(sort: Desc)])
+  @@index([createdAt])
 }
 
 // ============================================================================
@@ -749,6 +758,7 @@ model ServerMetrics {
 
   @@unique([serverId, timestamp])
   @@index([serverId, timestamp])
+  @@index([timestamp])
 }
 
 model NodeMetrics {
@@ -766,6 +776,7 @@ model NodeMetrics {
   timestamp      DateTime @default(now())
 
   @@index([nodeId, timestamp])
+  @@index([timestamp])
 }
 
 model Alert {

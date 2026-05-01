@@ -59,6 +59,8 @@ import { startAuditRetention } from "./services/audit-retention";
 import { startStatRetention } from "./services/stat-retention";
 import { startBackupRetention } from "./services/backup-retention";
 import { startLogRetention } from "./services/log-retention";
+import { startMetricsRetention } from "./services/metrics-retention";
+import { startAuthRetention } from "./services/auth-retention";
 import { auth } from "./auth";
 import { fromNodeHeaders } from "better-auth/node";
 import { normalizeHostIp } from "./utils/ipam";
@@ -147,6 +149,8 @@ let auditRetentionInterval: ReturnType<typeof setInterval> | null = null;
 let statRetentionInterval: ReturnType<typeof setInterval> | null = null;
 let backupRetentionInterval: ReturnType<typeof setInterval> | null = null;
 let logRetentionInterval: ReturnType<typeof setInterval> | null = null;
+let metricsRetentionInterval: ReturnType<typeof setInterval> | null = null;
+let authRetentionInterval: ReturnType<typeof setInterval> | null = null;
 
 // Set task executor for the scheduler
 taskScheduler.setTaskExecutor({
@@ -1297,17 +1301,37 @@ async function bootstrap() {
 		await alertService.start();
 		logger.info("Alert monitoring service started");
 
-		auditRetentionInterval = startAuditRetention(prisma, logger);
-		logger.info("Audit retention job scheduled");
+		const retentionJitter = () => Math.floor(Math.random() * 60_000);
 
-		statRetentionInterval = startStatRetention(prisma, logger);
-		logger.info("Stat retention job scheduled");
+		setTimeout(() => {
+			auditRetentionInterval = startAuditRetention(prisma, logger);
+			logger.info("Audit retention job scheduled");
+		}, retentionJitter());
 
-		backupRetentionInterval = startBackupRetention(prisma, logger);
-		logger.info("Backup retention job scheduled");
+		setTimeout(() => {
+			statRetentionInterval = startStatRetention(prisma, logger);
+			logger.info("Stat retention job scheduled");
+		}, retentionJitter());
 
-		logRetentionInterval = startLogRetention(prisma, logger);
-		logger.info("Log retention job scheduled");
+		setTimeout(() => {
+			backupRetentionInterval = startBackupRetention(prisma, logger);
+			logger.info("Backup retention job scheduled");
+		}, retentionJitter());
+
+		setTimeout(() => {
+			logRetentionInterval = startLogRetention(prisma, logger);
+			logger.info("Log retention job scheduled");
+		}, retentionJitter());
+
+		setTimeout(() => {
+			metricsRetentionInterval = startMetricsRetention(prisma, logger);
+			logger.info("Metrics retention job scheduled");
+		}, retentionJitter());
+
+		setTimeout(() => {
+			authRetentionInterval = startAuthRetention(prisma, logger);
+			logger.info("Auth retention job scheduled");
+		}, retentionJitter());
 	} catch (err) {
 		logger.error(err, "Failed to start server");
 		captureSystemError({
@@ -1389,6 +1413,8 @@ async function shutdown(signal: string) {
 	if (statRetentionInterval) clearInterval(statRetentionInterval);
 	if (backupRetentionInterval) clearInterval(backupRetentionInterval);
 	if (logRetentionInterval) clearInterval(logRetentionInterval);
+	if (metricsRetentionInterval) clearInterval(metricsRetentionInterval);
+	if (authRetentionInterval) clearInterval(authRetentionInterval);
 	await prisma.$disconnect();
 	process.exit(0);
 }
@@ -1396,7 +1422,9 @@ async function shutdown(signal: string) {
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
-bootstrap().catch((err) => {
+import { bootstrapCluster } from './cluster';
+
+const run = () => bootstrap().catch((err) => {
 	logger.error(err, "Bootstrap error");
 	captureSystemError({
 		level: 'critical',
@@ -1406,3 +1434,9 @@ bootstrap().catch((err) => {
 	}).catch(() => {});
 	process.exit(1);
 });
+
+if (Number(process.env.WORKERS || 0) > 0) {
+	bootstrapCluster(run);
+} else {
+	run();
+}

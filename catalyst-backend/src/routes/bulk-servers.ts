@@ -126,6 +126,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       });
 
       const serverMap = new Map(servers.map((s) => [s.id, s]));
+      const auditLogs: Array<{ userId: string; action: string; resource: string; resourceId: string; details: any }> = [];
 
       for (const serverId of serverIds) {
         const server = serverMap.get(serverId);
@@ -182,20 +183,22 @@ export async function bulkServerRoutes(app: FastifyInstance) {
             if (scheduler) scheduler.unscheduleTask(task.id);
           }
 
-          await prisma.auditLog.create({
-            data: {
-              userId,
-              action: 'server.bulk_suspend',
-              resource: 'server',
-              resourceId: serverId,
-              details: { reason: reason?.trim() || undefined },
-            },
+          auditLogs.push({
+            userId,
+            action: 'server.bulk_suspend',
+            resource: 'server',
+            resourceId: serverId,
+            details: { reason: reason?.trim() || undefined },
           });
 
           result.success.push(serverId);
         } catch (err: any) {
           result.failed.push({ id: serverId, error: err.message || 'Unknown error' });
         }
+      }
+
+      if (auditLogs.length > 0) {
+        await prisma.auditLog.createMany({ data: auditLogs });
       }
 
       // Fire webhook
@@ -271,6 +274,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         select: { id: true, name: true, suspendedAt: true, ownerId: true },
       });
       const serverMap = new Map(servers.map((s) => [s.id, s]));
+      const auditLogs: Array<{ userId: string; action: string; resource: string; resourceId: string; details: any }> = [];
 
       for (const serverId of serverIds) {
         const server = serverMap.get(serverId);
@@ -315,20 +319,22 @@ export async function bulkServerRoutes(app: FastifyInstance) {
             }
           }
 
-          await prisma.auditLog.create({
-            data: {
-              userId,
-              action: 'server.bulk_unsuspend',
-              resource: 'server',
-              resourceId: serverId,
-              details: {},
-            },
+          auditLogs.push({
+            userId,
+            action: 'server.bulk_unsuspend',
+            resource: 'server',
+            resourceId: serverId,
+            details: {},
           });
 
           result.success.push(serverId);
         } catch (err: any) {
           result.failed.push({ id: serverId, error: err.message || 'Unknown error' });
         }
+      }
+
+      if (auditLogs.length > 0) {
+        await prisma.auditLog.createMany({ data: auditLogs });
       }
 
       // Broadcast server_unsuspended events for each successfully unsuspended server
@@ -403,6 +409,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         select: { id: true, name: true, status: true, nodeId: true, uuid: true, suspendedAt: true, ownerId: true, node: { select: { isOnline: true } } },
       });
       const serverMap = new Map(servers.map((s) => [s.id, s]));
+      const auditLogs: Array<{ userId: string; action: string; resource: string; resourceId: string; details: any }> = [];
 
       for (const serverId of serverIds) {
         const server = serverMap.get(serverId);
@@ -447,20 +454,22 @@ export async function bulkServerRoutes(app: FastifyInstance) {
             }
           }
 
-          await prisma.auditLog.create({
-            data: {
-              userId,
-              action: 'server.bulk_delete',
-              resource: 'server',
-              resourceId: serverId,
-              details: { serverName: server.name },
-            },
+          auditLogs.push({
+            userId,
+            action: 'server.bulk_delete',
+            resource: 'server',
+            resourceId: serverId,
+            details: { serverName: server.name },
           });
 
           result.success.push(serverId);
         } catch (err: any) {
           result.failed.push({ id: serverId, error: err.message || 'Unknown error' });
         }
+      }
+
+      if (auditLogs.length > 0) {
+        await prisma.auditLog.createMany({ data: auditLogs });
       }
 
       // Fire webhook

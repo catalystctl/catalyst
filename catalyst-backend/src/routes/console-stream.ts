@@ -101,6 +101,13 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
       reply.raw.write(formatSseComment('connected'));
       reply.raw.write(formatSseMessage('connected', { serverId, timestamp: new Date().toISOString() }));
 
+      // Enforce SSE subscriber cap
+      const MAX_SSE_CONSOLE_PER_SERVER = 50;
+      if (wsGateway.getSseSubscriberCount(serverId) >= MAX_SSE_CONSOLE_PER_SERVER) {
+        reply.status(503).send({ error: 'Too many console viewers. Please try again later.' });
+        return;
+      }
+
       // Register SSE subscriber — pushes events to this HTTP connection
       const { unsubscribe, touch } = wsGateway.addSseSubscriber(serverId, (event, data) => {
         try {

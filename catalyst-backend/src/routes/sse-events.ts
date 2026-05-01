@@ -173,6 +173,13 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
         }
       };
 
+      // Enforce SSE subscriber caps
+      const MAX_SSE_EVENTS_PER_SERVER = 100;
+      if (!isGlobal && wsGateway.getSseEventSubscriberCount(serverId) >= MAX_SSE_EVENTS_PER_SERVER) {
+        reply.status(503).send({ error: 'Too many event subscribers. Please try again later.' });
+        return;
+      }
+
       // Per-server subscription OR global subscription for AppLayout
       const wasFirstSubscriber = !isGlobal && wsGateway.getSseEventSubscriberCount(serverId) === 0;
       const unsubscribe = isGlobal
