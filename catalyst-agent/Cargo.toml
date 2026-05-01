@@ -4,21 +4,21 @@ version = "1.0.0"
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1.35", features = [
+tokio = { version = "1.52", features = [
     "macros", "rt-multi-thread", "fs", "time", "sync",
     "process", "io-util", "signal", "net"
 ] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml = "1.1"
+toml = "0.8"
 tokio-tungstenite = "0.29"
 futures = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 thiserror = "2.0"
-uuid = { version = "1.6", features = ["v4"] }
+uuid = { version = "1.23", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
-regex = "1.10"
+regex = "1.12"
 sha2 = "0.11"
 aes-gcm = "0.10"
 rand_08 = { package = "rand", version = "0.8" }
@@ -28,9 +28,9 @@ nix = { version = "0.31", features = ["fs"] }
 num_cpus = "1"
 libc = "0.2"
 reqwest = { version = "0.13", features = ["json", "stream", "rustls-native-certs"], default-features = false }
-containerd-client = "0.8"
-tonic = "0.12"
-prost-types = "0.13"
+containerd-client = "0.9"
+tonic = "0.14"
+prost-types = "0.14"
 
 [profile.release]
 opt-level = 3
