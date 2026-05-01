@@ -32,6 +32,7 @@ import {
 import { useState, MouseEvent, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { usePluginTabs, usePluginRoutes } from '../../plugins/hooks';
+import { PANEL_VERSION } from '../../utils/version';
 
 const mainLinks = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -460,6 +461,19 @@ function Sidebar() {
             <LogOut className="h-3 w-3" />
           </button>
         </div>
+      </div>
+
+      {/* Version */}
+      <div className={cn('border-t border-border', sidebarCollapsed ? 'px-2 py-1.5' : 'px-3 py-2')}>
+        <span
+          className={cn(
+            'block text-center font-mono text-muted-foreground/50',
+            sidebarCollapsed ? 'text-[9px]' : 'text-[10px]',
+          )}
+          title={`Catalyst Panel v${PANEL_VERSION}`}
+        >
+          v{PANEL_VERSION}
+        </span>
       </div>
     </aside>
   );

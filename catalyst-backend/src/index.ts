@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import fastifyCompress from "@fastify/compress";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import crypto from "crypto";
 import fastifyWebsocket from "@fastify/websocket";
 import fastifyCors from "@fastify/cors";
@@ -379,8 +380,20 @@ const authenticate = async (request: any, reply: any) => {
 // SETUP
 // ============================================================================
 
+function getPanelVersion(): string {
+	try {
+		const __dirname = path.dirname(fileURLToPath(import.meta.url));
+		const pkgPath = path.resolve(__dirname, "..", "..", "package.json");
+		const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+		return pkg.version as string;
+	} catch {
+		return "unknown";
+	}
+}
+
 async function bootstrap() {
 	try {
+		logger.info(`Catalyst Backend v${getPanelVersion()}`);
 		// Register security plugins
 		// Response compression — gzip/br/deflate for smaller payloads
 		// Enabled by default; set ENABLE_COMPRESSION=false to disable.

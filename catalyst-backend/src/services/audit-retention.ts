@@ -12,7 +12,7 @@ export const startAuditRetention = (prisma: PrismaClient, logger: pino.Logger) =
   const prune = async () => {
     const settings = await getSecuritySettings();
     const rawDays = settings.auditRetentionDays as number | null | undefined;
-    const days = (rawDays == null || !Number.isFinite(rawDays) || rawDays <= 0) ? 30 : rawDays;
+    const days = (rawDays === null || rawDays === undefined || !Number.isFinite(rawDays) || rawDays <= 0) ? 30 : rawDays;
     if (days !== rawDays) {
       log.warn({ auditRetentionDays: rawDays, defaultedTo: days }, 'Invalid audit retention setting; using safe default');
     }

@@ -40,7 +40,7 @@ pub struct CatalystAgent {
 
 impl CatalystAgent {
     pub async fn new(config: AgentConfig) -> AgentResult<Self> {
-        info!("Initializing Catalyst Agent");
+        info!("Initializing Catalyst Agent v{}", env!("CARGO_PKG_VERSION"));
 
         let config = Arc::new(config);
         let runtime = Arc::new(
@@ -247,7 +247,7 @@ async fn main() -> AgentResult<()> {
         tracing_subscriber::fmt().with_env_filter(filter).init();
     }
 
-    info!("Catalyst Agent starting");
+    info!("Catalyst Agent v{} starting", env!("CARGO_PKG_VERSION"));
     info!("Configuration loaded: {:?}", config);
 
     // Run system initialization
