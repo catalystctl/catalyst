@@ -4851,15 +4851,28 @@ impl WebSocketHandler {
         info!("Starting global container event monitor for instant state syncing");
 
         let mut retry_delay = Duration::from_secs(5);
+        let mut attempt = 0u32;
         loop {
+            attempt += 1;
+            debug!(
+                "monitor_global_events: attempt {} starting (retry_delay={:?})",
+                attempt, retry_delay
+            );
+
             // Pre-subscription health check: verify containerd is responsive
             // before attempting a long-lived event stream subscription.
+            debug!("monitor_global_events: health check - calling list_containers()");
             match tokio::time::timeout(Duration::from_secs(5), self.runtime.list_containers()).await
             {
-                Ok(Ok(_)) => {}
+                Ok(Ok(containers)) => {
+                    debug!(
+                        "monitor_global_events: health check OK ({} containers)",
+                        containers.len()
+                    );
+                }
                 Ok(Err(e)) => {
                     error!(
-                        "containerd health check failed: {}. Retrying in {:?}...",
+                        "monitor_global_events: health check failed: {}. Retrying in {:?}...",
                         e, retry_delay
                     );
                     tokio::time::sleep(retry_delay).await;
@@ -4868,7 +4881,7 @@ impl WebSocketHandler {
                 }
                 Err(_) => {
                     error!(
-                        "containerd health check timed out. Retrying in {:?}...",
+                        "monitor_global_events: health check timed out after 5s. Retrying in {:?}...",
                         retry_delay
                     );
                     tokio::time::sleep(retry_delay).await;
@@ -4878,12 +4891,22 @@ impl WebSocketHandler {
             }
 
             // Subscribe to all events
+            debug!(
+                "monitor_global_events: attempt {} - calling subscribe_to_all_events()",
+                attempt
+            );
             let event_stream = match self.runtime.subscribe_to_all_events().await {
-                Ok(stream) => stream,
+                Ok(stream) => {
+                    info!(
+                        "monitor_global_events: subscription established on attempt {}",
+                        attempt
+                    );
+                    stream
+                }
                 Err(e) => {
                     error!(
-                        "Failed to subscribe to global events: {}. Retrying in {:?}...",
-                        e, retry_delay
+                        "monitor_global_events: subscribe failed on attempt {}: {}. Retrying in {:?}...",
+                        attempt, e, retry_delay
                     );
                     tokio::time::sleep(retry_delay).await;
                     retry_delay = (retry_delay * 2).min(Duration::from_secs(60));
@@ -4892,6 +4915,7 @@ impl WebSocketHandler {
             };
 
             // Reset backoff after successful subscription
+            attempt = 0;
             retry_delay = Duration::from_secs(5);
 
             let mut receiver = event_stream.receiver;

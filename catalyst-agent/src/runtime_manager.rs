@@ -1686,29 +1686,34 @@ impl ContainerdRuntime {
         &self,
         container_id: &str,
     ) -> AgentResult<EventStream> {
-        // Use a dedicated channel for streaming subscriptions so that long-lived
-        // event streams do not compete with unary RPCs on the shared channel.
+        debug!(
+            "subscribe_to_container_events: creating dedicated channel to {} for container {}",
+            self.socket_path, container_id
+        );
         let channel = tokio::time::timeout(
             Duration::from_secs(5),
             containerd_client::connect(&self.socket_path),
         )
         .await
         .map_err(|_| {
+            error!("subscribe_to_container_events: channel creation timed out after 5s");
             AgentError::ContainerError(
                 "subscribe_to_container_events: channel creation timed out".to_string(),
             )
         })?
         .map_err(|e| {
+            error!(
+                "subscribe_to_container_events: channel creation failed: {}",
+                e
+            );
             AgentError::ContainerError(format!(
                 "subscribe_to_container_events: failed to connect to containerd at {}: {}",
                 self.socket_path, e
             ))
         })?;
+        debug!("subscribe_to_container_events: dedicated channel created OK");
+
         let mut client = EventsClient::new(channel);
-        // Containerd's filter parser requires quoting values that contain
-        // special characters like '/'.  Without quotes the '/' in topic
-        // paths (e.g. /tasks/exit) is misinterpreted as a filter delimiter
-        // and causes a parse error.
         let req = SubscribeRequest {
             filters: vec![
                 format!("topic==\"/tasks/exit\",container=={}", container_id),
@@ -1717,38 +1722,58 @@ impl ContainerdRuntime {
             ],
         };
         let req = with_namespace!(req, &self.namespace);
-        // Increased from 10s to 30s: containerd can be slow to start streaming
-        // under load, and a short timeout causes unnecessary reconnect loops.
+        debug!(
+            "subscribe_to_container_events: calling subscribe with filters for container {}",
+            container_id
+        );
+
         let resp = tokio::time::timeout(Duration::from_secs(30), client.subscribe(req))
             .await
             .map_err(|_| {
+                error!("subscribe_to_container_events: subscribe RPC timed out after 30s");
                 AgentError::ContainerError("subscribe_to_container_events timed out".to_string())
             })?
-            .map_err(grpc_err)?;
+            .map_err(|e| {
+                error!(
+                    "subscribe_to_container_events: subscribe RPC returned error: {:?}",
+                    e
+                );
+                grpc_err(e)
+            })?;
+        info!(
+            "subscribe_to_container_events: subscription established for {}",
+            container_id
+        );
         Ok(EventStream {
             receiver: resp.into_inner(),
         })
     }
 
     pub async fn subscribe_to_all_events(&self) -> AgentResult<EventStream> {
-        // Use a dedicated channel for streaming subscriptions so that long-lived
-        // event streams do not compete with unary RPCs on the shared channel.
+        debug!(
+            "subscribe_to_all_events: creating dedicated channel to {}",
+            self.socket_path
+        );
         let channel = tokio::time::timeout(
             Duration::from_secs(5),
             containerd_client::connect(&self.socket_path),
         )
         .await
         .map_err(|_| {
+            error!("subscribe_to_all_events: channel creation timed out after 5s");
             AgentError::ContainerError(
                 "subscribe_to_all_events: channel creation timed out".to_string(),
             )
         })?
         .map_err(|e| {
+            error!("subscribe_to_all_events: channel creation failed: {}", e);
             AgentError::ContainerError(format!(
                 "subscribe_to_all_events: failed to connect to containerd at {}: {}",
                 self.socket_path, e
             ))
         })?;
+        debug!("subscribe_to_all_events: dedicated channel created OK");
+
         let mut client = EventsClient::new(channel);
         let req = SubscribeRequest {
             filters: vec![
@@ -1757,14 +1782,22 @@ impl ContainerdRuntime {
             ],
         };
         let req = with_namespace!(req, &self.namespace);
-        // Increased from 10s to 30s: containerd can be slow to start streaming
-        // under load, and a short timeout causes unnecessary reconnect loops.
+        debug!("subscribe_to_all_events: calling subscribe RPC now");
+
         let resp = tokio::time::timeout(Duration::from_secs(30), client.subscribe(req))
             .await
             .map_err(|_| {
+                error!("subscribe_to_all_events: subscribe RPC timed out after 30s");
                 AgentError::ContainerError("subscribe_to_all_events timed out".to_string())
             })?
-            .map_err(grpc_err)?;
+            .map_err(|e| {
+                error!(
+                    "subscribe_to_all_events: subscribe RPC returned error: {:?}",
+                    e
+                );
+                grpc_err(e)
+            })?;
+        info!("subscribe_to_all_events: subscription established successfully");
         Ok(EventStream {
             receiver: resp.into_inner(),
         })
