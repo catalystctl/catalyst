@@ -46,7 +46,7 @@ use crate::firewall_manager::FirewallManager;
 
 const RUNTIME_NAME: &str = "io.containerd.runc.v2";
 const SPEC_TYPE_URL: &str = "types.containerd.io/opencontainers/runtime-spec/1/Spec";
-const CONSOLE_BASE_DIR: &str = "/var/log/catalyst/console";
+pub const CONSOLE_BASE_DIR: &str = "/var/log/catalyst/console";
 const PORT_FWD_STATE_DIR: &str = "/var/lib/cni/results";
 const MAX_LOG_SIZE: u64 = 10 * 1024 * 1024; // 10MB per file
 const LOG_BACKUP_COUNT: usize = 2;
@@ -1714,23 +1714,20 @@ impl ContainerdRuntime {
         debug!("subscribe_to_container_events: dedicated channel created OK");
 
         let mut client = EventsClient::new(channel);
-        let req = SubscribeRequest {
-            filters: vec![
-                format!("topic==\"/tasks/exit\",container=={}", container_id),
-                format!("topic==\"/tasks/start\",container=={}", container_id),
-                format!("topic==\"/tasks/delete\",container=={}", container_id),
-            ],
-        };
+        // Subscribe with NO server-side filters.  containerd's events service
+        // can hang when evaluating topic filters.  We filter client-side in
+        // spawn_exit_monitor instead.
+        let req = SubscribeRequest { filters: vec![] };
         let req = with_namespace!(req, &self.namespace);
         debug!(
-            "subscribe_to_container_events: calling subscribe with filters for container {}",
+            "subscribe_to_container_events: calling subscribe with empty filters for container {}",
             container_id
         );
 
-        let resp = tokio::time::timeout(Duration::from_secs(30), client.subscribe(req))
+        let resp = tokio::time::timeout(Duration::from_secs(10), client.subscribe(req))
             .await
             .map_err(|_| {
-                error!("subscribe_to_container_events: subscribe RPC timed out after 30s");
+                error!("subscribe_to_container_events: subscribe RPC timed out after 10s");
                 AgentError::ContainerError("subscribe_to_container_events timed out".to_string())
             })?
             .map_err(|e| {

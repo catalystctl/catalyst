@@ -32,13 +32,6 @@ const IP_RATE_LIMIT_MAX_ATTEMPTS = 20; // 20 attempts per 15 minutes for unknown
  * Get client IP from request, handling proxies
  */
 function getClientIp(request: FastifyRequest): string {
-  // Check X-Forwarded-For header first (for proxied requests)
-  const forwarded = request.headers['x-forwarded-for'];
-  if (forwarded) {
-    const ips = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-    return ips.split(',')[0].trim();
-  }
-  // Fall back to direct IP
   return request.ip || request.socket.remoteAddress || 'unknown';
 }
 
@@ -103,7 +96,9 @@ export const bruteForceProtection = async (
   // This protects against account enumeration attacks on non-existent users
   checkIpRateLimit(request);
   
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
+  });
 
   if (!user) return; // Don't reveal if user exists
 
@@ -147,7 +142,7 @@ export const handleFailedLogin = async (
   });
 
   // Apply lockout if threshold reached
-  const threshold = LOCKOUT_THRESHOLDS.find(t => updatedUser.failedLoginAttempts >= t.attempts);
+  const threshold = [...LOCKOUT_THRESHOLDS].reverse().find(t => updatedUser.failedLoginAttempts >= t.attempts);
   if (threshold) {
     const lockedUntil = new Date(Date.now() + threshold.lockout);
     await prisma.user.update({

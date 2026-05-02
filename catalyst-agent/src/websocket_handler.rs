@@ -22,8 +22,9 @@ use tracing::{debug, error, info, warn};
 
 use crate::config::CniNetworkConfig;
 use crate::{
-    runtime_manager::rotate_logs, AgentConfig, AgentError, AgentResult, ContainerdRuntime,
-    FileManager, FirewallManager, NetworkManager, StorageManager,
+    runtime_manager::{rotate_logs, CONSOLE_BASE_DIR},
+    AgentConfig, AgentError, AgentResult, ContainerdRuntime, FileManager, FirewallManager,
+    NetworkManager, StorageManager,
 };
 
 type WsStream =
@@ -2248,7 +2249,7 @@ impl WebSocketHandler {
 
     async fn stream_container_logs(&self, server_id: &str, container_id: &str) -> AgentResult<()> {
         let _log_stream = self.runtime.spawn_log_stream(container_id).await?;
-        let base = std::path::PathBuf::from("/tmp/catalyst-console").join(container_id);
+        let base = std::path::PathBuf::from(CONSOLE_BASE_DIR).join(container_id);
         let stdout_path = base.join("stdout");
         let stderr_path = base.join("stderr");
 
