@@ -1714,11 +1714,11 @@ impl ContainerdRuntime {
         debug!("subscribe_to_container_events: dedicated channel created OK");
 
         let mut client = EventsClient::new(channel);
-        // Subscribe with NO server-side filters.  containerd's events service
-        // can hang when evaluating topic filters.  We filter client-side in
-        // spawn_exit_monitor instead.
+        // NOTE: Do NOT use with_namespace! for the events Subscribe RPC.
+        // The events service is global and ignores namespace metadata.
+        // See: containerd.services.events.v1.Events/subscribe docs.
+        // We filter client-side in spawn_exit_monitor instead.
         let req = SubscribeRequest { filters: vec![] };
-        let req = with_namespace!(req, &self.namespace);
         debug!(
             "subscribe_to_container_events: calling subscribe with empty filters for container {}",
             container_id
@@ -1772,11 +1772,11 @@ impl ContainerdRuntime {
         debug!("subscribe_to_all_events: dedicated channel created OK");
 
         let mut client = EventsClient::new(channel);
-        // Subscribe with NO server-side filters.  containerd's events service
-        // can hang when evaluating topic filters (observed in production).
+        // NOTE: Do NOT use with_namespace! for the events Subscribe RPC.
+        // The events service is global and ignores namespace metadata.
+        // See: containerd.services.events.v1.Events/subscribe docs.
         // We filter client-side in monitor_global_events instead.
         let req = SubscribeRequest { filters: vec![] };
-        let req = with_namespace!(req, &self.namespace);
         debug!("subscribe_to_all_events: calling subscribe RPC with empty filters");
 
         let resp = tokio::time::timeout(Duration::from_secs(10), client.subscribe(req))
