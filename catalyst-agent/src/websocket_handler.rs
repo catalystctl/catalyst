@@ -729,11 +729,13 @@ impl WebSocketHandler {
             }
         }));
 
-        // Start periodic state reconciliation task (every 5 minutes)
-        // This catches any status drift that may occur
+        // Start periodic state reconciliation task (every 30 seconds)
+        // This catches any status drift that may occur.  When the event monitor
+        // is working, reconciliation is a safety net.  When events are broken,
+        // this becomes the primary state-sync mechanism.
         let handler_clone = self.clone();
         connection_tasks.push(tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(300));
+            let mut interval = tokio::time::interval(Duration::from_secs(30));
             loop {
                 interval.tick().await;
                 debug!("Running periodic state reconciliation");
@@ -4855,6 +4857,7 @@ impl WebSocketHandler {
         let mut retry_delay = Duration::from_secs(5);
         let mut attempt = 0u32;
         let mut consecutive_failures = 0u32;
+        let mut diagnosed = false;
         loop {
             attempt += 1;
             debug!(
@@ -4864,9 +4867,9 @@ impl WebSocketHandler {
 
             if consecutive_failures >= MAX_EVENT_SUBSCRIBE_FAILURES {
                 warn!(
-                    "Event monitor giving up after {} consecutive failures. \
-                     Falling back to periodic reconciliation (5-min interval). \
-                     Containerd events service appears unresponsive.",
+                    "Event monitor PERMANENTLY DISABLED after {} consecutive failures. \
+                     Falling back to periodic reconciliation (30-sec interval). \
+                     Run `ctr events` on the node to verify containerd's events service.",
                     consecutive_failures
                 );
                 return Ok(());
@@ -4922,6 +4925,14 @@ impl WebSocketHandler {
                         "monitor_global_events: subscribe failed on attempt {} (failure {}/{}): {}. Retrying in {:?}...",
                         attempt, consecutive_failures, MAX_EVENT_SUBSCRIBE_FAILURES, e, retry_delay
                     );
+                    // Run diagnostic once on first failure to capture containerd version & events status
+                    if !diagnosed {
+                        diagnosed = true;
+                        match self.runtime.diagnose_events_service().await {
+                            Ok(report) => warn!("Event monitor diagnostic: {}", report),
+                            Err(diag_err) => warn!("Event monitor diagnostic failed: {}", diag_err),
+                        }
+                    }
                     tokio::time::sleep(retry_delay).await;
                     retry_delay = (retry_delay * 2).min(Duration::from_secs(60));
                     continue;

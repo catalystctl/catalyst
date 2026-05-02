@@ -18,6 +18,7 @@ use containerd_client::services::v1::snapshots::{
     MountsRequest, PrepareSnapshotRequest, RemoveSnapshotRequest,
 };
 use containerd_client::services::v1::tasks_client::TasksClient;
+use containerd_client::services::v1::version_client::VersionClient;
 use containerd_client::services::v1::GetImageRequest;
 use containerd_client::services::v1::SubscribeRequest;
 use containerd_client::services::v1::{
@@ -1744,6 +1745,62 @@ impl ContainerdRuntime {
         Ok(EventStream {
             receiver: resp.into_inner(),
         })
+    }
+
+    /// Diagnostic: query containerd version and test event subscribe using the
+    /// exact pattern from the official containerd-client example.
+    pub async fn diagnose_events_service(&self) -> AgentResult<String> {
+        let mut version_client = VersionClient::new(self.channel.clone());
+        let version_resp = tokio::time::timeout(
+            Duration::from_secs(5),
+            version_client.version(Request::new(())),
+        )
+        .await
+        .map_err(|_| AgentError::ContainerError("version query timed out".to_string()))?
+        .map_err(grpc_err)?;
+        let version = version_resp.into_inner();
+        info!(
+            "containerd version: {} (revision: {})",
+            version.version, version.revision
+        );
+
+        debug!("diagnose_events_service: testing Subscribe with official-example pattern");
+        let test_channel = containerd_client::connect(&self.socket_path)
+            .await
+            .map_err(|e| AgentError::ContainerError(format!("test connect failed: {}", e)))?;
+        let mut test_client = EventsClient::new(test_channel);
+        let test_req = SubscribeRequest::default();
+        let test_result =
+            tokio::time::timeout(Duration::from_secs(10), test_client.subscribe(test_req)).await;
+
+        let diag = match test_result {
+            Ok(Ok(resp)) => {
+                info!("diagnose_events_service: Subscribe succeeded");
+                let mut stream = resp.into_inner();
+                match tokio::time::timeout(Duration::from_secs(2), stream.message()).await {
+                    Ok(Ok(Some(_))) => "events service OK (received event)".to_string(),
+                    Ok(Ok(None)) => "events service OK (stream open, no events yet)".to_string(),
+                    Ok(Err(e)) => format!("events service OK but message error: {:?}", e),
+                    Err(_) => "events service OK (stream open, no events within 2s)".to_string(),
+                }
+            }
+            Ok(Err(status)) => {
+                error!(
+                    "diagnose_events_service: Subscribe returned gRPC error: {:?}",
+                    status
+                );
+                format!("events service returned error: {:?}", status)
+            }
+            Err(_) => {
+                error!("diagnose_events_service: Subscribe timed out after 10s");
+                "events service UNRESPONSIVE (Subscribe timed out)".to_string()
+            }
+        };
+
+        Ok(format!(
+            "containerd {} (rev {}) — {}",
+            version.version, version.revision, diag
+        ))
     }
 
     pub async fn subscribe_to_all_events(&self) -> AgentResult<EventStream> {
