@@ -4850,19 +4850,49 @@ impl WebSocketHandler {
     async fn monitor_global_events(&self) -> AgentResult<()> {
         info!("Starting global container event monitor for instant state syncing");
 
+        let mut retry_delay = Duration::from_secs(5);
         loop {
+            // Pre-subscription health check: verify containerd is responsive
+            // before attempting a long-lived event stream subscription.
+            match tokio::time::timeout(Duration::from_secs(5), self.runtime.list_containers()).await
+            {
+                Ok(Ok(_)) => {}
+                Ok(Err(e)) => {
+                    error!(
+                        "containerd health check failed: {}. Retrying in {:?}...",
+                        e, retry_delay
+                    );
+                    tokio::time::sleep(retry_delay).await;
+                    retry_delay = (retry_delay * 2).min(Duration::from_secs(60));
+                    continue;
+                }
+                Err(_) => {
+                    error!(
+                        "containerd health check timed out. Retrying in {:?}...",
+                        retry_delay
+                    );
+                    tokio::time::sleep(retry_delay).await;
+                    retry_delay = (retry_delay * 2).min(Duration::from_secs(60));
+                    continue;
+                }
+            }
+
             // Subscribe to all events
             let event_stream = match self.runtime.subscribe_to_all_events().await {
                 Ok(stream) => stream,
                 Err(e) => {
                     error!(
-                        "Failed to subscribe to global events: {}. Retrying in 10s...",
-                        e
+                        "Failed to subscribe to global events: {}. Retrying in {:?}...",
+                        e, retry_delay
                     );
-                    tokio::time::sleep(Duration::from_secs(10)).await;
+                    tokio::time::sleep(retry_delay).await;
+                    retry_delay = (retry_delay * 2).min(Duration::from_secs(60));
                     continue;
                 }
             };
+
+            // Reset backoff after successful subscription
+            retry_delay = Duration::from_secs(5);
 
             let mut receiver = event_stream.receiver;
 

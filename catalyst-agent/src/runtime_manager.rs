@@ -444,7 +444,7 @@ impl InstallerHandle {
 
 #[derive(Clone)]
 pub struct ContainerdRuntime {
-    _socket_path: String,
+    socket_path: String,
     namespace: String,
     channel: tonic::transport::Channel,
     container_io: Arc<Mutex<HashMap<String, ContainerIo>>>,
@@ -473,7 +473,7 @@ impl ContainerdRuntime {
         info!("Connected to containerd at {}", socket_path.display());
         info!("DNS servers configured for containers: {:?}", dns_servers);
         Ok(Self {
-            _socket_path: socket_path.to_string_lossy().to_string(),
+            socket_path: socket_path.to_string_lossy().to_string(),
             namespace,
             channel,
             container_io: Arc::new(Mutex::new(HashMap::new())),
@@ -1686,7 +1686,25 @@ impl ContainerdRuntime {
         &self,
         container_id: &str,
     ) -> AgentResult<EventStream> {
-        let mut client = EventsClient::new(self.channel.clone());
+        // Use a dedicated channel for streaming subscriptions so that long-lived
+        // event streams do not compete with unary RPCs on the shared channel.
+        let channel = tokio::time::timeout(
+            Duration::from_secs(5),
+            containerd_client::connect(&self.socket_path),
+        )
+        .await
+        .map_err(|_| {
+            AgentError::ContainerError(
+                "subscribe_to_container_events: channel creation timed out".to_string(),
+            )
+        })?
+        .map_err(|e| {
+            AgentError::ContainerError(format!(
+                "subscribe_to_container_events: failed to connect to containerd at {}: {}",
+                self.socket_path, e
+            ))
+        })?;
+        let mut client = EventsClient::new(channel);
         // Containerd's filter parser requires quoting values that contain
         // special characters like '/'.  Without quotes the '/' in topic
         // paths (e.g. /tasks/exit) is misinterpreted as a filter delimiter
@@ -1699,7 +1717,9 @@ impl ContainerdRuntime {
             ],
         };
         let req = with_namespace!(req, &self.namespace);
-        let resp = tokio::time::timeout(Duration::from_secs(10), client.subscribe(req))
+        // Increased from 10s to 30s: containerd can be slow to start streaming
+        // under load, and a short timeout causes unnecessary reconnect loops.
+        let resp = tokio::time::timeout(Duration::from_secs(30), client.subscribe(req))
             .await
             .map_err(|_| {
                 AgentError::ContainerError("subscribe_to_container_events timed out".to_string())
@@ -1711,7 +1731,25 @@ impl ContainerdRuntime {
     }
 
     pub async fn subscribe_to_all_events(&self) -> AgentResult<EventStream> {
-        let mut client = EventsClient::new(self.channel.clone());
+        // Use a dedicated channel for streaming subscriptions so that long-lived
+        // event streams do not compete with unary RPCs on the shared channel.
+        let channel = tokio::time::timeout(
+            Duration::from_secs(5),
+            containerd_client::connect(&self.socket_path),
+        )
+        .await
+        .map_err(|_| {
+            AgentError::ContainerError(
+                "subscribe_to_all_events: channel creation timed out".to_string(),
+            )
+        })?
+        .map_err(|e| {
+            AgentError::ContainerError(format!(
+                "subscribe_to_all_events: failed to connect to containerd at {}: {}",
+                self.socket_path, e
+            ))
+        })?;
+        let mut client = EventsClient::new(channel);
         let req = SubscribeRequest {
             filters: vec![
                 "topic~=\"/tasks/\"".to_string(),
@@ -1719,7 +1757,9 @@ impl ContainerdRuntime {
             ],
         };
         let req = with_namespace!(req, &self.namespace);
-        let resp = tokio::time::timeout(Duration::from_secs(10), client.subscribe(req))
+        // Increased from 10s to 30s: containerd can be slow to start streaming
+        // under load, and a short timeout causes unnecessary reconnect loops.
+        let resp = tokio::time::timeout(Duration::from_secs(30), client.subscribe(req))
             .await
             .map_err(|_| {
                 AgentError::ContainerError("subscribe_to_all_events timed out".to_string())
