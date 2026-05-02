@@ -8,6 +8,9 @@
 		"node": ">=20.0.0",
 		"bun": ">=1.0.0"
 	},
+	"overrides": {
+		"@peculiar/asn1-schema": "2.6.0"
+	},
 	"scripts": {
 		"dev": "bun --watch src/index.ts -- --host",
 		"build": "tsc",
