@@ -1775,19 +1775,17 @@ impl ContainerdRuntime {
         debug!("subscribe_to_all_events: dedicated channel created OK");
 
         let mut client = EventsClient::new(channel);
-        let req = SubscribeRequest {
-            filters: vec![
-                "topic~=\"/tasks/\"".to_string(),
-                "topic~=\"/containers/\"".to_string(),
-            ],
-        };
+        // Subscribe with NO server-side filters.  containerd's events service
+        // can hang when evaluating topic filters (observed in production).
+        // We filter client-side in monitor_global_events instead.
+        let req = SubscribeRequest { filters: vec![] };
         let req = with_namespace!(req, &self.namespace);
-        debug!("subscribe_to_all_events: calling subscribe RPC now");
+        debug!("subscribe_to_all_events: calling subscribe RPC with empty filters");
 
-        let resp = tokio::time::timeout(Duration::from_secs(30), client.subscribe(req))
+        let resp = tokio::time::timeout(Duration::from_secs(10), client.subscribe(req))
             .await
             .map_err(|_| {
-                error!("subscribe_to_all_events: subscribe RPC timed out after 30s");
+                error!("subscribe_to_all_events: subscribe RPC timed out after 10s");
                 AgentError::ContainerError("subscribe_to_all_events timed out".to_string())
             })?
             .map_err(|e| {

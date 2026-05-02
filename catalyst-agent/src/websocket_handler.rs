@@ -35,6 +35,7 @@ const CONTAINER_GID: u32 = 1000;
 const MAX_BACKUP_UPLOAD_BYTES: u64 = 10 * 1024 * 1024 * 1024; // 10GB
 const BACKUP_UPLOAD_INACTIVITY_TIMEOUT: Duration = Duration::from_secs(600); // 10 minutes
 const MAX_CONSOLE_BATCH_BYTES: usize = 32768; // Max bytes to batch into a single console_output message
+const MAX_EVENT_SUBSCRIBE_FAILURES: u32 = 10; // Give up on event monitor after this many consecutive failures
 
 // ---------------------------------------------------------------------------
 // Typed message structs for hot-path serialization (avoids json! allocation)
@@ -4852,12 +4853,23 @@ impl WebSocketHandler {
 
         let mut retry_delay = Duration::from_secs(5);
         let mut attempt = 0u32;
+        let mut consecutive_failures = 0u32;
         loop {
             attempt += 1;
             debug!(
                 "monitor_global_events: attempt {} starting (retry_delay={:?})",
                 attempt, retry_delay
             );
+
+            if consecutive_failures >= MAX_EVENT_SUBSCRIBE_FAILURES {
+                warn!(
+                    "Event monitor giving up after {} consecutive failures. \
+                     Falling back to periodic reconciliation (5-min interval). \
+                     Containerd events service appears unresponsive.",
+                    consecutive_failures
+                );
+                return Ok(());
+            }
 
             // Pre-subscription health check: verify containerd is responsive
             // before attempting a long-lived event stream subscription.
@@ -4904,9 +4916,10 @@ impl WebSocketHandler {
                     stream
                 }
                 Err(e) => {
+                    consecutive_failures += 1;
                     error!(
-                        "monitor_global_events: subscribe failed on attempt {}: {}. Retrying in {:?}...",
-                        attempt, e, retry_delay
+                        "monitor_global_events: subscribe failed on attempt {} (failure {}/{}): {}. Retrying in {:?}...",
+                        attempt, consecutive_failures, MAX_EVENT_SUBSCRIBE_FAILURES, e, retry_delay
                     );
                     tokio::time::sleep(retry_delay).await;
                     retry_delay = (retry_delay * 2).min(Duration::from_secs(60));
@@ -4914,8 +4927,9 @@ impl WebSocketHandler {
                 }
             };
 
-            // Reset backoff after successful subscription
+            // Reset backoff and failure counter after successful subscription
             attempt = 0;
+            consecutive_failures = 0;
             retry_delay = Duration::from_secs(5);
 
             let mut receiver = event_stream.receiver;
