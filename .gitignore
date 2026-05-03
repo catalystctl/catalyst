@@ -57,3 +57,4 @@ catalyst-frontend/src/styles/material.css
 .pi-tavily-temp/
 eggs/
 progress.md
+packages/plugin-sdk/dist/

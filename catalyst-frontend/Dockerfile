@@ -3,20 +3,29 @@ FROM oven/bun:1.3-alpine AS build
 
 WORKDIR /app
 
-# Copy only the frontend package (standalone build, no workspace resolution needed)
-COPY catalyst-frontend/package.json catalyst-frontend/bun.lock ./
-COPY catalyst-frontend/tsconfig.json catalyst-frontend/tsconfig.node.json ./
-COPY catalyst-frontend/vite.config.ts ./
-COPY catalyst-frontend/postcss.config.js ./
-COPY catalyst-frontend/tailwind.config.js ./
-COPY catalyst-frontend/index.html ./
-COPY catalyst-frontend/public ./public
-COPY catalyst-frontend/src ./src
+# Use the root workspace lockfile for reproducible installs.
+# We create a minimal workspace root containing only the frontend so
+# bun doesn't fail when other monorepo packages aren't copied into the image.
+RUN printf '%s\n' '{"name":"catalyst","private":true,"workspaces":["catalyst-frontend"]}' > package.json
+COPY bun.lock ./
 
-# Install dependencies
+# Copy frontend manifest first for dependency-layer caching
+COPY catalyst-frontend/package.json ./catalyst-frontend/
+
+# Install dependencies (bun will trim lockfile entries for missing workspaces)
 RUN bun install
 
+# Copy frontend source
+COPY catalyst-frontend/tsconfig.json catalyst-frontend/tsconfig.node.json ./catalyst-frontend/
+COPY catalyst-frontend/vite.config.ts ./catalyst-frontend/
+COPY catalyst-frontend/postcss.config.js ./catalyst-frontend/
+COPY catalyst-frontend/tailwind.config.js ./catalyst-frontend/
+COPY catalyst-frontend/index.html ./catalyst-frontend/
+COPY catalyst-frontend/public ./catalyst-frontend/public
+COPY catalyst-frontend/src ./catalyst-frontend/src
+
 # Build
+WORKDIR /app/catalyst-frontend
 RUN bun run build
 
 # Production stage — serve with nginx
@@ -29,7 +38,7 @@ RUN rm /etc/nginx/conf.d/default.conf
 COPY catalyst-frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy built assets
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY --from=build /app/catalyst-frontend/dist /usr/share/nginx/html
 
 EXPOSE 80
 

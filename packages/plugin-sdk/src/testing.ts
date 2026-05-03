@@ -119,8 +119,8 @@ export function createMockContext(manifest: PluginManifest, config?: Record<stri
       config[key] = value;
     },
     getStorage: async (key) => storage.get(key) ?? null,
-    setStorage: async (key, value) => storage.set(key, value),
-    deleteStorage: async (key) => storage.delete(key),
+    setStorage: async (key, value) => { storage.set(key, value); },
+    deleteStorage: async (key) => { storage.delete(key); },
     collection: (name) => createMockCollection(),
   };
 }
