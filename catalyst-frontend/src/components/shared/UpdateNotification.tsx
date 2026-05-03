@@ -39,6 +39,7 @@ export default function UpdateNotification() {
   const [triggering, setTriggering] = useState(false);
 
   const hasAdminWrite = user?.permissions?.includes('admin.write') || user?.permissions?.includes('*');
+  const canUpdate = hasAdminWrite && updateData?.isDocker;
 
   useEffect(() => {
     // Re-check dismissal on mount and when update data changes
@@ -93,7 +94,7 @@ export default function UpdateNotification() {
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
-              {hasAdminWrite && (
+              {canUpdate && (
                 <Button
                   size="sm"
                   variant="default"

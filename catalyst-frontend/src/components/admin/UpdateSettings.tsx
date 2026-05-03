@@ -4,10 +4,10 @@ import {
   Container,
   Clock,
   Tag,
-  GitBranch,
   CheckCircle2,
   XCircle,
   Loader2,
+  Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -67,6 +67,8 @@ export default function UpdateSettings() {
     },
   });
 
+  const canTrigger = status?.isDocker && status?.updateAvailable;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -88,7 +90,7 @@ export default function UpdateSettings() {
         </div>
         <Button
           size="sm"
-          disabled={isLoading || triggerMutation.isPending || !status?.updateAvailable}
+          disabled={isLoading || triggerMutation.isPending || !canTrigger}
           onClick={() => triggerMutation.mutate()}
         >
           {triggerMutation.isPending ? (
@@ -104,6 +106,16 @@ export default function UpdateSettings() {
           )}
         </Button>
       </div>
+
+      {!isLoading && !status?.isDocker && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            Auto-update is only available when running in Docker. Please update
+            Catalyst manually.
+          </span>
+        </div>
+      )}
 
       <div className="divide-y divide-border/50">
         {isLoading ? (

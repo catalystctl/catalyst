@@ -55,14 +55,16 @@ export async function updateRoutes(app: FastifyInstance) {
 				return reply.status(403).send({ error: 'Admin write permission required' });
 			}
 
-			// Fire and forget — the container/process may restart
-			performUpdate(app.log).catch((err) => {
-				app.log.error({ err }, 'Auto-update trigger failed');
-			});
-
-			return reply.send({
-				success: true,
-				message: 'Update initiated',
+			const result = await performUpdate(app.log);
+			if (result.success) {
+				return reply.send({
+					success: true,
+					message: result.message,
+				});
+			}
+			return reply.status(400).send({
+				success: false,
+				message: result.message,
 			});
 		},
 	);

@@ -6,6 +6,7 @@ export interface UpdateCheckResponse {
   currentVersion: string;
   latestVersion: string;
   updateAvailable: boolean;
+  isDocker: boolean;
 }
 
 export function useUpdateCheck() {

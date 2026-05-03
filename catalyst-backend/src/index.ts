@@ -1148,6 +1148,7 @@ async function bootstrap() {
 				currentVersion: fresh.currentVersion,
 				latestVersion: fresh.latestVersion,
 				updateAvailable: fresh.updateAvailable,
+				isDocker: fresh.isDocker,
 			});
 		});
 
