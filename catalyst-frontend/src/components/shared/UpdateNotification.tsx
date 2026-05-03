@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RefreshCw, Download, X, ArrowUpCircle, BellOff } from 'lucide-react';
+import { RefreshCw, Download, X, ArrowUpCircle, BellOff, Clock, BellRing, Ban } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,65 +16,100 @@ import { useAuthStore } from '../../stores/authStore';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
 
-const LS_DISMISS_KEY = 'catalyst-update-dismissed';
+// ── localStorage keys ──
+const LS_DISMISS_VERSION_PREFIX = 'catalyst-update-dismissed-v';
+const LS_DISMISS_GLOBAL = 'catalyst-update-dismissed';
 
-function isPermanentlyDismissed(): boolean {
+function getVersionDismissKey(version: string): string {
+  return `${LS_DISMISS_VERSION_PREFIX}${version}`;
+}
+
+function isVersionDismissed(version: string): boolean {
   try {
-    return localStorage.getItem(LS_DISMISS_KEY) === '1';
+    return localStorage.getItem(getVersionDismissKey(version)) === '1';
   } catch {
     return false;
   }
 }
 
-function setPermanentlyDismissed() {
+function setVersionDismissed(version: string) {
   try {
-    localStorage.setItem(LS_DISMISS_KEY, '1');
+    localStorage.setItem(getVersionDismissKey(version), '1');
   } catch {
     // ignore
   }
 }
 
-function clearPermanentDismissal() {
+function isGloballyDismissed(): boolean {
   try {
-    localStorage.removeItem(LS_DISMISS_KEY);
+    return localStorage.getItem(LS_DISMISS_GLOBAL) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function setGloballyDismissed() {
+  try {
+    localStorage.setItem(LS_DISMISS_GLOBAL, '1');
   } catch {
     // ignore
   }
 }
 
-type DismissScope = 'this' | 'all' | 'permanent' | null;
+export function clearGlobalDismissal() {
+  try {
+    localStorage.removeItem(LS_DISMISS_GLOBAL);
+  } catch {
+    // ignore
+  }
+}
+
+export function clearVersionDismissal(version: string) {
+  try {
+    localStorage.removeItem(getVersionDismissKey(version));
+  } catch {
+    // ignore
+  }
+}
+
+type DismissScope = 'session' | 'version' | 'global' | null;
 
 export default function UpdateNotification() {
   const { data: updateData } = useUpdateCheck();
   const user = useAuthStore((s) => s.user);
-  const [sessionDismissVersion, setSessionDismissVersion] = useState<string | null>(null);
-  const [sessionDismissAll, setSessionDismissAll] = useState(false);
+  const [sessionDismissed, setSessionDismissed] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [triggering, setTriggering] = useState(false);
 
   const hasAdminWrite = user?.permissions?.includes('admin.write') || user?.permissions?.includes('*');
   const canUpdate = hasAdminWrite && updateData?.isDocker;
+  const latestVersion = updateData?.latestVersion ?? '';
 
   const visible =
     updateData?.updateAvailable &&
-    !isPermanentlyDismissed() &&
-    !sessionDismissAll &&
-    sessionDismissVersion !== updateData.latestVersion;
+    !sessionDismissed &&
+    !isGloballyDismissed() &&
+    !isVersionDismissed(latestVersion);
 
-  const handleOpenDismissModal = useCallback(() => {
+  const handleQuickDismiss = useCallback(() => {
+    // X button — just dismiss for this session (no modal, no localStorage)
+    setSessionDismissed(true);
+  }, []);
+
+  const handleOpenModal = useCallback(() => {
     setShowModal(true);
   }, []);
 
   const handleDismissChoice = useCallback((scope: DismissScope) => {
     setShowModal(false);
-    if (scope === 'this') {
-      setSessionDismissVersion(updateData?.latestVersion ?? null);
-    } else if (scope === 'all') {
-      setSessionDismissAll(true);
-    } else if (scope === 'permanent') {
-      setPermanentlyDismissed();
+    if (scope === 'session') {
+      setSessionDismissed(true);
+    } else if (scope === 'version') {
+      setVersionDismissed(latestVersion);
+    } else if (scope === 'global') {
+      setGloballyDismissed();
     }
-  }, [updateData?.latestVersion]);
+  }, [latestVersion]);
 
   const handleTriggerUpdate = useCallback(async () => {
     setTriggering(true);
@@ -141,11 +176,21 @@ export default function UpdateNotification() {
                 </Button>
                 <button
                   type="button"
-                  onClick={handleOpenDismissModal}
+                  onClick={handleQuickDismiss}
                   className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                  title="Dismiss for now"
                   aria-label="Dismiss update notification"
                 >
                   <X className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenModal}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                  title="Dismiss options"
+                  aria-label="Open dismiss options"
+                >
+                  <BellOff className="h-3.5 w-3.5" />
                 </button>
               </div>
             </Card>
@@ -161,43 +206,62 @@ export default function UpdateNotification() {
               <DialogTitle>Dismiss update notification</DialogTitle>
             </div>
             <DialogDescription>
-              Choose how long to hide the update banner for version{' '}
+              Choose how to handle the update banner for version{' '}
               <span className="font-medium text-foreground">v{updateData?.latestVersion}</span>.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-3 py-2">
+            {/* 1. Dismiss — just for a bit */}
             <button
               type="button"
-              onClick={() => handleDismissChoice('this')}
-              className="flex flex-col items-start gap-0.5 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
+              onClick={() => handleDismissChoice('session')}
+              className="flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
             >
-              <span className="text-sm font-medium text-foreground">Dismiss this update</span>
-              <span className="text-xs text-muted-foreground">
-                Hide until you reload the page or sign back in. The next version will notify you again.
-              </span>
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-2 text-muted-foreground">
+                <Clock className="h-3.5 w-3.5" />
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium text-foreground">Dismiss</span>
+                <span className="text-xs text-muted-foreground">
+                  Hide for now. The banner will reappear on the next page reload or sign-in.
+                </span>
+              </div>
             </button>
 
+            {/* 2. Dismiss this update — stored per version */}
             <button
               type="button"
-              onClick={() => handleDismissChoice('all')}
-              className="flex flex-col items-start gap-0.5 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
+              onClick={() => handleDismissChoice('version')}
+              className="flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
             >
-              <span className="text-sm font-medium text-foreground">Dismiss all updates</span>
-              <span className="text-xs text-muted-foreground">
-                Hide all update notifications until you reload the page or sign back in.
-              </span>
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-2 text-muted-foreground">
+                <BellRing className="h-3.5 w-3.5" />
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium text-foreground">Dismiss this update</span>
+                <span className="text-xs text-muted-foreground">
+                  Remember my choice for v{updateData?.latestVersion}. You&apos;ll be notified again
+                  when the next version is released.
+                </span>
+              </div>
             </button>
 
+            {/* 3. Don't remind me again — global */}
             <button
               type="button"
-              onClick={() => handleDismissChoice('permanent')}
-              className="flex flex-col items-start gap-0.5 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-left transition-colors hover:bg-amber-500/10"
+              onClick={() => handleDismissChoice('global')}
+              className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-left transition-colors hover:bg-amber-500/10"
             >
-              <span className="text-sm font-medium text-foreground">Don&apos;t remind me again</span>
-              <span className="text-xs text-muted-foreground">
-                Permanently hide update notifications. You can re-enable them by clearing site data / localStorage.
-              </span>
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-amber-500/10 text-amber-600">
+                <Ban className="h-3.5 w-3.5" />
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium text-foreground">Don&apos;t remind me again</span>
+                <span className="text-xs text-muted-foreground">
+                  Permanently hide all update notifications. Re-enable by clearing site data / localStorage.
+                </span>
+              </div>
             </button>
           </div>
 
@@ -211,6 +275,3 @@ export default function UpdateNotification() {
     </>
   );
 }
-
-// Utility to let callers clear the permanent dismissal (e.g. admin settings)
-export { clearPermanentDismissal };
