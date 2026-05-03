@@ -815,7 +815,11 @@ impl SystemSetup {
         false
     }
 
-    /// Setup CNI networking with macvlan and host-local IPAM (static IPs)
+    /// Setup CNI networking with macvlan and host-local IPAM (static IPs).
+    /// Re-detects host network parameters on every startup. If the existing
+    /// CNI config differs from the currently detected network, a warning is
+    /// logged but the config is NOT overwritten — overwriting a network
+    /// config while containers are using it would break their connectivity.
     async fn setup_cni_static_networking(config: &AgentConfig) -> Result<(), AgentError> {
         let cni_dir = "/etc/cni/net.d";
 
@@ -837,13 +841,15 @@ impl SystemSetup {
         };
 
         for network in networks {
-            let cni_config = format!("{}/{}.conflist", cni_dir, network.name);
-            if Path::new(&cni_config).exists() {
-                info!(
-                    "CNI static network configuration exists for {}, updating if changed",
-                    network.name
-                );
-            }
+            let cni_config_path = format!("{}/{}.conflist", cni_dir, network.name);
+            let existing_config = if Path::new(&cni_config_path).exists() {
+                match fs::read_to_string(&cni_config_path) {
+                    Ok(raw) => serde_json::from_str::<serde_json::Value>(&raw).ok(),
+                    Err(_) => None,
+                }
+            } else {
+                None
+            };
 
             let interface = if let Some(value) = network.interface {
                 value
@@ -865,7 +871,8 @@ impl SystemSetup {
                 None => Self::detect_default_gateway()?,
             };
 
-            let config = serde_json::to_string_pretty(&serde_json::json!({
+            // Build the new config JSON.
+            let new_config = serde_json::json!({
                 "cniVersion": "1.0.0",
                 "name": network.name,
                 "plugins": [{
@@ -883,13 +890,51 @@ impl SystemSetup {
                         "routes": [{"dst": "0.0.0.0/0"}]
                     }
                 }]
-            }))?;
+            });
 
-            fs::write(&cni_config, config)
+            // If a config already exists, validate it against the current
+            // detected network before overwriting.
+            if let Some(ref existing) = existing_config {
+                let existing_iface = existing
+                    .pointer("/plugins/0/master")
+                    .and_then(|v| v.as_str());
+                let existing_subnet = existing
+                    .pointer("/plugins/0/ipam/ranges/0/0/subnet")
+                    .and_then(|v| v.as_str());
+                let existing_gateway = existing
+                    .pointer("/plugins/0/ipam/ranges/0/0/gateway")
+                    .and_then(|v| v.as_str());
+
+                if existing_iface != Some(&interface)
+                    || existing_subnet != Some(&cidr)
+                    || existing_gateway != Some(&gateway)
+                {
+                    warn!(
+                        "Host network changed for '{}' (iface: {:?}→{}, subnet: {:?}→{}, gateway: {:?}→{}). \"
+                        Existing CNI config at {} was NOT overwritten to avoid breaking running containers. \"
+                        Restart the agent with no running containers, or recreate the network, to apply the new configuration.",
+                        network.name,
+                        existing_iface, interface,
+                        existing_subnet, cidr,
+                        existing_gateway, gateway,
+                        cni_config_path
+                    );
+                    continue;
+                }
+
+                info!(
+                    "CNI config for '{}' matches current host network — no update needed",
+                    network.name
+                );
+                continue;
+            }
+
+            let config_str = serde_json::to_string_pretty(&new_config)?;
+            fs::write(&cni_config_path, config_str)
                 .map_err(|e| AgentError::IoError(format!("Failed to write CNI config: {}", e)))?;
             info!(
                 "✓ Created CNI static network configuration at {}",
-                cni_config
+                cni_config_path
             );
         }
 

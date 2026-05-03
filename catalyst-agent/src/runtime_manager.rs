@@ -3224,90 +3224,120 @@ async fn detect_default_route_interface() -> Option<String> {
     Some(iface)
 }
 
+/// Detect the host's current primary network parameters.
+/// Re-detects on every call — host network can change (DHCP, VPN, failover).
 async fn detect_host_network() -> Option<(String, String, String)> {
-    static CACHED: tokio::sync::OnceCell<Option<(String, String, String)>> =
-        tokio::sync::OnceCell::const_new();
-    CACHED
-        .get_or_init(|| async {
-            // Parse `ip -4 route show default` → "default via <gw> dev <iface> ..."
-            let output = tokio::process::Command::new("ip")
-                .args(["-4", "route", "show", "default"])
-                .output()
-                .await
-                .ok()?;
-            let route = String::from_utf8_lossy(&output.stdout);
-            let mut parts = route.split_whitespace();
-            let mut gateway = None;
-            let mut iface = None;
-            while let Some(part) = parts.next() {
-                if part == "via" {
-                    gateway = parts.next().map(|s| s.to_string());
-                } else if part == "dev" {
-                    iface = parts.next().map(|s| s.to_string());
-                }
-            }
-            let gateway = gateway?;
-            let iface = iface?;
-
-            // Parse interface address → "inet <ip>/<prefix> ..."
-            let output = tokio::process::Command::new("ip")
-                .args(["-4", "-o", "addr", "show", &iface])
-                .output()
-                .await
-                .ok()?;
-            let addr_line = String::from_utf8_lossy(&output.stdout);
-            let cidr = addr_line
-                .split_whitespace()
-                .find(|s| {
-                    s.contains('/')
-                        && s.chars()
-                            .next()
-                            .map(|c| c.is_ascii_digit())
-                            .unwrap_or(false)
-                })?
-                .to_string();
-            let (ip_str, prefix_str) = cidr.split_once('/')?;
-            let ip: Ipv4Addr = ip_str.parse().ok()?;
-            let prefix: u32 = prefix_str.parse().ok()?;
-            let mask = if prefix == 0 {
-                0u32
-            } else {
-                !0u32 << (32 - prefix)
-            };
-            let net_addr = Ipv4Addr::from(u32::from(ip) & mask);
-            let subnet = format!("{}/{}", net_addr, prefix);
-
-            Some((iface, subnet, gateway))
-        })
+    // Parse `ip -4 route show default` → "default via <gw> dev <iface> ..."
+    let output = tokio::process::Command::new("ip")
+        .args(["-4", "route", "show", "default"])
+        .output()
         .await
-        .clone()
+        .ok()?;
+    let route = String::from_utf8_lossy(&output.stdout);
+    let mut parts = route.split_whitespace();
+    let mut gateway = None;
+    let mut iface = None;
+    while let Some(part) = parts.next() {
+        if part == "via" {
+            gateway = parts.next().map(|s| s.to_string());
+        } else if part == "dev" {
+            iface = parts.next().map(|s| s.to_string());
+        }
+    }
+    let gateway = gateway?;
+    let iface = iface?;
+
+    // Parse interface address → "inet <ip>/<prefix> ..."
+    let output = tokio::process::Command::new("ip")
+        .args(["-4", "-o", "addr", "show", &iface])
+        .output()
+        .await
+        .ok()?;
+    let addr_line = String::from_utf8_lossy(&output.stdout);
+    let cidr = addr_line
+        .split_whitespace()
+        .find(|s| {
+            s.contains('/')
+                && s.chars()
+                    .next()
+                    .map(|c| c.is_ascii_digit())
+                    .unwrap_or(false)
+        })?
+        .to_string();
+    let (ip_str, prefix_str) = cidr.split_once('/')?;
+    let ip: Ipv4Addr = ip_str.parse().ok()?;
+    let prefix: u32 = prefix_str.parse().ok()?;
+    let mask = if prefix == 0 {
+        0u32
+    } else {
+        !0u32 << (32 - prefix)
+    };
+    let net_addr = Ipv4Addr::from(u32::from(ip) & mask);
+    let subnet = format!("{}/{}", net_addr, prefix);
+
+    Some((iface, subnet, gateway))
 }
 
-/// Calculate usable IP range from a subnet CIDR (e.g., "192.168.1.0/24" -> ("192.168.1.10", "192.168.1.250"))
-/// This matches the logic used by NetworkManager's cidr_usable_range function.
+/// Calculate usable IP range from a subnet CIDR (e.g., "192.168.1.0/24" -> ("192.168.1.1", "192.168.1.254"))
+/// Properly respects the prefix length instead of hardcoding the last octet.
 fn calculate_ip_range_from_subnet(cidr: &str) -> (String, String) {
     let parts: Vec<&str> = cidr.split('/').collect();
     if parts.len() != 2 {
-        // Fallback to a reasonable default
         warn!("Invalid CIDR format '{}', using default range", cidr);
         return ("10.0.0.10".to_string(), "10.0.0.250".to_string());
     }
 
-    let base_ip = parts[0];
-    let ip_parts: Vec<&str> = base_ip.split('.').collect();
+    let addr_str = parts[0];
+    let prefix_str = parts[1];
+    let prefix: u32 = match prefix_str.parse() {
+        Ok(p) if p <= 32 => p,
+        _ => {
+            warn!("Invalid CIDR prefix '{}', using default range", prefix_str);
+            return ("10.0.0.10".to_string(), "10.0.0.250".to_string());
+        }
+    };
 
-    if ip_parts.len() != 4 {
+    let addr: std::net::Ipv4Addr = match addr_str.parse() {
+        Ok(a) => a,
+        Err(_) => {
+            warn!("Invalid IP address '{}', using default range", addr_str);
+            return ("10.0.0.10".to_string(), "10.0.0.250".to_string());
+        }
+    };
+
+    let addr_u32 = u32::from(addr);
+    let mask = if prefix == 0 {
+        0u32
+    } else {
+        !0u32 << (32 - prefix)
+    };
+    let network = addr_u32 & mask;
+    let broadcast = network | (!mask);
+
+    if broadcast <= network + 1 {
         warn!(
-            "Invalid IP address format '{}', using default range",
-            base_ip
+            "CIDR '{}' has no usable addresses, using default range",
+            cidr
         );
         return ("10.0.0.10".to_string(), "10.0.0.250".to_string());
     }
 
-    // Use .10 to .250 as the usable range (matching NetworkManager's cidr_usable_range)
+    // Usable range is network+1 to broadcast-1.
+    // For larger subnets (/8, /16) provide a reasonable sub-range.
+    let (start, end) = if prefix < 24 {
+        let default_start = network + 10;
+        let default_end = broadcast - 5;
+        (
+            default_start.max(network + 1),
+            default_end.min(broadcast - 1),
+        )
+    } else {
+        (network + 1, broadcast - 1)
+    };
+
     (
-        format!("{}.{}.{}.10", ip_parts[0], ip_parts[1], ip_parts[2]),
-        format!("{}.{}.{}.250", ip_parts[0], ip_parts[1], ip_parts[2]),
+        std::net::Ipv4Addr::from(start).to_string(),
+        std::net::Ipv4Addr::from(end).to_string(),
     )
 }
 

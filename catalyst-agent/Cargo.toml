@@ -40,5 +40,5 @@ panic = "abort"
 strip = true
 
 [profile.release.build-override]
-opt-level = 3
+opt-level = 0
 codegen-units = 16

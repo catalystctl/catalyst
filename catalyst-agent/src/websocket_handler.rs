@@ -635,7 +635,16 @@ impl WebSocketHandler {
             .map_err(|e| AgentError::ConfigError(format!("Invalid server.backend_url: {}", e)))?;
         match parsed_url.scheme() {
             "wss" => {}
-            "ws" => {}
+            "ws" => {
+                if std::env::var("CATALYST_ALLOW_INSECURE_WS").is_err() {
+                    return Err(AgentError::ConfigError(
+                        "Insecure ws:// connections are not allowed in production. \"
+                        Use wss:// or set CATALYST_ALLOW_INSECURE_WS=1 to override."
+                            .to_string(),
+                    ));
+                }
+                warn!("Using insecure WebSocket connection (ws://)");
+            }
             other => {
                 return Err(AgentError::ConfigError(format!(
                     "Invalid backend_url scheme '{}': expected ws:// or wss://",
