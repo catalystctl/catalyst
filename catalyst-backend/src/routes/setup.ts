@@ -22,18 +22,27 @@ const setupSchema = z.object({
 	logoUrl: z.string().optional(),
 });
 
-// Helper to forward set-cookie headers from better-auth to Fastify reply
+// Helper to forward set-cookie headers from better-auth to Fastify reply.
+// Must use getSetCookie() when available because Headers.get("set-cookie")
+// returns a comma-separated string which browsers cannot parse.
 function forwardAuthHeaders(response: any, reply: FastifyReply) {
-	const cookieHeader =
-		"headers" in response ? response.headers?.get?.("set-cookie") : null;
-	if (cookieHeader) {
-		if (Array.isArray(cookieHeader)) {
-			cookieHeader.forEach((cookie: string) =>
-				reply.header("set-cookie", cookie),
-			);
-		} else {
-			reply.header("set-cookie", cookieHeader);
-		}
+	const headers = "headers" in response ? response.headers : null;
+	if (!headers) return;
+
+	// Prefer getSetCookie() (Node 18+ / undici) — returns an array of individual cookies
+	const rawSetCookie =
+		typeof (headers as any).getSetCookie === "function"
+			? (headers as any).getSetCookie()
+			: headers.get?.("set-cookie");
+
+	if (!rawSetCookie) return;
+
+	const cookies: string[] = Array.isArray(rawSetCookie)
+		? rawSetCookie
+		: [rawSetCookie];
+
+	for (const cookie of cookies) {
+		reply.header("set-cookie", cookie);
 	}
 }
 
@@ -43,19 +52,155 @@ export async function setupRoutes(app: FastifyInstance) {
 			request.headers as Record<string, string | string[] | undefined>,
 		);
 
-	// ── Check if setup is needed ─────────────────────────────────────────
-	app.get("/status", async (_request: FastifyRequest, reply: FastifyReply) => {
-		const userCount = await prisma.user.count();
-		return reply.send({ setupRequired: userCount === 0 });
-	});
+	// ── Check if setup is needed ───────────────────────────────────────
+	app.get(
+		"/status",
+		async (_request: FastifyRequest, reply: FastifyReply) => {
+			const userCount = await prisma.user.count();
+			return reply.send({ setupRequired: userCount === 0 });
+		},
+	);
 
-	// ── Complete initial setup ───────────────────────────────────────────
+	// ── Complete initial setup ─────────────────────────────────────────
+	//
+	// Idempotency guard: if a user already exists but has no admin role
+	// (e.g. a previous attempt crashed after user creation but before
+	// role assignment), we finish the setup instead of returning 409.
+	// This prevents users from being stranded on a half-completed install.
+	async function ensureSetupComplete(
+		reply: FastifyReply,
+		parsed: z.infer<typeof setupSchema>,
+		existingUser: any,
+	) {
+		const {
+			email,
+			username,
+			panelName,
+			primaryColor,
+			accentColor,
+			defaultTheme,
+			logoUrl,
+		} = parsed;
+
+		// 1. Ensure roles exist
+		const adminRole = await prisma.role.upsert({
+			where: { name: "Administrator" },
+			update: {
+				description: "Full system access",
+				permissions: ["*"],
+			},
+			create: {
+				name: "Administrator",
+				description: "Full system access",
+				permissions: ["*"],
+			},
+		});
+
+		await prisma.role.upsert({
+			where: { name: "User" },
+			update: {
+				description: "Standard user access",
+				permissions: [
+					"server.read",
+					"server.start",
+					"server.stop",
+					"file.read",
+					"file.write",
+					"console.read",
+					"console.write",
+				],
+			},
+			create: {
+				name: "User",
+				description: "Standard user access",
+				permissions: [
+					"server.read",
+					"server.start",
+					"server.stop",
+					"file.read",
+					"file.write",
+					"console.read",
+					"console.write",
+				],
+			},
+		});
+
+		// 2. Ensure user has admin role and is verified
+		const userRecord = await prisma.user.findUnique({
+			where: { id: existingUser.id },
+			include: { roles: true },
+		});
+
+		if (userRecord) {
+			const hasAdminRole = userRecord.roles.some(
+				(r) => r.name === "Administrator",
+			);
+			if (!hasAdminRole || userRecord.role !== "administrator") {
+				await prisma.user.update({
+					where: { id: existingUser.id },
+					data: {
+						role: "administrator",
+						roles: { connect: { id: adminRole.id } },
+						emailVerified: true,
+					},
+				});
+			}
+		}
+
+		// 3. Ensure theme settings exist
+		await prisma.themeSettings.upsert({
+			where: { id: "default" },
+			update: {
+				panelName,
+				primaryColor,
+				accentColor,
+				defaultTheme,
+				logoUrl: logoUrl || null,
+			},
+			create: {
+				id: "default",
+				panelName,
+				primaryColor,
+				accentColor,
+				defaultTheme,
+				logoUrl: logoUrl || null,
+			},
+		});
+
+		// 4. Return success (no new session — user already exists)
+		return reply.send({
+			success: true,
+			data: {
+				userId: existingUser.id,
+				email: existingUser.email,
+				username: (existingUser as any).username ?? username,
+				role: "Administrator",
+				permissions: ["*"],
+				panelName,
+			},
+		});
+	}
+
 	app.post(
 		"/complete",
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			// 1. Ensure no users exist yet
 			const userCount = await prisma.user.count();
-			if (userCount > 0) {
+			const existingUser =
+				userCount > 0
+					? await prisma.user.findFirst({
+							include: { roles: true },
+					  })
+					: null;
+
+			// If a user exists but has no admin role, the previous attempt
+			// partially failed. Finish the setup instead of rejecting.
+			const isFullySetUp =
+				existingUser?.roles.some(
+					(r) => r.name === "Administrator",
+				) ?? false;
+
+			if (userCount > 0 && isFullySetUp) {
 				return reply.status(409).send({
 					error: "Setup has already been completed",
 				});
@@ -73,6 +218,11 @@ export async function setupRoutes(app: FastifyInstance) {
 				});
 			}
 
+			// 3. Partial setup recovery — user exists but wasn't fully configured
+			if (existingUser && !isFullySetUp) {
+				return ensureSetupComplete(reply, parsed.data, existingUser);
+			}
+
 			const {
 				email,
 				username,
@@ -85,7 +235,7 @@ export async function setupRoutes(app: FastifyInstance) {
 			} = parsed.data;
 
 			try {
-				// 3. Create Administrator role
+				// 4. Create Administrator role
 				const adminRole = await prisma.role.upsert({
 					where: { name: "Administrator" },
 					update: {
@@ -99,7 +249,7 @@ export async function setupRoutes(app: FastifyInstance) {
 					},
 				});
 
-				// 4. Create User role
+				// 5. Create User role
 				await prisma.role.upsert({
 					where: { name: "User" },
 					update: {
@@ -129,7 +279,7 @@ export async function setupRoutes(app: FastifyInstance) {
 					},
 				});
 
-				// 5. Create the admin user via better-auth
+				// 6. Create the admin user via better-auth
 				const response = await auth.api.signUpEmail({
 					headers: getHeaders(request),
 					body: { email, password, name: username, username } as any,
@@ -147,7 +297,7 @@ export async function setupRoutes(app: FastifyInstance) {
 					});
 				}
 
-				// 6. Assign Administrator role
+				// 7. Assign Administrator role
 				await prisma.user.update({
 					where: { id: user.id },
 					data: {
@@ -156,7 +306,7 @@ export async function setupRoutes(app: FastifyInstance) {
 					},
 				});
 
-				// 7. Upsert theme settings
+				// 8. Upsert theme settings
 				await prisma.themeSettings.upsert({
 					where: { id: "default" },
 					update: {
@@ -176,10 +326,10 @@ export async function setupRoutes(app: FastifyInstance) {
 					},
 				});
 
-				// 8. Forward auth headers (set-cookie) so user is immediately logged in
+				// 9. Forward auth headers (set-cookie) so user is immediately logged in
 				forwardAuthHeaders(response, reply);
 
-				// 9. Return success
+				// 10. Return success
 				return reply.send({
 					success: true,
 					data: {
@@ -193,11 +343,11 @@ export async function setupRoutes(app: FastifyInstance) {
 				});
 			} catch (error: any) {
 				captureSystemError({
-					level: 'error',
-					component: 'SetupRoutes',
-					message: error?.message || 'Setup failed',
+					level: "error",
+					component: "SetupRoutes",
+					message: error?.message || "Setup failed",
 					stack: error?.stack,
-					metadata: { context: 'setup' },
+					metadata: { context: "setup" },
 				}).catch(() => {});
 				request.log.error({ error }, "Setup failed");
 				return reply.status(500).send({

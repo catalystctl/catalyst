@@ -227,10 +227,21 @@ function SetupPage() {
       // Cancel preview and re-apply theme with saved settings
       cancelPreview();
 
-      // Re-initialize auth (backend sets session cookies)
-      await init();
-
-      navigate('/dashboard', { replace: true });
+      // Re-initialize auth (backend sets session cookies).
+      // If this fails the setup POST still succeeded — the user just needs
+      // to log in manually (e.g. cookie blocked by browser security).
+      try {
+        await init();
+        navigate('/dashboard', { replace: true });
+      } catch {
+        setError(
+          'Setup completed successfully, but we could not log you in automatically. ' +
+            'Please sign in with your new credentials.',
+        );
+        setTimeout(() => {
+          navigate('/login', { replace: true });
+        }, 3_000);
+      }
     } catch (err: any) {
       reportSystemError({
         level: 'error',
