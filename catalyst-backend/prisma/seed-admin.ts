@@ -1,5 +1,8 @@
-// Minimal seed — creates only the default admin user + role.
-// Fast. Use this when you just need credentials for e2e / screenshot tests.
+// ═════════════════════════════════════════════════════════════════════════════
+//  DEVELOPMENT ONLY — DO NOT RUN IN PRODUCTION
+//  Minimal seed that creates only the default admin user + role.
+//  Fast. Use for e2e / screenshot tests. For production use the /setup route.
+// ═════════════════════════════════════════════════════════════════════════════
 
 import 'dotenv/config';
 import { PrismaClient } from "@prisma/client";
@@ -14,8 +17,10 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   if (process.env.NODE_ENV === 'production' && !process.env.SEED_ALLOW_DEFAULT_ADMIN) {
-    console.error('ERROR: Seed script must not be run in production.');
-    console.error('Set NODE_ENV=development or SEED_ALLOW_DEFAULT_ADMIN=true to override.');
+    console.error('ERROR: Seed scripts must not be run in production.');
+    console.error('For new production installs, open the /setup page in your browser.');
+    console.error('If you really need to seed, set NODE_ENV=development or');
+    console.error('SEED_ALLOW_DEFAULT_ADMIN=true to override this guard.');
     process.exit(1);
   }
 
