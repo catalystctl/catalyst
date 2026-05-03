@@ -5,7 +5,7 @@ import { passkey } from "@better-auth/passkey";
 import { prisma } from "./db";
 import { captureSystemError } from "./services/error-logger";
 
-const baseUrl = process.env.BETTER_AUTH_URL || process.env.BACKEND_EXTERNAL_ADDRESS || "http://localhost:3000";
+const baseUrl = process.env.BETTER_AUTH_URL || process.env.PUBLIC_URL || process.env.BACKEND_EXTERNAL_ADDRESS || "http://localhost:3000";
 const authSecret = process.env.BETTER_AUTH_SECRET;
 if (!authSecret && process.env.NODE_ENV !== "test") {
   throw new Error("BETTER_AUTH_SECRET is required");
@@ -67,6 +67,7 @@ function toOrigin(url: string): string | null {
 function buildTrustedOrigins(): string[] {
   const origins = [
     toOrigin(baseUrl),
+    toOrigin(process.env.PUBLIC_URL || ""),
     toOrigin(process.env.FRONTEND_URL || ""),
     ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(s => toOrigin(s.trim())) : []),
     ...(process.env.NODE_ENV !== 'production'

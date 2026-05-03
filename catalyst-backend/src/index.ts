@@ -495,6 +495,7 @@ async function bootstrap() {
 		// Register plugins
 		const allowedOrigins = [
 			...(process.env.CORS_ORIGIN?.split(",").map((s) => s.trim()) ?? []),
+			...(process.env.PUBLIC_URL ? [process.env.PUBLIC_URL] : []),
 			...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
 			// Allow localhost origins only in development
 			...(process.env.NODE_ENV !== "production"

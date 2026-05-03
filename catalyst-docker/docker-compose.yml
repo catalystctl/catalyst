@@ -75,17 +75,21 @@ services:
       # Auth / Security
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
       BETTER_AUTH_URL: ${PUBLIC_URL:-http://localhost}
+      # Passkey RP ID must be the bare hostname from PUBLIC_URL (no scheme, no port).
+      # Defaults to localhost; override if PUBLIC_URL uses a real domain.
       PASSKEY_RP_ID: ${PASSKEY_RP_ID:-localhost}
 
-      # CORS — set to the URL(s) the panel is accessed from
+      # CORS — automatically driven by PUBLIC_URL unless you override it.
+      # Add extra origins here as a comma-separated list if needed.
       CORS_ORIGIN: ${PUBLIC_URL:-http://localhost}
       FRONTEND_URL: ${PUBLIC_URL:-http://localhost}
 
-      # Public address used in deploy scripts, agent config, and email links
+      # Public address used in deploy scripts, agent config, and email links.
+      # Defaults to PUBLIC_URL.
       BACKEND_EXTERNAL_ADDRESS: ${PUBLIC_URL:-http://localhost}
 
-      # Internal URL override — used by deploy token endpoint for curl one-liner.
-      # Must match PUBLIC_URL so the deploy script is reachable from remote nodes.
+      # Internal URL override — used by the deploy token endpoint for curl one-liners.
+      # Defaults to PUBLIC_URL. Only change this if you have a split DNS setup.
       BACKEND_URL: ${PUBLIC_URL:-http://localhost}
 
       # SFTP
