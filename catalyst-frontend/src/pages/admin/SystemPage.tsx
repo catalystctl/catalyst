@@ -16,8 +16,10 @@ import {
   User,
   CheckCircle,
   AlertTriangle,
+  ArrowUpCircle,
 } from 'lucide-react';
 import { useAdminHealth, useAdminStats, useModManagerSettings, useSmtpSettings } from '../../hooks/useAdmin';
+import UpdateSettings from '../../components/admin/UpdateSettings';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { Input } from '../../components/ui/input';
@@ -387,6 +389,16 @@ function SystemPage() {
               <Input type="password" value={modrinthApiKey} onChange={(e) => setModrinthApiKey(e.target.value)} placeholder="••••••••" />
             </label>
           </div>
+        </Section>
+
+        {/* ── Auto Updater ── */}
+        <Section
+          title="Auto Updater"
+          subtitle="Check for new releases and trigger automatic updates."
+          icon={<ArrowUpCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
+          iconColor="bg-emerald-100 dark:bg-emerald-900/30"
+        >
+          <UpdateSettings />
         </Section>
       </div>
     </motion.div>

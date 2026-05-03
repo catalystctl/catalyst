@@ -137,6 +137,11 @@ services:
       PAYMENTER_OIDC_CLIENT_SECRET: ${PAYMENTER_OIDC_CLIENT_SECRET:-}
       PAYMENTER_OIDC_DISCOVERY_URL: ${PAYMENTER_OIDC_DISCOVERY_URL:-}
 
+      # Auto Updater
+      AUTO_UPDATE_ENABLED: ${AUTO_UPDATE_ENABLED:-false}
+      AUTO_UPDATE_INTERVAL_MS: ${AUTO_UPDATE_INTERVAL_MS:-3600000}
+      AUTO_UPDATE_AUTO_TRIGGER: ${AUTO_UPDATE_AUTO_TRIGGER:-false}
+
       # Misc tuning (unlikely to need changing)
       CONSOLE_OUTPUT_BYTE_LIMIT_BYTES: ${CONSOLE_OUTPUT_BYTE_LIMIT_BYTES:-524288}
       MAX_DISK_MB: ${MAX_DISK_MB:-1048576}
@@ -147,6 +152,7 @@ services:
       - catalyst-server-data:/var/lib/catalyst/servers
       - catalyst-backup-data:/var/lib/catalyst/backups
       - catalyst-plugin-data:/var/lib/catalyst/plugins
+      - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/health || exit 1"]
       interval: 15s

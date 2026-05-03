@@ -1073,6 +1073,28 @@ impl WebSocketHandler {
                     warn!("Failed to send immediate stats: {}", e);
                 }
             }
+            Some("update_agent") => {
+                info!("Received update_agent command from backend");
+                let config = self.config.clone();
+                let write = Arc::clone(write);
+                tokio::spawn(async move {
+                    let updater = crate::updater::AgentUpdater::new(&config);
+                    match updater.update().await {
+                        Ok(_) => {
+                            info!("Agent update initiated successfully");
+                        }
+                        Err(e) => {
+                            error!("Agent update failed: {}", e);
+                            let payload = json!({
+                                "type": "agent_update_failed",
+                                "error": e.to_string(),
+                            });
+                            let mut w = write.lock().await;
+                            let _ = w.send(Message::Text(payload.to_string().into())).await;
+                        }
+                    }
+                });
+            }
             Some("create_network") => self.handle_create_network(&msg, write).await?,
             Some("update_network") => self.handle_update_network(&msg, write).await?,
             Some("delete_network") => self.handle_delete_network(&msg, write).await?,

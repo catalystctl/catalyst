@@ -88,6 +88,8 @@ export const qk = {
   adminNodeAllocations: (nodeId: string) => ['node-allocations', nodeId] as const,
   adminThemeSettings: () => ['admin-theme-settings'] as const,
   adminOidcConfig: () => ['admin-oidc-config'] as const,
+  adminUpdateStatus: () => ['admin-update-status'] as const,
+  updateCheck: () => ['update-check'] as const,
 
   // ── Profile ─────────────────────────────────────────────────────────
   profile: () => ['profile'] as const,

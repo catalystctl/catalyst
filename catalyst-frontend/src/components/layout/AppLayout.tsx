@@ -11,6 +11,7 @@ import { useCmdK } from '../../hooks/useKeyboardShortcut';
 import { Menu, X, Search } from 'lucide-react';
 import SearchPalette from '../search/SearchPalette';
 import { cn } from '@/lib/utils';
+import UpdateNotification from '../shared/UpdateNotification';
 
 function AppLayout() {
   useServerStateUpdates();
@@ -25,6 +26,7 @@ function AppLayout() {
 
   return (
     <div className="app-shell flex h-[100dvh] font-sans">
+      <UpdateNotification />
       {/* Mobile overlay */}
       {isMobileSidebarOpen && (
         <div

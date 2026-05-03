@@ -14,6 +14,7 @@ mod network_manager;
 mod runtime_manager;
 mod storage_manager;
 mod system_setup;
+mod updater;
 mod websocket_handler;
 
 pub use config::AgentConfig;

@@ -18,6 +18,7 @@ import type {
   Role,
   RolePreset,
   SystemErrorsResponse,
+  UpdateStatusResponse,
 } from '../../types/admin';
 
 type ApiResponse<T> = {
@@ -301,6 +302,14 @@ export const adminApi = {
   },
   resolveSystemError: async (id: string) => {
     const data = await apiClient.post<{ success: boolean }>(`/api/admin/system-errors/${id}/resolve`);
+    return data;
+  },
+  updateStatus: async () => {
+    const data = await apiClient.get<UpdateStatusResponse>('/api/admin/update/status');
+    return data;
+  },
+  triggerUpdate: async () => {
+    const data = await apiClient.post<{ success: boolean; message: string }>('/api/admin/update/trigger');
     return data;
   },
 };

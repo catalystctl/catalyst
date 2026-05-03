@@ -70,6 +70,7 @@ import { pluginRoutes } from "./routes/plugins";
 import { FileTunnelService } from "./services/file-tunnel";
 import { fileTunnelRoutes } from "./routes/file-tunnel";
 import { migrationRoutes } from "./routes/migration";
+import { updateRoutes } from "./routes/update";
 import { verifyAgentApiKey } from "./lib/agent-auth";
 
 const logger = pino(
@@ -744,6 +745,7 @@ async function bootstrap() {
 		await app.register(metricsRoutes, { prefix: "/api" });
 		await app.register(backupRoutes, { prefix: "/api/servers" });
 		await app.register(adminRoutes, { prefix: "/api/admin" });
+		await app.register(updateRoutes, { prefix: "/api/admin/update" });
 		await app.register((app) => adminEventsRoutes(app, wsGateway), {
 			prefix: "/api/admin/events",
 		});
@@ -1130,6 +1132,25 @@ async function bootstrap() {
 			},
 		);
 
+		// Public update check endpoint (unauthenticated)
+		app.get("/api/update/check", async (_request, reply) => {
+			const { getUpdateStatus, checkForUpdate } = await import("./services/auto-updater");
+			const status = getUpdateStatus();
+			// Refresh cache if stale (> 5 min) so the frontend gets real data
+			const isStale =
+				!status.lastCheckedAt ||
+				Date.now() - new Date(status.lastCheckedAt).getTime() > 5 * 60 * 1000;
+			if (isStale) {
+				await checkForUpdate(logger);
+			}
+			const fresh = getUpdateStatus();
+			return reply.send({
+				currentVersion: fresh.currentVersion,
+				latestVersion: fresh.latestVersion,
+				updateAvailable: fresh.updateAvailable,
+			});
+		});
+
 		// Public theme settings endpoint (unauthenticated)
 		app.get("/api/theme-settings/public", async (_request, reply) => {
 			let settings = await prisma.themeSettings.findUnique({
@@ -1316,6 +1337,15 @@ async function bootstrap() {
 		// Start alert service
 		await alertService.start();
 		logger.info("Alert monitoring service started");
+
+		// Start auto-updater
+		if (process.env.AUTO_UPDATE_ENABLED === "true") {
+			const { scheduleUpdateCheck } = await import("./services/auto-updater");
+			scheduleUpdateCheck(
+				parseInt(process.env.AUTO_UPDATE_INTERVAL_MS || "3600000"),
+				logger,
+			);
+		}
 
 		const retentionJitter = () => Math.floor(Math.random() * 60_000);
 

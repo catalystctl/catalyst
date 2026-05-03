@@ -300,3 +300,13 @@ export interface RoleUsersResponse {
   roles: Role[];
   permissions: string[];
 }
+
+export interface UpdateStatusResponse {
+  currentVersion: string;
+  latestVersion: string;
+  updateAvailable: boolean;
+  lastCheckedAt: string | null;
+  releaseUrl: string | null;
+  isDocker: boolean;
+  autoUpdateEnabled: boolean;
+}

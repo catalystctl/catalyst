@@ -33,6 +33,7 @@ import { useState, MouseEvent, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { usePluginTabs, usePluginRoutes } from '../../plugins/hooks';
 import { PANEL_VERSION } from '../../utils/version';
+import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 
 const mainLinks = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -306,6 +307,7 @@ function Section({ title, links, defaultExpanded = false, collapsed }: SectionPr
 }
 
 function Sidebar() {
+  const { data: updateData } = useUpdateCheck();
   const theme = useUIStore((s) => s.theme);
   const setTheme = useUIStore((s) => s.setTheme);
   const user = useAuthStore((s) => s.user);
@@ -463,17 +465,36 @@ function Sidebar() {
         </div>
       </div>
 
-      {/* Version */}
+      {/* Version + update status */}
       <div className={cn('border-t border-border', sidebarCollapsed ? 'px-2 py-1.5' : 'px-3 py-2')}>
-        <span
+        <Link
+          to="/admin/system"
           className={cn(
-            'block text-center font-mono text-muted-foreground/50',
+            'flex items-center justify-center gap-1 rounded-md font-mono transition-colors hover:text-foreground',
             sidebarCollapsed ? 'text-[9px]' : 'text-[10px]',
+            updateData?.updateAvailable ? 'text-amber-500 hover:text-amber-400' : 'text-muted-foreground/50 hover:text-foreground/70',
           )}
-          title={`Catalyst Panel v${PANEL_VERSION}`}
+          title={
+            updateData?.updateAvailable
+              ? `v${updateData.currentVersion} — out of date (latest: v${updateData.latestVersion})`
+              : `Catalyst Panel v${PANEL_VERSION} — up to date`
+          }
         >
-          v{PANEL_VERSION}
-        </span>
+          <span>v{PANEL_VERSION}</span>
+          {!sidebarCollapsed && (
+            <span className={cn(updateData?.updateAvailable ? 'text-amber-500' : 'text-emerald-500')}>
+              {updateData?.updateAvailable ? '(out of date)' : '(up to date)'}
+            </span>
+          )}
+          {sidebarCollapsed && (
+            <span
+              className={cn(
+                'inline-block h-1.5 w-1.5 rounded-full',
+                updateData?.updateAvailable ? 'bg-amber-500' : 'bg-emerald-500',
+              )}
+            />
+          )}
+        </Link>
       </div>
     </aside>
   );
