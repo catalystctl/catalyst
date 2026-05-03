@@ -52,24 +52,84 @@ function buildOAuthConfig() {
   ].filter((provider) => provider.clientId && provider.clientSecret && provider.discoveryUrl);
 }
 
-// The passkey plugin pulls in @simplewebauthn/server internal types that TypeScript
-// cannot name when inferring the return type of betterAuth(). Using satisfies to
-// capture the full inferred type without requiring portable type names.
-export type AuthInstance = ReturnType<typeof betterAuth>;
+/** Extract protocol + host from a URL string, returning null if invalid. */
+function toOrigin(url: string): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return null;
+  }
+}
 
-/**
- * Mutable auth instance — null until initAuth() is called.
- * ES module `import { auth }` creates a live binding, so all consumers
- * see the value set by initAuth().
- */
-export let auth: AuthInstance = null as unknown as AuthInstance;
+/** Build a deduplicated list of trusted origins from all configured sources. */
+function buildTrustedOrigins(): string[] {
+  const origins = [
+    toOrigin(baseUrl),
+    toOrigin(process.env.FRONTEND_URL || ""),
+    ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(s => toOrigin(s.trim())) : []),
+    ...(process.env.NODE_ENV !== 'production'
+      ? [
+          "http://localhost:3000",
+          "http://localhost:5173",
+          "http://127.0.0.1:3000",
+          "http://127.0.0.1:5173",
+          ...(process.env.DEV_EXTRA_ORIGINS
+            ? process.env.DEV_EXTRA_ORIGINS.split(',').map((s) => toOrigin(s.trim()))
+            : []),
+        ]
+      : []),
+  ].filter((origin): origin is string => Boolean(origin));
+  return [...new Set(origins)];
+}
+
+/** Build passkey origins, filtering out http origins in production. */
+function buildPasskeyOrigins(): string[] {
+  const origins = buildTrustedOrigins();
+  if (process.env.NODE_ENV === 'production') {
+    return origins.filter((o) => !o.startsWith('http:'));
+  }
+  return origins;
+}
+
+/** Validate that rpID is a bare hostname (no scheme, no path, no port). */
+function validateRpID(rpID?: string): string | undefined {
+  if (!rpID) return undefined;
+  if (/^https?:\/\//.test(rpID)) return undefined;
+  if (rpID.includes('/') || rpID.includes(':')) return undefined;
+  return rpID;
+}
+
+/** Basic HTML escaping to prevent XSS in email templates. */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+let _auth: ReturnType<typeof betterAuth> | null = null;
+
+/** Return the initialized auth instance, throwing if not yet created. */
+export function getAuth(): ReturnType<typeof betterAuth> {
+  if (!_auth) {
+    throw new Error("Auth has not been initialized. Call initAuth() first.");
+  }
+  return _auth;
+}
 
 /**
  * Initialize the auth instance. Must be called after OIDC env vars have
  * been bootstrapped from the database (in index.ts startup).
  */
 export function initAuth() {
-  auth = betterAuth({
+  // @ts-expect-error better-auth infers Auth<SpecificOptions> which is structurally
+  // incompatible with Auth<BetterAuthOptions> due to invariant generic usage, but
+  // they are identical at runtime.
+  _auth = betterAuth({
     appName: process.env.APP_NAME || "Catalyst",
     baseURL: baseUrl,
     secret: authSecret as string,
@@ -79,11 +139,6 @@ export function initAuth() {
       },
     },
     session: {
-      additionalFields: {
-        // Note: ipAddress and userAgent are built-in session fields in better-auth.
-        // Defining them here would cause Prisma migration conflicts.
-        csrfToken: { type: "string", required: false },
-      },
       cookieCache: {
         // Disabled by default to prevent stale session data during rapid permission
         // changes and to ensure fresh role/permission resolution on every request.
@@ -94,49 +149,49 @@ export function initAuth() {
       },
       cookie: {
         attributes: {
-          sameSite: 'Strict',
-          secure: process.env.NODE_ENV === 'production',
+          sameSite: process.env.NODE_ENV === 'production' ? (process.env.FRONTEND_URL?.startsWith('https') ? 'none' : 'lax') : 'lax',
+          secure: process.env.NODE_ENV !== 'development' && process.env.COOKIE_SECURE !== 'false',
           httpOnly: true,
           path: '/',
         }
       }
     },
-    trustedOrigins: [
-      baseUrl,
-      process.env.FRONTEND_URL,
-      ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(s => s.trim()) : []),
-      ...(process.env.NODE_ENV !== 'production'
-        ? [
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:5173",
-            ...(process.env.DEV_EXTRA_ORIGINS
-              ? process.env.DEV_EXTRA_ORIGINS.split(',').map((s) => s.trim())
-              : []),
-          ]
-        : []),
-    ].filter((origin): origin is string => Boolean(origin)),
+    trustedOrigins: buildTrustedOrigins(),
     database: prismaAdapter(prisma, { provider: "postgresql" }),
+    rateLimit: {
+      enabled: true,
+      window: 60,
+      max: 30,
+      customRules: {
+        '/sign-in/email': { window: 60, max: 5 },
+        '/sign-up/email': { window: 60, max: 5 },
+        '/request-password-reset': { window: 300, max: 3 },
+      },
+    },
     emailAndPassword: {
       enabled: true,
+      requireEmailVerification: true,
       sendResetPassword: async ({ user, url }) => {
         const { sendEmail } = await import("./services/mailer");
-        const panelName = (await prisma.themeSettings.findUnique({ where: { id: 'default' } }))?.panelName || process.env.APP_NAME || 'Catalyst';
+        const rawPanelName = (await prisma.themeSettings.findUnique({ where: { id: 'default' } }))?.panelName || process.env.APP_NAME || 'Catalyst';
+        const panelName = escapeHtml(rawPanelName);
+        const userName = escapeHtml(user.name || '');
         const content = {
           subject: `Reset your ${panelName} password`,
-          html: `<p>Hello ${user.name},</p><p>Reset your password: <a href="${url}">${url}</a></p>`,
+          html: `<p>Hello ${userName},</p><p>Reset your password: <a href="${url}">${url}</a></p>`,
           text: `Reset your password: ${url}`,
         };
         await sendEmail({ to: user.email, ...content });
       },
       sendVerificationEmail: async ({ user, url }) => {
         const { sendEmail } = await import("./services/mailer");
-        const panelName = (await prisma.themeSettings.findUnique({ where: { id: 'default' } }))?.panelName || process.env.APP_NAME || 'Catalyst';
+        const rawPanelName = (await prisma.themeSettings.findUnique({ where: { id: 'default' } }))?.panelName || process.env.APP_NAME || 'Catalyst';
+        const panelName = escapeHtml(rawPanelName);
+        const userName = escapeHtml(user.name || '');
         await sendEmail({
           to: user.email,
           subject: `Verify your ${panelName} email`,
-          html: `<p>Hello ${user.name},</p><p>Please verify your email address by clicking the link below:</p><p><a href="${url}">${url}</a></p>`,
+          html: `<p>Hello ${userName},</p><p>Please verify your email address by clicking the link below:</p><p><a href="${url}">${url}</a></p>`,
           text: `Verify your email: ${url}`,
         });
       },
@@ -146,16 +201,20 @@ export function initAuth() {
       // Setting autoSignIn to false would prevent session creation on register.
     },
     plugins: [
-      bearer({
-        requireSignature: true,
-      }),
+      bearer(),
       twoFactor({
         issuer: process.env.APP_NAME || "Catalyst",
         // skipVerificationOnEnable intentionally omitted — requiring TOTP
         // verification during enrollment ensures the user can actually generate
         // valid codes before 2FA is activated (prevents lockout).
       }),
-      jwtPlugin(),
+      jwtPlugin({
+        jwt: {
+          expiration: 60 * 60 * 24 * 7,
+          issuer: baseUrl,
+          audience: 'catalyst-api',
+        },
+      }),
       admin({
         roles: (() => {
           const ac = createAccessControl({
@@ -174,23 +233,8 @@ export function initAuth() {
         adminRoles: ["administrator"],
       }),
       passkey({
-        origin: [
-          baseUrl,
-          process.env.FRONTEND_URL,
-          ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(s => s.trim()) : []),
-          ...(process.env.NODE_ENV !== 'production'
-            ? [
-                "http://localhost:3000",
-                "http://localhost:5173",
-                "http://127.0.0.1:3000",
-                "http://127.0.0.1:5173",
-                ...(process.env.DEV_EXTRA_ORIGINS
-                  ? process.env.DEV_EXTRA_ORIGINS.split(',').map((s) => s.trim())
-                  : []),
-              ]
-            : []),
-        ].filter((origin): origin is string => Boolean(origin)),
-        rpID: process.env.PASSKEY_RP_ID || undefined,
+        origin: buildPasskeyOrigins(),
+        rpID: validateRpID(process.env.PASSKEY_RP_ID),
         advanced: {
           webAuthnChallengeCookie: "better-auth-passkey",
         },
@@ -199,5 +243,25 @@ export function initAuth() {
         config: buildOAuthConfig(),
       }),
     ],
-  }) as unknown as AuthInstance;
+    advanced: {
+      ipAddress: {
+        disableIpTracking: false,
+        ipAddressHeaders: ['x-forwarded-for', 'x-real-ip'],
+      },
+      crossSubDomainCookies: { enabled: false },
+      useSecureCookies: process.env.NODE_ENV === 'production',
+    },
+  });
 }
+
+/** Backward-compatible proxy that delegates to the initialized auth instance. */
+export const auth = new Proxy({} as ReturnType<typeof betterAuth>, {
+  get(_target, prop) {
+    const instance = getAuth();
+    const value = Reflect.get(instance, prop);
+    if (typeof value === 'function') {
+      return value.bind(instance);
+    }
+    return value;
+  },
+});

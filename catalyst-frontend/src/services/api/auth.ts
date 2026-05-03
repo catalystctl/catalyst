@@ -289,6 +289,11 @@ export const authApi = {
     });
     const data = extractResponse(response);
     if (data.redirect && data.url) {
+      const trusted = new URL(data.url);
+      const allowed = [frontendOrigin, import.meta.env.VITE_BETTER_AUTH_URL].filter(Boolean);
+      if (!allowed.some(o => trusted.origin === new URL(o).origin)) {
+        throw new Error('Untrusted redirect URL');
+      }
       window.location.href = data.url;
     }
     return data;

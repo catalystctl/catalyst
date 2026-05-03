@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+# Mock docker-compose standalone binary for testing install.sh across distros
+
+case "$1" in
+  --version|-v|version)
+    echo "docker-compose version 1.29.2, build 5becea4c"
+    ;;
+  *)
+    echo "Mock docker-compose: $*" >&2
+    ;;
+esac

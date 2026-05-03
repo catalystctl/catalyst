@@ -1,0 +1,27 @@
+#!/usr/bin/env sh
+# Mock Docker binary for testing install.sh across distros
+
+case "$1" in
+  version)
+    echo "28.0.0"
+    ;;
+  info)
+    echo "Server Version: 28.0.0"
+    echo "Storage Driver: overlay2"
+    echo "..."
+    ;;
+  compose)
+    shift
+    case "$1" in
+      version)
+        echo "Docker Compose version v2.30.0"
+        ;;
+      *)
+        echo "Mock docker compose: $*" >&2
+        ;;
+    esac
+    ;;
+  *)
+    echo "Mock docker: $*" >&2
+    ;;
+esac

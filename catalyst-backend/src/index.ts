@@ -917,6 +917,9 @@ async function bootstrap() {
 				process.env.BACKEND_EXTERNAL_ADDRESS ||
 				`${request.protocol}://${request.headers.host}`;
 			const baseUrl = externalBase;
+			if (/[;&|`$()\[\]{}]/.test(baseUrl)) {
+				return reply.status(400).send({ error: 'Invalid backend URL' });
+			}
 			const script = generateDeploymentScript(
 				baseUrl,
 				deployToken.node.id,
@@ -1384,7 +1387,7 @@ if [ "\$EUID" -ne 0 ]; then
 fi
 # ---------------------------------------------------------------------------
 
-BACKEND_HTTP_URL="${backendUrl}"
+BACKEND_HTTP_URL=${shellEscape(backendUrl)}
 case "$BACKEND_HTTP_URL" in
   ws://*) BACKEND_HTTP_URL="http://\${BACKEND_HTTP_URL#ws://}" ;;
   wss://*) BACKEND_HTTP_URL="https://\${BACKEND_HTTP_URL#wss://}" ;;

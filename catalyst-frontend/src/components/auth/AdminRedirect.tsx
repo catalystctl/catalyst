@@ -15,7 +15,6 @@ const ADMIN_ROUTES: Array<{ path: string; permissions: string[] }> = [
   { path: '/admin/api-keys', permissions: ['apikey.manage', 'admin.read', 'admin.write'] },
   { path: '/admin/system', permissions: ['admin.write'] },
   { path: '/admin/security', permissions: ['admin.read', 'admin.write'] },
-  { path: '/admin/audit-logs', permissions: ['admin.read', 'admin.write'] },
   { path: '/admin/plugins', permissions: ['admin.read', 'admin.write'] },
   { path: '/admin/theme-settings', permissions: ['admin.write'] },
 ];

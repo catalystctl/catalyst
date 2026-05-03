@@ -10,6 +10,27 @@ const MAX_MESSAGE_LENGTH = 2000;
 const MAX_STACK_LENGTH = 10000;
 const MAX_METADATA_BYTES = 50 * 1024;
 
+const SENSITIVE_PATTERNS = [
+  { regex: /(\bAuthorization\b["']?\s*[:=]\s*["']?Bearer\s+)[^\s"']+/gi, mask: '$1[REDACTED]' },
+  { regex: /(\bset-auth-token\b["']?\s*[:=]\s*["']?)[^"']+/gi, mask: '$1[REDACTED]' },
+  { regex: /(\btoken\b["']?\s*[:=]\s*["']?)[^"']+/gi, mask: '$1[REDACTED]' },
+  { regex: /(\bpassword\b["']?\s*[:=]\s*["']?)[^"']+/gi, mask: '$1[REDACTED]' },
+];
+function redact(input: string): string {
+  return SENSITIVE_PATTERNS.reduce((acc, { regex, mask }) => acc.replace(regex, mask), input);
+}
+
+function redactObject(obj: unknown): unknown {
+  if (typeof obj === 'string') return redact(obj);
+  if (Array.isArray(obj)) return obj.map(redactObject);
+  if (obj && typeof obj === 'object') {
+    return Object.fromEntries(
+      Object.entries(obj).map(([k, v]) => [k, redactObject(v)]),
+    );
+  }
+  return obj;
+}
+
 const dedupMap = new Map<string, number>();
 
 function getDedupKey(component: string, message: string): string {
@@ -61,9 +82,9 @@ export async function reportSystemError(opts: {
     const body = {
       level,
       component,
-      message: trimmedMessage,
-      stack: trimmedStack,
-      metadata: sanitizeMetadata(metadata),
+      message: redact(trimmedMessage),
+      stack: trimmedStack ? redact(trimmedStack) : trimmedStack,
+      metadata: sanitizeMetadata(redactObject(metadata) as Record<string, any>),
     };
 
     await fetch(`${BASE_URL}/api/system-errors/report`, {

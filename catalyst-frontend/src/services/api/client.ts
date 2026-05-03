@@ -1,13 +1,20 @@
 import { useAuthStore } from '../../stores/authStore';
 import { reportSystemError } from './systemErrors';
 
-/** Module-level flag set by authStore.login() to suppress the 401 interceptor
+/** Module-level guard set by authStore.login() to suppress the 401 interceptor
  *  while a login request is in flight.  Without this, a stale server-side
  *  sign-out (from a previous logout) can destroy the brand-new session cookie,
  *  causing /api/auth/me or page-level API calls to 401 and the interceptor
  *  to wipe isAuthenticated — bouncing the user back to /login.
+ *  Uses reference counting so overlapping login/refresh calls don't race.
  */
-export const loginGuard = { active: false };
+class AuthGuard {
+  private count = 0;
+  get active() { return this.count > 0; }
+  enter() { this.count++; }
+  exit() { this.count = Math.max(0, this.count - 1); }
+}
+export const loginGuard = new AuthGuard();
 
 const normalizeBaseUrl = (value?: string) => {
   if (!value) return '';
@@ -77,6 +84,15 @@ class ApiClient {
     const authHeaders: Record<string, string> = {};
     if (token && token.startsWith('catalyst_')) {
       authHeaders['Authorization'] = `Bearer ${token}`;
+    }
+
+    // Add CSRF token header
+    const csrfToken = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('csrf-token='))
+      ?.split('=')[1];
+    if (csrfToken) {
+      authHeaders['X-CSRF-Token'] = decodeURIComponent(csrfToken);
     }
 
     // Only set Content-Type when there's a body to send.

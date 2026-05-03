@@ -17,11 +17,13 @@ interface AuthState {
   error: string | null;
   /** @internal AbortController for an in-flight server sign-out request */
   _pendingLogoutController?: AbortController;
+  /** @internal BroadcastChannel for cross-tab logout sync */
+  _broadcast?: BroadcastChannel;
   login: (values: LoginSchema, options?: { forcePasskeyFallback?: boolean }) => Promise<void>;
   register: (values: RegisterSchema) => Promise<void>;
   refresh: () => Promise<void>;
   init: () => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   setUser: (user: User | null) => void;
   setSession: (payload: { user: User }) => void;
   verifyTwoFactor: (payload: { code: string; trustDevice?: boolean }) => Promise<void>;
@@ -33,12 +35,25 @@ type AuthSet = (
 ) => void;
 type AuthGet = () => AuthState;
 
+const ALLOWED_IMAGE_PROTOCOLS = ['data:', 'https:'];
+const ALLOWED_IMAGE_MIME = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+function sanitizeImageUrl(url?: string | null): string | undefined {
+  if (!url) return undefined;
+  try {
+    const parsed = new URL(url);
+    if (!ALLOWED_IMAGE_PROTOCOLS.includes(parsed.protocol)) return undefined;
+    if (parsed.protocol === 'data:' && !ALLOWED_IMAGE_MIME.some(m => parsed.pathname.startsWith(m))) {
+      return undefined;
+    }
+    return url;
+  } catch { return undefined; }
+}
+
 const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [], AuthState> = (set, get) => {
-  const rememberMe = localStorage.getItem('catalyst-remember-me') === 'true';
   return {
     user: null,
     token: null, // No longer using localStorage tokens
-    rememberMe,
+    rememberMe: false,
     isAuthenticated: false,
     isReady: false,
     isLoading: false,
@@ -52,13 +67,13 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
       // sign-out (or any transient 401) doesn't wipe isAuthenticated before
       // we've finished setting it.
       const { loginGuard } = await import('../services/api/client');
-      loginGuard.active = true;
+      loginGuard.enter();
       (set as AuthSet)({ isLoading: true, error: null });
       try {
         const { user } = await authApi.login(values, options);
         // Cookie-based authentication - tokens stored in HttpOnly cookies
         (set as AuthSet)({
-          user,
+          user: { ...user, image: sanitizeImageUrl(user.image) },
           token: null, // No longer storing token in memory
           rememberMe: Boolean(values.rememberMe),
           isAuthenticated: true,
@@ -71,7 +86,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         // permission-gated UI (admin routes, etc.) works without a reload.
         // Keep the login-in-progress flag true during this window so transient
         // 401s from a stale sign-out don't bounce the user.
-        const clearFlag = () => { loginGuard.active = false; };
+        const clearFlag = () => { loginGuard.exit(); };
         if (user.permissions && user.permissions.length === 0) {
           setTimeout(async () => {
             try {
@@ -105,7 +120,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         const rawError = error.response?.data?.error;
         const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || error.message || 'Login failed';
         (set as AuthSet)({ isLoading: false, error: message as string });
-        loginGuard.active = false;
+        loginGuard.exit();
         reportSystemError({
           level: 'error',
           component: 'AuthStore:login',
@@ -117,18 +132,18 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
     },
     register: async (values) => {
       const { loginGuard } = await import('../services/api/client');
-      loginGuard.active = true;
+      loginGuard.enter();
       (set as AuthSet)({ isLoading: true, error: null });
       try {
         const { user } = await authApi.register(values);
         // Cookie-based authentication - tokens stored in HttpOnly cookies
-        (set as AuthSet)({ user, token: null, isAuthenticated: true, isLoading: false, isReady: true, error: null });
+        (set as AuthSet)({ user: { ...user, image: sanitizeImageUrl(user.image) }, token: null, isAuthenticated: true, isLoading: false, isReady: true, error: null });
       } catch (err: unknown) {
         const error = err as { response?: { data?: { error?: unknown } }; message?: string };
         const rawError = error.response?.data?.error;
         const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || error.message || 'Registration failed';
         (set as AuthSet)({ isLoading: false, error: message as string });
-        loginGuard.active = false;
+        loginGuard.exit();
         reportSystemError({
           level: 'error',
           component: 'AuthStore:register',
@@ -137,7 +152,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         });
         throw err;
       } finally {
-        setTimeout(() => { loginGuard.active = false; }, 3_000);
+        setTimeout(() => { loginGuard.exit(); }, 3_000);
       }
     },
     refresh: async () => {
@@ -147,7 +162,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         const { user } = await authApi.refresh();
         (set as AuthSet)({
           token: null,
-          user,
+          user: { ...user, image: sanitizeImageUrl(user.image) },
           isAuthenticated: true,
           isRefreshing: false,
           isReady: true,
@@ -206,16 +221,22 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         (set as AuthSet)({ isReady: true });
       }
     },
-    logout: () => {
-      localStorage.removeItem('catalyst-remember-me');
+    logout: async () => {
       localStorage.removeItem('catalyst-auth');
       (set as AuthSet)({ user: null, token: null, isAuthenticated: false, isReady: true, rememberMe: false });
+      const bc = (get as AuthGet)()._broadcast;
+      if (bc) bc.postMessage({ type: 'logout' });
       // Fire-and-forget server sign-out, but abort it if the user logs back in
       // before it completes — otherwise the delayed sign-out response destroys
       // the brand-new session cookie, causing an immediate redirect to /login.
       const controller = new AbortController();
-      void authApi.logout({ signal: controller.signal }).catch(() => {});
       (get as AuthGet)()._pendingLogoutController = controller;
+      try {
+        await authApi.logout({ signal: controller.signal });
+      } catch {
+        // If server logout fails, cookie may still be valid — force reload
+        window.location.reload();
+      }
     },
     setUser: (user) => (set as AuthSet)({ user, isAuthenticated: Boolean(user) }),
     setSession: ({ user }) => {
@@ -232,13 +253,13 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
     },
     verifyTwoFactor: async (payload) => {
       const { loginGuard } = await import('../services/api/client');
-      loginGuard.active = true;
+      loginGuard.enter();
       (set as AuthSet)({ isLoading: true, error: null });
       try {
         const { user } = await authApi.verifyTwoFactor(payload);
         // Cookie-based authentication - tokens stored in HttpOnly cookies
         (set as AuthSet)({
-          user,
+          user: { ...user, image: sanitizeImageUrl(user.image) },
           token: null,
           isAuthenticated: true,
           isLoading: false,
@@ -250,7 +271,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         const rawError = error.response?.data?.error;
         const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || error.message || 'Two-factor verification failed';
         (set as AuthSet)({ isLoading: false, error: message as string });
-        loginGuard.active = false;
+        loginGuard.exit();
         reportSystemError({
           level: 'error',
           component: 'AuthStore:verify2FA',
@@ -259,7 +280,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         });
         throw err;
       } finally {
-        setTimeout(() => { loginGuard.active = false; }, 3_000);
+        setTimeout(() => { loginGuard.exit(); }, 3_000);
       }
     },
   };
@@ -269,10 +290,26 @@ export const useAuthStore = create<AuthState>()(
   persist(createAuthState, {
     name: 'catalyst-auth',
     partialize: (state: AuthState) => ({
-      user: state.user,
-      isAuthenticated: state.isAuthenticated,
       rememberMe: state.rememberMe,
-      // Do NOT store token - using HttpOnly cookies instead
     }),
   }),
 );
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'catalyst-auth') {
+      useAuthStore.getState().init();
+    }
+  });
+
+  const channel = new BroadcastChannel('catalyst-auth');
+  channel.onmessage = (event) => {
+    if (event.data?.type === 'logout') {
+      useAuthStore.setState({
+        user: null, token: null, isAuthenticated: false, isReady: true, rememberMe: false,
+      });
+      window.location.href = '/login';
+    }
+  };
+  (useAuthStore.getState() as any)._broadcast = channel;
+}

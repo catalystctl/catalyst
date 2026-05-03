@@ -35,7 +35,7 @@ error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 info "Checking for Docker..."
 
 if command -v docker &>/dev/null; then
-    DOCKER_VERSION=$(docker version --format '{{.Server.Version}}' 2>/dev/null || docker -v | grep -oP '(?<=version )[^,]+')
+    DOCKER_VERSION=$(docker version --format '{{.Server.Version}}' 2>/dev/null || docker -v | sed -n 's/.*version \([^,]*\).*/\1/p')
     ok "Docker found (version ${DOCKER_VERSION})"
 
     # Make sure the daemon is reachable
@@ -60,10 +60,10 @@ fi
 info "Checking for Docker Compose..."
 
 if docker compose version &>/dev/null; then
-    COMPOSE_VERSION=$(docker compose version --short 2>/dev/null)
+    COMPOSE_VERSION=$(docker compose version | sed -n 's/.*version \([^,]*\).*/\1/p')
     ok "Docker Compose found (version ${COMPOSE_VERSION})"
 elif command -v docker-compose &>/dev/null; then
-    COMPOSE_VERSION=$(docker-compose --version | grep -oP '(?<=version )[^,]+')
+    COMPOSE_VERSION=$(docker-compose --version | sed -n 's/.*version \([^,]*\).*/\1/p')
     warn "Found standalone docker-compose (v${COMPOSE_VERSION}). Docker Compose V2 (plugin) is recommended."
 else
     error "Docker Compose is not available."
@@ -72,7 +72,7 @@ else
 fi
 
 # ── 3. Check for required tools ──────────────────────────────────────────────
-for cmd in curl tar; do
+for cmd in curl tar openssl; do
     if ! command -v "$cmd" &>/dev/null; then
         error "'$cmd' is required but not found. Please install it and re-run."
         exit 1
@@ -85,19 +85,19 @@ info "Downloading ${TARGET_DIR} from ${REPO} (${BRANCH})..."
 ARCHIVE_URL="https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz"
 
 # Create a temporary directory for extraction
-TMPDIR=$(mktemp -d)
-trap 'rm -rf "$TMPDIR"' EXIT
+WORK_DIR=$(mktemp -d /tmp/catalyst-install.XXXXXX)
+trap 'rm -rf "$WORK_DIR"' EXIT
 
-if ! curl -fsSL "$ARCHIVE_URL" -o "${TMPDIR}/catalyst.tar.gz"; then
+if ! curl -fsSL "$ARCHIVE_URL" -o "${WORK_DIR}/catalyst.tar.gz"; then
     error "Failed to download from GitHub. Check your internet connection and try again."
     exit 1
 fi
 
 ok "Download complete. Extracting..."
 
-tar -xzf "${TMPDIR}/catalyst.tar.gz" -C "$TMPDIR" --strip-components=1 "${REPO#*/}-${BRANCH}/${TARGET_DIR}/" 2>/dev/null
+tar -xzf "${WORK_DIR}/catalyst.tar.gz" -C "$WORK_DIR" --strip-components=1 "${REPO#*/}-${BRANCH}/${TARGET_DIR}/"
 
-if [[ ! -d "${TMPDIR}/${TARGET_DIR}" ]]; then
+if [[ ! -d "${WORK_DIR}/${TARGET_DIR}" ]]; then
     error "Extraction failed — the '${TARGET_DIR}' folder was not found in the archive."
     exit 1
 fi
@@ -108,15 +108,16 @@ if [[ -d "$DEST" ]]; then
     warn "'${TARGET_DIR}' already exists in ${PWD}."
     if [[ -f "${DEST}/.env" ]]; then
         # Preserve existing .env
-        cp "${TMPDIR}/${TARGET_DIR}/"* "$DEST/" 2>/dev/null || true
-        cp -r "${TMPDIR}/${TARGET_DIR}/nginx" "$DEST/nginx" 2>/dev/null || true
+        mv "${DEST}/.env" "${DEST}/.env.backup.$$"
+        cp -r "${WORK_DIR}/${TARGET_DIR}/." "$DEST/" 2>/dev/null || true
+        mv "${DEST}/.env.backup.$$" "${DEST}/.env"
         ok "Updated files (kept your existing .env)."
     else
-        cp -r "${TMPDIR}/${TARGET_DIR}/." "$DEST/"
+        cp -r "${WORK_DIR}/${TARGET_DIR}/." "$DEST/"
         ok "Updated '${TARGET_DIR}' in ${PWD}."
     fi
 else
-    mv "${TMPDIR}/${TARGET_DIR}" "$DEST"
+    mv "${WORK_DIR}/${TARGET_DIR}" "$DEST"
     ok "Created '${TARGET_DIR}' in ${PWD}."
 fi
 
@@ -129,12 +130,12 @@ else
     ok "Created .env from .env.example"
 
     # Generate a strong Postgres password and auth secret
-    NEW_PG_PASS=$(openssl rand -base64 24 | tr -d '/+=' | head -c 32)
+    NEW_PG_PASS=$(openssl rand -base64 48 | tr -d '/+=' | head -c 32)
     NEW_AUTH_SECRET=$(openssl rand -base64 32)
 
     # Patch .env with generated secrets
-    sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=${NEW_PG_PASS}|" "${DEST}/.env"
-    sed -i "s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=${NEW_AUTH_SECRET}|" "${DEST}/.env"
+    sed -i "s~^POSTGRES_PASSWORD=.*~POSTGRES_PASSWORD=${NEW_PG_PASS}~" "${DEST}/.env"
+    sed -i "s~^BETTER_AUTH_SECRET=.*~BETTER_AUTH_SECRET=${NEW_AUTH_SECRET}~" "${DEST}/.env"
 
     ok "Generated secure POSTGRES_PASSWORD and BETTER_AUTH_SECRET."
 fi

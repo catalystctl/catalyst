@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Mock curl that serves a local tar.gz instead of downloading from GitHub
+# Usage: mock-curl -fsSL <url> -o <output>
+
+LOCAL_ARCHIVE="/tmp/test-catalyst-archive/catalyst.tar.gz"
+
+# Parse args to find -o output file
+OUTPUT=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -o)
+            OUTPUT="$2"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+if [[ -n "$OUTPUT" && -f "$LOCAL_ARCHIVE" ]]; then
+    cp "$LOCAL_ARCHIVE" "$OUTPUT"
+    exit 0
+else
+    echo "mock-curl: could not find $LOCAL_ARCHIVE" >&2
+    exit 1
+fi
