@@ -2255,16 +2255,28 @@ impl WebSocketHandler {
         let stdout_path = base.join("stdout");
         let stderr_path = base.join("stderr");
 
+        // Log initial file state for diagnostics
+        let stdout_exists = stdout_path.exists();
+        let stderr_exists = stderr_path.exists();
+        let stdout_meta = tokio::fs::metadata(&stdout_path).await.ok();
+        let stderr_meta = tokio::fs::metadata(&stderr_path).await.ok();
+        info!(
+            "Console log stream started for server {} (container {}) — stdout: exists={} size={:?}, stderr: exists={} size={:?}",
+            server_id,
+            container_id,
+            stdout_exists,
+            stdout_meta.as_ref().map(|m| m.len()),
+            stderr_exists,
+            stderr_meta.as_ref().map(|m| m.len()),
+        );
+
         let mut stdout_pos = 0u64;
         let mut stderr_pos = 0u64;
-
-        info!(
-            "Console log stream started for server {} (container {})",
-            server_id, container_id
-        );
+        let mut loop_count = 0u32;
 
         // Tail the stdout/stderr files
         loop {
+            loop_count += 1;
             let running = self
                 .runtime
                 .is_container_running(container_id)
@@ -2272,68 +2284,103 @@ impl WebSocketHandler {
                 .unwrap_or(false);
             let mut had_data = false;
 
-            if let Ok(content) = tokio::fs::read_to_string(&stdout_path).await {
-                if (stdout_pos as usize) < content.len() {
-                    let new_text = &content[stdout_pos as usize..];
-                    let (lines, trailing) = split_terminal_lines(new_text);
-                    let processed_len = new_text.len() - trailing.len();
-                    let mut batch = String::new();
-                    for line in lines {
-                        batch.push_str(&line);
-                        batch.push('\n');
-                        if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+            match tokio::fs::read_to_string(&stdout_path).await {
+                Ok(content) => {
+                    if (stdout_pos as usize) < content.len() {
+                        let new_text = &content[stdout_pos as usize..];
+                        let (lines, trailing) = split_terminal_lines(new_text);
+                        let processed_len = new_text.len() - trailing.len();
+                        let mut batch = String::new();
+                        for line in lines {
+                            batch.push_str(&line);
+                            batch.push('\n');
+                            if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                                self.emit_console_output(server_id, "stdout", &batch)
+                                    .await?;
+                                batch.clear();
+                            }
+                        }
+                        if !batch.is_empty() {
                             self.emit_console_output(server_id, "stdout", &batch)
                                 .await?;
-                            batch.clear();
                         }
+                        stdout_pos += processed_len as u64;
+                        had_data = !new_text.is_empty();
+                        debug!(
+                            "server {} stdout: read {} bytes, emitted {} bytes, pos now {}",
+                            server_id,
+                            new_text.len(),
+                            processed_len,
+                            stdout_pos
+                        );
                     }
-                    if !batch.is_empty() {
-                        self.emit_console_output(server_id, "stdout", &batch)
-                            .await?;
-                    }
-                    stdout_pos += processed_len as u64;
-                    had_data = !new_text.is_empty();
-                    debug!(
-                        "server {} stdout: read {} bytes, emitted {} bytes, pos now {}",
-                        server_id,
-                        new_text.len(),
-                        processed_len,
-                        stdout_pos
-                    );
                 }
-            }
-            if let Ok(content) = tokio::fs::read_to_string(&stderr_path).await {
-                if (stderr_pos as usize) < content.len() {
-                    let new_text = &content[stderr_pos as usize..];
-                    let (lines, trailing) = split_terminal_lines(new_text);
-                    let processed_len = new_text.len() - trailing.len();
-                    let mut batch = String::new();
-                    for line in lines {
-                        batch.push_str(&line);
-                        batch.push('\n');
-                        if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
-                            self.emit_console_output(server_id, "stderr", &batch)
-                                .await?;
-                            batch.clear();
-                        }
+                Err(e) => {
+                    if loop_count <= 5 {
+                        warn!("server {} stdout read error: {}", server_id, e);
                     }
-                    if !batch.is_empty() {
-                        self.emit_console_output(server_id, "stderr", &batch)
-                            .await?;
-                    }
-                    stderr_pos += processed_len as u64;
-                    had_data = had_data || !new_text.is_empty();
-                    debug!(
-                        "server {} stderr: read {} bytes, emitted {} bytes, pos now {}",
-                        server_id,
-                        new_text.len(),
-                        processed_len,
-                        stderr_pos
-                    );
                 }
             }
 
+            match tokio::fs::read_to_string(&stderr_path).await {
+                Ok(content) => {
+                    if (stderr_pos as usize) < content.len() {
+                        let new_text = &content[stderr_pos as usize..];
+                        let (lines, trailing) = split_terminal_lines(new_text);
+                        let processed_len = new_text.len() - trailing.len();
+                        let mut batch = String::new();
+                        for line in lines {
+                            batch.push_str(&line);
+                            batch.push('\n');
+                            if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
+                                self.emit_console_output(server_id, "stderr", &batch)
+                                    .await?;
+                                batch.clear();
+                            }
+                        }
+                        if !batch.is_empty() {
+                            self.emit_console_output(server_id, "stderr", &batch)
+                                .await?;
+                        }
+                        stderr_pos += processed_len as u64;
+                        had_data = had_data || !new_text.is_empty();
+                        debug!(
+                            "server {} stderr: read {} bytes, emitted {} bytes, pos now {}",
+                            server_id,
+                            new_text.len(),
+                            processed_len,
+                            stderr_pos
+                        );
+                    }
+                }
+                Err(e) => {
+                    if loop_count <= 5 {
+                        warn!("server {} stderr read error: {}", server_id, e);
+                    }
+                }
+            }
+
+            // Periodic status log every 50 iterations (~10 seconds) when no data
+            if loop_count.is_multiple_of(50) && !had_data {
+                let stdout_size = tokio::fs::metadata(&stdout_path)
+                    .await
+                    .ok()
+                    .map(|m| m.len());
+                let stderr_size = tokio::fs::metadata(&stderr_path)
+                    .await
+                    .ok()
+                    .map(|m| m.len());
+                debug!(
+                    "server {} console stream alive (loop {}): running={}, stdout_size={:?}, stderr_size={:?}, stdout_pos={}, stderr_pos={}",
+                    server_id, loop_count, running, stdout_size, stderr_size, stdout_pos, stderr_pos
+                );
+            }
+
             if !running {
+                info!(
+                    "server {} container stopped — flushing trailing console data",
+                    server_id
+                );
                 // Container stopped — flush any trailing partial lines too
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 if let Ok(content) = tokio::fs::read_to_string(&stdout_path).await {
@@ -2384,6 +2431,10 @@ impl WebSocketHandler {
                         }
                     }
                 }
+                info!(
+                    "Console log stream ended for server {} (container {}) after {} loops",
+                    server_id, container_id, loop_count
+                );
                 break;
             }
 
