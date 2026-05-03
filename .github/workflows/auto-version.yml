@@ -129,7 +129,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git add -A
-          git commit -m "chore(release): bump version to $VERSION [skip ci]" || true
+          git commit -m "chore(release): bump version to $VERSION" || true
 
           git tag -a "v$VERSION" -m "Release v$VERSION"
           git push origin main --follow-tags

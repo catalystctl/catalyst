@@ -3,6 +3,8 @@ name: CI/CD - Docker Publish
 on:
   push:
     branches: [main, develop]
+    tags:
+      - 'v*'
     paths:
       - 'catalyst-backend/**'
       - 'catalyst-frontend/**'
@@ -40,6 +42,7 @@ jobs:
               - 'package.json'
             frontend:
               - 'catalyst-frontend/**'
+              - 'catalyst-shared/**'
               - 'bun.lock'
               - 'bun.lockb'
               - 'package.json'
@@ -70,6 +73,7 @@ jobs:
             type=sha,prefix=
             type=ref,event=branch
             type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
 
       - name: Build and push
         uses: useblacksmith/build-push-action@v2
@@ -106,6 +110,7 @@ jobs:
             type=sha,prefix=
             type=ref,event=branch
             type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
 
       - name: Build and push
         uses: useblacksmith/build-push-action@v2
