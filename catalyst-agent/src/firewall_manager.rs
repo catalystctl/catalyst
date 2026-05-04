@@ -221,11 +221,20 @@ impl FirewallManager {
         }
 
         let ft = if run_firewall_command("ipset", &["list"]).await.is_ok() {
-            if run_firewall_command("iptables", &["-L", "-n"])
+            let iptables_ok = run_firewall_command("iptables", &["-L", "-n"])
                 .await
-                .is_ok()
-            {
-                info!("Using ipset + iptables for firewall management");
+                .is_ok();
+            let ip6tables_ok = run_firewall_command("ip6tables", &["-L", "-n"])
+                .await
+                .is_ok();
+            if iptables_ok || ip6tables_ok {
+                if iptables_ok && ip6tables_ok {
+                    info!("Using ipset + iptables/ip6tables for firewall management");
+                } else if iptables_ok {
+                    info!("Using ipset + iptables for firewall management");
+                } else {
+                    info!("Using ipset + ip6tables for firewall management");
+                }
                 FirewallType::Ipset
             } else {
                 FirewallType::None
@@ -244,6 +253,18 @@ impl FirewallManager {
             .is_ok()
         {
             info!("Using iptables for firewall management");
+            if run_firewall_command("ip6tables", &["-L", "-n"])
+                .await
+                .is_ok()
+            {
+                info!("ip6tables is also available");
+            }
+            FirewallType::Iptables
+        } else if run_firewall_command("ip6tables", &["-L", "-n"])
+            .await
+            .is_ok()
+        {
+            info!("Using ip6tables for firewall management");
             FirewallType::Iptables
         } else {
             warn!("No firewall detected or iptables not available");
@@ -593,70 +614,80 @@ impl FirewallManager {
     /// Add idempotent iptables rules using the `catalyst` comment match.
     /// `-C` checks first to avoid duplicates.
     async fn allow_port_iptables(port: u16, protocol: &str, container_ip: &str) -> AgentResult<()> {
+        let cmd = Self::iptables_cmd(container_ip);
         info!(
-            "Configuring iptables to allow port {}/{} for container {}",
-            port, protocol, container_ip
+            "Configuring {} to allow port {}/{} for container {}",
+            cmd, port, protocol, container_ip
         );
         let port_str = port.to_string();
 
         // INPUT rule — allow traffic to the host port.
-        Self::iptables_ensure_rule(&[
-            "-I",
-            "INPUT",
-            "-p",
-            protocol,
-            "--dport",
-            &port_str,
-            "-m",
-            "comment",
-            "--comment",
-            "catalyst-game-server",
-            "-j",
-            "ACCEPT",
-        ])
+        Self::iptables_ensure_rule(
+            cmd,
+            &[
+                "-I",
+                "INPUT",
+                "-p",
+                protocol,
+                "--dport",
+                &port_str,
+                "-m",
+                "comment",
+                "--comment",
+                "catalyst-game-server",
+                "-j",
+                "ACCEPT",
+            ],
+        )
         .await?;
 
         // FORWARD rule — incoming to container.
-        Self::iptables_ensure_rule(&[
-            "-I",
-            "FORWARD",
-            "-p",
-            protocol,
-            "--dport",
-            &port_str,
-            "-d",
-            container_ip,
-            "-m",
-            "comment",
-            "--comment",
-            "catalyst-game-server",
-            "-j",
-            "ACCEPT",
-        ])
+        Self::iptables_ensure_rule(
+            cmd,
+            &[
+                "-I",
+                "FORWARD",
+                "-p",
+                protocol,
+                "--dport",
+                &port_str,
+                "-d",
+                container_ip,
+                "-m",
+                "comment",
+                "--comment",
+                "catalyst-game-server",
+                "-j",
+                "ACCEPT",
+            ],
+        )
         .await?;
 
         // FORWARD rule — outgoing from container.
-        Self::iptables_ensure_rule(&[
-            "-I",
-            "FORWARD",
-            "-p",
-            protocol,
-            "--sport",
-            &port_str,
-            "-s",
-            container_ip,
-            "-m",
-            "comment",
-            "--comment",
-            "catalyst-game-server",
-            "-j",
-            "ACCEPT",
-        ])
+        Self::iptables_ensure_rule(
+            cmd,
+            &[
+                "-I",
+                "FORWARD",
+                "-p",
+                protocol,
+                "--sport",
+                &port_str,
+                "-s",
+                container_ip,
+                "-m",
+                "comment",
+                "--comment",
+                "catalyst-game-server",
+                "-j",
+                "ACCEPT",
+            ],
+        )
         .await?;
 
         info!(
-            "✓ iptables configured to allow port {}/{} for container {}",
-            port, protocol, container_ip
+            "✓ {} configured to allow port {}/{} for container {}",
+            cmd, port, protocol, container_ip
         );
         Ok(())
     }
@@ -666,17 +697,17 @@ impl FirewallManager {
     async fn remove_port_iptables(
         port: u16,
         protocol: &str,
-        _container_ip: &str,
+        container_ip: &str,
     ) -> AgentResult<()> {
+        let cmd = Self::iptables_cmd(container_ip);
         info!(
-            "Removing iptables rules for port {}/{} container {}",
-            port, protocol, _container_ip
+            "Removing {} rules for port {}/{} container {}",
+            cmd, port, protocol, container_ip
         );
         let port_str = port.to_string();
 
         for chain in &["INPUT", "FORWARD"] {
-            let output =
-                run_firewall_command("iptables", &["-L", chain, "-n", "--line-numbers"]).await?;
+            let output = run_firewall_command(cmd, &["-L", chain, "-n", "--line-numbers"]).await?;
 
             if !output.status.success() {
                 continue;
@@ -701,7 +732,7 @@ impl FirewallManager {
             numbers.sort_unstable_by(|a, b| b.cmp(a));
             numbers.dedup();
             for num in numbers {
-                let _ = run_firewall_command("iptables", &["-D", chain, &num.to_string()]).await;
+                let _ = run_firewall_command(cmd, &["-D", chain, &num.to_string()]).await;
             }
         }
 
@@ -710,6 +741,7 @@ impl FirewallManager {
 
     /// Allow all traffic to/from a container IP in the FORWARD chain.
     async fn allow_container_ip_iptables(container_ip: &str) -> AgentResult<()> {
+        let cmd = Self::iptables_cmd(container_ip);
         let rules: &[(&str, &[&str])] = &[
             (
                 "incoming",
@@ -743,12 +775,12 @@ impl FirewallManager {
             ),
         ];
         for (args_desc, args) in rules {
-            Self::iptables_ensure_rule(args)
+            Self::iptables_ensure_rule(cmd, args)
                 .await
                 .map_err(|e| {
                     warn!(
-                        "iptables FORWARD {} rule for {} failed (non-fatal): {}",
-                        args_desc, container_ip, e
+                        "{} FORWARD {} rule for {} failed (non-fatal): {}",
+                        cmd, args_desc, container_ip, e
                     );
                     e
                 })
@@ -758,11 +790,11 @@ impl FirewallManager {
     }
 
     async fn remove_container_ip_iptables(container_ip: &str) -> AgentResult<()> {
+        let cmd = Self::iptables_cmd(container_ip);
         for chain in &["FORWARD"] {
             loop {
                 let output =
-                    run_firewall_command("iptables", &["-L", chain, "-n", "--line-numbers"])
-                        .await?;
+                    run_firewall_command(cmd, &["-L", chain, "-n", "--line-numbers"]).await?;
 
                 if !output.status.success() {
                     break;
@@ -785,8 +817,7 @@ impl FirewallManager {
                 match found_num {
                     Some(num) => {
                         let output =
-                            run_firewall_command("iptables", &["-D", chain, &num.to_string()])
-                                .await?;
+                            run_firewall_command(cmd, &["-D", chain, &num.to_string()]).await?;
                         if !output.status.success() {
                             break;
                         }
@@ -801,7 +832,7 @@ impl FirewallManager {
     /// Ensure an iptables rule exists — uses `-C` to check first, only
     /// inserts if missing (idempotent).  Uses a mutex to prevent races
     /// between the check and the insert.
-    async fn iptables_ensure_rule(args: &[&str]) -> AgentResult<()> {
+    async fn iptables_ensure_rule(cmd: &str, args: &[&str]) -> AgentResult<()> {
         let _guard = IPTABLES_MUTEX.lock().await;
 
         // Build the check command: replace -I with -C.
@@ -814,7 +845,7 @@ impl FirewallManager {
             }
         }
 
-        let check = run_firewall_command("iptables", &check_args).await;
+        let check = run_firewall_command(cmd, &check_args).await;
         if let Ok(output) = check {
             if output.status.success() {
                 return Ok(()); // rule already exists
@@ -822,13 +853,13 @@ impl FirewallManager {
         }
 
         // Rule doesn't exist — insert it.
-        let output = run_firewall_command("iptables", args).await?;
+        let output = run_firewall_command(cmd, args).await?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             Err(AgentError::FirewallError(format!(
-                "iptables failed: {}",
-                stderr
+                "{} failed: {}",
+                cmd, stderr
             )))
         } else {
             Ok(())
@@ -839,8 +870,9 @@ impl FirewallManager {
     // ipset implementation
     // -----------------------------------------------------------------------
 
-    async fn allow_port_ipset(port: u16, _protocol: &str, _container_ip: &str) -> AgentResult<()> {
+    async fn allow_port_ipset(port: u16, _protocol: &str, container_ip: &str) -> AgentResult<()> {
         let _guard = IPTABLES_MUTEX.lock().await;
+        let cmd = Self::iptables_cmd(container_ip);
 
         // Ensure the ipset exists
         let create = run_firewall_command(
@@ -863,10 +895,10 @@ impl FirewallManager {
             )));
         }
 
-        // Ensure iptables references the set (INPUT and FORWARD)
+        // Ensure iptables/ip6tables references the set (INPUT and FORWARD)
         for chain in &["INPUT", "FORWARD"] {
             let check = run_firewall_command(
-                "iptables",
+                cmd,
                 &[
                     "-C",
                     chain,
@@ -882,7 +914,7 @@ impl FirewallManager {
             .await;
             if check.is_err() || !check.unwrap().status.success() {
                 let _ = run_firewall_command(
-                    "iptables",
+                    cmd,
                     &[
                         "-I",
                         chain,
@@ -939,9 +971,17 @@ impl FirewallManager {
 
     fn validate_container_ip(container_ip: &str) -> AgentResult<()> {
         container_ip
-            .parse::<std::net::Ipv4Addr>()
+            .parse::<std::net::IpAddr>()
             .map_err(|_| AgentError::InvalidRequest("Invalid container IP".to_string()))?;
         Ok(())
+    }
+
+    fn iptables_cmd(ip: &str) -> &'static str {
+        if ip.contains(':') {
+            "ip6tables"
+        } else {
+            "iptables"
+        }
     }
 }
 
@@ -964,6 +1004,7 @@ mod tests {
     #[test]
     fn test_validate_container_ip() {
         assert!(FirewallManager::validate_container_ip("10.42.0.5").is_ok());
+        assert!(FirewallManager::validate_container_ip("2001:db8::1").is_ok());
         assert!(FirewallManager::validate_container_ip("not-an-ip").is_err());
     }
 

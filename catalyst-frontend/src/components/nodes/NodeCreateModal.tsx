@@ -317,7 +317,7 @@ function NodeCreateModal(_props: Props) {
                         className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
                         value={publicAddress}
                         onChange={(event) => setPublicAddress(event.target.value)}
-                        placeholder="203.0.113.10"
+                        placeholder="203.0.113.10 or 2001:db8::1"
                       />
                     </label>
                     <div className="grid grid-cols-2 gap-3">

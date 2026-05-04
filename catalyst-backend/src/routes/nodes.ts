@@ -2,7 +2,7 @@ import { prisma } from "../db.js";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { v4 as uuidv4 } from "uuid";
 import { randomBytes } from "crypto";
-import { listAvailableIps, summarizePool } from "../utils/ipam";
+import { listAvailableIps, summarizePool, parseCidr, parseIp, formatIp } from "../utils/ipam";
 import { auth } from "../auth";
 import { serialize } from "../utils/serialize";
 import { verifyAgentApiKey } from "../lib/agent-auth";
@@ -90,54 +90,55 @@ const parsePortRanges = (input: string): number[] => {
 	return Array.from(ports);
 };
 
+const MAX_CIDR_EXPAND = 5000;
+
 const parseAllocationIps = async (input: string): Promise<string[]> => {
 	const entries = input
 		.split(/[,\s]+/)
 		.map((entry) => entry.trim())
 		.filter(Boolean);
 	const ips: string[] = [];
-	const ipRegex =
-		/^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)$/;
+
 	for (const entry of entries) {
 		if (entry.includes("/")) {
-			const [base, prefixRaw] = entry.split("/");
-			const prefix = Number(prefixRaw);
-			if (
-				!ipRegex.test(base) ||
-				Number.isNaN(prefix) ||
-				prefix < 0 ||
-				prefix > 32
-			) {
+			let range: ReturnType<typeof parseCidr>;
+			try {
+				range = parseCidr(entry);
+			} catch {
 				throw new Error(`Invalid CIDR: ${entry}`);
 			}
-			const parts = base.split(".").map((part) => Number(part));
-			const ipInt =
-				((parts[0] << 24) >>> 0) +
-				((parts[1] << 16) >>> 0) +
-				((parts[2] << 8) >>> 0) +
-				(parts[3] >>> 0);
-			const mask = prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0;
-			const network = ipInt & mask;
-			const broadcast = (network | (~mask >>> 0)) >>> 0;
-			if (prefix >= 31) {
-				ips.push(
-					`${(network >>> 24) & 0xff}.${(network >>> 16) & 0xff}.${(network >>> 8) & 0xff}.${network & 0xff}`,
-					`${(broadcast >>> 24) & 0xff}.${(broadcast >>> 16) & 0xff}.${(broadcast >>> 8) & 0xff}.${broadcast & 0xff}`,
-				);
-				continue;
-			}
-			for (let value = network + 1; value <= broadcast - 1; value += 1) {
-				ips.push(
-					`${(value >>> 24) & 0xff}.${(value >>> 16) & 0xff}.${(value >>> 8) & 0xff}.${value & 0xff}`,
-				);
+
+			let count = 0;
+			if (range.family === 'v6') {
+				let value = range.start as bigint;
+				const end = range.end as bigint;
+				while (value <= end) {
+					if (count >= MAX_CIDR_EXPAND) {
+						throw new Error(`CIDR expansion too large: ${entry}`);
+					}
+					ips.push(formatIp(value, range.family));
+					value += 1n;
+					count++;
+				}
+			} else {
+				for (let value = range.start as number; value <= (range.end as number); value += 1) {
+					if (count >= MAX_CIDR_EXPAND) {
+						throw new Error(`CIDR expansion too large: ${entry}`);
+					}
+					ips.push(formatIp(value, range.family));
+					count++;
+				}
 			}
 			continue;
 		}
-		if (ipRegex.test(entry)) {
+
+		try {
+			parseIp(entry);
 			ips.push(entry);
 			continue;
+		} catch {
+			throw new Error(`Unsupported host entry: ${entry}`);
 		}
-		throw new Error(`Unsupported host entry: ${entry}`);
 	}
 	return ips;
 };
