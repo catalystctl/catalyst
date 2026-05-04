@@ -297,12 +297,15 @@ export async function setupRoutes(app: FastifyInstance) {
 					});
 				}
 
-				// 7. Assign Administrator role
+				// 7. Assign Administrator role and mark email as verified
+				// (the initial admin bypasses email verification — no mailer is
+				// configured yet during first-time setup).
 				await prisma.user.update({
 					where: { id: user.id },
 					data: {
 						role: "administrator",
 						roles: { connect: { id: adminRole.id } },
+						emailVerified: true,
 					},
 				});
 

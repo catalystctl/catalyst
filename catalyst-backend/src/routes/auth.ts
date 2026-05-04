@@ -30,21 +30,35 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;');
 }
 
-// Helper to forward response headers (set-auth-token, set-cookie) from better-auth to Fastify reply
+// Helper to forward response headers (set-auth-token, set-cookie) from better-auth to Fastify reply.
+// Must use getSetCookie() when available because Headers.get("set-cookie")
+// returns a comma-separated string which browsers cannot parse.
 function forwardAuthHeaders(response: any, reply: FastifyReply) {
-  const tokenHeader = "headers" in response ? response.headers?.get?.("set-auth-token") : null;
-  const cookieHeader = "headers" in response ? response.headers?.get?.("set-cookie") : null;
+  const headers = "headers" in response ? response.headers : null;
+
+  const tokenHeader = headers?.get?.("set-auth-token") ?? null;
   if (tokenHeader) {
     reply.header("set-auth-token", tokenHeader);
     reply.header("Access-Control-Expose-Headers", "set-auth-token");
   }
-  if (cookieHeader) {
-    if (Array.isArray(cookieHeader)) {
-      cookieHeader.forEach((cookie: string) => reply.header("set-cookie", cookie));
-    } else {
-      reply.header("set-cookie", cookieHeader);
-    }
+
+  if (!headers) return tokenHeader;
+
+  const rawSetCookie =
+    typeof (headers as any).getSetCookie === "function"
+      ? (headers as any).getSetCookie()
+      : headers.get?.("set-cookie");
+
+  if (!rawSetCookie) return tokenHeader;
+
+  const cookies: string[] = Array.isArray(rawSetCookie)
+    ? rawSetCookie
+    : [rawSetCookie];
+
+  for (const cookie of cookies) {
+    reply.header("set-cookie", cookie);
   }
+
   return tokenHeader;
 }
 
