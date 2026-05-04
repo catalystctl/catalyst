@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../../stores/authStore';
 import { useThemeStore } from '../../stores/themeStore';
+import { useSetupStatus } from '../../hooks/useSetupStatus';
 import apiClient from '../../services/api/client';
 import { PasswordStrengthMeter } from '../../components/shared/PasswordStrengthMeter';
 import { reportSystemError } from '../../services/api/systemErrors';
@@ -76,6 +77,7 @@ function SetupPage() {
   const applyTheme = useThemeStore((s) => s.applyTheme);
   const setTheme = useThemeStore((s) => s.setTheme);
   const theme = useThemeStore((s) => s.theme);
+  const { recheck } = useSetupStatus();
 
   const [currentStep, setCurrentStep] = useState(0);
   const [direction, setDirection] = useState(1);
@@ -213,7 +215,21 @@ function SetupPage() {
     setError(null);
 
     try {
-      await apiClient.post('/api/setup/complete', {
+      const response = await apiClient.post<{
+        success: boolean;
+        data: {
+          id: string;
+          email: string;
+          username: string;
+          name?: string | null;
+          firstName?: string | null;
+          lastName?: string | null;
+          image?: string | null;
+          role?: string;
+          permissions?: string[];
+          panelName?: string;
+        };
+      }>('/api/setup/complete', {
         panelName: panelName.trim() || 'Catalyst',
         logoUrl: logoDataUri || undefined,
         email: email.trim(),
@@ -227,20 +243,38 @@ function SetupPage() {
       // Cancel preview and re-apply theme with saved settings
       cancelPreview();
 
+      // Notify App.tsx that setup is complete so it re-fetches status
+      window.dispatchEvent(new CustomEvent('catalyst:setup-complete'));
+      recheck();
+
       // Re-initialize auth (backend sets session cookies).
-      // If this fails the setup POST still succeeded — the user just needs
-      // to log in manually (e.g. cookie blocked by browser security).
+      // Delay slightly to reduce cookie race conditions.
+      await new Promise((resolve) => setTimeout(resolve, 500));
       try {
         await init();
         navigate('/dashboard', { replace: true });
       } catch {
-        setError(
-          'Setup completed successfully, but we could not log you in automatically. ' +
-            'Please sign in with your new credentials.',
-        );
-        setTimeout(() => {
+        // Fallback: manually set user from the POST response
+        const userData = response.data?.data;
+        if (userData) {
+          const user = {
+            id: userData.id,
+            email: userData.email,
+            username: userData.username,
+            name: userData.name,
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            image: userData.image,
+            role: (userData.role?.toLowerCase() === 'administrator'
+              ? 'admin'
+              : (userData.role as 'admin' | 'user' | undefined)) ?? 'admin',
+            permissions: userData.permissions,
+          };
+          useAuthStore.getState().setUser(user);
+          navigate('/dashboard', { replace: true });
+        } else {
           navigate('/login', { replace: true });
-        }, 3_000);
+        }
       }
     } catch (err: any) {
       reportSystemError({

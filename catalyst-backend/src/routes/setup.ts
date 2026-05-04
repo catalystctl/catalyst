@@ -167,15 +167,31 @@ export async function setupRoutes(app: FastifyInstance) {
 			},
 		});
 
-		// 4. Return success (no new session — user already exists)
+		// 4. Fetch full user record and return success
+		const fullUser = await prisma.user.findUnique({
+			where: { id: existingUser.id },
+			include: { roles: true },
+		});
+
+		if (!fullUser) {
+			return reply.status(500).send({
+				error: "Failed to retrieve user record during setup recovery",
+			});
+		}
+
 		return reply.send({
 			success: true,
 			data: {
-				userId: existingUser.id,
-				email: existingUser.email,
-				username: (existingUser as any).username ?? username,
-				role: "Administrator",
-				permissions: ["*"],
+				id: fullUser.id,
+				email: fullUser.email,
+				username: fullUser.username,
+				name: fullUser.name,
+				firstName: fullUser.firstName,
+				lastName: fullUser.lastName,
+				image: fullUser.image,
+				role: fullUser.roles[0]?.name || "Administrator",
+				permissions: fullUser.roles.flatMap((r) => r.permissions),
+				createdAt: fullUser.createdAt,
 				panelName,
 			},
 		});
@@ -332,15 +348,31 @@ export async function setupRoutes(app: FastifyInstance) {
 				// 9. Forward auth headers (set-cookie) so user is immediately logged in
 				forwardAuthHeaders(response, reply);
 
-				// 10. Return success
+				// 10. Fetch full user record and return success
+				const fullUser = await prisma.user.findUnique({
+					where: { id: user.id },
+					include: { roles: true },
+				});
+
+				if (!fullUser) {
+					return reply.status(500).send({
+						error: "Failed to retrieve user record after creation",
+					});
+				}
+
 				return reply.send({
 					success: true,
 					data: {
-						userId: user.id,
-						email: user.email,
-						username: (user as any).username ?? username,
-						role: "Administrator",
-						permissions: ["*"],
+						id: fullUser.id,
+						email: fullUser.email,
+						username: fullUser.username,
+						name: fullUser.name,
+						firstName: fullUser.firstName,
+						lastName: fullUser.lastName,
+						image: fullUser.image,
+						role: fullUser.roles[0]?.name || "Administrator",
+						permissions: fullUser.roles.flatMap((r) => r.permissions),
+						createdAt: fullUser.createdAt,
 						panelName,
 					},
 				});
