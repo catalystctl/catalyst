@@ -131,6 +131,15 @@ export async function templateRoutes(app: FastifyInstance) {
 				nestId?: string | null;
 			};
 
+			const existing = await prisma.serverTemplate.findUnique({
+				where: { name },
+			});
+			if (existing) {
+				return reply.status(409).send({
+					error: `A template named "${name}" already exists`,
+				});
+			}
+
 			const template = await prisma.serverTemplate.create({
 				data: {
 					name,
