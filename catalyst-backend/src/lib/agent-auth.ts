@@ -68,21 +68,16 @@ export async function verifyAgentApiKey(
   apiKey: string,
 ): Promise<boolean> {
   if (!nodeId || !apiKey) {
-    console.log(`[AGENT_AUTH_DEBUG] reject: missing nodeId=${!!nodeId} or apiKey=${!!apiKey}`);
     return false;
   }
 
   try {
     // Try HMAC-SHA256 hash first (current api-key-service format)
     const hashedKey = hashApiKeyHmac(apiKey);
-    console.log(`[AGENT_AUTH_DEBUG] nodeId=${nodeId} hmacHash=${hashedKey}`);
 
     // Check in-memory cache first
     const cached = getCachedVerification(nodeId, hashedKey);
-    if (cached === true) {
-      console.log(`[AGENT_AUTH_DEBUG] nodeId=${nodeId} cache HIT`);
-      return true;
-    }
+    if (cached === true) return true;
 
     // Direct DB lookup by hashed key
     let apiKeyRecord = await prisma.apikey.findUnique({
@@ -93,12 +88,10 @@ export async function verifyAgentApiKey(
         metadata: true,
       },
     });
-    console.log(`[AGENT_AUTH_DEBUG] nodeId=${nodeId} hmac lookup found=${!!apiKeyRecord}`);
 
     // Fallback to legacy SHA-256 base64url hash for backward compatibility
     if (!apiKeyRecord) {
       const legacyHashedKey = hashApiKeyLegacy(apiKey);
-      console.log(`[AGENT_AUTH_DEBUG] nodeId=${nodeId} legacyHash=${legacyHashedKey}`);
       apiKeyRecord = await prisma.apikey.findUnique({
         where: { key: legacyHashedKey },
         select: {
@@ -107,38 +100,30 @@ export async function verifyAgentApiKey(
           metadata: true,
         },
       });
-      console.log(`[AGENT_AUTH_DEBUG] nodeId=${nodeId} legacy lookup found=${!!apiKeyRecord}`);
     }
 
     if (!apiKeyRecord || !apiKeyRecord.enabled) {
-      console.log(`[AGENT_AUTH_DEBUG] nodeId=${nodeId} reject: record=${!!apiKeyRecord} enabled=${apiKeyRecord?.enabled}`);
       return false;
     }
 
     if (apiKeyRecord.expiresAt && new Date(apiKeyRecord.expiresAt) < new Date()) {
-      console.log(`[AGENT_AUTH_DEBUG] nodeId=${nodeId} reject: expired`);
       return false;
     }
 
     const metadata = parseApiKeyMetadata(apiKeyRecord.metadata as unknown);
-    console.log(`[AGENT_AUTH_DEBUG] nodeId=${nodeId} metadata=${JSON.stringify(metadata)}`);
 
     if (!metadata) {
-      console.log(`[AGENT_AUTH_DEBUG] nodeId=${nodeId} reject: no metadata`);
       return false;
     }
 
     if (typeof metadata.nodeId !== "string" || metadata.nodeId !== nodeId) {
-      console.log(`[AGENT_AUTH_DEBUG] nodeId=${nodeId} reject: metadata.nodeId=${metadata.nodeId} !== ${nodeId}`);
       return false;
     }
 
     // Cache successful verification
     setCachedVerification(nodeId, hashedKey);
-    console.log(`[AGENT_AUTH_DEBUG] nodeId=${nodeId} ACCEPT`);
     return true;
-  } catch (err) {
-    console.log(`[AGENT_AUTH_DEBUG] nodeId=${nodeId} EXCEPTION:`, err);
+  } catch {
     return false;
   }
 }
