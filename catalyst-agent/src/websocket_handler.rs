@@ -151,6 +151,25 @@ struct ServerStateSync<'a> {
     timestamp: i64,
 }
 
+#[derive(serde::Serialize)]
+#[allow(non_snake_case)]
+struct DiscoveredServer<'a> {
+    containerId: &'a str,
+    image: &'a str,
+    status: &'a str,
+    labels: &'a HashMap<String, String>,
+}
+
+#[derive(serde::Serialize)]
+#[allow(non_snake_case)]
+struct DiscoveredServers<'a> {
+    #[serde(rename = "type")]
+    ty: &'static str,
+    nodeId: &'a str,
+    containers: Vec<DiscoveredServer<'a>>,
+    timestamp: i64,
+}
+
 /// Shell-escape a value for safe interpolation into a bash script.
 /// Wraps the value in single quotes and escapes any embedded single quotes.
 fn shell_escape_value(value: &str) -> String {
@@ -4847,7 +4866,7 @@ impl WebSocketHandler {
         }
 
         // Report state for all known containers
-        for container in containers {
+        for container in &containers {
             if !container.managed {
                 continue;
             }
@@ -4921,6 +4940,32 @@ impl WebSocketHandler {
         let mut w = ws.lock().await;
         if let Err(err) = w.send(Message::Text(complete_text.into())).await {
             warn!("Failed to send reconciliation complete: {}", err);
+        }
+
+        // Send discovered containers info for auto-import feature
+        let discovered: Vec<DiscoveredServer> = containers
+            .iter()
+            .filter(|c| c.managed)
+            .map(|c| DiscoveredServer {
+                containerId: &c.id,
+                image: &c.image,
+                status: &c.status,
+                labels: &c.labels,
+            })
+            .collect();
+
+        if !discovered.is_empty() {
+            let discovered_msg = DiscoveredServers {
+                ty: "discovered_servers",
+                nodeId: &self.config.server.node_id,
+                containers: discovered,
+                timestamp: chrono::Utc::now().timestamp_millis(),
+            };
+            let discovered_text = serde_json::to_string(&discovered_msg).unwrap_or_default();
+
+            if let Err(err) = w.send(Message::Text(discovered_text.into())).await {
+                warn!("Failed to send discovered servers: {}", err);
+            }
         }
 
         info!(

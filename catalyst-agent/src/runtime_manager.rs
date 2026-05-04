@@ -357,6 +357,7 @@ pub struct ContainerInfo {
     pub status: String,
     pub command: String,
     pub image: String,
+    pub labels: HashMap<String, String>,
 }
 
 #[derive(Debug)]
@@ -1450,6 +1451,7 @@ impl ContainerdRuntime {
                 },
                 image: c.image.clone(),
                 command: String::new(),
+                labels: c.labels.clone(),
             });
         }
 

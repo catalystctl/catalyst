@@ -1632,6 +1632,210 @@ export async function nodeRoutes(app: FastifyInstance) {
 	);
 
 	// ============================================================================
+	// AUTO-IMPORT: UNREGISTERED CONTAINERS
+	// ============================================================================
+
+	// Get unregistered containers discovered on a node (containers without DB server records)
+	app.get(
+		"/:nodeId/unregistered-containers",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "admin.write")) return;
+			const { nodeId } = request.params as { nodeId: string };
+
+			const node = await prisma.node.findUnique({
+				where: { id: nodeId },
+				select: { id: true, locationId: true },
+			});
+			if (!node) {
+				return reply.status(404).send({ error: "Node not found" });
+			}
+
+			// Get registered server IDs for this node
+			const registeredServers = await prisma.server.findMany({
+				where: { nodeId },
+				select: { id: true },
+			});
+			const registeredIds = new Set(registeredServers.map((s) => s.id));
+
+			// Get discovered containers from gateway
+			const wsGateway = (app as any).wsGateway;
+			const discovered = wsGateway?.getDiscoveredContainers?.(nodeId) ?? [];
+
+			// Filter out containers that are already registered
+			const unregistered = discovered
+				.filter((c: any) => !registeredIds.has(c.containerId))
+				.map((c: any) => ({
+					containerId: c.containerId,
+					image: c.image,
+					status: c.status,
+					labels: c.labels,
+					discoveredAt: c.discoveredAt,
+				}));
+
+			reply.send({ success: true, data: unregistered });
+		},
+	);
+
+	// Import a discovered container as a server
+	app.post(
+		"/:nodeId/import-server",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "admin.write")) return;
+			const { nodeId } = request.params as { nodeId: string };
+			const {
+				containerId,
+				name,
+				templateId,
+				ownerId,
+				allocatedMemoryMb,
+				allocatedCpuCores,
+				allocatedDiskMb,
+				primaryPort,
+				portBindings,
+				environment,
+			} = request.body as {
+				containerId: string;
+				name: string;
+				templateId: string;
+				ownerId: string;
+				allocatedMemoryMb?: number;
+				allocatedCpuCores?: number;
+				allocatedDiskMb?: number;
+				primaryPort?: number;
+				portBindings?: Record<number, number>;
+				environment?: Record<string, string>;
+			};
+
+			// Validate required fields
+			if (!containerId || !name || !templateId || !ownerId) {
+				return reply.status(400).send({ error: "containerId, name, templateId, and ownerId are required" });
+			}
+
+			// Validate node
+			const node = await prisma.node.findUnique({
+				where: { id: nodeId },
+				select: { id: true, locationId: true },
+			});
+			if (!node) {
+				return reply.status(404).send({ error: "Node not found" });
+			}
+
+			// Verify container was discovered on this node
+			const wsGateway = (app as any).wsGateway;
+			const discovered = wsGateway?.getDiscoveredContainers?.(nodeId) ?? [];
+			const container = discovered.find((c: any) => c.containerId === containerId);
+			if (!container) {
+				return reply.status(400).send({ error: "Container not found on node. Agent reconciliation may be needed." });
+			}
+
+			// Verify no existing server with this container ID
+			const existing = await prisma.server.findUnique({
+				where: { id: containerId },
+			});
+			if (existing) {
+				return reply.status(409).send({ error: "A server with this container ID already exists" });
+			}
+
+			// Validate template
+			const template = await prisma.serverTemplate.findUnique({
+				where: { id: templateId },
+			});
+			if (!template) {
+				return reply.status(404).send({ error: "Template not found" });
+			}
+
+			// Validate owner
+			const owner = await prisma.user.findUnique({
+				where: { id: ownerId },
+			});
+			if (!owner) {
+				return reply.status(404).send({ error: "Owner not found" });
+			}
+
+			// Resolve environment with template defaults
+			const templateVariables = (template.variables as any[]) || [];
+			const templateDefaults = templateVariables.reduce((acc: Record<string, string>, variable: any) => {
+				if (variable?.name && variable?.default !== undefined) {
+					acc[variable.name] = String(variable.default);
+				}
+				return acc;
+			}, {} as Record<string, string>);
+			const resolvedEnvironment = {
+				...templateDefaults,
+				...(environment || {}),
+			};
+
+			// Derive status from container
+			const status = container.status.includes("Up") ? "running" : "stopped";
+
+			// Create server record — containerId IS the server.id (critical for agent sync)
+			const server = await prisma.server.create({
+				data: {
+					id: containerId,                    // MUST match container name for agent sync
+					uuid: uuidv4(),
+					name,
+					templateId,
+					nodeId,
+					locationId: node.locationId,
+					ownerId,
+					status,
+					allocatedMemoryMb: allocatedMemoryMb ?? template.allocatedMemoryMb,
+					allocatedCpuCores: allocatedCpuCores ?? template.allocatedCpuCores,
+					allocatedDiskMb: allocatedDiskMb ?? 10240,
+					containerId,
+					containerName: containerId,
+					networkMode: "bridge",
+					primaryPort: primaryPort ?? 25565,
+					portBindings: portBindings ?? {},
+					environment: resolvedEnvironment,
+					startupCommand: template.startup,
+				},
+			});
+
+			// Create system log entry
+			await prisma.serverLog.create({
+				data: {
+					serverId: server.id,
+					stream: "system",
+					data: `[Import] Server imported from existing container ${containerId}`,
+				},
+			});
+
+			// Audit log
+			await prisma.auditLog.create({
+				data: {
+					userId: request.user.userId,
+					action: "server.import",
+					resource: "server",
+					resourceId: server.id,
+					details: {
+						containerId,
+						nodeId,
+						templateId,
+						ownerId,
+						source: "auto_import",
+					},
+				},
+			});
+
+			reply.status(201).send(serialize({ success: true, data: server }));
+
+			// Broadcast via WS
+			if (wsGateway?.pushToAdminSubscribers) {
+				wsGateway.pushToAdminSubscribers('server_created', {
+					type: 'server_created',
+					serverId: server.id,
+					nodeId,
+					ownerId,
+					timestamp: new Date().toISOString(),
+				});
+			}
+		},
+	);
+
+	// ============================================================================
 	// WILDCARD ASSIGNMENT ROUTE
 	// ============================================================================
 
