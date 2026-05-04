@@ -10,7 +10,7 @@ backend_url = "ws://192.168.1.78:3000/ws"
 node_id = "cmo6hdahu0003odpdzol1uwpp"
 
 # Agent API key (required for node authentication)
-api_key = "catalyst_vzrTKsMjfsJrGtLBMZXIBlrwcCcLpNLoox6GxNo9uGk"
+api_key = "catalyst_0oUhT_TosDr2MqtC0_qoNAoaNjJZlci3GQnaW8qrDpI"
 
 # Hostname of this server
 hostname = "Home"
