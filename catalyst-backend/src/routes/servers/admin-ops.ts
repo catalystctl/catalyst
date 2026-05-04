@@ -352,15 +352,18 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         0
       );
 
+      const effectiveMaxMemory = targetNode.memoryOverallocatePercent === -1 ? Infinity : Math.floor(targetNode.maxMemoryMb * (1 + targetNode.memoryOverallocatePercent / 100));
+      const effectiveMaxCpu = targetNode.cpuOverallocatePercent === -1 ? Infinity : targetNode.maxCpuCores * (1 + targetNode.cpuOverallocatePercent / 100);
+
       if (
-        usedMemory + server.allocatedMemoryMb > targetNode.maxMemoryMb ||
-        usedCpu + server.allocatedCpuCores > targetNode.maxCpuCores
+        usedMemory + server.allocatedMemoryMb > effectiveMaxMemory ||
+        usedCpu + server.allocatedCpuCores > effectiveMaxCpu
       ) {
         return reply.status(400).send({
           error: "Target node does not have enough resources",
           available: {
-            memory: targetNode.maxMemoryMb - usedMemory,
-            cpu: targetNode.maxCpuCores - usedCpu,
+            memory: effectiveMaxMemory === Infinity ? "unlimited" : effectiveMaxMemory - usedMemory,
+            cpu: effectiveMaxCpu === Infinity ? "unlimited" : effectiveMaxCpu - usedCpu,
           },
           required: {
             memory: server.allocatedMemoryMb,

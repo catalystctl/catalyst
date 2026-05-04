@@ -206,6 +206,8 @@ export interface Node {
   publicAddress: string;
   maxMemoryMb: number;
   maxCpuCores: number;
+  memoryOverallocatePercent: number;
+  cpuOverallocatePercent: number;
   isOnline: boolean;
   lastSeenAt?: Date;
   createdAt: Date;

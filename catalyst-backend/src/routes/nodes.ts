@@ -25,6 +25,14 @@ const escapeForJsonQuery = (nodeId: string): string => {
 	return nodeId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 };
 
+const validateOverallocatePercent = (value: unknown): number | null => {
+	if (value === undefined || value === null) return null;
+	if (!Number.isInteger(value) || (value as number) < -1) {
+		return null;
+	}
+	return value as number;
+};
+
 import {
 	hasNodeAccess,
 	getUserAccessibleNodes,
@@ -152,6 +160,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 				maxMemoryMb,
 				maxCpuCores,
 				serverDataDir,
+				memoryOverallocatePercent,
+				cpuOverallocatePercent,
 			} = request.body as {
 				name: string;
 				description?: string;
@@ -161,6 +171,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 				maxMemoryMb: number;
 				maxCpuCores: number;
 				serverDataDir?: string;
+				memoryOverallocatePercent?: number;
+				cpuOverallocatePercent?: number;
 			};
 
 			// Validate required fields
@@ -186,6 +198,24 @@ export async function nodeRoutes(app: FastifyInstance) {
 				return reply
 					.status(400)
 					.send({ error: "maxCpuCores must be positive" });
+			}
+
+			let validatedMemoryOverallocatePercent = 0;
+			let validatedCpuOverallocatePercent = 0;
+
+			if (memoryOverallocatePercent !== undefined) {
+				const validated = validateOverallocatePercent(memoryOverallocatePercent);
+				if (validated === null) {
+					return reply.status(400).send({ error: "memoryOverallocatePercent must be an integer >= -1" });
+				}
+				validatedMemoryOverallocatePercent = validated;
+			}
+			if (cpuOverallocatePercent !== undefined) {
+				const validated = validateOverallocatePercent(cpuOverallocatePercent);
+				if (validated === null) {
+					return reply.status(400).send({ error: "cpuOverallocatePercent must be an integer >= -1" });
+				}
+				validatedCpuOverallocatePercent = validated;
 			}
 
 			// Check for duplicate name
@@ -218,6 +248,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 					maxMemoryMb,
 					maxCpuCores,
 					serverDataDir: serverDataDir || undefined,
+					memoryOverallocatePercent: validatedMemoryOverallocatePercent,
+					cpuOverallocatePercent: validatedCpuOverallocatePercent,
 				},
 			});
 
@@ -633,6 +665,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 				maxMemoryMb,
 				maxCpuCores,
 				serverDataDir,
+				memoryOverallocatePercent,
+				cpuOverallocatePercent,
 			} = request.body as {
 				name?: string;
 				description?: string;
@@ -641,6 +675,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 				maxMemoryMb?: number;
 				maxCpuCores?: number;
 				serverDataDir?: string;
+				memoryOverallocatePercent?: number;
+				cpuOverallocatePercent?: number;
 			};
 
 			const node = await prisma.node.findUnique({
@@ -664,6 +700,19 @@ export async function nodeRoutes(app: FastifyInstance) {
 					.send({ error: "maxCpuCores must be positive" });
 			}
 
+			if (memoryOverallocatePercent !== undefined) {
+				const validated = validateOverallocatePercent(memoryOverallocatePercent);
+				if (validated === null) {
+					return reply.status(400).send({ error: "memoryOverallocatePercent must be an integer >= -1" });
+				}
+			}
+			if (cpuOverallocatePercent !== undefined) {
+				const validated = validateOverallocatePercent(cpuOverallocatePercent);
+				if (validated === null) {
+					return reply.status(400).send({ error: "cpuOverallocatePercent must be an integer >= -1" });
+				}
+			}
+
 			// Check for duplicate name
 			if (name && name !== node.name) {
 				const existing = await prisma.node.findFirst({
@@ -684,6 +733,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 					maxMemoryMb,
 					maxCpuCores,
 					serverDataDir,
+					memoryOverallocatePercent,
+					cpuOverallocatePercent,
 				},
 			});
 
@@ -747,6 +798,27 @@ export async function nodeRoutes(app: FastifyInstance) {
 				0,
 			);
 
+			const effectiveMaxMemoryMb = node.memoryOverallocatePercent === -1
+				? Infinity
+				: Math.floor(node.maxMemoryMb * (1 + node.memoryOverallocatePercent / 100));
+			const effectiveMaxCpuCores = node.cpuOverallocatePercent === -1
+				? Infinity
+				: node.maxCpuCores * (1 + node.cpuOverallocatePercent / 100);
+
+			const availableMemoryMb = effectiveMaxMemoryMb === Infinity
+				? Infinity
+				: effectiveMaxMemoryMb - totalAllocatedMemory;
+			const availableCpuCores = effectiveMaxCpuCores === Infinity
+				? Infinity
+				: effectiveMaxCpuCores - totalAllocatedCpu;
+
+			const memoryUsagePercent = effectiveMaxMemoryMb === Infinity
+				? 0
+				: (totalAllocatedMemory / effectiveMaxMemoryMb) * 100;
+			const cpuUsagePercent = effectiveMaxCpuCores === Infinity
+				? 0
+				: (totalAllocatedCpu / effectiveMaxCpuCores) * 100;
+
 			const runningServers = node.servers.filter(
 				(s) => s.status === "running" || s.status === "starting",
 			).length;
@@ -766,12 +838,16 @@ export async function nodeRoutes(app: FastifyInstance) {
 					resources: {
 						maxMemoryMb: node.maxMemoryMb,
 						maxCpuCores: node.maxCpuCores,
+						memoryOverallocatePercent: node.memoryOverallocatePercent,
+						cpuOverallocatePercent: node.cpuOverallocatePercent,
+						effectiveMaxMemoryMb,
+						effectiveMaxCpuCores,
 						allocatedMemoryMb: totalAllocatedMemory,
 						allocatedCpuCores: totalAllocatedCpu,
-						availableMemoryMb: node.maxMemoryMb - totalAllocatedMemory,
-						availableCpuCores: node.maxCpuCores - totalAllocatedCpu,
-						memoryUsagePercent: (totalAllocatedMemory / node.maxMemoryMb) * 100,
-						cpuUsagePercent: (totalAllocatedCpu / node.maxCpuCores) * 100,
+						availableMemoryMb,
+						availableCpuCores,
+						memoryUsagePercent,
+						cpuUsagePercent,
 						// Real-time metrics from agent
 						actualMemoryUsageMb: latestMetrics?.memoryUsageMb || 0,
 						actualMemoryTotalMb:

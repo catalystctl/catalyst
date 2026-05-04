@@ -124,6 +124,13 @@ function NodeCard({ node, index = 0 }: Props) {
               {node.maxCpuCores ?? 0}
               <span className="ml-1 text-xs font-normal text-muted-foreground">cores</span>
             </div>
+            {node.cpuOverallocatePercent !== undefined && node.cpuOverallocatePercent !== 0 && (
+              <div className="mt-0.5 text-[11px] text-muted-foreground">
+                {node.cpuOverallocatePercent === -1
+                  ? 'effective: ∞'
+                  : `effective: ${((node.maxCpuCores ?? 0) * (1 + node.cpuOverallocatePercent / 100)).toFixed(1)} cores (${node.cpuOverallocatePercent}%)`}
+              </div>
+            )}
           </div>
           <div className="rounded-lg border border-border/50 bg-surface-2/50 p-3 dark:bg-surface-2/30">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -134,6 +141,13 @@ function NodeCard({ node, index = 0 }: Props) {
               {memoryGB}
               <span className="ml-1 text-xs font-normal text-muted-foreground">GB</span>
             </div>
+            {node.memoryOverallocatePercent !== undefined && node.memoryOverallocatePercent !== 0 && (
+              <div className="mt-0.5 text-[11px] text-muted-foreground">
+                {node.memoryOverallocatePercent === -1
+                  ? 'effective: ∞'
+                  : `effective: ${((node.maxMemoryMb ?? 0) * (1 + node.memoryOverallocatePercent / 100) / 1024).toFixed(1)} GB (${node.memoryOverallocatePercent}%)`}
+              </div>
+            )}
           </div>
         </div>
       </div>
