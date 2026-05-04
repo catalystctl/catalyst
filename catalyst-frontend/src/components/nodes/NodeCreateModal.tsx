@@ -27,6 +27,8 @@ function NodeCreateModal(_props: Props) {
   const [publicAddress, setPublicAddress] = useState('');
   const [memory, setMemory] = useState('16384');
   const [cpu, setCpu] = useState('8');
+  const [memoryOverallocate, setMemoryOverallocate] = useState('0');
+  const [cpuOverallocate, setCpuOverallocate] = useState('0');
   const [serverDataDir, setServerDataDir] = useState('/var/lib/catalyst/servers');
   const [deployInfo, setDeployInfo] = useState<{
     deployUrl: string;
@@ -51,6 +53,8 @@ function NodeCreateModal(_props: Props) {
         publicAddress,
         maxMemoryMb: Number(memory),
         maxCpuCores: Number(cpu),
+        memoryOverallocatePercent: Number(memoryOverallocate),
+        cpuOverallocatePercent: Number(cpuOverallocate),
         serverDataDir: serverDataDir || undefined,
       });
       const info = created?.id ? await nodesApi.deploymentToken(created.id) : null;
@@ -81,6 +85,8 @@ function NodeCreateModal(_props: Props) {
     setPublicAddress('');
     setMemory('16384');
     setCpu('8');
+    setMemoryOverallocate('0');
+    setCpuOverallocate('0');
     setServerDataDir('/var/lib/catalyst/servers');
   };
 
@@ -339,6 +345,38 @@ function NodeCreateModal(_props: Props) {
                           min={1}
                           step={1}
                         />
+                      </label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="block space-y-1">
+                        <span className="text-muted-foreground dark:text-muted-foreground">
+                          Memory Over-allocation (%)
+                        </span>
+                        <input
+                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
+                          value={memoryOverallocate}
+                          onChange={(event) => setMemoryOverallocate(event.target.value)}
+                          type="number"
+                          min={-1}
+                        />
+                        <p className="text-xs text-muted-foreground dark:text-muted-foreground">
+                          0 = no over-allocation, -1 = unlimited
+                        </p>
+                      </label>
+                      <label className="block space-y-1">
+                        <span className="text-muted-foreground dark:text-muted-foreground">
+                          CPU Over-allocation (%)
+                        </span>
+                        <input
+                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
+                          value={cpuOverallocate}
+                          onChange={(event) => setCpuOverallocate(event.target.value)}
+                          type="number"
+                          min={-1}
+                        />
+                        <p className="text-xs text-muted-foreground dark:text-muted-foreground">
+                          0 = no over-allocation, -1 = unlimited
+                        </p>
                       </label>
                     </div>
                   </div>

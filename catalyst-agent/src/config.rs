@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use tracing::warn;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentConfig {
@@ -88,13 +89,13 @@ impl AgentConfig {
                 .map_err(|e| format!("Failed to read config metadata: {}", e))?;
             let mode = metadata.permissions().mode();
             if mode & 0o004 != 0 {
-                return Err(format!(
+                warn!(
                     "Config file {} is world-readable ({:o}). \"
                     Run: chmod o-r {}",
                     path,
                     mode & 0o777,
                     path
-                ));
+                );
             }
         }
         let content =

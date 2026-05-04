@@ -10,6 +10,8 @@ export interface NodeInfo {
   serverDataDir?: string;
   maxMemoryMb?: number;
   maxCpuCores?: number;
+  memoryOverallocatePercent?: number;
+  cpuOverallocatePercent?: number;
   createdAt?: string;
   updatedAt?: string;
   servers?: Array<{
@@ -57,6 +59,10 @@ export interface NodeStats {
     actualCpuPercent: number;
     actualDiskUsageMb: number;
     actualDiskTotalMb: number;
+    memoryOverallocatePercent?: number;
+    cpuOverallocatePercent?: number;
+    effectiveMaxMemoryMb?: number;
+    effectiveMaxCpuCores?: number;
   };
   servers: {
     total: number;

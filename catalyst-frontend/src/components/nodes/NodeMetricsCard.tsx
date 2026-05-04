@@ -4,16 +4,31 @@ import { Badge } from '../../components/ui/badge';
 import type { NodeStats } from '../../types/node';
 
 function NodeMetricsCard({ stats }: { stats: NodeStats }) {
+  const hasEffectiveMemory =
+    stats.resources.effectiveMaxMemoryMb != null && stats.resources.effectiveMaxMemoryMb > 0;
+  const hasEffectiveCpu =
+    stats.resources.effectiveMaxCpuCores != null && stats.resources.effectiveMaxCpuCores > 0;
+
   const memoryPercent = Math.min(
     100,
     Math.max(
       0,
-      stats.resources.actualMemoryTotalMb
-        ? (stats.resources.actualMemoryUsageMb / stats.resources.actualMemoryTotalMb) * 100
-        : 0,
+      hasEffectiveMemory
+        ? stats.resources.memoryUsagePercent
+        : stats.resources.actualMemoryTotalMb
+          ? (stats.resources.actualMemoryUsageMb / stats.resources.actualMemoryTotalMb) * 100
+          : 0,
     ),
   );
-  const cpuPercent = Math.min(100, Math.max(0, stats.resources.actualCpuPercent ?? 0));
+  const cpuPercent = Math.min(
+    100,
+    Math.max(
+      0,
+      hasEffectiveCpu
+        ? stats.resources.cpuUsagePercent
+        : stats.resources.actualCpuPercent ?? 0,
+    ),
+  );
   const diskPercent = Math.min(
     100,
     Math.max(

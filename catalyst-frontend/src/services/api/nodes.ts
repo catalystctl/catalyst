@@ -49,6 +49,8 @@ export const nodesApi = {
     publicAddress: string;
     maxMemoryMb: number;
     maxCpuCores: number;
+    memoryOverallocatePercent?: number;
+    cpuOverallocatePercent?: number;
     serverDataDir?: string;
   }) => {
     const data = await apiClient.post<ApiResponse<NodeInfo>>('/api/nodes', payload);
@@ -64,6 +66,8 @@ export const nodesApi = {
       publicAddress?: string;
       maxMemoryMb?: number;
       maxCpuCores?: number;
+      memoryOverallocatePercent?: number;
+      cpuOverallocatePercent?: number;
       serverDataDir?: string;
     },
   ) => {

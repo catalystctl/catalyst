@@ -335,6 +335,8 @@ model Node {
   secret        String    @unique
   maxMemoryMb   Int
   maxCpuCores   Int
+  memoryOverallocatePercent Int @default(0)
+  cpuOverallocatePercent    Int @default(0)
   isOnline      Boolean   @default(false)
   lastSeenAt    DateTime?
   createdAt     DateTime  @default(now())

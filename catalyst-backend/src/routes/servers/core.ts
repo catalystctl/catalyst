@@ -249,15 +249,20 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         "Node resource check"
       );
 
-      if (totalAllocatedMemory + allocatedMemoryMb > node.maxMemoryMb) {
+      const effectiveMaxMemory = node.memoryOverallocatePercent === -1 ? Infinity : Math.floor(node.maxMemoryMb * (1 + node.memoryOverallocatePercent / 100));
+      const effectiveMaxCpu = node.cpuOverallocatePercent === -1 ? Infinity : node.maxCpuCores * (1 + node.cpuOverallocatePercent / 100);
+
+      if (totalAllocatedMemory + allocatedMemoryMb > effectiveMaxMemory) {
+        const available = effectiveMaxMemory === Infinity ? "unlimited" : `${effectiveMaxMemory - totalAllocatedMemory}MB`;
         return reply.status(400).send({
-          error: `Insufficient memory. Available: ${node.maxMemoryMb - totalAllocatedMemory}MB, Required: ${allocatedMemoryMb}MB`,
+          error: `Insufficient memory. Available: ${available}, Required: ${allocatedMemoryMb}MB`,
         });
       }
 
-      if (totalAllocatedCpu + allocatedCpuCores > node.maxCpuCores) {
+      if (totalAllocatedCpu + allocatedCpuCores > effectiveMaxCpu) {
+        const available = effectiveMaxCpu === Infinity ? "unlimited" : `${effectiveMaxCpu - totalAllocatedCpu} cores`;
         return reply.status(400).send({
-          error: `Insufficient CPU. Available: ${node.maxCpuCores - totalAllocatedCpu} cores, Required: ${allocatedCpuCores} cores`,
+          error: `Insufficient CPU. Available: ${available}, Required: ${allocatedCpuCores} cores`,
         });
       }
 
@@ -785,15 +790,20 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         const newCpu = allocatedCpuCores ?? server.allocatedCpuCores;
         const newDisk = allocatedDiskMb ?? server.allocatedDiskMb;
 
-        if (totalOtherMemory + newMemory > node.maxMemoryMb) {
+        const effectiveMaxMemory = node.memoryOverallocatePercent === -1 ? Infinity : Math.floor(node.maxMemoryMb * (1 + node.memoryOverallocatePercent / 100));
+        const effectiveMaxCpu = node.cpuOverallocatePercent === -1 ? Infinity : node.maxCpuCores * (1 + node.cpuOverallocatePercent / 100);
+
+        if (totalOtherMemory + newMemory > effectiveMaxMemory) {
+          const available = effectiveMaxMemory === Infinity ? "unlimited" : `${effectiveMaxMemory - totalOtherMemory}MB`;
           return reply.status(400).send({
-            error: `Insufficient memory. Available: ${node.maxMemoryMb - totalOtherMemory}MB`,
+            error: `Insufficient memory. Available: ${available}`,
           });
         }
 
-        if (totalOtherCpu + newCpu > node.maxCpuCores) {
+        if (totalOtherCpu + newCpu > effectiveMaxCpu) {
+          const available = effectiveMaxCpu === Infinity ? "unlimited" : `${effectiveMaxCpu - totalOtherCpu} cores`;
           return reply.status(400).send({
-            error: `Insufficient CPU. Available: ${node.maxCpuCores - totalOtherCpu} cores`,
+            error: `Insufficient CPU. Available: ${available}`,
           });
         }
 

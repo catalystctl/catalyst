@@ -392,21 +392,57 @@ function NodeDetailsPage() {
               <CapacityBlock
                 icon={Cpu}
                 label="CPU cores"
-                value={String(node.maxCpuCores ?? 0)}
+                value={
+                  node.cpuOverallocatePercent && node.cpuOverallocatePercent !== 0
+                    ? node.cpuOverallocatePercent === -1
+                      ? `${node.maxCpuCores ?? 0} (effective: ∞)`
+                      : `${node.maxCpuCores ?? 0} (effective: ${resourceSummary?.effectiveMaxCpuCores ?? ((node.maxCpuCores ?? 0) * (1 + node.cpuOverallocatePercent / 100)).toFixed(1)})`
+                    : String(node.maxCpuCores ?? 0)
+                }
                 detail={
                   resourceSummary
-                    ? `Allocated: ${resourceSummary.allocatedCpuCores} · Available: ${resourceSummary.availableCpuCores}`
-                    : undefined
+                    ? (() => {
+                        const effective = resourceSummary.effectiveMaxCpuCores ?? node.maxCpuCores ?? 0;
+                        const pct = effective > 0 ? Math.round((resourceSummary.allocatedCpuCores / effective) * 100) : 0;
+                        return `Allocated: ${resourceSummary.allocatedCpuCores} · Available: ${resourceSummary.availableCpuCores}${
+                          node.cpuOverallocatePercent && node.cpuOverallocatePercent !== 0
+                            ? ` · ${node.cpuOverallocatePercent === -1 ? 'Unlimited over-allocation' : `${node.cpuOverallocatePercent}% over-allocation`}`
+                            : ''
+                        } · ${pct}% used`;
+                      })()
+                    : node.cpuOverallocatePercent && node.cpuOverallocatePercent !== 0
+                      ? node.cpuOverallocatePercent === -1
+                        ? 'Unlimited over-allocation'
+                        : `${node.cpuOverallocatePercent}% over-allocation`
+                      : undefined
                 }
               />
               <CapacityBlock
                 icon={HardDrive}
                 label="Memory"
-                value={`${node.maxMemoryMb ?? 0} MB`}
+                value={
+                  node.memoryOverallocatePercent && node.memoryOverallocatePercent !== 0
+                    ? node.memoryOverallocatePercent === -1
+                      ? `${node.maxMemoryMb ?? 0} MB (effective: ∞)`
+                      : `${node.maxMemoryMb ?? 0} MB (effective: ${resourceSummary?.effectiveMaxMemoryMb ?? ((node.maxMemoryMb ?? 0) * (1 + node.memoryOverallocatePercent / 100)).toFixed(0)} MB)`
+                    : `${node.maxMemoryMb ?? 0} MB`
+                }
                 detail={
                   resourceSummary
-                    ? `Allocated: ${resourceSummary.allocatedMemoryMb} MB · Available: ${resourceSummary.availableMemoryMb} MB`
-                    : undefined
+                    ? (() => {
+                        const effective = resourceSummary.effectiveMaxMemoryMb ?? node.maxMemoryMb ?? 0;
+                        const pct = effective > 0 ? Math.round((resourceSummary.allocatedMemoryMb / effective) * 100) : 0;
+                        return `Allocated: ${resourceSummary.allocatedMemoryMb} MB · Available: ${resourceSummary.availableMemoryMb} MB${
+                          node.memoryOverallocatePercent && node.memoryOverallocatePercent !== 0
+                            ? ` · ${node.memoryOverallocatePercent === -1 ? 'Unlimited over-allocation' : `${node.memoryOverallocatePercent}% over-allocation`}`
+                            : ''
+                        } · ${pct}% used`;
+                      })()
+                    : node.memoryOverallocatePercent && node.memoryOverallocatePercent !== 0
+                      ? node.memoryOverallocatePercent === -1
+                        ? 'Unlimited over-allocation'
+                        : `${node.memoryOverallocatePercent}% over-allocation`
+                      : undefined
                 }
               />
               <CapacityBlock
