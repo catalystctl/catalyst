@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { createHash } from "crypto";
+import { hashApiKey as hashApiKeyHmac } from "../services/api-key-service";
 
 function parseApiKeyMetadata(rawMetadata: unknown): Record<string, unknown> | null {
   if (rawMetadata && typeof rawMetadata === "object" && !Array.isArray(rawMetadata)) {
@@ -21,9 +22,10 @@ function parseApiKeyMetadata(rawMetadata: unknown): Record<string, unknown> | nu
 }
 
 /**
- * Hash an API key the same way Better Auth does: SHA-256 → base64url (no padding).
+ * Legacy hash used by early Better Auth-style keys: SHA-256 → base64url.
+ * Kept for backward compatibility while migrating to HMAC-SHA256.
  */
-function hashApiKey(key: string): string {
+function hashApiKeyLegacy(key: string): string {
   const hash = createHash("sha256").update(key).digest();
   return hash.toString("base64url");
 }
@@ -70,14 +72,15 @@ export async function verifyAgentApiKey(
   }
 
   try {
-    const hashedKey = hashApiKey(apiKey);
+    // Try HMAC-SHA256 hash first (current api-key-service format)
+    const hashedKey = hashApiKeyHmac(apiKey);
 
     // Check in-memory cache first
     const cached = getCachedVerification(nodeId, hashedKey);
     if (cached === true) return true;
 
-    // Direct DB lookup by hashed key (same hash Better Auth uses)
-    const apiKeyRecord = await prisma.apikey.findUnique({
+    // Direct DB lookup by hashed key
+    let apiKeyRecord = await prisma.apikey.findUnique({
       where: { key: hashedKey },
       select: {
         enabled: true,
@@ -85,6 +88,19 @@ export async function verifyAgentApiKey(
         metadata: true,
       },
     });
+
+    // Fallback to legacy SHA-256 base64url hash for backward compatibility
+    if (!apiKeyRecord) {
+      const legacyHashedKey = hashApiKeyLegacy(apiKey);
+      apiKeyRecord = await prisma.apikey.findUnique({
+        where: { key: legacyHashedKey },
+        select: {
+          enabled: true,
+          expiresAt: true,
+          metadata: true,
+        },
+      });
+    }
 
     if (!apiKeyRecord || !apiKeyRecord.enabled) {
       return false;
