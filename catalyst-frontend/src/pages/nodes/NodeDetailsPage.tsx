@@ -566,6 +566,23 @@ function NodeDetailsPage() {
                           </Badge>
                         )}
                       </div>
+                      {c.startupCommand && (
+                        <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground/60" title={c.startupCommand}>
+                          {c.startupCommand}
+                        </div>
+                      )}
+                      {c.envVarNames && c.envVarNames.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {c.envVarNames.slice(0, 6).map((name: string) => (
+                            <span key={name} className="rounded bg-warning/5 px-1 py-0.5 text-[9px] text-muted-foreground">
+                              {name}
+                            </span>
+                          ))}
+                          {c.envVarNames.length > 6 && (
+                            <span className="text-[9px] text-muted-foreground">+{c.envVarNames.length - 6} more</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

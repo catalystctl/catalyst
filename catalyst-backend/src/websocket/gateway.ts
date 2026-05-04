@@ -169,6 +169,8 @@ export class WebSocketGateway {
     networkMode?: string;
     memoryLimitMb?: number;
     cpuCores?: number;
+    startupCommand?: string;
+    envVarNames?: string[];
     discoveredAt: number;
   }>>();
 
@@ -1822,6 +1824,8 @@ export class WebSocketGateway {
           networkMode: typeof c.networkMode === "string" ? c.networkMode : undefined,
           memoryLimitMb: typeof c.memoryLimitMb === "number" ? c.memoryLimitMb : undefined,
           cpuCores: typeof c.cpuCores === "number" ? c.cpuCores : undefined,
+          startupCommand: typeof c.startupCommand === "string" ? c.startupCommand : undefined,
+          envVarNames: Array.isArray(c.envVarNames) ? c.envVarNames : undefined,
           discoveredAt: Date.now(),
         })));
 

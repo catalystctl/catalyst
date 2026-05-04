@@ -367,6 +367,8 @@ pub struct ContainerInspectInfo {
     pub memory_limit_bytes: i64,
     pub cpu_quota: i64,
     pub cpu_period: i64,
+    pub startup_command: String,    // process.args joined as string
+    pub env_var_names: Vec<String>, // env var NAMES only (not values, for security)
 }
 
 #[derive(Debug)]
@@ -1555,6 +1557,32 @@ impl ContainerdRuntime {
                         .and_then(|p| p.as_i64())
                     {
                         info.cpu_period = period;
+                    }
+
+                    // Startup command (process.args)
+                    if let Some(args) = spec_value
+                        .get("process")
+                        .and_then(|p| p.get("args"))
+                        .and_then(|a| a.as_array())
+                    {
+                        let arg_strings: Vec<String> = args
+                            .iter()
+                            .filter_map(|a| a.as_str().map(String::from))
+                            .collect();
+                        info.startup_command = arg_strings.join(" ");
+                    }
+
+                    // Environment variable NAMES only (not values — may contain secrets)
+                    if let Some(env_list) = spec_value
+                        .get("process")
+                        .and_then(|p| p.get("env"))
+                        .and_then(|e| e.as_array())
+                    {
+                        info.env_var_names = env_list
+                            .iter()
+                            .filter_map(|e| e.as_str())
+                            .filter_map(|entry| entry.split_once('=').map(|(k, _)| k.to_string()))
+                            .collect();
                     }
                 }
             }

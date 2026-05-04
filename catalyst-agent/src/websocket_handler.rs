@@ -164,6 +164,10 @@ struct DiscoveredServer<'a> {
     memoryLimitMb: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     cpuCores: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    startupCommand: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    envVarNames: Vec<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -4972,6 +4976,14 @@ impl WebSocketHandler {
                         None
                     }
                 }),
+                startupCommand: inspect
+                    .as_ref()
+                    .map(|i| i.startup_command.clone())
+                    .filter(|s| !s.is_empty()),
+                envVarNames: inspect
+                    .as_ref()
+                    .map(|i| i.env_var_names.clone())
+                    .unwrap_or_default(),
             });
         }
 

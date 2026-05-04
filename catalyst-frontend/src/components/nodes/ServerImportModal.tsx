@@ -19,6 +19,8 @@ export interface UnregisteredContainer {
   networkMode?: string;
   memoryLimitMb?: number;
   cpuCores?: number;
+  startupCommand?: string;
+  envVarNames?: string[];
   discoveredAt: number;
 }
 
@@ -46,6 +48,14 @@ export default function ServerImportModal({
     allocatedDiskMb: string;
     primaryPort: string;
   }>>({});
+
+  // Template suggestions fetched from backend matching
+  const [suggestions, setSuggestions] = useState<Record<string, Array<{
+    templateId: string;
+    templateName: string;
+    score: number;
+    matchReasons: string[];
+  }>>>({});
 
   // Fetch templates for dropdown
   const { data: templates = [] } = useQuery({
@@ -109,6 +119,20 @@ export default function ServerImportModal({
   });
 
   if (!open) return null;
+
+  const fetchSuggestions = async (containerId: string) => {
+    try {
+      const results = await nodesApi.suggestTemplate(nodeId, containerId);
+      setSuggestions((prev) => ({ ...prev, [containerId]: results }));
+      // Auto-select top suggestion if no template selected yet
+      const form = getForm(containerId);
+      if (!form.templateId && results.length > 0) {
+        updateForm(containerId, { templateId: results[0].templateId });
+      }
+    } catch {
+      // Silently fail — suggestions are optional
+    }
+  };
 
   const getForm = (containerId: string) => {
     const container = containers.find((c) => c.containerId === containerId);
@@ -205,14 +229,36 @@ export default function ServerImportModal({
                                 </Badge>
                               )}
                             </div>
+                            {container.startupCommand && (
+                              <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground/70" title={container.startupCommand}>
+                                {container.startupCommand}
+                              </div>
+                            )}
+                            {container.envVarNames && container.envVarNames.length > 0 && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {container.envVarNames.slice(0, 8).map((name) => (
+                                  <span key={name} className="rounded bg-surface-2/50 px-1 py-0.5 text-[9px] text-muted-foreground">
+                                    {name}
+                                  </span>
+                                ))}
+                                {container.envVarNames.length > 8 && (
+                                  <span className="text-[9px] text-muted-foreground">+{container.envVarNames.length - 8} more</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                         <Button
                           size="sm"
                           variant={isExpanded ? 'outline' : 'default'}
-                          onClick={() =>
-                            setImportingId(isExpanded ? null : container.containerId)
-                          }
+                          onClick={() => {
+                            if (isExpanded) {
+                              setImportingId(null);
+                            } else {
+                              setImportingId(container.containerId);
+                              fetchSuggestions(container.containerId);
+                            }
+                          }}
                           className="gap-1.5"
                         >
                           {isExpanded ? (
@@ -262,6 +308,26 @@ export default function ServerImportModal({
                                 }
                                 placeholder="Select template..."
                               />
+                              {suggestions[container.containerId] && suggestions[container.containerId].length > 0 && (
+                                <div className="mt-1 flex flex-wrap items-center gap-1">
+                                  <span className="text-[10px] text-muted-foreground">Suggested:</span>
+                                  {suggestions[container.containerId].slice(0, 3).map((s) => (
+                                    <button
+                                      key={s.templateId}
+                                      type="button"
+                                      onClick={() => updateForm(container.containerId, { templateId: s.templateId })}
+                                      className={`rounded px-1.5 py-0.5 text-[10px] transition-colors ${
+                                        form.templateId === s.templateId
+                                          ? 'bg-primary/20 text-primary font-medium'
+                                          : 'bg-surface-2/50 text-muted-foreground hover:bg-primary/10'
+                                      }`}
+                                      title={s.matchReasons.join('; ')}
+                                    >
+                                      {s.templateName} ({s.score})
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                             <div>
                               <label className="mb-1 block text-xs font-medium text-muted-foreground">

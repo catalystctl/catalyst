@@ -230,10 +230,27 @@ export const nodesApi = {
           networkMode?: string;
           memoryLimitMb?: number;
           cpuCores?: number;
+          startupCommand?: string;
+          envVarNames?: string[];
           discoveredAt: number;
         }>
       >
     >(`/api/nodes/${nodeId}/unregistered-containers`);
+    return data.data || [];
+  },
+
+  // Suggest template match for an unregistered container
+  suggestTemplate: async (nodeId: string, containerId: string) => {
+    const data = await apiClient.get<
+      ApiResponse<
+        Array<{
+          templateId: string;
+          templateName: string;
+          score: number;
+          matchReasons: string[];
+        }>
+      >
+    >(`/api/nodes/${nodeId}/unregistered-containers/${containerId}/suggest-template`);
     return data.data || [];
   },
 

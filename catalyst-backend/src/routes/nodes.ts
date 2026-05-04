@@ -1673,10 +1673,143 @@ export async function nodeRoutes(app: FastifyInstance) {
 					networkMode: c.networkMode,
 					memoryLimitMb: c.memoryLimitMb,
 					cpuCores: c.cpuCores,
+					startupCommand: c.startupCommand,
+					envVarNames: c.envVarNames,
 					discoveredAt: c.discoveredAt,
 				}));
 
 			reply.send({ success: true, data: unregistered });
+		},
+	);
+
+	// Suggest template match for an unregistered container
+	app.get(
+		"/:nodeId/unregistered-containers/:containerId/suggest-template",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "admin.write")) return;
+			const { nodeId, containerId } = request.params as { nodeId: string; containerId: string };
+
+			// Verify node exists
+			const node = await prisma.node.findUnique({
+				where: { id: nodeId },
+				select: { id: true },
+			});
+			if (!node) {
+				return reply.status(404).send({ error: "Node not found" });
+			}
+
+			const wsGateway = (app as any).wsGateway;
+			const discovered = wsGateway?.getDiscoveredContainers?.(nodeId) ?? [];
+			const container = discovered.find((c: any) => c.containerId === containerId);
+			if (!container) {
+				return reply.status(404).send({ error: "Container not found" });
+			}
+
+			// Fetch all templates to match against
+			const templates = await prisma.serverTemplate.findMany({
+				select: {
+					id: true,
+					name: true,
+					startup: true,
+					variables: true,
+					image: true,
+					images: true,
+				},
+			});
+
+			// Score each template based on matching signals
+			const results = templates.map((template) => {
+				let score = 0;
+				const matchReasons: string[] = [];
+
+				// 1. Match startup command pattern
+				if (container.startupCommand && template.startup) {
+					const templateStartup = template.startup.toLowerCase();
+					const containerStartup = container.startupCommand.toLowerCase();
+
+					// Extract structural parts of the template startup (non-variable tokens)
+					const structuralTokens = templateStartup
+						.split(/[\s]+/)
+						.filter((t) => !t.startsWith("{{"))
+						.filter((t) => t.length > 1);
+
+					let matchedTokens = 0;
+					for (const token of structuralTokens) {
+						if (containerStartup.includes(token)) {
+							matchedTokens++;
+						}
+					}
+					if (structuralTokens.length > 0 && matchedTokens > 0) {
+						const tokenScore = matchedTokens / structuralTokens.length;
+						score += tokenScore * 50; // Up to 50 points for startup match
+						if (tokenScore > 0.5) {
+							matchReasons.push(`Startup command matches ${Math.round(tokenScore * 100)}%`);
+						}
+					}
+				}
+
+				// 2. Match env var names
+				if (container.envVarNames && container.envVarNames.length > 0) {
+					const templateVars = (template.variables as any[]) || [];
+					const templateVarNames = new Set(
+						templateVars.map((v: any) => v?.name).filter(Boolean),
+					);
+
+					if (templateVarNames.size > 0) {
+						let matchedVars = 0;
+						for (const varName of templateVarNames) {
+							if (container.envVarNames.includes(varName)) {
+								matchedVars++;
+							}
+						}
+						if (matchedVars > 0) {
+							const varScore = matchedVars / templateVarNames.size;
+							score += varScore * 30; // Up to 30 points for env var match
+							if (varScore > 0.3) {
+								matchReasons.push(`${matchedVars}/${templateVarNames.size} env variables match`);
+							}
+						}
+					}
+				}
+
+				// 3. Match image name
+				if (container.image && template.image) {
+					const containerImage = container.image.toLowerCase();
+					const templateImages = [
+						template.image,
+						...((template.images as any[]) || []).map((i: any) => i?.image || ""),
+					].map((i) => i.toLowerCase());
+
+					for (const templateImage of templateImages) {
+						if (!templateImage) continue;
+						const containerRepoTag = containerImage.split(":")[0];
+						const templateRepoTag = templateImage.split(":")[0];
+						if (containerRepoTag === templateRepoTag) {
+							score += 20;
+							matchReasons.push(`Image matches: ${containerImage}`);
+							break;
+						}
+						if (containerRepoTag.includes(templateRepoTag) || templateRepoTag.includes(containerRepoTag)) {
+							score += 10;
+							matchReasons.push(`Image repo similar: ${containerImage}`);
+							break;
+						}
+					}
+				}
+
+				return {
+					templateId: template.id,
+					templateName: template.name,
+					score: Math.round(score),
+					matchReasons,
+				};
+			})
+				.filter((r) => r.score > 0)
+				.sort((a, b) => b.score - a.score)
+				.slice(0, 5); // Top 5 matches
+
+			reply.send({ success: true, data: results });
 		},
 	);
 
