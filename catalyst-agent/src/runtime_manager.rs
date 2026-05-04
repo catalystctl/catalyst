@@ -360,6 +360,15 @@ pub struct ContainerInfo {
     pub labels: HashMap<String, String>,
 }
 
+/// Inspected OCI-derived configuration from an existing container.
+#[derive(Debug, Clone, Default)]
+pub struct ContainerInspectInfo {
+    pub network_mode: String, // "host" or "bridge"
+    pub memory_limit_bytes: i64,
+    pub cpu_quota: i64,
+    pub cpu_period: i64,
+}
+
 #[derive(Debug)]
 pub struct ContainerStats {
     pub container_id: String,
@@ -1472,6 +1481,86 @@ impl ContainerdRuntime {
             tokio::time::timeout(Duration::from_secs(5), client.get(req)).await,
             Ok(Ok(_))
         )
+    }
+
+    /// Inspect an existing container and extract its OCI-derived config
+    /// (network mode, memory limits, CPU allocation). This is used by the
+    /// auto-import feature so the backend can recreate the server record
+    /// with the same resource profile.
+    pub async fn inspect_container(
+        &self,
+        container_id: &str,
+    ) -> AgentResult<Option<ContainerInspectInfo>> {
+        let mut client = ContainersClient::new(self.channel.clone());
+        let req = GetContainerRequest {
+            id: container_id.to_string(),
+        };
+        let req = with_namespace!(req, &self.namespace);
+        let resp = tokio::time::timeout(Duration::from_secs(5), client.get(req))
+            .await
+            .map_err(|_| AgentError::ContainerError("inspect_container timed out".to_string()))?
+            .map_err(grpc_err)?;
+
+        let container = resp.into_inner().container;
+        let Some(container) = container else {
+            return Ok(None);
+        };
+
+        let mut info = ContainerInspectInfo::default();
+
+        // Parse OCI spec to extract network mode and resource limits
+        if let Some(spec_any) = container.spec {
+            if spec_any.type_url == SPEC_TYPE_URL {
+                if let Ok(spec_value) = serde_json::from_slice::<serde_json::Value>(&spec_any.value)
+                {
+                    // Network mode: absence of "network" namespace = host networking
+                    if let Some(namespaces) = spec_value
+                        .get("linux")
+                        .and_then(|l| l.get("namespaces"))
+                        .and_then(|n| n.as_array())
+                    {
+                        let has_network_ns = namespaces
+                            .iter()
+                            .any(|ns| ns.get("type").and_then(|t| t.as_str()) == Some("network"));
+                        info.network_mode =
+                            if has_network_ns { "bridge" } else { "host" }.to_string();
+                    }
+
+                    // Memory limit (bytes)
+                    if let Some(limit) = spec_value
+                        .get("linux")
+                        .and_then(|l| l.get("resources"))
+                        .and_then(|r| r.get("memory"))
+                        .and_then(|m| m.get("limit"))
+                        .and_then(|l| l.as_i64())
+                    {
+                        info.memory_limit_bytes = limit;
+                    }
+
+                    // CPU quota and period
+                    if let Some(quota) = spec_value
+                        .get("linux")
+                        .and_then(|l| l.get("resources"))
+                        .and_then(|r| r.get("cpu"))
+                        .and_then(|c| c.get("quota"))
+                        .and_then(|q| q.as_i64())
+                    {
+                        info.cpu_quota = quota;
+                    }
+                    if let Some(period) = spec_value
+                        .get("linux")
+                        .and_then(|l| l.get("resources"))
+                        .and_then(|r| r.get("cpu"))
+                        .and_then(|c| c.get("period"))
+                        .and_then(|p| p.as_i64())
+                    {
+                        info.cpu_period = period;
+                    }
+                }
+            }
+        }
+
+        Ok(Some(info))
     }
 
     pub async fn is_container_running(&self, container_id: &str) -> AgentResult<bool> {

@@ -166,6 +166,9 @@ export class WebSocketGateway {
     image: string;
     status: string;
     labels: Record<string, string>;
+    networkMode?: string;
+    memoryLimitMb?: number;
+    cpuCores?: number;
     discoveredAt: number;
   }>>();
 
@@ -1816,6 +1819,9 @@ export class WebSocketGateway {
           image: String(c.image || ""),
           status: String(c.status || ""),
           labels: typeof c.labels === "object" && c.labels !== null ? c.labels : {},
+          networkMode: typeof c.networkMode === "string" ? c.networkMode : undefined,
+          memoryLimitMb: typeof c.memoryLimitMb === "number" ? c.memoryLimitMb : undefined,
+          cpuCores: typeof c.cpuCores === "number" ? c.cpuCores : undefined,
           discoveredAt: Date.now(),
         })));
 

@@ -158,6 +158,12 @@ struct DiscoveredServer<'a> {
     image: &'a str,
     status: &'a str,
     labels: &'a HashMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    networkMode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    memoryLimitMb: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cpuCores: Option<u64>,
 }
 
 #[derive(serde::Serialize)]
@@ -4943,16 +4949,31 @@ impl WebSocketHandler {
         }
 
         // Send discovered containers info for auto-import feature
-        let discovered: Vec<DiscoveredServer> = containers
-            .iter()
-            .filter(|c| c.managed)
-            .map(|c| DiscoveredServer {
+        let mut discovered = Vec::new();
+        for c in containers.iter().filter(|c| c.managed) {
+            let inspect = self.runtime.inspect_container(&c.id).await.ok().flatten();
+            discovered.push(DiscoveredServer {
                 containerId: &c.id,
                 image: &c.image,
                 status: &c.status,
                 labels: &c.labels,
-            })
-            .collect();
+                networkMode: inspect.as_ref().map(|i| i.network_mode.clone()),
+                memoryLimitMb: inspect.as_ref().and_then(|i| {
+                    if i.memory_limit_bytes > 0 {
+                        Some((i.memory_limit_bytes as u64) / (1024 * 1024))
+                    } else {
+                        None
+                    }
+                }),
+                cpuCores: inspect.as_ref().and_then(|i| {
+                    if i.cpu_quota > 0 && i.cpu_period > 0 {
+                        Some((i.cpu_quota as u64) / (i.cpu_period as u64))
+                    } else {
+                        None
+                    }
+                }),
+            });
+        }
 
         if !discovered.is_empty() {
             let discovered_msg = DiscoveredServers {

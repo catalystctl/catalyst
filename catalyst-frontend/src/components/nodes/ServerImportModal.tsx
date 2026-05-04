@@ -16,6 +16,9 @@ export interface UnregisteredContainer {
   image: string;
   status: string;
   labels: Record<string, string>;
+  networkMode?: string;
+  memoryLimitMb?: number;
+  cpuCores?: number;
   discoveredAt: number;
 }
 
@@ -107,16 +110,20 @@ export default function ServerImportModal({
 
   if (!open) return null;
 
-  const getForm = (containerId: string) =>
-    formState[containerId] ?? {
-      name: '',
-      templateId: '',
-      ownerId: '',
-      allocatedMemoryMb: '',
-      allocatedCpuCores: '',
-      allocatedDiskMb: '10240',
-      primaryPort: '25565',
-    };
+  const getForm = (containerId: string) => {
+    const container = containers.find((c) => c.containerId === containerId);
+    return (
+      formState[containerId] ?? {
+        name: '',
+        templateId: '',
+        ownerId: '',
+        allocatedMemoryMb: container?.memoryLimitMb?.toString() ?? '',
+        allocatedCpuCores: container?.cpuCores?.toString() ?? '',
+        allocatedDiskMb: '10240',
+        primaryPort: '25565',
+      }
+    );
+  };
 
   const updateForm = (containerId: string, updates: Record<string, string>) => {
     setFormState((prev) => ({
@@ -189,6 +196,14 @@ export default function ServerImportModal({
                               >
                                 {container.status.includes('Up') ? 'Running' : 'Stopped'}
                               </Badge>
+                              {container.networkMode && (
+                                <Badge
+                                  variant={container.networkMode === 'host' ? 'warning' : 'outline'}
+                                  className="text-[10px]"
+                                >
+                                  {container.networkMode === 'host' ? 'Host Network' : 'Bridge'}
+                                </Badge>
+                              )}
                             </div>
                           </div>
                         </div>

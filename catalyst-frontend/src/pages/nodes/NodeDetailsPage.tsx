@@ -557,6 +557,14 @@ function NodeDetailsPage() {
                         >
                           {c.status?.includes('Up') ? 'Running' : 'Stopped'}
                         </Badge>
+                        {c.networkMode && (
+                          <Badge
+                            variant={c.networkMode === 'host' ? 'warning' : 'outline'}
+                            className="text-[10px]"
+                          >
+                            {c.networkMode === 'host' ? 'Host Network' : 'Bridge'}
+                          </Badge>
+                        )}
                       </div>
                     </div>
                   </div>

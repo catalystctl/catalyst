@@ -1670,6 +1670,9 @@ export async function nodeRoutes(app: FastifyInstance) {
 					image: c.image,
 					status: c.status,
 					labels: c.labels,
+					networkMode: c.networkMode,
+					memoryLimitMb: c.memoryLimitMb,
+					cpuCores: c.cpuCores,
 					discoveredAt: c.discoveredAt,
 				}));
 
@@ -1770,6 +1773,10 @@ export async function nodeRoutes(app: FastifyInstance) {
 			// Derive status from container
 			const status = container.status.includes("Up") ? "running" : "stopped";
 
+			// Use discovered resource defaults if user didn't specify values
+			const resolvedMemoryMb = allocatedMemoryMb ?? container.memoryLimitMb ?? template.allocatedMemoryMb;
+			const resolvedCpuCores = allocatedCpuCores ?? (container.cpuCores ? Math.ceil(container.cpuCores) : undefined) ?? template.allocatedCpuCores;
+
 			// Create server record — containerId IS the server.id (critical for agent sync)
 			const server = await prisma.server.create({
 				data: {
@@ -1781,12 +1788,12 @@ export async function nodeRoutes(app: FastifyInstance) {
 					locationId: node.locationId,
 					ownerId,
 					status,
-					allocatedMemoryMb: allocatedMemoryMb ?? template.allocatedMemoryMb,
-					allocatedCpuCores: allocatedCpuCores ?? template.allocatedCpuCores,
+					allocatedMemoryMb: resolvedMemoryMb,
+					allocatedCpuCores: resolvedCpuCores,
 					allocatedDiskMb: allocatedDiskMb ?? 10240,
 					containerId,
 					containerName: containerId,
-					networkMode: "bridge",
+					networkMode: container.networkMode || "bridge",
 					primaryPort: primaryPort ?? 25565,
 					portBindings: portBindings ?? {},
 					environment: resolvedEnvironment,

@@ -227,6 +227,9 @@ export const nodesApi = {
           image: string;
           status: string;
           labels: Record<string, string>;
+          networkMode?: string;
+          memoryLimitMb?: number;
+          cpuCores?: number;
           discoveredAt: number;
         }>
       >
