@@ -16,6 +16,11 @@ Learn how to automate Catalyst operations using scheduled tasks, webhooks, the R
   - [Payload Format](#webhook-payload-format)
   - [Signature Verification](#webhook-signature-verification)
   - [Receiving Webhooks (Example)](#receiving-webhooks)
+- [Real-Time Event Streams](#real-time-event-streams)
+  - [SSE Events](#sse-events)
+  - [Console Stream (SSE)](#console-stream-sse)
+  - [Metrics Stream](#metrics-stream)
+  - [Admin Events](#admin-events)
 - [API Automation](#api-automation)
   - [cURL Examples](#curl-automation-examples)
   - [Python Automation Script](#python-automation-script)
@@ -90,7 +95,7 @@ curl -X POST http://localhost:3000/api/servers/srv_abc/tasks \
     "payload": { "command": "say Server restarting in 5 minutes!" },
     "schedule": "55 2 * * *"
   }'
-```
+```text
 
 ### Supported Actions
 
@@ -116,7 +121,7 @@ Catalyst uses standard 5-field cron syntax:
 │ │ │ │ ┌───────────── day of week (0–6, 0=Sunday)
 │ │ │ │ │
 * * * * *
-```
+```text
 
 | Expression | Meaning |
 |-----------|---------|
@@ -199,7 +204,7 @@ requests.post(f"{API}/api/servers/{SERVER_ID}/tasks", headers=HEADERS, json={
     "action": "start",
     "schedule": "0 4 * * *"
 })
-```
+```text
 
 ---
 
@@ -247,7 +252,7 @@ All payloads follow this structure:
     "ownerId": "usr_xyz789"
   }
 }
-```
+```text
 
 **Headers included in every webhook:**
 
@@ -308,10 +313,189 @@ def handle_webhook():
         send_discord_notification(f"⚠️ Server suspended: {data['serverName']}")
 
     return jsonify({"ok": True})
-```
+```text
 
 ---
 
+## Real-Time Event Streams
+
+Catalyst provides several real-time event streams for monitoring and automation. All streams use Server-Sent Events (SSE) for efficient, one-directional data delivery.
+
+### SSE Events
+
+**Endpoint:** `GET /api/servers/:serverId/events`
+
+Per-server event stream that delivers real-time updates about server state changes, console output, and system events.
+
+**Event types:**
+
+| Event | Description | Data Payload |
+|-------|-------------|--------------|
+| `server.started` | Server power-on completed | `{ serverId, timestamp }` |
+| `server.stopped` | Server power-off completed | `{ serverId, timestamp }` |
+| `server.restarting` | Server is restarting | `{ serverId, reason }` |
+| `server.installing` | Server installation started | `{ serverId, progress }` |
+| `server.installComplete` | Server installation finished | `{ serverId, timestamp }` |
+| `server.suspended` | Server was suspended by admin | `{ serverId, reason }` |
+| `server.resumed` | Server was resumed by admin | `{ serverId }` |
+| `console` | Console output line | `{ serverId, line, timestamp }` |
+| `alert` | Alert triggered for server | `{ serverId, alertId, message, level }` |
+| `backup.started` | Backup process started | `{ serverId, backupId }` |
+| `backup.complete` | Backup completed | `{ serverId, backupId, size }` |
+| `backup.failed` | Backup failed | `{ serverId, backupId, error }` |
+
+**Example client (JavaScript):**
+
+```javascript
+const evtSource = new EventSource('http://localhost:3000/api/servers/srv_abc/events');
+
+evtSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log(`Event: ${data.type}`, data);
+};
+
+evtSource.onerror = (error) => {
+  console.error('SSE connection error:', error);
+  // SSE auto-reconnects automatically
+};
+```
+
+**Rate limits:** SSE streams are exempt from the global rate limiter. Maximum 100 concurrent SSE events per server.
+
+### Console Stream (SSE)
+
+**Endpoint:** `GET /api/servers/:serverId/console/stream`
+
+Real-time console output stream. Falls back to WebSocket if SSE is unavailable. Used by the panel's server console UI.
+
+**How it works:**
+
+1. Client connects to `/api/servers/:serverId/console/stream`
+2. Server opens an SSE connection with proper CORS headers
+3. Console output from the game server is pushed to the client
+4. Heartbeats are sent every 30 seconds to keep the connection alive
+5. If the connection drops, the client auto-reconnects
+
+**SSE message format:**
+
+```
+event: connected
+data: {"serverId": "srv_abc", "timestamp": "2026-05-04T12:00:00.000Z"}
+
+event: console
+data: {"serverId": "srv_abc", "line": "[INFO] Starting server...", "timestamp": "2026-05-04T12:00:01.000Z"}
+
+event: heartbeat
+data: null
+```
+
+**Maximum concurrent streams:** 50 per server. If the cap is reached, new connections are rejected until existing ones close.
+
+**Sending commands:**
+
+```bash
+curl -X POST http://localhost:3000/api/servers/srv_abc/console/command \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command": "say Hello from API"}'
+```
+
+**Nginx configuration for SSE:**
+
+```nginx
+location /ws {
+    proxy_pass http://backend:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_read_timeout 86400s;
+    proxy_send_timeout 86400s;
+}
+
+# SSE streams should NOT be buffered
+location ~ ^/api/servers/.*/console/stream {
+    proxy_pass http://backend:3000;
+    proxy_set_header X-Accel-Buffering no;
+    proxy_buffering off;
+    proxy_cache off;
+}
+```
+
+### Metrics Stream
+
+**Endpoint:** `GET /api/metrics/stream`
+
+WebSocket-based real-time metrics stream for server resource monitoring (CPU, memory, disk, network).
+
+**Metrics sent:**
+
+| Metric | Description | Source |
+|--------|-------------|--------|
+| `cpuUsage` | CPU usage percentage | Agent → Backend → Client |
+| `memoryUsed` | Memory used (MB) | Container stats |
+| `memoryTotal` | Total memory (MB) | Container config |
+| `diskUsed` | Disk used (MB) | Container stats |
+| `diskTotal` | Total disk (MB) | Container config |
+| `networkIn` | Network incoming (KB/s) | Container stats |
+| `networkOut` | Network outgoing (KB/s) | Container stats |
+| `processCount` | Number of running processes | Agent → Backend |
+| `status` | Server status | Internal state |
+
+**Rate limit:** `60` server metrics per second (configurable via `serverMetricsMax`)
+
+**Example client (JavaScript):**
+
+```javascript
+const ws = new WebSocket('ws://localhost:3000/api/metrics/stream');
+
+ws.onmessage = (event) => {
+  const metrics = JSON.parse(event.data);
+  console.log(`CPU: ${metrics.cpuUsage}%`, `RAM: ${metrics.memoryUsed}/${metrics.memoryTotal} MB`);
+};
+
+ws.onerror = (error) => {
+  console.error('Metrics stream error:', error);
+};
+```
+
+### Admin Events
+
+**Endpoint:** `GET /api/admin/events`
+
+Admin activity feed stream. Shows system-wide events for administrators to monitor panel activity.
+
+**Event types:**
+
+| Event | Description | Data Payload |
+|-------|-------------|--------------|
+| `user.created` | New user registered | `{ userId, email, source }` |
+| `user.deleted` | User account deleted | `{ userId, email, ownedServers }` |
+| `user.banned` | User was banned | `{ userId, email, reason }` |
+| `server.created` | Server created | `{ serverId, name, templateId }` |
+| `server.deleted` | Server deleted | `{ serverId, name, ownerId }` |
+| `server.suspended` | Server suspended | `{ serverId, name, reason, adminId }` |
+| `node.offline` | Node went offline | `{ nodeId, lastSeen }` |
+| `node.online` | Node came back online | `{ nodeId }` |
+| `backup.started` | Backup initiated | `{ backupId, serverId }` |
+| `backup.complete` | Backup completed | `{ backupId, serverId, size }` |
+| `backup.failed` | Backup failed | `{ backupId, serverId, error }` |
+| `alert.triggered` | Alert triggered | `{ alertId, serverId, message }` |
+
+**Example client (JavaScript):**
+
+```javascript
+const evtSource = new EventSource('http://localhost:3000/api/admin/events');
+
+evtSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log(`[Admin] ${data.type}:`, data);
+};
+```
+
+**Rate limits:** Admin events stream is exempt from the global rate limiter. Maximum 1 concurrent subscriber per admin.
+
+---
 ## API Automation
 
 ### cURL Automation Examples
@@ -486,7 +670,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
+```text
 
 ### Node.js Automation
 
@@ -580,7 +764,7 @@ curl -X POST http://localhost:3000/api/servers/bulk/unsuspend \
   -d '{
     "serverIds": ["srv_1", "srv_2", "srv_3"]
   }'
-```
+```text
 
 ### Bulk Delete
 
@@ -605,7 +789,7 @@ Bulk operations return per-server results:
   ],
   "summary": { "success": 1, "skipped": 1, "failed": 0 }
 }
-```
+```text
 
 ---
 
@@ -689,7 +873,7 @@ cat > server.properties << 'EOF'
 server-port={{PORT}}
 max-players=20
 EOF
-```
+```text
 
 #### Image Variants
 
@@ -728,7 +912,7 @@ Templates can declare optional features:
     "backupPaths": ["/world", "/plugins", "/server.properties"]
   }
 }
-```
+```text
 
 | Feature | Description |
 |---------|-------------|
@@ -788,7 +972,7 @@ curl -X POST http://localhost:3000/api/templates/import-pterodactyl \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $API_KEY" \
   -d @pterodactyl-egg.json
-```
+```text
 
 The import maps Pterodactyl variables, images, install scripts, and config files to Catalyst format automatically.
 
@@ -823,7 +1007,7 @@ Catalyst has a built-in plugin system that allows extending the panel with custo
 │  │  (hot-reload via chokidar file watcher)     │ │
 │  └─────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────┘
-```
+```text
 
 ### Plugin Directory Structure
 
@@ -835,7 +1019,7 @@ catalyst-plugins/
     │   └── index.js         # Backend entry point
     └── frontend/
         └── index.ts         # Frontend entry point
-```
+```text
 
 ### Plugin Manifest
 
@@ -943,7 +1127,7 @@ module.exports = {
     await ctx.deleteStorage('temp');
   },
 };
-```
+```text
 
 ### Plugin Database Access
 
@@ -985,7 +1169,7 @@ const config = await ctx.getStorage('config');
 
 // Delete
 await ctx.deleteStorage('temp_cache');
-```
+```text
 
 ### Example Plugin Walkthrough
 
@@ -1083,7 +1267,7 @@ module.exports = {
     ctx.logger.info('Plugin unloaded');
   },
 };
-```
+```text
 
 ### Real Plugin: Ticketing System
 
@@ -1121,7 +1305,7 @@ curl -X PUT http://localhost:3000/api/plugins/example-plugin/config \
       "cronEnabled": false
     }
   }'
-```
+```text
 
 Configuration values are persisted to the database and survive plugin reloads.
 
@@ -1220,7 +1404,7 @@ services:
 volumes:
   pgdata:
   redisdata:
-```
+```text
 
 ### Node Deployment Script
 
@@ -1287,4 +1471,4 @@ jobs:
             curl -sf "http://server:3000/api/nodes/$NODE_ID" \
               -H "Authorization: Bearer $API_KEY" | jq -r '.isOnline'
           done
-```
+```text

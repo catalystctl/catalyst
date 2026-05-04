@@ -1,31 +1,31 @@
 # Installation Guide
 
-Complete instructions for deploying Catalyst, a production-grade game server management panel.
+Complete instructions for deploying **Catalyst**, a production-grade game server management panel built with Fastify, React, and PostgreSQL.
 
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
-- [One-Line Install (Recommended)](#one-line-install-recommended)
-- [Quick Start (Docker Compose)](#quick-start-docker-compose)
-- [Standalone Docker (catalyst-docker)](#standalone-docker-catalyst-docker)
-- [Environment Variables](#environment-variables)
+- [Option 1: One-Line Install (Recommended)](#option-1-one-line-install-recommended)
+- [Option 2: Standalone Docker / Podman](#option-2-standalone-docker--podman)
+- [Option 3: Build from Source](#option-3-build-from-source)
+- [Post-Install Steps](#post-install-steps)
+  - [First-Run Setup Wizard](#first-run-setup-wizard)
+  - [Verify the Stack](#verify-the-stack)
+  - [Access the Panel](#access-the-panel)
+- [Environment Configuration](#environment-configuration)
   - [Required Variables](#required-variables)
   - [General Settings](#general-settings)
-  - [Database Configuration](#database-configuration)
-  - [Redis Configuration](#redis-configuration)
-  - [Port Bindings](#port-bindings)
-  - [SFTP Configuration](#sftp-configuration)
-  - [Backup Configuration](#backup-configuration)
-  - [Server Limits](#server-limits)
-  - [Suspension Settings](#suspension-settings)
-  - [OAuth Providers](#oauth-providers)
-  - [S3 Backups](#s3-backups)
-- [Service Architecture](#service-architecture)
+  - [Database](#database)
+  - [Redis](#redis)
+  - [Ports](#ports)
+  - [SFTP](#sftp)
+  - [Backups](#backups)
+  - [Optional Features](#optional-features)
+- [TLS / HTTPS](#tls--https)
+  - [Caddy (Zero-Config)](#caddy-zero-config)
+  - [Traefik (Docker-Native)](#traefik-docker-native)
+  - [Manual Reverse Proxy](#manual-reverse-proxy)
 - [Development Setup](#development-setup)
-- [Reverse Proxy Configuration](#reverse-proxy-configuration)
-  - [Nginx (Standalone)](#nginx-standalone)
-  - [Caddy](#caddy)
-- [SSL/TLS](#ssltls)
 - [Upgrading](#upgrading)
 - [Troubleshooting](#troubleshooting)
 
@@ -35,329 +35,399 @@ Complete instructions for deploying Catalyst, a production-grade game server man
 
 | Requirement | Minimum | Recommended |
 |---|---|---|
-| **OS** | Any Linux with Docker | Ubuntu 22.04+ / Debian 12+ |
-| **Docker** | 20.10+ | Latest stable |
-| **Docker Compose** | v2.0+ | Latest stable |
+| **OS** | Any Linux with Docker/Podman | Ubuntu 22.04+ / Debian 12+ |
+| **Container Runtime** | Docker 20.10+ or Podman 4.0+ | Docker 26+ (rootless) |
+| **Docker Compose** | V2 plugin (`docker compose`) or `podman-compose` | Latest stable |
 | **CPU** | 2 cores | 4+ cores |
 | **RAM** | 2 GB | 4+ GB |
 | **Disk** | 10 GB (panel only) | SSD with 50+ GB |
+| **Open Ports** | 80 (or 8080), 3000, 2022 | 80, 443, 2022 |
 
-> **Note:** Docker Compose (with Docker or Podman) is the **only supported deployment method**. Direct installation, containerd (`ctr`/`nerdctl`), and other container runtimes are not supported.
-
-## One-Line Install (Recommended)
-
-The fastest way to get Catalyst running — no need to clone the full repo:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh | bash
-```
-
-This script:
-- Checks for Docker and Docker Compose
-- Downloads the standalone `catalyst-docker/` folder from GitHub
-- Generates secure `POSTGRES_PASSWORD` and `BETTER_AUTH_SECRET`
-- Creates `.env` from `.env.example`
-
-Then start the stack:
-
-```bash
-cd catalyst-docker
-# Edit .env — set PUBLIC_URL at minimum
-nano .env
-docker compose up -d
-```
-
-👉 See [`catalyst-docker/README.md`](../catalyst-docker/README.md) for full details including TLS setup with Caddy or Traefik.
+> **Note:** Docker Compose (Docker or Podman) is the **only supported deployment method**. Direct installation on bare metal is not supported.
 
 ---
 
-## Quick Start (Docker Compose)
+## Option 1: One-Line Install (Recommended)
 
-If you prefer to build from source:
+The fastest way to get Catalyst running — no need to clone the full repository:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh | bash
+```text
+
+**What the script does:**
+
+1. Checks that Docker and Docker Compose are installed and the daemon is running
+2. Verifies `curl`, `tar`, and `openssl` are available
+3. Downloads the `catalyst-docker/` folder from the latest `main` branch
+4. Copies `.env.example` to `.env`
+5. Generates strong `POSTGRES_PASSWORD` (32 chars) and `BETTER_AUTH_SECRET`
+6. Preserves existing `.env` if it already exists (backs up to `.env.backup.PID`)
+
+**After the script completes:**
+
+```bash
+cd catalyst-docker
+# 1. Edit your configuration
+nano .env
+
+# 2. Start the stack
+docker compose up -d
+
+# 3. Verify containers are healthy
+docker ps
+
+# 4. (Optional) Seed the database with a default admin user
+docker exec -e NODE_ENV=development catalyst-backend bun run db:seed
+```
+
+> **Tip:** If this is your first time, the **first user to register** automatically becomes the panel administrator. No seeding is required.
+>
+> After installation, follow the post-install walkthrough in [Getting Started](./getting-started.md) for your first admin setup.
+
+---
+
+## Option 2: Standalone Docker / Podman
+
+The `catalyst-docker/` directory is a self-contained deployment using **pre-built images** from [GitHub Container Registry](https://github.com/catalystctl/catalyst/pkgs/container/catalyst-backend) — no build step needed.
+
+### Docker
+
+```bash
+# Clone the repo (or download catalyst-docker/ separately)
+git clone https://github.com/catalystctl/catalyst.git
+cd catalyst/catalyst-docker
+
+# Configure
+cp .env.example .env
+nano .env
+
+# Start
+docker compose up -d
+```text
+
+### Podman (Rootless)
+
+```bash
+# Clone the repo
+git clone https://github.com/catalystctl/catalyst.git
+cd catalyst/catalyst-docker
+
+# Configure
+cp .env.example .env
+nano .env
+
+# Start with podman-compose
+podman compose up -d
+```
+
+> **Podman note:** `podman-compose` may appear to hang — it waits for healthchecks to pass. Check progress in another terminal with `podman ps`. All four containers should show `Up` with postgres/redis/backend marked `(healthy)`.
+
+### Podman — Privileged Ports
+
+Rootless Podman cannot bind ports below 1024 by default. Two options:
+
+1. **Use high ports (default)** — Frontend binds to `8080` instead of `80`. No extra setup needed.
+2. **Allow privileged ports** — Add `net.ipv4.ip_unprivileged_port_start=80` to `/etc/sysctl.conf`:
+
+```bash
+echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+```text
+
+### LAN Exposure
+
+If exposing the panel on your local network (not just localhost):
+
+```env
+# In .env
+PUBLIC_URL=http://<YOUR_LAN_IP>:8080
+PASSKEY_RP_ID=<YOUR_LAN_IP>
+FRONTEND_PORT=0.0.0.0:8080
+BACKEND_PORT=0.0.0.0:3000
+SFTP_PORT=0.0.0.0:2022
+```
+
+Find your LAN IP with `hostname -I | awk '{print $1}'`.
+
+---
+
+## Option 3: Build from Source
+
+For development or when pre-built images are not suitable:
 
 ### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/catalystctl/catalyst.git
 cd catalyst
-```
+```text
 
-### 2. Run the Setup Script
-
-```bash
-chmod +x dev.sh
-./dev.sh
-```
-
-This script will:
-- Detect Docker or Podman
-- Copy `.env.example` to `.env`
-- Prompt you to set required values
-- Validate configuration
-- Build and start all services
-
-### 3. Manual Quick Start
-
-If you prefer to configure manually:
+### 2. Backend Dev Setup
 
 ```bash
-# Copy environment template
+cd catalyst-backend
+
+# Create and configure .env
 cp .env.example .env
+nano .env  # Set DATABASE_URL and BETTER_AUTH_SECRET
 
-# Edit required values
-nano .env  # Set BETTER_AUTH_SECRET and POSTGRES_PASSWORD
+# Install dependencies and generate Prisma client
+bun install
+bun run db:generate
+bun run db:push
+
+# Seed development data (dev only!)
+bun run db:seed
 ```
 
-Generate a secure auth secret:
+### 3. Frontend Setup
 
 ```bash
-openssl rand -base64 32
-```
+cd ../catalyst-frontend
+bun install
+```text
 
-Then start the stack:
-
-```bash
-docker compose up -d --build
-```
-
-### 4. Seed the Database
-
-For first-time installations, seed the database with default data (admin user, roles, templates):
+### 4. Start Everything
 
 ```bash
-docker compose exec backend bun run db:seed
+# From the repository root
+bun run dev
 ```
 
-> **⚠️ Warning:** The seed script creates a default admin account (`admin@example.com` / `admin123`). Change this password immediately after first login. The seed script refuses to run in production (`NODE_ENV=production`) unless `SEED_ALLOW_DEFAULT_ADMIN=true` is set.
+This starts the backend and frontend in parallel with hot reload.
 
-### 5. Access the Panel
-
-| Service | URL |
-|---|---|
-| **Panel** | `http://localhost` (port 80) |
-| **API** | `http://localhost:3000/api` |
-| **API Docs** | `http://localhost:3000/docs` |
-| **SFTP** | `localhost:2022` |
+> **Development scripts:** See the [Development Setup](#development-setup) section for the full list of commands.
 
 ---
 
-## Standalone Docker (catalyst-docker)
+## Post-Install Steps
 
-The `catalyst-docker/` folder is a self-contained deployment using **pre-built images** from GitHub Container Registry — no build step required. This is what the [one-line install](#one-line-install-recommended) downloads.
+### First-Run Setup Wizard
+
+When you first visit your Catalyst URL, you'll see the setup wizard:
+
+1. The wizard detects that no users exist
+2. Register your first account — it becomes the **admin** automatically
+3. Optionally configure SMTP, panel branding, and OAuth providers from the admin panel
+
+> **Seed alternative:** If you prefer seeded data, run `docker exec -e NODE_ENV=development catalyst-backend bun run db:seed` to create a default admin (`admin@example.com` / `admin123`). **Change this password immediately** after first login.
+
+### Verify the Stack
 
 ```bash
-# Clone and enter the standalone folder
-git clone https://github.com/catalystctl/catalyst.git
-cd catalyst/catalyst-docker
+# Check all containers
+docker compose ps
+# or
+podman ps
 
-cp .env.example .env
-# Edit .env — set PUBLIC_URL at minimum
-nano .env
+# Expected output — four containers running:
+# catalyst-postgres   healthy   postgres:16-alpine
+# catalyst-redis      healthy   redis:7-alpine
+# catalyst-backend    healthy   ghcr.io/catalystctl/catalyst-backend:latest
+# catalyst-frontend   running   ghcr.io/catalystctl/catalyst-frontend:latest
+```text
 
-docker compose up -d
-```
+### Access the Panel
 
-For Podman, use `podman compose up -d` instead.
+| Service | URL |
+|---|---|
+| **Web Panel** | Your `PUBLIC_URL` (e.g., `http://localhost:8080`) |
+| **REST API** | `http://localhost:3000/api` |
+| **API Docs** | `http://localhost:3000/docs` |
+| **SFTP** | `localhost:2022` |
 
-👉 See [`catalyst-docker/README.md`](../catalyst-docker/README.md) for the complete guide including TLS setup, port configuration, and troubleshooting.
+The backend's `/health` endpoint returns `200 OK` when the service is ready.
 
-## Environment Variables
+---
 
-All configuration is done through the `.env` file. Copy `.env.example` as a starting point.
+## Environment Configuration
+
+All configuration is done through the `.env` file in the `catalyst-docker/` directory. Copy `.env.example` as a starting point.
+
+For the full variable reference, see [Environment Variables](./environment-variables.md).
+
+For detailed Docker service architecture, volume management, and hardening, see [Docker Setup](./docker-setup.md).
 
 ### Required Variables
 
-| Variable | Description | Example |
+| Variable | Description | How to Generate |
 |---|---|---|
-| `BETTER_AUTH_SECRET` | Secret key for session encryption. Generate with `openssl rand -base64 32` | `a3f8b...` |
-| `BETTER_AUTH_URL` | Public URL of the panel (used for OAuth callbacks) | `https://panel.example.com` |
-| `POSTGRES_PASSWORD` | Password for PostgreSQL (also used internally by the backend) | `your-secure-password` |
+| `PUBLIC_URL` | The exact URL users type into their browser (no trailing slash) | `http://your-domain.com` or `http://192.168.1.100:8080` |
+| `POSTGRES_PASSWORD` | PostgreSQL database password | `openssl rand -base64 32 \| tr -d '/+=' \| head -c 32` |
+| `BETTER_AUTH_SECRET` | Secret key for session encryption | `openssl rand -base64 32` |
+
+> **`PUBLIC_URL` is the single source of truth.** It automatically drives `BETTER_AUTH_URL`, `CORS_ORIGIN`, `FRONTEND_URL`, `BACKEND_EXTERNAL_ADDRESS`, and `BACKEND_URL`. Only override those individually if you have a split DNS setup.
 
 ### General Settings
 
 | Variable | Default | Description |
 |---|---|---|
-| `NODE_ENV` | `production` | Environment: `production` or `development` |
-| `TZ` | `UTC` | Timezone in IANA format (e.g., `America/New_York`) |
-| `LOG_LEVEL` | `info` | Log verbosity: `trace`, `debug`, `info`, `warn`, `error` |
-| `APP_NAME` | `Catalyst` | Panel branding name (TOTP issuer, OAuth display, email subjects) |
-| `BACKEND_EXTERNAL_ADDRESS` | `http://localhost` | Public-facing backend URL |
-| `FRONTEND_URL` | `http://localhost` | Public-facing frontend URL |
-| `CORS_ORIGIN` | `http://localhost` | Allowed CORS origin |
-| `PASSKEY_RP_ID` | `localhost` | WebAuthn/Passkey relying party ID (must match your domain) |
+| `NODE_ENV` | `development` | `production` enables HSTS and aggressive security headers. **Must be `production` when behind TLS.** |
+| `TZ` | `UTC` | Timezone in IANA format (`America/New_York`, `Europe/London`) |
+| `LOG_LEVEL` | `info` | Log verbosity: `trace` → `debug` → `info` → `warn` → `error` |
+| `APP_NAME` | `Catalyst` | Panel name shown in emails, TOTP issuer, and OAuth display |
 
-### Database Configuration
+### Database
 
 | Variable | Default | Description |
 |---|---|---|
 | `POSTGRES_USER` | `catalyst` | PostgreSQL username |
 | `POSTGRES_DB` | `catalyst_db` | Database name |
-| `POSTGRES_PORT` | `127.0.0.1:5432` | Host port binding (bind address:port) |
+| `POSTGRES_PORT` | `127.0.0.1:5432` | Host port binding (bind address + port) |
 
-### Redis Configuration
+The PostgreSQL service (`catalyst-postgres`) binds to `127.0.0.1:5432` by default — it is not exposed to the network. If you need external access (e.g., pgAdmin, backup tools), change the bind address:
+
+```env
+POSTGRES_PORT=0.0.0.0:5432
+```
+
+> **Note:** The backend entrypoint automatically runs database migrations on every startup via `prisma migrate deploy`. For a fresh database, run `db:seed` to initialize the schema with sample data.
+
+### Redis
 
 | Variable | Default | Description |
 |---|---|---|
-| `REDIS_PASSWORD` | *(empty)* | Redis password (leave empty for no auth) |
-| `REDIS_URL` | `redis://:REDIS_PASSWORD_PLACEHOLDER@redis:6379` | Redis connection URL |
+| `REDIS_PASSWORD` | *(empty)* | Redis authentication password |
 | `REDIS_PORT` | `127.0.0.1:6379` | Host port binding |
 
-> **Note:** If `REDIS_URL` is empty or Redis is unreachable, Redis-dependent features (rate limiting, caching, session store) will be skipped. Redis is recommended for production.
+Redis is optional. If `REDIS_URL` is empty or Redis is unreachable, Redis-dependent features (rate limiting, caching, session store) are gracefully skipped.
 
-### Port Bindings
+```env
+REDIS_PASSWORD=your-redis-password
+# REDIS_URL is constructed automatically inside the backend container
+```text
+
+### Ports
 
 | Variable | Default | Description |
 |---|---|---|
-| `BACKEND_PORT` | `127.0.0.1:3000` | Backend HTTP API port |
-| `FRONTEND_PORT` | `80` | Frontend (nginx) port |
-| `SFTP_PORT` | `127.0.0.1:2022` | SFTP server port |
+| `FRONTEND_PORT` | `0.0.0.0:8080` | Web panel (nginx) port |
+| `BACKEND_PORT` | `127.0.0.1:3000` | Backend API port |
+| `SFTP_PORT` | `0.0.0.0:2022` | SFTP server port |
 
-> **Security:** By default, the backend and SFTP ports are bound to `127.0.0.1` only. They are accessed through the nginx frontend proxy. Change this only if you have a specific need.
+> **Security:** Backend and SFTP ports are exposed on `0.0.0.0` by default. Change to `127.0.0.1:<port>` to restrict access to localhost only.
 
-### SFTP Configuration
+### SFTP
 
 | Variable | Default | Description |
 |---|---|---|
 | `SFTP_ENABLED` | `true` | Enable or disable the built-in SFTP server |
+| `SFTP_MAX_FILE_SIZE` | `104857600` | Max upload size in bytes (default: 100 MB) |
+| `SFTP_HOST_KEY` | *(auto-generate)* | SFTP host key file path. Set empty to auto-generate. |
+| `SFTP_HOST_KEY_BASE64` | *(empty)* | Base64-encoded SFTP host key (alternative to `SFTP_HOST_KEY`) |
 
-### Backup Configuration
+> **Podman note:** `podman-compose` may pass literal `${VAR:-}` strings instead of empty values. Set `SFTP_HOST_KEY=` and `SFTP_HOST_KEY_BASE64=` explicitly in `.env` to avoid SFTP host key errors.
 
-| Variable | Default | Description |
-|---|---|---|
-| `BACKUP_STORAGE_MODE` | `local` | Storage backend: `local` or `s3` |
-| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | *(empty)* | Encryption key for backup credentials. Generate with `openssl rand -hex 32`. **If lost, all encrypted backup credentials become unrecoverable.** |
-
-### Server Limits
+### Backups
 
 | Variable | Default | Description |
 |---|---|---|
-| `MAX_DISK_MB` | `10240` | Maximum disk allocation per server in MB |
-| `CONSOLE_OUTPUT_BYTE_LIMIT_BYTES` | `262144` | Maximum console output buffer size per server |
+| `BACKUP_STORAGE_MODE` | `local` | Storage backend: `local` (disk) or `s3` (S3-compatible) |
+| `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | *(empty)* | Encryption key for stored backup credentials. Generate with `openssl rand -hex 32`. **If lost, all encrypted credentials become unrecoverable.** |
 
-### Suspension Settings
+#### S3 Backups
 
-| Variable | Default | Description |
-|---|---|---|
-| `SUSPENSION_ENFORCED` | `true` | Whether suspension stops servers |
-| `SUSPENSION_DELETE_POLICY` | `block` | Delete policy for suspended servers: `block` or `allow` |
-| `SUSPENSION_DELETE_BLOCKED` | `true` | Whether delete operations are blocked for suspended servers |
-
-### OAuth Providers
-
-Catalyst supports WHMCS and Paymenter OIDC authentication. Leave these empty to disable.
-
-| Variable | Description |
-|---|---|
-| `WHMCS_OIDC_CLIENT_ID` | WHMCS OAuth client ID |
-| `WHMCS_OIDC_CLIENT_SECRET` | WHMCS OAuth client secret |
-| `WHMCS_OIDC_DISCOVERY_URL` | WHMCS OIDC discovery endpoint URL |
-| `PAYMENTER_OIDC_CLIENT_ID` | Paymenter OAuth client ID |
-| `PAYMENTER_OIDC_CLIENT_SECRET` | Paymenter OAuth client secret |
-| `PAYMENTER_OIDC_DISCOVERY_URL` | Paymenter OIDC discovery endpoint URL |
-
-### S3 Backups
-
-For remote backup storage via S3-compatible services (AWS, MinIO, etc.):
+When `BACKUP_STORAGE_MODE=s3`:
 
 | Variable | Default | Description |
 |---|---|---|
-| `BACKUP_S3_ENDPOINT` | *(empty)* | S3 endpoint URL |
+| `BACKUP_S3_ENDPOINT` | *(empty)* | S3-compatible endpoint (e.g., `https://s3.amazonaws.com`) |
 | `BACKUP_S3_REGION` | `us-east-1` | S3 region |
-| `BACKUP_S3_BUCKET` | *(empty)* | S3 bucket name |
-| `BACKUP_S3_ACCESS_KEY` | *(empty)* | S3 access key |
-| `BACKUP_S3_SECRET_KEY` | *(empty)* | S3 secret key |
-| `BACKUP_S3_PATH_STYLE` | `false` | Use path-style S3 URLs (needed for MinIO) |
+| `BACKUP_S3_BUCKET` | *(empty)* | Target bucket name |
+| `BACKUP_S3_ACCESS_KEY` | *(empty)* | S3 access key ID |
+| `BACKUP_S3_SECRET_KEY` | *(empty)* | S3 secret access key |
+| `BACKUP_S3_PATH_STYLE` | `false` | Use path-style URLs (required for MinIO) |
 
-## Service Architecture
+### Optional Features
 
-Catalyst uses four Docker services:
+#### Webhooks
 
-```
-┌──────────────┐     ┌──────────────┐
-│   Frontend   │────▶│   Backend    │
-│   (Nginx)    │     │   (Fastify)  │
-│   Port 80    │     │   Port 3000  │
-└──────────────┘     └──────┬───────┘
-                            │
-                     ┌──────┴───────┐
-                     │              │
-              ┌──────▼──────┐ ┌────▼──────┐
-              │  PostgreSQL │ │   Redis   │
-              │  Port 5432  │ │  Port 6379│
-              └─────────────┘ └───────────┘
+```env
+WEBHOOK_URLS=https://your-webhook.example.com/notify
+WEBHOOK_SECRET=your-webhook-signing-secret
 ```
 
-### Volumes
+#### Auto-Updater
 
-| Volume | Purpose |
-|---|---|
-| `catalyst-postgres-data` | PostgreSQL data persistence |
-| `catalyst-server-data` | Server container files at `/var/lib/catalyst/servers` |
-| `catalyst-backup-data` | Backup files at `/var/lib/catalyst/backups` |
+```env
+AUTO_UPDATE_ENABLED=false
+AUTO_UPDATE_INTERVAL_MS=3600000        # 1 hour
+AUTO_UPDATE_AUTO_TRIGGER=false         # false = notify only; true = auto-update
+AUTO_UPDATE_DOCKER_COMPOSE_PATH=/app/docker-compose.yml
+```text
 
-### Health Checks
+#### Suspension Policies
 
-All services include health checks:
+```env
+SUSPENSION_ENFORCED=true
+SUSPENSION_DELETE_BLOCKED=false
+SUSPENSION_DELETE_POLICY=keep          # block, allow, or keep
+```
 
-- **PostgreSQL:** `pg_isready` every 10s
-- **Redis:** `redis-cli ping` every 10s
-- **Backend:** HTTP GET `/health` every 30s (with 30s start period)
+---
 
-The frontend waits for the backend to be healthy before starting.
+## TLS / HTTPS
 
-> **Note:** Docker Compose (with Docker or Podman) is the **only supported deployment method**. Manual installation of individual services is not supported.
+### Caddy (Zero-Config)
 
-## Development Setup
+Caddy is the recommended option — automatic Let's Encrypt with minimal configuration:
 
-Catalyst uses a Bun workspace monorepo. Development requires:
+**1. Configure `.env`:**
 
-- [Bun](https://bun.sh/) >= 1.0.0
-- Podman or Docker (for PostgreSQL and Redis)
-- Rust toolchain (for the agent, if needed)
+```env
+DOMAIN=panel.example.com
+ACME_EMAIL=admin@example.com              # optional but recommended for cert alerts
+PUBLIC_URL=https://panel.example.com
+NODE_ENV=production                       # enables HSTS in the backend
+```text
+
+**2. Start with the Caddy overlay:**
 
 ```bash
-# Install all dependencies
-bun install
-
-# Start infrastructure (PostgreSQL + Redis)
-bun run dev:infra
-
-# Run backend and frontend in parallel (hot reload)
-bun run dev
-
-# Run the agent locally (requires root for containerd access)
-bun run dev:agent
-
-# Seed the database
-bun run db:seed
-
-# Database GUI (Prisma Studio)
-bun run db:studio
+docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d
 ```
 
-### Useful Development Scripts
+That's it. Visit `https://panel.example.com` — Caddy handles certificate issuance, renewal, and HTTP→HTTPS redirects.
 
-| Command | Description |
-|---|---|
-| `bun run dev` | Start backend + frontend with hot reload |
-| `bun run dev:agent` | Run the Rust agent locally |
-| `bun run build` | Build all packages |
-| `bun run build:agent` | Build the Rust agent (release) |
-| `bun run db:generate` | Regenerate Prisma client |
-| `bun run db:push` | Push schema changes to database |
-| `bun run db:migrate` | Create and apply migrations |
-| `bun run db:seed` | Seed database with sample data |
-| `bun run db:studio` | Open Prisma Studio GUI |
-| `bun run lint` | Lint all packages |
-| `bun run test` | Run tests |
+### Traefik (Docker-Native)
 
+For advanced users who want Docker-native service discovery and a web dashboard:
 
+**1. Configure `.env`:**
 
-## Reverse Proxy Configuration
+```env
+DOMAIN=panel.example.com
+ACME_EMAIL=admin@example.com
+PUBLIC_URL=https://panel.example.com
+NODE_ENV=production
+```text
 
-In production, place a reverse proxy (nginx, Caddy) in front of the frontend service to handle TLS termination.
+**2. Start with the Traefik overlay:**
 
-### Nginx (Standalone)
+```bash
+docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d
+```
+
+**3. (Optional) Access the Traefik dashboard:**
+
+Open `http://127.0.0.1:8080` on the server (localhost only by default).
+
+> **Security:** Never expose the Traefik dashboard on `0.0.0.0` without authentication. Set `TRAEFIK_DASHBOARD_PORT=` to disable it entirely.
+
+### Manual Reverse Proxy
+
+If you prefer to manage TLS yourself (e.g., with Certbot + nginx):
+
+**1. Update `.env` for public-facing deployment:**
+
+```env
+PUBLIC_URL=https://panel.example.com
+NODE_ENV=production
+BACKEND_EXTERNAL_ADDRESS=https://panel.example.com
+```text
+
+**2. Configure your reverse proxy.** Example for nginx:
 
 ```nginx
 server {
@@ -369,14 +439,6 @@ server {
 
     client_max_body_size 100m;
 
-    location / {
-        proxy_pass http://127.0.0.1:80;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
     # WebSocket support
     location /ws {
         proxy_pass http://127.0.0.1:80;
@@ -386,9 +448,18 @@ server {
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
     }
+
+    # All other requests
+    location / {
+        proxy_pass http://127.0.0.1:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 }
 
-# Redirect HTTP to HTTPS
+# Redirect HTTP → HTTPS
 server {
     listen 80;
     server_name panel.example.com;
@@ -396,92 +467,196 @@ server {
 }
 ```
 
-### Caddy
+### Important: HSTS and NODE_ENV
 
-Caddy handles TLS automatically with Let's Encrypt:
+When `NODE_ENV=production`, the backend sets:
+- `Strict-Transport-Security` (HSTS) — forces browsers to use HTTPS
+- `upgrade-insecure-requests` in CSP — auto-upgrades HTTP to HTTPS
 
-```
-panel.example.com {
-    reverse_proxy localhost:80
-}
-```
+**Never set `NODE_ENV=production` with plain HTTP.** Browsers will cache HSTS and refuse to load `http://` resources, breaking deploy scripts and the panel. Keep `NODE_ENV=development` when running behind no TLS, or use one of the TLS overlay options above.
 
-## SSL/TLS
+### PASSKEY_RP_ID Must Match Your Domain
 
-When using SSL, update these environment variables accordingly:
+WebAuthn/Passkey authentication will fail if `PASSKEY_RP_ID` doesn't exactly match your domain:
 
 ```env
-BETTER_AUTH_URL=https://panel.example.com
-BACKEND_EXTERNAL_ADDRESS=https://panel.example.com
-FRONTEND_URL=https://panel.example.com
-CORS_ORIGIN=https://panel.example.com
-PASSKEY_RP_ID=panel.example.com
+# For http://localhost:8080 → PASSKEY_RP_ID=localhost
+# For https://panel.example.com → PASSKEY_RP_ID=panel.example.com
+# For LAN → PASSKEY_RP_ID=192.168.1.100
+```text
+
+No protocol, no port — the bare hostname or IP only.
+
+---
+
+## Development Setup
+
+Catalyst uses a Bun workspace monorepo. Full development requires:
+
+- [Bun](https://bun.sh/) >= 1.0.0
+- Docker or Podman (for PostgreSQL, Redis)
+- Rust toolchain (for the agent, if needed)
+
+### Quick Start
+
+```bash
+# Install all workspace dependencies
+bun install
+
+# Start infrastructure containers (PostgreSQL + Redis)
+bun run dev:infra
+
+# Run backend and frontend in parallel (hot reload)
+bun run dev
+
+# Run the Rust agent locally (requires root for containerd access)
+bun run dev:agent
 ```
 
-> **Important:** `PASSKEY_RP_ID` must exactly match your domain (no protocol, no port). WebAuthn/Passkey authentication will fail if this doesn't match.
+### Useful Commands
+
+| Command | Context | Description |
+|---|---|---|
+| `bun run dev` | Root | Start backend + frontend with hot reload |
+| `bun run dev:agent` | Root | Run the Rust agent locally |
+| `bun run build` | Root | Build all packages |
+| `bun run build:agent` | Root | Build the Rust agent (release) |
+| `bun run db:generate` | `catalyst-backend/` | Regenerate Prisma client |
+| `bun run db:push` | `catalyst-backend/` | Push schema to database |
+| `bun run db:migrate` | `catalyst-backend/` | Create and apply migrations |
+| `bun run db:seed` | `catalyst-backend/` | Seed database with sample data |
+| `bun run db:seed:admin` | `catalyst-backend/` | Seed only the admin user |
+| `bun run db:studio` | `catalyst-backend/` | Open Prisma Studio GUI |
+| `bun run test` | Root | Run Vitest test suite |
+| `bun run lint` | Root | Run ESLint on all packages |
+
+### Backend Dev Environment
+
+```bash
+cd catalyst-backend
+cp .env.example .env
+nano .env  # Set DATABASE_URL
+
+bun install
+bun run db:generate
+bun run db:push
+bun run db:seed
+bun run dev
+```text
+
+### Frontend Dev Environment
+
+```bash
+cd catalyst-frontend
+bun install
+# Frontend dev server starts via `bun run dev` (root) or `bun run dev` here
+```
+
+> **See also:** [Development Guide](./development.md) for the complete developer guide including testing, plugin development, and PR process.
+
+---
 
 ## Upgrading
 
-### Docker Compose
+### Docker Compose (Recommended)
 
 ```bash
-# Pull latest code
-git pull origin main
-
-# Rebuild and restart
-docker compose up -d --build
-
-# Run any pending database migrations
-docker compose exec backend bunx prisma migrate deploy --config prisma/prisma.config.ts
-```
-
-> **Note:** The backend entrypoint automatically runs database migrations on every startup, so explicit migration commands are usually not needed.
-
-### Standalone Docker (catalyst-docker)
-
-```bash
-cd catalyst-docker
+# Pull latest images
 docker compose pull
+
+# Apply any database migrations and restart
 docker compose up -d
+```text
+
+The backend entrypoint automatically runs `prisma migrate deploy` on every startup, so migrations are applied before the API starts accepting connections.
+
+> **Post-upgrade:** After upgrading, verify node agents are connected by checking the admin panel. For node deployment procedures, see [Agent Guide](./agent.md).
+
+### With Git (Source Builds)
+
+```bash
+git pull origin main
+docker compose up -d --build
 ```
+
+### One-Line Install
+
+The one-line installer includes an update routine:
+
+```bash
+# Run the installer again — it updates catalyst-docker/ in place
+curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh | bash
+```text
+
+It preserves your existing `.env` and only replaces the config files.
+
+---
 
 ## Troubleshooting
 
-### Database Connection Errors
+### Docker Compose Hangs on Start
 
+The compose command waits for healthchecks. This can take 1–3 minutes on first run:
+
+```bash
+# Check progress in another terminal
+docker compose ps
 ```
+
+### PostgreSQL Connection Errors
+
+```text
 Error: P1001 Can't reach database server
 ```
 
-- Verify PostgreSQL is running: `docker compose ps postgres`
-- Check `DATABASE_URL` in the backend environment
-- Ensure the database container is healthy: `docker compose logs postgres`
+- Verify the container is running: `docker compose ps postgres`
+- Check logs: `docker compose logs postgres`
+- Ensure `POSTGRES_PASSWORD` is set in `.env` (required)
+- For a fresh database, run: `docker exec -e NODE_ENV=development catalyst-backend bun run db:seed`
 
 ### Migration Failures
 
-```
+```text
 Warning: Could not run migrations
 ```
 
-- For a fresh database, run the seed manually: `docker compose exec backend bun run db:seed`
-- For existing databases, check migration status: `docker compose exec backend bunx prisma migrate status --config prisma/prisma.config.ts`
+The entrypoint falls back to `db push` (which may lose data). For a fresh database, the seed script handles initialization. For existing databases, check migration status:
+
+```bash
+docker compose exec backend bunx prisma migrate status --config prisma/prisma.config.ts
+```text
 
 ### Redis Connection Warnings
 
 ```
 Warning: Could not connect to Redis
+```text
+
+Redis is optional. If you don't use Redis-dependent features (rate limiting, caching), this can be safely ignored. To fix:
+
+```bash
+docker compose ps redis
+docker compose logs redis
 ```
-
-Redis is optional. If you see this warning but don't need Redis features, it can be safely ignored. To fix it:
-
-- Verify Redis is running: `docker compose ps redis`
-- Check `REDIS_URL` matches your Redis configuration
 
 ### SFTP Connection Refused
 
 - Verify `SFTP_ENABLED=true` in `.env`
-- Check the SFTP port binding: `docker compose port backend 2022`
-- Ensure port 2022 is not blocked by a firewall
+- Check the port binding: `docker compose port backend 2022`
+- Podman users: ensure `SFTP_HOST_KEY=` and `SFTP_HOST_KEY_BASE64=` are set explicitly
+
+### Podman `rootlessport` Error
+
+```text
+rootlessport cannot expose privileged port 80
+```
+
+Use the default high port (8080) or allow privileged ports:
+
+```bash
+echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+```text
 
 ### Port Already in Use
 
@@ -489,20 +664,22 @@ Redis is optional. If you see this warning but don't need Redis features, it can
 # Check what's using a port
 ss -tlnp | grep :3000
 
-# Change the port in .env
+# Change in .env
 BACKEND_PORT=127.0.0.1:3001
 ```
 
-### View Logs
+### Backend Crash Loop
+
+Check logs for the error:
 
 ```bash
-# All services
-docker compose logs -f
-
-# Specific service
 docker compose logs -f backend
-docker compose logs -f postgres
-```
+```text
+
+Common causes:
+- Missing `BETTER_AUTH_SECRET` or `DATABASE_URL`
+- Invalid `SFTP_HOST_KEY` (set empty for auto-generate)
+- Database unreachable (verify PostgreSQL container health)
 
 ### Reset Everything
 
@@ -511,3 +688,17 @@ docker compose logs -f postgres
 ```bash
 docker compose down -v
 ```
+
+### View Logs
+
+```bash
+# All services (follow mode)
+docker compose logs -f
+
+# Specific service
+docker compose logs -f backend
+docker compose logs -f postgres
+
+# Last 100 lines
+docker compose logs --tail=100 backend
+```text

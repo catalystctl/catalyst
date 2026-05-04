@@ -82,7 +82,7 @@ The health check reports:
 ```bash
 curl -H "Authorization: Bearer <session_token>" \
   https://your-catalyst.example.com/api/admin/health
-```
+```text
 
 Response example:
 
@@ -166,7 +166,7 @@ To view which servers a user has access to:
 
 ```bash
 GET /api/admin/users/:userId/servers
-```
+```text
 
 ### Permissions Required
 
@@ -318,7 +318,7 @@ POST /api/nodes/:nodeId/allocations
   "alias": "Main IP",
   "notes": "Primary allocation range"
 }
-```
+```text
 
 **Supported formats:**
 
@@ -482,7 +482,7 @@ POST /api/admin/servers/actions
   "action": "start",
   "reason": "Maintenance complete"
 }
-```
+```text
 
 **Available actions:**
 
@@ -603,7 +603,7 @@ POST /api/alert-rules
   "actions": { "type": "webhook", "url": "https://example.com/alert" },
   "enabled": true
 }
-```
+```text
 
 ### Managing Alerts
 
@@ -731,7 +731,7 @@ Webhooks notify external services about events in Catalyst. Each webhook payload
 Webhooks are configured via the `WEBHOOK_URLS` environment variable or stored in the database (`SystemSetting` with id `webhooks`).
 
 **Environment variable:**
-```
+```text
 WEBHOOK_URLS=https://example.com/hook,https://other.com/hook
 ```
 
@@ -764,7 +764,7 @@ The signing secret is set via the `WEBHOOK_SECRET` environment variable. If not 
   "timestamp": "2026-04-18T21:00:00.000Z",
   "data": { "ownerId": "user_xyz" }
 }
-```
+```text
 
 ### Signature Verification
 
@@ -830,7 +830,7 @@ PUT /api/plugins/my-plugin/config
     "threshold": 75
   }
 }
-```
+```text
 
 ---
 
@@ -988,7 +988,7 @@ POST /api/admin/database-hosts
   "username": "catalyst",
   "password": "secure-password"
 }
-```
+```text
 
 | Field | Validation |
 |-------|-----------|
@@ -1091,7 +1091,7 @@ Catalyst provides a built-in migration tool to import servers, nodes, and data f
    ```json
    POST /api/admin/migration/test
    { "url": "https://pterodactyl.example.com", "key": "ptla_xxx" }
-   ```
+   ```text
 
 2. **Select Scope:**
    - `full` — Migrate nodes, allocations, users, servers, eggs, and files
@@ -1118,7 +1118,7 @@ Catalyst provides a built-in migration tool to import servers, nodes, and data f
      "scope": "full",
      "nodeMappings": { "ptero-node-1": "catalyst-node-1" }
    }
-   ```
+   ```text
 
 ### Monitoring Migration
 

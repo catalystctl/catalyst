@@ -7,7 +7,12 @@ A step-by-step walkthrough for setting up and using Catalyst for the first time.
 - [Before You Begin](#before-you-begin)
 - [Step 1: Install the Panel](#step-1-install-the-panel)
 - [Step 2: Initial Login](#step-2-initial-login)
+  - [Forgot Password Flow](#forgot-password-flow)
 - [Step 3: Configure Your Profile](#step-3-configure-your-profile)
+  - [Enable Two-Factor Authentication](#enable-two-factor-authentication)
+  - [Trust Device Option](#trust-device-option)
+  - [Set Up Passkeys (WebAuthn)](#set-up-passkeys-webauthn)
+  - [Change Your Password](#change-your-password)
 - [Step 4: Create a Location](#step-4-create-a-location)
 - [Step 5: Create a Node](#step-5-create-a-node)
 - [Step 6: Deploy the Agent](#step-6-deploy-the-agent)
@@ -18,6 +23,7 @@ A step-by-step walkthrough for setting up and using Catalyst for the first time.
   - [Using Built-in Templates](#using-built-in-templates)
   - [Understanding Template Variables](#understanding-template-variables)
 - [Step 8: Create Your First Server](#step-8-create-your-first-server)
+  - [Accepting an Invite (Optional)](#accepting-an-invite-optional)
 - [Step 9: Install the Server](#step-9-install-the-server)
 - [Step 10: Access the Console](#step-10-access-the-console)
 - [Step 11: Basic Server Management](#step-11-basic-server-management)
@@ -54,7 +60,7 @@ cd catalyst-docker
 # Edit .env — set PUBLIC_URL at minimum
 nano .env
 docker compose up -d
-```
+```text
 
 👉 See [`catalyst-docker/README.md`](../catalyst-docker/README.md) for full details including TLS setup.
 
@@ -72,7 +78,7 @@ After the stack starts, seed the database to create the initial admin user:
 
 ```bash
 docker compose exec backend bun run db:seed
-```
+```text
 
 The seed creates:
 - **Admin account:** `admin@example.com` / `admin123`
@@ -102,9 +108,47 @@ If you have user registration enabled, new users can click **Create Account** to
 
 - **Email** — must be unique across the system
 - **Username** — 2–32 characters, must be unique
-- **Password** — must meet complexity requirements
+- **Password** — must meet complexity requirements (min 8 characters)
 
 New users receive a welcome email and start with the default "User" role (read-only access to their own servers).
+
+### Forgot Password Flow
+
+If you forget your password after creating an account:
+
+1. On the login page, click **Forgot Password?**
+2. Enter the email address associated with your account.
+3. Click **Send Reset Link**.
+4. Check your email for the reset message.
+5. Click the link in the email and enter your new password.
+6. Sign in with the new password.
+
+> **Note:** Password recovery requires SMTP to be configured by your administrator. If you don't receive the email, contact your server admin to verify email settings.
+
+### Reset Password Page
+
+After clicking the reset link, you'll be taken to the Reset Password page (`/reset-password`):
+1. The page validates the reset token (1-hour expiry, single-use only).
+2. Enter your new password (min 8 characters) and confirm it.
+3. Click **Reset Password**.
+4. You're redirected to the login page.
+
+> **Security:** Reset tokens use constant-time comparison to prevent timing attacks. Failed attempts are rate-limited.
+
+---
+
+### Cross-Tab Session Synchronization
+
+Catalyst automatically keeps your sessions synchronized across all open browser tabs:
+
+- When you log in to Catalyst in one tab, all other open tabs are automatically logged in.
+- When you log out from any tab, you are logged out of **ALL tabs simultaneously**.
+- When your session expires, all tabs are notified and redirect to the login page.
+- Password changes revoke all other sessions across all tabs.
+
+This is powered by the `BroadcastChannel` API and `localStorage` event listeners, ensuring that even if a tab is in a different browser window, it will still receive session state updates within milliseconds.
+
+> **Note:** Cross-tab sync only works within the same browser and the same Catalyst panel. It does not sync across different browsers or different panel instances.
 
 ---
 
@@ -115,27 +159,59 @@ After your first login, update your admin profile:
 1. Click your **avatar** or username in the top-right corner
 2. Navigate to **Profile Settings**
 3. Update your display name, first name, and last name
-4. Upload an avatar image (JPEG, PNG, GIF, WebP, or SVG, max 2 MB)
+4. Upload an avatar image (JPEG, PNG, GIF, or WebP, max 2 MB). Note: SVG files are not accepted due to XSS risk.
 
 ### Enable Two-Factor Authentication
 
 It's strongly recommended to enable 2FA for admin accounts:
 
-1. Go to **Profile** → **Security** → **Two-Factor Authentication**
-2. Click **Enable 2FA**
-3. Enter your password to confirm
-4. Scan the QR code with an authenticator app (Google Authenticator, Authy, etc.)
-5. Enter the verification code
-6. **Save your backup codes** in a secure location
+1. Go to **Profile** → **Security** → **Two-Factor Authentication** (or navigate to `/two-factor`).
+2. Click **Enable 2FA**.
+3. Enter your password to confirm your identity.
+4. A **QR code** is displayed — open your authenticator app (Google Authenticator, Authy, Microsoft Authenticator, etc.) and scan the code.
+   - The QR code contains a TOTP secret encoded as `otpauth://totp/` URI.
+   - Your app will start generating 6-digit codes that change every 30 seconds.
+5. Enter the 6-digit verification code from your app to confirm setup.
+6. **Save your backup codes** — 10 one-time codes are provided. Store them in a password manager, printed document, or other secure location.
+   - Each backup code can be used **only once**.
+   - If you lose your authenticator device, backup codes are your only way to log in.
+
+### 2FA Page Features
+
+The 2FA Setup page (`/two-factor`) includes:
+
+| Feature | Description |
+|---------|-------------|
+| **Password Verification** | You must enter your current password before enabling 2FA |
+| **QR Code Display** | Scannable TOTP secret for authenticator apps |
+| **Verification Code Input** | Enter the 6-digit code from your app to confirm |
+| **Backup Code Generation** | 10 one-time codes displayed after successful verification |
+| **Trust Device Checkbox** | "Trust this device for 30 days" option during verification |
+| **Revoke Trusted Devices** | View and revoke trusted devices at any time |
+| **Disable 2FA** | Toggle 2FA on/off with current code verification |
+| **Generate New Backup Codes** | Invalidate old codes and generate a new set |
+
+### Trust Device Option
+
+During 2FA verification, you'll see a **"Trust this device for 30 days"** checkbox:
+
+- When checked, future logins from the same device/browser won't require a 2FA code for 30 days.
+- Device identity is verified via a cryptographic browser fingerprint (not just cookies).
+- Each trusted device shows its registration date and fingerprint hash.
+- You can revoke a trusted device at any time by clicking **Revoke Trust** next to it.
+- Revoking a trusted device immediately requires 2FA on the next login attempt.
 
 ### Set Up Passkeys (WebAuthn)
 
 For passwordless login support:
 
-1. Go to **Profile** → **Security** → **Passkeys**
-2. Click **Add Passkey**
-3. Name your passkey (e.g., "MacBook Touch ID")
-4. Follow your browser's biometric prompt
+1. Go to **Profile** → **Security** → **Passkeys**.
+2. Click **Add Passkey**.
+3. Enter a name for the passkey (e.g., "MacBook Touch ID", "YubiKey").
+4. Click **Continue**.
+5. Follow your browser's biometric prompt (Face ID, Touch ID, Windows Hello, or security key).
+
+> **2-step registration:** Passkeys use a 2-step process — first you name the passkey, then you authenticate. This prevents phishing by committing to the name before biometric verification.
 
 ### Change Your Password
 
@@ -150,7 +226,7 @@ For passwordless login support:
 
 Locations are logical groupings for your nodes (e.g., data centers, regions).
 
-1. Navigate to **Admin** → **Locations** (or **Nodes** → **Locations**)
+1. Navigate to **Admin** → **Locations** (`/admin/locations`).
 2. Click **Create Location**
 3. Fill in the details:
    - **Name:** e.g., `US East 1`
@@ -253,7 +329,7 @@ If you prefer manual installation:
    cd catalyst-agent
    cargo build --release
    sudo cp target/release/catalyst-agent /usr/local/bin/
-   ```
+   ```text
 
 2. **Create the configuration file** at `/etc/catalyst/config.toml`:
    ```toml
@@ -289,7 +365,7 @@ If you prefer manual installation:
 
    [Install]
    WantedBy=multi-user.target
-   ```
+   ```text
 
 4. **Start the agent:**
    ```bash
@@ -315,7 +391,7 @@ cidr = "10.5.5.0/24"
 gateway = "10.5.5.1"
 range_start = "10.5.5.50"
 range_end = "10.5.5.200"
-```
+```text
 
 If no networks are configured, the agent will automatically create a default network based on the primary interface.
 
@@ -388,12 +464,12 @@ Templates use `{{VARIABLE_NAME}}` syntax for interpolation in startup commands a
 **Example — Minecraft startup command:**
 ```
 java -Xms{{MEMORY_XMS}}M -Xmx{{MEMORY}}M -jar paper.jar nogui
-```
+```text
 
 With `MEMORY=2048` and `MEMORY_XMS=1024`, this becomes:
 ```
 java -Xms1024M -Xmx2048M -jar paper.jar nogui
-```
+```text
 
 **Built-in placeholders available in install scripts:**
 
@@ -443,6 +519,27 @@ Fill in the template-specific variables (e.g., for Minecraft: Memory, Version, B
 
 The server is created in a **stopped** state. You need to install it before starting.
 
+### Accepting an Invite (Optional)
+
+If someone invited you to a server, you'll receive an invite link:
+
+**For existing users:**
+1. Click the invite link.
+2. Log in if prompted.
+3. Click **Accept Invite** on the invite page.
+4. You'll gain access to the invited server.
+
+**For new users:**
+1. Click the invite link.
+2. You'll be taken to the registration page with your email pre-filled.
+3. Fill in:
+   - **Username** — your desired username (min 3 characters)
+   - **Password** — your password (min 8 characters)
+4. Click **Register**.
+5. You'll automatically gain access to the invited server after registration.
+
+> **Note:** The email on the invite cannot be changed during registration. If you need a different email, contact the person who sent the invite.
+
 ---
 
 ## Step 9: Install the Server
@@ -484,7 +581,7 @@ list                   — List online players
 op <username>          — Grant operator status
 whitelist add <player> — Add player to whitelist
 stop                   — Stop the server gracefully
-```
+```text
 
 ---
 
@@ -528,7 +625,7 @@ For SFTP access (if enabled on the panel):
    Port: 2022
    Username: <your-username>.<server-uuid>
    Password: <sftp-token>
-   ```
+   ```text
 
 ### Backups
 
@@ -556,8 +653,45 @@ Configure your server from the **Settings** tab:
 
 Now that you have a working setup, explore these features:
 
+### Essential Admin Pages
+
+- **System Configuration** (`/admin/system`) — SMTP settings, Mod Manager API keys, auto-updater, platform health dashboard
+- **Security Settings** (`/admin/security`) — rate limits, lockout policy, file tunnel security, brute-force protection, lockout viewer
+- **System Errors** (`/admin/system-errors`) — client-side error reporting dashboard for debugging frontend issues
+- **Theme Settings** (`/admin/theme-settings`) — panel branding, colors, custom CSS, light/dark mode
+- **Database Hosts** (`/admin/database`) — configure remote database servers for per-server provisioning
+- **System-wide Alerts** (`/admin/alerts`) — create and manage platform-level alert rules
+- **Migration Tool** (`/admin/migration`) — migrate from Pterodactyl Panel to Catalyst
+- **Audit Logs** (`/admin/audit-logs`) — system-wide activity trail with filtering, CSV export, and 15-second auto-refresh
+
+### Node & Template Details
+
+- **Node Details** (`/admin/nodes/:nodeId`) — view live metrics (CPU, memory, disk), server summary, allocation management, agent health
+- **Template Details** (`/admin/templates/:templateId`) — edit template variables, configuration, and features
+
+### Server Management Features
+
+- **Server Transfer Ownership** — transfer server ownership to another user (Settings → Transfer Ownership)
+- **Server Suspension** — admins can suspend/resume servers temporarily
+- **Archive & Restore** — preserve servers without deleting them (Admin tab)
+- **File Editor** — edit text files directly in the browser with save/cancel and dirty state tracking
+- **Console Filters** — toggle visibility of stdout (green), stderr (red), system (blue), and stdin (yellow) streams
+
+### Advanced Features
+
+- **Cross-Tab Session Sync** — automatically synced across all browser tabs via BroadcastChannel API
+- **Brute Force Protection** — rate limiting, IP blocking, email lockout, and lockout viewer
+- **Invites Page** (`/invites/:token`) — accept invites for existing users or register + accept for new users
+- **API Keys** — create scoped API keys with rate limits and expiration
+- **Mod Manager** — browse and install mods from CurseForge, Modrinth, and Paper
+- **Plugin Manager** — browse and install plugins from Modrinth, Spigot, and Paper
+
+### Documentation
+
 - **[Admin Guide](./admin-guide.md)** — User management, roles, permissions, themes, and system configuration
 - **[Agent Guide](./agent.md)** — Advanced agent configuration, networking, firewall, and troubleshooting
 - **[API Reference](./api-reference.md)** — REST API and WebSocket documentation for automation
 - **[Automation Guide](./automation.md)** — Scheduled tasks, webhooks, and plugin development
 - **[User Guide](./user-guide.md)** — Complete user documentation for day-to-day server management
+- **[Architecture Overview](./architecture.md)** — System design, component diagrams, data flow, security model
+- **[Troubleshooting](./troubleshooting.md)** — Common errors, solutions, and debugging workflows
