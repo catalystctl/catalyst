@@ -22,12 +22,20 @@ const setupSchema = z.object({
 	logoUrl: z.string().optional(),
 });
 
-// Helper to forward set-cookie headers from better-auth to Fastify reply.
-// Must use getSetCookie() when available because Headers.get("set-cookie")
-// returns a comma-separated string which browsers cannot parse.
+// Helper to forward auth headers (set-cookie, set-auth-token) from better-auth
+// to the Fastify reply.  Must use getSetCookie() when available because
+// Headers.get("set-cookie") returns a comma-separated string which browsers
+// cannot parse.
 function forwardAuthHeaders(response: any, reply: FastifyReply) {
 	const headers = "headers" in response ? response.headers : null;
 	if (!headers) return;
+
+	// Forward bearer token (fallback when cookies are blocked by proxies)
+	const tokenHeader = headers.get?.("set-auth-token");
+	if (tokenHeader) {
+		reply.header("set-auth-token", tokenHeader);
+		reply.header("Access-Control-Expose-Headers", "set-auth-token");
+	}
 
 	// Prefer getSetCookie() (Node 18+ / undici) — returns an array of individual cookies
 	const rawSetCookie =

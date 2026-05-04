@@ -169,7 +169,10 @@ function App() {
     );
   }
 
-  // Redirect unauthenticated users to /setup when OOBE is required
+  // Redirect unauthenticated users to /setup when OOBE is required.
+  // Auth pages are included here so that if setup finishes while the user
+  // is on /login (or a 401 bounces them there) they don't get trapped in
+  // a redirect loop — they can log in normally.
   if (setupRequired && !isAuthenticated) {
     return (
       <ErrorBoundary>
@@ -178,6 +181,11 @@ function App() {
           <AnimatePresence initial={false}>
             <Routes>
               <Route path="/setup" element={<SetupPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/two-factor" element={<TwoFactorPage />} />
               <Route path="*" element={<Navigate to="/setup" replace />} />
             </Routes>
           </AnimatePresence>

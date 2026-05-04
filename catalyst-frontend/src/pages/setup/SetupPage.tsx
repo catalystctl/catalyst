@@ -248,33 +248,30 @@ function SetupPage() {
       recheck();
 
       // Re-initialize auth (backend sets session cookies).
-      // Delay slightly to reduce cookie race conditions.
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      try {
-        await init();
-        navigate('/dashboard', { replace: true });
-      } catch {
-        // Fallback: manually set user from the POST response
-        const userData = response.data?.data;
-        if (userData) {
-          const user = {
-            id: userData.id,
-            email: userData.email,
-            username: userData.username,
-            name: userData.name,
-            firstName: userData.firstName,
-            lastName: userData.lastName,
-            image: userData.image,
-            role: (userData.role?.toLowerCase() === 'administrator'
-              ? 'admin'
-              : (userData.role as 'admin' | 'user' | undefined)) ?? 'admin',
-            permissions: userData.permissions,
-          };
-          useAuthStore.getState().setUser(user);
-          navigate('/dashboard', { replace: true });
-        } else {
-          navigate('/login', { replace: true });
+      // Retry a few times with delays — browsers need time to process
+      // Set-Cookie before the cookie jar is ready for the next request.
+      let loggedIn = false;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (attempt > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 400));
         }
+        try {
+          await init();
+          loggedIn = true;
+          break;
+        } catch {
+          // Cookie not ready yet — retry
+        }
+      }
+
+      if (loggedIn) {
+        navigate('/dashboard', { replace: true });
+      } else {
+        // Cookie-based auto-login failed (common in fresh Docker installs
+        // behind reverse proxies). Redirect to /login so the user can sign
+        // in manually. App.tsx now includes /login in the setup-only router,
+        // so this cannot loop.
+        navigate('/login', { replace: true, state: { fromSetup: true } });
       }
     } catch (err: any) {
       reportSystemError({
