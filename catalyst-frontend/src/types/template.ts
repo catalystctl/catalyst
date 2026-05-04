@@ -82,4 +82,6 @@ export interface Template {
   allocatedMemoryMb: number;
   allocatedCpuCores: number;
   features?: TemplateFeatures;
+  srvService?: string | null;
+  srvProtocol?: string;
 }

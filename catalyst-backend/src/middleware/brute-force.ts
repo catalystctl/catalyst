@@ -211,8 +211,8 @@ export const isAccountLocked = async (
   prisma: PrismaClient,
   email: string
 ): Promise<boolean> => {
-  const user = await prisma.user.findUnique({
-    where: { email },
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
     select: { lockedUntil: true },
   });
 
@@ -232,8 +232,8 @@ export const getLockoutTimeRemaining = async (
   prisma: PrismaClient,
   email: string
 ): Promise<number> => {
-  const user = await prisma.user.findUnique({
-    where: { email },
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
     select: { lockedUntil: true },
   });
 

@@ -685,11 +685,21 @@ export async function authRoutes(app: FastifyInstance) {
 
       // Build update payload
       const data: Record<string, string> = {};
-      if (firstName !== undefined) data.firstName = firstName;
-      if (lastName !== undefined) data.lastName = lastName;
+      if (firstName !== undefined) {
+        if (firstName.length > 100) {
+          return reply.status(400).send({ error: 'First name must be at most 100 characters' });
+        }
+        data.firstName = firstName;
+      }
+      if (lastName !== undefined) {
+        if (lastName.length > 100) {
+          return reply.status(400).send({ error: 'Last name must be at most 100 characters' });
+        }
+        data.lastName = lastName;
+      }
       if (username !== undefined) {
-        if (!username || username.length < 2 || username.length > 32) {
-          return reply.status(400).send({ error: 'Username must be 2-32 characters' });
+        if (!username || username.length < 3 || username.length > 32 || !/^[a-zA-Z0-9_-]+$/.test(username)) {
+          return reply.status(400).send({ error: 'Username must be 3-32 characters and contain only letters, numbers, hyphens, and underscores' });
         }
         data.username = username;
       }
@@ -1048,13 +1058,14 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       // Clear all better-auth cookies
+      const secureAttr = process.env.NODE_ENV !== "development" && process.env.COOKIE_SECURE !== 'false' ? '; Secure' : '';
       const cookieNames = [
         'better-auth.session_token',
         'better-auth.passkey',
         'better-auth.two_factor',
       ];
       cookieNames.forEach(name => {
-        reply.header('set-cookie', `${name}=; Max-Age=0; Path=/; SameSite=Strict; HttpOnly`);
+        reply.header('set-cookie', `${name}=; Max-Age=0; Path=/; SameSite=Strict; HttpOnly${secureAttr}`);
       });
       reply.send({ success: true, message: "Account deleted" });
     }

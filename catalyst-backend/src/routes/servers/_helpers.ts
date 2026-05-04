@@ -302,7 +302,7 @@ export const syncPortEnvironmentVariables = (
  */
 export const injectPterodactylCompatibilityVars = (
   environment: Record<string, string>,
-  server: { uuid: string; name: string; primaryIp: string | null; primaryPort: number; allocatedMemoryMb: number; allocatedDiskMb: number },
+  server: { uuid: string; name: string; primaryIp: string | null; primaryPort: number; allocatedMemoryMb: number; allocatedDiskMb: number; subdomain?: string | null },
   portBindings?: Record<number, number>
 ): Record<string, string> => {
   const env = { ...environment };
@@ -340,6 +340,11 @@ export const injectPterodactylCompatibilityVars = (
   // SERVER_PRIMARY_IP — same as SERVER_IP but explicit
   if ("SERVER_PRIMARY_IP" in env && server.primaryIp) {
     env.SERVER_PRIMARY_IP = server.primaryIp;
+  }
+
+  // SERVER_SUBDOMAIN — subdomain assigned to this server
+  if ("SERVER_SUBDOMAIN" in env && server.subdomain) {
+    env.SERVER_SUBDOMAIN = server.subdomain;
   }
 
   // SERVER_DESCRIPTION — used by some eggs for MOTD
@@ -396,6 +401,7 @@ export const buildConnectionInfo = (
     hostNetworkIp,
     host,
     port: resolvePrimaryHostPort(server),
+    subdomain: server.subdomain ?? null,
   };
 };
 
@@ -405,6 +411,17 @@ export const patchTemplateForRuntime = (template: any) => ({
   sendSignalTo: template.sendSignalTo ?? 'SIGTERM',
   installImage: template.installImage ?? 'alpine:3.19',
 });
+
+export const injectSubdomainEnvVar = (
+  environment: Record<string, string>,
+  server: { subdomain: string | null }
+): Record<string, string> => {
+  const env = { ...environment };
+  if (server.subdomain) {
+    env.CATALYST_SUBDOMAIN = server.subdomain;
+  }
+  return env;
+};
 
 export const withConnectionInfo = (server: any, fallbackNode?: { publicAddress?: string }) => ({
     ...server,

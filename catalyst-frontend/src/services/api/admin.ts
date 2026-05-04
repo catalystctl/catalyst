@@ -11,6 +11,7 @@ import type {
   AdminNodesResponse,
   AuditLogsResponse,
   DatabaseHost,
+  DnsSettings,
   ModManagerSettings,
   SmtpSettings,
   SecuritySettings,
@@ -204,6 +205,14 @@ export const adminApi = {
   },
   updateModManagerSettings: async (payload: ModManagerSettings) => {
     const data = await apiClient.put<ApiResponse<void>>('/api/admin/mod-manager', payload);
+    return data;
+  },
+  getDnsSettings: async () => {
+    const data = await apiClient.get<ApiResponse<DnsSettings>>('/api/admin/dns-settings');
+    return data.data;
+  },
+  updateDnsSettings: async (payload: DnsSettings) => {
+    const data = await apiClient.put<ApiResponse<void>>('/api/admin/dns-settings', payload);
     return data;
   },
   listAuthLockouts: async (params?: { page?: number; limit?: number; search?: string }) => {
