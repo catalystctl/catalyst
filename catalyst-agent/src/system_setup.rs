@@ -872,6 +872,11 @@ impl SystemSetup {
             };
 
             // Build the new config JSON.
+            let route_dst = if cidr.contains(':') {
+                "::/0"
+            } else {
+                "0.0.0.0/0"
+            };
             let new_config = serde_json::json!({
                 "cniVersion": "1.0.0",
                 "name": network.name,
@@ -887,7 +892,7 @@ impl SystemSetup {
                             "rangeEnd": range_end,
                             "gateway": gateway
                         }]],
-                        "routes": [{"dst": "0.0.0.0/0"}]
+                        "routes": [{"dst": route_dst}]
                     }
                 }]
             });

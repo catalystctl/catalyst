@@ -67,7 +67,12 @@ impl Default for NetworkingConfig {
 }
 
 fn default_dns_servers() -> Vec<String> {
-    vec!["1.1.1.1".to_string(), "8.8.8.8".to_string()]
+    vec![
+        "1.1.1.1".to_string(),
+        "8.8.8.8".to_string(),
+        "2606:4700:4700::1111".to_string(),
+        "2001:4860:4860::8888".to_string(),
+    ]
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

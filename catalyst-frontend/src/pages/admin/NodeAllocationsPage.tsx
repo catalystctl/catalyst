@@ -593,8 +593,8 @@ function NodeAllocationsPage() {
             <div className="mt-6 space-y-4">
               <div className="rounded-xl border border-border bg-surface-2 px-4 py-3 dark:border-border dark:bg-surface-1/60">
                 <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-                  <strong>IP format:</strong> Single IP (192.168.1.100), multiple IPs
-                  (192.168.1.100, 192.168.1.101), or CIDR (192.168.1.0/24)
+                  <strong>IP format:</strong> Single IP (192.168.1.100 or 2001:db8::1), multiple IPs
+                  (192.168.1.100, 192.168.1.101), or CIDR (192.168.1.0/24, 2001:db8::/64)
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
                   <strong>Port format:</strong> Single port (25565), range (25565-25664), or
@@ -608,7 +608,7 @@ function NodeAllocationsPage() {
                   type="text"
                   value={ipInput}
                   onChange={(e) => setIpInput(e.target.value)}
-                  placeholder="192.168.1.100 or 192.168.1.0/24"
+                  placeholder="192.168.1.100, 2001:db8::1, or 192.168.1.0/24"
                   className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
                 />
               </label>
@@ -700,7 +700,7 @@ function NodeAllocationsPage() {
                   type="text"
                   value={cidr}
                   onChange={(e) => setCidr(e.target.value)}
-                  placeholder="192.168.50.0/24"
+                  placeholder="192.168.50.0/24 or 2001:db8::/64"
                   className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
                 />
               </label>
@@ -712,7 +712,7 @@ function NodeAllocationsPage() {
                     type="text"
                     value={gateway}
                     onChange={(e) => setGateway(e.target.value)}
-                    placeholder="192.168.50.1"
+                    placeholder="192.168.50.1 or 2001:db8::1"
                     className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
                   />
                 </label>
@@ -723,7 +723,7 @@ function NodeAllocationsPage() {
                     type="text"
                     value={startIp}
                     onChange={(e) => setStartIp(e.target.value)}
-                    placeholder="192.168.50.10"
+                    placeholder="192.168.50.10 or 2001:db8::10"
                     className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
                   />
                 </label>
@@ -734,7 +734,7 @@ function NodeAllocationsPage() {
                     type="text"
                     value={endIp}
                     onChange={(e) => setEndIp(e.target.value)}
-                    placeholder="192.168.50.200"
+                    placeholder="192.168.50.200 or 2001:db8::200"
                     className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
                   />
                 </label>
@@ -756,7 +756,7 @@ function NodeAllocationsPage() {
                   type="text"
                   value={autoFillIp}
                   onChange={(e) => setAutoFillIp(e.target.value)}
-                  placeholder={node?.publicAddress || '0.0.0.0'}
+                  placeholder={node?.publicAddress || '0.0.0.0 or ::'}
                   className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
                 />
               </label>

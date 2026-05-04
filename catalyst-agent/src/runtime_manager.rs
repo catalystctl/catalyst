@@ -2447,7 +2447,7 @@ impl ContainerdRuntime {
             })
         } else {
             serde_json::json!({
-                "nameservers": ["1.1.1.1", "8.8.8.8"],
+                "nameservers": ["1.1.1.1", "8.8.8.8", "2606:4700:4700::1111", "2001:4860:4860::8888"],
                 "options": ["attempts:3", "timeout:2"]
             })
         };
@@ -2496,6 +2496,11 @@ impl ContainerdRuntime {
                 });
                 // Calculate rangeStart/rangeEnd from subnet (same logic as NetworkManager)
                 let (range_start, range_end) = calculate_ip_range_from_subnet(&subnet);
+                let route_dst = if subnet.contains(':') {
+                    "::/0"
+                } else {
+                    "0.0.0.0/0"
+                };
                 info!(
                     "macvlan network '{}': master={}, subnet={}, gateway={}, range={}-{}",
                     network, iface, subnet, gateway, range_start, range_end
@@ -2515,7 +2520,7 @@ impl ContainerdRuntime {
                             "rangeEnd": range_end,
                             "gateway": gateway
                         }]],
-                        "routes": [{"dst": "0.0.0.0/0"}],
+                        "routes": [{"dst": route_dst}],
                         "dataDir": "/var/lib/cni/networks"
                     }
                 })
@@ -2786,7 +2791,16 @@ impl ContainerdRuntime {
     }
 
     async fn setup_port_forward(&self, hp: u16, cp: u16, cip: &str) -> AgentResult<()> {
-        let dest = format!("{}:{}", cip, cp);
+        let dest = if cip.contains(':') {
+            format!("[{}]:{}", cip, cp)
+        } else {
+            format!("{}:{}", cip, cp)
+        };
+        let cmd = if cip.contains(':') {
+            "ip6tables"
+        } else {
+            "iptables"
+        };
         let hps = hp.to_string();
         let cps = cp.to_string();
         // Set up forwarding for both TCP and UDP (many game servers use UDP)
@@ -2821,9 +2835,9 @@ impl ContainerdRuntime {
                     &dest,
                 ],
             ] {
-                let o = Command::new("iptables").args(&args).output().await?;
+                let o = Command::new(cmd).args(&args).output().await?;
                 if !o.status.success() {
-                    warn!("iptables: {}", String::from_utf8_lossy(&o.stderr));
+                    warn!("{}: {}", cmd, String::from_utf8_lossy(&o.stderr));
                 }
             }
         }
@@ -2858,9 +2872,9 @@ impl ContainerdRuntime {
                 "MASQUERADE",
             ],
         ] {
-            let o = Command::new("iptables").args(&args).output().await?;
+            let o = Command::new(cmd).args(&args).output().await?;
             if !o.status.success() {
-                warn!("iptables: {}", String::from_utf8_lossy(&o.stderr));
+                warn!("{}: {}", cmd, String::from_utf8_lossy(&o.stderr));
             }
         }
         Ok(())
@@ -2905,7 +2919,16 @@ impl ContainerdRuntime {
         if cip.is_empty() {
             return Ok(());
         }
-        let dest = format!("{}:{}", cip, cp);
+        let dest = if cip.contains(':') {
+            format!("[{}]:{}", cip, cp)
+        } else {
+            format!("{}:{}", cip, cp)
+        };
+        let cmd = if cip.contains(':') {
+            "ip6tables"
+        } else {
+            "iptables"
+        };
         let hps = hp.to_string();
         let cps = cp.to_string();
         // Teardown both TCP and UDP rules
@@ -2940,9 +2963,9 @@ impl ContainerdRuntime {
                     &dest,
                 ],
             ] {
-                let o = Command::new("iptables").args(&args).output().await?;
+                let o = Command::new(cmd).args(&args).output().await?;
                 if !o.status.success() {
-                    warn!("iptables: {}", String::from_utf8_lossy(&o.stderr));
+                    warn!("{}: {}", cmd, String::from_utf8_lossy(&o.stderr));
                 }
             }
         }
@@ -2976,9 +2999,9 @@ impl ContainerdRuntime {
                 "MASQUERADE",
             ],
         ] {
-            let o = Command::new("iptables").args(&args).output().await?;
+            let o = Command::new(cmd).args(&args).output().await?;
             if !o.status.success() {
-                warn!("iptables: {}", String::from_utf8_lossy(&o.stderr));
+                warn!("{}: {}", cmd, String::from_utf8_lossy(&o.stderr));
             }
         }
         Ok(())
@@ -3227,12 +3250,23 @@ async fn detect_default_route_interface() -> Option<String> {
 /// Detect the host's current primary network parameters.
 /// Re-detects on every call — host network can change (DHCP, VPN, failover).
 async fn detect_host_network() -> Option<(String, String, String)> {
-    // Parse `ip -4 route show default` → "default via <gw> dev <iface> ..."
-    let output = tokio::process::Command::new("ip")
+    // Try IPv4 default route first, then IPv6
+    let (output, is_v6) = if let Ok(output) = tokio::process::Command::new("ip")
         .args(["-4", "route", "show", "default"])
         .output()
         .await
-        .ok()?;
+    {
+        (output, false)
+    } else if let Ok(output) = tokio::process::Command::new("ip")
+        .args(["-6", "route", "show", "default"])
+        .output()
+        .await
+    {
+        (output, true)
+    } else {
+        return None;
+    };
+
     let route = String::from_utf8_lossy(&output.stdout);
     let mut parts = route.split_whitespace();
     let mut gateway = None;
@@ -3247,98 +3281,175 @@ async fn detect_host_network() -> Option<(String, String, String)> {
     let gateway = gateway?;
     let iface = iface?;
 
-    // Parse interface address → "inet <ip>/<prefix> ..."
+    // Parse interface address for the matching family
+    let family_arg = if is_v6 { "-6" } else { "-4" };
     let output = tokio::process::Command::new("ip")
-        .args(["-4", "-o", "addr", "show", &iface])
+        .args([family_arg, "-o", "addr", "show", &iface])
         .output()
         .await
         .ok()?;
     let addr_line = String::from_utf8_lossy(&output.stdout);
-    let cidr = addr_line
-        .split_whitespace()
-        .find(|s| {
-            s.contains('/')
-                && s.chars()
-                    .next()
-                    .map(|c| c.is_ascii_digit())
-                    .unwrap_or(false)
-        })?
-        .to_string();
+    let cidr = addr_line.lines().find_map(|line| {
+        let mut parts = line.split_whitespace();
+        while let Some(part) = parts.next() {
+            if (part == "inet" && !is_v6) || (part == "inet6" && is_v6) {
+                return parts.next().map(|s| s.to_string());
+            }
+        }
+        None
+    })?;
     let (ip_str, prefix_str) = cidr.split_once('/')?;
-    let ip: Ipv4Addr = ip_str.parse().ok()?;
     let prefix: u32 = prefix_str.parse().ok()?;
-    let mask = if prefix == 0 {
-        0u32
-    } else {
-        !0u32 << (32 - prefix)
-    };
-    let net_addr = Ipv4Addr::from(u32::from(ip) & mask);
-    let subnet = format!("{}/{}", net_addr, prefix);
 
-    Some((iface, subnet, gateway))
+    if is_v6 {
+        let ip: std::net::Ipv6Addr = ip_str.parse().ok()?;
+        let addr_u128 = u128::from(ip);
+        let mask = if prefix == 0 {
+            0u128
+        } else {
+            u128::MAX << (128 - prefix)
+        };
+        let net_addr = std::net::Ipv6Addr::from(addr_u128 & mask);
+        let subnet = format!("{}/{}", net_addr, prefix);
+        Some((iface, subnet, gateway))
+    } else {
+        let ip: Ipv4Addr = ip_str.parse().ok()?;
+        let mask = if prefix == 0 {
+            0u32
+        } else {
+            !0u32 << (32 - prefix)
+        };
+        let net_addr = Ipv4Addr::from(u32::from(ip) & mask);
+        let subnet = format!("{}/{}", net_addr, prefix);
+        Some((iface, subnet, gateway))
+    }
 }
 
 /// Calculate usable IP range from a subnet CIDR (e.g., "192.168.1.0/24" -> ("192.168.1.1", "192.168.1.254"))
 /// Properly respects the prefix length instead of hardcoding the last octet.
 fn calculate_ip_range_from_subnet(cidr: &str) -> (String, String) {
-    let parts: Vec<&str> = cidr.split('/').collect();
-    if parts.len() != 2 {
-        warn!("Invalid CIDR format '{}', using default range", cidr);
-        return ("10.0.0.10".to_string(), "10.0.0.250".to_string());
-    }
-
-    let addr_str = parts[0];
-    let prefix_str = parts[1];
-    let prefix: u32 = match prefix_str.parse() {
-        Ok(p) if p <= 32 => p,
-        _ => {
-            warn!("Invalid CIDR prefix '{}', using default range", prefix_str);
-            return ("10.0.0.10".to_string(), "10.0.0.250".to_string());
+    if cidr.contains(':') {
+        // IPv6
+        let parts: Vec<&str> = cidr.split('/').collect();
+        if parts.len() != 2 {
+            warn!("Invalid IPv6 CIDR format '{}', using default range", cidr);
+            return ("fd00::10".to_string(), "fd00::fff0".to_string());
         }
-    };
 
-    let addr: std::net::Ipv4Addr = match addr_str.parse() {
-        Ok(a) => a,
-        Err(_) => {
-            warn!("Invalid IP address '{}', using default range", addr_str);
-            return ("10.0.0.10".to_string(), "10.0.0.250".to_string());
+        let addr_str = parts[0];
+        let prefix_str = parts[1];
+        let prefix: u32 = match prefix_str.parse() {
+            Ok(p) if p <= 128 => p,
+            _ => {
+                warn!(
+                    "Invalid IPv6 CIDR prefix '{}', using default range",
+                    prefix_str
+                );
+                return ("fd00::10".to_string(), "fd00::fff0".to_string());
+            }
+        };
+
+        let addr: std::net::Ipv6Addr = match addr_str.parse() {
+            Ok(a) => a,
+            Err(_) => {
+                warn!("Invalid IPv6 address '{}', using default range", addr_str);
+                return ("fd00::10".to_string(), "fd00::fff0".to_string());
+            }
+        };
+
+        let addr_u128 = u128::from(addr);
+        let mask = if prefix == 0 {
+            0u128
+        } else {
+            u128::MAX << (128 - prefix)
+        };
+        let network = addr_u128 & mask;
+        let broadcast = network | (!mask);
+
+        if broadcast <= network + 1 {
+            warn!(
+                "CIDR '{}' has no usable addresses, using default range",
+                cidr
+            );
+            return ("fd00::10".to_string(), "fd00::fff0".to_string());
         }
-    };
 
-    let addr_u32 = u32::from(addr);
-    let mask = if prefix == 0 {
-        0u32
-    } else {
-        !0u32 << (32 - prefix)
-    };
-    let network = addr_u32 & mask;
-    let broadcast = network | (!mask);
+        let (start, end) = if prefix < 64 {
+            let default_start = network + 10;
+            let default_end = broadcast - 5;
+            (
+                default_start.max(network + 1),
+                default_end.min(broadcast - 1),
+            )
+        } else {
+            (network + 1, broadcast - 1)
+        };
 
-    if broadcast <= network + 1 {
-        warn!(
-            "CIDR '{}' has no usable addresses, using default range",
-            cidr
-        );
-        return ("10.0.0.10".to_string(), "10.0.0.250".to_string());
-    }
-
-    // Usable range is network+1 to broadcast-1.
-    // For larger subnets (/8, /16) provide a reasonable sub-range.
-    let (start, end) = if prefix < 24 {
-        let default_start = network + 10;
-        let default_end = broadcast - 5;
         (
-            default_start.max(network + 1),
-            default_end.min(broadcast - 1),
+            std::net::Ipv6Addr::from(start).to_string(),
+            std::net::Ipv6Addr::from(end).to_string(),
         )
     } else {
-        (network + 1, broadcast - 1)
-    };
+        // IPv4
+        let parts: Vec<&str> = cidr.split('/').collect();
+        if parts.len() != 2 {
+            warn!("Invalid CIDR format '{}', using default range", cidr);
+            return ("10.0.0.10".to_string(), "10.0.0.250".to_string());
+        }
 
-    (
-        std::net::Ipv4Addr::from(start).to_string(),
-        std::net::Ipv4Addr::from(end).to_string(),
-    )
+        let addr_str = parts[0];
+        let prefix_str = parts[1];
+        let prefix: u32 = match prefix_str.parse() {
+            Ok(p) if p <= 32 => p,
+            _ => {
+                warn!("Invalid CIDR prefix '{}', using default range", prefix_str);
+                return ("10.0.0.10".to_string(), "10.0.0.250".to_string());
+            }
+        };
+
+        let addr: std::net::Ipv4Addr = match addr_str.parse() {
+            Ok(a) => a,
+            Err(_) => {
+                warn!("Invalid IP address '{}', using default range", addr_str);
+                return ("10.0.0.10".to_string(), "10.0.0.250".to_string());
+            }
+        };
+
+        let addr_u32 = u32::from(addr);
+        let mask = if prefix == 0 {
+            0u32
+        } else {
+            !0u32 << (32 - prefix)
+        };
+        let network = addr_u32 & mask;
+        let broadcast = network | (!mask);
+
+        if broadcast <= network + 1 {
+            warn!(
+                "CIDR '{}' has no usable addresses, using default range",
+                cidr
+            );
+            return ("10.0.0.10".to_string(), "10.0.0.250".to_string());
+        }
+
+        // Usable range is network+1 to broadcast-1.
+        // For larger subnets (/8, /16) provide a reasonable sub-range.
+        let (start, end) = if prefix < 24 {
+            let default_start = network + 10;
+            let default_end = broadcast - 5;
+            (
+                default_start.max(network + 1),
+                default_end.min(broadcast - 1),
+            )
+        } else {
+            (network + 1, broadcast - 1)
+        };
+
+        (
+            std::net::Ipv4Addr::from(start).to_string(),
+            std::net::Ipv4Addr::from(end).to_string(),
+        )
+    }
 }
 
 fn create_fifo(path: &Path) -> std::io::Result<()> {
