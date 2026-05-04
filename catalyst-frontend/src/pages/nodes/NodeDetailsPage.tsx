@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   Clock,
   Shield,
+  Download,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -29,6 +30,7 @@ import NodeAssignmentModal from '../../components/nodes/NodeAssignmentModal';
 import { nodesApi } from '../../services/api/nodes';
 import { useAuthStore } from '../../stores/authStore';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import ServerImportModal from '../../components/nodes/ServerImportModal';
 import { reportSystemError } from '../../services/api/systemErrors';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
@@ -121,6 +123,7 @@ function NodeDetailsPage() {
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   // Check if API key exists for this node
   const { data: apiKeyStatus } = useQuery({
@@ -176,6 +179,14 @@ function NodeDetailsPage() {
     () => user?.permissions?.includes('admin.write') || user?.permissions?.includes('*'),
     [user?.permissions],
   );
+
+  const { data: unregisteredContainers = [] } = useQuery({
+    queryKey: ['unregistered-containers', nodeId],
+    queryFn: () => nodesApi.getUnregisteredContainers(nodeId!),
+    enabled: !!nodeId,
+    refetchInterval: 30000,
+  });
+
   const canAssignNodes = useMemo(
     () =>
       !!(
@@ -513,6 +524,73 @@ function NodeDetailsPage() {
           </div>
         </motion.div>
 
+        {/* ── Discovered Servers ── */}
+        {canWrite && unregisteredContainers.length > 0 && (
+          <motion.div variants={itemVariants}>
+            <div className="rounded-xl border border-warning/30 bg-warning/5 p-5 backdrop-blur-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Download className="h-4 w-4 text-warning" />
+                  <h2 className="font-display text-sm font-semibold text-foreground">
+                    Discovered Servers
+                  </h2>
+                </div>
+                <Button size="sm" onClick={() => setShowImportModal(true)} className="gap-1.5">
+                  <Download className="h-3.5 w-3.5" />
+                  Import Servers
+                </Button>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {unregisteredContainers.length} container(s) found on this node that are not registered in the panel.
+                These may be servers from a previous panel installation.
+              </div>
+              <div className="mt-3 divide-y divide-warning/10">
+                {unregisteredContainers.map((c: any) => (
+                  <div key={c.containerId} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
+                    <div className="min-w-0 flex-1 overflow-hidden">
+                      <div className="font-mono text-xs font-medium text-foreground">{c.containerId}</div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <span>{c.image || 'Unknown image'}</span>
+                        <Badge
+                          variant={c.status?.includes('Up') ? 'success' : 'secondary'}
+                          className="text-[10px]"
+                        >
+                          {c.status?.includes('Up') ? 'Running' : 'Stopped'}
+                        </Badge>
+                        {c.networkMode && (
+                          <Badge
+                            variant={c.networkMode === 'host' ? 'warning' : 'outline'}
+                            className="text-[10px]"
+                          >
+                            {c.networkMode === 'host' ? 'Host Network' : 'Bridge'}
+                          </Badge>
+                        )}
+                      </div>
+                      {c.startupCommand && (
+                        <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground/60" title={c.startupCommand}>
+                          {c.startupCommand.length > 120 ? c.startupCommand.slice(0, 120) + '…' : c.startupCommand}
+                        </div>
+                      )}
+                      {c.envVarNames && c.envVarNames.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {c.envVarNames.slice(0, 6).map((name: string) => (
+                            <span key={name} className="rounded bg-warning/5 px-1 py-0.5 text-[9px] text-muted-foreground">
+                              {name}
+                            </span>
+                          ))}
+                          {c.envVarNames.length > 6 && (
+                            <span className="text-[9px] text-muted-foreground">+{c.envVarNames.length - 6} more</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* ── Node Assignments ── */}
         {canWrite || canAssignNodes ? (
           <motion.div variants={itemVariants} className="space-y-4">
@@ -630,6 +708,14 @@ function NodeDetailsPage() {
         nodeId={nodeId!}
         open={showAssignmentModal}
         onClose={() => setShowAssignmentModal(false)}
+      />
+
+      {/* ── Server Import Modal ── */}
+      <ServerImportModal
+        open={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        nodeId={nodeId!}
+        containers={unregisteredContainers}
       />
     </motion.div>
   );

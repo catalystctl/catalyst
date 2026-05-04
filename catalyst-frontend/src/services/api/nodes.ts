@@ -217,4 +217,63 @@ export const nodesApi = {
     );
     return data;
   },
+
+  // Get unregistered containers on a node (containers not registered as servers)
+  getUnregisteredContainers: async (nodeId: string) => {
+    const data = await apiClient.get<
+      ApiResponse<
+        Array<{
+          containerId: string;
+          image: string;
+          status: string;
+          labels: Record<string, string>;
+          networkMode?: string;
+          memoryLimitMb?: number;
+          cpuCores?: number;
+          startupCommand?: string;
+          envVarNames?: string[];
+          discoveredAt: number;
+        }>
+      >
+    >(`/api/nodes/${nodeId}/unregistered-containers`);
+    return data.data || [];
+  },
+
+  // Suggest template match for an unregistered container
+  suggestTemplate: async (nodeId: string, containerId: string) => {
+    const data = await apiClient.get<
+      ApiResponse<
+        Array<{
+          templateId: string;
+          templateName: string;
+          score: number;
+          matchReasons: string[];
+        }>
+      >
+    >(`/api/nodes/${nodeId}/unregistered-containers/${containerId}/suggest-template`);
+    return data.data || [];
+  },
+
+  // Import a discovered container as a server
+  importServer: async (
+    nodeId: string,
+    payload: {
+      containerId: string;
+      name: string;
+      templateId: string;
+      ownerId: string;
+      allocatedMemoryMb?: number;
+      allocatedCpuCores?: number;
+      allocatedDiskMb?: number;
+      primaryPort?: number;
+      portBindings?: Record<number, number>;
+      environment?: Record<string, string>;
+    },
+  ) => {
+    const data = await apiClient.post<ApiResponse<any>>(
+      `/api/nodes/${nodeId}/import-server`,
+      payload,
+    );
+    return data.data;
+  },
 };

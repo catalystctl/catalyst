@@ -1632,6 +1632,350 @@ export async function nodeRoutes(app: FastifyInstance) {
 	);
 
 	// ============================================================================
+	// AUTO-IMPORT: UNREGISTERED CONTAINERS
+	// ============================================================================
+
+	// Get unregistered containers discovered on a node (containers without DB server records)
+	app.get(
+		"/:nodeId/unregistered-containers",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "admin.write")) return;
+			const { nodeId } = request.params as { nodeId: string };
+
+			const node = await prisma.node.findUnique({
+				where: { id: nodeId },
+				select: { id: true, locationId: true },
+			});
+			if (!node) {
+				return reply.status(404).send({ error: "Node not found" });
+			}
+
+			// Get registered server IDs for this node
+			const registeredServers = await prisma.server.findMany({
+				where: { nodeId },
+				select: { id: true },
+			});
+			const registeredIds = new Set(registeredServers.map((s) => s.id));
+
+			// Get discovered containers from gateway
+			const wsGateway = (app as any).wsGateway;
+			const discovered = wsGateway?.getDiscoveredContainers?.(nodeId) ?? [];
+
+			// Filter out containers that are already registered
+			const unregistered = discovered
+				.filter((c: any) => !registeredIds.has(c.containerId))
+				.map((c: any) => ({
+					containerId: c.containerId,
+					image: c.image,
+					status: c.status,
+					labels: c.labels,
+					networkMode: c.networkMode,
+					memoryLimitMb: c.memoryLimitMb,
+					cpuCores: c.cpuCores,
+					startupCommand: c.startupCommand,
+					envVarNames: c.envVarNames,
+					discoveredAt: c.discoveredAt,
+				}));
+
+			reply.send({ success: true, data: unregistered });
+		},
+	);
+
+	// Suggest template match for an unregistered container
+	app.get(
+		"/:nodeId/unregistered-containers/:containerId/suggest-template",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "admin.write")) return;
+			const { nodeId, containerId } = request.params as { nodeId: string; containerId: string };
+
+			// Verify node exists
+			const node = await prisma.node.findUnique({
+				where: { id: nodeId },
+				select: { id: true },
+			});
+			if (!node) {
+				return reply.status(404).send({ error: "Node not found" });
+			}
+
+			const wsGateway = (app as any).wsGateway;
+			const discovered = wsGateway?.getDiscoveredContainers?.(nodeId) ?? [];
+			const container = discovered.find((c: any) => c.containerId === containerId);
+			if (!container) {
+				return reply.status(404).send({ error: "Container not found" });
+			}
+
+			// Fetch all templates to match against
+			const templates = await prisma.serverTemplate.findMany({
+				select: {
+					id: true,
+					name: true,
+					startup: true,
+					variables: true,
+					image: true,
+					images: true,
+				},
+			});
+
+			// Score each template based on matching signals
+			const results = templates.map((template) => {
+				let score = 0;
+				const matchReasons: string[] = [];
+
+				// 1. Match startup command pattern
+				if (container.startupCommand && template.startup) {
+					const templateStartup = template.startup.toLowerCase();
+					const containerStartup = container.startupCommand.toLowerCase();
+
+					// Extract structural parts of the template startup (non-variable tokens)
+					const structuralTokens = templateStartup
+						.split(/[\s]+/)
+						.filter((t) => !t.startsWith("{{"))
+						.filter((t) => t.length > 1);
+
+					let matchedTokens = 0;
+					for (const token of structuralTokens) {
+						if (containerStartup.includes(token)) {
+							matchedTokens++;
+						}
+					}
+					if (structuralTokens.length > 0 && matchedTokens > 0) {
+						const tokenScore = matchedTokens / structuralTokens.length;
+						score += tokenScore * 50; // Up to 50 points for startup match
+						if (tokenScore > 0.5) {
+							matchReasons.push(`Startup command matches ${Math.round(tokenScore * 100)}%`);
+						}
+					}
+				}
+
+				// 2. Match env var names
+				if (container.envVarNames && container.envVarNames.length > 0) {
+					const templateVars = (template.variables as any[]) || [];
+					const templateVarNames = new Set(
+						templateVars.map((v: any) => v?.name).filter(Boolean),
+					);
+
+					if (templateVarNames.size > 0) {
+						let matchedVars = 0;
+						for (const varName of templateVarNames) {
+							if (container.envVarNames.includes(varName)) {
+								matchedVars++;
+							}
+						}
+						if (matchedVars > 0) {
+							const varScore = matchedVars / templateVarNames.size;
+							score += varScore * 30; // Up to 30 points for env var match
+							if (varScore > 0.3) {
+								matchReasons.push(`${matchedVars}/${templateVarNames.size} env variables match`);
+							}
+						}
+					}
+				}
+
+				// 3. Match image name
+				if (container.image && template.image) {
+					const containerImage = container.image.toLowerCase();
+					const templateImages = [
+						template.image,
+						...((template.images as any[]) || []).map((i: any) => i?.image || ""),
+					].map((i) => i.toLowerCase());
+
+					for (const templateImage of templateImages) {
+						if (!templateImage) continue;
+						const containerRepoTag = containerImage.split(":")[0];
+						const templateRepoTag = templateImage.split(":")[0];
+						if (containerRepoTag === templateRepoTag) {
+							score += 20;
+							matchReasons.push(`Image matches: ${containerImage}`);
+							break;
+						}
+						if (containerRepoTag.includes(templateRepoTag) || templateRepoTag.includes(containerRepoTag)) {
+							score += 10;
+							matchReasons.push(`Image repo similar: ${containerImage}`);
+							break;
+						}
+					}
+				}
+
+				return {
+					templateId: template.id,
+					templateName: template.name,
+					score: Math.round(score),
+					matchReasons,
+				};
+			})
+				.filter((r) => r.score > 0)
+				.sort((a, b) => b.score - a.score)
+				.slice(0, 5); // Top 5 matches
+
+			reply.send({ success: true, data: results });
+		},
+	);
+
+	// Import a discovered container as a server
+	app.post(
+		"/:nodeId/import-server",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "admin.write")) return;
+			const { nodeId } = request.params as { nodeId: string };
+			const {
+				containerId,
+				name,
+				templateId,
+				ownerId,
+				allocatedMemoryMb,
+				allocatedCpuCores,
+				allocatedDiskMb,
+				primaryPort,
+				portBindings,
+				environment,
+			} = request.body as {
+				containerId: string;
+				name: string;
+				templateId: string;
+				ownerId: string;
+				allocatedMemoryMb?: number;
+				allocatedCpuCores?: number;
+				allocatedDiskMb?: number;
+				primaryPort?: number;
+				portBindings?: Record<number, number>;
+				environment?: Record<string, string>;
+			};
+
+			// Validate required fields
+			if (!containerId || !name || !templateId || !ownerId) {
+				return reply.status(400).send({ error: "containerId, name, templateId, and ownerId are required" });
+			}
+
+			// Validate node
+			const node = await prisma.node.findUnique({
+				where: { id: nodeId },
+				select: { id: true, locationId: true },
+			});
+			if (!node) {
+				return reply.status(404).send({ error: "Node not found" });
+			}
+
+			// Verify container was discovered on this node
+			const wsGateway = (app as any).wsGateway;
+			const discovered = wsGateway?.getDiscoveredContainers?.(nodeId) ?? [];
+			const container = discovered.find((c: any) => c.containerId === containerId);
+			if (!container) {
+				return reply.status(400).send({ error: "Container not found on node. Agent reconciliation may be needed." });
+			}
+
+			// Verify no existing server with this container ID
+			const existing = await prisma.server.findUnique({
+				where: { id: containerId },
+			});
+			if (existing) {
+				return reply.status(409).send({ error: "A server with this container ID already exists" });
+			}
+
+			// Validate template
+			const template = await prisma.serverTemplate.findUnique({
+				where: { id: templateId },
+			});
+			if (!template) {
+				return reply.status(404).send({ error: "Template not found" });
+			}
+
+			// Validate owner
+			const owner = await prisma.user.findUnique({
+				where: { id: ownerId },
+			});
+			if (!owner) {
+				return reply.status(404).send({ error: "Owner not found" });
+			}
+
+			// Resolve environment with template defaults
+			const templateVariables = (template.variables as any[]) || [];
+			const templateDefaults = templateVariables.reduce((acc: Record<string, string>, variable: any) => {
+				if (variable?.name && variable?.default !== undefined) {
+					acc[variable.name] = String(variable.default);
+				}
+				return acc;
+			}, {} as Record<string, string>);
+			const resolvedEnvironment = {
+				...templateDefaults,
+				...(environment || {}),
+			};
+
+			// Derive status from container
+			const status = container.status.includes("Up") ? "running" : "stopped";
+
+			// Use discovered resource defaults if user didn't specify values
+			const resolvedMemoryMb = allocatedMemoryMb ?? container.memoryLimitMb ?? template.allocatedMemoryMb;
+			const resolvedCpuCores = allocatedCpuCores ?? (container.cpuCores ? Math.ceil(container.cpuCores) : undefined) ?? template.allocatedCpuCores;
+
+			// Create server record — containerId IS the server.id (critical for agent sync)
+			const server = await prisma.server.create({
+				data: {
+					id: containerId,                    // MUST match container name for agent sync
+					uuid: uuidv4(),
+					name,
+					templateId,
+					nodeId,
+					locationId: node.locationId,
+					ownerId,
+					status,
+					allocatedMemoryMb: resolvedMemoryMb,
+					allocatedCpuCores: resolvedCpuCores,
+					allocatedDiskMb: allocatedDiskMb ?? 10240,
+					containerId,
+					containerName: containerId,
+					networkMode: container.networkMode || "bridge",
+					primaryPort: primaryPort ?? 25565,
+					portBindings: portBindings ?? {},
+					environment: resolvedEnvironment,
+					startupCommand: template.startup,
+				},
+			});
+
+			// Create system log entry
+			await prisma.serverLog.create({
+				data: {
+					serverId: server.id,
+					stream: "system",
+					data: `[Import] Server imported from existing container ${containerId}`,
+				},
+			});
+
+			// Audit log
+			await prisma.auditLog.create({
+				data: {
+					userId: request.user.userId,
+					action: "server.import",
+					resource: "server",
+					resourceId: server.id,
+					details: {
+						containerId,
+						nodeId,
+						templateId,
+						ownerId,
+						source: "auto_import",
+					},
+				},
+			});
+
+			reply.status(201).send(serialize({ success: true, data: server }));
+
+			// Broadcast via WS
+			if (wsGateway?.pushToAdminSubscribers) {
+				wsGateway.pushToAdminSubscribers('server_created', {
+					type: 'server_created',
+					serverId: server.id,
+					nodeId,
+					ownerId,
+					timestamp: new Date().toISOString(),
+				});
+			}
+		},
+	);
+
+	// ============================================================================
 	// WILDCARD ASSIGNMENT ROUTE
 	// ============================================================================
 

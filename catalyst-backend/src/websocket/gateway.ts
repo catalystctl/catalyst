@@ -160,6 +160,19 @@ export class WebSocketGateway {
   private readonly globalSseSubscribers = new Map<string, { eventTypes: string[]; push: (event: string, data: any) => void; serverIds?: Set<string>; lastActivity: number }>();
   // Admin SSE event subscribers — receive entity-level admin events (users, nodes, templates, alerts)
   private readonly adminEventSubscribers = new Map<string, { eventTypes: string[]; push: (event: string, data: any) => void; lastActivity: number }>();
+  // Discovered containers on nodes (for auto-import of existing servers)
+  private discoveredContainers = new Map<string, Array<{
+    containerId: string;
+    image: string;
+    status: string;
+    labels: Record<string, string>;
+    networkMode?: string;
+    memoryLimitMb?: number;
+    cpuCores?: number;
+    startupCommand?: string;
+    envVarNames?: string[];
+    discoveredAt: number;
+  }>>();
 
   // ── Agent auth lockout tracker (progressive backoff) ───────────────────────
   // Tracks failed auth attempts per nodeId. Lockout durations increase with
@@ -303,6 +316,7 @@ export class WebSocketGateway {
           return;
         }
         this.agents.delete(nodeId);
+        this.discoveredContainers.delete(nodeId);
         this.prisma.node.update({
           where: { id: nodeId },
           data: { isOnline: false },
@@ -1461,6 +1475,18 @@ export class WebSocketGateway {
 
         if (!server) {
           this.logger.warn(`State sync for unknown server ID: ${message.serverUuid}`);
+          // Track as unregistered container for auto-import
+          const existing = this.discoveredContainers.get(nodeId) ?? [];
+          if (!existing.some(c => c.containerId === message.serverUuid)) {
+            existing.push({
+              containerId: message.serverUuid,
+              image: "",
+              status: message.state === "running" ? "Up" : "Exited",
+              labels: {},
+              discoveredAt: Date.now(),
+            });
+            this.discoveredContainers.set(nodeId, existing);
+          }
           return;
         }
         if (server.nodeId !== nodeId) {
@@ -1783,6 +1809,30 @@ export class WebSocketGateway {
         await this.routeToClients(message.serverId, message);
       } else if (message.type === "storage_resize_complete") {
         await this.routeToClients(message.serverId, message);
+      } else if (message.type === "discovered_servers") {
+        if (!message.nodeId || message.nodeId !== nodeId) {
+          this.logger.warn({ nodeId, messageNodeId: message.nodeId }, "discovered_servers node mismatch");
+          return;
+        }
+        const containers = Array.isArray(message.containers) ? message.containers : [];
+
+        this.discoveredContainers.set(nodeId, containers.map((c: any) => ({
+          containerId: String(c.containerId || ""),
+          image: String(c.image || ""),
+          status: String(c.status || ""),
+          labels: typeof c.labels === "object" && c.labels !== null ? c.labels : {},
+          networkMode: typeof c.networkMode === "string" ? c.networkMode : undefined,
+          memoryLimitMb: typeof c.memoryLimitMb === "number" ? c.memoryLimitMb : undefined,
+          cpuCores: typeof c.cpuCores === "number" ? c.cpuCores : undefined,
+          startupCommand: typeof c.startupCommand === "string" ? c.startupCommand : undefined,
+          envVarNames: Array.isArray(c.envVarNames) ? c.envVarNames : undefined,
+          discoveredAt: Date.now(),
+        })));
+
+        this.logger.info(
+          { nodeId, count: containers.length },
+          `Discovered ${containers.length} containers on node`
+        );
       }
     } catch (err) {
       this.logger.error(err, `Error handling agent message from ${nodeId}`);
@@ -3040,6 +3090,16 @@ export class WebSocketGateway {
     }
   }
 
+  // ── Discovered container accessors (for auto-import) ───────────────────
+
+  getDiscoveredContainers(nodeId: string) {
+    return this.discoveredContainers.get(nodeId) ?? [];
+  }
+
+  clearDiscoveredContainers(nodeId: string) {
+    this.discoveredContainers.delete(nodeId);
+  }
+
   /**
    * Destroy the gateway: close all connections and clean up resources.
    */
@@ -3069,6 +3129,7 @@ export class WebSocketGateway {
     this.globalSseSubscribers.clear();
     this.adminEventSubscribers.clear();
     this.pluginWsHandlers.clear();
+    this.discoveredContainers.clear();
     this.logger.info('WebSocket gateway destroyed');
   }
 }

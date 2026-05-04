@@ -151,6 +151,35 @@ struct ServerStateSync<'a> {
     timestamp: i64,
 }
 
+#[derive(serde::Serialize)]
+#[allow(non_snake_case)]
+struct DiscoveredServer<'a> {
+    containerId: &'a str,
+    image: &'a str,
+    status: &'a str,
+    labels: &'a HashMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    networkMode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    memoryLimitMb: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cpuCores: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    startupCommand: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    envVarNames: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
+#[allow(non_snake_case)]
+struct DiscoveredServers<'a> {
+    #[serde(rename = "type")]
+    ty: &'static str,
+    nodeId: &'a str,
+    containers: Vec<DiscoveredServer<'a>>,
+    timestamp: i64,
+}
+
 /// Shell-escape a value for safe interpolation into a bash script.
 /// Wraps the value in single quotes and escapes any embedded single quotes.
 fn shell_escape_value(value: &str) -> String {
@@ -4847,7 +4876,7 @@ impl WebSocketHandler {
         }
 
         // Report state for all known containers
-        for container in containers {
+        for container in &containers {
             if !container.managed {
                 continue;
             }
@@ -4921,6 +4950,55 @@ impl WebSocketHandler {
         let mut w = ws.lock().await;
         if let Err(err) = w.send(Message::Text(complete_text.into())).await {
             warn!("Failed to send reconciliation complete: {}", err);
+        }
+
+        // Send discovered containers info for auto-import feature
+        let mut discovered = Vec::new();
+        for c in containers.iter().filter(|c| c.managed) {
+            let inspect = self.runtime.inspect_container(&c.id).await.ok().flatten();
+            discovered.push(DiscoveredServer {
+                containerId: &c.id,
+                image: &c.image,
+                status: &c.status,
+                labels: &c.labels,
+                networkMode: inspect.as_ref().map(|i| i.network_mode.clone()),
+                memoryLimitMb: inspect.as_ref().and_then(|i| {
+                    if i.memory_limit_bytes > 0 {
+                        Some((i.memory_limit_bytes as u64) / (1024 * 1024))
+                    } else {
+                        None
+                    }
+                }),
+                cpuCores: inspect.as_ref().and_then(|i| {
+                    if i.cpu_quota > 0 && i.cpu_period > 0 {
+                        Some((i.cpu_quota as u64) / (i.cpu_period as u64))
+                    } else {
+                        None
+                    }
+                }),
+                startupCommand: inspect
+                    .as_ref()
+                    .map(|i| i.startup_command.clone())
+                    .filter(|s| !s.is_empty()),
+                envVarNames: inspect
+                    .as_ref()
+                    .map(|i| i.env_var_names.clone())
+                    .unwrap_or_default(),
+            });
+        }
+
+        if !discovered.is_empty() {
+            let discovered_msg = DiscoveredServers {
+                ty: "discovered_servers",
+                nodeId: &self.config.server.node_id,
+                containers: discovered,
+                timestamp: chrono::Utc::now().timestamp_millis(),
+            };
+            let discovered_text = serde_json::to_string(&discovered_msg).unwrap_or_default();
+
+            if let Err(err) = w.send(Message::Text(discovered_text.into())).await {
+                warn!("Failed to send discovered servers: {}", err);
+            }
         }
 
         info!(
