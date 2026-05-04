@@ -547,9 +547,9 @@ function NodeDetailsPage() {
               <div className="mt-3 divide-y divide-warning/10">
                 {unregisteredContainers.map((c: any) => (
                   <div key={c.containerId} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
-                    <div>
+                    <div className="min-w-0 flex-1 overflow-hidden">
                       <div className="font-mono text-xs font-medium text-foreground">{c.containerId}</div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         <span>{c.image || 'Unknown image'}</span>
                         <Badge
                           variant={c.status?.includes('Up') ? 'success' : 'secondary'}
@@ -568,7 +568,7 @@ function NodeDetailsPage() {
                       </div>
                       {c.startupCommand && (
                         <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground/60" title={c.startupCommand}>
-                          {c.startupCommand}
+                          {c.startupCommand.length > 120 ? c.startupCommand.slice(0, 120) + '…' : c.startupCommand}
                         </div>
                       )}
                       {c.envVarNames && c.envVarNames.length > 0 && (

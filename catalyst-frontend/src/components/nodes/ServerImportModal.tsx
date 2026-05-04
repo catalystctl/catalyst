@@ -202,9 +202,9 @@ export default function ServerImportModal({
                       className="rounded-lg border border-border/50 bg-surface-2/30 p-4"
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Server className="h-4 w-4 text-muted-foreground" />
-                          <div>
+                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                          <Server className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0 overflow-hidden">
                             <div className="text-sm font-mono font-medium text-foreground">
                               {container.containerId}
                             </div>
@@ -231,7 +231,7 @@ export default function ServerImportModal({
                             </div>
                             {container.startupCommand && (
                               <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground/70" title={container.startupCommand}>
-                                {container.startupCommand}
+                                {container.startupCommand.length > 120 ? container.startupCommand.slice(0, 120) + '…' : container.startupCommand}
                               </div>
                             )}
                             {container.envVarNames && container.envVarNames.length > 0 && (
