@@ -669,7 +669,7 @@ The agent uses structured logging via the `tracing` crate.
 **JSON format example:**
 ```json
 {
-  "timestamp": "2025-01-15T10:30:00.000Z",
+  "timestamp": "2026-01-15T10:30:00.000Z",
   "level": "INFO",
   "message": "Container started",
   "span": {"name": "runtime_manager"},
@@ -680,7 +680,7 @@ The agent uses structured logging via the `tracing` crate.
 
 **Text format example:**
 ```
-2025-01-15T10:30:00.000Z  INFO catalyst_agent::runtime_manager: Container started container_id=abc123 server_uuid=srv-xyz
+2026-01-15T10:30:00.000Z  INFO catalyst_agent::runtime_manager: Container started container_id=abc123 server_uuid=srv-xyz
 ```
 
 ---

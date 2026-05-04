@@ -344,4 +344,4 @@ We welcome contributions! Please see [AGENTS.md](AGENTS.md) for repository guide
 
 ## License
 
-GPLv3 © 2025 Catalyst Contributors
+GPLv3 © 2026 Catalyst Contributors
