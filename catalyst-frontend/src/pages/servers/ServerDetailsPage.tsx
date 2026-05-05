@@ -1171,6 +1171,7 @@ function ServerDetailsPage() {
               onRename={() => renameServerMutation.mutate()}
               isSuspended={isSuspended}
               serverStatus={server.status}
+              subdomain={server.subdomain ?? null}
             />
           )}
           </Suspense>

@@ -982,6 +982,9 @@ export async function adminRoutes(app: FastifyInstance) {
                   return { serverId: server.id, status: 'failed', error: error.message };
                 }
               }
+              if (server.subdomain && !environment.CATALYST_SUBDOMAIN) {
+                environment.CATALYST_SUBDOMAIN = server.subdomain;
+              }
               const success = await gateway.sendToAgent(server.nodeId, {
                 type: 'start_server',
                 serverId: server.id,
@@ -1130,6 +1133,9 @@ export async function adminRoutes(app: FastifyInstance) {
                 } catch (error: any) {
                   return { serverId: server.id, status: 'failed', error: error.message };
                 }
+              }
+              if (server.subdomain && !environment.CATALYST_SUBDOMAIN) {
+                environment.CATALYST_SUBDOMAIN = server.subdomain;
               }
               const success = await gateway.sendToAgent(server.nodeId, {
                 type: 'restart_server',
@@ -2465,6 +2471,87 @@ export async function adminRoutes(app: FastifyInstance) {
         const wsGateway = (app as any).wsGateway;
         wsGateway?.pushToAdminSubscribers('system_settings_updated', { updatedBy: user.userId });
       } catch { /* ignore — WS push is best-effort */ }
+
+      reply.send({ success: true });
+    }
+  );
+
+  // DNS settings: get
+  app.get(
+    '/dns-settings',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const user = request.user;
+      if (!isAdminUser(request, 'admin.read')) {
+        return reply.status(403).send({ error: 'Admin access required' });
+      }
+      const settings = await prisma.systemSetting.findUnique({ where: { id: 'dns' } });
+      reply.send({
+        success: true,
+        data: {
+          enabled: settings?.dnsEnabled ?? false,
+          provider: settings?.dnsProvider ?? null,
+          baseDomain: settings?.dnsBaseDomain ?? null,
+          cloudflareApiToken: settings?.dnsCloudflareApiToken ? '••••••••' : null,
+          cloudflareZoneId: settings?.dnsCloudflareZoneId ?? null,
+        },
+      });
+    }
+  );
+
+  // DNS settings: put
+  app.put(
+    '/dns-settings',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const user = request.user;
+      if (!isAdminUser(request, 'admin.write')) {
+        return reply.status(403).send({ error: 'Admin write access required' });
+      }
+      const { enabled, provider, baseDomain, cloudflareApiToken, cloudflareZoneId } = request.body as {
+        enabled?: boolean;
+        provider?: string | null;
+        baseDomain?: string | null;
+        cloudflareApiToken?: string | null;
+        cloudflareZoneId?: string | null;
+      };
+
+      if (enabled && (!baseDomain || !provider)) {
+        return reply.status(400).send({ error: 'Base domain and provider are required when DNS is enabled' });
+      }
+      if (provider === 'cloudflare' && enabled && !cloudflareZoneId) {
+        return reply.status(400).send({ error: 'Cloudflare Zone ID is required' });
+      }
+
+      const existing = await prisma.systemSetting.findUnique({ where: { id: 'dns' } });
+      const tokenToStore = cloudflareApiToken && cloudflareApiToken !== '••••••••'
+        ? cloudflareApiToken
+        : existing?.dnsCloudflareApiToken ?? null;
+
+      await prisma.systemSetting.upsert({
+        where: { id: 'dns' },
+        create: {
+          id: 'dns',
+          dnsEnabled: enabled ?? false,
+          dnsProvider: provider ?? null,
+          dnsBaseDomain: baseDomain ?? null,
+          dnsCloudflareApiToken: tokenToStore,
+          dnsCloudflareZoneId: cloudflareZoneId ?? null,
+        },
+        update: {
+          dnsEnabled: enabled ?? false,
+          dnsProvider: provider ?? null,
+          dnsBaseDomain: baseDomain ?? null,
+          dnsCloudflareApiToken: tokenToStore,
+          dnsCloudflareZoneId: cloudflareZoneId ?? null,
+        },
+      });
+
+      await createAuditLog(user.userId, {
+        action: 'dns_settings_update',
+        resource: 'system',
+        details: { enabled, provider, baseDomain },
+      });
 
       reply.send({ success: true });
     }

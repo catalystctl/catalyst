@@ -289,6 +289,12 @@ model SystemSetting {
   fileTunnelMaxUploadMb       Int?
   fileTunnelMaxPendingPerNode Int?
   fileTunnelConcurrentMax     Int?
+  // DNS provider settings
+  dnsProvider           String?
+  dnsBaseDomain         String?
+  dnsCloudflareApiToken String?
+  dnsCloudflareZoneId   String?
+  dnsEnabled            Boolean  @default(false)
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 }
@@ -457,6 +463,8 @@ model ServerTemplate {
   features          Json     @default("{}")
   nest        Nest?     @relation(fields: [nestId], references: [id])
   nestId      String?
+  srvService  String?
+  srvProtocol String   @default("tcp")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -497,6 +505,7 @@ model Server {
   networkMode  String  @default("bridge")
   primaryPort  Int
   primaryIp    String?
+  subdomain    String? @unique
   portBindings Json    @default("{}") // Record<number, number>
 
   // Configuration

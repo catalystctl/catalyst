@@ -128,6 +128,14 @@ export function useOidcConfig() {
   });
 }
 
+export function useDnsSettings() {
+  return useQuery({
+    queryKey: qk.adminDnsSettings(),
+    queryFn: adminApi.getDnsSettings,
+    refetchInterval: 30000,
+  });
+}
+
 export function useSystemErrors(params?: {
   page?: number;
   limit?: number;

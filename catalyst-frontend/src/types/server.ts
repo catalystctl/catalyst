@@ -36,6 +36,7 @@ export interface Server {
   nodeName?: string;
   primaryPort?: number;
   primaryIp?: string | null;
+  subdomain?: string | null;
   portBindings?: Record<number, number>;
   networkMode?: string;
   environment?: Record<string, string>;
@@ -121,6 +122,7 @@ export interface Server {
     hostNetworkIp?: string | null;
     host?: string | null;
     port?: number | null;
+    subdomain?: string | null;
   };
   /** Effective permissions for the current user on this server */
   effectivePermissions?: string[];
@@ -146,6 +148,7 @@ export interface CreateServerPayload {
   databaseAllocation?: number;
   primaryPort: number;
   primaryIp?: string | null;
+  subdomain?: string | null;
   allocationId?: string;
   portBindings?: Record<number, number>;
   networkMode?: string;
@@ -162,6 +165,7 @@ export interface UpdateServerPayload {
   allocatedDiskMb?: number;
   primaryPort?: number;
   primaryIp?: string | null;
+  subdomain?: string | null;
   allocationId?: string;
   portBindings?: Record<number, number>;
   backupAllocationMb?: number;

@@ -301,6 +301,14 @@ export interface RoleUsersResponse {
   permissions: string[];
 }
 
+export interface DnsSettings {
+  enabled: boolean;
+  provider: string | null;
+  baseDomain: string | null;
+  cloudflareApiToken: string | null;
+  cloudflareZoneId: string | null;
+}
+
 export interface UpdateStatusResponse {
   currentVersion: string;
   latestVersion: string;

@@ -308,4 +308,8 @@ export const serversApi = {
     );
     return data;
   },
+  updateSubdomain: async (id: string, subdomain: string | null) => {
+    const data = await apiClient.put<ApiResponse<Server>>(`/api/servers/${id}`, { subdomain });
+    return data.data;
+  },
 };

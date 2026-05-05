@@ -36,6 +36,8 @@ export const templatesApi = {
     allocatedCpuCores: number;
     features?: Template['features'];
     nestId?: string | null;
+    srvService?: string | null;
+    srvProtocol?: string | null;
   }) => {
     const data = await apiClient.post<ApiResponse<Template>>('/api/templates', payload);
     return data.data;
@@ -61,6 +63,8 @@ export const templatesApi = {
       allocatedCpuCores: number;
       features?: Template['features'];
       nestId?: string | null;
+      srvService?: string | null;
+      srvProtocol?: string | null;
     }>,
   ) => {
     const data = await apiClient.put<ApiResponse<Template>>(

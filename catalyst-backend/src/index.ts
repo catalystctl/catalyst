@@ -206,6 +206,9 @@ taskScheduler.setTaskExecutor({
 				);
 			}
 		}
+		if (server.subdomain && !environment.CATALYST_SUBDOMAIN) {
+			environment.CATALYST_SUBDOMAIN = server.subdomain;
+		}
 
 		if (action === "backup") {
 			await wsGateway.sendToAgent(server.nodeId, {

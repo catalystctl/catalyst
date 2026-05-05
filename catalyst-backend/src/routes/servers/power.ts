@@ -91,6 +91,9 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           return reply.status(400).send({ error: error.message });
         }
       }
+      if (server.subdomain && !environment.CATALYST_SUBDOMAIN) {
+        environment.CATALYST_SUBDOMAIN = server.subdomain;
+      }
       const runtimeTemplate = patchTemplateForRuntime(server.template);
 
       // Sync port environment variables with primaryPort
@@ -224,6 +227,9 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         } catch (error: any) {
           return reply.status(400).send({ error: error.message });
         }
+      }
+      if (server.subdomain && !environment.CATALYST_SUBDOMAIN) {
+        environment.CATALYST_SUBDOMAIN = server.subdomain;
       }
       const runtimeTemplate = patchTemplateForRuntime(server.template);
 
@@ -421,6 +427,9 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           return reply.status(400).send({ error: error.message });
         }
       }
+      if (server.subdomain && !environment.CATALYST_SUBDOMAIN) {
+        environment.CATALYST_SUBDOMAIN = server.subdomain;
+      }
       const runtimeTemplate = patchTemplateForRuntime(server.template);
       if (server.startupCommand) {
         runtimeTemplate.startup = server.startupCommand;
@@ -552,6 +561,9 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         } catch (error: any) {
           return reply.status(400).send({ error: error.message });
         }
+      }
+      if (server.subdomain && !environment.CATALYST_SUBDOMAIN) {
+        environment.CATALYST_SUBDOMAIN = server.subdomain;
       }
       const runtimeTemplate = patchTemplateForRuntime(server.template);
       if (server.startupCommand) {
@@ -886,6 +898,9 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         } catch (error: any) {
           return reply.status(400).send({ error: error.message });
         }
+      }
+      if (server.subdomain && !environment.CATALYST_SUBDOMAIN) {
+        environment.CATALYST_SUBDOMAIN = server.subdomain;
       }
 
       // Sync port environment variables with primaryPort

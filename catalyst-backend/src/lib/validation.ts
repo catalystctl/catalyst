@@ -18,6 +18,7 @@ import type { ZodIssue } from 'zod';
  */
 export const passwordSchema = z.string()
   .min(12, 'Password must be at least 12 characters')
+  .max(128, 'Password must be at most 128 characters')
   .regex(/[A-Z]/, 'Must contain uppercase letter')
   .regex(/[a-z]/, 'Must contain lowercase letter')
   .regex(/[0-9]/, 'Must contain number')
@@ -73,6 +74,11 @@ export const serverCreateSchema = z.object({
   portBindings: z.record(z.string(), z.number().int().min(1).max(65535)).optional().default({}),
   primaryPort: z.number().int().min(1).max(65535),
   primaryIp: z.string().max(45).nullable().optional(),
+  subdomain: z.string()
+    .max(63, 'Subdomain must be at most 63 characters')
+    .regex(/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/, 'Invalid subdomain format')
+    .nullable()
+    .optional(),
   allocationId: z.string().min(1).optional(),
   allocatedMemoryMb: z.number().int().min(512).max(131072),
   allocatedCpuCores: z.number().int().min(1).max(128),
@@ -94,6 +100,11 @@ export const serverUpdateSchema = z.object({
   allocatedCpuCores: z.number().int().min(1).max(128).optional(),
   allocatedDiskMb: z.number().int().min(1024).max(1048576).optional(),
   networkMode: z.enum(['bridge', 'macvlan', 'host']).optional(),
+  subdomain: z.string()
+    .max(63, 'Subdomain must be at most 63 characters')
+    .regex(/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/, 'Invalid subdomain format')
+    .nullable()
+    .optional(),
 });
 
 /**

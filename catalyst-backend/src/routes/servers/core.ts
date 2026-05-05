@@ -24,6 +24,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         portBindings,
         networkMode,
         environment,
+        subdomain,
         ownerId: bodyOwnerId,
       } = request.body as {
         name: string;
@@ -42,6 +43,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         portBindings?: Record<number, number>;
         networkMode?: string;
         environment: Record<string, string>;
+        subdomain?: string | null;
         ownerId?: string;
       };
 
@@ -301,6 +303,16 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         });
       }
       const resolvedPortBindings = normalizePortBindings(portBindings, validatedPrimaryPort);
+
+      // Validate subdomain uniqueness
+      const normalizedSubdomain = typeof subdomain === 'string' ? subdomain.trim().toLowerCase() : null;
+      if (normalizedSubdomain) {
+        const existing = await prisma.server.findUnique({ where: { subdomain: normalizedSubdomain } });
+        if (existing) {
+          return reply.status(409).send({ error: 'Subdomain is already in use' });
+        }
+      }
+
       let resolvedHostIp: string | null = null;
       try {
         resolvedHostIp =
@@ -391,6 +403,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
               primaryPort: allocationPort ?? validatedPrimaryPort,
               portBindings: resolvedPortBindings,
               networkMode: desiredNetworkMode,
+              subdomain: normalizedSubdomain,
               environment: {
                 ...nextEnvironment,
                 TEMPLATE_IMAGE: resolvedImage,
@@ -488,6 +501,23 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const webhookService: any = (app as any).webhookService;
       if (webhookService) {
         webhookService.serverCreated({ id: server.id, name: server.name, ownerId: effectiveOwnerId }, userId).catch(() => {});
+      }
+
+      // Trigger DNS sync for subdomain
+      if (server.subdomain) {
+        const { syncServerSubdomain } = await import('../../services/dns-sync.js');
+        syncServerSubdomain({
+          id: server.id,
+          subdomain: server.subdomain,
+          primaryIp: server.primaryIp,
+          primaryPort: server.primaryPort,
+        }).catch((err: any) => {
+          captureSystemError({
+            level: 'warn',
+            component: 'DnsSync',
+            message: `Failed to sync DNS for new server ${server.id}: ${err?.message}`,
+          }).catch(() => {});
+        });
       }
 
       // Broadcast server_created event
@@ -704,6 +734,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         primaryIp,
         portBindings,
         allocationId,
+        subdomain,
       } = request.body as {
         name?: string;
         description?: string;
@@ -718,11 +749,23 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         primaryIp?: string | null;
         portBindings?: Record<number, number>;
         allocationId?: string;
+        subdomain?: string | null;
       };
 
       const hasPrimaryIpUpdate = primaryIp !== undefined;
       const hasAllocationUpdate = allocationId !== undefined;
       const normalizedPrimaryIp = typeof primaryIp === "string" ? primaryIp.trim() : null;
+
+      // Validate subdomain uniqueness on update
+      const normalizedSubdomain = typeof subdomain === 'string' ? subdomain.trim().toLowerCase() : null;
+      if (subdomain !== undefined && normalizedSubdomain !== server.subdomain) {
+        if (normalizedSubdomain) {
+          const existing = await prisma.server.findUnique({ where: { subdomain: normalizedSubdomain } });
+          if (existing && existing.id !== serverId) {
+            return reply.status(409).send({ error: 'Subdomain is already in use' });
+          }
+        }
+      }
 
       // Can only update resources if server is stopped
       if (
@@ -1009,6 +1052,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             primaryPort: nextPrimaryPort,
             portBindings: effectiveBindings,
             primaryIp: nextPrimaryIp,
+            subdomain: subdomain !== undefined ? normalizedSubdomain : server.subdomain,
           },
         });
 
@@ -1016,6 +1060,23 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       });
 
       reply.send({ success: true, data: updated });
+
+      // Trigger DNS sync if subdomain or primary IP changed
+      if (updated.subdomain) {
+        const { syncServerSubdomain } = await import('../../services/dns-sync.js');
+        syncServerSubdomain({
+          id: updated.id,
+          subdomain: updated.subdomain,
+          primaryIp: updated.primaryIp,
+          primaryPort: updated.primaryPort,
+        }).catch((err: any) => {
+          captureSystemError({
+            level: 'warn',
+            component: 'DnsSync',
+            message: `Failed to sync DNS for updated server ${server.id}: ${err?.message}`,
+          }).catch(() => {});
+        });
+      }
 
       // Broadcast server_updated event
       const wsGatewayServerUpdated = (app as any).wsGateway;
@@ -1148,6 +1209,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
 
       const server = await prisma.server.findUnique({
         where: { id: serverId },
+        include: { template: true },
       });
 
       if (!server) {
@@ -1178,6 +1240,16 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         return reply.status(409).send({
           error: `Server must be stopped before deletion (current state: ${server.status})`,
         });
+      }
+
+      // Clean up DNS record before deleting server
+      if (server.subdomain) {
+        const { deleteServerSubdomain } = await import('../../services/dns-sync.js');
+        deleteServerSubdomain({
+          subdomain: server.subdomain,
+          primaryPort: server.primaryPort,
+          template: server.template ? { srvService: server.template.srvService, srvProtocol: server.template.srvProtocol } : null,
+        }).catch(() => {});
       }
 
       await prisma.$transaction(async (tx) => {

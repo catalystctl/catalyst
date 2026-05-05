@@ -187,6 +187,7 @@ export interface ServerInstance {
     mode: NetworkMode;
     primaryPort: number;
     primaryIp?: string;
+    subdomain?: string;
     portBindings: Record<number, number>; // container port -> host port
   };
   environment: Record<string, string>;

@@ -94,10 +94,17 @@ function ServerCard({ server }: { server: Server }) {
                 <ServerIcon className="h-3 w-3" />
                 {server.nodeName ?? server.nodeId}
               </Badge>
-              <Badge variant="secondary" className="gap-1.5">
-                <Globe className="h-3 w-3" />
-                {host}:{port}
-              </Badge>
+              {server.subdomain ? (
+                <Badge variant="secondary" className="gap-1.5">
+                  <Globe className="h-3 w-3" />
+                  {server.subdomain}
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="gap-1.5">
+                  <Globe className="h-3 w-3" />
+                  {host}:{port}
+                </Badge>
+              )}
             </div>
           </div>
         </div>
