@@ -779,7 +779,12 @@ async function bootstrap() {
 		await app.register((app) => migrationRoutes(app));
 
 		// Agent binary download endpoint (public)
-		app.get("/api/agent/download", async (request, reply) => {
+		app.get(
+			"/api/agent/download",
+			{
+				config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+			},
+			async (request, reply) => {
 			// Use musl static binary for portability across Linux distributions.
 			// Supports both x86_64 and aarch64 architectures.
 			const arch = (request.query as { arch?: string }).arch || "x86_64";
@@ -866,7 +871,12 @@ async function bootstrap() {
 		});
 
 		// Canonical node deployment script endpoint (public)
-		app.get("/api/agent/deploy-script", async (_request, reply) => {
+		app.get(
+			"/api/agent/deploy-script",
+			{
+				config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+			},
+			async (_request, reply) => {
 			const deployScriptPath =
 				process.env.DEPLOY_SCRIPT_PATH ||
 				path.resolve(process.cwd(), "..", "scripts", "deploy-agent.sh");
@@ -884,7 +894,12 @@ async function bootstrap() {
 		});
 
 		// Node deployment script endpoint (public)
-		app.get("/api/deploy/:token", async (request, reply) => {
+		app.get(
+			"/api/deploy/:token",
+			{
+				config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+			},
+			async (request, reply) => {
 			const { token } = request.params as { token: string };
 			const { apiKey } = (request.query as { apiKey?: string }) || {};
 

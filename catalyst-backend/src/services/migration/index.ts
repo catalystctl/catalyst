@@ -65,7 +65,8 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
     serversList?: Array<{ id: number; uuid: string; name: string; nodeId: number; nodeName: string; state: string; eggName: string; nestName: string }>;
     error?: string;
   }> {
-    const client = new PterodactylClient(url, key, this.logger, clientApiKey);
+    // Migration often targets panels with self-signed certs — explicitly opt out of strict validation
+    const client = new PterodactylClient(url, key, this.logger, clientApiKey, false);
 
     try {
       const connResult = await client.testConnection();
@@ -111,7 +112,7 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
       this.logger.info({ jobId, url: job.sourceUrl }, "Starting migration");
 
       // Create client
-      const client = new PterodactylClient(job.sourceUrl, job.sourceKey, this.logger, config.clientApiKey);
+      const client = new PterodactylClient(job.sourceUrl, job.sourceKey, this.logger, config.clientApiKey, false);
 
       try {
         await this.runMigration(jobId, client, config, state, activeFlag, job.bypassToken);
@@ -149,7 +150,8 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
 
     try {
       await state.updateJobStatus(jobId, "running");
-      const client = new PterodactylClient(job.sourceUrl, job.sourceKey, this.logger, config.clientApiKey);
+      // Migration often targets panels with self-signed certs — explicitly opt out of strict validation
+      const client = new PterodactylClient(job.sourceUrl, job.sourceKey, this.logger, config.clientApiKey, false);
       try {
         await this.runMigration(jobId, client, config, state, activeFlag, job.bypassToken);
       } finally {

@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify';
 import { cn } from '../../../plugin-ui';
 
 interface MarkdownRendererProps {
@@ -23,10 +24,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
 // ── Sanitization ──
 
 function sanitize(input: string): string {
-  return input
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/on\w+\s*=\s*"[^"]*"/gi, '')
-    .replace(/on\w+\s*=\s*'[^']*'/gi, '');
+  return DOMPurify.sanitize(input, { ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'ul', 'ol', 'li', 'a', 'del', 'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'div', 'span'], ALLOWED_ATTR: ['href', 'target', 'rel', 'class'] });
 }
 
 // ── Rendering ──

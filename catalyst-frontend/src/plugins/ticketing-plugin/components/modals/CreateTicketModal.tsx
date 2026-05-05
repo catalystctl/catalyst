@@ -1,6 +1,7 @@
 // src/plugins/ticketing-plugin/components/modals/CreateTicketModal.tsx
 // Modal for creating a new ticket with optional template pre-fill.
 
+import DOMPurify from 'dompurify';
 import { useState, useEffect } from 'react';
 import type {
   CreateTicketPayload,
@@ -247,11 +248,14 @@ export function CreateTicketModal({
                   <div
                     className="prose prose-invert prose-sm max-w-none"
                     dangerouslySetInnerHTML={{
-                      __html: description
-                        .replace(/\n/g, '<br/>')
-                        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                        .replace(/\*(.+?)\*/g, '<em>$1</em>')
-                        .replace(/`(.+?)`/g, '<code class="bg-surface-3 px-1 rounded text-xs">$1</code>'),
+                      __html: DOMPurify.sanitize(
+                        description
+                          .replace(/\n/g, '<br/>')
+                          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                          .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                          .replace(/`(.+?)`/g, '<code class="bg-surface-3 px-1 rounded text-xs">$1</code>'),
+                        { ALLOWED_TAGS: ['br', 'strong', 'em', 'code'], ALLOWED_ATTR: ['class'] }
+                      ),
                     }}
                   />
                 ) : (

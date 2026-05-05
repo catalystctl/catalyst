@@ -333,6 +333,14 @@ export class PluginLoader {
       // Load backend if exists
       if (manifest.backend?.entry) {
         const backendPath = path.resolve(resolvedPath, manifest.backend.entry);
+        // Prevent path traversal via manifest.backend.entry
+        const canonicalPluginPath = path.resolve(resolvedPath);
+        if (
+          !backendPath.startsWith(canonicalPluginPath + path.sep) &&
+          backendPath !== canonicalPluginPath
+        ) {
+          throw new Error(`Backend entry path escapes plugin directory: ${manifest.backend.entry}`);
+        }
         const backendModule = await import(backendPath);
         loadedPlugin.backend = backendModule.default || backendModule;
 

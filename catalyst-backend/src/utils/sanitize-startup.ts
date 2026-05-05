@@ -8,6 +8,11 @@
  * Detects shell-variable assignments (VAR=$! or VAR=$(…)) and replaces
  * any corresponding {{VAR}} placeholders with $VAR.
  */
+
+function escapeRegExp(string: string): string {
+	return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export function sanitizeStartupCommand(startup: string): string {
 	if (!startup) return startup;
 
@@ -26,7 +31,7 @@ export function sanitizeStartupCommand(startup: string): string {
 	}
 
 	for (const varName of varsToFix) {
-		const placeholder = new RegExp(`\\{\\{${varName}\\}\\}`, "g");
+		const placeholder = new RegExp(`\\{\\{${escapeRegExp(varName)}\\}\\}`, "g");
 		if (placeholder.test(result)) {
 			result = result.replace(placeholder, `\$${varName}`);
 		}

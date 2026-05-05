@@ -64,6 +64,8 @@ export class PterodactylClient extends EventEmitter<ClientEvents> {
   private readonly clientApiKey: string | null;
   private readonly logger: any;
   private closed = false;
+  /** Whether to reject unauthorized TLS certificates (default: true for security) */
+  private readonly rejectUnauthorized: boolean;
   private useHttp1 = false; // Fallback when server doesn't support HTTP/2
   private http1Agent: http.Agent | https.Agent | null = null;
   private reconnectAttempt = 0;
@@ -78,7 +80,7 @@ export class PterodactylClient extends EventEmitter<ClientEvents> {
   }>();
   private requestIdCounter = 0;
 
-  constructor(panelUrl: string, apiKey: string, logger?: any, clientApiKey?: string) {
+  constructor(panelUrl: string, apiKey: string, logger?: any, clientApiKey?: string, rejectUnauthorized?: boolean) {
     super();
     // Normalize URL — strip trailing slash
     const cleanUrl = panelUrl.replace(/\/+$/, "");
@@ -86,6 +88,8 @@ export class PterodactylClient extends EventEmitter<ClientEvents> {
     this.apiKey = apiKey;
     this.clientApiKey = clientApiKey || null;
     this.logger = logger || console;
+    // Default to true for security; allow override for self-signed certs in migration scenarios
+    this.rejectUnauthorized = rejectUnauthorized !== false;
   }
 
   /**
@@ -160,7 +164,7 @@ export class PterodactylClient extends EventEmitter<ClientEvents> {
       let session: http2.ClientHttp2Session;
       try {
         session = http2.connect(`https://${host}:${port}`, {
-          rejectUnauthorized: false,
+          rejectUnauthorized: this.rejectUnauthorized,
         });
       } catch (err: any) {
         // Synchronous error from http2.connect — fall back to HTTP/1.1
@@ -310,7 +314,7 @@ export class PterodactylClient extends EventEmitter<ClientEvents> {
         this.http1Agent = new https.Agent({
           keepAlive: true,
           maxSockets: 4,
-          rejectUnauthorized: false,
+          rejectUnauthorized: this.rejectUnauthorized,
         });
       } else {
         this.http1Agent = new http.Agent({
@@ -473,7 +477,7 @@ export class PterodactylClient extends EventEmitter<ClientEvents> {
           method: opts.method || "GET",
           headers: reqHeaders,
           agent: this.http1Agent || undefined,
-          rejectUnauthorized: isHttps ? false : undefined,
+          rejectUnauthorized: isHttps ? this.rejectUnauthorized : undefined,
         },
         (res) => {
           const status = res.statusCode || 0;

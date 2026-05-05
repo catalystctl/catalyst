@@ -207,6 +207,11 @@ export async function setupRoutes(app: FastifyInstance) {
 
 	app.post(
 		"/complete",
+		{
+			config: {
+				rateLimit: { max: 5, timeWindow: "1 minute" },
+			},
+		},
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			// 1. Ensure no users exist yet
 			const userCount = await prisma.user.count();
