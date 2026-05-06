@@ -128,6 +128,21 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       if (sanitizedPermissions.length === 0) {
         return reply.status(400).send({ error: "Permissions cannot be empty" });
       }
+
+      // Validate inviter has all permissions they're granting
+      const inviterPerms: string[] = request.user?.permissions ?? [];
+      const hasWildcard = inviterPerms.includes('*');
+      if (!hasWildcard) {
+        const cantGrant = sanitizedPermissions.filter(
+          (p) => !inviterPerms.includes(p),
+        );
+        if (cantGrant.length > 0) {
+          return reply.status(403).send({
+            error: `Cannot grant permissions you don't have: ${cantGrant.join(', ')}`,
+          });
+        }
+      }
+
       const invite = await prisma.serverAccessInvite.create({
         data: {
           serverId,
@@ -540,6 +555,20 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       const sanitizedPermissions = permissions.map((entry) => entry.trim()).filter(Boolean);
       if (sanitizedPermissions.length === 0) {
         return reply.status(400).send({ error: "Permissions cannot be empty" });
+      }
+
+      // Validate owner/requester has all permissions they're granting
+      const requesterPerms: string[] = request.user?.permissions ?? [];
+      const hasWildcard = requesterPerms.includes('*');
+      if (!hasWildcard) {
+        const cantGrant = sanitizedPermissions.filter(
+          (p) => !requesterPerms.includes(p),
+        );
+        if (cantGrant.length > 0) {
+          return reply.status(403).send({
+            error: `Cannot grant permissions you don't have: ${cantGrant.join(', ')}`,
+          });
+        }
       }
 
       const access = await prisma.serverAccess.upsert({

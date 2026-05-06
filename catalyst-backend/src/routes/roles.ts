@@ -138,6 +138,20 @@ export async function roleRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'Permissions must be an array' });
       }
 
+      // Validate user can grant these permissions (prevent privilege escalation)
+      const userPerms: string[] = request.user?.permissions ?? [];
+      const hasWildcard = userPerms.includes('*');
+      if (!hasWildcard) {
+        const cantGrant = permissions.filter(
+          (p) => !userPerms.includes(p),
+        );
+        if (cantGrant.length > 0) {
+          return reply.status(403).send({
+            error: `Cannot grant permissions you don't have: ${cantGrant.join(', ')}`,
+          });
+        }
+      }
+
       // Check for duplicate name
       const existing = await prisma.role.findFirst({
         where: { name: { equals: name.trim(), mode: 'insensitive' } },
@@ -224,6 +238,21 @@ export async function roleRoutes(app: FastifyInstance) {
         if (!Array.isArray(permissions)) {
           return reply.status(400).send({ error: 'Permissions must be an array' });
         }
+
+        // Validate user can grant these permissions (prevent privilege escalation)
+        const userPerms: string[] = request.user?.permissions ?? [];
+        const hasWildcard = userPerms.includes('*');
+        if (!hasWildcard) {
+          const cantGrant = permissions.filter(
+            (p) => !userPerms.includes(p),
+          );
+          if (cantGrant.length > 0) {
+            return reply.status(403).send({
+              error: `Cannot grant permissions you don't have: ${cantGrant.join(', ')}`,
+            });
+          }
+        }
+
         updateData.permissions = permissions;
       }
 
@@ -326,6 +355,15 @@ export async function roleRoutes(app: FastifyInstance) {
 
       if (!permission || typeof permission !== 'string') {
         return reply.status(400).send({ error: 'Permission is required' });
+      }
+
+      // Validate user can grant this permission (prevent privilege escalation)
+      const userPerms: string[] = request.user?.permissions ?? [];
+      const hasWildcard = userPerms.includes('*');
+      if (!hasWildcard && !userPerms.includes(permission)) {
+        return reply.status(403).send({
+          error: `Cannot grant permission you don't have: ${permission}`,
+        });
       }
 
       const role = await prisma.role.findUnique({
@@ -460,6 +498,21 @@ export async function roleRoutes(app: FastifyInstance) {
 
       if (!user) {
         return reply.status(404).send({ error: 'User not found' });
+      }
+
+      // Validate current user has all permissions in the target role
+      // This prevents privilege escalation via role assignment
+      const currentUserPerms: string[] = request.user?.permissions ?? [];
+      const hasWildcard = currentUserPerms.includes('*');
+      if (!hasWildcard && role.permissions.length > 0) {
+        const cantGrant = role.permissions.filter(
+          (p) => !currentUserPerms.includes(p),
+        );
+        if (cantGrant.length > 0) {
+          return reply.status(403).send({
+            error: `Cannot assign role with permissions you don't have: ${cantGrant.join(', ')}`,
+          });
+        }
       }
 
       // Check if user already has this role

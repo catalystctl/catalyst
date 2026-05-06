@@ -318,6 +318,30 @@ const authenticate = async (request: any, reply: any) => {
 					permissions = verification.key.permissions;
 				}
 
+				// Validate API key permissions don't exceed user's current permissions
+				// This prevents stale permissions when a user's roles are revoked after key creation
+				const { resolveUserPermissions } = await import(
+					"./lib/permissions-catalog"
+				);
+				const currentUserPermissions = await resolveUserPermissions(
+					verification.key.userId,
+				);
+				const hasWildcard = currentUserPermissions.includes("*");
+
+				if (!hasWildcard && !verification.key.allPermissions) {
+					// For keys with specific permissions, ensure user still has those permissions
+					const stalePermissions = permissions.filter(
+						(p) => !currentUserPermissions.includes(p),
+					);
+					if (stalePermissions.length > 0) {
+						reply.status(403).send({
+							error:
+								"API key permissions revoked - user no longer has required permissions",
+						});
+						return;
+					}
+				}
+
 				request.user = {
 					userId: verification.user.id,
 					email: verification.user.email,

@@ -8,6 +8,7 @@ import { ServerStateMachine } from '../services/state-machine';
 import { normalizeHostIp, releaseIpForServer, summarizePool } from '../utils/ipam';
 import { createAuditLog } from '../middleware/audit';
 import { revokeSftpTokensForUser } from '../services/sftp-token-manager';
+import { hasNodeAccess } from '../lib/permissions.js';
 import { captureSystemError } from '../services/error-logger';
 // Permission checks use request.user.permissions (populated by auth middleware)
 // No DB queries needed — works for both session and API key auth.
@@ -243,11 +244,41 @@ export async function adminRoutes(app: FastifyInstance) {
         const uniqueServerIds = Array.from(new Set(serverIds));
         const existingServers = await prisma.server.findMany({
           where: { id: { in: uniqueServerIds } },
-          select: { id: true },
+          select: { id: true, ownerId: true, nodeId: true },
         });
 
         if (existingServers.length !== uniqueServerIds.length) {
           return reply.status(400).send({ error: 'One or more servers are invalid' });
+        }
+
+        // Validate requesting user can grant access to these servers
+        const isAdmin = checkPerm(request, 'admin.write');
+        if (!isAdmin) {
+          for (const server of existingServers) {
+            const canGrant = server.ownerId === user.userId ||
+              await hasNodeAccess(prisma, user.userId, server.nodeId);
+            if (!canGrant) {
+              return reply.status(403).send({
+                error: `Cannot grant access to server ${server.id}`,
+              });
+            }
+          }
+        }
+
+        // Validate server permissions don't exceed what the requester has
+        if (serverPermissions && serverPermissions.length > 0) {
+          const requesterPerms: string[] = request.user?.permissions ?? [];
+          const hasWildcard = requesterPerms.includes('*');
+          if (!hasWildcard) {
+            const cantGrant = serverPermissions.filter(
+              (p) => !requesterPerms.includes(p),
+            );
+            if (cantGrant.length > 0) {
+              return reply.status(403).send({
+                error: `Cannot grant server permissions you don't have: ${cantGrant.join(', ')}`,
+              });
+            }
+          }
         }
 
         serverAccessIds = uniqueServerIds;
@@ -456,11 +487,41 @@ export async function adminRoutes(app: FastifyInstance) {
         const uniqueServerIds = Array.from(new Set(serverIds));
         const existingServers = await prisma.server.findMany({
           where: { id: { in: uniqueServerIds } },
-          select: { id: true },
+          select: { id: true, ownerId: true, nodeId: true },
         });
 
         if (existingServers.length !== uniqueServerIds.length) {
           return reply.status(400).send({ error: 'One or more servers are invalid' });
+        }
+
+        // Validate requesting user can grant access to these servers
+        const isAdmin = checkPerm(request, 'admin.write');
+        if (!isAdmin) {
+          for (const server of existingServers) {
+            const canGrant = server.ownerId === user.userId ||
+              await hasNodeAccess(prisma, user.userId, server.nodeId);
+            if (!canGrant) {
+              return reply.status(403).send({
+                error: `Cannot grant access to server ${server.id}`,
+              });
+            }
+          }
+        }
+
+        // Validate server permissions don't exceed what the requester has
+        if (serverPermissions && serverPermissions.length > 0) {
+          const requesterPerms: string[] = request.user?.permissions ?? [];
+          const hasWildcard = requesterPerms.includes('*');
+          if (!hasWildcard) {
+            const cantGrant = serverPermissions.filter(
+              (p) => !requesterPerms.includes(p),
+            );
+            if (cantGrant.length > 0) {
+              return reply.status(403).send({
+                error: `Cannot grant server permissions you don't have: ${cantGrant.join(', ')}`,
+              });
+            }
+          }
         }
 
         const defaultPermissions =
@@ -931,6 +992,24 @@ export async function adminRoutes(app: FastifyInstance) {
         where: { id: { in: uniqueServerIds } },
         include: { node: true, template: true },
       });
+
+      // Validate per-server access for non-admin users
+      const isAdmin = checkPerm(request, 'admin.write');
+      if (!isAdmin) {
+        for (const server of servers) {
+          const access = await prisma.serverAccess.findUnique({
+            where: { userId_serverId: { userId: user.userId, serverId: server.id } },
+          });
+          const hasExplicitPerm = access?.permissions.includes(requiredPerm);
+          const canAccess = server.ownerId === user.userId || hasExplicitPerm ||
+            await hasNodeAccess(prisma, user.userId, server.nodeId);
+          if (!canAccess) {
+            return reply.status(403).send({
+              error: `Cannot perform ${action} on server ${server.id}: access denied`,
+            });
+          }
+        }
+      }
 
       const serverMap = new Map(servers.map((server) => [server.id, server]));
       const missing = uniqueServerIds.filter((id) => !serverMap.has(id));
