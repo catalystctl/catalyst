@@ -31,7 +31,7 @@ jobs:
 
       - name: Cache protoc
         id: cache-protoc
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /usr/local/bin/protoc
           key: protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}
@@ -50,7 +50,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache cargo registry + git deps
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry/index/
@@ -60,7 +60,7 @@ jobs:
           restore-keys: agent-cargo-deps-
 
       - name: Cache cargo build (check)
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: catalyst-agent/target/
           key: agent-check-${{ runner.os }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-${{ hashFiles('catalyst-agent/src/**') }}
@@ -87,7 +87,7 @@ jobs:
 
       - name: Cache protoc
         id: cache-protoc
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /usr/local/bin/protoc
           key: protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}
@@ -104,7 +104,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo registry + git deps
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry/index/
@@ -114,7 +114,7 @@ jobs:
           restore-keys: agent-cargo-deps-
 
       - name: Cache cargo build (test)
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: catalyst-agent/target/
           key: agent-test-${{ runner.os }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-${{ hashFiles('catalyst-agent/src/**') }}
@@ -141,7 +141,7 @@ jobs:
 
       - name: Cache protoc
         id: cache-protoc
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /usr/local/bin/protoc
           key: protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}
@@ -164,7 +164,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Cache cargo registry + git deps
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry/index/
@@ -174,7 +174,7 @@ jobs:
           restore-keys: agent-cargo-deps-
 
       - name: Cache cargo build (release ${{ matrix.target }})
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: catalyst-agent/target/
           key: agent-release-${{ matrix.target }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-${{ hashFiles('catalyst-agent/src/**') }}
