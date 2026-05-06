@@ -281,10 +281,19 @@ export async function authRoutes(app: FastifyInstance) {
         if (isCredentialError && userRecord) {
           await handleFailedLogin(prisma, request);
           await logAuthAttempt(normalizedEmail, false, request.ip, request.headers["user-agent"]);
-        } else {
-          app.log.warn({ err }, 'Non-auth error during login');
+          return reply.status(401).send({ error: "Invalid credentials" });
         }
-        return reply.status(401).send({ error: "Invalid credentials" });
+        
+        // Log unexpected errors and return 500
+        app.log.error({ err }, 'Unexpected error during login');
+        captureSystemError({
+          level: 'error',
+          component: 'AuthRoutes',
+          message: err?.message || 'Unexpected login error',
+          stack: err?.stack,
+          metadata: { email: normalizedEmail, code: err?.code },
+        }).catch(() => {});
+        return reply.status(500).send({ error: "An error occurred during login. Please try again." });
       }
     }
   );

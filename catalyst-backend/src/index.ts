@@ -377,10 +377,16 @@ const authenticate = async (request: any, reply: any) => {
 			return;
 		}
 		// Resolve permissions from roles for session auth too
-		const { resolveUserPermissions } = await import(
-			"./lib/permissions-catalog"
-		);
-		const permissions = await resolveUserPermissions(session.user.id);
+		let permissions: string[] = [];
+		try {
+			const { resolveUserPermissions } = await import(
+				"./lib/permissions-catalog"
+			);
+			permissions = await resolveUserPermissions(session.user.id);
+		} catch (permError) {
+			logger.error(permError, "Failed to resolve user permissions");
+			// Continue with empty permissions - better than failing auth entirely
+		}
 		request.user = {
 			userId: session.user.id,
 			email: session.user.email,
