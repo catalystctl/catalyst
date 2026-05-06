@@ -207,9 +207,10 @@ interface MenuItemProps {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   collapsed?: boolean;
+  onNavigate?: () => void;
 }
 
-function MenuItem({ to, label, icon: Icon, collapsed }: MenuItemProps) {
+function MenuItem({ to, label, icon: Icon, collapsed, onNavigate }: MenuItemProps) {
   const location = useLocation();
   const isActive =
     location.pathname === to || (to !== '/admin' && location.pathname.startsWith(`${to}/`));
@@ -218,6 +219,7 @@ function MenuItem({ to, label, icon: Icon, collapsed }: MenuItemProps) {
     return (
       <NavLink
         to={to}
+        onClick={onNavigate}
         className={cn(
           'flex h-9 w-9 items-center justify-center rounded-lg transition-all duration-200',
           isActive
@@ -234,6 +236,7 @@ function MenuItem({ to, label, icon: Icon, collapsed }: MenuItemProps) {
   return (
     <NavLink
       to={to}
+      onClick={onNavigate}
       className={cn(
         'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
         isActive
@@ -252,9 +255,10 @@ interface SectionProps {
   links: MenuItemProps[];
   defaultExpanded?: boolean;
   collapsed?: boolean;
+  onNavigate?: () => void;
 }
 
-function Section({ title, links, defaultExpanded = false, collapsed }: SectionProps) {
+function Section({ title, links, defaultExpanded = false, collapsed, onNavigate }: SectionProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const location = useLocation();
 
@@ -274,7 +278,7 @@ function Section({ title, links, defaultExpanded = false, collapsed }: SectionPr
     return (
       <div className="space-y-1">
         {links.map((link) => (
-          <MenuItem key={link.to} {...link} collapsed />
+          <MenuItem key={link.to} {...link} collapsed onNavigate={onNavigate} />
         ))}
       </div>
     );
@@ -298,7 +302,7 @@ function Section({ title, links, defaultExpanded = false, collapsed }: SectionPr
         <div className="space-y-1 border-l border-border pl-3">
           <div className="absolute" />
           {links.map((link) => (
-            <MenuItem key={link.to} {...link} />
+            <MenuItem key={link.to} {...link} onNavigate={onNavigate} />
           ))}
         </div>
       )}
@@ -306,7 +310,11 @@ function Section({ title, links, defaultExpanded = false, collapsed }: SectionPr
   );
 }
 
-function Sidebar() {
+interface SidebarProps {
+  onNavigate?: () => void;
+}
+
+function Sidebar({ onNavigate }: SidebarProps) {
   const { data: updateData } = useUpdateCheck();
   const theme = useUIStore((s) => s.theme);
   const setTheme = useUIStore((s) => s.setTheme);
@@ -370,6 +378,7 @@ function Sidebar() {
       >
         <Link
           to="/dashboard"
+          onClick={onNavigate}
           className={cn('flex items-center', sidebarCollapsed ? 'justify-center' : 'gap-2.5')}
         >
           <img
@@ -392,7 +401,7 @@ function Sidebar() {
           {mainLinks
             .filter((link) => link.to !== '/tickets' || hasUserTicketPage)
             .map((link) => (
-            <MenuItem key={link.to} {...link} collapsed={sidebarCollapsed} />
+            <MenuItem key={link.to} {...link} collapsed={sidebarCollapsed} onNavigate={onNavigate} />
           ))}
         </div>
 
@@ -400,7 +409,7 @@ function Sidebar() {
           <div className={cn('border-t border-border pt-3', sidebarCollapsed ? 'mt-3' : 'mt-4')}>
             <div className={cn('space-y-1', sidebarCollapsed ? 'space-y-2' : '')}>
               {filteredSections.map((section) => (
-                <Section key={section.title} {...section} collapsed={sidebarCollapsed} />
+                <Section key={section.title} {...section} collapsed={sidebarCollapsed} onNavigate={onNavigate} />
               ))}
             </div>
           </div>
@@ -411,6 +420,7 @@ function Sidebar() {
       <div className={cn('border-t border-border', sidebarCollapsed ? 'p-2' : 'p-3')}>
         <NavLink
           to="/profile"
+          onClick={onNavigate}
           className={cn(
             'flex items-center gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-surface-2',
             sidebarCollapsed && 'justify-center',
@@ -469,6 +479,7 @@ function Sidebar() {
       <div className={cn('border-t border-border', sidebarCollapsed ? 'px-2 py-1.5' : 'px-3 py-2')}>
         <Link
           to="/admin/system"
+          onClick={onNavigate}
           className={cn(
             'flex items-center justify-center gap-1 rounded-md font-mono transition-colors hover:text-foreground',
             sidebarCollapsed ? 'text-[9px]' : 'text-[10px]',

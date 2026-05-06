@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import MobileNavBar from './MobileNavBar';
 import Breadcrumbs from './Breadcrumbs';
 import { useServerStateUpdates } from '../../hooks/useServerStateUpdates';
 import { useSseAdminEvents } from '../../hooks/useSseAdminEvents';
@@ -21,8 +22,36 @@ function AppLayout() {
   const { panelName } = usePanelBranding();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const touchStartX = useRef<number | null>(null);
 
   useCmdK(() => setIsSearchOpen(true));
+
+  // Swipe-to-close on mobile sidebar
+  useEffect(() => {
+    const el = sidebarRef.current;
+    if (!el || !isMobileSidebarOpen) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      touchStartX.current = e.touches[0].clientX;
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (touchStartX.current == null) return;
+      const endX = e.changedTouches[0].clientX;
+      const diff = touchStartX.current - endX;
+      if (diff > 60) {
+        setIsMobileSidebarOpen(false);
+      }
+      touchStartX.current = null;
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [isMobileSidebarOpen]);
 
   return (
     <div className="app-shell flex h-[100dvh] font-sans">
@@ -59,6 +88,7 @@ function AppLayout() {
 
       {/* Sidebar */}
       <aside
+        ref={sidebarRef}
         className={cn(
           'fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 ease-out lg:static lg:transform-none',
           isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
@@ -72,13 +102,13 @@ function AppLayout() {
         >
           <X className="h-4 w-4" />
         </button>
-        <Sidebar />
+        <Sidebar onNavigate={() => setIsMobileSidebarOpen(false)} />
       </aside>
 
       {/* Main content */}
       <main
         className={cn(
-          'flex flex-1 flex-col overflow-y-auto px-4 py-4 pt-[4.5rem] transition-all duration-200 lg:px-6 lg:py-6 lg:pt-6',
+          'flex flex-1 flex-col overflow-y-auto px-4 py-4 pb-16 pt-[4.5rem] transition-all duration-200 lg:px-6 lg:py-6 lg:pb-0 lg:pt-6',
           sidebarCollapsed ? 'lg:pl-4' : 'lg:pl-6',
         )}
       >
@@ -103,6 +133,7 @@ function AppLayout() {
       </main>
 
       <SearchPalette isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      <MobileNavBar onOpenSidebar={() => setIsMobileSidebarOpen(true)} />
     </div>
   );
 }
