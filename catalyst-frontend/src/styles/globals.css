@@ -114,6 +114,12 @@
   color-scheme: light;
 }
 
+@media (prefers-color-scheme: dark) {
+  html:not(.light):not(.dark) {
+    color-scheme: dark;
+  }
+}
+
 /* ── Base ── */
 
 * {
@@ -127,6 +133,7 @@ body {
   color: hsl(var(--foreground));
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  touch-action: manipulation;
 }
 
 .font-display {

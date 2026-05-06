@@ -135,8 +135,14 @@ function applyThemeToDOM(
   colors: ThemeColors,
 ) {
   const root = document.documentElement;
-  root.classList.remove('light', 'dark');
-  root.classList.add(theme);
+  const other = theme === 'dark' ? 'light' : 'dark';
+  if (root.classList.contains(other)) {
+    root.classList.remove(other);
+  }
+  if (!root.classList.contains(theme)) {
+    root.classList.add(theme);
+  }
+  root.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
 
   // ── Primary color + full scale ──
   const primaryHSL = hexToHSL(primaryColor);
@@ -339,7 +345,6 @@ export const useThemeStore = create<ThemeState>()(
       },
 
       applyTheme: () => {
-        flushPreview();
         const { theme, themeSettings } = get();
         const settings = themeSettings || defaultThemeSettings;
         const colors = settings.themeColors || defaultThemeColors;
