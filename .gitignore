@@ -58,4 +58,4 @@ catalyst-frontend/src/styles/material.css
 eggs/
 progress.md
 packages/plugin-sdk/dist/
-.fusion
+.fusion.worktrees/
