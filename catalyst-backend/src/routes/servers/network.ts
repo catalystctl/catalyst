@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
+import { hasNodeAccess } from "../../lib/permissions.js";
 import { checkIsAdmin, collectUsedHostPortsByIp, ensureNotSuspended, findPortConflict, parsePortValue, parseStoredPortBindings, shouldUseIpam } from './_helpers.js';
 
 export async function serverNetworkRoutes(app: FastifyInstance) {
@@ -86,9 +87,13 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         return;
       }
 
-      const hasAccess =
-        server.ownerId === userId ||
-        server.access.some((access) => access.userId === userId);
+      const isAdmin = checkIsAdmin(request, 'admin.read');
+      const hasWriteAccess = server.access.some(
+        (access) => access.userId === userId &&
+          (access.permissions.includes('server.update') || access.permissions.includes('server.delete'))
+      );
+      const hasNodeAccessResult = await hasNodeAccess(prisma, userId, server.nodeId);
+      const hasAccess = server.ownerId === userId || hasWriteAccess || isAdmin || hasNodeAccessResult;
       if (!hasAccess) {
         return reply.status(403).send({ error: "Forbidden" });
       }
@@ -210,9 +215,13 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         return;
       }
 
-      const hasAccess =
-        server.ownerId === userId ||
-        server.access.some((access) => access.userId === userId);
+      const isAdmin = checkIsAdmin(request, 'admin.read');
+      const hasWriteAccess = server.access.some(
+        (access) => access.userId === userId &&
+          (access.permissions.includes('server.update') || access.permissions.includes('server.delete'))
+      );
+      const hasNodeAccessResult = await hasNodeAccess(prisma, userId, server.nodeId);
+      const hasAccess = server.ownerId === userId || hasWriteAccess || isAdmin || hasNodeAccessResult;
       if (!hasAccess) {
         return reply.status(403).send({ error: "Forbidden" });
       }
@@ -290,9 +299,13 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         return;
       }
 
-      const hasAccess =
-        server.ownerId === userId ||
-        server.access.some((access) => access.userId === userId);
+      const isAdmin = checkIsAdmin(request, 'admin.read');
+      const hasWriteAccess = server.access.some(
+        (access) => access.userId === userId &&
+          (access.permissions.includes('server.update') || access.permissions.includes('server.delete'))
+      );
+      const hasNodeAccessResult = await hasNodeAccess(prisma, userId, server.nodeId);
+      const hasAccess = server.ownerId === userId || hasWriteAccess || isAdmin || hasNodeAccessResult;
       if (!hasAccess) {
         return reply.status(403).send({ error: "Forbidden" });
       }

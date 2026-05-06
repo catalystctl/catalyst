@@ -15,11 +15,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { WebSocketGateway } from '../websocket/gateway';
 import { prisma } from '../db.js';
-import { auth } from '../auth.js';
-import { fromNodeHeaders } from 'better-auth/node';
 import { hasNodeAccess } from '../lib/permissions.js';
 import { captureSystemError } from '../services/error-logger.js';
 import { ErrorCodes } from '../shared-types.js';
+import { checkIsAdmin } from './servers/_helpers.js';
 
 interface ConsoleCommandBody {
   command: string;
@@ -40,32 +39,23 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
   app.get<{ Params: { serverId: string } }>(
     '/:serverId/console/stream',
     {
+      onRequest: [(app as any).authenticate],
       config: { rateLimit: false }, // SSE streams are long-lived; per-user rate limits are checked via auth
     },
     async (request, reply) => {
       const { serverId } = request.params;
+      const userId = request.user?.userId;
 
-      // Authenticate via session cookie
-      let userId: string | null = null;
-      try {
-        const session = await auth.api.getSession({
-          headers: fromNodeHeaders(request.headers as Record<string, string | string[] | undefined>),
-        });
-        if (!session) {
-          reply.status(401).send({ error: 'Unauthorized' });
-          return;
-        }
-        userId = session.user.id;
-      } catch {
+      if (!userId) {
         reply.status(401).send({ error: 'Unauthorized' });
         return;
       }
 
-      // Check server access
+      // Check server access with proper permission checks
       const server = await prisma.server.findUnique({
         where: { id: serverId },
         include: {
-          access: { select: { userId: true } },
+          access: { select: { userId: true, permissions: true } },
         },
       });
 
@@ -74,13 +64,15 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
         return;
       }
 
-      const allowedUsers = [server.ownerId, ...server.access.map((a) => a.userId)];
-      if (!userId || !allowedUsers.includes(userId)) {
-        const isAdmin = await hasNodeAccess(prisma, userId, server.nodeId);
-        if (!isAdmin) {
-          reply.status(403).send({ error: 'Access denied' });
-          return;
-        }
+      const access = server.access.find((a) => a.userId === userId);
+      const hasConsoleRead = access?.permissions?.includes('console.read');
+      const isOwner = server.ownerId === userId;
+      const isAdmin = checkIsAdmin(request, 'admin.read');
+      const hasNodeAccessResult = await hasNodeAccess(prisma, userId, server.nodeId);
+
+      if (!isOwner && !hasConsoleRead && !isAdmin && !hasNodeAccessResult) {
+        reply.status(403).send({ error: 'Access denied' });
+        return;
       }
 
       // Build SSE response with proper CORS headers using origin whitelist
@@ -149,31 +141,12 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
   app.post<{ Params: { serverId: string }; Body: ConsoleCommandBody }>(
     '/:serverId/console/command',
     {
-      preHandler: async (request, reply) => {
-        // Authenticate
-        let userId: string | null = null;
-        try {
-          const session = await auth.api.getSession({
-            headers: fromNodeHeaders(request.headers as Record<string, string | string[] | undefined>),
-          });
-          if (!session) {
-            reply.status(401).send({ error: 'Unauthorized' });
-            return;
-          }
-          userId = session.user.id;
-        } catch {
-          reply.status(401).send({ error: 'Unauthorized' });
-          return;
-        }
-
-        // Attach userId to request for downstream use
-        (request as any).authUserId = userId;
-      },
+      onRequest: [(app as any).authenticate],
     },
     async (request, reply) => {
       const { serverId } = request.params;
       const { command } = request.body ?? {};
-      const userId = (request as any).authUserId;
+      const userId = request.user?.userId;
 
       if (!command || typeof command !== 'string' || !command.trim()) {
         reply.status(400).send({ error: 'Command is required' });
@@ -198,12 +171,14 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
         return;
       }
 
-      const isAdmin = await hasNodeAccess(prisma, userId, server.nodeId);
+      const hasNodeAccessResult = await hasNodeAccess(prisma, userId, server.nodeId);
+      const isAdmin = checkIsAdmin(request, 'admin.read');
       const access = server.access.find((a) => a.userId === userId);
       const hasWritePermission =
         access?.permissions?.includes('console.write') ||
         server.ownerId === userId ||
-        isAdmin;
+        isAdmin ||
+        hasNodeAccessResult;
 
       if (!hasWritePermission) {
         reply.status(403).send({ error: ErrorCodes.PERMISSION_DENIED });
