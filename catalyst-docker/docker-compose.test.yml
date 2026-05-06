@@ -1,0 +1,161 @@
+# =============================================================================
+# Catalyst — Docker Compose Test Override
+#
+# Extends docker-compose.yml with build contexts and test-specific settings.
+# Used by the Docker E2E test suite to build and test local images.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # PostgreSQL (test-optimized)
+  # ===========================================================================
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-127.0.0.1:5432}:5432"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-catalyst_test_password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U catalyst"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # ===========================================================================
+  # Redis (test-optimized)
+  # ===========================================================================
+  redis:
+    ports:
+      - "${REDIS_PORT:-127.0.0.1:6379}:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    healthcheck:
+      test: "redis-cli ping | grep PONG"
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # ===========================================================================
+  # Backend (built from local source)
+  # ===========================================================================
+  backend:
+    build:
+      context: ..
+      dockerfile: catalyst-backend/Dockerfile
+    image: catalyst-backend:test
+    container_name: catalyst-backend-test
+    ports:
+      - "${BACKEND_PORT:-127.0.0.1:3000}:3000"
+      - "${SFTP_PORT:-0.0.0.0:2022}:2022"
+    environment:
+      NODE_ENV: test
+      LOG_LEVEL: debug
+      DATABASE_URL: postgresql://catalyst:${POSTGRES_PASSWORD}@postgres:5432/catalyst_db
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${PUBLIC_URL:-http://localhost}
+      PASSKEY_RP_ID: ${PASSKEY_RP_ID:-localhost}
+      CORS_ORIGIN: ${PUBLIC_URL:-http://localhost}
+      FRONTEND_URL: ${PUBLIC_URL:-http://localhost}
+      BACKEND_EXTERNAL_ADDRESS: ${PUBLIC_URL:-http://localhost}
+      BACKEND_URL: ${PUBLIC_URL:-http://localhost}
+      SFTP_ENABLED: ${SFTP_ENABLED:-true}
+      SFTP_PORT: "2022"
+      SFTP_MAX_FILE_SIZE: ${SFTP_MAX_FILE_SIZE:-104857600}
+      SFTP_HOST_KEY: ${SFTP_HOST_KEY:-}
+      SFTP_HOST_KEY_BASE64: ${SFTP_HOST_KEY_BASE64:-}
+      DEPLOY_SCRIPT_PATH: /scripts/deploy-agent.sh
+      SERVER_DATA_DIR: /var/lib/catalyst/servers
+      BACKUP_DIR: /var/lib/catalyst/backups
+      BACKUP_STORAGE_MODE: ${BACKUP_STORAGE_MODE:-local}
+      BACKUP_STREAM_DIR: /tmp/catalyst-backup-stream
+      BACKUP_TRANSFER_DIR: /tmp/catalyst-backup-transfer
+      APP_NAME: ${APP_NAME:-Catalyst}
+      ENABLE_COMPRESSION: ${ENABLE_COMPRESSION:-true}
+      WEBHOOK_URLS: ${WEBHOOK_URLS:-}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      SUSPENSION_ENFORCED: ${SUSPENSION_ENFORCED:-true}
+      SUSPENSION_DELETE_BLOCKED: ${SUSPENSION_DELETE_BLOCKED:-false}
+      SUSPENSION_DELETE_POLICY: ${SUSPENSION_DELETE_POLICY:-keep}
+      PLUGINS_DIR: /var/lib/catalyst/plugins
+      WHMCS_OIDC_CLIENT_ID: ${WHMCS_OIDC_CLIENT_ID:-}
+      WHMCS_OIDC_CLIENT_SECRET: ${WHMCS_OIDC_CLIENT_SECRET:-}
+      WHMCS_OIDC_DISCOVERY_URL: ${WHMCS_OIDC_DISCOVERY_URL:-}
+      PAYMENTER_OIDC_CLIENT_ID: ${PAYMENTER_OIDC_CLIENT_ID:-}
+      PAYMENTER_OIDC_CLIENT_SECRET: ${PAYMENTER_OIDC_CLIENT_SECRET:-}
+      PAYMENTER_OIDC_DISCOVERY_URL: ${PAYMENTER_OIDC_DISCOVERY_URL:-}
+      AUTO_UPDATE_ENABLED: ${AUTO_UPDATE_ENABLED:-false}
+      AUTO_UPDATE_INTERVAL_MS: ${AUTO_UPDATE_INTERVAL_MS:-3600000}
+      AUTO_UPDATE_AUTO_TRIGGER: ${AUTO_UPDATE_AUTO_TRIGGER:-false}
+      CONSOLE_OUTPUT_BYTE_LIMIT_BYTES: ${CONSOLE_OUTPUT_BYTE_LIMIT_BYTES:-524288}
+      MAX_DISK_MB: ${MAX_DISK_MB:-1048576}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # ===========================================================================
+  # Frontend (built from local source)
+  # ===========================================================================
+  frontend:
+    build:
+      context: ..
+      dockerfile: catalyst-frontend/Dockerfile
+    image: catalyst-frontend:test
+    container_name: catalyst-frontend-test
+    ports:
+      - "${FRONTEND_PORT:-127.0.0.1:8080}:80"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  # ===========================================================================
+  # Agent (optional — for full E2E testing with agent connectivity)
+  # ===========================================================================
+  agent:
+    build:
+      context: ../catalyst-agent
+      dockerfile: Dockerfile
+    image: catalyst-agent:test
+    container_name: catalyst-agent-test
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      RUST_LOG: info
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - agent-config:/opt/catalyst-agent
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    # Agent starts paused — tests will configure and start it as needed
+    entrypoint: ["sh", "-c", "sleep infinity"]
+
+volumes:
+  agent-config:
+    driver: local

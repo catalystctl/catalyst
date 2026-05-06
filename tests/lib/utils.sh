@@ -457,3 +457,106 @@ setup_cleanup_trap() {
     local cleanup_function="$1"
     trap "$cleanup_function" EXIT INT TERM
 }
+
+# ============================================================================
+# Docker Compose Helpers
+# ============================================================================
+
+# Wait for Docker Compose services to be healthy
+# Usage: wait_for_compose_services <compose_dir> [timeout_seconds]
+wait_for_compose_services() {
+    local compose_dir="$1"
+    local timeout="${2:-120}"
+    local elapsed=0
+    local compose_files=""
+
+    # Detect compose files
+    if [ -f "$compose_dir/docker-compose.yml" ] && [ -f "$compose_dir/docker-compose.test.yml" ]; then
+        compose_files="-f $compose_dir/docker-compose.yml -f $compose_dir/docker-compose.test.yml"
+    elif [ -f "$compose_dir/docker-compose.yml" ]; then
+        compose_files="-f $compose_dir/docker-compose.yml"
+    else
+        log_error "No docker-compose.yml found in $compose_dir"
+        return 1
+    fi
+
+    log_info "Waiting for compose services to be healthy (timeout: ${timeout}s)..."
+
+    while [ $elapsed -lt $timeout ]; do
+        local all_healthy=true
+        local services
+        services=$(docker compose $compose_files ps --format json 2>/dev/null | jq -sr '.[] | select(.Health != "healthy" and .Health != "" and .Health != null) | .Name' 2>/dev/null || true)
+
+        if [ -z "$services" ]; then
+            # Also check if any services are still starting (no healthcheck yet)
+            local starting
+            starting=$(docker compose $compose_files ps --format json 2>/dev/null | jq -sr '.[] | select(.State == "running" and (.Health == "" or .Health == null)) | .Name' 2>/dev/null || true)
+
+            if [ -z "$starting" ]; then
+                log_success "All compose services are healthy"
+                return 0
+            fi
+        fi
+
+        sleep 2
+        ((elapsed += 2)) || true
+
+        # Show progress every 10 seconds
+        if [ $((elapsed % 10)) -eq 0 ]; then
+            log_info "  ...waiting (${elapsed}s elapsed)"
+            docker compose $compose_files ps --format "table {{.Name}}\t{{.State}}\t{{.Health}}" 2>/dev/null || true
+        fi
+    done
+
+    log_error "Services not healthy after ${timeout}s"
+    docker compose $compose_files ps --format "table {{.Name}}\t{{.State}}\t{{.Health}}" 2>/dev/null || true
+    return 1
+}
+
+# Check if a container is running
+# Usage: is_container_running <container_name>
+is_container_running() {
+    local container_name="$1"
+    local status
+    status=$(docker inspect --format='{{.State.Status}}' "$container_name" 2>/dev/null || echo "missing")
+
+    if [ "$status" = "running" ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Get container logs for debugging
+# Usage: get_container_logs <container_name> [lines]
+get_container_logs() {
+    local container_name="$1"
+    local lines="${2:-100}"
+
+    if ! docker inspect "$container_name" >/dev/null 2>&1; then
+        echo "Container $container_name not found"
+        return 1
+    fi
+
+    docker logs --tail "$lines" "$container_name" 2>&1
+}
+
+# Docker Compose cleanup helper
+# Usage: cleanup_docker_compose <compose_dir>
+cleanup_docker_compose() {
+    local compose_dir="$1"
+    local compose_files=""
+
+    if [ -f "$compose_dir/docker-compose.yml" ] && [ -f "$compose_dir/docker-compose.test.yml" ]; then
+        compose_files="-f $compose_dir/docker-compose.yml -f $compose_dir/docker-compose.test.yml"
+    elif [ -f "$compose_dir/docker-compose.yml" ]; then
+        compose_files="-f $compose_dir/docker-compose.yml"
+    else
+        log_warn "No docker-compose.yml found in $compose_dir"
+        return 1
+    fi
+
+    log_info "Cleaning up Docker Compose: $compose_dir"
+    docker compose $compose_files down -v 2>/dev/null || true
+    log_success "Docker Compose cleanup complete"
+}
