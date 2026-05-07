@@ -1,0 +1,81 @@
+name: CI/CD - Docker E2E Tests
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'catalyst-backend/**'
+      - 'catalyst-frontend/**'
+      - 'catalyst-agent/**'
+      - 'catalyst-docker/**'
+      - 'tests/**'
+      - '.github/workflows/docker-e2e.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'catalyst-backend/**'
+      - 'catalyst-frontend/**'
+      - 'catalyst-agent/**'
+      - 'catalyst-docker/**'
+      - 'tests/**'
+
+permissions:
+  contents: read
+
+env:
+  TEST_LOG_DIR: /tmp/catalyst-docker-tests
+
+jobs:
+  docker-e2e-tests:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Docker Buildx
+        uses: useblacksmith/setup-docker-builder@v1
+
+      - name: Cache Docker layers
+        uses: actions/cache@v5
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl openssl openssh-client
+
+      - name: Run Docker E2E Tests
+        working-directory: tests
+        run: |
+          ./run-docker-tests.sh --verbose
+        timeout-minutes: 30
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-e2e-logs-${{ github.run_id }}
+          path: /tmp/catalyst-docker-tests/
+          retention-days: 7
+
+      - name: Upload container logs on failure
+        if: failure()
+        run: |
+          mkdir -p /tmp/catalyst-docker-tests/containers
+          cd catalyst-docker
+          for container in $(docker compose -f docker-compose.yml -f docker-compose.test.yml ps -q 2>/dev/null || true); do
+            name=$(docker inspect --format='{{.Name}}' "$container" | sed 's/^\///')
+            docker logs "$container" > "/tmp/catalyst-docker-tests/containers/${name}.log" 2>&1 || true
+          done
+          docker compose -f docker-compose.yml -f docker-compose.test.yml logs > /tmp/catalyst-docker-tests/container-logs.txt 2>/dev/null || true
+
+      - name: Cleanup on failure
+        if: failure()
+        run: |
+          cd catalyst-docker
+          docker compose -f docker-compose.yml -f docker-compose.test.yml --env-file .env.test down -v 2>/dev/null || true

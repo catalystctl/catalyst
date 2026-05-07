@@ -9,8 +9,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Load configuration
+# Preserve BACKEND_URL if already set (for Docker test runs)
+_preserved_backend_url="${BACKEND_URL:-}"
+_preserved_backend_ws_url="${BACKEND_WS_URL:-}"
 source config.env
 source lib/utils.sh
+# Restore BACKEND_URL if it was set before sourcing config.env
+if [ -n "$_preserved_backend_url" ]; then
+    export BACKEND_URL="$_preserved_backend_url"
+fi
+if [ -n "$_preserved_backend_ws_url" ]; then
+    export BACKEND_WS_URL="$_preserved_backend_ws_url"
+fi
 
 # Test suites in execution order
 TEST_SUITES=(
