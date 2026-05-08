@@ -59,3 +59,4 @@ eggs/
 progress.md
 packages/plugin-sdk/dist/
 .fusion.worktrees/
+.fusion

@@ -38,7 +38,7 @@ if command -v docker &>/dev/null; then
     DOCKER_VERSION=$(docker version --format '{{.Server.Version}}' 2>/dev/null || docker -v | sed -n 's/.*version \([^,]*\).*/\1/p')
     ok "Docker found (version ${DOCKER_VERSION})"
 
-    # Make sure the daemon is reachable
+    # Make sure the Docker daemon is reachable
     if ! docker info &>/dev/null; then
         error "Docker daemon is not running. Please start it:"
         echo -e "  ${BOLD}sudo systemctl start docker${NC}"
@@ -49,25 +49,37 @@ else
     echo ""
     echo -e "${BOLD}Please install Docker before continuing:${NC}"
     echo ""
-    echo -e "  ${CYAN}Linux (Ubuntu/Debian):${NC}   https://docs.docker.com/engine/install/ubuntu/"
-    echo -e "  ${CYAN}Linux (CentOS/RHEL):${NC}    https://docs.docker.com/engine/install/centos/"
+    echo -e "  ${CYAN}Docker (Ubuntu/Debian):${NC}  https://docs.docker.com/engine/install/ubuntu/"
+    echo -e "  ${CYAN}Docker (CentOS/RHEL):${NC}   https://docs.docker.com/engine/install/centos/"
+    echo -e "  ${CYAN}Podman (any Linux):${NC}      https://podman.io/getting-started/installation"
     echo ""
-    echo "After installing Docker, re-run this script."
+    echo "After installing Docker or Podman, re-run this script."
     exit 1
 fi
 
 # ── 2. Check Docker Compose ──────────────────────────────────────────────────
-info "Checking for Docker Compose..."
+info "Checking for Compose..."
+COMPOSE_CMD=""
 
 if docker compose version &>/dev/null; then
     COMPOSE_VERSION=$(docker compose version | sed -n 's/.*version \([^,]*\).*/\1/p')
+    COMPOSE_CMD="docker compose"
     ok "Docker Compose found (version ${COMPOSE_VERSION})"
 elif command -v docker-compose &>/dev/null; then
     COMPOSE_VERSION=$(docker-compose --version | sed -n 's/.*version \([^,]*\).*/\1/p')
+    COMPOSE_CMD="docker-compose"
     warn "Found standalone docker-compose (v${COMPOSE_VERSION}). Docker Compose V2 (plugin) is recommended."
+elif command -v podman &>/dev/null && podman compose version &>/dev/null; then
+    COMPOSE_VERSION=$(podman compose version | sed -n 's/.*version \([^,]*\).*/\1/p')
+    COMPOSE_CMD="podman compose"
+    ok "Podman Compose found (version ${COMPOSE_VERSION})"
 else
-    error "Docker Compose is not available."
-    echo -e "  Install it: ${BOLD}https://docs.docker.com/compose/install/${NC}"
+    error "No compose command is available (tried docker compose, docker-compose, podman compose)."
+    echo ""
+    echo -e "${BOLD}Install one of the following:${NC}"
+    echo ""
+    echo -e "  ${CYAN}Docker Compose V2 (plugin):${NC}  https://docs.docker.com/compose/install/"
+    echo -e "  ${CYAN}Podman Compose:${NC}              https://github.com/containers/podman-compose"
     exit 1
 fi
 
@@ -163,8 +175,8 @@ echo ""
 echo -e "  1. Edit your configuration:"
 echo -e "     ${CYAN}nano ${DEST}/.env${NC}"
 echo ""
-echo -e "  2. Start the stack:"
-echo -e "     ${CYAN}cd ${DEST} && docker compose up -d${NC}"
+echo -e "  2. Start the stack with your compose command:"
+echo -e "     ${CYAN}cd ${DEST} && ${COMPOSE_CMD} up -d${NC}"
 echo ""
 echo -e "  3. Check container status:"
 echo -e "     ${CYAN}docker ps${NC}"
