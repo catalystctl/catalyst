@@ -14,12 +14,17 @@ const setupSchema = z.object({
 		.string()
 		.regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color")
 		.default("#0d9488"),
+	secondaryColor: z
+		.string()
+		.regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color")
+		.default("#8b5cf6"),
 	accentColor: z
 		.string()
 		.regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color")
 		.default("#06b6d4"),
 	defaultTheme: z.enum(["light", "dark"]).default("dark"),
 	logoUrl: z.string().optional(),
+	metadata: z.record(z.any()).default({}),
 });
 
 // Helper to forward auth headers (set-cookie, set-auth-token) from better-auth
@@ -85,9 +90,11 @@ export async function setupRoutes(app: FastifyInstance) {
 			username,
 			panelName,
 			primaryColor,
+			secondaryColor,
 			accentColor,
 			defaultTheme,
 			logoUrl,
+			metadata,
 		} = parsed;
 
 		// 1. Ensure roles exist
@@ -161,17 +168,21 @@ export async function setupRoutes(app: FastifyInstance) {
 			update: {
 				panelName,
 				primaryColor,
+				secondaryColor,
 				accentColor,
 				defaultTheme,
 				logoUrl: logoUrl || null,
+				metadata,
 			},
 			create: {
 				id: "default",
 				panelName,
 				primaryColor,
+				secondaryColor,
 				accentColor,
 				defaultTheme,
 				logoUrl: logoUrl || null,
+				metadata,
 			},
 		});
 
@@ -258,9 +269,11 @@ export async function setupRoutes(app: FastifyInstance) {
 				password,
 				panelName,
 				primaryColor,
+				secondaryColor,
 				accentColor,
 				defaultTheme,
 				logoUrl,
+				metadata,
 			} = parsed.data;
 
 			try {
@@ -344,17 +357,21 @@ export async function setupRoutes(app: FastifyInstance) {
 					update: {
 						panelName,
 						primaryColor,
+						secondaryColor,
 						accentColor,
 						defaultTheme,
 						logoUrl: logoUrl || null,
+						metadata,
 					},
 					create: {
 						id: "default",
 						panelName,
 						primaryColor,
+						secondaryColor,
 						accentColor,
 						defaultTheme,
 						logoUrl: logoUrl || null,
+						metadata,
 					},
 				});
 
