@@ -370,7 +370,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Change password ──────────────────────────────────────────────────
   app.post(
     "/profile/change-password",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       // Validate password change using the pre-built schema
       const changeValidation = passwordChangeSchema.safeParse(request.body);
@@ -399,7 +399,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Set password (for SSO-only accounts) ─────────────────────────────
   app.post(
     "/profile/set-password",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { newPassword } = request.body as { newPassword: string };
       if (!newPassword) {
@@ -438,7 +438,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Enable 2FA ───────────────────────────────────────────────────────
   app.post(
     "/profile/two-factor/enable",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { password } = request.body as { password: string };
       if (!password) {
@@ -457,7 +457,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Disable 2FA ──────────────────────────────────────────────────────
   app.post(
     "/profile/two-factor/disable",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { password } = request.body as { password: string };
       if (!password) {
@@ -476,7 +476,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Generate backup codes ────────────────────────────────────────────
   app.post(
     "/profile/two-factor/generate-backup-codes",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { password } = request.body as { password: string };
       if (!password) {
@@ -506,7 +506,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.post(
     "/profile/passkeys",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { name, authenticatorAttachment } = request.body as {
         name?: string; authenticatorAttachment?: "platform" | "cross-platform";
@@ -524,7 +524,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.post(
     "/profile/passkeys/verify",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { response: credentialResponse, name } = request.body as {
         response: Record<string, any>; name?: string;
@@ -542,7 +542,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.delete(
     "/profile/passkeys/:id",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const response = await (getAuth().api as any).deletePasskey({
@@ -555,7 +555,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.patch(
     "/profile/passkeys/:id",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const { name } = request.body as { name: string };
@@ -686,7 +686,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Update profile ──────────────────────────────────────────────────
   app.patch(
     "/profile",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { username, firstName, lastName } = request.body as {
         username?: string; firstName?: string; lastName?: string;
@@ -736,7 +736,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Update user preferences ─────────────────────────────────────────
   app.patch(
     "/profile/preferences",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const preferencesSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).refine(
         obj => JSON.stringify(obj).length <= 16384,
@@ -757,7 +757,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Avatar upload ───────────────────────────────────────────────────
   app.post(
     "/profile/avatar",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const data = await request.file();
       if (!data) {
@@ -948,7 +948,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Forgot password ──────────────────────────────────────────────────
   app.post(
     "/forgot-password",
-    { config: { rateLimit: { max: 3, timeWindow: '15 minutes' } } },
+    { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { email } = request.body as { email: string };
       if (!email || !email.trim()) {
@@ -975,7 +975,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Validate reset token ─────────────────────────────────────────────
   app.get(
     "/reset-password/validate",
-    { config: { rateLimit: { max: 5, timeWindow: '15 minutes' } } },
+    { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { token } = request.query as { token?: string };
       if (!token) {
@@ -999,7 +999,7 @@ export async function authRoutes(app: FastifyInstance) {
   // Sub-users (no servers) can delete freely.
   app.post(
     "/profile/delete",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
       const { confirm, currentPassword } = request.body as { confirm?: string; currentPassword?: string };
@@ -1115,3 +1115,4 @@ export async function authRoutes(app: FastifyInstance) {
     }
   );
 }
+

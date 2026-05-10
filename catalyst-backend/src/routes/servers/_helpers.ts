@@ -435,7 +435,7 @@ export const __dirname = path.dirname(path.dirname(__filename));
 // Using shared prisma instance from db.ts
 export const execFileAsync = promisify(execFile);
 export const serverDataRoot = process.env.SERVER_DATA_DIR || "/var/lib/catalyst/servers";
-export let fileRateLimitMax = 30;
+export let fileRateLimitMax = 60;
 export let maxBufferBytes = 50 * 1024 * 1024;
 export const modManagerProviders = new Map<string, string>(
   [

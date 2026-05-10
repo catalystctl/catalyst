@@ -1125,7 +1125,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/mod-manager/check-updates",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: 5, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: 15, timeWindow: "1 minute" } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -1242,7 +1242,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/plugin-manager/check-updates",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: 5, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: 15, timeWindow: "1 minute" } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };

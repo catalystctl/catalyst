@@ -462,7 +462,8 @@ async function bootstrap() {
 
 		await app.register(fastifyRateLimit, {
 			global: true,
-			max: 600, // Per-IP limit: 600 requests
+			max: 1200, // Per-user/per-IP limit — raised from 600 to accommodate power
+			               // users with multiple tabs polling at 10–30s intervals.
 			timeWindow: "1 minute",
 			errorResponseBuilder: (_req, context) => {
 				const err = new Error("Too many requests. Please try again later.");

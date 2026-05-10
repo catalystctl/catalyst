@@ -385,7 +385,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // Accept invite + register
   app.post(
     "/invites/register",
-    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { token, username, password } = request.body as {
         token?: string;
@@ -476,7 +476,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // Invite preview (for invite signup flow)
   app.get(
     "/invites/:token",
-    { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { token } = request.params as { token: string };
       if (!token) {
