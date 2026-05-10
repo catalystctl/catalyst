@@ -8,6 +8,7 @@ import ProtectedRoute, { hasAnyAdminPermission } from './components/auth/Protect
 import { ToastProvider } from './components/providers/ToastProvider';
 import { useAuthInit } from './hooks/useAuthInit';
 import ErrorBoundary from './components/shared/ErrorBoundary';
+import { debugLog } from './lib/debug-log';
 import { useThemeStore } from './stores/themeStore';
 import { themeApi } from './services/api/theme';
 import { adminApi } from './services/api/admin';
@@ -99,7 +100,7 @@ function App() {
     const loadThemeSettings = async () => {
       try {
         const settings = await themeApi.getPublicSettings();
-        console.log('[App] public theme loaded, customCss length:', settings.customCss?.length ?? 0);
+        debugLog('[App] public theme loaded, customCss length:', settings.customCss?.length ?? 0);
         setThemeSettings(settings, settings.customCss);
       } catch (error) {
         reportSystemError({
@@ -134,7 +135,7 @@ function App() {
     const loadAdminCustomCss = async () => {
       try {
         const fullSettings = await adminApi.getThemeSettings();
-        console.log('[App] admin theme loaded, customCss length:', fullSettings.customCss?.length ?? 0);
+        debugLog('[App] admin theme loaded, customCss length:', fullSettings.customCss?.length ?? 0);
         if (fullSettings.customCss !== undefined) {
           injectCustomCss(fullSettings.customCss);
         }

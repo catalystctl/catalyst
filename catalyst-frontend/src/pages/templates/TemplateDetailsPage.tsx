@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { motion, type Variants } from 'framer-motion';
 import {
@@ -49,6 +49,20 @@ function TemplateDetailsPage() {
   const { data: template, isLoading, isError, refetch } = useTemplate(templateId);
   const user = useAuthStore((s) => s.user);
   const [showEditModal, setShowEditModal] = useState(false);
+
+  // Re-open the edit modal after creating a nest from within it
+  // If a nest was just created, pass its ID so the edit modal can auto-select it
+  const [pendingCreatedNestId, setPendingCreatedNestId] = useState<string | null>(null);
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const createdId = detail?.createdId as string | undefined;
+      if (createdId) setPendingCreatedNestId(createdId);
+      setShowEditModal(true);
+    };
+    window.addEventListener('catalyst:return-to-template-edit', handler);
+    return () => window.removeEventListener('catalyst:return-to-template-edit', handler);
+  }, []);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const canWrite = useMemo(
     () => user?.permissions?.includes('admin.write') || user?.permissions?.includes('*'),
@@ -272,7 +286,13 @@ function TemplateDetailsPage() {
         <TemplateEditModal
           template={template}
           open
-          onOpenChange={(open) => { if (!open) setShowEditModal(false); }}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShowEditModal(false);
+              setPendingCreatedNestId(null);
+            }
+          }}
+          createdNestId={pendingCreatedNestId}
         />
       )}
       {showDeleteModal && (

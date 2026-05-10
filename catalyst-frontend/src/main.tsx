@@ -6,6 +6,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import App from './App';
 import { queryClient } from './lib/queryClient';
 import { reportSystemError } from './services/api/systemErrors';
+import { debugLog } from './lib/debug-log';
 import './styles/globals.css';
 
 // Self-hosted fonts (no external requests)
@@ -18,7 +19,7 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('/sw.js')
-      .then((reg) => console.log('[SW] Registered:', reg.scope))
+      .then((reg) => debugLog('[SW] Registered:', reg.scope))
       .catch((err) => console.warn('[SW] Registration failed:', err));
   });
 }

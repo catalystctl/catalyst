@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -7,6 +7,15 @@ import { locationsApi, type Location } from '../../services/api/locations';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import ConfirmDialog from '../shared/ConfirmDialog';
 import { ModalPortal } from '@/components/ui/modal-portal';
+
+/**
+ * Maps a `returnTo` identifier (sent by the opening modal) to the
+ * custom event that re-opens that modal after a location is created.
+ */
+const RETURN_EVENT_MAP: Record<string, string> = {
+  'node-create': 'catalyst:return-to-node-create',
+  'node-update': 'catalyst:return-to-node-update',
+};
 
 // ── Location Form ──
 function LocationForm({
@@ -83,6 +92,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Location | null>(null);
+  const returnToRef = useRef<string | null>(null);
 
   const { data: locations = [], isLoading } = useQuery({
     queryKey: qk.locations(),
@@ -90,9 +100,19 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
     refetchInterval: 15000,
   });
 
+  // Listen for the `returnTo` field in the open-locations-modal event
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      returnToRef.current = detail?.returnTo ?? null;
+    };
+    window.addEventListener('catalyst:open-locations-modal', handler);
+    return () => window.removeEventListener('catalyst:open-locations-modal', handler);
+  }, []);
+
   const createMutation = useMutation({
     mutationFn: locationsApi.create,
-    onSuccess: () => {
+    onSuccess: (created) => {
       notifySuccess('Location created');
       Promise.all([
         queryClient.invalidateQueries({ queryKey: qk.locations() }),
@@ -100,6 +120,18 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
         queryClient.invalidateQueries({ queryKey: ['admin-nodes'] }),
       ]);
       setIsCreating(false);
+      // If opened from another modal, send the user back after creation
+      if (returnToRef.current) {
+        const returnEvent = RETURN_EVENT_MAP[returnToRef.current];
+        returnToRef.current = null;
+        onOpenChange(false);
+        if (returnEvent) {
+          const createdId = created?.id ?? null;
+          requestAnimationFrame(() => {
+            window.dispatchEvent(new CustomEvent(returnEvent, { detail: { createdId } }));
+          });
+        }
+      }
     },
     onError: (error: any) => {
       const message = error?.response?.data?.error || 'Failed to create location';

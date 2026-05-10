@@ -42,9 +42,11 @@ type EditProps = {
   template: Template;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** ID of a newly-created nest to auto-select (passed from parent after return-from-nests flow) */
+  createdNestId?: string | null;
 };
 
-function TemplateEditModal({ template, open: controlledOpen, onOpenChange }: EditProps) {
+function TemplateEditModal({ template, open: controlledOpen, onOpenChange, createdNestId }: EditProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = (value: boolean) => {
@@ -107,6 +109,15 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange }: Edi
     extractProviderIds(template.features?.pluginManager?.providers),
   );
   const [nestId, setNestId] = useState(template.nestId || '');
+  // Auto-select a newly created nest when returning from the nests manager.
+  // Use the "previous prop" pattern to sync state without an effect.
+  const [prevCreatedNestId, setPrevCreatedNestId] = useState<string | null | undefined>(undefined);
+  if (createdNestId !== prevCreatedNestId && createdNestId) {
+    setPrevCreatedNestId(createdNestId);
+    setNestId(createdNestId);
+  } else if (createdNestId !== prevCreatedNestId) {
+    setPrevCreatedNestId(createdNestId);
+  }
 
   const { data: nests = [] } = useQuery({
     queryKey: qk.nests(),
@@ -532,7 +543,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange }: Edi
                           to="/admin/templates"
                           onClick={(e) => {
                             e.preventDefault();
-                            window.dispatchEvent(new CustomEvent('catalyst:open-nests-modal'));
+                            window.dispatchEvent(new CustomEvent('catalyst:open-nests-modal', { detail: { returnTo: 'template-edit' } }));
                           }}
                           className="inline-flex items-center gap-0.5 font-medium text-primary-600 hover:text-primary dark:text-primary-400 dark:hover:text-primary-300"
                         >

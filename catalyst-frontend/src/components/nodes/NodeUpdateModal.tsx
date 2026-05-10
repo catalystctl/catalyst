@@ -20,9 +20,11 @@ type Props = {
   node: NodeInfo;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** ID of a newly-created location to auto-select (passed from parent after return-from-locations flow) */
+  createdLocationId?: string | null;
 };
 
-function NodeUpdateModal({ node, open: controlledOpen, onOpenChange }: Props) {
+function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLocationId }: Props) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = (value: boolean) => {
@@ -32,7 +34,15 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange }: Props) {
   const [name, setName] = useState(node.name);
   const [description, setDescription] = useState(node.description ?? '');
   const [locationId, setLocationId] = useState(node.locationId ?? '');
-  const [hostname, setHostname] = useState(node.hostname ?? '');
+  // Auto-select a newly created location when returning from the locations manager.
+  // Use the "previous prop" pattern to sync state without an effect.
+  const [prevCreatedLocationId, setPrevCreatedLocationId] = useState<string | null | undefined>(undefined);
+  if (createdLocationId !== prevCreatedLocationId && createdLocationId) {
+    setPrevCreatedLocationId(createdLocationId);
+    setLocationId(createdLocationId);
+  } else if (createdLocationId !== prevCreatedLocationId) {
+    setPrevCreatedLocationId(createdLocationId);
+  }  const [hostname, setHostname] = useState(node.hostname ?? '');
   const [publicAddress, setPublicAddress] = useState(node.publicAddress ?? '');
   const [memory, setMemory] = useState(String(node.maxMemoryMb ?? 0));
   const [cpu, setCpu] = useState(String(node.maxCpuCores ?? 0));
@@ -157,7 +167,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange }: Props) {
                           className="inline-flex items-center gap-1 font-medium text-primary-600 hover:text-primary dark:text-primary-400 dark:hover:text-primary-300"
                           onClick={() => {
                             setOpen(false);
-                            window.dispatchEvent(new CustomEvent('catalyst:open-locations-modal'));
+                            window.dispatchEvent(new CustomEvent('catalyst:open-locations-modal', { detail: { returnTo: 'node-update' } }));
                           }}
                         >
                           Create a location

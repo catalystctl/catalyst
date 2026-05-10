@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, type Variants } from 'framer-motion';
@@ -122,6 +122,19 @@ function NodeDetailsPage() {
   const [generatedApiKey, setGeneratedApiKey] = useState<string | null>(null);
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [pendingCreatedLocationId, setPendingCreatedLocationId] = useState<string | null>(null);
+
+  // Re-open the update modal after creating a location from within it
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const createdId = detail?.createdId as string | undefined;
+      if (createdId) setPendingCreatedLocationId(createdId);
+      setShowUpdateModal(true);
+    };
+    window.addEventListener('catalyst:return-to-node-update', handler);
+    return () => window.removeEventListener('catalyst:return-to-node-update', handler);
+  }, []);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
 
@@ -688,8 +701,12 @@ function NodeDetailsPage() {
           node={node}
           open
           onOpenChange={(open) => {
-            if (!open) setShowUpdateModal(false);
+            if (!open) {
+              setShowUpdateModal(false);
+              setPendingCreatedLocationId(null);
+            }
           }}
+          createdLocationId={pendingCreatedLocationId}
         />
       )}
       {showDeleteModal && (

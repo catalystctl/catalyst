@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import type { ChangeEvent } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
@@ -84,6 +84,24 @@ function TemplateCreateModal() {
   const [importUrl, setImportUrl] = useState('');
   const [importUrlLoading, setImportUrlLoading] = useState(false);
   const [importUrlError, setImportUrlError] = useState('');
+
+  // Re-open this modal when a nests manager sends the user back after creating a nest
+  // If a nest was just created, auto-select it and jump to step 2 (preserves imported data)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const createdId = detail?.createdId as string | undefined;
+      setOpen(true);
+      if (createdId) {
+        setNestId(createdId);
+        setStep(2);
+      } else {
+        setStep(1);
+      }
+    };
+    window.addEventListener('catalyst:return-to-template-create', handler);
+    return () => window.removeEventListener('catalyst:return-to-template-create', handler);
+  }, []);
 
   const { data: nests = [] } = useQuery({
     queryKey: qk.nests(),
@@ -683,7 +701,7 @@ function TemplateCreateModal() {
                           onClick={() => {
                             setOpen(false);
                             setStep(1);
-                            window.dispatchEvent(new CustomEvent('catalyst:open-nests-modal'));
+                            window.dispatchEvent(new CustomEvent('catalyst:open-nests-modal', { detail: { returnTo: 'template-create' } }));
                           }}
                         >
                           Create a nest

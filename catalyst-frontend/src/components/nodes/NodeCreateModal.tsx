@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { MapPin, ArrowRight, SkipForward } from 'lucide-react';
+import { MapPin, ArrowRight } from 'lucide-react';
 import { nodesApi } from '../../services/api/nodes';
 import { locationsApi } from '../../services/api/locations';
+
 import { qk } from '../../lib/queryKeys';
 import { queryClient } from '../../lib/queryClient';
 import { notifyError, notifySuccess } from '../../utils/notify';
@@ -15,7 +16,16 @@ import {
 } from '../../components/ui/select';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
-type Props = {};
+// no props needed, but the type is kept for consistency
+type Props = Record<string, never>;
+
+/**
+ * Event types used for inter-modal navigation.
+ * NodeCreateModal listens for `catalyst:return-to-node-create` so the
+ * LocationsManagerModal can re-open this modal after creating a location.
+ */
+const RETURN_EVENT = 'catalyst:return-to-node-create' as const;
+const OPEN_LOCATIONS_EVENT = 'catalyst:open-locations-modal' as const;
 
 function NodeCreateModal(_props: Props) {
   const [open, setOpen] = useState(false);
@@ -36,6 +46,24 @@ function NodeCreateModal(_props: Props) {
     apiKey: string;
     expiresAt: string;
   } | null>(null);
+
+  // Re-open this modal when a location manager sends the user back
+  // If a location was just created, auto-select it and jump to step 2
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const createdId = detail?.createdId as string | undefined;
+      setOpen(true);
+      if (createdId) {
+        setLocationId(createdId);
+        setStep(2);
+      } else {
+        setStep(1);
+      }
+    };
+    window.addEventListener(RETURN_EVENT, handler);
+    return () => window.removeEventListener(RETURN_EVENT, handler);
+  }, []);
 
   const { data: locations = [] } = useQuery({
     queryKey: qk.locations(),
@@ -185,7 +213,7 @@ function NodeCreateModal(_props: Props) {
                   {locations.length > 0 ? (
                     <label className="mt-6 block w-full max-w-xs space-y-1.5">
                       <span className="text-xs font-medium text-muted-foreground">
-                        Select a location
+                        Select a location <span className="text-red-500">*</span>
                       </span>
                       <Select
                         value={locationId || '__none__'}
@@ -221,24 +249,17 @@ function NodeCreateModal(_props: Props) {
                           onClick={() => {
                             setOpen(false);
                             setStep(1);
-                            window.dispatchEvent(new CustomEvent('catalyst:open-locations-modal'));
+                            window.dispatchEvent(new CustomEvent(OPEN_LOCATIONS_EVENT, { detail: { returnTo: 'node-create' } }));
                           }}
                         >
                           Create a location
                         </button>{' '}
-                        first, or skip this step.
+                        first before registering a node.
                       </p>
                     </div>
                   )}
 
                   <div className="mt-8 flex items-center gap-3">
-                    <button
-                      className="flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:hover:border-primary/30"
-                      onClick={() => setStep(2)}
-                    >
-                      <SkipForward className="h-3.5 w-3.5" />
-                      Skip and Continue
-                    </button>
                     {locations.length > 0 && locationId && (
                       <button
                         className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"

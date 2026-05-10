@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -7,6 +7,15 @@ import { nestsApi, type Nest } from '../../services/api/nests';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import ConfirmDialog from '../shared/ConfirmDialog';
 import { ModalPortal } from '@/components/ui/modal-portal';
+
+/**
+ * Maps a `returnTo` identifier (sent by the opening modal) to the
+ * custom event that re-opens that modal after a nest is created.
+ */
+const RETURN_EVENT_MAP: Record<string, string> = {
+  'template-create': 'catalyst:return-to-template-create',
+  'template-edit': 'catalyst:return-to-template-edit',
+};
 
 // ── Nest Form ──
 function NestForm({
@@ -107,6 +116,7 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
   const [editingNest, setEditingNest] = useState<Nest | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Nest | null>(null);
+  const returnToRef = useRef<string | null>(null);
 
   const { data: nests = [], isLoading } = useQuery({
     queryKey: qk.nests(),
@@ -114,13 +124,35 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
     refetchInterval: 15000,
   });
 
+  // Listen for the `returnTo` field in the open-nests-modal event
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      returnToRef.current = detail?.returnTo ?? null;
+    };
+    window.addEventListener('catalyst:open-nests-modal', handler);
+    return () => window.removeEventListener('catalyst:open-nests-modal', handler);
+  }, []);
+
   const createMutation = useMutation({
     mutationFn: nestsApi.create,
-    onSuccess: () => {
+    onSuccess: (created) => {
       notifySuccess('Nest created');
       queryClient.invalidateQueries({ queryKey: qk.nests() });
       queryClient.invalidateQueries({ queryKey: qk.templates() });
       setIsCreating(false);
+      // If opened from another modal, send the user back after creation
+      if (returnToRef.current) {
+        const returnEvent = RETURN_EVENT_MAP[returnToRef.current];
+        returnToRef.current = null;
+        onOpenChange(false);
+        if (returnEvent) {
+          const createdId = created?.id ?? null;
+          requestAnimationFrame(() => {
+            window.dispatchEvent(new CustomEvent(returnEvent, { detail: { createdId } }));
+          });
+        }
+      }
     },
     onError: (error: any) => {
       const message = error?.response?.data?.error || 'Failed to create nest';

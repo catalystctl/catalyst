@@ -32,6 +32,16 @@ export default tseslint.config(
       'no-useless-assignment': 'off',
       // React Compiler memoization warnings (experimental feature)
       'react-hooks/preserve-manual-memoization': 'off',
+      // Disallow console.log in runtime source — use debugLog() from lib/debug-log instead
+      // (test and e2e files are exempt — see override below)
+      'no-console': ['error', { allow: ['warn', 'error'] }],
+    },
+  },
+  // E2E / test files: allow console.log (CLI output is expected)
+  {
+    files: ['e2e/**/*.{ts,tsx}', '**/*.test.{ts,tsx}', '**/*.spec.{ts,tsx}'],
+    rules: {
+      'no-console': 'off',
     },
   },
 );
