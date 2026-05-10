@@ -119,7 +119,11 @@ services:
 
       # App
       APP_NAME: ${APP_NAME:-Catalyst}
-      ENABLE_COMPRESSION: ${ENABLE_COMPRESSION:-true}
+      # Compression is handled by nginx reverse proxy — disable Fastify's
+      # @fastify/compress to prevent "premature close" stream errors that
+      # truncate compressed responses when nginx closes the upstream connection
+      # before the compression stream finishes flushing.
+      ENABLE_COMPRESSION: "false"
 
       # Webhooks (optional)
       WEBHOOK_URLS: ${WEBHOOK_URLS:-}

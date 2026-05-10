@@ -75,7 +75,9 @@ services:
       BACKUP_STREAM_DIR: /tmp/catalyst-backup-stream
       BACKUP_TRANSFER_DIR: /tmp/catalyst-backup-transfer
       APP_NAME: ${APP_NAME:-Catalyst}
-      ENABLE_COMPRESSION: ${ENABLE_COMPRESSION:-true}
+      # Compression handled by nginx — disabling Fastify's @fastify/compress
+      # prevents "premature close" stream truncation behind reverse proxies.
+      ENABLE_COMPRESSION: "false"
       WEBHOOK_URLS: ${WEBHOOK_URLS:-}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
       SUSPENSION_ENFORCED: ${SUSPENSION_ENFORCED:-true}
