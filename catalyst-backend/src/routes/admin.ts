@@ -171,19 +171,67 @@ export async function adminRoutes(app: FastifyInstance) {
             username: true,
             createdAt: true,
             updatedAt: true,
+            banned: true,
+            twoFactorEnabled: true,
+            lastSuccessfulLogin: true,
             roles: {
               select: {
                 id: true,
                 name: true,
               },
             },
+            accounts: {
+              select: {
+                id: true,
+                providerId: true,
+                accountId: true,
+              },
+            },
+            passkeys: {
+              select: {
+                id: true,
+                name: true,
+                createdAt: true,
+              },
+            },
+            twoFactor: {
+              select: {
+                id: true,
+              },
+            },
+            _count: {
+              select: {
+                passkeys: true,
+                sessions: true,
+              },
+            },
+            sessions: {
+              select: {
+                id: true,
+                ipAddress: true,
+                createdAt: true,
+              },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
           },
         }),
         prisma.user.count({ where }),
       ]);
 
+      // Enrich users with last sign-in IP from most recent session
+      const usersWithLastIp = users.map((u: any) => {
+        const lastIp = u.sessions?.length > 0
+          ? [...u.sessions].sort((a: any, b: any) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            )[0]?.ipAddress
+          : null;
+        const { sessions, ...rest } = u;
+        return { ...rest, lastSignInIp: lastIp ?? null };
+      });
+
       reply.send({
-        users,
+        users: usersWithLastIp,
         pagination: {
           page: Number(page),
           limit: Number(limit),
@@ -777,6 +825,125 @@ export async function adminRoutes(app: FastifyInstance) {
         });
       }
 
+      return reply.send({ success: true });
+    }
+  );
+
+  // ── User security management endpoints ──
+
+  // Wipe all passkeys for a user (requires user.update)
+  app.delete(
+    '/users/:userId/passkeys',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!(canManageUsers(request, 'update'))) {
+        return reply.status(403).send({ error: 'User update permission required' });
+      }
+      const { userId } = request.params as { userId: string };
+      const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+      if (!existingUser) return reply.status(404).send({ error: 'User not found' });
+
+      const result = await prisma.passkey.deleteMany({ where: { userId } });
+      await createAuditLog((request.user as any).userId, {
+        action: 'user_passkeys_wiped',
+        resource: 'user',
+        resourceId: userId,
+        details: { count: result.count },
+      });
+      return reply.send({ success: true, wiped: result.count });
+    }
+  );
+
+  // Wipe 2FA for a user (requires user.update)
+  app.delete(
+    '/users/:userId/two-factor',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!(canManageUsers(request, 'update'))) {
+        return reply.status(403).send({ error: 'User update permission required' });
+      }
+      const { userId } = request.params as { userId: string };
+      const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+      if (!existingUser) return reply.status(404).send({ error: 'User not found' });
+
+      await prisma.twoFactor.deleteMany({ where: { userId } });
+      await prisma.user.update({ where: { id: userId }, data: { twoFactorEnabled: false } });
+      await createAuditLog((request.user as any).userId, {
+        action: 'user_2fa_wiped',
+        resource: 'user',
+        resourceId: userId,
+        details: {},
+      });
+      return reply.send({ success: true });
+    }
+  );
+
+  // Enforce 2FA for a user (requires user.update)
+  app.put(
+    '/users/:userId/enforce-2fa',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!(canManageUsers(request, 'update'))) {
+        return reply.status(403).send({ error: 'User update permission required' });
+      }
+      const { userId } = request.params as { userId: string };
+      const { enforce } = request.body as { enforce?: boolean };
+      const existingUser = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { twoFactor: true },
+      });
+      if (!existingUser) return reply.status(404).send({ error: 'User not found' });
+
+      if (enforce && !existingUser.twoFactor.length) {
+        return reply.status(400).send({ error: 'Cannot enforce 2FA: user has not set up 2FA yet. Set it up first, then enforce.' });
+      }
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: { twoFactorEnabled: !!enforce },
+      });
+      await createAuditLog((request.user as any).userId, {
+        action: enforce ? 'user_2fa_enforced' : 'user_2fa_unenforced',
+        resource: 'user',
+        resourceId: userId,
+        details: {},
+      });
+      return reply.send({ success: true, twoFactorEnabled: !!enforce });
+    }
+  );
+
+  // Unlink an SSO account from a user (requires user.update)
+  app.delete(
+    '/users/:userId/accounts/:accountId',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!(canManageUsers(request, 'update'))) {
+        return reply.status(403).send({ error: 'User update permission required' });
+      }
+      const { userId, accountId } = request.params as { userId: string; accountId: string };
+      const existingUser = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { accounts: true },
+      });
+      if (!existingUser) return reply.status(404).send({ error: 'User not found' });
+
+      const account = existingUser.accounts.find((a: any) => a.id === accountId);
+      if (!account) return reply.status(404).send({ error: 'Account not found' });
+
+      // Prevent unlinking if this is the only authentication method (no password and no other accounts)
+      const hasPassword = existingUser.accounts.some((a: any) => a.providerId === 'credential');
+      const otherAccounts = existingUser.accounts.filter((a: any) => a.id !== accountId);
+      if (!hasPassword && otherAccounts.length === 0) {
+        return reply.status(400).send({ error: 'Cannot unlink: this is the only authentication method. Set a password first.' });
+      }
+
+      await prisma.account.delete({ where: { id: accountId } });
+      await createAuditLog((request.user as any).userId, {
+        action: 'user_sso_unlinked',
+        resource: 'user',
+        resourceId: userId,
+        details: { providerId: account.providerId, accountId: account.accountId },
+      });
       return reply.send({ success: true });
     }
   );

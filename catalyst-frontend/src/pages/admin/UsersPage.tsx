@@ -17,6 +17,13 @@ import {
   Ban,
   CheckCircle,
   MoreHorizontal,
+  KeyRound,
+  Fingerprint,
+  ShieldCheck,
+  Link2,
+  Unlink,
+  Globe,
+  Clock,
 } from 'lucide-react';
 import EmptyState from '../../components/shared/EmptyState';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
@@ -194,6 +201,12 @@ function UsersPage() {
   const [banTargets, setBanTargets] = useState<{ userIds: string[]; label: string } | null>(null);
   const [unbanTargets, setUnbanTargets] = useState<{ userIds: string[]; label: string } | null>(null);
   const [banReason, setBanReason] = useState('');
+
+  // Security action confirmation state
+  const [wipePasskeyTarget, setWipePasskeyTarget] = useState<{ id: string; username: string; count: number } | null>(null);
+  const [wipe2faTarget, setWipe2faTarget] = useState<{ id: string; username: string } | null>(null);
+  const [enforce2faTarget, setEnforce2faTarget] = useState<{ id: string; username: string; enforce: boolean } | null>(null);
+  const [unlinkTarget, setUnlinkTarget] = useState<{ userId: string; username: string; accountId: string; providerId: string } | null>(null);
 
 
   const { data, isLoading } = useAdminUsers({
@@ -444,6 +457,65 @@ function UsersPage() {
       const message =
         error?.response?.data?.error || 'Failed to unban user(s)';
       notifyError(message);
+    },
+  });
+
+  const wipePasskeysMutation = useMutation({
+    mutationFn: (userId: string) => adminApi.wipePasskeys(userId),
+    onSuccess: (_data, userId) => {
+      notifySuccess('Passkeys wiped');
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      setWipePasskeyTarget(null);
+      // Refresh the editing user data
+      const updatedUser = users.find((u) => u.id === userId);
+      if (updatedUser) handleEditUser(updatedUser);
+    },
+    onError: (error: any) => {
+      notifyError(error?.response?.data?.error || 'Failed to wipe passkeys');
+    },
+  });
+
+  const wipe2faMutation = useMutation({
+    mutationFn: (userId: string) => adminApi.wipeTwoFactor(userId),
+    onSuccess: (_data, userId) => {
+      notifySuccess('2FA wiped');
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      setWipe2faTarget(null);
+      const updatedUser = users.find((u) => u.id === userId);
+      if (updatedUser) handleEditUser(updatedUser);
+    },
+    onError: (error: any) => {
+      notifyError(error?.response?.data?.error || 'Failed to wipe 2FA');
+    },
+  });
+
+  const enforce2faMutation = useMutation({
+    mutationFn: ({ userId, enforce }: { userId: string; enforce: boolean }) =>
+      adminApi.enforceTwoFactor(userId, enforce),
+    onSuccess: (_data, variables) => {
+      notifySuccess(variables.enforce ? '2FA enforcement enabled' : '2FA enforcement disabled');
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      setEnforce2faTarget(null);
+      const updatedUser = users.find((u) => u.id === variables.userId);
+      if (updatedUser) handleEditUser(updatedUser);
+    },
+    onError: (error: any) => {
+      notifyError(error?.response?.data?.error || 'Failed to update 2FA enforcement');
+    },
+  });
+
+  const unlinkAccountMutation = useMutation({
+    mutationFn: ({ userId, accountId }: { userId: string; accountId: string }) =>
+      adminApi.unlinkAccount(userId, accountId),
+    onSuccess: (_data, variables) => {
+      notifySuccess('SSO account unlinked');
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      setUnlinkTarget(null);
+      const updatedUser = users.find((u) => u.id === variables.userId);
+      if (updatedUser) handleEditUser(updatedUser);
+    },
+    onError: (error: any) => {
+      notifyError(error?.response?.data?.error || 'Failed to unlink SSO account');
     },
   });
 
@@ -924,6 +996,18 @@ function UsersPage() {
                             <span className="hidden md:inline">
                               Created {new Date(user.createdAt).toLocaleDateString()}
                             </span>
+                            {user.twoFactorEnabled && (
+                              <span className="hidden items-center gap-1 lg:flex">
+                                <ShieldCheck className="h-3 w-3 text-success" />
+                                2FA
+                              </span>
+                            )}
+                            {(user.passkeys?.length ?? 0) > 0 && (
+                              <span className="hidden items-center gap-1 lg:flex">
+                                <Fingerprint className="h-3 w-3 text-success" />
+                                {(user.passkeys?.length ?? 0)} key{(user.passkeys?.length ?? 0) !== 1 ? 's' : ''}
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -1395,6 +1479,224 @@ function UsersPage() {
             onSelectionChange={setSelectedNodeIds}
             disabled={updateMutation.isPending}
           />
+
+          {/* ── Security & Authentication ── */}
+          {editingUserId && (() => {
+            const editUser = users.find((u) => u.id === editingUserId);
+            if (!editUser) return null;
+            const passkeys = editUser.passkeys ?? [];
+            const accounts = editUser.accounts ?? [];
+            const has2fa = !!(editUser.twoFactor?.length);
+            const twoFactorEnabled = editUser.twoFactorEnabled ?? false;
+            const lastLogin = editUser.lastSuccessfulLogin;
+            const lastIp = editUser.lastSignInIp;
+            const ssoAccounts = accounts.filter((a) => a.providerId !== 'credential');
+            const hasPassword = accounts.some((a) => a.providerId === 'credential');
+
+            const providerLabel = (id: string) => {
+              const labels: Record<string, string> = {
+                credential: 'Email & Password',
+                whmcs: 'WHMCS',
+                paymenter: 'Paymenter',
+                google: 'Google',
+                github: 'GitHub',
+                discord: 'Discord',
+              };
+              return labels[id] ?? id;
+            };
+
+            return (
+              <div className="rounded-xl border border-border/50 bg-surface-2/50 p-4 dark:bg-surface-2/30">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Security & Authentication
+                </div>
+
+                <div className="mt-3 space-y-3">
+                  {/* Sign-in info */}
+                  {(lastLogin || lastIp) && (
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                      {lastIp && (
+                        <span className="flex items-center gap-1.5 rounded-md bg-card px-2 py-1 border border-border">
+                          <Globe className="h-3 w-3" />
+                          Last IP: <span className="font-mono text-foreground">{lastIp}</span>
+                        </span>
+                      )}
+                      {lastLogin && (
+                        <span className="flex items-center gap-1.5 rounded-md bg-card px-2 py-1 border border-border">
+                          <Clock className="h-3 w-3" />
+                          Last sign-in: {new Date(lastLogin).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 2FA status */}
+                  <div className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className={`h-4 w-4 ${twoFactorEnabled ? 'text-success' : 'text-muted-foreground'}`} />
+                      <div>
+                        <span className="text-xs font-medium text-foreground">
+                          Two-Factor Authentication
+                        </span>
+                        <p className="text-[11px] text-muted-foreground">
+                          {has2fa
+                            ? twoFactorEnabled
+                              ? 'Enabled and enforced'
+                              : 'Set up but not enforced'
+                            : 'Not set up'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {has2fa && !twoFactorEnabled && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1 text-xs"
+                          disabled={enforce2faMutation.isPending}
+                          onClick={() =>
+                            setEnforce2faTarget({ id: editUser.id, username: editUser.username, enforce: true })
+                          }
+                        >
+                          <ShieldCheck className="h-3 w-3" />
+                          Enforce
+                        </Button>
+                      )}
+                      {twoFactorEnabled && has2fa && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1 text-xs"
+                          disabled={enforce2faMutation.isPending}
+                          onClick={() =>
+                            setEnforce2faTarget({ id: editUser.id, username: editUser.username, enforce: false })
+                          }
+                        >
+                          Unenforce
+                        </Button>
+                      )}
+                      {has2fa && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20 dark:text-destructive"
+                          disabled={wipe2faMutation.isPending}
+                          onClick={() =>
+                            setWipe2faTarget({ id: editUser.id, username: editUser.username })
+                          }
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Wipe 2FA
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Passkeys */}
+                  <div className="rounded-lg border border-border bg-card px-3 py-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Fingerprint className={`h-4 w-4 ${passkeys.length > 0 ? 'text-success' : 'text-muted-foreground'}`} />
+                        <div>
+                          <span className="text-xs font-medium text-foreground">
+                            Passkeys
+                          </span>
+                          <p className="text-[11px] text-muted-foreground">
+                            {passkeys.length
+                              ? `${passkeys.length} passkey${passkeys.length === 1 ? '' : 's'} registered`
+                              : 'No passkeys registered'}
+                          </p>
+                        </div>
+                      </div>
+                      {passkeys.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20 dark:text-destructive"
+                          disabled={wipePasskeysMutation.isPending}
+                          onClick={() =>
+                            setWipePasskeyTarget({
+                              id: editUser.id,
+                              username: editUser.username,
+                              count: passkeys.length,
+                            })
+                          }
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Wipe all
+                        </Button>
+                      )}
+                    </div>
+                    {passkeys.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {passkeys.map((pk) => (
+                          <div key={pk.id} className="flex items-center justify-between rounded-md bg-surface-2/50 px-2 py-1 text-xs">
+                            <span className="text-muted-foreground">
+                              {pk.name || 'Unnamed passkey'}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground/60">
+                              Added {new Date(pk.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Linked SSO accounts */}
+                  <div className="rounded-lg border border-border bg-card px-3 py-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Link2 className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-xs font-medium text-foreground">
+                        Linked Accounts
+                      </span>
+                    </div>
+                    {accounts.length === 0 ? (
+                      <p className="text-[11px] text-muted-foreground">No linked accounts</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {accounts.map((account) => {
+                          const isSSO = account.providerId !== 'credential';
+                          return (
+                            <div key={account.id} className="flex items-center justify-between rounded-md bg-surface-2/50 px-2 py-1.5 text-xs">
+                              <div className="flex items-center gap-2">
+                                <KeyRound className={`h-3.5 w-3.5 ${isSSO ? 'text-primary' : 'text-muted-foreground'}`} />
+                                <span className="text-foreground">{providerLabel(account.providerId)}</span>
+                                {isSSO && (
+                                  <span className="text-[10px] font-mono text-muted-foreground/60">
+                                    {account.accountId.slice(0, 12)}…
+                                  </span>
+                                )}
+                              </div>
+                              {isSSO && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 gap-1 px-2 text-[11px] text-destructive hover:bg-destructive/5 hover:text-destructive dark:text-destructive"
+                                  disabled={unlinkAccountMutation.isPending}
+                                  onClick={() =>
+                                    setUnlinkTarget({
+                                      userId: editUser.id,
+                                      username: editUser.username,
+                                      accountId: account.id,
+                                      providerId: account.providerId,
+                                    })
+                                  }
+                                >
+                                  <Unlink className="h-3 w-3" />
+                                  Unlink
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </ModalShell>
 
@@ -1494,6 +1796,119 @@ function UsersPage() {
           }
         }}
         onCancel={() => setDeletingUser(null)}
+      />
+
+      {/* ── Wipe Passkeys Confirmation Dialog ── */}
+      <ConfirmDialog
+        open={!!wipePasskeyTarget}
+        title="Wipe passkeys?"
+        message={
+          <div className="space-y-2">
+            <p>
+              Remove all <span className="font-semibold">{wipePasskeyTarget?.count} passkey{wipePasskeyTarget?.count === 1 ? '' : 's'}</span> from{' '}
+              <span className="font-semibold">{wipePasskeyTarget?.username}</span>?
+            </p>
+            <p className="text-xs text-muted-foreground">
+              The user will no longer be able to sign in with passkeys. This cannot be undone.
+            </p>
+          </div>
+        }
+        confirmText="Wipe passkeys"
+        cancelText="Cancel"
+        variant="danger"
+        loading={wipePasskeysMutation.isPending}
+        onConfirm={() =>
+          wipePasskeyTarget &&
+          wipePasskeysMutation.mutate(wipePasskeyTarget.id)
+        }
+        onCancel={() => setWipePasskeyTarget(null)}
+      />
+
+      {/* ── Wipe 2FA Confirmation Dialog ── */}
+      <ConfirmDialog
+        open={!!wipe2faTarget}
+        title="Wipe 2FA?"
+        message={
+          <div className="space-y-2">
+            <p>
+              Remove two-factor authentication from{' '}
+              <span className="font-semibold">{wipe2faTarget?.username}</span>?
+            </p>
+            <p className="text-xs text-muted-foreground">
+              The user's authenticator app and backup codes will be removed. 2FA enforcement will also be disabled.
+            </p>
+          </div>
+        }
+        confirmText="Wipe 2FA"
+        cancelText="Cancel"
+        variant="danger"
+        loading={wipe2faMutation.isPending}
+        onConfirm={() =>
+          wipe2faTarget &&
+          wipe2faMutation.mutate(wipe2faTarget.id)
+        }
+        onCancel={() => setWipe2faTarget(null)}
+      />
+
+      {/* ── Enforce/Unenforce 2FA Confirmation Dialog ── */}
+      <ConfirmDialog
+        open={!!enforce2faTarget}
+        title={enforce2faTarget?.enforce ? 'Enforce 2FA?' : 'Disable 2FA enforcement?'}
+        message={
+          <div className="space-y-2">
+            <p>
+              {enforce2faTarget?.enforce
+                ? <>Enforce 2FA for <span className="font-semibold">{enforce2faTarget?.username}</span>?</>
+                : <>Disable 2FA enforcement for <span className="font-semibold">{enforce2faTarget?.username}</span>?</>}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {enforce2faTarget?.enforce
+                ? 'The user will be required to use 2FA on every sign-in.'
+                : 'The user will no longer be required to use 2FA, but their authenticator will remain configured.'}
+            </p>
+          </div>
+        }
+        confirmText={enforce2faTarget?.enforce ? 'Enforce' : 'Disable'}
+        cancelText="Cancel"
+        variant="warning"
+        loading={enforce2faMutation.isPending}
+        onConfirm={() =>
+          enforce2faTarget &&
+          enforce2faMutation.mutate({
+            userId: enforce2faTarget.id,
+            enforce: enforce2faTarget.enforce,
+          })
+        }
+        onCancel={() => setEnforce2faTarget(null)}
+      />
+
+      {/* ── Unlink SSO Confirmation Dialog ── */}
+      <ConfirmDialog
+        open={!!unlinkTarget}
+        title="Unlink SSO account?"
+        message={
+          <div className="space-y-2">
+            <p>
+              Unlink <span className="font-semibold">{unlinkTarget?.providerId}</span> from{' '}
+              <span className="font-semibold">{unlinkTarget?.username}</span>?
+            </p>
+            <p className="text-xs text-muted-foreground">
+              The user will no longer be able to sign in with this provider. Make sure they have another way to log in.
+            </p>
+          </div>
+        }
+        confirmText="Unlink"
+        cancelText="Cancel"
+        variant="danger"
+        loading={unlinkAccountMutation.isPending}
+        onConfirm={() =>
+          unlinkTarget &&
+          unlinkAccountMutation.mutate({
+            userId: unlinkTarget.userId,
+            accountId: unlinkTarget.accountId,
+          })
+        }
+        onCancel={() => setUnlinkTarget(null)}
       />
     </motion.div>
   );

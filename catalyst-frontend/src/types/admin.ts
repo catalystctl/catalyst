@@ -26,6 +26,18 @@ export interface AdminRolesResponse {
   roles: AdminRole[];
 }
 
+export interface AdminUserPasskey {
+  id: string;
+  name: string | null;
+  createdAt: string;
+}
+
+export interface AdminUserAccount {
+  id: string;
+  providerId: string;
+  accountId: string;
+}
+
 export interface AdminUser {
   id: string;
   email: string;
@@ -34,6 +46,16 @@ export interface AdminUser {
   updatedAt: string;
   roles: AdminUserRole[];
   banned?: boolean;
+  twoFactorEnabled?: boolean;
+  lastSuccessfulLogin?: string | null;
+  lastSignInIp?: string | null;
+  accounts?: AdminUserAccount[];
+  passkeys?: AdminUserPasskey[];
+  twoFactor?: { id: string }[];
+  _count?: {
+    passkeys: number;
+    sessions: number;
+  };
 }
 
 export interface UserWithRoles extends AdminUser {

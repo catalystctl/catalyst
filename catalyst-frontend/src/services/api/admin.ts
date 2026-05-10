@@ -271,6 +271,35 @@ export const adminApi = {
     );
     return data;
   },
+  // Wipe all passkeys for a user
+  wipePasskeys: async (userId: string) => {
+    const data = await apiClient.delete<ApiResponse<{ wiped: number }>>(
+      `/api/admin/users/${userId}/passkeys`
+    );
+    return data;
+  },
+  // Wipe 2FA for a user
+  wipeTwoFactor: async (userId: string) => {
+    const data = await apiClient.delete<ApiResponse<void>>(
+      `/api/admin/users/${userId}/two-factor`
+    );
+    return data;
+  },
+  // Enforce/unenforce 2FA for a user
+  enforceTwoFactor: async (userId: string, enforce: boolean) => {
+    const data = await apiClient.put<ApiResponse<{ twoFactorEnabled: boolean }>>(
+      `/api/admin/users/${userId}/enforce-2fa`,
+      { enforce }
+    );
+    return data;
+  },
+  // Unlink an SSO account from a user
+  unlinkAccount: async (userId: string, accountId: string) => {
+    const data = await apiClient.delete<ApiResponse<void>>(
+      `/api/admin/users/${userId}/accounts/${accountId}`
+    );
+    return data;
+  },
   // Get user roles
   getUserRoles: async (userId: string) => {
     const data = await apiClient.get<ApiResponse<{ roles: Role[]; permissions: string[] }>>(
