@@ -24,7 +24,7 @@ const setupSchema = z.object({
 		.default("#06b6d4"),
 	defaultTheme: z.enum(["light", "dark"]).default("dark"),
 	logoUrl: z.string().optional(),
-	metadata: z.record(z.any()).default({}),
+	metadata: z.record(z.string(), z.any()).default({}),
 });
 
 // Helper to forward auth headers (set-cookie, set-auth-token) from better-auth
@@ -94,8 +94,9 @@ export async function setupRoutes(app: FastifyInstance) {
 			accentColor,
 			defaultTheme,
 			logoUrl,
-			metadata,
+			metadata: rawMetadata,
 		} = parsed;
+		const metadata = rawMetadata as any;
 
 		// 1. Ensure roles exist
 		const adminRole = await prisma.role.upsert({
@@ -273,8 +274,9 @@ export async function setupRoutes(app: FastifyInstance) {
 				accentColor,
 				defaultTheme,
 				logoUrl,
-				metadata,
+				metadata: rawMetadata,
 			} = parsed.data;
+			const metadata = rawMetadata as any;
 
 			try {
 				// 4. Create Administrator role
