@@ -1383,10 +1383,10 @@ function UsersPage() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 10 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                className="flex w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl md:m-4 md:max-h-[88vh]"
+                className="flex w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]"
               >
                 {/* Header */}
-                <div className="flex items-center justify-between border-b border-border px-6 py-4">
+                <div className="flex items-center justify-between border-b border-border px-4 py-3 md:px-6 md:py-4">
                   <div className="flex items-center gap-3">
                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${editingUserId ? 'bg-amber-500/10' : 'bg-primary/10'}`}>
                       {editingUserId ? <Pencil className="h-4 w-4 text-amber-600 dark:text-amber-400" /> : <UserPlus className="h-4 w-4 text-primary" />}
@@ -1411,7 +1411,7 @@ function UsersPage() {
                 </div>
 
                 {/* Step indicator */}
-                <div className="border-b border-border/50 px-6 py-3">
+                <div className="border-b border-border/50 px-4 py-2.5 md:px-6 md:py-3 overflow-x-auto">
                   <StepIndicator
                     steps={currentSteps}
                     currentStep={wizardStep}
@@ -1421,7 +1421,7 @@ function UsersPage() {
                 </div>
 
                 {/* Step content */}
-                <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-5">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:px-6 md:py-5">
                   <AnimatePresence mode="wait" custom={wizardDirection}>
                     {/* Step 0: Account Details */}
                     {wizardStep === 0 && (
@@ -1633,7 +1633,7 @@ function UsersPage() {
                 </div>
 
                 {/* Footer with navigation */}
-                <div className="flex items-center justify-between border-t border-border px-6 py-4">
+                <div className="flex items-center justify-between border-t border-border px-4 py-3 md:px-6 md:py-4">
                   <div className="text-xs text-muted-foreground">
                     {wizardStep === 0 && !editingUserId && 'All fields are required'}
                     {wizardStep === 0 && editingUserId && 'Leave password blank to keep current'}
@@ -1703,10 +1703,10 @@ function UsersPage() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 10 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl md:m-4 md:max-h-[88vh]"
+                className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]"
               >
                 {/* Header with user identity */}
-                <div className="relative overflow-hidden px-6 py-5 border-b border-border">
+                <div className="relative overflow-hidden px-4 py-4 border-b border-border md:px-6 md:py-5">
                   {/* Decorative gradient */}
                   <div className={`absolute inset-0 ${viewingUser.banned ? 'bg-gradient-to-br from-destructive/5 via-destructive/3 to-transparent' : 'bg-gradient-to-br from-primary/5 via-primary/3 to-transparent'}`} />
 
@@ -1747,7 +1747,7 @@ function UsersPage() {
                   </div>
 
                   {/* Quick stats */}
-                  <div className="relative mt-4 flex flex-wrap gap-3">
+                  <div className="relative mt-3 md:mt-4 flex flex-wrap gap-2 md:gap-3">
                     <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card/80 px-3 py-1.5 text-xs">
                       <Shield className="h-3 w-3 text-primary" />
                       <span className="text-muted-foreground">Roles</span>
@@ -1789,7 +1789,7 @@ function UsersPage() {
                 </div>
 
                 {/* Body */}
-                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5 space-y-4">
                   {/* Roles */}
                   {viewingUser.roles.length > 0 && (
                     <div className="rounded-xl border border-border p-4">
@@ -1901,7 +1901,7 @@ function UsersPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-2 border-t border-border px-6 py-4">
+                <div className="flex items-center gap-2 border-t border-border px-4 py-3 md:px-6 md:py-4">
                   <Button variant="outline" size="sm" onClick={() => { startView(viewingUser); handleEditUser(viewingUser); }} className="gap-1.5">
                     <Pencil className="h-3.5 w-3.5" />
                     Edit user

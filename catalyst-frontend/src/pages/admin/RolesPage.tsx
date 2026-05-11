@@ -484,7 +484,7 @@ function PermissionCategoryCard({
     <div className={`rounded-xl border transition-all duration-200 ${someSelected ? category.border : 'border-border'}`}>
       {/* Category header */}
       <div
-        className="flex items-center justify-between px-4 py-3 cursor-pointer select-none"
+        className="flex items-center justify-between px-3 py-2.5 cursor-pointer select-none md:px-4 md:py-3"
         onClick={() => onToggleCategory(category.permissions, !allSelected)}
       >
         <div className="flex items-center gap-2.5">
@@ -510,7 +510,7 @@ function PermissionCategoryCard({
       </div>
 
       {/* Permission chips */}
-      <div className="border-t border-border/50 px-4 py-3">
+      <div className="border-t border-border/50 px-3 py-2.5 md:px-4 md:py-3">
         <div className="flex flex-wrap gap-1.5">
           {filteredPerms.map((perm) => (
             <PermissionChip
@@ -920,10 +920,10 @@ function RolesPage() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 10 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                className="flex w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl md:m-4 md:max-h-[88vh]"
+                className="flex w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]"
               >
                 {/* Header */}
-                <div className="flex items-center justify-between border-b border-border px-6 py-4">
+                <div className="flex items-center justify-between border-b border-border px-4 py-3 md:px-6 md:py-4">
                   <div>
                     <h2 className="text-lg font-semibold text-foreground">
                       {editingRole ? 'Edit role' : 'Create role'}
@@ -941,7 +941,7 @@ function RolesPage() {
                 </div>
 
                 {/* Step indicator */}
-                <div className="border-b border-border/50 px-6 py-3">
+                <div className="border-b border-border/50 px-4 py-2.5 md:px-6 md:py-3 overflow-x-auto">
                   <StepIndicator
                     steps={wizardSteps}
                     currentStep={wizardStep}
@@ -951,7 +951,7 @@ function RolesPage() {
                 </div>
 
                 {/* Step content */}
-                <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-5">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:px-6 md:py-5">
                   <AnimatePresence mode="wait" custom={wizardDirection}>
                     {/* Step 0: Details */}
                     {wizardStep === 0 && (
@@ -1099,7 +1099,7 @@ function RolesPage() {
                 </div>
 
                 {/* Footer with navigation */}
-                <div className="flex items-center justify-between border-t border-border px-6 py-4">
+                <div className="flex items-center justify-between border-t border-border px-4 py-3 md:px-6 md:py-4">
                   <div className="text-xs text-muted-foreground">
                     {selectedPermissions.size > 0 && (
                       <span>{selectedPermissions.size} permission{selectedPermissions.size === 1 ? '' : 's'} selected</span>
@@ -1164,10 +1164,10 @@ function RolesPage() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 10 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl md:m-4 md:max-h-[88vh]"
+                className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]"
               >
                 {/* Header with role identity */}
-                <div className="relative overflow-hidden px-6 py-5 border-b border-border">
+                <div className="relative overflow-hidden px-4 py-4 border-b border-border md:px-6 md:py-5">
                   {/* Decorative gradient */}
                   <div className={`absolute inset-0 bg-gradient-to-br ${
                     viewingRole.permissions?.includes('*')
@@ -1204,7 +1204,7 @@ function RolesPage() {
                   </div>
 
                   {/* Quick stats */}
-                  <div className="relative mt-4 flex flex-wrap gap-3">
+                  <div className="relative mt-3 md:mt-4 flex flex-wrap gap-2 md:gap-3">
                     <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card/80 px-3 py-1.5 text-xs">
                       <Shield className="h-3 w-3 text-primary" />
                       <span className="text-muted-foreground">Permissions</span>
@@ -1226,7 +1226,7 @@ function RolesPage() {
                 </div>
 
                 {/* Permission body */}
-                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5 space-y-4">
                   {viewingRole.permissions?.includes('*') ? (
                     <div className="flex flex-col items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-6 text-center dark:border-amber-500/30 dark:bg-amber-500/10">
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/20">
@@ -1265,7 +1265,7 @@ function RolesPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-2 border-t border-border px-6 py-4">
+                <div className="flex items-center gap-2 border-t border-border px-4 py-3 md:px-6 md:py-4">
                   <Button variant="outline" size="sm" onClick={() => startEdit(viewingRole)} className="gap-1.5">
                     <Pencil className="h-3.5 w-3.5" />
                     Edit role
