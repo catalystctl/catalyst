@@ -2,7 +2,7 @@
 
 The fastest way to run Catalyst. Uses pre-built images from [GitHub Container Registry](https://github.com/catalystctl/catalyst/pkgs/container/catalyst-backend) — no building required.
 
-> 🏠 **New here?** See [`docs/QUICKSTART.md`](../docs/QUICKSTART.md) for the absolute fastest path, or [`docs/installation.md`](../docs/installation.md) for a deep-dive covering every option.
+> 🏠 **New here?** See [`docs/QUICKSTART.md`](../docs/QUICKSTART.md) for the absolute fastest path, or [`docs/INSTALLATION_DETAILED.md`](../docs/INSTALLATION_DETAILED.md) for a deep-dive covering every option.
 
 ---
 
@@ -537,7 +537,7 @@ docker compose logs --tail=100 backend
 - **Admin?** Read [`docs/admin-guide.md`](../docs/admin-guide.md) for node deployment, user management, RBAC, and system configuration.
 - **Developer?** Read [`docs/development.md`](../docs/development.md) for local dev setup, testing, and plugin development.
 - **API integration?** Read [`docs/api-reference.md`](../docs/api-reference.md) for the complete REST API reference.
-- **Full details?** Read [`docs/installation.md`](../docs/installation.md) for every option, edge case, and advanced configuration.
+- **Full details?** Read [`docs/INSTALLATION_DETAILED.md`](../docs/INSTALLATION_DETAILED.md) for every option, edge case, and advanced configuration.
 
 ---
 

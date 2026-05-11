@@ -1,19 +1,20 @@
 # Installation Guide — Complete Reference
 
-> **Super simple version:** See [`QUICKSTART.md`](QUICKSTART.md) for a 5-minute setup.  
-> **This document:** Every option, edge case, and advanced configuration explained in detail.
+> **Every option, every edge case, every platform.** This is the definitive guide for installing Catalyst. If you want the 5-minute version, see [QUICKSTART.md](QUICKSTART.md).
 
 ---
 
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
-- [Deployment Options](#deployment-options)
-  - [Option 1: One-Line Install (Recommended)](#option-1-one-line-install-recommended)
-  - [Option 2: Clone & Run (Pre-Built Images)](#option-2-clone--run-pre-built-images)
-  - [Option 3: Build from Source](#option-3-build-from-source)
-  - [Option 4: Podman (Rootless)](#option-4-podman-rootless)
-- [First-Time Setup](#first-time-setup)
+- [Deployment Methods](#deployment-methods)
+  - [One-Line Install (Recommended)](#one-line-install-recommended)
+  - [Standalone Docker / Podman](#standalone-docker--podman)
+  - [Build from Source](#build-from-source)
+- [Post-Install Steps](#post-install-steps)
+  - [First-Run Setup Wizard](#first-run-setup-wizard)
+  - [Verify the Stack](#verify-the-stack)
+  - [Access the Panel](#access-the-panel)
 - [Environment Configuration](#environment-configuration)
   - [Required Variables](#required-variables)
   - [General Settings](#general-settings)
@@ -29,7 +30,6 @@
   - [Manual Reverse Proxy](#manual-reverse-proxy)
 - [Development Setup](#development-setup)
 - [Upgrading](#upgrading)
-- [Production Hardening](#production-hardening)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -46,13 +46,13 @@
 | **Disk** | 10 GB (panel only) | SSD with 50+ GB |
 | **Open Ports** | 80 (or 8080), 3000, 2022 | 80, 443, 2022 |
 
-> **Important:** Docker Compose (with Docker or Podman) is the **only supported deployment method**. Direct installation on bare metal is not supported.
+> **Note:** Docker Compose (Docker or Podman) is the **only supported deployment method**. Direct installation on bare metal is not supported.
 
 ---
 
-## Deployment Options
+## Deployment Methods
 
-### Option 1: One-Line Install (Recommended)
+### One-Line Install (Recommended)
 
 The fastest way to get Catalyst running — no need to clone the full repository:
 
@@ -88,11 +88,11 @@ docker exec -e NODE_ENV=development catalyst-backend bun run db:seed
 
 > **Tip:** If this is your first time, the **first user to register** automatically becomes the panel administrator. No seeding is required.
 >
-> After installation, follow the post-install walkthrough in [Getting Started](getting-started.md) for your first admin setup.
+> After installation, follow the post-install walkthrough in [Getting Started](./getting-started.md) for your first admin setup.
 
 ---
 
-### Option 2: Clone & Run (Pre-Built Images)
+### Standalone Docker / Podman
 
 The `catalyst-docker/` directory is a self-contained deployment using **pre-built images** from [GitHub Container Registry](https://github.com/catalystctl/catalyst/pkgs/container/catalyst-backend) — no build step needed.
 
@@ -157,7 +157,7 @@ Find your LAN IP with `hostname -I | awk '{print $1}'`.
 
 ---
 
-### Option 3: Build from Source
+### Build from Source
 
 For development or when pre-built images are not suitable:
 
@@ -206,28 +206,7 @@ This starts the backend and frontend in parallel with hot reload.
 
 ---
 
-### Option 4: Podman (Rootless)
-
-Podman Compose is a drop-in replacement. The only differences:
-
-1. **Port binding:** Use ports above 1024 for rootless mode:
-   ```env
-   FRONTEND_PORT=0.0.0.0:8080
-   ```
-
-2. **Socket path:** If using the agent on the same host, adjust Docker socket path in `docker-compose.yml`:
-   ```yaml
-   volumes:
-     - /run/user/1000/podman/podman.sock:/var/run/docker.sock
-   ```
-
-3. **SFTP host key:** Explicitly set `SFTP_HOST_KEY=` (empty) in `.env` due to Podman variable interpolation quirks.
-
-All other commands are identical — just replace `docker` with `podman`.
-
----
-
-## First-Time Setup
+## Post-Install Steps
 
 ### First-Run Setup Wizard
 
@@ -271,9 +250,9 @@ The backend's `/health` endpoint returns `200 OK` when the service is ready.
 
 All configuration is done through the `.env` file in the `catalyst-docker/` directory. Copy `.env.example` as a starting point.
 
-For the full variable reference, see [Environment Variables](environment-variables.md).
+For the full variable reference, see [Environment Variables](./environment-variables.md).
 
-For detailed Docker service architecture, volume management, and hardening, see [Docker Setup](docker-setup.md).
+For detailed Docker service architecture, volume management, and hardening, see [Docker Setup](./docker-setup.md).
 
 ### Required Variables
 
@@ -283,7 +262,7 @@ For detailed Docker service architecture, volume management, and hardening, see 
 | `POSTGRES_PASSWORD` | PostgreSQL database password | `openssl rand -base64 32 \| tr -d '/+=' \| head -c 32` |
 | `BETTER_AUTH_SECRET` | Secret key for session encryption | `openssl rand -base64 32` |
 
-> **`PUBLIC_URL` is the single source of truth.** It automatically drives `BETTER_AUTH_URL`, `CORS_ORIGIN`, `FRONTEND_URL`, `BACKEND_EXTERNAL_ADDRESS`, and `BACKEND_URL`. Only override those individually if you have a split DNS setup.
+> **`PUBLIC_URL` is the single source of truth.** It automatically drives `BETTER_AUTH_URL`, `CORS_ORIGIN`, `FRONTEND_URL`, `BACKEND_EXTERNAL_ADDRESS`, and `BACKEND_URL`. Only override those individually for split internal/external setups.
 
 ### General Settings
 
@@ -291,7 +270,7 @@ For detailed Docker service architecture, volume management, and hardening, see 
 |---|---|---|
 | `NODE_ENV` | `development` | `production` enables HSTS and aggressive security headers. **Must be `production` when behind TLS.** |
 | `TZ` | `UTC` | Timezone in IANA format (`America/New_York`, `Europe/London`) |
-| `LOG_LEVEL` | `info` | Log verbosity: `trace` → `debug` → `info` → `warn` → `error` |
+| `LOG_LEVEL` | `info` | Log verbosity: `trace` -> `debug` -> `info` -> `warn` -> `error` |
 | `APP_NAME` | `Catalyst` | Panel name shown in emails, TOTP issuer, and OAuth display |
 
 ### Database
@@ -414,7 +393,7 @@ NODE_ENV=production                       # enables HSTS in the backend
 docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d
 ```
 
-That's it. Visit `https://panel.example.com` — Caddy handles certificate issuance, renewal, and HTTP→HTTPS redirects.
+That's it. Visit `https://panel.example.com` — Caddy handles certificate issuance, renewal, and HTTP->HTTPS redirects.
 
 ### Traefik (Docker-Native)
 
@@ -485,7 +464,7 @@ server {
     }
 }
 
-# Redirect HTTP → HTTPS
+# Redirect HTTP -> HTTPS
 server {
     listen 80;
     server_name panel.example.com;
@@ -506,9 +485,9 @@ When `NODE_ENV=production`, the backend sets:
 WebAuthn/Passkey authentication will fail if `PASSKEY_RP_ID` doesn't exactly match your domain:
 
 ```env
-# For http://localhost:8080 → PASSKEY_RP_ID=localhost
-# For https://panel.example.com → PASSKEY_RP_ID=panel.example.com
-# For LAN → PASSKEY_RP_ID=192.168.1.100
+# For http://localhost:8080 -> PASSKEY_RP_ID=localhost
+# For https://panel.example.com -> PASSKEY_RP_ID=panel.example.com
+# For LAN -> PASSKEY_RP_ID=192.168.1.100
 ```
 
 No protocol, no port — the bare hostname or IP only.
@@ -578,7 +557,7 @@ bun install
 # Frontend dev server starts via `bun run dev` (root) or `bun run dev` here
 ```
 
-> **See also:** [Development Guide](development.md) for the complete developer guide including testing, plugin development, and PR process.
+> **See also:** [Development Guide](./development.md) for the complete developer guide including testing, plugin development, and PR process.
 
 ---
 
@@ -596,7 +575,7 @@ docker compose up -d
 
 The backend entrypoint automatically runs `prisma migrate deploy` on every startup, so migrations are applied before the API starts accepting connections.
 
-> **Post-upgrade:** After upgrading, verify node agents are connected by checking the admin panel. For node deployment procedures, see [Agent Guide](agent.md).
+> **Post-upgrade:** After upgrading, verify node agents are connected by checking the admin panel. For node deployment procedures, see [Agent Guide](./agent.md).
 
 ### With Git (Source Builds)
 
@@ -615,25 +594,6 @@ curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.s
 ```
 
 It preserves your existing `.env` and only replaces the config files.
-
----
-
-## Production Hardening
-
-Before exposing Catalyst to the internet, complete this checklist:
-
-- [ ] Set `NODE_ENV=production` in `.env`
-- [ ] Change all default passwords and generate strong secrets
-- [ ] Use TLS (Caddy, Traefik, or external reverse proxy)
-- [ ] Restrict `BACKEND_PORT` and `POSTGRES_PORT` to `127.0.0.1`
-- [ ] Disable external Redis access (comment out `REDIS_PORT`)
-- [ ] Set up automated database backups
-- [ ] Configure backup encryption key
-- [ ] Review and adjust rate limits
-- [ ] Enable audit log retention
-- [ ] Set `COOKIE_SECURE=true` when behind HTTPS
-- [ ] Configure OAuth providers if using SSO
-- [ ] Set up monitoring and alerting
 
 ---
 
@@ -728,7 +688,7 @@ Common causes:
 
 ### Reset Everything
 
-> **⚠️ This deletes all data including databases, server files, and backups.**
+> **Warning:** This deletes all data including databases, server files, and backups.
 
 ```bash
 docker compose down -v
@@ -747,3 +707,7 @@ docker compose logs -f postgres
 # Last 100 lines
 docker compose logs --tail=100 backend
 ```
+
+---
+
+*Last updated: 2026-05-11*

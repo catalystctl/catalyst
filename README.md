@@ -33,7 +33,7 @@ Open your `PUBLIC_URL` in a browser. The **first user to register becomes the ad
 
 That's it. No build steps, no dependency installation, no manual secret generation (the install script does that for you).
 
-👉 Want more detail? See the [Quick Start Guide](docs/QUICKSTART.md) for the full walkthrough with screenshots, or the [Detailed Installation Guide](docs/installation.md) for every option, every edge case, and production hardening.
+👉 Want more detail? See the [Quick Start Guide](docs/QUICKSTART.md) for the full walkthrough with screenshots, or the [Detailed Installation Guide](docs/INSTALLATION_DETAILED.md) for every option, every edge case, and production hardening.
 
 ---
 
@@ -241,7 +241,7 @@ All screenshots are captured automatically at 1080p via Playwright. [See how to 
 | Guide | For You If... | Description |
 |-------|---------------|-------------|
 | **[⚡ Quick Start](docs/QUICKSTART.md)** | New to Catalyst | 5-minute setup with Docker Compose |
-| **[📖 Detailed Installation](docs/installation.md)** | Devs & ops | Full install: every option, every edge case |
+| **[📖 Detailed Installation](docs/INSTALLATION_DETAILED.md)** | Devs & ops | Full install: every option, every edge case |
 | **[Getting Started](docs/getting-started.md)** | First-time admin | Walkthrough: nodes, templates, first server |
 | **[Docker Setup](docs/docker-setup.md)** | System operator | TLS, volumes, networking, production hardening |
 | **[User Guide](docs/user-guide.md)** | Server owner | Manage your servers, files, backups, console |
@@ -273,6 +273,18 @@ All screenshots are captured automatically at 1080p via Playwright. [See how to 
 | Testing | ✅ 23 E2E test suites |
 | Container Deployment | ✅ Docker Compose, Podman Compose |
 | v2 (Scaling, CLI, Mobile) | 🔮 Planned |
+
+---
+
+## 📚 Quick Documentation Links
+
+New here? Pick your path:
+
+- 🚀 **[Quick Start](docs/QUICKSTART.md)** — Running in 5 minutes with Docker
+- 📖 **[Detailed Installation](docs/INSTALLATION_DETAILED.md)** — Every option, every edge case, production hardening
+- 🐳 **[Docker Reference](docs/docker-setup.md)** — Complete Docker/Podman guide: TLS, volumes, networking
+
+The full documentation catalog is in the table above.
 
 ---
 
