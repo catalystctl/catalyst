@@ -65,7 +65,7 @@ Catalyst is a **three-tier architecture** consisting of a React frontend SPA, a 
 
 ### Deployment Architecture
 
-```text
+```
 ┌───────────────────────────────────────────────────────────────┐
 │                       Client Browser                          │
 │              (React SPA served by reverse proxy)               │
@@ -192,7 +192,7 @@ Catalyst is a **three-tier architecture** consisting of a React frontend SPA, a 
 
 **Boot sequence (from `index.ts`):**
 
-```text
+```
 1. Create Fastify instance with security plugins (helmet, cors, rate-limit, compress)
 2. Register Swagger/Swagger UI for API docs at /docs
 3. Register WebSocket gateway at /ws
@@ -243,7 +243,7 @@ Catalyst is a **three-tier architecture** consisting of a React frontend SPA, a 
 
 **Internal architecture:**
 
-```text
+```
 CatalystAgent
 ├── config: AgentConfig (from TOML or env)
 ├── runtime: ContainerdRuntime (gRPC client)
@@ -275,7 +275,7 @@ CatalystAgent
 
 ### User Request Flow
 
-```text
+```
 Browser                    Frontend                      Backend
   │                            │                               │
   │  GET /api/servers          │                               │
@@ -305,7 +305,7 @@ Browser                    Frontend                      Backend
 
 The WebSocket gateway (`/ws`) is the central nervous system connecting the backend to all agents.
 
-```text
+```
 Agent Node A          WebSocket Gateway          Backend Services
      │                       │                         │
      │  connect + auth       │                         │
@@ -348,7 +348,7 @@ Agent Node A          WebSocket Gateway          Backend Services
 
 ### Server Lifecycle Flow
 
-```text
+```
 ┌─────────────┐
 │  Admin/DB   │  CREATE server record
 │  (Prisma)   │  ── INSERT → servers table ─────────────────┐
@@ -389,7 +389,7 @@ Agent Node A          WebSocket Gateway          Backend Services
 
 ### Plugin Runtime Flow
 
-```text
+```
 ┌─────────────────────────────────────────────────────┐
 │                   Backend Process                     │
 │                                                     │
@@ -427,7 +427,7 @@ Agent Node A          WebSocket Gateway          Backend Services
 
 ### Backup Flow
 
-```text
+```
 ┌──────────┐     ┌──────────────┐     ┌──────────┐     ┌──────────┐
 │ Frontend │     │  Backend     │     │  Agent   │     │  Storage │
 │          │     │              │     │          │     │          │
@@ -487,7 +487,7 @@ Catalyst uses **Better Auth v1.6.9** with the Prisma adapter as its primary auth
 
 **Session flow:**
 
-```text
+```
 Client                          Backend                          Database
   │                                │                               │
   │ POST /api/auth/login           │                               │
@@ -537,7 +537,7 @@ Catalyst uses a **Role-Based Access Control (RBAC)** system with **20+ granular 
 
 **Permission resolution flow:**
 
-```text
+```
 Request arrives with userId
          │
          ▼
@@ -563,7 +563,7 @@ API keys provide machine-to-machine authentication. They are **not** part of Bet
 
 **Structure:**
 
-```text
+```
 catalyst_<random-prefix>_<hashed-key>
 │        │                  │
 │        │                  └─ SHA-256 hash of the actual key (stored in DB)
@@ -573,7 +573,7 @@ catalyst_<random-prefix>_<hashed-key>
 
 **Lifecycle:**
 
-```text
+```
 Admin creates key (POST /api/api-keys)
          │
          ▼
@@ -598,7 +598,7 @@ Admin creates key (POST /api/api-keys)
 
 **Verification flow:**
 
-```text
+```
 Request: Authorization: Bearer catalyst_xyz...
          │
          ▼
@@ -638,7 +638,7 @@ Agent nodes authenticate to the backend using **node-specific credentials** stor
 
 **Verification flow:**
 
-```text
+```
 Request with X-Catalyst-Node-Id + X-Catalyst-Node-Token
          │
          ▼
@@ -650,7 +650,7 @@ Request with X-Catalyst-Node-Id + X-Catalyst-Node-Token
 
 **Deployment token flow (one-time use):**
 
-```text
+```
 Admin creates DeploymentToken (POST /api/admin/nodes)
          │
          ▼
@@ -672,7 +672,7 @@ Admin creates DeploymentToken (POST /api/admin/nodes)
 
 ### Entity Relationship Diagram
 
-```text
+```
 ┌──────────┐       1:N       ┌─────────┐       N:1       ┌──────────┐
 │   User   │◄────────────────│  Server │────────────────►│   Node   │
 │──────────│                 │─────────│                 │──────────│
@@ -758,7 +758,7 @@ Admin creates DeploymentToken (POST /api/admin/nodes)
 
 ### Plugin System Components
 
-```text
+```
 ┌─────────────────────────────────────────────────────────────┐
 │                  Plugin System Components                    │
 │                                                             │
@@ -826,7 +826,7 @@ Plugins run in **isolated Node.js Worker Threads**, which provide:
 
 **Thread communication:**
 
-```text
+```
 Main Thread (Fastify)          Worker Thread (Plugin)
          │                              │
          │  require(pluginModule)       │
@@ -856,7 +856,7 @@ Catalyst enforces **per-server network isolation** using CNI (Container Network 
 
 **Isolation strategy:**
 
-```text
+```
 Node Network
     │
     ├── Node Agent (trusted, internal)
@@ -890,7 +890,7 @@ Node Network
 
 SFTP access is **JWT-authenticated** and **session-scoped**:
 
-```text
+```
 User requests SFTP connection
          │
          ▼
@@ -936,7 +936,7 @@ The agent's `FirewallManager` maintains persistent iptables rules:
 iptables -I FORWARD -s 172.18.0.2 -d 172.18.0.3 -j DROP  # No inter-server communication
 iptables -A FORWARD -s 172.18.0.2 -p tcp --dport 25565 -j ACCEPT  # Game port
 iptables -A FORWARD -s 172.18.0.2 -p udp --dport 25565 -j ACCEPT
-```text
+```
 
 ### Data Protection
 

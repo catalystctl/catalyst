@@ -1,41 +1,46 @@
 # Getting Started Guide
 
-A step-by-step walkthrough for setting up and using Catalyst for the first time.
+> 🎉 **Welcome to Catalyst!** This guide walks you through everything *after* installation — from your first login to running your first game server.
+>
+> If you haven't installed the panel yet, hop over to the **[Quick Start](QUICKSTART.md)** (5 minutes) or the **[Installation Guide](installation.md)** (full details).
 
 ## Table of Contents
 
 - [Before You Begin](#before-you-begin)
-- [Step 1: Install the Panel](#step-1-install-the-panel)
-- [Step 2: Initial Login](#step-2-initial-login)
+- [Step 1: Initial Login](#step-1-initial-login)
   - [Forgot Password Flow](#forgot-password-flow)
-- [Step 3: Configure Your Profile](#step-3-configure-your-profile)
+- [Step 2: Configure Your Profile](#step-2-configure-your-profile)
   - [Enable Two-Factor Authentication](#enable-two-factor-authentication)
   - [Trust Device Option](#trust-device-option)
   - [Set Up Passkeys (WebAuthn)](#set-up-passkeys-webauthn)
   - [Change Your Password](#change-your-password)
-- [Step 4: Create a Location](#step-4-create-a-location)
-- [Step 5: Create a Node](#step-5-create-a-node)
-- [Step 6: Deploy the Agent](#step-6-deploy-the-agent)
+- [Step 3: Create a Location](#step-3-create-a-location)
+- [Step 4: Create a Node](#step-4-create-a-node)
+- [Step 5: Deploy the Agent](#step-5-deploy-the-agent)
   - [One-Click Deployment](#one-click-deployment)
   - [Manual Agent Setup](#manual-agent-setup)
   - [Networking Configuration](#networking-configuration)
-- [Step 7: Server Templates](#step-7-server-templates)
+- [Step 6: Server Templates](#step-6-server-templates)
   - [Using Built-in Templates](#using-built-in-templates)
   - [Understanding Template Variables](#understanding-template-variables)
-- [Step 8: Create Your First Server](#step-8-create-your-first-server)
+- [Step 7: Create Your First Server](#step-7-create-your-first-server)
   - [Accepting an Invite (Optional)](#accepting-an-invite-optional)
-- [Step 9: Install the Server](#step-9-install-the-server)
-- [Step 10: Access the Console](#step-10-access-the-console)
-- [Step 11: Basic Server Management](#step-11-basic-server-management)
+- [Step 8: Install the Server](#step-8-install-the-server)
+- [Step 9: Access the Console](#step-9-access-the-console)
+- [Step 10: Basic Server Management](#step-10-basic-server-management)
 - [Next Steps](#next-steps)
 
 ---
 
 ## Before You Begin
 
-Make sure you have:
+Welcome! This guide assumes you already have the Catalyst panel running. If you haven't installed it yet, check out:
 
-- **Installed the panel** following the [Installation Guide](./installation.md)
+- **[Quick Start](QUICKSTART.md)** — Get the panel running in 5 minutes with Docker
+- **[Installation Guide](installation.md)** — Full installation details for every scenario
+
+You'll also need:
+
 - **Access to a node machine** (can be the same server or a separate one) with:
   - Linux (Ubuntu 22.04+, Debian 12+, or similar)
   - Root or sudo access
@@ -44,54 +49,13 @@ Make sure you have:
 
 ---
 
-## Step 1: Install the Panel
-
-If you haven't already, deploy Catalyst using one of the supported methods below.
-
-> **⚠️ Important:** Docker Compose (with Docker or Podman) is the **only supported deployment method**. Direct installation, containerd (`ctr`/`nerdctl`), and other container runtimes are not supported.
-
-### Option A: One-Line Install (Recommended)
-
-The fastest way — no need to clone the full repo:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh | bash
-cd catalyst-docker
-# Edit .env — set PUBLIC_URL at minimum
-nano .env
-docker compose up -d
-```text
-
-👉 See [`catalyst-docker/README.md`](../catalyst-docker/README.md) for full details including TLS setup.
-
-### Option B: Build from Source
-
-```bash
-git clone https://github.com/catalystctl/catalyst.git
-cd catalyst
-cp .env.example .env
-# Edit .env with your values
-./dev.sh
-```
-
-After the stack starts, seed the database to create the initial admin user:
-
-```bash
-docker compose exec backend bun run db:seed
-```text
-
-The seed creates:
-- **Admin account:** `admin@example.com` / `admin123`
-- **Default roles:** Administrator, Moderator, User
-- **Sample templates:** Minecraft (Paper), Node.js Bot
-- **Development node:** `development-1`
-- **Location:** US East 1
-
-> **⚠️ Important:** Change the admin password immediately after your first login.
+> 🎉 **The panel is running — let's get you set up!**
+>
+> This guide walks you through everything after installation: logging in for the first time, setting up a node, deploying the agent, and creating your first game server.
 
 ---
 
-## Step 2: Initial Login
+## Step 1: Initial Login
 
 1. Open your browser and navigate to `http://localhost` (or your configured domain)
 2. Click **Sign In** on the login page
@@ -101,6 +65,8 @@ The seed creates:
 4. Click **Sign In**
 
 You'll be taken to the dashboard where you can see an overview of your system.
+
+> **Did you seed the database?** If you ran `docker compose exec backend bun run db:seed`, the default admin account is `admin@example.com` / `admin123`. **Change this password immediately** after your first login.
 
 ### Registration
 
@@ -152,7 +118,7 @@ This is powered by the `BroadcastChannel` API and `localStorage` event listeners
 
 ---
 
-## Step 3: Configure Your Profile
+## Step 2: Configure Your Profile
 
 After your first login, update your admin profile:
 
@@ -222,7 +188,7 @@ For passwordless login support:
 
 ---
 
-## Step 4: Create a Location
+## Step 3: Create a Location
 
 Locations are logical groupings for your nodes (e.g., data centers, regions).
 
@@ -237,7 +203,7 @@ Locations are used to organize nodes and help users choose where to deploy their
 
 ---
 
-## Step 5: Create a Node
+## Step 4: Create a Node
 
 A node represents a physical or virtual machine that runs game server containers.
 
@@ -287,7 +253,7 @@ The agent needs an API key to authenticate with the panel:
 
 ---
 
-## Step 6: Deploy the Agent
+## Step 5: Deploy the Agent
 
 The Catalyst agent is a Rust binary that runs on each node. It manages containers using containerd and communicates with the panel over WebSocket.
 
@@ -329,7 +295,7 @@ If you prefer manual installation:
    cd catalyst-agent
    cargo build --release
    sudo cp target/release/catalyst-agent /usr/local/bin/
-   ```text
+   ```
 
 2. **Create the configuration file** at `/etc/catalyst/config.toml`:
    ```toml
@@ -365,7 +331,7 @@ If you prefer manual installation:
 
    [Install]
    WantedBy=multi-user.target
-   ```text
+   ```
 
 4. **Start the agent:**
    ```bash
@@ -391,7 +357,7 @@ cidr = "10.5.5.0/24"
 gateway = "10.5.5.1"
 range_start = "10.5.5.50"
 range_end = "10.5.5.200"
-```text
+```
 
 If no networks are configured, the agent will automatically create a default network based on the primary interface.
 
@@ -407,7 +373,7 @@ Standard Docker bridge networking. The panel handles port forwarding from the ho
 
 ---
 
-## Step 7: Server Templates
+## Step 6: Server Templates
 
 Templates define how game servers are configured and deployed. Catalyst comes with built-in templates and supports custom ones.
 
@@ -464,12 +430,12 @@ Templates use `{{VARIABLE_NAME}}` syntax for interpolation in startup commands a
 **Example — Minecraft startup command:**
 ```
 java -Xms{{MEMORY_XMS}}M -Xmx{{MEMORY}}M -jar paper.jar nogui
-```text
+```
 
 With `MEMORY=2048` and `MEMORY_XMS=1024`, this becomes:
 ```
 java -Xms1024M -Xmx2048M -jar paper.jar nogui
-```text
+```
 
 **Built-in placeholders available in install scripts:**
 
@@ -481,7 +447,7 @@ java -Xms1024M -Xmx2048M -jar paper.jar nogui
 
 ---
 
-## Step 8: Create Your First Server
+## Step 7: Create Your First Server
 
 1. Navigate to **Servers** → **Create Server** (or click **+** on the dashboard)
 2. Fill in the server details:
@@ -542,7 +508,7 @@ If someone invited you to a server, you'll receive an invite link:
 
 ---
 
-## Step 9: Install the Server
+## Step 8: Install the Server
 
 Before a server can run, it needs to be installed (this downloads game files and runs the template's install script).
 
@@ -559,7 +525,7 @@ Installation progress is shown in the server console. For Minecraft, this downlo
 
 ---
 
-## Step 10: Access the Console
+## Step 9: Access the Console
 
 The real-time console lets you interact with your server:
 
@@ -581,11 +547,11 @@ list                   — List online players
 op <username>          — Grant operator status
 whitelist add <player> — Add player to whitelist
 stop                   — Stop the server gracefully
-```text
+```
 
 ---
 
-## Step 11: Basic Server Management
+## Step 10: Basic Server Management
 
 ### Start / Stop / Restart
 
@@ -625,7 +591,7 @@ For SFTP access (if enabled on the panel):
    Port: 2022
    Username: <your-username>.<server-uuid>
    Password: <sftp-token>
-   ```text
+   ```
 
 ### Backups
 
@@ -651,7 +617,9 @@ Configure your server from the **Settings** tab:
 
 ## Next Steps
 
-Now that you have a working setup, explore these features:
+Congratulations — you now have a fully working Catalyst setup with a running game server! 🎉
+
+Here's where to go next:
 
 ### Essential Admin Pages
 
@@ -686,12 +654,23 @@ Now that you have a working setup, explore these features:
 - **Mod Manager** — browse and install mods from CurseForge, Modrinth, and Paper
 - **Plugin Manager** — browse and install plugins from Modrinth, Spigot, and Paper
 
-### Documentation
+---
 
-- **[Admin Guide](./admin-guide.md)** — User management, roles, permissions, themes, and system configuration
-- **[Agent Guide](./agent.md)** — Advanced agent configuration, networking, firewall, and troubleshooting
-- **[API Reference](./api-reference.md)** — REST API and WebSocket documentation for automation
-- **[Automation Guide](./automation.md)** — Scheduled tasks, webhooks, and plugin development
-- **[User Guide](./user-guide.md)** — Complete user documentation for day-to-day server management
-- **[Architecture Overview](./architecture.md)** — System design, component diagrams, data flow, security model
-- **[Troubleshooting](./troubleshooting.md)** — Common errors, solutions, and debugging workflows
+## 📖 Related Documentation
+
+| Guide | For You If... |
+|-------|---------------|
+| [Quick Start](QUICKSTART.md) | You haven't installed Catalyst yet |
+| [Installation Guide](installation.md) | You want full installation details |
+| [Docker Setup](docker-setup.md) | You need Docker Compose reference |
+| [Admin Guide](admin-guide.md) | You manage users, roles, and system config |
+| [Agent Guide](agent.md) | You need advanced agent configuration |
+| [API Reference](api-reference.md) | You're building integrations |
+| [Automation Guide](automation.md) | You want scheduled tasks, webhooks, or plugins |
+| [User Guide](user-guide.md) | You manage servers day-to-day |
+| [Architecture Overview](architecture.md) | You want to understand how Catalyst works |
+| [Troubleshooting](troubleshooting.md) | Something went wrong |
+
+---
+
+*Part of the [Catalyst Documentation](README.md). Last updated: 2026-05-11*
