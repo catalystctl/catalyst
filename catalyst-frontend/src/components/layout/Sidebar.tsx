@@ -137,12 +137,6 @@ const adminSections = [
         icon: Database,
         permissions: ['admin.read', 'admin.write'],
       },
-      {
-        to: '/admin/audit-logs',
-        label: 'Audit Logs',
-        icon: Activity,
-        permissions: ['admin.read', 'admin.write'],
-      },
       { to: '/admin/system', label: 'System', icon: Settings, permissions: ['admin.write'] },
       {
         to: '/admin/security',

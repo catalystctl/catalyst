@@ -256,18 +256,6 @@ const STATIC_ITEMS: StaticItemDef[] = [
     path: '/admin/database',
   },
   {
-    id: 'admin-activity',
-    label: 'Activity Log',
-    description: 'Track all platform events and user actions',
-    icon: Activity,
-    to: '/admin/audit-logs',
-    category: 'Admin',
-    keywords: ['audit', 'logs', 'events', 'activity', 'stream', 'log'],
-    permissions: ['admin.read'],
-    badge: 'Admin',
-    path: '/admin/audit-logs',
-  },
-  {
     id: 'admin-system',
     label: 'System',
     description: 'Health, SMTP, and mod manager configuration',
