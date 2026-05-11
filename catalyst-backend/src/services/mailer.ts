@@ -21,8 +21,11 @@ export const MOD_MANAGER_SETTING_ID = 'mod_manager';
 
 export type SecuritySettings = {
   authRateLimitMax: number;
+  authRateLimitWindowMs: number;
   fileRateLimitMax: number;
+  fileRateLimitWindowMs: number;
   consoleRateLimitMax: number;
+  consoleRateLimitWindowMs: number;
   consoleOutputLinesMax: number;
   consoleOutputByteLimitBytes: number;
   agentMessageMax: number;
@@ -35,6 +38,7 @@ export type SecuritySettings = {
   maxBufferMb: number;
   // File tunnel security settings
   fileTunnelRateLimitMax: number;
+  fileTunnelRateLimitWindowMs: number;
   fileTunnelMaxUploadMb: number;
   fileTunnelMaxPendingPerNode: number;
   fileTunnelConcurrentMax: number;
@@ -67,10 +71,26 @@ export const sanitizeConsoleOutputByteLimit = (value: number | null | undefined)
   );
 };
 
+export const RATE_LIMIT_TIME_WINDOWS_MS = {
+  second: 1000,
+  minute: 60_000,
+  hour: 3_600_000,
+  day: 86_400_000,
+  month: 2_592_000_000,
+} as const;
+
+export type RateLimitTimeUnit = keyof typeof RATE_LIMIT_TIME_WINDOWS_MS;
+
+export const isValidTimeWindowMs = (ms: number): boolean =>
+  (Object.values(RATE_LIMIT_TIME_WINDOWS_MS) as readonly number[]).includes(ms);
+
 export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   authRateLimitMax: 60,
+  authRateLimitWindowMs: RATE_LIMIT_TIME_WINDOWS_MS.minute,
   fileRateLimitMax: 180,
+  fileRateLimitWindowMs: RATE_LIMIT_TIME_WINDOWS_MS.minute,
   consoleRateLimitMax: 120,
+  consoleRateLimitWindowMs: RATE_LIMIT_TIME_WINDOWS_MS.minute,
   consoleOutputLinesMax: 2000,
   consoleOutputByteLimitBytes: resolveConsoleOutputByteLimitDefault(),
   agentMessageMax: 10000,
@@ -83,6 +103,7 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   maxBufferMb: 50,
   // File tunnel security settings
   fileTunnelRateLimitMax: 100,
+  fileTunnelRateLimitWindowMs: RATE_LIMIT_TIME_WINDOWS_MS.minute,
   fileTunnelMaxUploadMb: 100,
   fileTunnelMaxPendingPerNode: 50,
   fileTunnelConcurrentMax: 10,
@@ -158,10 +179,16 @@ export const getSecuritySettings = async (): Promise<SecuritySettings> => {
   if (!settings) {
     return { ...DEFAULT_SECURITY_SETTINGS };
   }
+  const resolveWindow = (value: number | null | undefined, fallback: number) =>
+    value && isValidTimeWindowMs(value) ? value : fallback;
+
   return {
     authRateLimitMax: settings.authRateLimitMax ?? DEFAULT_SECURITY_SETTINGS.authRateLimitMax,
+    authRateLimitWindowMs: resolveWindow(settings.authRateLimitWindowMs, DEFAULT_SECURITY_SETTINGS.authRateLimitWindowMs),
     fileRateLimitMax: settings.fileRateLimitMax ?? DEFAULT_SECURITY_SETTINGS.fileRateLimitMax,
+    fileRateLimitWindowMs: resolveWindow(settings.fileRateLimitWindowMs, DEFAULT_SECURITY_SETTINGS.fileRateLimitWindowMs),
     consoleRateLimitMax: settings.consoleRateLimitMax ?? DEFAULT_SECURITY_SETTINGS.consoleRateLimitMax,
+    consoleRateLimitWindowMs: resolveWindow(settings.consoleRateLimitWindowMs, DEFAULT_SECURITY_SETTINGS.consoleRateLimitWindowMs),
     consoleOutputLinesMax: settings.consoleOutputLinesMax ?? DEFAULT_SECURITY_SETTINGS.consoleOutputLinesMax,
     consoleOutputByteLimitBytes: sanitizeConsoleOutputByteLimit(
       settings.consoleOutputByteLimitBytes,
@@ -176,6 +203,7 @@ export const getSecuritySettings = async (): Promise<SecuritySettings> => {
     auditRetentionDays: settings.auditRetentionDays ?? DEFAULT_SECURITY_SETTINGS.auditRetentionDays,
     maxBufferMb: settings.maxBufferMb ?? DEFAULT_SECURITY_SETTINGS.maxBufferMb,
     fileTunnelRateLimitMax: settings.fileTunnelRateLimitMax ?? DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitMax,
+    fileTunnelRateLimitWindowMs: resolveWindow(settings.fileTunnelRateLimitWindowMs, DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitWindowMs),
     fileTunnelMaxUploadMb: settings.fileTunnelMaxUploadMb ?? DEFAULT_SECURITY_SETTINGS.fileTunnelMaxUploadMb,
     fileTunnelMaxPendingPerNode: settings.fileTunnelMaxPendingPerNode ?? DEFAULT_SECURITY_SETTINGS.fileTunnelMaxPendingPerNode,
     fileTunnelConcurrentMax: settings.fileTunnelConcurrentMax ?? DEFAULT_SECURITY_SETTINGS.fileTunnelConcurrentMax,
@@ -214,13 +242,28 @@ export const upsertSecuritySettings = async (payload: SecuritySettings) => {
   const consoleOutputByteLimitBytes = sanitizeConsoleOutputByteLimit(
     payload.consoleOutputByteLimitBytes,
   );
+  const authRateLimitWindowMs = isValidTimeWindowMs(payload.authRateLimitWindowMs)
+    ? payload.authRateLimitWindowMs
+    : DEFAULT_SECURITY_SETTINGS.authRateLimitWindowMs;
+  const fileRateLimitWindowMs = isValidTimeWindowMs(payload.fileRateLimitWindowMs)
+    ? payload.fileRateLimitWindowMs
+    : DEFAULT_SECURITY_SETTINGS.fileRateLimitWindowMs;
+  const consoleRateLimitWindowMs = isValidTimeWindowMs(payload.consoleRateLimitWindowMs)
+    ? payload.consoleRateLimitWindowMs
+    : DEFAULT_SECURITY_SETTINGS.consoleRateLimitWindowMs;
+  const fileTunnelRateLimitWindowMs = isValidTimeWindowMs(payload.fileTunnelRateLimitWindowMs)
+    ? payload.fileTunnelRateLimitWindowMs
+    : DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitWindowMs;
   return prisma.systemSetting.upsert({
     where: { id: SECURITY_SETTING_ID },
     create: {
       id: SECURITY_SETTING_ID,
       authRateLimitMax: payload.authRateLimitMax,
+      authRateLimitWindowMs,
       fileRateLimitMax: payload.fileRateLimitMax,
+      fileRateLimitWindowMs,
       consoleRateLimitMax: payload.consoleRateLimitMax,
+      consoleRateLimitWindowMs,
       consoleOutputLinesMax: payload.consoleOutputLinesMax,
       consoleOutputByteLimitBytes,
       agentMessageMax: payload.agentMessageMax,
@@ -232,14 +275,18 @@ export const upsertSecuritySettings = async (payload: SecuritySettings) => {
       auditRetentionDays: payload.auditRetentionDays,
       maxBufferMb: payload.maxBufferMb,
       fileTunnelRateLimitMax: payload.fileTunnelRateLimitMax,
+      fileTunnelRateLimitWindowMs,
       fileTunnelMaxUploadMb: payload.fileTunnelMaxUploadMb,
       fileTunnelMaxPendingPerNode: payload.fileTunnelMaxPendingPerNode,
       fileTunnelConcurrentMax: payload.fileTunnelConcurrentMax,
     },
     update: {
       authRateLimitMax: payload.authRateLimitMax,
+      authRateLimitWindowMs,
       fileRateLimitMax: payload.fileRateLimitMax,
+      fileRateLimitWindowMs,
       consoleRateLimitMax: payload.consoleRateLimitMax,
+      consoleRateLimitWindowMs,
       consoleOutputLinesMax: payload.consoleOutputLinesMax,
       consoleOutputByteLimitBytes,
       agentMessageMax: payload.agentMessageMax,
@@ -251,6 +298,7 @@ export const upsertSecuritySettings = async (payload: SecuritySettings) => {
       auditRetentionDays: payload.auditRetentionDays,
       maxBufferMb: payload.maxBufferMb,
       fileTunnelRateLimitMax: payload.fileTunnelRateLimitMax,
+      fileTunnelRateLimitWindowMs,
       fileTunnelMaxUploadMb: payload.fileTunnelMaxUploadMb,
       fileTunnelMaxPendingPerNode: payload.fileTunnelMaxPendingPerNode,
       fileTunnelConcurrentMax: payload.fileTunnelConcurrentMax,

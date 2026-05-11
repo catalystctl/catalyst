@@ -218,8 +218,11 @@ export interface SmtpSettings {
 
 export interface SecuritySettings {
   authRateLimitMax: number;
+  authRateLimitWindowMs: number;
   fileRateLimitMax: number;
+  fileRateLimitWindowMs: number;
   consoleRateLimitMax: number;
+  consoleRateLimitWindowMs: number;
   consoleOutputLinesMax: number;
   consoleOutputByteLimitBytes: number;
   agentMessageMax: number;
@@ -232,6 +235,7 @@ export interface SecuritySettings {
   maxBufferMb: number;
   // File tunnel settings
   fileTunnelRateLimitMax: number;
+  fileTunnelRateLimitWindowMs: number;
   fileTunnelMaxUploadMb: number;
   fileTunnelMaxPendingPerNode: number;
   fileTunnelConcurrentMax: number;

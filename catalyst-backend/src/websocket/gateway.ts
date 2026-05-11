@@ -246,7 +246,10 @@ export class WebSocketGateway {
   private async refreshConsoleLimits() {
     const settings = await this.prisma.systemSetting.findUnique({ where: { id: "security" } });
     if (settings?.consoleRateLimitMax && settings.consoleRateLimitMax > 0) {
-      this.consoleInputLimit = { ...this.consoleInputLimit, max: settings.consoleRateLimitMax };
+      this.consoleInputLimit = { max: settings.consoleRateLimitMax, windowMs: settings.consoleRateLimitWindowMs ?? 60_000 };
+    }
+    if (settings?.consoleRateLimitWindowMs && settings.consoleRateLimitWindowMs > 0) {
+      this.consoleInputLimit = { ...this.consoleInputLimit, windowMs: settings.consoleRateLimitWindowMs };
     }
     if (settings?.consoleOutputLinesMax && settings.consoleOutputLinesMax > 0) {
       this.consoleOutputLimit = { ...this.consoleOutputLimit, max: settings.consoleOutputLinesMax };

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
-import { ModManagerTarget, buildProviderHeaders, ensureModManagerEnabled, ensurePluginManagerEnabled, ensureServerAccess, extractGameVersion, fileRateLimitMax, getModManagerSettings, getProviderTargets, loadPluginProviderConfig, loadProviderConfig, normalizeRequestPath, normalizeTargetValue, path, resolveCurseforgeClassId, resolveCurseforgeGameId, resolveCurseforgeLoaderType, resolveModManagerProvider, resolveModrinthGameVersion, resolvePaperDownload, resolveSpigotDownload, resolveTemplatePath, sanitizeFilename } from './_helpers.js';
+import { ModManagerTarget, buildProviderHeaders, ensureModManagerEnabled, ensurePluginManagerEnabled, ensureServerAccess, extractGameVersion, fileRateLimitMax, fileRateLimitWindowMs, getModManagerSettings, getProviderTargets, loadPluginProviderConfig, loadProviderConfig, normalizeRequestPath, normalizeTargetValue, path, resolveCurseforgeClassId, resolveCurseforgeGameId, resolveCurseforgeLoaderType, resolveModManagerProvider, resolveModrinthGameVersion, resolvePaperDownload, resolveSpigotDownload, resolveTemplatePath, sanitizeFilename } from './_helpers.js';
 
 export async function serverModpluginsRoutes(app: FastifyInstance) {
   const fileTunnel = (app as any).fileTunnel as import("../../services/file-tunnel").FileTunnelService;
@@ -80,7 +80,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/mod-manager/search",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -229,7 +229,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/mod-manager/versions",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -293,7 +293,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/mod-manager/install",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -512,7 +512,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/plugin-manager/search",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -626,7 +626,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/plugin-manager/versions",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -690,7 +690,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/plugin-manager/install",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -895,7 +895,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/mod-manager/installed",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -945,7 +945,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/plugin-manager/installed",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -994,7 +994,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/mod-manager/uninstall",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -1061,7 +1061,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/plugin-manager/uninstall",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -1125,7 +1125,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/mod-manager/check-updates",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: 15, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: 15, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -1242,7 +1242,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/plugin-manager/check-updates",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: 15, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: 15, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -1349,7 +1349,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/mod-manager/update",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -1490,7 +1490,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     "/:serverId/plugin-manager/update",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };

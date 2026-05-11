@@ -20,6 +20,7 @@ import {
   upsertModManagerSettings,
   upsertSecuritySettings,
   upsertSmtpSettings,
+  isValidTimeWindowMs,
 } from '../services/mailer';
 import { serialize } from '../utils/serialize';
 
@@ -1886,8 +1887,11 @@ export async function adminRoutes(app: FastifyInstance) {
 
       const {
         authRateLimitMax = DEFAULT_SECURITY_SETTINGS.authRateLimitMax,
+        authRateLimitWindowMs = DEFAULT_SECURITY_SETTINGS.authRateLimitWindowMs,
         fileRateLimitMax = DEFAULT_SECURITY_SETTINGS.fileRateLimitMax,
+        fileRateLimitWindowMs = DEFAULT_SECURITY_SETTINGS.fileRateLimitWindowMs,
         consoleRateLimitMax = DEFAULT_SECURITY_SETTINGS.consoleRateLimitMax,
+        consoleRateLimitWindowMs = DEFAULT_SECURITY_SETTINGS.consoleRateLimitWindowMs,
         consoleOutputLinesMax = DEFAULT_SECURITY_SETTINGS.consoleOutputLinesMax,
         consoleOutputByteLimitBytes = DEFAULT_SECURITY_SETTINGS.consoleOutputByteLimitBytes,
         agentMessageMax = DEFAULT_SECURITY_SETTINGS.agentMessageMax,
@@ -1899,6 +1903,7 @@ export async function adminRoutes(app: FastifyInstance) {
         auditRetentionDays = DEFAULT_SECURITY_SETTINGS.auditRetentionDays,
         maxBufferMb = DEFAULT_SECURITY_SETTINGS.maxBufferMb,
         fileTunnelRateLimitMax = DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitMax,
+        fileTunnelRateLimitWindowMs = DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitWindowMs,
         fileTunnelMaxUploadMb = DEFAULT_SECURITY_SETTINGS.fileTunnelMaxUploadMb,
         fileTunnelMaxPendingPerNode = DEFAULT_SECURITY_SETTINGS.fileTunnelMaxPendingPerNode,
         fileTunnelConcurrentMax = DEFAULT_SECURITY_SETTINGS.fileTunnelConcurrentMax,
@@ -1927,10 +1932,18 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'Security settings must be positive numbers' });
       }
 
+      const windowFields = [authRateLimitWindowMs, fileRateLimitWindowMs, consoleRateLimitWindowMs, fileTunnelRateLimitWindowMs];
+      if (windowFields.some((value) => !Number.isFinite(value) || !isValidTimeWindowMs(Number(value)))) {
+        return reply.status(400).send({ error: 'Time windows must be valid (1000, 60000, 3600000, 86400000, or 2592000000 ms)' });
+      }
+
       await upsertSecuritySettings({
         authRateLimitMax: Number(authRateLimitMax),
+        authRateLimitWindowMs: Number(authRateLimitWindowMs),
         fileRateLimitMax: Number(fileRateLimitMax),
+        fileRateLimitWindowMs: Number(fileRateLimitWindowMs),
         consoleRateLimitMax: Number(consoleRateLimitMax),
+        consoleRateLimitWindowMs: Number(consoleRateLimitWindowMs),
         consoleOutputLinesMax: Number(consoleOutputLinesMax),
         consoleOutputByteLimitBytes: Number(consoleOutputByteLimitBytes),
         agentMessageMax: Number(agentMessageMax),
@@ -1942,6 +1955,7 @@ export async function adminRoutes(app: FastifyInstance) {
         auditRetentionDays: Number(auditRetentionDays),
         maxBufferMb: Number(maxBufferMb),
         fileTunnelRateLimitMax: Number(fileTunnelRateLimitMax),
+        fileTunnelRateLimitWindowMs: Number(fileTunnelRateLimitWindowMs),
         fileTunnelMaxUploadMb: Number(fileTunnelMaxUploadMb),
         fileTunnelMaxPendingPerNode: Number(fileTunnelMaxPendingPerNode),
         fileTunnelConcurrentMax: Number(fileTunnelConcurrentMax),
@@ -1952,8 +1966,11 @@ export async function adminRoutes(app: FastifyInstance) {
         resource: 'system',
         details: {
           authRateLimitMax,
+          authRateLimitWindowMs,
           fileRateLimitMax,
+          fileRateLimitWindowMs,
           consoleRateLimitMax,
+          consoleRateLimitWindowMs,
           consoleOutputLinesMax,
           consoleOutputByteLimitBytes,
           agentMessageMax,
@@ -1965,6 +1982,7 @@ export async function adminRoutes(app: FastifyInstance) {
           auditRetentionDays,
           maxBufferMb,
           fileTunnelRateLimitMax,
+          fileTunnelRateLimitWindowMs,
           fileTunnelMaxUploadMb,
           fileTunnelMaxPendingPerNode,
           fileTunnelConcurrentMax,

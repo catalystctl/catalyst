@@ -20,6 +20,13 @@ import { useAuthLockouts, useSecuritySettings } from '../../hooks/useAdmin';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import Pagination from '../../components/shared/Pagination';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../components/ui/select';
 
 // ── Animation Variants ──
 const containerVariants = {
@@ -30,6 +37,20 @@ const containerVariants = {
 const itemVariants: Variants = {
   hidden: { opacity: 0, y: 12 },
   visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
+};
+
+// ── Time Window Constants ──
+const TIME_WINDOWS = [
+  { value: '1000', label: 'second' },
+  { value: '60000', label: 'minute' },
+  { value: '3600000', label: 'hour' },
+  { value: '86400000', label: 'day' },
+  { value: '2592000000', label: 'month' },
+] as const;
+
+const resolveWindowLabel = (ms: number): string => {
+  const match = TIME_WINDOWS.find((w) => Number(w.value) === ms);
+  return match ? match.label : 'minute';
 };
 
 // ── Tooltip Helper ──
@@ -73,6 +94,59 @@ function NumberField({
         min={min}
         max={max}
       />
+    </label>
+  );
+}
+
+// ── Rate Limit Field (count + time unit dropdown) ──
+function RateLimitField({
+  label,
+  countValue,
+  onCountChange,
+  windowValue,
+  onWindowChange,
+  tooltip,
+  min = '1',
+  max,
+}: {
+  label: string;
+  countValue: string;
+  onCountChange: (v: string) => void;
+  windowValue: string;
+  onWindowChange: (v: string) => void;
+  tooltip?: string;
+  min?: string;
+  max?: string;
+}) {
+  return (
+    <label className="block space-y-1">
+      <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        {label}
+        {tooltip && <Tooltip text={tooltip} />}
+      </span>
+      <div className="flex items-center gap-1.5">
+        <Input
+          type="number"
+          value={countValue}
+          onChange={(e) => onCountChange(e.target.value)}
+          min={min}
+          max={max}
+          className="flex-1"
+        />
+        <span className="text-xs text-muted-foreground shrink-0">per</span>
+        <Select value={windowValue} onValueChange={onWindowChange}>
+          <SelectTrigger className="w-[100px] shrink-0">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TIME_WINDOWS.map((w) => (
+              <SelectItem key={w.value} value={w.value}>
+                {w.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </label>
   );
 }
@@ -192,22 +266,31 @@ function SecurityPage() {
   const [lockoutPage, setLockoutPage] = useState(1);
   const lockoutPageSize = 20;
 
-  // Security settings state
-  const [authRateLimitMax, setAuthRateLimitMax] = useState('5');
-  const [fileRateLimitMax, setFileRateLimitMax] = useState('30');
-  const [consoleRateLimitMax, setConsoleRateLimitMax] = useState('60');
+  // ── Rate limit state (count + time window) ──
+  const [authRateLimitMax, setAuthRateLimitMax] = useState('60');
+  const [authRateLimitWindowMs, setAuthRateLimitWindowMs] = useState('60000');
+  const [fileRateLimitMax, setFileRateLimitMax] = useState('180');
+  const [fileRateLimitWindowMs, setFileRateLimitWindowMs] = useState('60000');
+  const [consoleRateLimitMax, setConsoleRateLimitMax] = useState('120');
+  const [consoleRateLimitWindowMs, setConsoleRateLimitWindowMs] = useState('60000');
+
+  // ── Per-second throughput limits (no time window selector) ──
   const [consoleOutputLinesMax, setConsoleOutputLinesMax] = useState('2000');
   const [consoleOutputByteLimitBytes, setConsoleOutputByteLimitBytes] = useState('2097152');
   const [agentMessageMax, setAgentMessageMax] = useState('10000');
   const [agentMetricsMax, setAgentMetricsMax] = useState('10000');
   const [serverMetricsMax, setServerMetricsMax] = useState('60');
+  const [maxBufferMb, setMaxBufferMb] = useState('50');
+
+  // ── Lockout policy ──
   const [lockoutMaxAttempts, setLockoutMaxAttempts] = useState('5');
   const [lockoutWindowMinutes, setLockoutWindowMinutes] = useState('15');
   const [lockoutDurationMinutes, setLockoutDurationMinutes] = useState('15');
   const [auditRetentionDays, setAuditRetentionDays] = useState('90');
-  const [maxBufferMb, setMaxBufferMb] = useState('50');
-  // File tunnel settings
+
+  // ── File tunnel settings ──
   const [fileTunnelRateLimitMax, setFileTunnelRateLimitMax] = useState('100');
+  const [fileTunnelRateLimitWindowMs, setFileTunnelRateLimitWindowMs] = useState('60000');
   const [fileTunnelMaxUploadMb, setFileTunnelMaxUploadMb] = useState('100');
   const [fileTunnelMaxPendingPerNode, setFileTunnelMaxPendingPerNode] = useState('50');
   const [fileTunnelConcurrentMax, setFileTunnelConcurrentMax] = useState('10');
@@ -222,8 +305,11 @@ function SecurityPage() {
     if (!settings) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAuthRateLimitMax(String(settings.authRateLimitMax));
+    setAuthRateLimitWindowMs(String(settings.authRateLimitWindowMs ?? 60000));
     setFileRateLimitMax(String(settings.fileRateLimitMax));
+    setFileRateLimitWindowMs(String(settings.fileRateLimitWindowMs ?? 60000));
     setConsoleRateLimitMax(String(settings.consoleRateLimitMax));
+    setConsoleRateLimitWindowMs(String(settings.consoleRateLimitWindowMs ?? 60000));
     setConsoleOutputLinesMax(String(settings.consoleOutputLinesMax));
     setConsoleOutputByteLimitBytes(String(settings.consoleOutputByteLimitBytes));
     setAgentMessageMax(String(settings.agentMessageMax));
@@ -235,16 +321,23 @@ function SecurityPage() {
     setAuditRetentionDays(String(settings.auditRetentionDays));
     setMaxBufferMb(String(settings.maxBufferMb));
     setFileTunnelRateLimitMax(String(settings.fileTunnelRateLimitMax ?? 100));
+    setFileTunnelRateLimitWindowMs(String(settings.fileTunnelRateLimitWindowMs ?? 60000));
     setFileTunnelMaxUploadMb(String(settings.fileTunnelMaxUploadMb ?? 100));
     setFileTunnelMaxPendingPerNode(String(settings.fileTunnelMaxPendingPerNode ?? 50));
     setFileTunnelConcurrentMax(String(settings.fileTunnelConcurrentMax ?? 10));
   }, [settings]);
 
+  // ── Validate time window values ──
+  const validTimeWindows = new Set(TIME_WINDOWS.map((w) => Number(w.value)));
+
   const canSubmit = useMemo(
     () =>
       Number(authRateLimitMax) > 0 &&
+      validTimeWindows.has(Number(authRateLimitWindowMs)) &&
       Number(fileRateLimitMax) > 0 &&
+      validTimeWindows.has(Number(fileRateLimitWindowMs)) &&
       Number(consoleRateLimitMax) > 0 &&
+      validTimeWindows.has(Number(consoleRateLimitWindowMs)) &&
       Number(consoleOutputLinesMax) > 0 &&
       Number(consoleOutputByteLimitBytes) >= MIN_CONSOLE_OUTPUT_BYTES_PER_SECOND &&
       Number(consoleOutputByteLimitBytes) <= MAX_CONSOLE_OUTPUT_BYTES_PER_SECOND &&
@@ -257,14 +350,20 @@ function SecurityPage() {
       Number(auditRetentionDays) > 0 &&
       Number(maxBufferMb) >= 1 &&
       Number(fileTunnelRateLimitMax) > 0 &&
+      validTimeWindows.has(Number(fileTunnelRateLimitWindowMs)) &&
       Number(fileTunnelMaxUploadMb) > 0 &&
       Number(fileTunnelMaxPendingPerNode) > 0 &&
       Number(fileTunnelConcurrentMax) > 0,
     [
-      authRateLimitMax, fileRateLimitMax, consoleRateLimitMax, consoleOutputLinesMax,
-      consoleOutputByteLimitBytes, agentMessageMax, agentMetricsMax, serverMetricsMax,
-      lockoutMaxAttempts, lockoutWindowMinutes, lockoutDurationMinutes, auditRetentionDays,
-      maxBufferMb, fileTunnelRateLimitMax, fileTunnelMaxUploadMb, fileTunnelMaxPendingPerNode,
+      authRateLimitMax, authRateLimitWindowMs,
+      fileRateLimitMax, fileRateLimitWindowMs,
+      consoleRateLimitMax, consoleRateLimitWindowMs,
+      consoleOutputLinesMax, consoleOutputByteLimitBytes,
+      agentMessageMax, agentMetricsMax, serverMetricsMax,
+      lockoutMaxAttempts, lockoutWindowMinutes, lockoutDurationMinutes,
+      auditRetentionDays, maxBufferMb,
+      fileTunnelRateLimitMax, fileTunnelRateLimitWindowMs,
+      fileTunnelMaxUploadMb, fileTunnelMaxPendingPerNode,
       fileTunnelConcurrentMax,
     ],
   );
@@ -273,8 +372,11 @@ function SecurityPage() {
     mutationFn: () =>
       adminApi.updateSecuritySettings({
         authRateLimitMax: Number(authRateLimitMax),
+        authRateLimitWindowMs: Number(authRateLimitWindowMs),
         fileRateLimitMax: Number(fileRateLimitMax),
+        fileRateLimitWindowMs: Number(fileRateLimitWindowMs),
         consoleRateLimitMax: Number(consoleRateLimitMax),
+        consoleRateLimitWindowMs: Number(consoleRateLimitWindowMs),
         consoleOutputLinesMax: Number(consoleOutputLinesMax),
         consoleOutputByteLimitBytes: Number(consoleOutputByteLimitBytes),
         agentMessageMax: Number(agentMessageMax),
@@ -286,6 +388,7 @@ function SecurityPage() {
         auditRetentionDays: Number(auditRetentionDays),
         maxBufferMb: Number(maxBufferMb),
         fileTunnelRateLimitMax: Number(fileTunnelRateLimitMax),
+        fileTunnelRateLimitWindowMs: Number(fileTunnelRateLimitWindowMs),
         fileTunnelMaxUploadMb: Number(fileTunnelMaxUploadMb),
         fileTunnelMaxPendingPerNode: Number(fileTunnelMaxPendingPerNode),
         fileTunnelConcurrentMax: Number(fileTunnelConcurrentMax),
@@ -349,7 +452,7 @@ function SecurityPage() {
         {/* ── Rate Limits Section ── */}
         <Section
           title="Rate Limits"
-          subtitle="Requests per minute unless noted. Adjust to prevent abuse while allowing normal usage."
+          subtitle="Adjust request counts and time windows to prevent abuse while allowing normal usage."
           icon={<Zap className="h-4 w-4 text-warning dark:text-warning" />}
           iconColor="bg-warning/10 dark:bg-warning/30"
           footer={
@@ -360,20 +463,29 @@ function SecurityPage() {
         >
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <NumberField
-                label="Auth requests / min"
-                value={authRateLimitMax}
-                onChange={setAuthRateLimitMax}
+              <RateLimitField
+                label="Auth requests"
+                countValue={authRateLimitMax}
+                onCountChange={setAuthRateLimitMax}
+                windowValue={authRateLimitWindowMs}
+                onWindowChange={setAuthRateLimitWindowMs}
+                tooltip="Maximum authentication API requests (login, register, etc.) per time window."
               />
-              <NumberField
-                label="File operations / min"
-                value={fileRateLimitMax}
-                onChange={setFileRateLimitMax}
+              <RateLimitField
+                label="File operations"
+                countValue={fileRateLimitMax}
+                onCountChange={setFileRateLimitMax}
+                windowValue={fileRateLimitWindowMs}
+                onWindowChange={setFileRateLimitWindowMs}
+                tooltip="Maximum file and mod/plugin API requests per time window. Applies to list, read, write, upload, compress, decompress, download, and delete operations."
               />
-              <NumberField
-                label="Console input / min"
-                value={consoleRateLimitMax}
-                onChange={setConsoleRateLimitMax}
+              <RateLimitField
+                label="Console input"
+                countValue={consoleRateLimitMax}
+                onCountChange={setConsoleRateLimitMax}
+                windowValue={consoleRateLimitWindowMs}
+                onWindowChange={setConsoleRateLimitWindowMs}
+                tooltip="Maximum console command submissions per time window via WebSocket."
               />
               <NumberField
                 label="Console output lines / sec"
@@ -467,11 +579,13 @@ function SecurityPage() {
           }
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <NumberField
-              label="Tunnel requests / min"
-              value={fileTunnelRateLimitMax}
-              onChange={setFileTunnelRateLimitMax}
-              tooltip="Maximum file tunnel requests per minute per agent node."
+            <RateLimitField
+              label="Tunnel requests"
+              countValue={fileTunnelRateLimitMax}
+              onCountChange={setFileTunnelRateLimitMax}
+              windowValue={fileTunnelRateLimitWindowMs}
+              onWindowChange={setFileTunnelRateLimitWindowMs}
+              tooltip="Maximum file tunnel requests per time window per agent node."
             />
             <NumberField
               label="Max upload size (MB)"

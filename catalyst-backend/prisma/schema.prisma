@@ -284,6 +284,11 @@ model SystemSetting {
   lockoutDurationMinutes      Int?
   auditRetentionDays          Int?
   maxBufferMb                 Int?
+  // Rate limit time windows (milliseconds)
+  authRateLimitWindowMs       Int?
+  fileRateLimitWindowMs       Int?
+  consoleRateLimitWindowMs    Int?
+  fileTunnelRateLimitWindowMs Int?
   // File tunnel security settings
   fileTunnelRateLimitMax      Int?
   fileTunnelMaxUploadMb       Int?

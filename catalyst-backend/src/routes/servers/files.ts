@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
-import { captureSystemError, ensureNotSuspended, fileRateLimitMax, hasNodeAccess, isArchiveName, normalizeRequestPath, path, validateAndNormalizePath } from './_helpers.js';
+import { captureSystemError, ensureNotSuspended, fileRateLimitMax, fileRateLimitWindowMs, hasNodeAccess, isArchiveName, normalizeRequestPath, path, validateAndNormalizePath } from './_helpers.js';
 
 export async function serverFilesRoutes(app: FastifyInstance) {
   const fileTunnel = (app as any).fileTunnel as import("../../services/file-tunnel").FileTunnelService;
@@ -39,7 +39,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     "/:serverId/files",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: '1 minute' } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -104,7 +104,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     "/:serverId/files/download",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: '1 minute' } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -171,7 +171,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     "/:serverId/files/upload",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: '1 minute' } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -247,7 +247,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     "/:serverId/files/create",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: '1 minute' } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -317,7 +317,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     "/:serverId/files/compress",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: '1 minute' } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -384,7 +384,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     "/:serverId/files/decompress",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: '1 minute' } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -450,7 +450,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     "/:serverId/files/archive-contents",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: '1 minute' } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -587,7 +587,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     "/:serverId/files/write",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: '1 minute' } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -665,7 +665,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     "/:serverId/files/permissions",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: '1 minute' } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
@@ -751,7 +751,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
   // Delete file or directory
   app.delete(
     "/:serverId/files/delete",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: '1 minute' } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -826,7 +826,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     "/:serverId/files/rename",
     {
       onRequest: [app.authenticate],
-      config: { rateLimit: { max: fileRateLimitMax, timeWindow: '1 minute' } },
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };

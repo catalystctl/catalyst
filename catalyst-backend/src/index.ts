@@ -652,7 +652,10 @@ async function bootstrap() {
 						const settings = await getSecuritySettings();
 						return settings.authRateLimitMax;
 					},
-					timeWindow: "1 minute",
+					timeWindow: async () => {
+						const settings = await getSecuritySettings();
+						return settings.authRateLimitWindowMs;
+					},
 					allowList: (request) => request.url.startsWith("/api/auth/passkey/"),
 				},
 			},

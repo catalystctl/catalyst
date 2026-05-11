@@ -71,7 +71,7 @@ export function fileTunnelRoutes(
             const settings = await getSecuritySettings();
             return settings.fileTunnelRateLimitMax;
           },
-          timeWindow: '1 minute',
+          timeWindow: async () => { const s = await getSecuritySettings(); return s.fileTunnelRateLimitWindowMs; },
           allowList: agentAllowList,
           skipOnError: false,
         },
@@ -111,7 +111,7 @@ export function fileTunnelRoutes(
             const settings = await getSecuritySettings();
             return settings.fileTunnelRateLimitMax;
           },
-          timeWindow: '1 minute',
+          timeWindow: async () => { const s = await getSecuritySettings(); return s.fileTunnelRateLimitWindowMs; },
           allowList: agentAllowList,
           skipOnError: false,
         },
@@ -166,7 +166,7 @@ export function fileTunnelRoutes(
             const settings = await getSecuritySettings();
             return settings.fileTunnelRateLimitMax;
           },
-          timeWindow: '1 minute',
+          timeWindow: async () => { const s = await getSecuritySettings(); return s.fileTunnelRateLimitWindowMs; },
           allowList: agentAllowList,
           skipOnError: false,
         },
@@ -213,7 +213,7 @@ export function fileTunnelRoutes(
             const settings = await getSecuritySettings();
             return settings.fileTunnelRateLimitMax;
           },
-          timeWindow: '1 minute',
+          timeWindow: async () => { const s = await getSecuritySettings(); return s.fileTunnelRateLimitWindowMs; },
           allowList: agentAllowList,
           skipOnError: false,
         },
