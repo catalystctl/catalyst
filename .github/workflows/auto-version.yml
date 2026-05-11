@@ -146,6 +146,12 @@ jobs:
           NEW_VERSION: ${{ steps.version.outputs.new_version }}
           PREVIOUS_TAG: ${{ steps.bump.outputs.current_version }}
         run: |
+          if [ -z "$LLM_API_KEY" ]; then
+            echo "❌ LLM_API_KEY secret is not set — cannot generate AI release notes"
+            echo "   Add it in Settings → Secrets and variables → Actions"
+            echo "FALLBACK=true" >> "$GITHUB_OUTPUT"
+          fi
+
           PREV_TAG="v${PREVIOUS_TAG}"
           NEW_TAG="v${NEW_VERSION}"
 
@@ -190,6 +196,13 @@ jobs:
           Commit messages: \
           ${COMMIT_LOG}"
 
+          # Skip API call if no key configured
+          if [ "${FALLBACK}" = "true" ]; then
+            echo "## Changes\n\n${COMMIT_LOG}" > /tmp/release_notes.md
+            echo "⚠️ Wrote fallback commit-log notes (no LLM_API_KEY)"
+            exit 0
+          fi
+
           # Call the OpenAI-compatible API
           RESPONSE=$(curl -s -f "${LLM_API_BASE}/chat/completions" \
             -H "Content-Type: application/json" \
@@ -208,7 +221,7 @@ jobs:
           # Extract the generated text, or fall back to the commit list
           if echo "$RESPONSE" | jq -e '.choices[0].message.content' >/dev/null 2>&1; then
             NOTES=$(echo "$RESPONSE" | jq -r '.choices[0].message.content')
-            echo "Successfully generated AI release notes"
+            echo "✅ Successfully generated AI release notes"
           else
             echo "⚠️ AI generation failed, falling back to commit log"
             echo "API response: $(echo "$RESPONSE" | head -5)"
