@@ -123,7 +123,7 @@ export class CollectionStorage implements PluginCollectionAPI {
 
     for (const doc of docs) {
       const { _id } = doc;
-      let updated = { ...doc };
+      const updated = { ...doc };
 
       if (updateData.$set) {
         Object.assign(updated, updateData.$set);
