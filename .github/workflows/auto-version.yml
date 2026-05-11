@@ -233,6 +233,7 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.bump.outputs.bump != 'none'
+        id: create_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.new_version }}
@@ -240,3 +241,48 @@ jobs:
           body_path: /tmp/release_notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify Discord on Release
+        if: steps.bump.outputs.bump != 'none'
+        env:
+          DISCORD_RELEASE_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+          NEW_VERSION: ${{ steps.version.outputs.new_version }}
+        run: |
+          if [ -z "$DISCORD_RELEASE_WEBHOOK_URL" ]; then
+            echo "⊘ No DISCORD_RELEASE_WEBHOOK_URL secret set, skipping notification"
+            exit 0
+          fi
+
+          TAG="v${NEW_VERSION}"
+          RELEASE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+          NOTES=$(cat /tmp/release_notes.md)
+
+          # Truncate notes to fit Discord embed description limit (1024 chars)
+          if [ ${#NOTES} -gt 1000 ]; then
+            DESCRIPTION="${NOTES:0:1000}…\n[View full release notes](<$RELEASE_URL>)"
+          else
+            DESCRIPTION="$NOTES"
+          fi
+
+          jq -n \
+            --arg username "Catalyst" \
+            --arg avatar_url "https://github.com/${GITHUB_REPOSITORY_OWNER}.png" \
+            --arg title "🚀 Release ${TAG}" \
+            --arg description "$DESCRIPTION" \
+            --arg url "$RELEASE_URL" \
+            --argjson color 5763719 \
+            --arg repo "$GITHUB_REPOSITORY" \
+            '{
+              username: $username,
+              avatar_url: $avatar_url,
+              embeds: [{
+                title: $title,
+                description: $description,
+                url: $url,
+                color: $color,
+                footer: { text: $repo },
+                timestamp: now | todateiso8601
+              }]
+            }' | curl -sf -H "Content-Type: application/json" -X POST "$DISCORD_RELEASE_WEBHOOK_URL" -d @-
+
+          echo "✅ Discord release notification sent for ${TAG}"
