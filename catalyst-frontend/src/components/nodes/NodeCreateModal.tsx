@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { MapPin, ArrowRight } from 'lucide-react';
+import { MapPin, ArrowRight, CheckCircle, Loader2, Copy } from 'lucide-react';
 import { nodesApi } from '../../services/api/nodes';
 import { locationsApi } from '../../services/api/locations';
 
@@ -29,7 +29,7 @@ const OPEN_LOCATIONS_EVENT = 'catalyst:open-locations-modal' as const;
 
 function NodeCreateModal(_props: Props) {
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [locationId, setLocationId] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -46,6 +46,7 @@ function NodeCreateModal(_props: Props) {
     apiKey: string;
     expiresAt: string;
   } | null>(null);
+  const [createdNodeId, setCreatedNodeId] = useState<string | null>(null);
 
   // Re-open this modal when a location manager sends the user back
   // If a location was just created, auto-select it and jump to step 2
@@ -71,7 +72,7 @@ function NodeCreateModal(_props: Props) {
     refetchInterval: 15000,
   });
 
-  const mutation = useMutation({
+  const createMutation = useMutation({
     mutationFn: async () => {
       const created = await nodesApi.create({
         name,
@@ -85,22 +86,38 @@ function NodeCreateModal(_props: Props) {
         cpuOverallocatePercent: Number(cpuOverallocate),
         serverDataDir: serverDataDir || undefined,
       });
-      const info = created?.id ? await nodesApi.deploymentToken(created.id) : null;
-      return info;
+      return created;
     },
-    onSuccess: (info) => {
+    onSuccess: (created) => {
       Promise.all([
         queryClient.invalidateQueries({ queryKey: qk.nodes() }),
         queryClient.invalidateQueries({ queryKey: ['admin-nodes'] }),
       ]);
       notifySuccess('Node registered');
-      setDeployInfo(info ?? null);
-      setOpen(false);
-      resetForm();
+      setCreatedNodeId(created?.id ?? null);
+      // Move to step 3 (deploy script) and immediately fetch the deployment token
+      setStep(3);
+      if (created?.id) {
+        deployTokenMutation.mutate(created.id);
+      }
     },
     onError: (error: any) => {
       const message = error?.response?.data?.error || 'Failed to register node';
       notifyError(message);
+    },
+  });
+
+  const deployTokenMutation = useMutation({
+    mutationFn: async (nodeId: string) => {
+      const info = await nodesApi.deploymentToken(nodeId);
+      return info;
+    },
+    onSuccess: (info) => {
+      setDeployInfo(info ?? null);
+    },
+    onError: () => {
+      // Don't show a separate error — step 3 already has a retry button
+      setDeployInfo(null);
     },
   });
 
@@ -116,6 +133,10 @@ function NodeCreateModal(_props: Props) {
     setMemoryOverallocate('0');
     setCpuOverallocate('0');
     setServerDataDir('/var/lib/catalyst/servers');
+    setDeployInfo(null);
+    setCreatedNodeId(null);
+    createMutation.reset();
+    deployTokenMutation.reset();
   };
 
   const disableSubmit =
@@ -125,7 +146,7 @@ function NodeCreateModal(_props: Props) {
     !publicAddress ||
     !Number(memory) ||
     !Number(cpu) ||
-    mutation.isPending;
+    createMutation.isPending;
 
   return (
     <div>
@@ -148,12 +169,14 @@ function NodeCreateModal(_props: Props) {
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5 dark:border-border">
                 <div>
                   <h2 className="text-lg font-semibold text-foreground">
-                    {step === 1 ? 'Register Node' : 'Node details'}
+                    {step === 1 ? 'Register Node' : step === 2 ? 'Node details' : 'Deploy agent'}
                   </h2>
                   <p className="text-xs text-muted-foreground dark:text-muted-foreground">
                     {step === 1
                       ? 'Choose a location for this node.'
-                      : 'Configure hostname, resources, and connection details.'}
+                      : step === 2
+                        ? 'Configure hostname, resources, and connection details.'
+                        : 'Install the agent on your node using the script below.'}
                   </p>
                 </div>
                 <button
@@ -181,14 +204,25 @@ function NodeCreateModal(_props: Props) {
                 </div>
                 <div className="h-px flex-1 bg-border" />
                 <div
-                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 2 ? 'bg-primary/10 text-primary-600 dark:text-primary-400' : 'text-muted-foreground'}`}
+                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 2 ? 'bg-primary/10 text-primary-600 dark:text-primary-400' : step === 3 ? 'bg-primary/10 text-primary-600 dark:text-primary-400' : 'text-muted-foreground'}`}
                 >
                   <span
-                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 2 ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground'}`}
+                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 2 || step === 3 ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground'}`}
                   >
                     2
                   </span>
                   Details
+                </div>
+                <div className="h-px flex-1 bg-border" />
+                <div
+                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 3 ? 'bg-primary/10 text-primary-600 dark:text-primary-400' : 'text-muted-foreground'}`}
+                >
+                  <span
+                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 3 ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground'}`}
+                  >
+                    3
+                  </span>
+                  Deploy
                 </div>
               </div>
 
@@ -410,56 +444,97 @@ function NodeCreateModal(_props: Props) {
                     </button>
                     <button
                       className="rounded-full bg-primary px-6 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
-                      onClick={() => mutation.mutate()}
+                      onClick={() => createMutation.mutate()}
                       disabled={disableSubmit}
                     >
-                      {mutation.isPending ? 'Registering...' : 'Register node'}
+                      {createMutation.isPending ? 'Registering...' : 'Register node'}
                     </button>
                   </div>
                 </>
               )}
-            </div>
-          </div>
-        </ModalPortal>
-      ) : null}
 
-      {/* ── Deploy Info Modal ── */}
-      {deployInfo ? (
-        <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 py-10 backdrop-blur-sm">
-            <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl transition-all duration-300 dark:border-border dark:bg-surface-1">
-              <div className="flex items-center justify-between border-b border-border px-6 py-4 dark:border-border">
-                <h2 className="text-lg font-semibold text-foreground">
-                  Deploy agent
-                </h2>
-                <button
-                  className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary dark:border-border dark:hover:border-primary/30"
-                  onClick={() => setDeployInfo(null)}
-                >
-                  Close
-                </button>
-              </div>
-              <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground">
-                <div className="text-muted-foreground">
-                  Run this on the node to install and register the agent (valid for 24 hours).
-                </div>
-                <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 text-xs text-foreground dark:border-border dark:bg-surface-0/40">
-                  <code className="whitespace-pre-wrap">
-                    {`curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`}
-                  </code>
-                </div>
-                <div className="text-xs text-muted-foreground dark:text-muted-foreground">
-                  Token expires: {new Date(deployInfo.expiresAt).toLocaleString()}
-                </div>
-              </div>
-              <div className="flex justify-end border-t border-border px-6 py-4 text-xs dark:border-border">
-                <button
-                  className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
-                  onClick={() => setDeployInfo(null)}
-                >
-                  Done
-                </button>
-              </div>
+              {/* ── Step 3: Deploy Script ── */}
+              {step === 3 && (
+                <>
+                  <div className="flex flex-col items-center px-6 py-8 text-center">
+                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 dark:from-emerald-500/20 dark:to-cyan-500/20">
+                      <CheckCircle className="h-7 w-7 text-success dark:text-success" />
+                    </div>
+                    <h3 className="text-base font-semibold text-foreground">
+                      Node registered successfully
+                    </h3>
+                    <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+                      Run the script below on <span className="font-medium text-foreground">{hostname}</span> to install and register the agent.
+                    </p>
+
+                    {deployTokenMutation.isPending ? (
+                      <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Generating deployment script…
+                      </div>
+                    ) : deployInfo ? (
+                      <div className="mt-6 w-full space-y-3 text-left">
+                        <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 font-mono text-xs text-foreground dark:border-border dark:bg-surface-0/40">
+                          <code className="whitespace-pre-wrap break-all">
+{`curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`}
+                          </code>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>Token expires: {new Date(deployInfo.expiresAt).toLocaleString()}</span>
+                          <button
+                            className="inline-flex items-center gap-1 font-medium text-primary-600 hover:text-primary dark:text-primary-400 dark:hover:text-primary-300"
+                            onClick={() => {
+                              navigator.clipboard.writeText(
+                                `curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`
+                              );
+                              notifySuccess('Copied to clipboard');
+                            }}
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                            Copy
+                          </button>
+                        </div>
+                      </div>
+                    ) : deployTokenMutation.isError ? (
+                      <div className="mt-6 w-full space-y-3 text-left">
+                        <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning dark:border-warning/30 dark:bg-warning/10">
+                          Failed to generate deployment script automatically.
+                        </div>
+                        <button
+                          className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
+                          onClick={() => {
+                            if (createdNodeId) {
+                              deployTokenMutation.mutate(createdNodeId);
+                            }
+                          }}
+                        >
+                          Retry
+                        </button>
+                        {createdNodeId && (
+                          <p className="text-xs text-muted-foreground">
+                            Or go to{' '}
+                            <a href={`/admin/nodes/${createdNodeId}`} className="font-medium text-primary-600 hover:text-primary dark:text-primary-400">
+                              node settings
+                            </a>{' '}
+                            to generate the deploy script manually.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="flex justify-end border-t border-border px-6 py-4 text-xs dark:border-border">
+                    <button
+                      className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
+                      onClick={() => {
+                        setOpen(false);
+                        resetForm();
+                      }}
+                    >
+                      Done
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </ModalPortal>
