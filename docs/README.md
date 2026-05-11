@@ -11,7 +11,7 @@ Welcome to the Catalyst documentation. This is the central index for all guides,
 | Path | If you... | Start here |
 |------|-----------|------------|
 | **🚀 Simple** | Want to get running in 5 minutes with Docker | **[QUICKSTART.md](QUICKSTART.md)** |
-| **📖 Detailed** | Want to understand every option and edge case | **[installation.md](installation.md)** |
+| **📖 Detailed** | Want to understand every option and edge case | **[INSTALLATION_DETAILED.md](INSTALLATION_DETAILED.md)** |
 
 > **Docker is the only supported deployment method.** You need Docker (or Podman) with Compose support. Nothing else required — no Node.js, no Rust, no database setup.
 
@@ -31,7 +31,7 @@ Then follow **[QUICKSTART.md](QUICKSTART.md)** → **[Getting Started](getting-s
 
 For production deployments, custom setups, or when things go wrong:
 
-1. **[installation.md](installation.md)** — Complete install guide with every option
+1. **[INSTALLATION_DETAILED.md](INSTALLATION_DETAILED.md)** — Complete install guide with every option
 2. **[Docker Setup](docker-setup.md)** — Deep dive into Docker Compose, volumes, TLS, networking
 3. **[Environment Variables](environment-variables.md)** — Every config variable explained
 
@@ -46,7 +46,7 @@ For production deployments, custom setups, or when things go wrong:
 | **[QUICKSTART](QUICKSTART.md)** | New users — 5-minute Docker setup | Simple |
 | **[Getting Started](getting-started.md)** | First-time users — walkthrough after install | Simple |
 | **[Installation](installation.md)** | Devs & ops — full install instructions | Medium |
-| **[Installation (Detailed)](installation.md)** | Production deployments — every option covered | Detailed |
+| **[Installation (Detailed)](INSTALLATION_DETAILED.md)** | Production deployments — every option covered | Detailed |
 | **[Usage Examples](usage-examples.md)** | Everyone — copy-paste API, CLI, and automation snippets | Reference |
 
 ### End User Guides

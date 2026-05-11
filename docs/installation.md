@@ -3,7 +3,7 @@
 > **🐳 Docker is the only supported way to run Catalyst.** All production deployments use Docker Compose or Podman Compose.
 
 > **📚 Looking for the 5-minute version?** → [Quick Start](QUICKSTART.md)  
-> **📖 Want every option explained in depth?** → [Detailed Installation](installation.md)
+> **📖 Want every option explained in depth?** → [Detailed Installation](INSTALLATION_DETAILED.md)
 
 Complete instructions for deploying **Catalyst** with Docker Compose. This guide covers everything you need to get the panel running, configured, and secured.
 
@@ -72,7 +72,7 @@ docker compose up -d
 
 For Podman, use `podman compose up -d` instead of `docker compose up -d`.
 
-📖 See [Detailed Installation](installation.md) for a breakdown of everything the install script does, Podman quirks, and LAN exposure settings.
+📖 See [Detailed Installation](INSTALLATION_DETAILED.md) for a breakdown of everything the install script does, Podman quirks, and LAN exposure settings.
 
 ---
 
@@ -374,7 +374,7 @@ WebAuthn/Passkey requires `PASSKEY_RP_ID` to exactly match your domain:
 
 No protocol, no port — bare hostname or IP only.
 
-📖 For full TLS configuration details, certificate automation, and reverse-proxy examples: [Detailed Installation](installation.md).
+📖 For full TLS configuration details, certificate automation, and reverse-proxy examples: [Detailed Installation](INSTALLATION_DETAILED.md).
 
 ---
 
@@ -450,4 +450,4 @@ curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.s
 | Backend crash loop | Check `BETTER_AUTH_SECRET` and `DATABASE_URL` are set. Check `docker compose logs -f backend`. |
 
 📖 For comprehensive troubleshooting — debug logging, agent issues, CORS errors, plugin failures, and performance tuning: [Troubleshooting](./troubleshooting.md).  
-📖 For deep-dive environment variable explanations and config issue matrix: [Detailed Installation](installation.md).
+📖 For deep-dive environment variable explanations and config issue matrix: [Detailed Installation](INSTALLATION_DETAILED.md).

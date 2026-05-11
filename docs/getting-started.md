@@ -1,6 +1,8 @@
 # Getting Started Guide
 
-A step-by-step walkthrough for setting up and using Catalyst for the first time.
+> 🎉 **Welcome to Catalyst!** This guide walks you through everything *after* installation — from your first login to running your first game server.
+>
+> If you haven't installed the panel yet, hop over to the **[Quick Start](QUICKSTART.md)** (5 minutes) or the **[Installation Guide](installation.md)** (full details).
 
 ## Table of Contents
 
