@@ -6,6 +6,8 @@ on:
   pull_request:
     branches: [main, develop]
     types: [opened, closed]
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -15,10 +17,35 @@ jobs:
     runs-on: blacksmith-2vcpu-ubuntu-2404
     env:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      DISCORD_RELEASE_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
     steps:
       - name: Send Discord webhook
         run: |
-          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+          if [ "$GITHUB_EVENT_NAME" = "release" ]; then
+            TAG=$(jq -r '.release.tag_name' < "$GITHUB_EVENT_PATH")
+            RELEASE_URL=$(jq -r '.release.html_url' < "$GITHUB_EVENT_PATH")
+            RELEASE_BODY=$(jq -r '.release.body // ""' < "$GITHUB_EVENT_PATH")
+            PRERELEASE=$(jq -r '.release.prerelease' < "$GITHUB_EVENT_PATH")
+
+            if [ "$PRERELEASE" = "true" ]; then
+              EMBED_TITLE="🧪 Pre-release $TAG"
+              EMBED_COLOR=16776960  # yellow
+            else
+              EMBED_TITLE="🚀 Release $TAG"
+              EMBED_COLOR=5763719  # green
+            fi
+
+            # Truncate body to fit Discord embed limits (1024 chars for description)
+            if [ ${#RELEASE_BODY} -gt 1000 ]; then
+              DESCRIPTION="${RELEASE_BODY:0:1000}…\n[View full release notes](<$RELEASE_URL>)"
+            else
+              DESCRIPTION="$RELEASE_BODY"
+            fi
+
+            EMBED_URL="$RELEASE_URL"
+            WEBHOOK_URL="${DISCORD_RELEASE_WEBHOOK_URL:-$DISCORD_WEBHOOK_URL}"
+
+          elif [ "$GITHUB_EVENT_NAME" = "push" ]; then
             COMMIT_COUNT=$(jq '.commits | length' < "$GITHUB_EVENT_PATH")
 
             # Build commit list (max 5 shown)
@@ -62,8 +89,11 @@ jobs:
 
           ACTOR_AVATAR="https://github.com/$GITHUB_ACTOR.png"
 
+          # Use release-specific webhook for releases, general webhook otherwise
+          WEBHOOK_URL="${WEBHOOK_URL:-$DISCORD_WEBHOOK_URL}"
+
           jq -n \
-            --arg username "GitHub" \
+            --arg username "Catalyst" \
             --arg avatar_url "$ACTOR_AVATAR" \
             --arg title "$EMBED_TITLE" \
             --arg description "$DESCRIPTION" \
@@ -81,6 +111,6 @@ jobs:
                 footer: { text: $repo },
                 timestamp: now | todateiso8601
               }]
-            }' | curl -sf -H "Content-Type: application/json" -X POST "$DISCORD_WEBHOOK_URL" -d @-
+            }' | curl -sf -H "Content-Type: application/json" -X POST "$WEBHOOK_URL" -d @-
 
-        if: env.DISCORD_WEBHOOK_URL != ''
+        if: env.DISCORD_WEBHOOK_URL != '' || env.DISCORD_RELEASE_WEBHOOK_URL != ''
