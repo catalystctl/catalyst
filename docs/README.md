@@ -4,26 +4,59 @@ Welcome to the Catalyst documentation. This is the central index for all guides,
 
 ---
 
-## 📚 Quick Start
+## ⚡ Get Running Now
 
-| Guide | Audience |
-|-------|----------|
-| [Getting Started](getting-started.md) | New users — deploy Catalyst in minutes with Docker Compose |
-| [Installation](installation.md) | Devs & ops — full install instructions for Linux, Docker, and production |
-| [Usage Examples](usage-examples.md) | Everyone — copy-paste API, CLI, and automation snippets |
+**New to Catalyst?** Pick your path:
+
+| Path | If you... | Start here |
+|------|-----------|------------|
+| **🚀 Simple** | Want to get running in 5 minutes with Docker | **[QUICKSTART.md](QUICKSTART.md)** |
+| **📖 Detailed** | Want to understand every option and edge case | **[installation.md](installation.md)** |
+
+> **Docker is the only supported deployment method.** You need Docker (or Podman) with Compose support. Nothing else required — no Node.js, no Rust, no database setup.
+
+### Simple Path
+
+For most users who just want Catalyst running:
+
+```bash
+# One-line install
+curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh | bash
+cd catalyst-docker && nano .env && docker compose up -d
+```
+
+Then follow **[QUICKSTART.md](QUICKSTART.md)** → **[Getting Started](getting-started.md)** for your first server.
+
+### Detailed Path
+
+For production deployments, custom setups, or when things go wrong:
+
+1. **[installation.md](installation.md)** — Complete install guide with every option
+2. **[Docker Setup](docker-setup.md)** — Deep dive into Docker Compose, volumes, TLS, networking
+3. **[Environment Variables](environment-variables.md)** — Every config variable explained
 
 ---
 
-## 🎮 End User Guides
+## 📚 All Guides
+
+### Quick Start
+
+| Guide | Audience | Detail Level |
+|-------|----------|-------------|
+| **[QUICKSTART](QUICKSTART.md)** | New users — 5-minute Docker setup | Simple |
+| **[Getting Started](getting-started.md)** | First-time users — walkthrough after install | Simple |
+| **[Installation](installation.md)** | Devs & ops — full install instructions | Medium |
+| **[Installation (Detailed)](installation.md)** | Production deployments — every option covered | Detailed |
+| **[Usage Examples](usage-examples.md)** | Everyone — copy-paste API, CLI, and automation snippets | Reference |
+
+### End User Guides
 
 | Document | Description |
 |----------|-------------|
 | [User Guide](user-guide.md) | Game server management: console, files, backups, databases, tasks, SFTP |
 | [Troubleshooting](troubleshooting.md) | Common errors, solutions, and debugging workflows |
 
----
-
-## 🔧 Administration
+### Administration
 
 | Document | Description |
 |----------|-------------|
@@ -31,18 +64,14 @@ Welcome to the Catalyst documentation. This is the central index for all guides,
 | [Agent Guide](agent.md) | Deploy and configure the Rust agent on game server nodes (containerd, CNI) |
 | [Environment Variables](environment-variables.md) | Complete reference of all 60+ configuration variables with defaults |
 
----
-
-## ⚙️ Infrastructure & Deployment
+### Infrastructure & Deployment
 
 | Document | Description |
 |----------|-------------|
 | [Docker Setup](docker-setup.md) | Docker Compose reference: services, volumes, networking, TLS, health checks |
 | [Architecture Overview](architecture.md) | System design, component diagrams, data flow, security model, scaling |
 
----
-
-## 👨‍💻 Developer Resources
+### Developer Resources
 
 | Document | Description |
 |----------|-------------|
@@ -53,9 +82,7 @@ Welcome to the Catalyst documentation. This is the central index for all guides,
 | [Plugin System Analysis](plugin-system-analysis.md) | Deep dive into the plugin architecture and internals |
 | [Plugin System Gap Analysis](plugin-system-gaps.md) | Identified gaps and recommended improvements for the plugin system |
 
----
-
-## 🔒 Security
+### Security
 
 | Document | Description |
 |----------|-------------|
@@ -105,4 +132,4 @@ If you find gaps in the documentation or encounter unclear sections:
 
 ---
 
-*Last updated: 2026-05-04*
+*Last updated: 2026-05-11*

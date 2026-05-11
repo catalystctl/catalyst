@@ -392,7 +392,7 @@ Catalyst runs a dedicated SFTP server (default port: 2022). Instead of using you
 ```bash
 sftp -P 2022 -oPasswordPrompt=no \
   "sftp_token@your-catalyst.example.com"
-```text
+```
 
 **curl:**
 ```bash
@@ -802,7 +802,7 @@ POST /api/servers/:serverId/suspend
 
 # Unsuspend a server (admin only)
 POST /api/servers/:serverId/unsuspend
-```text
+```
 
 If your admin has configured database hosts, you can create and manage databases for your server.
 
@@ -945,7 +945,7 @@ Create API keys to programmatically interact with the Catalyst API.
 # Authenticate with your API key
 curl -H "Authorization: Bearer catalyst_your_key_here" \
   https://your-catalyst.example.com/api/servers
-```text
+```
 
 ### Managing API Keys
 

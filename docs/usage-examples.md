@@ -58,7 +58,7 @@ All API requests require authentication via API key. The same key authenticates 
 # All requests include the API key in the Authorization header
 curl -X GET http://localhost:3000/api/servers \
   -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
-```text
+```
 
 API keys follow the format `catalyst_<base64-encoded-uuid>`.
 
@@ -89,7 +89,7 @@ curl -X POST http://localhost:3000/api/agent/report \
   -H "Authorization: Bearer $AGENT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"nodeId":"node_abc","status":"online","cpu":45.2}'
-```text
+```
 
 For full agent details, see [agent.md](./agent.md).
 
@@ -131,7 +131,7 @@ curl -X POST http://localhost:3000/api/servers \
   "ownerEmail": "player@example.com",
   "createdAt": "2025-04-01T12:00:00.000Z"
 }
-```text
+```
 
 ### List Servers
 
@@ -151,7 +151,7 @@ curl "http://localhost:3000/api/servers?page=1&limit=20" \
 # Get full server details including console, settings, and resources
 curl http://localhost:3000/api/servers/srv_xyz789 \
   -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
-```text
+```
 
 ### Power Operations
 
@@ -187,7 +187,7 @@ curl -X POST http://localhost:3000/api/servers/srv_xyz789/power \
 # Delete with confirmation
 curl -X DELETE http://localhost:3000/api/servers/srv_xyz789 \
   -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
-```text
+```
 
 ---
 
@@ -211,7 +211,7 @@ Stream real-time console output via Server-Sent Events:
 ```bash
 curl -N http://localhost:3000/api/servers/srv_xyz789/console-stream \
   -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
-```text
+```
 
 Example output:
 
@@ -219,7 +219,7 @@ Example output:
 data: {"type":"output","data":"[12:00:00] [Server thread/INFO]: Starting minecraft server version 1.21\n"}
 data: {"type":"output","data":"[12:00:01] [Server thread/INFO]: Preparing level \"world\"\n"}
 data: {"type":"output","data":"[12:00:05] [Server thread/INFO]: Done (5.123s)!\n"}
-```text
+```
 
 For WebSocket-based console, see [api-reference.md](./api-reference.md).
 
@@ -257,7 +257,7 @@ curl -X POST http://localhost:3000/api/servers/srv_xyz789/backups \
     "name": "pre-update-backup",
     "description": "Backup before applying config changes"
   }'
-```text
+```
 
 ### List Backups
 
@@ -273,7 +273,7 @@ curl -X POST http://localhost:3000/api/servers/srv_xyz789/backups/bkp_abc/restor
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6" \
   -d '{"backupId":"bkp_abc"}'
-```text
+```
 
 ### Delete a Backup
 
@@ -305,7 +305,7 @@ sftp> put my-custom-config.yml
 
 # Upload multiple files
 sftp> mput *.yml plugins/
-```text
+```
 
 SFTP credentials are available per-server in the admin panel or via the API. For SFTP configuration details, see [admin-guide.md](./admin-guide.md).
 
@@ -355,7 +355,7 @@ curl -X POST http://localhost:3000/api/webhooks \
     "events": ["server.created", "server.deleted", "server.suspended"],
     "secret": "whsec_your_secret_key"
   }'
-```text
+```
 
 ### Webhook Receiver Examples
 
@@ -451,7 +451,7 @@ app.post('/webhook', (req, res) => {
 });
 
 app.listen(8080);
-```text
+```
 
 All available webhook events: `server.created`, `server.deleted`, `server.suspended`, `server.unsuspended`, `server.bulk_suspended`, `server.bulk_deleted`, `user.deleted`. For the full event payload schema, see [api-reference.md](./api-reference.md).
 
@@ -479,7 +479,7 @@ curl -X POST http://localhost:3000/api/servers/srv_xyz789/files/write \
     "path": "config.yml",
     "content": "server-name: My Server\nmax-players: 20"
   }'
-```text
+```
 
 ### List Directory
 
@@ -503,7 +503,7 @@ curl http://localhost:3000/api/servers/srv_xyz789/files/list \
 # Paginated user list
 curl "http://localhost:3000/api/admin/users?page=1&limit=20" \
   -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
-```text
+```
 
 ### Create a User
 
@@ -525,7 +525,7 @@ curl -X POST http://localhost:3000/api/admin/users \
 ```bash
 curl http://localhost:3000/api/admin/nodes \
   -H "Authorization: Bearer catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6"
-```text
+```
 
 ### Deploy a Node
 
@@ -565,7 +565,7 @@ curl -X POST http://localhost:3000/api/admin/templates \
     "fileStartupLocation": ".",
     "userFiles": []
   }'
-```text
+```
 
 ---
 
@@ -640,7 +640,7 @@ if __name__ == "__main__":
   {"name": "mc-survival-2", "nodeId": "node_abc", "templateId": "tpl_mc_paper", "ownerEmail": "user2@example.com"},
   {"name": "creative-1", "nodeId": "node_def", "templateId": "tpl_mc_paper", "ownerEmail": "user3@example.com"}
 ]
-```text
+```
 
 ### Node.js: Server Health Monitor
 
@@ -727,14 +727,14 @@ while IFS= read -r line; do
   deploy_server "$line"
   sleep "$DEPLOY_DELAY"
 done
-```text
+```
 
 `servers.jsonl` example (one JSON object per line):
 
 ```
 {"name":"test-1","nodeId":"node_abc","templateId":"tpl_mc_paper","ownerEmail":"a@example.com","limits":{"cpu":200,"memory":1024,"disk":5120}}
 {"name":"test-2","nodeId":"node_abc","templateId":"tpl_mc_paper","ownerEmail":"b@example.com","limits":{"cpu":400,"memory":2048,"disk":10240}}
-```text
+```
 
 ---
 
@@ -769,7 +769,7 @@ Rate limit headers are returned on every response:
 X-RateLimit-Limit: 30
 X-RateLimit-Remaining: 27
 X-RateLimit-Reset: 1712000060
-```text
+```
 
 For complete API details and all endpoints, see [api-reference.md](./api-reference.md).
 

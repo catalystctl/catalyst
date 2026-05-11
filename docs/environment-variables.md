@@ -66,7 +66,7 @@ All backend variables are defined in `catalyst-backend/.env.example`.
 ::: tip Copy to Start
 ```bash
 cp catalyst-backend/.env.example catalyst-backend/.env
-```text
+```
 :::
 
 ### General
@@ -95,7 +95,7 @@ cp catalyst-backend/.env.example catalyst-backend/.env
 ```
 BETTER_AUTH_URL → PUBLIC_URL → BACKEND_EXTERNAL_ADDRESS → http://localhost:3000
 FRONTEND_URL    → PUBLIC_URL → http://localhost:5173
-```text
+```
 The first available value is used. See source: `catalyst-backend/src/auth.ts`.
 :::
 
@@ -448,7 +448,7 @@ namespace = "catalyst"
 [logging]
 level = "info"
 format = "json"  # "json" or "text"
-```text
+```
 
 ### TOML Sections
 

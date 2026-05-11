@@ -37,7 +37,7 @@
 **Bun:**
 ```bash
 curl -fsSL https://bun.sh/install | bash
-```text
+```
 
 **Rust:**
 ```bash
@@ -51,7 +51,7 @@ rustup component add rustfmt clippy
 curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v25.1/protoc-25.1-linux-x86_64.zip"
 unzip protoc-25.1-linux-x86_64.zip -d $HOME/.local
 export PATH="$HOME/.local/bin:$PATH"
-```text
+```
 
 ---
 
@@ -89,7 +89,7 @@ catalyst/
 ├── .github/workflows/         # CI/CD pipelines
 ├── package.json               # Root workspace config
 └── docs/                      # User/admin documentation
-```text
+```
 
 ---
 
@@ -129,7 +129,7 @@ bun run dev
 # Frontend (port 5173)
 cd catalyst-frontend
 bun run dev
-```text
+```
 
 ---
 
@@ -174,7 +174,7 @@ bun run db:seed
 
 ### Project Structure
 
-```text
+```
 catalyst-backend/src/
 ├── index.ts                 # Fastify bootstrap, route registration, service startup
 ├── auth.ts                  # Better Auth initialization
@@ -211,7 +211,7 @@ catalyst-backend/src/
 ServerStateMachine.canTransition(from, to);  // Validate
 prisma.server.update(...);                    // Persist
 wsGateway.sendToAgent(...);                   // Notify agent
-```text
+```
 
 **RBAC Middleware** — Every protected route uses the permission middleware:
 
@@ -242,7 +242,7 @@ bun run test
 
 # Run E2E tests (requires backend running)
 bun run test:e2e
-```text
+```
 
 ### Development Commands
 
@@ -281,7 +281,7 @@ catalyst-frontend/src/
 ├── services/                # API client, WebSocket service
 ├── lib/                     # Utilities (formatters, helpers)
 └── test/setup.ts            # Vitest test setup
-```text
+```
 
 ### Key Architecture Patterns
 
@@ -667,7 +667,7 @@ cargo build --release
 
 # Run on a node with containerd
 sudo cargo run -- ./config.toml
-```text
+```
 
 ### Development Commands
 
@@ -689,7 +689,7 @@ catalyst-agent/src/
 ├── runtime_manager.rs       # Containerd lifecycle management
 ├── file_manager.rs          # File operations on node filesystem
 └── config.rs                # TOML configuration parsing
-```text
+```
 
 ### Key Architecture Patterns
 
@@ -710,7 +710,7 @@ containerd_client.get_container_status(container_id).await?;
 
 // Backend → Agent
 { "type": "start_server", "serverId": "...", "serverUuid": "..." }
-```text
+```
 
 ---
 
@@ -766,7 +766,7 @@ export default {
     // Final cleanup
   }
 };
-```text
+```
 
 ### Context API
 
@@ -825,7 +825,7 @@ bun run test:ui
 
 # Generate coverage report
 bun run test:coverage
-```text
+```
 
 Test files live alongside source in `src/**/__tests__/**/*.test.ts`.
 
@@ -852,7 +852,7 @@ bun run test:screenshots:headed
 
 # Against an already-running dev server
 SKIP_WEB_SERVER=1 bun run test:screenshots
-```text
+```
 
 The screenshot crawl dynamically discovers routes from `src/App.tsx`, navigation links from the sidebar, and modals from DOM triggers — requiring zero test maintenance when adding pages.
 
@@ -945,7 +945,7 @@ vi.mock('@/services/api/servers', () => ({
 ```bash
 # From monorepo root — runs tests in all packages
 bun run test
-```text
+```
 
 ---
 
@@ -980,7 +980,7 @@ Backend and frontend share similar TypeScript ESLint rules but with different ta
 ```bash
 bun run lint -- --fix
 bun run format    # Frontend only
-```text
+```
 
 ### Rust (Agent)
 
@@ -1026,7 +1026,7 @@ bun run db:seed
 
 # Admin user only
 bun run db:seed:admin
-```text
+```
 
 Default seeded credentials: `admin@example.com` / `password123`
 
@@ -1074,7 +1074,7 @@ docs: update API reference for new endpoints
 refactor: simplify state machine transitions
 test: add E2E test for plugin management
 chore: update dependencies
-```text
+```
 
 ---
 
@@ -1110,7 +1110,7 @@ bun run db:studio
 # Check network requests in browser DevTools
 # WebSocket connection shown in Network → WS tab
 # React DevTools for component tree inspection
-```text
+```
 
 ### Agent
 
@@ -1129,7 +1129,7 @@ docker compose up -d              # Start infra
 docker compose logs -f            # Tail all logs
 docker compose logs -f backend    # Tail backend only
 docker compose logs -f frontend   # Tail frontend only
-```text
+```
 
 ---
 

@@ -74,7 +74,7 @@ curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/catalyst-
 cp .env.example .env
 nano .env
 docker compose up -d
-```text
+```
 
 ### Database Initialization Fails
 
@@ -121,7 +121,7 @@ ls -la /run/containerd/containerd.sock
 
 # Verify the agent can access it
 sudo /usr/local/bin/catalyst-agent --help
-```text
+```
 
 ### CNI Plugins Missing
 
@@ -161,7 +161,7 @@ docker compose logs postgres
 
 # Ensure correct port mapping
 grep -A2 'postgres' catalyst-docker/docker-compose.yml
-```text
+```
 
 **Fix:**
 
@@ -204,7 +204,7 @@ docker compose exec backend bun run db:seed
 
 # Restart all services
 docker compose up -d
-```text
+```
 
 ### PostgreSQL Too Many Connections
 
@@ -242,7 +242,7 @@ docker compose exec postgres psql -U postgres -d catalyst -c "SELECT email, name
 
 # Check if Better Auth is misconfigured
 docker compose logs backend | grep -i "auth"
-```text
+```
 
 **Common causes:**
 
@@ -280,7 +280,7 @@ docker compose exec postgres psql -U postgres -d catalyst -c \
 # Verify it worked
 docker compose exec postgres psql -U postgres -d catalyst -c \
   "SELECT email, two_factor_enabled FROM users WHERE email = 'your@email.com';"
-```text
+```
 
 **Common 2FA issues:**
 
@@ -327,7 +327,7 @@ PASSKEY_RP_ID=panel.example.com
 # Check backend logs for OAuth errors
 docker compose logs backend | grep -i oauth
 docker compose logs backend | grep -i oidc
-```text
+```
 
 **Common OIDC issues:**
 
@@ -378,7 +378,7 @@ curl -v https://panel.example.com/health
 # In the panel UI: Admin → Nodes → [Your Node] → Agent tab → Generate Deployment Token
 # Then run:
 curl -fsSL https://panel.example.com/api/deploy/YOUR_NEW_TOKEN | sudo bash
-```text
+```
 
 ### WebSocket Connection Drops Repeatedly
 
@@ -409,7 +409,7 @@ location /ws {
     proxy_read_timeout 86400s;
     proxy_send_timeout 86400s;
 }
-```text
+```
 
 **Caddy:**
 ```caddy
@@ -425,7 +425,7 @@ reverse_proxy /ws* localhost:3000 {
 labels:
   - traefik.http.routers.websocket.rule=Host(`panel.example.com`) && PathPrefix(`/ws`)
   - traefik.http.routers.websocket.websocket=true
-```text
+```
 
 ### Agent Authentication Lockout
 
@@ -637,7 +637,7 @@ BACKEND_URL="wss://panel.example.com/ws" \
 NODE_ID="your-node-uuid" \
 NODE_API_KEY="your-api-key" \
 sudo /usr/local/bin/catalyst-agent --help
-```text
+```
 
 ---
 
@@ -686,7 +686,7 @@ sudo ctr -n catalyst tasks ls --format json | grep -A 5 "memory"
 
 # Check if cgroup memory limits are set correctly
 cat /sys/fs/cgroup/catalyst/SERVER_ID/memory.max
-```text
+```
 
 ### containerd Errors
 
@@ -722,7 +722,7 @@ sudo chown root:containerd /run/containerd/containerd.sock
 # Clean up stale containers
 sudo ctr -n catalyst containers rm --force --all 2>/dev/null || true
 sudo ctr -n catalyst containers ls
-```text
+```
 
 ### CNI Network Leases Stale
 
@@ -745,7 +745,7 @@ sudo journalctl -u catalyst-agent -f --no-pager | grep -i "stale"
 # If the agent's automatic cleanup didn't work:
 sudo rm -f /var/lib/cni/results/catalyst-*
 sudo systemctl restart catalyst-agent
-```text
+```
 
 ---
 
@@ -775,7 +775,7 @@ cat /var/log/catalyst/console/SERVER_ID/stdout
 2. **Restart the agent** — restores all console writers
    ```bash
    sudo systemctl restart catalyst-agent
-   ```text
+   ```
 3. **Check browser console** — WebSocket connection might be blocked by CORS
 4. **Verify SSE endpoint** is accessible:
    ```bash
@@ -801,7 +801,7 @@ nc -zv sftp-host 2022
 # Check for firewall blocking port 2022
 sudo ufw status
 sudo iptables -L -n | grep 2022
-```text
+```
 
 **Fix:**
 
@@ -836,7 +836,7 @@ ls -la /var/lib/catalyst/SERVER_ID/
 
 # Check disk space on the data partition
 df -h /var/lib/catalyst
-```text
+```
 
 **Common fixes:**
 
@@ -890,7 +890,7 @@ docker compose exec backend curl -s https://s3.amazonaws.com
 
 # Check S3 bucket policy
 # The bucket must allow: s3:PutObject, s3:GetObject, s3:DeleteObject
-```text
+```
 
 **Common S3 issues:**
 
@@ -938,7 +938,7 @@ docker compose logs frontend
 
 # Check if Nginx is serving files
 curl -I http://localhost:80
-```text
+```
 
 **Common fixes:**
 
@@ -968,7 +968,7 @@ grep CORS_ORIGIN catalyst-docker/.env.example
 CORS_ORIGIN=https://panel.example.com
 
 docker compose restart backend
-```text
+```
 
 **Common CORS causes:**
 
@@ -1142,7 +1142,7 @@ docker compose logs backend | grep -i "plugin"
 
 # Verify plugin compatibility with your Catalyst version
 # Check the plugin's documentation for version requirements
-```text
+```
 
 **Common causes:**
 
@@ -1331,7 +1331,7 @@ top -bn1 | head -20
 
 # Check if agent is the culprit
 sudo journalctl -u catalyst-agent --since "1 hour ago" | grep -c "WARN"
-```text
+```
 
 **Fix:**
 
@@ -1359,7 +1359,7 @@ sudo ctr -n catalyst tasks ls --format json | grep -A 3 "memory"
 # Check cgroup limits
 cat /sys/fs/cgroup/catalyst/memory.max
 cat /sys/fs/cgroup/catalyst/memory.current
-```text
+```
 
 **Fix:**
 
@@ -1406,7 +1406,7 @@ sudo rm -rf /var/lib/catalyst/servers/DELETED-SERVER-UUID/
 sudo systemctl restart catalyst-agent
 
 # Expand the disk partition if still full
-```text
+```
 
 ---
 
@@ -1470,7 +1470,7 @@ sudo firewall-cmd --reload
 
 # If using iptables directly:
 sudo iptables -A INPUT -p tcp --dport 25565 -j ACCEPT
-```text
+```
 
 ### MACVLAN Network Issues
 
@@ -1498,7 +1498,7 @@ sudo ctr -n catalyst run --exec docker.io/library/alpine:latest ping -c 3 8.8.8.
    ```bash
    # Flush ARP cache on the router/gateway
    arp -d <macvlan-gateway-ip>
-   ```text
+   ```
 
 ---
 
@@ -1524,7 +1524,7 @@ docker compose logs -f backend | grep -i "error\|warn"
 [logging]
 level = "debug"
 format = "text"
-```text
+```
 
 ```bash
 sudo systemctl restart catalyst-agent
@@ -1546,7 +1546,7 @@ sudo systemctl restart containerd
 
 # View logs
 sudo journalctl -u containerd -f --no-pager
-```text
+```
 
 ---
 
@@ -1579,7 +1579,7 @@ Then use the panel's "Forgot Password" flow if you have SMTP configured.
 # 4. Map Pterodactyl nodes to Catalyst nodes
 # 5. Map servers
 # 6. Execute migration
-```text
+```
 
 ### Q: How do I back up my Catalyst data?
 
@@ -1599,7 +1599,7 @@ tar czf catalyst-data-$(date +%Y%m%d).tar.gz /var/lib/catalyst/
 **A:** First-time starts pull the container image, which can take several minutes. Subsequent starts are faster. You can pre-pull images on the agent node:
 ```bash
 sudo ctr -n catalyst images pull docker.io/your-image:tag
-```text
+```
 
 ### Q: Can I use Traefik instead of the included reverse proxy?
 
@@ -1639,7 +1639,7 @@ sudo ctr -n catalyst images pull docker.io/your-image:tag
    - Relevant log output
 
 4. **Open an issue on GitHub:**
-   ```text
+   ```
    https://github.com/catalystctl/catalyst/issues/new
    ```
    Include all diagnostic information from above.

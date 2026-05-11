@@ -95,7 +95,7 @@ curl -X POST http://localhost:3000/api/servers/srv_abc/tasks \
     "payload": { "command": "say Server restarting in 5 minutes!" },
     "schedule": "55 2 * * *"
   }'
-```text
+```
 
 ### Supported Actions
 
@@ -121,7 +121,7 @@ Catalyst uses standard 5-field cron syntax:
 │ │ │ │ ┌───────────── day of week (0–6, 0=Sunday)
 │ │ │ │ │
 * * * * *
-```text
+```
 
 | Expression | Meaning |
 |-----------|---------|
@@ -204,7 +204,7 @@ requests.post(f"{API}/api/servers/{SERVER_ID}/tasks", headers=HEADERS, json={
     "action": "start",
     "schedule": "0 4 * * *"
 })
-```text
+```
 
 ---
 
@@ -252,7 +252,7 @@ All payloads follow this structure:
     "ownerId": "usr_xyz789"
   }
 }
-```text
+```
 
 **Headers included in every webhook:**
 
@@ -313,7 +313,7 @@ def handle_webhook():
         send_discord_notification(f"⚠️ Server suspended: {data['serverName']}")
 
     return jsonify({"ok": True})
-```text
+```
 
 ---
 
@@ -670,7 +670,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-```text
+```
 
 ### Node.js Automation
 
@@ -764,7 +764,7 @@ curl -X POST http://localhost:3000/api/servers/bulk/unsuspend \
   -d '{
     "serverIds": ["srv_1", "srv_2", "srv_3"]
   }'
-```text
+```
 
 ### Bulk Delete
 
@@ -789,7 +789,7 @@ Bulk operations return per-server results:
   ],
   "summary": { "success": 1, "skipped": 1, "failed": 0 }
 }
-```text
+```
 
 ---
 
@@ -873,7 +873,7 @@ cat > server.properties << 'EOF'
 server-port={{PORT}}
 max-players=20
 EOF
-```text
+```
 
 #### Image Variants
 
@@ -912,7 +912,7 @@ Templates can declare optional features:
     "backupPaths": ["/world", "/plugins", "/server.properties"]
   }
 }
-```text
+```
 
 | Feature | Description |
 |---------|-------------|
@@ -972,7 +972,7 @@ curl -X POST http://localhost:3000/api/templates/import-pterodactyl \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $API_KEY" \
   -d @pterodactyl-egg.json
-```text
+```
 
 The import maps Pterodactyl variables, images, install scripts, and config files to Catalyst format automatically.
 
@@ -1007,7 +1007,7 @@ Catalyst has a built-in plugin system that allows extending the panel with custo
 │  │  (hot-reload via chokidar file watcher)     │ │
 │  └─────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────┘
-```text
+```
 
 ### Plugin Directory Structure
 
@@ -1019,7 +1019,7 @@ catalyst-plugins/
     │   └── index.js         # Backend entry point
     └── frontend/
         └── index.ts         # Frontend entry point
-```text
+```
 
 ### Plugin Manifest
 
@@ -1127,7 +1127,7 @@ module.exports = {
     await ctx.deleteStorage('temp');
   },
 };
-```text
+```
 
 ### Plugin Database Access
 
@@ -1169,7 +1169,7 @@ const config = await ctx.getStorage('config');
 
 // Delete
 await ctx.deleteStorage('temp_cache');
-```text
+```
 
 ### Example Plugin Walkthrough
 
@@ -1267,7 +1267,7 @@ module.exports = {
     ctx.logger.info('Plugin unloaded');
   },
 };
-```text
+```
 
 ### Real Plugin: Ticketing System
 
@@ -1305,7 +1305,7 @@ curl -X PUT http://localhost:3000/api/plugins/example-plugin/config \
       "cronEnabled": false
     }
   }'
-```text
+```
 
 Configuration values are persisted to the database and survive plugin reloads.
 
@@ -1404,7 +1404,7 @@ services:
 volumes:
   pgdata:
   redisdata:
-```text
+```
 
 ### Node Deployment Script
 
@@ -1471,4 +1471,4 @@ jobs:
             curl -sf "http://server:3000/api/nodes/$NODE_ID" \
               -H "Authorization: Bearer $API_KEY" | jq -r '.isOnline'
           done
-```text
+```

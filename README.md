@@ -14,147 +14,79 @@ Catalyst is a complete platform built for enterprise game server hosts, game com
 
 ---
 
-## Quick Start
+## ⚡ 5-Minute Quick Start
 
-### 📦 Prerequisites
+> **Docker Compose** (Docker or Podman) is the **only supported deployment method**. Everything runs in containers — no Node.js, Bun, or Rust install needed on the host.
 
-- **Docker** with Compose support or **Podman** with Compose support
-
-That's it. Everything runs in containers — no Node.js, Bun, or Rust install needed on the host.
-
-> **⚠️ Important:** Docker Compose (with Docker or Podman) is the **only supported deployment method**. Direct installation, containerd (`ctr`/`nerdctl`), and other container runtimes are not supported.
-
-### 🚀 One-Line Install (Recommended)
-
-The fastest way to get Catalyst running — no need to clone the full repo:
+### 1. Download & configure
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/catalystctl/catalyst/main/install.sh | bash
-```
-
-This downloads the standalone [`catalyst-docker/`](catalyst-docker/) folder with pre-built images from GitHub Container Registry, generates secure secrets, and sets up `.env` for you.
-
-Then start the stack:
-
-```bash
 cd catalyst-docker
-# Edit .env — set PUBLIC_URL at minimum
-nano .env
+nano .env          # Set PUBLIC_URL at minimum
 docker compose up -d
 ```
 
-👉 See [`catalyst-docker/README.md`](catalyst-docker/README.md) for full details including TLS setup with Caddy or Traefik.
+### 2. Access the panel
+
+Open your `PUBLIC_URL` in a browser. The **first user to register becomes the administrator** automatically.
+
+That's it. No build steps, no dependency installation, no manual secret generation (the install script does that for you).
+
+👉 Want more detail? See the [Quick Start Guide](docs/QUICKSTART.md) for the full walkthrough with screenshots, or the [Detailed Installation Guide](docs/installation.md) for every option, every edge case, and production hardening.
 
 ---
 
-### 🐳 Deploy with Docker Compose (from source)
+## Installation Options
 
-If you prefer to build from source:
+Catalyst deploys in three ways. Pick the one that fits you:
 
-```bash
-git clone https://github.com/catalystctl/catalyst.git
-cd catalyst
+| Method | Time | Best For |
+|--------|------|----------|
+| **[One-Line Install](docs/QUICKSTART.md)** | 5 minutes | First-time users, production |
+| **[Docker/Podman Compose](docs/docker-setup.md)** | 10 minutes | Users who want full control over TLS, ports, volumes |
+| **[Build from Source](docs/development.md)** | 30+ minutes | Developers contributing to Catalyst |
 
-# Create environment file
-cp .env.example .env
+### 🐳 Docker & Podman
 
-# Edit .env — set at minimum:
-#   BETTER_AUTH_SECRET  (generate: openssl rand -base64 32)
-#   POSTGRES_PASSWORD
-
-# Build and start everything
-docker compose up -d --build
-```
-
-Or use the helper script:
+Both Docker Compose and Podman Compose are fully supported. The workflow is identical — just replace `docker` with `podman` in every command.
 
 ```bash
-./dev.sh
+# Docker
+docker compose up -d
+
+# Podman (drop-in replacement)
+podman compose up -d
 ```
-
-**That's it.** The panel is available at `http://localhost` (port 80 by default).
-
-#### First-time setup
-
-After the containers are running, seed the database with initial data:
-
-```bash
-docker compose exec backend bun run db:seed
-```
-
-#### Useful commands
-
-| Command | Description |
-|---|---|
-| `docker compose up -d --build` | Build and start all services |
-| `docker compose logs -f` | Tail logs from all services |
-| `docker compose logs -f backend` | Tail backend logs only |
-| `docker compose exec backend bun run db:seed` | Seed the database |
-| `docker compose exec backend bun run db:studio` | Open Prisma Studio |
-| `docker compose down` | Stop all services |
-| `docker compose down -v` | Stop and delete all data volumes |
-
----
-
-### 🟢 Deploy with Podman Compose
-
-Podman Compose is a drop-in replacement — the workflow is identical:
-
-```bash
-git clone https://github.com/catalystctl/catalyst.git
-cd catalyst
-
-cp .env.example .env
-# Edit .env (see Docker Compose section above)
-
-podman compose up -d --build
-```
-
-All commands are the same, just replace `docker` with `podman`. The helper script
-`./dev.sh` will auto-detect Podman if Docker is not installed.
-
-You can also use the [one-line install](#-one-line-install-recommended) with Podman —
-just run `podman compose up -d` instead of `docker compose up -d`.
 
 ### 🔧 Configuration
 
-All configuration lives in `.env` at the project root. See [`.env.example`](.env.example) for the full list.
-
-Key variables:
+All configuration lives in `.env`. The install script generates it automatically, but you can edit it anytime:
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `BETTER_AUTH_SECRET` | ✅ | — | Session encryption key (`openssl rand -base64 32`) |
-| `POSTGRES_PASSWORD` | ✅ | — | PostgreSQL password |
-| `CORS_ORIGIN` | | `http://localhost` | Allowed CORS origins |
-| `BACKEND_EXTERNAL_ADDRESS` | | `http://localhost` | Public backend URL |
-| `FRONTEND_PORT` | | `80` | Port to expose the panel on |
-| `BACKEND_PORT` | | `127.0.0.1:3000` | Port to expose the API on (localhost only) |
-| `SFTP_PORT` | | `127.0.0.1:2022` | Port for SFTP file access |
+| `PUBLIC_URL` | ✅ | — | The URL users access the panel from |
+| `POSTGRES_PASSWORD` | ✅ | auto-generated | PostgreSQL password |
+| `BETTER_AUTH_SECRET` | ✅ | auto-generated | Session encryption key |
+| `FRONTEND_PORT` | | `0.0.0.0:8080` | Panel port |
+| `BACKEND_PORT` | | `127.0.0.1:3000` | API port (localhost-only by default) |
+| `SFTP_PORT` | | `0.0.0.0:2022` | SFTP file access port |
 
-### 🌐 Exposing to the Internet
+For the complete variable reference, see [Environment Variables](docs/environment-variables.md).
 
-For production, put a reverse proxy (Caddy, Nginx, Cloudflare Tunnel) in front of port 80:
+### 🌐 Production & TLS
 
-```bash
-# Example: Caddy (automatic HTTPS)
-caddy reverse-proxy --from panel.example.com --to localhost:80
-```
-
-Set `CORS_ORIGIN=https://panel.example.com` and `BACKEND_EXTERNAL_ADDRESS=https://panel.example.com` in `.env`.
-
-### 🤖 Install Agent on Nodes
-
-The agent runs on game server nodes (separate from the panel). See the [Admin Guide](docs/ADMIN_GUIDE.md) for node deployment.
-
-### 🔌 Integrate via API
+For production with automatic HTTPS:
 
 ```bash
-# Create API key in admin panel, then:
-curl -H "x-api-key: YOUR_KEY" http://localhost:3000/api/servers
+# Caddy — automatic Let's Encrypt
+docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d
+
+# Or Traefik — Docker-native routing
+docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d
 ```
 
-👉 [API integration guide](docs/automation-api-guide.md)
+See [Docker Setup](docs/docker-setup.md) for full TLS, reverse proxy, and hardening details.
 
 ---
 
@@ -194,7 +126,7 @@ curl -H "x-api-key: YOUR_KEY" http://localhost:3000/api/servers
 - **Agent:** Rust 1.70, Tokio, containerd gRPC
 - **Features:** RBAC, SFTP, Plugin System, Task Scheduling, Alerts
 
-👉 [Full architecture details](docs/ARCHITECTURE.md)
+👉 [Full architecture details](docs/architecture.md)
 
 ---
 
@@ -308,12 +240,20 @@ All screenshots are captured automatically at 1080p via Playwright. [See how to 
 
 | Guide | For You If... | Description |
 |-------|---------------|-------------|
-| **[Getting Started](docs/GETTING_STARTED.md)** | New to Catalyst | Setup guide for Docker Compose and beyond |
-| **[User Guide](docs/USER_GUIDE.md)** | Server Owner | Manage your servers, files, backups, console |
-| **[Admin Guide](docs/ADMIN_GUIDE.md)** | System Operator | Deploy nodes, configure networking, monitor health |
-| **[API Reference](docs/README.md)** | Developer | Complete REST API with integration examples |
-| **[Plugin System](docs/PLUGIN_SYSTEM.md)** | Plugin Dev | Extend Catalyst with custom functionality |
-| **[Features List](docs/FEATURES.md)** | All | Complete feature catalog and status |
+| **[⚡ Quick Start](docs/QUICKSTART.md)** | New to Catalyst | 5-minute setup with Docker Compose |
+| **[📖 Detailed Installation](docs/installation.md)** | Devs & ops | Full install: every option, every edge case |
+| **[Getting Started](docs/getting-started.md)** | First-time admin | Walkthrough: nodes, templates, first server |
+| **[Docker Setup](docs/docker-setup.md)** | System operator | TLS, volumes, networking, production hardening |
+| **[User Guide](docs/user-guide.md)** | Server owner | Manage your servers, files, backups, console |
+| **[Admin Guide](docs/admin-guide.md)** | System operator | Deploy nodes, configure networking, monitor health |
+| **[Agent Guide](docs/agent.md)** | Node operator | Deploy the Rust agent on game server nodes |
+| **[API Reference](docs/api-reference.md)** | Developer | Complete REST API with integration examples |
+| **[Automation & Plugins](docs/automation.md)** | Power user | Scheduled tasks, webhooks, API automation, plugins |
+| **[Development Guide](docs/development.md)** | Contributor | Dev environment, testing, code style, PR process |
+| **[Plugin System](docs/plugins.md)** | Plugin dev | Extend Catalyst with custom functionality |
+| **[Environment Variables](docs/environment-variables.md)** | All | Complete reference of all 60+ config variables |
+| **[Troubleshooting](docs/troubleshooting.md)** | All | Common errors, solutions, debugging workflows |
+| **[Architecture](docs/architecture.md)** | Technical | System design, data flow, security model |
 
 ---
 
@@ -338,7 +278,7 @@ All screenshots are captured automatically at 1080p via Playwright. [See how to 
 
 ## Contributing
 
-We welcome contributions! Please see [AGENTS.md](AGENTS.md) for repository guidelines, code conventions, and commit standards.
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for repository guidelines, code conventions, and commit standards.
 
 ---
 

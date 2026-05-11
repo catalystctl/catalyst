@@ -104,7 +104,7 @@ The agent communicates exclusively with the Catalyst panel backend over **WebSoc
 
 ## Architecture Overview
 
-```text
+```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        Node Machine                                  │
 │                                                                      │
@@ -1229,7 +1229,7 @@ The agent uses structured logging via the `tracing` crate with `tracing-subscrib
 ```
 
 **Text format example:**
-```text
+```
 2026-01-15T10:30:00.000Z  INFO catalyst_agent::runtime_manager: Container started container_id=abc123 server_uuid=srv-xyz
 ```
 

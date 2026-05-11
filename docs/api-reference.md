@@ -5054,7 +5054,7 @@ Each API key has its own rate limit:
 
 List endpoints support standard pagination:
 
-```text
+```
 GET /api/servers?page=1&limit=20
 ```
 
