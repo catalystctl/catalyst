@@ -32,9 +32,13 @@
 		"test:e2e": "bun --filter=catalyst-frontend run test:e2e",
 		"test:screenshots": "bun --filter=catalyst-frontend run test:screenshots",
 		"test:screenshots:headed": "bun --filter=catalyst-frontend run test:screenshots:headed",
-		"clean": "rm -rf catalyst-backend/dist catalyst-backend/node_modules catalyst-frontend/dist catalyst-frontend/node_modules catalyst-shared/node_modules node_modules"
+		"clean": "rm -rf catalyst-backend/dist catalyst-backend/node_modules catalyst-frontend/dist catalyst-frontend/node_modules catalyst-shared/node_modules node_modules",
+		"prepare": "husky"
 	},
 	"devDependencies": {
+		"@commitlint/cli": "^21.0.0",
+		"@commitlint/config-conventional": "^21.0.0",
+		"husky": "^9.1.7",
 		"typescript": "~6.0.3"
 	}
 }

@@ -47,6 +47,12 @@ jobs:
           while IFS= read -r msg; do
             [ -z "$msg" ] && continue
 
+            # Skip chore and release commits (never trigger a bump)
+            if echo "$msg" | grep -qE '^(chore|ci|build|style)(\([^)]*\))?:'; then
+              echo "Skipping chore/ci/build/style commit: $msg"
+              continue
+            fi
+
             # Check for breaking changes (minor bump in your scheme)
             if echo "$msg" | grep -qE '^[a-z]+(\([^)]*\))?!:' || \
                echo "$msg" | grep -qiE 'BREAKING CHANGE|BREAKING-CHANGE'; then
@@ -55,12 +61,33 @@ jobs:
               break
             fi
 
-            # Check for feat or fix (patch bump)
-            if echo "$msg" | grep -qE '^(feat|fix)(\([^)]*\))?:'; then
-              BUMP="patch"
-              echo "Found feat/fix in commit: $msg"
+            # Check for feat (minor bump)
+            if echo "$msg" | grep -qE '^feat(\([^)]*\))?:'; then
+              if [ "$BUMP" = "none" ] || [ "$BUMP" = "patch" ]; then
+                BUMP="minor"
+                echo "Found feat in commit: $msg"
+              fi
+              continue
             fi
-          done < <(git log "$COMMIT_RANGE" --pretty=format:"%s%n%b" --)
+
+            # Check for fix or refactor or perf (patch bump)
+            if echo "$msg" | grep -qE '^(fix|refactor|perf|revert)(\([^)]*\))?:'; then
+              if [ "$BUMP" = "none" ]; then
+                BUMP="patch"
+                echo "Found fix/refactor/perf in commit: $msg"
+              fi
+              continue
+            fi
+
+            # Fallback: any non-chore, non-bot commit that doesn't match conventional
+            # format is treated as a patch bump (prevents missed bumps)
+            if echo "$msg" | grep -qvE '^(chore|ci|build|style|docs|test)(\([^)]*\))?:'; then
+              if [ "$BUMP" = "none" ]; then
+                BUMP="patch"
+                echo "Fallback: non-conventional commit triggers patch: $msg"
+              fi
+            fi
+          done < <(git log "$COMMIT_RANGE" --pretty=format:"%s" --)
 
           echo "bump=$BUMP" >> "$GITHUB_OUTPUT"
           echo "Detected bump type: $BUMP"
