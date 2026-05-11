@@ -816,16 +816,44 @@ impl ContainerdRuntime {
             interp, interp_arg, image
         );
 
-        // Wrap the install script so all files are chowned to the runtime user (1000:1000)
-        // after the user-provided script completes. The installer runs as root but the
-        // runtime container runs as 1000:1000, so files must be accessible.
+        // Wrap the install script with Catalyst compatibility shims.
         //
-        // Pterodactyl mounts server data at /mnt/server, but Catalyst mounts at /data.
-        // Create a symlink so install scripts that hardcode /mnt/server still work.
-        // Also set HOME=/data for compatibility with scripts that use $HOME.
+        // IMPORTANT: Do NOT inject `set -e` for the user's install script.
+        // Pterodactyl does not run install scripts with `set -e`, and many scripts
+        // rely on commands that return non-zero being handled gracefully (e.g.,
+        // `grep -m1 true` in backtick substitution, conditional `curl` pipelines).
+        // Injecting `set -e` causes these scripts to exit silently with code 1
+        // and no output, making debugging impossible.
+        //
+        // We use `set -e` only for the wrapper preamble (symlink setup), then
+        // disable it before the user's script runs. After the script finishes,
+        // we capture its exit code and re-enable `set -e` for the chown step,
+        // then exit with the script's exit code so the agent can detect failure.
+        //
+        // This matches Pterodactyl's behavior: install scripts run without
+        // `set -e`, and the final exit code determines success/failure.
         let wrapped_script = format!(
-            "set -e\nrm -rf /mnt/server && ln -s /data /mnt/server\nexport HOME=/data\n\n{}\n\necho '[Catalyst] Fixing file ownership for runtime user...'\nchown -R 1000:1000 /data",
-            script
+            "__catalyst_on_exit() {{ __e=$?; chown -R 1000:1000 /data 2>/dev/null; exit $__e; }}\ntrap '__catalyst_on_exit' EXIT\necho '[Catalyst] Install wrapper started (container: {})'\nset -e\nrm -rf /mnt/server && ln -s /data /mnt/server\nexport HOME=/data\necho '[Catalyst] Wrapper setup complete, running install script...'\nset +e\n\n{}",
+            container_id, script
+        );
+
+        // Debug: log the wrapped script for install troubleshooting
+        info!(
+            "[DEBUG] Installer {} wrapped script (first 2000 chars):\n---BEGIN SCRIPT---\n{}---END SCRIPT---",
+            container_id,
+            if wrapped_script.len() > 2000 {
+                format!("{}... [truncated, total {} bytes]", &wrapped_script[..2000], wrapped_script.len())
+            } else {
+                wrapped_script.clone()
+            }
+        );
+        info!(
+            "[DEBUG] Installer {} OCI args: [\"{}\", \"{}\", \"<script>\"]",
+            container_id, interp, interp_arg
+        );
+        info!(
+            "[DEBUG] Installer {} data_dir mount: {} -> /data",
+            container_id, data_dir
         );
 
         let spec = serde_json::json!({
@@ -873,6 +901,11 @@ impl ContainerdRuntime {
         let req = with_namespace!(req, &self.namespace);
         client.create(req).await.map_err(grpc_err)?;
 
+        info!(
+            "[DEBUG] Installer {} container created in containerd",
+            container_id
+        );
+
         let mounts = self.get_snapshot_mounts(&snap_key).await?;
         let mut tasks = TasksClient::new(self.channel.clone());
         let req = CreateTaskRequest {
@@ -886,12 +919,35 @@ impl ContainerdRuntime {
         let req = with_namespace!(req, &self.namespace);
         tasks.create(req).await.map_err(grpc_err)?;
 
+        info!(
+            "[DEBUG] Installer {} task created, stdout={} stderr={}",
+            container_id,
+            stdout_path.display(),
+            stderr_path.display()
+        );
+
         let req = StartRequest {
             container_id: container_id.clone(),
             ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
-        tasks.start(req).await.map_err(grpc_err)?;
+        let start_result = tasks.start(req).await;
+        match &start_result {
+            Ok(resp) => {
+                let inner = resp.get_ref();
+                info!(
+                    "[DEBUG] Installer {} task started, pid={}",
+                    container_id, inner.pid
+                );
+            }
+            Err(e) => {
+                error!(
+                    "[DEBUG] Installer {} task START FAILED: {:?}",
+                    container_id, e
+                );
+            }
+        }
+        start_result.map_err(grpc_err)?;
 
         Ok(InstallerHandle {
             container_id,

@@ -3,7 +3,10 @@ export interface TemplateVariable {
   description?: string;
   default: string;
   required: boolean;
+  userViewable?: boolean;
+  userEditable?: boolean;
   input?: 'text' | 'number' | 'password' | 'checkbox' | 'select' | 'textarea';
+  options?: string[];  // Parsed from "in:" rule for select fields
   rules?: string[];
 }
 
@@ -33,6 +36,17 @@ export interface TemplateFeatures {
   restartOnExit?: boolean;
   maxInstances?: number;
   configFile?: string;
+  configFiles?: string[];
+  fileDenylist?: string[];
+  installEntrypoint?: string;
+  pterodactylFeatures?: string[];
+  pterodactylSpecVersion?: string;
+  pterodactylConfigFiles?: Record<string, any>;
+  startupDetection?: Record<string, any>;
+  startupDonePattern?: string | string[];
+  logDetection?: Record<string, any>;
+  updateUrl?: string;
+  exportedAt?: string;
   modManager?: {
     targets?: ModManagerTarget[];
     providers: ModManagerProvider[];
@@ -48,7 +62,8 @@ export interface TemplateFeatures {
     restrictedPaths?: string[];
   };
   iconUrl?: string;
-  configFiles?: string[];
+  tags?: string[];
+  exportFiles?: string[];
   [key: string]: any;
 }
 
@@ -73,6 +88,7 @@ export interface Template {
   images?: TemplateImageOption[];
   defaultImage?: string;
   installImage?: string;
+  installEntrypoint?: string;
   startup: string;
   stopCommand: string;
   sendSignalTo: 'SIGTERM' | 'SIGINT' | 'SIGKILL';

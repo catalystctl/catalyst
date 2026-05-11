@@ -10,6 +10,9 @@ import {
   Upload,
   Link as LinkIcon,
   Loader2,
+  Download,
+  CheckCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   Select,
@@ -19,7 +22,7 @@ import {
   SelectValue,
 } from '../../components/ui/select';
 import type { TemplateImageOption, TemplateVariable } from '../../types/template';
-import { templatesApi } from '../../services/api/templates';
+import { templatesApi, type BatchImportResult } from '../../services/api/templates';
 import { nestsApi } from '../../services/api/nests';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { normalizeTemplateImport, parseEggContent } from '../../utils/pterodactylImport';
@@ -84,6 +87,8 @@ function TemplateCreateModal() {
   const [importUrl, setImportUrl] = useState('');
   const [importUrlLoading, setImportUrlLoading] = useState(false);
   const [importUrlError, setImportUrlError] = useState('');
+  const [batchImportLoading, setBatchImportLoading] = useState(false);
+  const [batchImportResult, setBatchImportResult] = useState<BatchImportResult | null>(null);
 
   // Re-open this modal when a nests manager sends the user back after creating a nest
   // If a nest was just created, auto-select it and jump to step 2 (preserves imported data)
@@ -507,6 +512,29 @@ function TemplateCreateModal() {
       setImportUrlError(error?.message || 'Failed to fetch the URL. Check the link and try again.');
     } finally {
       setImportUrlLoading(false);
+    }
+  };
+
+  const handleBatchImport = async () => {
+    setBatchImportLoading(true);
+    setBatchImportResult(null);
+    try {
+      const result = await templatesApi.importPterodactylBatch();
+      setBatchImportResult(result ?? null);
+      if (result) {
+        queryClient.invalidateQueries({ queryKey: qk.templates() });
+        queryClient.invalidateQueries({ queryKey: qk.nests() });
+      }
+    } catch (error: any) {
+      reportSystemError({
+        level: 'error',
+        component: 'TemplateCreateModal',
+        message: error?.message || 'Batch import failed',
+        metadata: { context: 'handleBatchImport' },
+      });
+      notifyError(error?.response?.data?.error || 'Failed to import Pterodactyl eggs');
+    } finally {
+      setBatchImportLoading(false);
     }
   };
 
@@ -1381,12 +1409,16 @@ function TemplateCreateModal() {
                     Import Template
                   </h2>
                   <p className="text-xs text-muted-foreground">
-                    Import from a URL or upload a local file.
+                    Import from a URL, upload a local file, or import all Pterodactyl eggs.
                   </p>
                 </div>
                 <button
                   className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary dark:border-border dark:text-foreground dark:hover:border-primary/30"
-                  onClick={() => setImportModalOpen(false)}
+                  onClick={() => {
+                    setImportModalOpen(false);
+                    setBatchImportLoading(false);
+                    setBatchImportResult(null);
+                  }}
                 >
                   Close
                 </button>
@@ -1456,6 +1488,100 @@ function TemplateCreateModal() {
                     Choose file{''}
                     <span className="text-xs opacity-60">(.json, .yaml, .yml)</span>
                   </button>
+                </div>
+
+                {/* Divider */}
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="text-xs font-medium text-muted-foreground">or</span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+
+                {/* Pterodactyl Batch Import */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Download className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium text-foreground">
+                      Import All Pterodactyl Eggs
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Download and import all templates from the{' '}
+                    <a
+                      href="https://github.com/pterodactyl/game-eggs"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-primary-600 hover:text-primary dark:text-primary-400 dark:hover:text-primary-300"
+                    >
+                      pterodactyl/game-eggs
+                    </a>{' '}
+                    repository. Nests are created automatically from egg categories.
+                  </p>
+                  {batchImportResult ? (
+                    <div className="space-y-2 rounded-lg border border-border bg-surface-2/50 px-4 py-3 dark:bg-surface-1/40">
+                      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                        <CheckCircle className="h-4 w-4 text-success" />
+                        Import complete
+                      </div>
+                      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                        <span className="text-success dark:text-success font-medium">
+                          {batchImportResult.imported} imported
+                        </span>
+                        {batchImportResult.skipped > 0 && (
+                          <span className="text-warning dark:text-warning font-medium">
+                            {batchImportResult.skipped} skipped (already exist)
+                          </span>
+                        )}
+                        {batchImportResult.errors > 0 && (
+                          <span className="text-destructive dark:text-destructive font-medium">
+                            {batchImportResult.errors} failed
+                          </span>
+                        )}
+                      </div>
+                      {batchImportResult.errors > 0 && batchImportResult.errorDetails.length > 0 && (
+                        <details className="text-xs text-muted-foreground">
+                          <summary className="cursor-pointer font-medium hover:text-foreground">
+                            Error details
+                          </summary>
+                          <ul className="mt-1 space-y-0.5 pl-3">
+                            {batchImportResult.errorDetails.slice(0, 10).map((e, i) => (
+                              <li key={i} className="truncate">
+                                {e.name}: {e.error}
+                              </li>
+                            ))}
+                            {batchImportResult.errorDetails.length > 10 && (
+                              <li className="italic">
+                                +{batchImportResult.errorDetails.length - 10} more
+                              </li>
+                            )}
+                          </ul>
+                        </details>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 px-4 py-4 text-sm font-medium text-primary-600 transition-all duration-300 hover:border-primary/60 hover:bg-primary/10 dark:border-primary/20 dark:bg-primary/10 dark:text-primary-400 dark:hover:border-primary/40"
+                      onClick={handleBatchImport}
+                      disabled={batchImportLoading}
+                    >
+                      {batchImportLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Importing all eggs…
+                        </>
+                      ) : (
+                        <>
+                          <Download className="h-4 w-4" />
+                          Import All (~249 eggs)
+                        </>
+                      )}
+                    </button>
+                  )}
+                  {batchImportLoading && (
+                    <p className="text-xs text-muted-foreground">
+                      This may take 1–2 minutes. The server is fetching all eggs from GitHub.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

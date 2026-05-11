@@ -236,78 +236,30 @@ function convertStartupCommand(startup: string): string {
   return result;
 }
 
-/** Convert Pterodactyl install script - handle paths, shebangs, and shell compatibility. */
+/**
+ * Convert Pterodactyl install script for Catalyst compatibility.
+ *
+ * The Catalyst agent already handles at runtime:
+ *   - /mnt/server compatibility: creates symlink /mnt/server → /data
+ *   - {{SERVER_DIR}} substitution: replaces with /data
+ *   - Shell interpreter detection: picks bash/sh based on image + shebang
+ *   - Carriage return stripping: removes \\r before execution
+ *   - set -e: adds to wrapper script automatically
+ *   - HOME=/data: sets in wrapper script
+ *   - File ownership: chowns to 1000:1000 after install
+ *
+ * So we only need minimal cleanup:
+ *   - Fix JSON escape sequences (\\/ → /) from Pterodactyl export format
+ *   - Preserve original shebang (agent reads it for interpreter selection)
+ *   - Do NOT convert /mnt/server paths (agent symlink handles it)
+ *   - Do NOT convert [[ ]] to [ ] (agent picks correct interpreter per image)
+ *   - Do NOT add pre-flight packages (agent + images already have them)
+ *   - Do NOT add set -e (agent wrapper already includes it)
+ */
 function convertInstallScript(script: string): string {
-  // Clean up JSON escape sequences and normalize line endings
+  // Clean up JSON escape sequences from Pterodactyl export format
+  // (Pterodactyl JSON-escapes forward slashes as \/)
   let cleaned = script.replace(/\\\//g, '/');
-
-  // Strip Windows-style carriage returns that cause $'\r': command not found
-  cleaned = cleaned.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-
-  // Replace Pterodactyl's /mnt/server path with Catalyst's {{SERVER_DIR}}
-  // This handles various path patterns
-  cleaned = cleaned.replace(/\/mnt\/server/g, '{{SERVER_DIR}}');
-
-  // Also handle the common pattern of cd /mnt/server
-  cleaned = cleaned.replace(/cd\s+\/mnt\/server/g, 'cd {{SERVER_DIR}}');
-
-  // Replace ash/sh shebangs with bash (host may not have ash)
-  cleaned = cleaned.replace(/^#!\/bin\/ash\b/, '#!/bin/bash');
-  cleaned = cleaned.replace(/^#!\/bin\/sh\b/, '#!/bin/bash');
-  cleaned = cleaned.replace(/^#!\/usr\/bin\/env ash\b/, '#!/bin/bash');
-  cleaned = cleaned.replace(/^#!\/usr\/bin\/env sh\b/, '#!/bin/bash');
-
-  // Replace any remaining Pterodactyl-specific paths in mkdir/cp/mv commands
-  cleaned = cleaned.replace(/(mkdir|cp|mv|ln)\s+(-\S+\s+)*\/mnt\/server/g, '$1 $2{{SERVER_DIR}}');
-
-  // Convert bash-specific [[ ]] to POSIX-compatible [ ]
-  // This prevents "sh: [[: not found" errors when subshells use sh
-  // Only convert simple cases - complex regex patterns are left as-is
-  cleaned = cleaned.replace(/\[\[\s+/g, '[ ');
-  cleaned = cleaned.replace(/\s+\]\]/g, ' ]');
-
-  // Convert == to = inside test brackets (bash-specific to POSIX)
-  // Match patterns like [ "$var" == "value" ]
-  cleaned = cleaned.replace(/\[\s+(\$?\w+)\s+==\s+/g, '[ $1 = ');
-  cleaned = cleaned.replace(/\[\s+"([^"]+)"\s+==\s+/g, '[ "$1" = ');
-
-  // Add pre-flight package installation if not already present in the script
-  // This ensures common utilities are available for install scripts
-  const hasAptUpdate = /apt(-get)?\s+update/i.test(cleaned);
-  const commonPackages = ['curl', 'wget', 'jq', 'unzip', 'tar', 'ca-certificates'];
-  const missingPackages = commonPackages.filter(pkg => !cleaned.includes(pkg));
-
-  // Only add pre-flight if there are missing packages and no apt update in the script
-  if (missingPackages.length > 0 && !hasAptUpdate) {
-    const preflight = `# Catalyst pre-flight: ensure common utilities are available
-if command -v apt-get >/dev/null 2>&1; then
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update -qq
-    apt-get install -y -qq ${missingPackages.join(' ')} 2>/dev/null || true
-fi
-
-`;
-    // Insert after shebang if present, otherwise at the beginning
-    const shebangMatch = cleaned.match(/^(#!.*\n)/);
-    if (shebangMatch) {
-      cleaned = shebangMatch[1] + preflight + cleaned.slice(shebangMatch[1].length);
-    } else {
-      cleaned = preflight + cleaned;
-    }
-  }
-
-  // Add error handling for common patterns that might fail
-  // Add set -e for better error detection if not already present
-  if (!cleaned.includes('set -e') && !cleaned.includes('set -E')) {
-    const shebangMatch = cleaned.match(/^(#!.*\n)/);
-    if (shebangMatch) {
-      // Add after shebang and any pre-flight
-      const afterShebang = cleaned.slice(shebangMatch[1].length);
-      if (!afterShebang.startsWith('# Catalyst pre-flight')) {
-        cleaned = shebangMatch[1] + 'set -e\n\n' + afterShebang;
-      }
-    }
-  }
 
   return cleaned;
 }
@@ -322,9 +274,13 @@ function parseStopCommand(stopValue: string | undefined): StopCommandResult {
   }
 
   // Handle signal-based stop commands
+  // Full signal map matching Pterodactyl spec (including ^C variants and ^X)
   const signalMap: Record<string, SignalType> = {
     '^C': 'SIGINT',
     '^c': 'SIGINT',
+    '^^C': 'SIGINT',  // Double-caret variant
+    '^SIGKILL': 'SIGKILL',
+    '^X': 'SIGKILL',
     'SIGINT': 'SIGINT',
     'SIGTERM': 'SIGTERM',
     'SIGKILL': 'SIGKILL',
@@ -427,12 +383,23 @@ export function convertPterodactylEgg(egg: PtdlEgg): Record<string, unknown> {
     const displayName = v.description || v.name || envVarName;
     const defaultValue = v.default_value ?? '';
 
+    // Infer input type from field_type + rules for better UX
+    const inputType = inferInputType(v.rules ?? '');
+
+    // Parse select options from "in:" rule if this is a select field
+    const selectOptions = inputType === 'select'
+      ? (v.rules ?? '').match(/\bin:([^|]+)/)?.[1]?.split(',').filter(Boolean)
+      : undefined;
+
     return {
       name: envVarName,
       description: displayName,
       default: defaultValue,
       required: isRequired,
-      input: inferInputType(v.rules ?? '') as 'text' | 'number' | 'select' | 'checkbox',
+      userViewable: v.user_viewable ?? true,
+      userEditable: v.user_editable ?? true,
+      input: inputType as 'text' | 'number' | 'select' | 'checkbox' | 'password',
+      ...(selectOptions?.length ? { options: selectOptions } : {}),
       ...(rules.length ? { rules } : {}),
     };
   });
@@ -515,19 +482,68 @@ export function convertPterodactylEgg(egg: PtdlEgg): Record<string, unknown> {
     restartOnExit: true,
   };
 
-  // Add startup detection pattern if available
-  if (startupDonePattern) {
-    features.startupDetection = startupDonePattern;
+  // Add startup detection pattern — store the full object for runtime use
+  if (egg.config?.startup) {
+    try {
+      const parsed = typeof egg.config.startup === 'string'
+        ? JSON.parse(egg.config.startup)
+        : egg.config.startup;
+      if (parsed && typeof parsed === 'object') {
+        features.startupDetection = parsed;
+        if (parsed.done) features.startupDonePattern = parsed.done;
+      }
+    } catch { /* ignore */ }
   }
 
-  // Add config files metadata if available
+  // Add log detection if available
+  if (egg.config?.logs) {
+    try {
+      const parsed = typeof egg.config.logs === 'string'
+        ? JSON.parse(egg.config.logs)
+        : egg.config.logs;
+      if (parsed && typeof parsed === 'object') {
+        features.logDetection = parsed;
+      }
+    } catch { /* ignore */ }
+  }
+
+  // Preserve Pterodactyl features array (e.g., ["steam_disk_space"])
+  if (Array.isArray(egg.features) && egg.features.length > 0) {
+    features.pterodactylFeatures = egg.features;
+  }
+
+  // Add config files metadata if available — preserve full object AND keys list
   if (configFiles && Object.keys(configFiles).length > 0) {
     features.pterodactylConfigFiles = configFiles;
     // Get the first config file as the primary one
     const configKeys = Object.keys(configFiles);
     if (configKeys.length > 0) {
       features.configFile = configKeys[0];
+      features.configFiles = configKeys;  // ALL config file keys for multi-file eggs
     }
+  }
+
+  // Preserve file denylist for security enforcement
+  const fileDenylist = [
+    ...(Array.isArray((egg as any).file_denylist) ? (egg as any).file_denylist : []),
+    ...(Array.isArray(egg.config?.file_denylist) ? egg.config!.file_denylist : []),
+  ];
+  if (fileDenylist.length > 0) {
+    features.fileDenylist = fileDenylist;
+  }
+
+  // Preserve install entrypoint for runtime
+  const installEntrypoint = egg.scripts?.installation?.entrypoint;
+  if (installEntrypoint) {
+    features.installEntrypoint = installEntrypoint;
+  }
+
+  // Preserve PTDL spec version separately from template version
+  if (egg.meta?.version) {
+    features.pterodactylSpecVersion = egg.meta.version;
+  }
+  if ((egg as any).exported_at) {
+    features.exportedAt = (egg as any).exported_at;
   }
 
   // Add tags if available (Pelican)
@@ -559,6 +575,7 @@ export function convertPterodactylEgg(egg: PtdlEgg): Record<string, unknown> {
     ...(images.length ? { images } : {}),
     defaultImage: primaryImage || undefined,
     installImage,
+    installEntrypoint: egg.scripts?.installation?.entrypoint || 'bash',
     startup,
     stopCommand,
     sendSignalTo,

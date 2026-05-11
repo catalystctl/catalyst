@@ -8,6 +8,14 @@ type ApiResponse<T> = {
   error?: string;
 };
 
+export type BatchImportResult = {
+  total: number;
+  imported: number;
+  skipped: number;
+  errors: number;
+  errorDetails: Array<{ name: string; error: string }>;
+};
+
 export const templatesApi = {
   list: async () => {
     const data = await apiClient.get<ApiResponse<Template[]>>('/api/templates');
@@ -76,5 +84,12 @@ export const templatesApi = {
   remove: async (templateId: string) => {
     const data = await apiClient.delete<ApiResponse<void>>(`/api/templates/${templateId}`);
     return data;
+  },
+  importPterodactylBatch: async (options?: { nestId?: string; repoUrl?: string }) => {
+    const data = await apiClient.post<ApiResponse<BatchImportResult>>(
+      '/api/templates/import-pterodactyl-batch',
+      options || {},
+    );
+    return data.data;
   },
 };

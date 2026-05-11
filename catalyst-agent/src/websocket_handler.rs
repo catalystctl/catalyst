@@ -2021,6 +2021,16 @@ impl WebSocketHandler {
 
         // Replace variables in install script
         let mut final_script = install_script.to_string();
+
+        // Debug: log raw install script for troubleshooting
+        info!("[DEBUG] install_server: raw install_script (first 500 chars):\n---BEGIN RAW---\n{}---END RAW---",
+            if install_script.len() > 500 { format!("{}... [truncated, total {} bytes]", &install_script[..500], install_script.len()) } else { install_script.to_string() }
+        );
+        info!(
+            "[DEBUG] install_server: environment keys: {:?}",
+            environment.keys().collect::<Vec<_>>()
+        );
+
         // Strip carriage returns to avoid $'\r': command not found errors
         final_script = final_script.replace("\r\n", "\n").replace('\r', "\n");
         for (key, value) in environment {
@@ -2040,6 +2050,22 @@ impl WebSocketHandler {
             .get("installImage")
             .and_then(|v| v.as_str())
             .unwrap_or("alpine:3.19");
+
+        info!(
+            "[DEBUG] install_server: install_image from template: {:?}",
+            template.get("installImage")
+        );
+        info!(
+            "[DEBUG] install_server: resolved install_image: {}",
+            install_image
+        );
+        info!(
+            "[DEBUG] install_server: host_server_dir: {}",
+            host_server_dir
+        );
+        info!("[DEBUG] install_server: final_script (first 500 chars after var substitution):\n---BEGIN FINAL---\n{}---END FINAL---",
+            if final_script.len() > 500 { format!("{}... [truncated, total {} bytes]", &final_script[..500], final_script.len()) } else { final_script.clone() }
+        );
 
         // Convert environment from Map<String, Value> to HashMap<String, String>
         let mut env_map = HashMap::new();
@@ -2099,6 +2125,36 @@ impl WebSocketHandler {
             } else {
                 "Install script failed".to_string()
             };
+            info!(
+                "[DEBUG] install_server FAILED: exit_code={}, stdout_len={}, stderr_len={}, reason='{}'",
+                exit_code, stdout_buffer.len(), stderr_buffer.len(), reason
+            );
+            if !stdout_buffer.is_empty() {
+                info!(
+                    "[DEBUG] install_server stdout (last 500 chars): {}",
+                    if stdout_buffer.len() > 500 {
+                        stdout_buffer
+                            .chars()
+                            .skip(stdout_buffer.len() - 500)
+                            .collect::<String>()
+                    } else {
+                        stdout_buffer.clone()
+                    }
+                );
+            }
+            if !stderr_buffer.is_empty() {
+                info!(
+                    "[DEBUG] install_server stderr (last 500 chars): {}",
+                    if stderr_buffer.len() > 500 {
+                        stderr_buffer
+                            .chars()
+                            .skip(stderr_buffer.len() - 500)
+                            .collect::<String>()
+                    } else {
+                        stderr_buffer.clone()
+                    }
+                );
+            }
             self.emit_console_output(server_id, "stderr", &format!("{}\n", reason))
                 .await?;
             self.emit_server_state_update(server_id, "error", Some(reason.clone()), None, None)

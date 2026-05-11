@@ -457,6 +457,7 @@ model ServerTemplate {
   images            Json     @default("[]")
   defaultImage      String?
   installImage      String?
+  installEntrypoint String   @default("bash")
   startup           String
   stopCommand       String
   sendSignalTo      String   @default("SIGTERM")

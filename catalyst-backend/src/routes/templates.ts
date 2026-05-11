@@ -2,7 +2,7 @@ import { prisma } from "../db.js";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { hasPermission } from "../lib/permissions";
 import { serialize } from "../utils/serialize";
-import { sanitizeStartupCommand } from "../utils/sanitize-startup";
+import { importPterodactylEgg as convertEgg, convertStartupCommand, convertInstallScript, parseStopCommand } from "../utils/egg-import";
 
 const ensurePermission = async (
 	prisma: any,
@@ -17,6 +17,88 @@ const ensurePermission = async (
 	}
 	return true;
 };
+
+/**
+ * Import a single Pterodactyl egg into the database using the shared
+ * egg-import utility for consistent conversion across all import paths.
+ *
+ * Shared between the single-egg and batch-egg import endpoints.
+ */
+async function importPterodactylEgg(
+	egg: Record<string, any>,
+	nestId: string | null,
+	userId: string,
+): Promise<{ status: "created" | "skipped" | "error"; name?: string; error?: string }> {
+	try {
+		// Use the shared egg-import utility for all conversions
+		const converted = convertEgg(egg, { nestId });
+
+		const sanitizedName = converted.name;
+		if (!sanitizedName) {
+			return { status: "error", error: "Missing name" };
+		}
+
+		// Skip if template with same name already exists
+		const existing = await prisma.serverTemplate.findUnique({
+			where: { name: sanitizedName },
+		});
+		if (existing) {
+			return { status: "skipped", name: sanitizedName };
+		}
+
+		// Validate minimum fields
+		if (!converted.startup) {
+			return { status: "error", name: sanitizedName, error: "Missing startup" };
+		}
+		if (!converted.image) {
+			return { status: "error", name: sanitizedName, error: "Missing images" };
+		}
+
+		// Determine nest — auto-create from egg category if no nestId provided
+		let resolvedNestId = nestId;
+		if (!resolvedNestId && egg._category) {
+			const existingNest = await prisma.nest.findFirst({
+				where: { name: egg._category },
+			});
+			if (existingNest) {
+				resolvedNestId = existingNest.id;
+			} else {
+				const newNest = await prisma.nest.create({
+					data: { name: egg._category },
+				});
+				resolvedNestId = newNest.id;
+			}
+		}
+
+		const template = await prisma.serverTemplate.create({
+			data: {
+				name: sanitizedName,
+				description: converted.description,
+				author: converted.author,
+				version: converted.version,
+				image: converted.image,
+				images: converted.images as any,
+				defaultImage: converted.defaultImage,
+				installImage: converted.installImage,
+				installEntrypoint: converted.installEntrypoint,
+				startup: converted.startup,
+				stopCommand: converted.stopCommand,
+				sendSignalTo: converted.sendSignalTo,
+				variables: converted.variables as any,
+				installScript: converted.installScript,
+				supportedPorts: converted.supportedPorts,
+				allocatedMemoryMb: converted.allocatedMemoryMb,
+				allocatedCpuCores: converted.allocatedCpuCores,
+				features: converted.features as any,
+				nestId: resolvedNestId,
+			},
+		});
+
+		return { status: "created", name: sanitizedName };
+	} catch (err: any) {
+		return { status: "error", name: (egg.name || "").trim(), error: err.message || "Unknown error" };
+	}
+}
 
 export async function templateRoutes(app: FastifyInstance) {
 	// Using shared prisma instance from db.ts
@@ -98,6 +180,7 @@ export async function templateRoutes(app: FastifyInstance) {
 				images,
 				defaultImage,
 				installImage,
+				installEntrypoint,
 				startup,
 				stopCommand,
 				sendSignalTo,
@@ -120,6 +203,7 @@ export async function templateRoutes(app: FastifyInstance) {
 				images?: Array<{ name: string; label?: string; image: string }>;
 				defaultImage?: string;
 				installImage?: string;
+				installEntrypoint?: string;
 				startup: string;
 				stopCommand: string;
 				sendSignalTo: "SIGTERM" | "SIGINT" | "SIGKILL";
@@ -154,6 +238,7 @@ export async function templateRoutes(app: FastifyInstance) {
 					images: Array.isArray(images) ? images : [],
 					defaultImage: defaultImage || null,
 					installImage,
+					installEntrypoint: installEntrypoint || "bash",
 					startup,
 					stopCommand,
 					sendSignalTo,
@@ -228,6 +313,7 @@ export async function templateRoutes(app: FastifyInstance) {
 				version,
 				image,
 				installImage,
+				installEntrypoint,
 				startup,
 				stopCommand,
 				sendSignalTo,
@@ -248,6 +334,7 @@ export async function templateRoutes(app: FastifyInstance) {
 				version?: string;
 				image?: string;
 				installImage?: string;
+				installEntrypoint?: string;
 				startup?: string;
 				stopCommand?: string;
 				sendSignalTo?: "SIGTERM" | "SIGINT" | "SIGKILL";
@@ -269,6 +356,7 @@ export async function templateRoutes(app: FastifyInstance) {
 			if (version !== undefined) nextData.version = version;
 			if (image !== undefined) nextData.image = image;
 			if (installImage !== undefined) nextData.installImage = installImage;
+			if (installEntrypoint !== undefined) nextData.installEntrypoint = installEntrypoint;
 			if (startup !== undefined) nextData.startup = startup;
 			if (stopCommand !== undefined) nextData.stopCommand = stopCommand;
 			if (sendSignalTo !== undefined) nextData.sendSignalTo = sendSignalTo;
@@ -371,7 +459,7 @@ export async function templateRoutes(app: FastifyInstance) {
 		},
 	);
 
-	// Import Pterodactyl egg
+	// Import Pterodactyl egg (single)
 	app.post(
 		"/import-pterodactyl",
 		{ onRequest: [app.authenticate] },
@@ -387,27 +475,6 @@ export async function templateRoutes(app: FastifyInstance) {
 			const egg = request.body as Record<string, any>;
 			const { nestId } = request.body as { nestId?: string };
 
-			// Validate required fields
-			if (!egg?.name || typeof egg.name !== "string") {
-				return reply
-					.status(400)
-					.send({ error: "Missing required field: name" });
-			}
-			if (!egg?.startup || typeof egg.startup !== "string") {
-				return reply
-					.status(400)
-					.send({ error: "Missing required field: startup" });
-			}
-			// Accept images as string array (Pelican) or docker_images as Record (Pterodactyl export)
-			const hasImages =
-				(Array.isArray(egg.images) && egg.images.length > 0) ||
-				(egg.docker_images && typeof egg.docker_images === "object" && Object.keys(egg.docker_images).length > 0);
-			if (!hasImages) {
-				return reply.status(400).send({
-					error: "Missing required field: images (must be a non-empty array or docker_images object)",
-				});
-			}
-
 			// Validate nestId if provided
 			if (nestId) {
 				const nest = await prisma.nest.findUnique({ where: { id: nestId } });
@@ -416,144 +483,28 @@ export async function templateRoutes(app: FastifyInstance) {
 				}
 			}
 
-			// Check for name conflict
-			const sanitizedName = egg.name.trim();
-			const existing = await prisma.serverTemplate.findUnique({
-				where: { name: sanitizedName },
-			});
-			if (existing) {
-				return reply.status(409).send({
-					error: `A template with the name '${sanitizedName}' already exists`,
-				});
-			}
+			const result = await importPterodactylEgg(egg, nestId || null, request.user.userId);
 
-			// Map Pterodactyl variables to Catalyst format
-			const pteroVariables: any[] = Array.isArray(egg.variables)
-				? egg.variables
-				: [];
-			const mappedVariables = pteroVariables.map((v: any) => ({
-				name: v.env_variable || v.name,
-				description: v.description || "",
-				default: v.default_value ?? "",
-				required: v.rules ? v.rules.includes("required") : false,
-				input:
-					v.field_type === "select"
-						? "select"
-						: v.field_type === "number"
-							? "number"
-							: "text",
-				rules: v.rules
-					? v.rules
-							.split("|")
-							.map((r: string) => r.trim())
-							.filter(Boolean)
-					: [],
-			}));
-
-			// Map images — handle both Pelican array format (egg.images) and Pterodactyl export format (egg.docker_images as Record)
-			let mappedImages: Array<{ name: string; image: string }> = [];
-			if (Array.isArray(egg.images)) {
-				mappedImages = egg.images.map((img: string, i: number) => ({
-					name: `image-${i}`,
-					image: img,
-				}));
-			} else if (egg.docker_images && typeof egg.docker_images === "object") {
-				mappedImages = Object.entries(egg.docker_images).map(([name, image]) => ({
-					name,
-					image: image as string,
-				}));
-			}
-
-			// Build features from Pterodactyl egg data
-			const eggFeatures: Record<string, any> = {};
-			if (Array.isArray(egg.features)) {
-				eggFeatures.pterodactylFeatures = egg.features;
-			}
-			// Parse startup detection — config.startup may be a JSON string or object
-			if (egg.config?.startup) {
-				try {
-					const parsed = typeof egg.config.startup === "string"
-						? JSON.parse(egg.config.startup)
-						: egg.config.startup;
-					if (parsed && typeof parsed === "object") {
-						eggFeatures.startupDetection = parsed;
-					}
-				} catch { /* ignore */ }
-			}
-			if (egg.config?.logs) {
-				try {
-					const parsed = typeof egg.config.logs === "string"
-						? JSON.parse(egg.config.logs)
-						: egg.config.logs;
-					if (parsed && typeof parsed === "object") {
-						eggFeatures.logDetection = parsed;
-					}
-				} catch { /* ignore */ }
-			}
-			// Store Pterodactyl config file definitions for the config editor
-			if (egg.config?.files) {
-				try {
-					const configFiles =
-						typeof egg.config.files === "string"
-							? JSON.parse(egg.config.files)
-							: egg.config.files;
-					if (typeof configFiles === "object" && configFiles !== null) {
-						const keys = Object.keys(configFiles);
-						if (keys.length > 0) {
-							eggFeatures.pterodactylConfigFiles = configFiles;
-							eggFeatures.configFile = keys[0];
-							eggFeatures.configFiles = keys;
-						}
-					}
-				} catch {
-					/* ignore invalid config files */
+			if (result.status === "error") {
+				if (result.error === "Missing name") {
+					return reply.status(400).send({ error: "Missing required field: name" });
 				}
+				if (result.error === "Missing startup") {
+					return reply.status(400).send({ error: "Missing required field: startup" });
+				}
+				if (result.error === "Missing images") {
+					return reply.status(400).send({ error: "Missing required field: images" });
+				}
+				return reply.status(400).send({ error: result.error });
+			}
+			if (result.status === "skipped") {
+				return reply.status(409).send({ error: `A template with the name '${result.name}' already exists` });
 			}
 
-			// Parse stop command — config.stop may be a JSON string or direct value
-			const rawStop = (() => {
-				if (egg.config?.stop) {
-					if (typeof egg.config.stop === "string") {
-						try { return JSON.parse(egg.config.stop); } catch { return egg.config.stop; }
-					}
-					return egg.config.stop;
-				}
-				return undefined;
-			})();
-			const stopSignalMap: Record<string, "SIGINT" | "SIGTERM" | "SIGKILL"> = {
-				"^C": "SIGINT", "^c": "SIGINT", "^^C": "SIGINT",
-				"^SIGKILL": "SIGKILL", "^X": "SIGKILL",
-				"SIGINT": "SIGINT", "SIGTERM": "SIGTERM", "SIGKILL": "SIGKILL",
-			};
-			const resolvedStopSignal = rawStop ? (stopSignalMap[rawStop] || "SIGTERM") : "SIGTERM";
-			const resolvedStopCommand = rawStop ? (stopSignalMap[rawStop] ? "" : rawStop.replace(/^\//, "")) : "stop";
-
-			const template = await prisma.serverTemplate.create({
-				data: {
-					name: sanitizedName,
-					description: egg.description || null,
-					author: egg.author || "Pterodactyl Import",
-					version: egg.meta?.version || "PTDL_v2",
-					image: mappedImages[0]?.image || "",
-					images: mappedImages,
-					defaultImage: mappedImages[0]?.image || null,
-					installImage: egg.scripts?.installation?.container || null,
-					startup: sanitizeStartupCommand(egg.startup),
-					stopCommand: resolvedStopCommand,
-					sendSignalTo: resolvedStopSignal,
-					variables: mappedVariables,
-					installScript: egg.scripts?.installation?.script || null,
-					supportedPorts: [25565],
-					allocatedMemoryMb: 1024,
-					allocatedCpuCores: 1,
-					features: eggFeatures,
-					nestId: nestId || null,
-				},
-				include: {
-					nest: {
-						select: { id: true, name: true, icon: true },
-					},
-				},
+			// Fetch the created template with nest for response
+			const template = await prisma.serverTemplate.findUnique({
+				where: { name: result.name! },
+				include: { nest: { select: { id: true, name: true, icon: true } } },
 			});
 
 			reply.status(201).send({ success: true, data: template });
@@ -566,6 +517,129 @@ export async function templateRoutes(app: FastifyInstance) {
 					timestamp: new Date().toISOString(),
 				});
 			}
+		},
+	);
+
+	// Import all Pterodactyl game eggs from GitHub
+	app.post(
+		"/import-pterodactyl-batch",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			const has = await ensurePermission(
+				prisma,
+				request.user.userId,
+				reply,
+				"template.create",
+			);
+			if (!has) return;
+
+			const { nestId, repoUrl } = request.body as {
+				nestId?: string;
+				repoUrl?: string;
+			};
+
+			// Validate nestId if provided
+			if (nestId) {
+				const nest = await prisma.nest.findUnique({ where: { id: nestId } });
+				if (!nest) {
+					return reply.status(400).send({ error: "Nest not found" });
+				}
+			}
+
+			const GITHUB_REPO = repoUrl || "pterodactyl/game-eggs";
+			const BRANCH = "main";
+
+			// 1. Fetch the repo tree
+			request.log.info({ repo: GITHUB_REPO }, "Fetching Pterodactyl eggs repo tree");
+			let treeEntries: Array<{ path: string }>;
+			try {
+				const treeRes = await fetch(
+					`https://api.github.com/repos/${GITHUB_REPO}/git/trees/${BRANCH}?recursive=1`,
+					{
+						headers: {
+							"User-Agent": "Catalyst-Panel",
+							Accept: "application/vnd.github.v3+json",
+						},
+					},
+				);
+				if (!treeRes.ok) {
+					throw new Error(`GitHub API returned ${treeRes.status}`);
+				}
+				const treeData = (await treeRes.json()) as any;
+				treeEntries = (treeData.tree || [])
+					.filter((t: any) => t.type === "blob" && t.path.endsWith(".json") && /egg[._-]/i.test(t.path));
+			} catch (err: any) {
+				request.log.error({ err }, "Failed to fetch Pterodactyl eggs repo tree");
+				return reply.status(502).send({ error: `Failed to fetch egg list from GitHub: ${err.message}` });
+			}
+
+			request.log.info({ count: treeEntries.length }, "Found eggs in repo");
+
+			// 2. Download and import each egg
+			const results = {
+				total: treeEntries.length,
+				imported: 0,
+				skipped: 0,
+				errors: 0,
+				errorDetails: [] as Array<{ name: string; error: string }>,
+			};
+
+			// Process eggs in batches of 5 to avoid overwhelming GitHub or the DB
+			const BATCH_SIZE = 5;
+			for (let i = 0; i < treeEntries.length; i += BATCH_SIZE) {
+				const batch = treeEntries.slice(i, i + BATCH_SIZE);
+				const batchResults = await Promise.all(
+					batch.map(async (entry) => {
+						const rawUrl = `https://raw.githubusercontent.com/${GITHUB_REPO}/${BRANCH}/${entry.path}`;
+						try {
+							const eggRes = await fetch(rawUrl, {
+								headers: { "User-Agent": "Catalyst-Panel" },
+							});
+							if (!eggRes.ok) {
+								throw new Error(`HTTP ${eggRes.status}`);
+							}
+							const eggData = await eggRes.json() as Record<string, any>;
+
+							// Derive category from directory path for nest auto-creation
+							const category = entry.path.split("/")[0]?.replace(/_/g, " ") || undefined;
+							if (category && !eggData._category) {
+								eggData._category = category;
+							}
+
+							return importPterodactylEgg(eggData, nestId || null, request.user.userId);
+						} catch (err: any) {
+							return { status: "error" as const, name: entry.path, error: err.message };
+						}
+					}),
+				);
+
+				for (const r of batchResults) {
+					if (r.status === "created") results.imported++;
+					else if (r.status === "skipped") results.skipped++;
+					else {
+						results.errors++;
+						if (r.name) results.errorDetails.push({ name: r.name, error: r.error || "Unknown error" });
+					}
+				}
+			}
+
+			request.log.info(
+				{ imported: results.imported, skipped: results.skipped, errors: results.errors },
+				"Batch import complete",
+			);
+
+			// Invalidate template cache via WebSocket notification
+			const wsGateway = (app as any).wsGateway;
+			if (wsGateway?.pushToAdminSubscribers) {
+				wsGateway.pushToAdminSubscribers("templates_batch_imported", {
+					type: "templates_batch_imported",
+					results,
+					importedBy: request.user.userId,
+					timestamp: new Date().toISOString(),
+				});
+			}
+
+			reply.send({ success: true, data: results });
 		},
 	);
 }

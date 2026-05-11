@@ -4,7 +4,7 @@
 
 import type { PrismaClient } from "@prisma/client";
 import { nanoid } from "nanoid";
-import { sanitizeStartupCommand } from "../../utils/sanitize-startup";
+import { importPterodactylEgg as convertEgg } from "../../utils/egg-import";
 import {
   PTERODACTYL_PERMISSION_MAP,
   type PterodactylLocation,
@@ -142,21 +142,21 @@ export class EntityMapper {
   // ========================================================================
 
   /**
-   * Convert a Pterodactyl API egg response to the egg export JSON format,
-   * then run it through the same import logic as POST /import-pterodactyl.
-   * Returns the Prisma create data for ServerTemplate.
+   * Convert a Pterodactyl API egg response to Catalyst ServerTemplate data.
+   * Uses the shared egg-import utility for consistent conversion.
+   * Handles both JSON:API (API response) and flat (egg export) formats.
    */
   mapTemplate(ptero: PterodactylEgg, catalystNestId: string): {
     data: Record<string, any>;
     sourceId: number;
   } {
     // Extract variables from JSON:API relationships or flat array
-    const rawVars: PterodactylEggVariable[] = [];
+    // and flatten them into the format expected by the shared utility
+    const rawVars: any[] = [];
     if (ptero.relationships?.variables) {
       const rel = ptero.relationships.variables;
       if (Array.isArray(rel)) {
         for (const v of rel) {
-          // JSON:API wrapped: { attributes: {...} }
           if (v && typeof v === 'object' && 'attributes' in v) {
             rawVars.push((v as any).attributes);
           } else {
@@ -177,96 +177,56 @@ export class EntityMapper {
       }
     }
 
-    // Map variables — same logic as POST /import-pterodactyl
-    const mappedVariables = rawVars.map((v) => ({
-      name: v.env_variable || v.name,
-      description: v.description || "",
-      default: v.default_value ?? "",
-      required: v.rules ? String(v.rules).includes("required") : false,
-      input: (v as any).field_type === "select" ? "select"
-        : (v as any).field_type === "number" ? "number"
-        : (v as any).field_type === "text" ? "text"
-        : undefined,
-      rules: v.rules ? String(v.rules).split("|").map((r: string) => r.trim()).filter(Boolean) : [],
-    }));
-
-    // Parse features — can be pipe-separated string, array, or undefined
-    const rawFeatures = ptero.features;
-    const eggFeatures: string[] = Array.isArray(rawFeatures)
-      ? rawFeatures
-      : (typeof rawFeatures === 'string' ? rawFeatures.split("|").filter(Boolean) : []);
-
-    // Build config from nested config object (API response) or flat fields (egg export)
-    const config: Record<string, any> = {};
+    // Build a normalized egg object from the API response
+    // that matches the PteroEgg format expected by convertEgg()
     const cfg = (ptero as any).config;
-    if (cfg?.startup) config.startup = cfg.startup;
-    else if (ptero.config_startup) config.startup = ptero.config_startup;
-    if (cfg?.logs) config.logs = cfg.logs;
-    else if (ptero.config_logs) config.logs = ptero.config_logs;
-    if (cfg?.stop) config.stop = cfg.stop;
-    else if (ptero.config_stop) config.stop = ptero.config_stop;
-
-    // Build images array — docker_images object (API) or docker_image string (both)
-    const dockerImage = ptero.docker_image || "";
-    const mappedImages = ptero.docker_images
-      ? Object.entries(ptero.docker_images).map(([name, image]) => ({ name, image }))
-      : dockerImage
-        ? [{ name: "default", image: dockerImage }]
-        : [];
-
-    // Build features object — same as POST /import-pterodactyl
-    const features: Record<string, any> = {};
-    if (eggFeatures.length > 0) features.pterodactylFeatures = eggFeatures;
-    if (config.startup) features.startupDetection = config.startup;
-    if (config.logs) features.logDetection = config.logs;
-    // Parse config_files — can be in config.files (API) or config_files (egg export)
-    const rawConfigFiles = cfg?.files || ptero.config_files;
-    if (rawConfigFiles) {
-      try {
-        const parsed = typeof rawConfigFiles === "string"
-          ? JSON.parse(rawConfigFiles)
-          : rawConfigFiles;
-        if (typeof parsed === "object" && parsed !== null) {
-          const keys = Object.keys(parsed);
-          if (keys.length > 0) {
-            features.pterodactylConfigFiles = parsed;
-            features.configFile = keys[0];
-            features.configFiles = keys;
-          }
-        }
-      } catch { /* ignore */ }
-    }
-
-    // Stop command — from config.stop (API) or stop (egg export)
-    const rawStopCommand = cfg?.stop || ptero.stop || "stop";
-    const stopSignalMap: Record<string, "SIGTERM" | "SIGINT" | "SIGKILL"> = {
-      "^C": "SIGINT", "^c": "SIGINT", "^^C": "SIGINT",
-      "^SIGKILL": "SIGKILL", "^X": "SIGKILL",
-      "SIGINT": "SIGINT", "SIGTERM": "SIGTERM", "SIGKILL": "SIGKILL",
+    const normalizedEgg = {
+      name: ptero.name,
+      author: ptero.author,
+      description: ptero.description,
+      meta: ptero.meta || { version: 'PTDL_v2' },
+      features: Array.isArray(ptero.features) ? ptero.features : (typeof ptero.features === 'string' ? ptero.features.split('|').filter(Boolean) : undefined),
+      docker_images: ptero.docker_images || (ptero.docker_image ? { default: ptero.docker_image } : undefined),
+      startup: ptero.startup,
+      config: {
+        files: cfg?.files || ptero.config_files,
+        startup: cfg?.startup || ptero.config_startup,
+        logs: cfg?.logs || ptero.config_logs,
+        stop: cfg?.stop || ptero.config_stop || ptero.stop,
+      },
+      scripts: {
+        installation: {
+          script: ptero.script?.install || ptero.install_script,
+          container: ptero.script?.container,
+          entrypoint: ptero.script?.entry || 'bash',
+        },
+      },
+      variables: rawVars.length > 0 ? rawVars : (Array.isArray((ptero as any).variables) ? (ptero as any).variables : []),
     };
-    const resolvedSignal = stopSignalMap[rawStopCommand] || "SIGTERM";
-    const stopCommand = stopSignalMap[rawStopCommand] ? "" : rawStopCommand.replace(/^\//, "");
-    const sendSignalTo = resolvedSignal;
+
+    // Use the shared conversion utility
+    const converted = convertEgg(normalizedEgg, { nestId: catalystNestId });
 
     return {
       data: {
-        name: ptero.name,
-        description: ptero.description || null,
-        author: ptero.author || "Pterodactyl Import",
-        version: "PTDL_v2",
-        image: dockerImage,
-        images: mappedImages,
-        defaultImage: dockerImage || null,
-        installImage: ptero.script?.container || null,
-        startup: sanitizeStartupCommand(ptero.startup || ""),
-        stopCommand,
-        sendSignalTo,
-        variables: mappedVariables,
-        installScript: ptero.script?.install || ptero.install_script || null,
-        supportedPorts: [25565],
-        allocatedMemoryMb: 1024,
-        allocatedCpuCores: 1,
-        features,
+        name: converted.name,
+        description: converted.description,
+        author: converted.author,
+        version: converted.version,
+        image: converted.image,
+        images: converted.images,
+        defaultImage: converted.defaultImage,
+        installImage: converted.installImage,
+        installEntrypoint: converted.installEntrypoint,
+        startup: converted.startup,
+        stopCommand: converted.stopCommand,
+        sendSignalTo: converted.sendSignalTo,
+        variables: converted.variables,
+        installScript: converted.installScript,
+        supportedPorts: converted.supportedPorts,
+        allocatedMemoryMb: converted.allocatedMemoryMb,
+        allocatedCpuCores: converted.allocatedCpuCores,
+        features: converted.features,
         nestId: catalystNestId,
       },
       sourceId: ptero.id,
