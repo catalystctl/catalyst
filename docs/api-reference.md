@@ -52,10 +52,12 @@ Error responses omit `data`:
     - [Server Admin Operations](#server-admin-operations)
     - [Server Bulk Operations](#server-bulk-operations)
     - [Server Console & Streaming](#server-console--streaming)
+    - [Server Backups](#server-backups)
   - [Node Management](#node-management)
   - [Admin Operations](#admin-operations)
   - [Role Management](#role-management)
   - [Template & Nest Management](#template--nest-management)
+  - [Location Management](#location-management)
   - [Alert Management](#alert-management)
   - [Scheduled Tasks](#scheduled-tasks)
   - [Plugin Management](#plugin-management)
@@ -114,15 +116,21 @@ API keys follow the format `catalyst_<base64>`. They are scoped to specific perm
 
 ### Agent Authentication
 
-The agent binary on server nodes authenticates using custom headers:
+The agent binary on server nodes authenticates using one of the following methods:
 
+**Primary method (used in code):**
+```http
+X-Node-Id: <node-uuid>
+X-Node-Api-Key: <node-api-key>
+```
+
+**Legacy Catalyst headers (also accepted):**
 ```http
 X-Catalyst-Node-Id: <node-uuid>
 X-Catalyst-Node-Token: <api-key>
 ```
 
-Or via `Authorization` header:
-
+**Authorization header:**
 ```http
 Authorization: Bearer <node-api-key>
 ```
@@ -279,7 +287,7 @@ Set password for accounts created via SSO/OAuth that don't yet have a password.
 **Body:**
 ```json
 {
-  "password": "newSecurePassword123"
+  "newPassword": "newSecurePassword123"
 }
 ```
 
@@ -297,7 +305,84 @@ Set password for accounts created via SSO/OAuth that don't yet have a password.
 - `400` — Password does not meet minimum complexity requirements
 - `409` — Account already has a password set
 
-#### POST `/api/auth/profile/passkeys/verify`
+#### POST `/api/auth/profile/change-password`
+
+Change the current user's password. Optionally revokes all other active sessions.
+
+**Auth:** Session  
+**Body:**
+```json
+{
+  "currentPassword": "oldPassword123",
+  "newPassword": "newSecurePassword123",
+  "revokeOtherSessions": false
+}
+```
+
+The `revokeOtherSessions` field is optional (default `false`). When `true`, all other active sessions are invalidated after the password change.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Password changed successfully"
+  }
+}
+```
+
+**Errors:**
+- `400` — Current password is incorrect or new password does not meet complexity requirements
+
+#### GET `/api/auth/profile/two-factor`
+
+Get the current user's two-factor authentication (TOTP) status.
+
+**Auth:** Session  
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "twoFactorEnabled": true
+  }
+}
+```
+
+#### POST `/api/auth/profile/passkeys`
+
+Start a passkey (WebAuthn) registration flow. Returns challenge data for the browser to use with `navigator.credentials.create()`.
+
+**Auth:** Session  
+**Body:**
+```json
+{
+  "name": "My Security Key",
+  "authenticatorAttachment": "cross-platform"
+}
+```
+
+Both fields are optional. `authenticatorAttachment` can be `"platform"` (device-bound, e.g. Touch ID) or `"cross-platform"` (roaming, e.g. YubiKey).
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "challenge": "base64-encoded-challenge",
+    "rp": { "name": "Catalyst", "id": "panel.example.com" },
+    "user": { "id": "base64-encoded-user-id", "name": "johndoe", "displayName": "John Doe" },
+    "pubKeyCredParams": [{ "type": "public-key", "alg": -7 }],
+    "timeout": 60000,
+    "excludeCredentials": [],
+    "authenticatorSelection": { "authenticatorAttachment": "cross-platform", "residentKey": "preferred", "userVerification": "preferred" },
+    "attestation": "none"
+  }
+}
+```
+
+**Errors:**
+- `400` — Passkey registration is not supported or misconfigured
 
 Verify a passkey registration flow. Called after the browser's WebAuthn dialog completes.
 
@@ -391,15 +476,13 @@ List all SSO/OAuth accounts linked to the current user.
 
 #### POST `/api/auth/profile/sso/link`
 
-Link a new SSO/OAuth account to the current user. Requires an OAuth callback flow.
+Link a new SSO/OAuth account to the current user. Initiates an OAuth authorization flow on the backend and returns a redirect URL for the client to open.
 
 **Auth:** Session  
 **Body:**
 ```json
 {
-  "provider": "google",
-  "code": "oauth-authorization-code",
-  "state": "random-state-param"
+  "providerId": "google"
 }
 ```
 
@@ -408,28 +491,26 @@ Link a new SSO/OAuth account to the current user. Requires an OAuth callback flo
 {
   "success": true,
   "data": {
-    "linked": true,
-    "account": {
-      "provider": "google",
-      "providerAccountId": "112233445566"
-    }
+    "url": "https://accounts.google.com/o/oauth2/auth?client_id=...&redirect_uri=...&scope=...",
+    "redirect": true
   }
 }
 ```
 
 **Errors:**
-- `400` — Invalid OAuth code or state mismatch
+- `400` — Invalid or unsupported provider ID
 - `409` — Account already linked to another user
 
 #### POST `/api/auth/profile/sso/unlink`
 
-Unlink an SSO/OAuth account. Prevents unlinking the last sign-in method for the account.
+Unlink an SSO/OAuth account. Prevents unlinking the only remaining sign-in method for the account.
 
 **Auth:** Session  
 **Body:**
 ```json
 {
-  "provider": "google"
+  "providerId": "google",
+  "accountId": "optional-specific-account-id"
 }
 ```
 
@@ -444,7 +525,7 @@ Unlink an SSO/OAuth account. Prevents unlinking the last sign-in method for the 
 ```
 
 **Errors:**
-- `400` — Cannot unlink last sign-in method (has a password set, or other linked accounts exist)
+- `400` — Cannot unlink only sign-in method
 - `404` — Provider not linked
 
 #### DELETE `/api/auth/profile/sessions`
@@ -587,7 +668,7 @@ Retrieve the user's personal audit log. Shows account-related events with pagina
 
 #### GET `/api/auth/profile/export`
 
-Export a GDPR-compliant zip archive of all user data, including profile, sessions, accounts, API keys, audit log, and server information.
+Export all user data as an inline JSON response. Includes profile, sessions, accounts, API keys, audit log, and server information.
 
 **Auth:** Session  
 **Response (200):**
@@ -595,20 +676,63 @@ Export a GDPR-compliant zip archive of all user data, including profile, session
 {
   "success": true,
   "data": {
-    "downloadUrl": "/api/auth/profile/export/download/xyz123",
-    "expiresAt": "2024-01-01T13:00:00Z",
-    "message": "Export will be ready in ~5 minutes"
+    "profile": {
+      "id": "user_xxx",
+      "email": "user@example.com",
+      "username": "johndoe",
+      "name": "John Doe",
+      "firstName": "John",
+      "lastName": "Doe",
+      "image": null,
+      "role": "user",
+      "permissions": ["server.read", "server.start"],
+      "createdAt": "2024-01-01T00:00:00Z",
+      "updatedAt": "2024-01-02T00:00:00Z"
+    },
+    "sessions": [
+      {
+        "id": "sess_xxx",
+        "createdAt": "2024-01-01T00:00:00Z",
+        "expiresAt": "2024-01-08T00:00:00Z",
+        "ipAddress": "192.168.1.1",
+        "userAgent": "Mozilla/5.0..."
+      }
+    ],
+    "accounts": [
+      {
+        "provider": "google",
+        "providerAccountId": "112233445566",
+        "createdAt": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "apiKeys": [
+      {
+        "id": "key_xxx",
+        "name": "CI/CD",
+        "permissions": ["server.read"],
+        "createdAt": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "auditLog": [
+      {
+        "id": "evt_xxx",
+        "action": "login",
+        "timestamp": "2024-01-01T12:00:00Z",
+        "ipAddress": "192.168.1.1",
+        "metadata": { "method": "password" }
+      }
+    ],
+    "servers": [
+      {
+        "id": "srv_xxx",
+        "name": "My Server",
+        "status": "running",
+        "createdAt": "2024-01-01T00:00:00Z"
+      }
+    ]
   }
 }
 ```
-
-The download URL returns a ZIP file containing:
-- `profile.json` — user profile data
-- `sessions.json` — all active sessions
-- `accounts.json` — linked SSO accounts
-- `api-keys.json` — API key metadata
-- `audit-log.json` — complete audit history
-- `servers.json` — server configurations owned by user
 
 **Errors:**
 - `400` — Export already pending (wait for current to complete)
@@ -680,22 +804,22 @@ All server routes are under `/api/servers`. Each server has a unique `id` and `u
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/servers` | Session | List user's accessible servers |
-| `POST` | `/api/servers` | Session | Create a new server |
-| `GET` | `/api/servers/:id` | Session | Get server details |
-| `PUT` | `/api/servers/:id` | Session | Update server configuration |
-| `DELETE` | `/api/servers/:id` | Session | Delete a server (must be stopped) |
-| `POST` | `/api/servers/:id/storage/resize` | Session | Resize server disk |
+| `GET` | `/api/servers` | `server.read` | List user's accessible servers |
+| `POST` | `/api/servers` | `admin.write` or node-assigned | Create a new server |
+| `GET` | `/api/servers/:id` | `server.read` | Get server details |
+| `PUT` | `/api/servers/:id` | `server.update` | Update server configuration |
+| `DELETE` | `/api/servers/:id` | `server.delete` | Delete a server (must be stopped) |
+| `POST` | `/api/servers/:id/storage/resize` | `file.write` or `server.update` | Resize server disk |
 
 #### POST `/api/servers/:id/storage/resize` — Resize Server Disk
 
 Resize the server's allocated disk space. Online grow is supported; shrinking requires the server to be stopped.
 
-**Auth:** Session (`server.update`)  
+**Auth:** `file.write` or `server.update`  
 **Body:**
 ```json
 {
-  "diskMb": 20480
+  "allocatedDiskMb": 20480
 }
 ```
 
@@ -705,7 +829,7 @@ Resize the server's allocated disk space. Online grow is supported; shrinking re
   "success": true,
   "data": {
     "serverId": "srv_xxx",
-    "diskMb": 20480,
+    "allocatedDiskMb": 20480,
     "previousDiskMb": 10240,
     "requiresRestart": false,
     "message": "Disk resized successfully"
@@ -721,22 +845,22 @@ Resize the server's allocated disk space. Online grow is supported; shrinking re
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `POST` | `/api/servers/:id/start` | Session | Start server |
-| `POST` | `/api/servers/:id/stop` | Session | Stop server |
-| `POST` | `/api/servers/:id/restart` | Session | Restart server |
-| `POST` | `/api/servers/:id/kill` | Session | Force kill server |
-| `POST` | `/api/servers/:id/install` | Session | Install server (first deploy) |
-| `POST` | `/api/servers/:id/reinstall` | Session | Reinstall (wipe + install) |
-| `POST` | `/api/servers/:id/rebuild` | Session | Rebuild container (preserve data) |
-| `POST` | `/api/servers/:id/suspend` | Session | Suspend server |
-| `POST` | `/api/servers/:id/unsuspend` | Session | Unsuspend server |
-| `POST` | `/api/servers/eula` | Session | Respond to EULA prompt |
+| `POST` | `/api/servers/:id/start` | `server.start` | Start server |
+| `POST` | `/api/servers/:id/stop` | `server.stop` | Stop server |
+| `POST` | `/api/servers/:id/restart` | `server.start` + `server.stop` | Restart server |
+| `POST` | `/api/servers/:id/kill` | `server.stop` | Force kill server |
+| `POST` | `/api/servers/:id/install` | `server.install` | Install server (first deploy) |
+| `POST` | `/api/servers/:id/reinstall` | `server.reinstall` | Reinstall (wipe + install) |
+| `POST` | `/api/servers/:id/rebuild` | `server.rebuild` | Rebuild container (preserve data) |
+| `POST` | `/api/servers/:id/suspend` | `server.suspend` or `admin` | Suspend server |
+| `POST` | `/api/servers/:id/unsuspend` | `server.suspend` or `admin` | Unsuspend server |
+| `POST` | `/api/servers/eula` | `server.install` | Respond to EULA prompt |
 
 #### POST `/api/servers/:id/reinstall`
 
 Completely wipe the server's disk and reinstall from scratch. This is irreversible — all data is lost.
 
-**Auth:** Session (`server.install`)  
+**Auth:** `server.reinstall`  
 **Response (200):**
 ```json
 {
@@ -754,10 +878,11 @@ Completely wipe the server's disk and reinstall from scratch. This is irreversib
 
 Respond to an EULA (End User License Agreement) prompt. The server must have an EULA requirement configured in its template.
 
-**Auth:** Session  
+**Auth:** `server.install`  
 **Body:**
 ```json
 {
+  "serverId": "srv_xxx",
   "accepted": true
 }
 ```
@@ -772,28 +897,54 @@ Respond to an EULA (End User License Agreement) prompt. The server must have an 
 }
 ```
 
+#### POST `/api/servers/:id/suspend`
+
+Suspend a server. Optionally stops the server first and records a reason for the suspension.
+
+**Auth:** `server.suspend` or `admin`  
+**Body:**
+```json
+{
+  "reason": "Billing suspended",
+  "stopServer": true
+}
+```
+
+- `reason` — optional human-readable reason for suspension
+- `stopServer` — if `true`, stops the server before suspending it
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "suspended": true,
+    "message": "Server suspended"
+  }
+}
+
 #### Server File Operations
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/servers/:id/files` | Session | List files in directory |
-| `GET` | `/api/servers/:id/files/download` | Session | Download file |
-| `POST` | `/api/servers/:id/files/upload` | Session | Upload file |
-| `POST` | `/api/servers/:id/files/write` | Session | Write/update file content |
-| `POST` | `/api/servers/:id/files/create` | Session | Create file or directory |
-| `POST` | `/api/servers/:id/files/rename` | Session | Rename/move file |
-| `DELETE` | `/api/servers/:id/files/delete` | Session | Delete file or directory |
-| `POST` | `/api/servers/:id/files/permissions` | Session | Update file permissions (chmod) |
-| `POST` | `/api/servers/:id/files/compress` | Session | Compress files to archive |
-| `POST` | `/api/servers/:id/files/decompress` | Session | Extract archive |
-| `POST` | `/api/servers/:id/files/archive-contents` | Session | List archive contents |
-| `GET` | `/api/servers/:id/logs` | Session | Get server logs |
+| `GET` | `/api/servers/:id/files` | `file.read` | List files in directory. Query: `?path=/subdir` |
+| `GET` | `/api/servers/:id/files/download` | `file.read` | Download file |
+| `POST` | `/api/servers/:id/files/upload` | `file.write` | Upload file (multipart/form-data, `path` form field) |
+| `POST` | `/api/servers/:id/files/write` | `file.write` | Write/update file content |
+| `POST` | `/api/servers/:id/files/create` | `file.write` | Create file or directory. Body: `{name, type: "file" or "directory", content?}` |
+| `POST` | `/api/servers/:id/files/rename` | `file.write` | Rename/move file |
+| `DELETE` | `/api/servers/:id/files/delete` | `file.write` | Delete file or directory |
+| `POST` | `/api/servers/:id/files/permissions` | `file.write` | Update file permissions (chmod) |
+| `POST` | `/api/servers/:id/files/compress` | `file.write` | Compress files to archive |
+| `POST` | `/api/servers/:id/files/decompress` | `file.write` | Extract archive |
+| `POST` | `/api/servers/:id/files/archive-contents` | `file.read` | List archive contents |
+| `GET` | `/api/servers/:id/logs` | `console.read` | Get server logs |
 
 #### POST `/api/servers/:id/files/archive-contents`
 
 List the contents of an archive file without extracting it.
 
-**Auth:** Session  
+**Auth:** `file.read`  
 **Body:**
 ```json
 {
@@ -815,7 +966,7 @@ List the contents of an archive file without extracting it.
 }
 ```
 
-**Supported archive formats:** `.zip`, `.tar.gz`, `.tar.bz2`, `.tar.xz`, `.tar.zst`
+**Supported archive formats:** `.zip`, `.tar.gz`, `.tgz`
 
 **Errors:**
 - `400` — Invalid archive format or corrupted archive
@@ -825,7 +976,7 @@ List the contents of an archive file without extracting it.
 
 Set file permissions using octal or hex notation.
 
-**Auth:** Session  
+**Auth:** `file.write`  
 **Body:**
 ```json
 {
@@ -851,7 +1002,7 @@ The `mode` field accepts octal (e.g., `0755`, `0644`) or hex (e.g., `0x755`) not
 
 Get server console logs. Returns recent log lines with pagination.
 
-**Auth:** Session  
+**Auth:** `console.read`  
 **Query params:**
 - `lines` — number of lines to return (default 100, max 1000)
 - `stream` — `console` (default) or `stdout`/`stderr`
@@ -875,13 +1026,10 @@ Get server console logs. Returns recent log lines with pagination.
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/servers/:id/network` | Session | Get network configuration |
-| `POST` | `/api/servers/:id/network/bindings` | Session | Update port bindings |
-| `GET` | `/api/servers/:id/network/availability` | Session | List available IP addresses |
-| `GET` | `/api/servers/:id/allocations` | Session | List port allocations/bindings |
-| `POST` | `/api/servers/:id/allocations` | Session | Add port allocation |
-| `DELETE` | `/api/servers/:id/allocations/:containerPort` | Session | Remove allocation (not primary) |
-| `POST` | `/api/servers/:id/allocations/primary` | Session | Set primary port |
+| `GET` | `/api/servers/:id/allocations` | `server.read` | List port allocations/bindings |
+| `POST` | `/api/servers/:id/allocations` | `server.update` | Add port allocation |
+| `DELETE` | `/api/servers/:id/allocations/:containerPort` | `server.update` | Remove allocation (not primary) |
+| `POST` | `/api/servers/:id/allocations/primary` | `server.update` | Set primary port |
 
 #### DELETE `/api/servers/:id/allocations/:containerPort`
 
@@ -935,14 +1083,14 @@ Set the primary port for this server. The primary port is used for server identi
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/servers/:id/databases` | Session | List databases |
-| `POST` | `/api/servers/:id/databases` | Session | Create a database |
-| `POST` | `/api/servers/:id/databases/:dbId/rotate` | Session | Rotate database password |
-| `DELETE` | `/api/servers/:id/databases/:dbId` | Session | Delete a database |
+| `GET` | `/api/servers/:id/databases` | `database.read` | List databases |
+| `POST` | `/api/servers/:id/databases` | `database.create` | Create a database (returns 201). `hostId` required. `name` optional (auto-generated if <3 chars). 403 if databaseAllocation is 0, 409 if limit reached |
+| `POST` | `/api/servers/:id/databases/:databaseId/rotate` | `database.rotate` | Rotate database password |
+| `DELETE` | `/api/servers/:id/databases/:databaseId` | `database.delete` | Delete a database |
 
-#### POST `/api/servers/:id/databases/:dbId/rotate`
+#### POST `/api/servers/:id/databases/:databaseId/rotate`
 
-Rotate the database password. The new password is returned once — it will not be stored again.
+Rotate the database password. Returns the full updated database object including the new password.
 
 **Auth:** Session (`database.rotate`)  
 **Response (200):**
@@ -950,26 +1098,30 @@ Rotate the database password. The new password is returned once — it will not 
 {
   "success": true,
   "data": {
+    "id": "db_xxx",
+    "name": "catalyst_db_123",
+    "username": "u_catalyst_123",
     "password": "newRandomPassword123",
-    "message": "Password rotated. This is the only time the new password will be shown."
+    "host": "db.example.com",
+    "port": 3306,
+    "hostId": "host_xxx",
+    "hostName": "Primary DB Host",
+    "createdAt": "2024-01-01T00:00:00Z"
   }
 }
 ```
-
-**Security note:** The rotated password is returned only in this response. It is not stored in the database and cannot be retrieved later.
 
 #### Server Invites & Access
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/servers/:id/permissions` | Session | List server access & permissions |
-| `GET` | `/api/servers/:id/invites` | Session | List pending invites |
-| `POST` | `/api/servers/:id/invites` | Session | Create invite |
-| `DELETE` | `/api/servers/:id/invites/:id` | Session | Cancel invite |
-| `GET` | `/api/servers/:id/access` | Session | List access entries |
-| `POST` | `/api/servers/:id/access` | Session | Add/update access |
-| `DELETE` | `/api/servers/:id/access/:targetUserId` | Session | Remove access |
-| `POST` | `/api/servers/invites/accept` | Session | Accept invite (authenticated) |
+| `GET` | `/api/servers/:id/permissions` | `server.read` | List server access & permissions |
+| `GET` | `/api/servers/:id/invites` | `server.read` | List pending invites |
+| `POST` | `/api/servers/:id/invites` | Owner only | Create invite |
+| `DELETE` | `/api/servers/:id/invites/:inviteId` | Owner only | Cancel invite |
+| `POST` | `/api/servers/:id/access` | Owner only | Add/update access |
+| `DELETE` | `/api/servers/:id/access/:targetUserId` | Owner only | Remove access |
+| `POST` | `/api/servers/invites/accept` | `server.read` | Accept invite (authenticated) |
 | `POST` | `/api/servers/invites/register` | No | Accept invite + register account |
 | `GET` | `/api/servers/invites/:token` | No | Preview invite |
 
@@ -977,7 +1129,7 @@ Rotate the database password. The new password is returned once — it will not 
 
 Cancel a pending server invite. The invite URL will no longer work.
 
-**Auth:** Session (`server.update`)  
+**Auth:** Owner only  
 **Response (200):**
 ```json
 {
@@ -997,11 +1149,12 @@ Accept an invite link and create a new account in a single flow. Intended for un
 ```json
 {
   "token": "invite-token-string",
-  "email": "newuser@example.com",
   "username": "newuser",
   "password": "securePassword123"
 }
 ```
+
+The `email` is taken from the invite itself, not provided in the request body.
 
 **Response (200):**
 ```json
@@ -1022,7 +1175,7 @@ Accept an invite link and create a new account in a single flow. Intended for un
 
 #### GET `/api/servers/invites/:token`
 
-Preview an invite without accepting it. Returns the server name, icon, and permissions being offered.
+Preview an invite without accepting it. Returns the target email, server name, and permissions being offered.
 
 **Auth:** No  
 **Response (200):**
@@ -1030,9 +1183,8 @@ Preview an invite without accepting it. Returns the server name, icon, and permi
 {
   "success": true,
   "data": {
-    "serverId": "srv_xxx",
+    "email": "newuser@example.com",
     "serverName": "My Survival Server",
-    "serverIcon": "icon-url",
     "permissions": ["server.read", "server.start", "server.stop", "console.read", "console.write"],
     "expiresAt": "2024-02-01T00:00:00Z"
   }
@@ -1050,7 +1202,7 @@ Preview an invite without accepting it. Returns the server name, icon, and permi
 
 Remove another user's access to this server.
 
-**Auth:** Session (`server.update`)  
+**Auth:** Owner only  
 **Response (200):**
 ```json
 {
@@ -1066,14 +1218,14 @@ Remove another user's access to this server.
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/servers/:id/variables` | Session | Get template variables |
-| `POST` | `/api/servers/:id/variables` | Session | Update environment variables |
+| `GET` | `/api/servers/:id/variables` | `server.read` | Get template variables |
+| `PATCH` | `/api/servers/:id/variables` | `server.rebuild` | Update environment variables |
 
-#### POST `/api/servers/:id/variables`
+#### PATCH `/api/servers/:id/variables`
 
 Update server environment variables with full validation. Returns detailed validation errors for any invalid values.
 
-**Auth:** Session  
+**Auth:** `server.rebuild`  
 **Body:**
 ```json
 {
@@ -1111,19 +1263,19 @@ Update server environment variables with full validation. Returns detailed valid
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/servers/:id/stats` | Session | Get server metrics |
-| `GET` | `/api/servers/:id/stats/history` | Session | Historical server stats |
-| `GET` | `/api/servers/:id/activity` | Session | Server activity log |
+| `GET` | `/api/servers/:id/stats` | `server.read` | Get server metrics |
+| `GET` | `/api/servers/:id/stats/history` | `server.read` | Historical server stats |
+| `GET` | `/api/servers/:id/activity` | `server.read` | Server activity log |
 
 #### GET `/api/servers/:id/stats/history`
 
-Get historical server resource metrics with automatic downsampling. Returns data points aggregated by time bucket.
+Get historical server resource metrics with automatic downsampling. Returns data points aggregated by time bucket. Maximum query window is 7 days.
 
-**Auth:** Session  
+**Auth:** `server.read`  
 **Query params:**
 - `from` — start timestamp (ISO or Unix epoch)
 - `to` — end timestamp (ISO or Unix epoch)
-- `bucket` — time bucket size: `1m`, `5m`, `15m`, `1h`, `6h`, `24h` (default: `5m` for requests < 6h, `15m` for 6h-24h, `1h` for > 24h)
+- `interval` — aggregation interval in seconds (default: 300)
 
 **Response (200):**
 ```json
@@ -1140,8 +1292,13 @@ Get historical server resource metrics with automatic downsampling. Returns data
         "diskWriteOps": 80
       }
     ],
-    "bucket": "5m",
-    "count": 288
+    "meta": {
+      "from": "2024-01-01T00:00:00Z",
+      "to": "2024-01-01T06:00:00Z",
+      "interval": 300,
+      "totalRaw": 15000,
+      "returned": 72
+    }
   }
 }
 ```
@@ -1152,8 +1309,8 @@ Get a paginated log of server activity events (power actions, file ops, console 
 
 **Auth:** Session  
 **Query params:**
-- `limit` — number of events (default 20, max 100)
-- `offset` — pagination offset
+- `page` — page number (default 1)
+- `limit` — number of events per page (default 20, max 100)
 
 **Response (200):**
 ```json
@@ -1176,9 +1333,12 @@ Get a paginated log of server activity events (power actions, file ops, console 
         "metadata": { "path": "/world/player.dat", "size": 4096 }
       }
     ],
-    "total": 250,
-    "limit": 20,
-    "offset": 0
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 250,
+      "totalPages": 13
+    }
   }
 }
 ```
@@ -1187,27 +1347,27 @@ Get a paginated log of server activity events (power actions, file ops, console 
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/servers/:id/mod-manager/game-versions` | Session | List game versions for a provider |
-| `GET` | `/api/servers/:id/mod-manager/search` | Session | Search mods |
-| `GET` | `/api/servers/:id/mod-manager/versions` | Session | List versions for a project |
-| `POST` | `/api/servers/:id/mod-manager/install` | Session | Install a mod |
-| `GET` | `/api/servers/:id/mod-manager/installed` | Session | List installed mods |
-| `POST` | `/api/servers/:id/mod-manager/uninstall` | Session | Uninstall a mod |
-| `POST` | `/api/servers/:id/mod-manager/check-updates` | Session | Check for mod updates |
-| `GET` | `/api/servers/:id/plugin-manager/game-versions` | Session | List plugin versions |
-| `GET` | `/api/servers/:id/plugin-manager/search` | Session | Search plugins |
-| `GET` | `/api/servers/:id/plugin-manager/versions` | Session | List versions for a plugin |
-| `POST` | `/api/servers/:id/plugin-manager/install` | Session | Install a plugin |
-| `GET` | `/api/servers/:id/plugin-manager/installed` | Session | List installed plugins |
-| `POST` | `/api/servers/:id/plugin-manager/uninstall` | Session | Uninstall a plugin |
-| `POST` | `/api/servers/:id/plugin-manager/check-updates` | Session | Check for plugin updates |
-| `POST` | `/api/servers/:id/plugin-manager/update` | Session | Update a plugin |
+| `GET` | `/api/servers/:id/mod-manager/game-versions` | `server.read` | List game versions for a provider |
+| `GET` | `/api/servers/:id/mod-manager/search` | `server.read` | Search mods |
+| `GET` | `/api/servers/:id/mod-manager/versions` | `server.read` | List versions for a project |
+| `POST` | `/api/servers/:id/mod-manager/install` | `file.write` | Install a mod |
+| `GET` | `/api/servers/:id/mod-manager/installed` | `server.read` | List installed mods |
+| `POST` | `/api/servers/:id/mod-manager/uninstall` | `file.write` | Uninstall a mod |
+| `POST` | `/api/servers/:id/mod-manager/check-updates` | `server.read` | Check for mod updates |
+| `GET` | `/api/servers/:id/plugin-manager/game-versions` | `server.read` | List plugin versions |
+| `GET` | `/api/servers/:id/plugin-manager/search` | `server.read` | Search plugins |
+| `GET` | `/api/servers/:id/plugin-manager/versions` | `server.read` | List versions for a plugin |
+| `POST` | `/api/servers/:id/plugin-manager/install` | `file.write` | Install a plugin |
+| `GET` | `/api/servers/:id/plugin-manager/installed` | `server.read` | List installed plugins |
+| `POST` | `/api/servers/:id/plugin-manager/uninstall` | `file.write` | Uninstall a plugin |
+| `POST` | `/api/servers/:id/plugin-manager/check-updates` | `server.read` | Check for plugin updates |
+| `POST` | `/api/servers/:id/plugin-manager/update` | `file.write` | Update a plugin |
 
 #### GET `/api/servers/:id/mod-manager/game-versions`
 
 List available game versions for a mod provider (Modrinth, CurseForge, etc.).
 
-**Auth:** Session  
+**Auth:** `server.read`  
 **Query params:**
 - `provider` — `modrinth` (default), `curseforge`, or `paper`
 - `gameVersion` — filter by Minecraft/other game version (e.g., `1.20.1`)
@@ -1232,11 +1392,13 @@ List available game versions for a mod provider (Modrinth, CurseForge, etc.).
 
 Search for mods across providers. Supports search by name, category, and game version.
 
-**Auth:** Session  
+**Auth:** `server.read`  
 **Query params:**
-- `q` — search query
-- `provider` — `modrinth` (default), `curseforge`, `paper`
+- `query` — search query (required)
+- `provider` — `modrinth`, `curseforge`, `paper` (required)
 - `gameVersion` — filter by game version
+- `target` — `mods` (default), `datapacks`, or `modpacks`
+- `loader` — mod loader type (e.g., `forge`, `fabric`, `quilt`, `neoforge`)
 - `page` — page number (default 1)
 - `limit` — results per page (default 20, max 100)
 
@@ -1273,8 +1435,10 @@ Install a mod from a provider. Downloads and places the mod file in the server's
 ```json
 {
   "provider": "modrinth",
+  "target": "mods",
   "projectId": "mod_xxx",
   "versionId": "version_xxx",
+  "projectName": "OptiFine",
   "filePath": "mods/"
 }
 ```
@@ -1306,7 +1470,7 @@ Remove an installed mod.
 **Body:**
 ```json
 {
-  "fileName": "optifine-mc1.20.1_HD_U_I6.jar"
+  "filename": "optifine-mc1.20.1_HD_U_I6.jar"
 }
 ```
 
@@ -1321,6 +1485,67 @@ Remove an installed mod.
 }
 ```
 
+#### GET `/api/servers/:id/mod-manager/installed`
+
+List all installed mods with their metadata and update status.
+
+**Auth:** Session (`server.read`)  
+**Query params:**
+- `target` — optional filter: `mods` (default), `datapacks`, or `modpacks`
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "name": "optifine-mc1.20.1_HD_U_I6.jar",
+      "size": 15242880,
+      "modifiedAt": "2024-01-01T00:00:00Z",
+      "provider": "modrinth",
+      "projectId": "mod_xxx",
+      "versionId": "ver_xxx",
+      "projectName": "OptiFine",
+      "hasUpdate": true,
+      "latestVersionId": "ver_yyy",
+      "latestVersionName": "I7",
+      "updateCheckedAt": "2024-01-02T00:00:00Z"
+    }
+  ]
+}
+```
+
+#### POST `/api/servers/:id/mod-manager/update`
+
+Update one or more installed mods to their latest available versions.
+
+**Auth:** Session (`file.write`)  
+**Body:**
+```json
+{
+  "filenames": ["optifine-mc1.20.1_HD_U_I6.jar"]
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "filename": "optifine-mc1.20.1_HD_U_I6.jar",
+      "updated": true,
+      "oldVersion": "I6",
+      "newVersion": "I7"
+    }
+  ]
+}
+```
+
+**Errors:**
+- `400` — One or more filenames not found in installed mods
+- `409` — Mod already at latest version
+
 #### POST `/api/servers/:id/mod-manager/check-updates`
 
 Check for available updates to all installed mods.
@@ -1331,44 +1556,51 @@ Check for available updates to all installed mods.
 {
   "success": true,
   "data": {
-    "updates": [
-      {
-        "fileName": "optifine-mc1.20.1_HD_U_I6.jar",
-        "currentVersion": "I6",
-        "latestVersion": "I7",
-        "downloadUrl": "https://..."
-      }
-    ],
-    "count": 2,
-    "totalMods": 15
+    "checked": 15,
+    "updatesAvailable": 3
   }
 }
 ```
 
-#### Server Admin Operations
+#### GET `/api/servers/:id/plugin-manager/installed`
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `PATCH` | `/api/servers/:id/restart-policy` | Session | Set auto-restart policy |
-| `POST` | `/api/servers/:id/reset-crash-count` | Session | Reset crash count |
-| `PATCH` | `/api/servers/:id/backup-settings` | Session | Update backup configuration |
-| `POST` | `/api/servers/:id/transfer` | Session | Transfer server to another node |
-| `POST` | `/api/servers/:id/transfer-ownership` | Session | Transfer ownership to another user |
-| `POST` | `/api/servers/:id/archive` | Session | Archive server |
-| `POST` | `/api/servers/:id/restore` | Session | Restore from archive |
+List all installed plugins with their metadata and update status.
 
-#### PATCH `/api/servers/:id/restart-policy`
+**Auth:** Session (`server.read`)  
+**Query params:**
+- `target` — optional filter: `plugins` (default), or `datapacks`
 
-Configure automatic restart behavior after crashes.
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "name": "EssentialsX-2.20.1.jar",
+      "size": 8450000,
+      "modifiedAt": "2024-01-01T00:00:00Z",
+      "provider": "bukkit",
+      "projectId": "essentialsx",
+      "versionId": "2.20.1",
+      "projectName": "EssentialsX",
+      "hasUpdate": false,
+      "latestVersionId": null,
+      "latestVersionName": null,
+      "updateCheckedAt": "2024-01-02T00:00:00Z"
+    }
+  ]
+}
+```
 
-**Auth:** Session (`server.schedule`)  
+#### POST `/api/servers/:id/plugin-manager/uninstall`
+
+Remove an installed plugin.
+
+**Auth:** Session  
 **Body:**
 ```json
 {
-  "autoRestart": true,
-  "maxRestarts": 3,
-  "restartCooldownSeconds": 30,
-  "restartOnOOM": true
+  "filename": "EssentialsX-2.20.1.jar"
 }
 ```
 
@@ -1377,10 +1609,47 @@ Configure automatic restart behavior after crashes.
 {
   "success": true,
   "data": {
-    "autoRestart": true,
-    "maxRestarts": 3,
-    "restartCooldownSeconds": 30,
-    "restartOnOOM": true
+    "uninstalled": true,
+    "requiresRestart": true
+  }
+}
+```
+
+#### Server Admin Operations
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `PATCH` | `/api/servers/:id/restart-policy` | `server.start` | Set auto-restart policy |
+| `POST` | `/api/servers/:id/reset-crash-count` | `server.start` | Reset crash count |
+| `PATCH` | `/api/servers/:id/backup-settings` | `server.start` | Update backup configuration |
+| `POST` | `/api/servers/:id/transfer` | `server.transfer` | Transfer server to another node |
+| `POST` | `/api/servers/:id/transfer-ownership` | `admin.write` or owner | Transfer ownership to another user |
+| `POST` | `/api/servers/:id/archive` | `server.suspend` or `admin` | Archive server |
+| `POST` | `/api/servers/:id/restore` | `server.suspend` or `admin` | Restore from archive |
+
+#### PATCH `/api/servers/:id/restart-policy`
+
+Configure automatic restart behavior after crashes.
+
+**Auth:** `server.start`  
+**Body:**
+```json
+{
+  "restartPolicy": "always",
+  "maxCrashCount": 5
+}
+```
+
+- `restartPolicy` — `"always"`, `"on-failure"`, or `"never"`
+- `maxCrashCount` — maximum consecutive crash restarts before giving up
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "restartPolicy": "always",
+    "maxCrashCount": 5
   }
 }
 ```
@@ -1389,7 +1658,7 @@ Configure automatic restart behavior after crashes.
 
 Reset the server's crash counter to zero. Used after manually resolving a crash loop.
 
-**Auth:** Session  
+**Auth:** `server.start`  
 **Response (200):**
 ```json
 {
@@ -1405,23 +1674,38 @@ Reset the server's crash counter to zero. Used after manually resolving a crash 
 
 Configure backup storage mode, retention, and provider settings (S3/SFTP).
 
-**Auth:** Session (`server.schedule`)  
+**Auth:** `server.start`  
 **Body:**
 ```json
 {
   "storageMode": "local",
-  "retention": {
-    "maxBackups": 10,
-    "maxAgeDays": 30
-  },
-  "remoteStorage": {
-    "provider": "s3",
+  "retentionCount": 10,
+  "retentionDays": 30,
+  "s3Config": {
     "bucket": "catalyst-backups",
     "region": "us-east-1",
-    "prefix": "servers/srv_xxx/"
+    "endpoint": "https://s3.amazonaws.com",
+    "accessKeyId": "AKIA...",
+    "secretAccessKey": "...",
+    "pathStyle": false
+  },
+  "sftpConfig": {
+    "host": "backup.example.com",
+    "port": 22,
+    "username": "backups",
+    "password": "...",
+    "privateKey": "-----BEGIN OPENSSH PRIVATE KEY-----...",
+    "privateKeyPassphrase": "...",
+    "basePath": "/backups"
   }
 }
 ```
+
+- `storageMode` — `"local"`, `"s3"`, `"sftp"`, or `"stream"`
+- `retentionCount` — max number of backups to keep
+- `retentionDays` — max age of backups in days
+- `s3Config` — required when `storageMode` is `"s3"`
+- `sftpConfig` — required when `storageMode` is `"sftp"`
 
 **Response (200):**
 ```json
@@ -1429,10 +1713,8 @@ Configure backup storage mode, retention, and provider settings (S3/SFTP).
   "success": true,
   "data": {
     "storageMode": "local",
-    "retention": {
-      "maxBackups": 10,
-      "maxAgeDays": 30
-    }
+    "retentionCount": 10,
+    "retentionDays": 30
   }
 }
 ```
@@ -1472,11 +1754,11 @@ Transfer events are streamed via SSE to `/api/servers/:id/sse-events`.
 
 Transfer server ownership to another user. The target user must have permission to create servers in the same location.
 
-**Auth:** Session  
+**Auth:** `admin.write` or owner  
 **Body:**
 ```json
 {
-  "userId": "user_yyy"
+  "newOwnerId": "user_yyy"
 }
 ```
 
@@ -1497,17 +1779,15 @@ Transfer server ownership to another user. The target user must have permission 
 
 #### POST `/api/servers/:id/archive`
 
-Archive a server. Stops the server, removes it from the active list, and creates a compressed snapshot. Archived servers can be restored later.
+Archive a server. Stops the server and sets its status to `archived`. Archived servers are hidden from the active server list but retain all data.
 
-**Auth:** Session  
+**Auth:** `server.suspend` or `admin`  
 **Response (200):**
 ```json
 {
   "success": true,
   "data": {
     "archived": true,
-    "archiveId": "archive_xxx",
-    "sizeBytes": 1073741824,
     "message": "Server archived successfully"
   }
 }
@@ -1515,52 +1795,39 @@ Archive a server. Stops the server, removes it from the active list, and creates
 
 #### POST `/api/servers/:id/restore`
 
-Restore a server from an archive. Creates a new server instance with the archived data.
+Restore an archived server. Sets the server status back to `stopped`, making it visible in the active server list again.
 
-**Auth:** Session  
-**Body:**
-```json
-{
-  "archiveId": "archive_xxx",
-  "serverName": "Restored Server"
-}
-```
-
+**Auth:** `server.suspend` or `admin`  
 **Response (200):**
 ```json
 {
   "success": true,
   "data": {
     "restored": true,
-    "newServerId": "srv_zzz",
     "message": "Server restored from archive"
   }
 }
 ```
 
-**Errors:**
-- `404` — Archive not found
-- `409` — Insufficient resources on target node
-
 #### Server Bulk Operations
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `POST` | `/api/servers/bulk/suspend` | Session | Bulk suspend servers |
-| `POST` | `/api/servers/bulk/unsuspend` | Session | Bulk unsuspend servers |
-| `DELETE` | `/api/servers/bulk` | Session | Bulk delete servers |
-| `POST` | `/api/servers/bulk/status` | Session | Bulk status check |
+| `POST` | `/api/servers/bulk/suspend` | `admin.write`, `admin.read`, or `server.suspend` | Bulk suspend servers |
+| `POST` | `/api/servers/bulk/unsuspend` | `admin.write`, `admin.read`, or `server.suspend` | Bulk unsuspend servers |
+| `DELETE` | `/api/servers/bulk` | `admin.write`, `admin.read`, or `server.suspend` (endpoint); `server.delete` (per-server) | Bulk delete servers |
+| `POST` | `/api/servers/bulk/status` | No specific permission (filters accessible) | Bulk status check |
 
 #### POST `/api/servers/bulk/suspend`
 
 Suspend multiple servers at once. Optionally stops them first and sets a reason.
 
-**Auth:** Session (`server.suspend`)  
+**Auth:** `admin.write`, `admin.read`, or `server.suspend`  
 **Body:**
 ```json
 {
   "serverIds": ["srv_1", "srv_2", "srv_3"],
-  "stopBeforeSuspend": true,
+  "stopServer": true,
   "reason": "Billing suspended"
 }
 ```
@@ -1570,13 +1837,15 @@ Suspend multiple servers at once. Optionally stops them first and sets a reason.
 {
   "success": true,
   "data": {
-    "suspended": 3,
-    "failed": 0,
-    "details": [
-      { "serverId": "srv_1", "status": "suspended" },
-      { "serverId": "srv_2", "status": "suspended" },
-      { "serverId": "srv_3", "status": "suspended" }
+    "success": ["srv_1", "srv_2"],
+    "failed": [
+      { "id": "srv_3", "error": "Server not found" }
     ]
+  },
+  "summary": {
+    "total": 3,
+    "succeeded": 2,
+    "failed": 1
   }
 }
 ```
@@ -1585,7 +1854,7 @@ Suspend multiple servers at once. Optionally stops them first and sets a reason.
 
 Unsuspend multiple servers at once. Re-enables scheduled tasks for each.
 
-**Auth:** Session (`server.suspend`)  
+**Auth:** `admin.write`, `admin.read`, or `server.suspend`  
 **Body:**
 ```json
 {
@@ -1598,7 +1867,12 @@ Unsuspend multiple servers at once. Re-enables scheduled tasks for each.
 {
   "success": true,
   "data": {
-    "unsuspended": 2,
+    "success": ["srv_1", "srv_2"],
+    "failed": []
+  },
+  "summary": {
+    "total": 2,
+    "succeeded": 2,
     "failed": 0
   }
 }
@@ -1608,7 +1882,7 @@ Unsuspend multiple servers at once. Re-enables scheduled tasks for each.
 
 Bulk delete servers. Maximum 100 servers per request. All servers must be stopped.
 
-**Auth:** Session (`server.delete`)  
+**Auth:** `admin.write`, `admin.read`, or `server.suspend` (endpoint); `server.delete` (per-server)  
 **Body:**
 ```json
 {
@@ -1621,13 +1895,15 @@ Bulk delete servers. Maximum 100 servers per request. All servers must be stoppe
 {
   "success": true,
   "data": {
-    "deleted": 3,
-    "failed": 0,
-    "details": [
-      { "serverId": "srv_1", "status": "deleted" },
-      { "serverId": "srv_2", "status": "deleted" },
-      { "serverId": "srv_3", "status": "deleted" }
+    "success": ["srv_1", "srv_2"],
+    "failed": [
+      { "id": "srv_3", "error": "Server is still running" }
     ]
+  },
+  "summary": {
+    "total": 3,
+    "succeeded": 2,
+    "failed": 1
   }
 }
 ```
@@ -1673,7 +1949,7 @@ Check the status of up to 200 servers in a single request. Returns server detail
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `POST` | `/api/servers/:id/console` | Session | Send command to console |
+| `POST` | `/api/servers/:id/console` | `console.write` | Send command to console |
 
 #### POST `/api/servers/:id/console`
 
@@ -1702,6 +1978,198 @@ Send a command to the server console. Maximum 4096 characters. A newline is auto
 **Errors:**
 - `400` — Command exceeds 4096 character limit
 
+#### GET `/api/servers/:serverId/console/stream` — Console SSE Stream
+
+Real-time server console output via Server-Sent Events. Replaces the legacy WebSocket console for better proxy compatibility.
+
+**Auth:** Session (`console.read`)  
+**Headers:**
+```http
+Accept: text/event-stream
+```
+
+**Behavior:**
+- Long-lived SSE connection that streams console output from the agent
+- Sends an initial `connected` event with `serverId` and `timestamp`
+- Pushes `console_output` events as the agent publishes them
+- Emits `eula_required` when the server prompts for EULA acceptance
+- Emits `error` events on connection or routing failures
+- 25-second heartbeat comments to keep connection alive through proxies
+- Maximum 50 concurrent subscribers per server
+
+**Event types:**
+- `connected` — `{ serverId, timestamp }` — connection established
+- `console_output` — `{ type, serverId, data, timestamp }` — console line
+- `eula_required` — `{ serverId, timestamp }` — EULA prompt detected
+- `error` — `{ error, serverId? }` — connection or routing error
+
+**Rate limiting:** Disabled (long-lived SSE stream)
+
+**Errors:**
+- `401` — Unauthorized
+- `403` — Insufficient permissions (`console.read` required)
+- `404` — Server not found
+- `503` — Subscriber cap reached (50 concurrent viewers)
+
+#### POST `/api/servers/:serverId/console/command` — Send Console Command
+
+Send a command to the server console via HTTP. The command is forwarded to the agent via the WebSocket gateway.
+
+**Auth:** `console.write`
+
+**Auth:** Session (`console.write`)  
+**Body:**
+```json
+{
+  "command": "say Hello world"
+}
+```
+
+- `command` — string, required, max 4096 characters, trimmed automatically
+- A newline is automatically appended if not present
+
+**Response (202):**
+```json
+{
+  "success": true,
+  "timestamp": "2024-01-01T12:00:00Z"
+}
+```
+
+**Errors:**
+- `400` — Command missing, empty, or exceeds 4096 characters
+- `403` — Insufficient permissions or server is suspended
+- `404` — Server not found
+- `500` — Failed to route command to agent
+
+#### Server Backups
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/api/servers/:serverId/backups` | `backup.read` | List backups with pagination |
+| `POST` | `/api/servers/:serverId/backups` | `backup.create` | Create a backup |
+| `GET` | `/api/servers/:serverId/backups/:backupId` | `backup.read` | Get backup details |
+| `POST` | `/api/servers/:serverId/backups/:backupId/restore` | `backup.restore` | Restore from backup |
+| `DELETE` | `/api/servers/:serverId/backups/:backupId` | `backup.delete` | Delete a backup |
+| `GET` | `/api/servers/:serverId/backups/:backupId/download` | `backup.read` | Download backup file |
+
+#### GET `/api/servers/:serverId/backups`
+
+List backups for a server with pagination.
+
+**Auth:** Session (`backup.read`)  
+**Query params:**
+- `limit` — results per page (default 50, max 100)
+- `page` — page number (default 1)
+
+**Response (200):**
+```json
+{
+  "backups": [
+    {
+      "id": "bkp_xxx",
+      "serverId": "srv_xxx",
+      "name": "backup-2024-01-01T00-00-00Z",
+      "path": "/var/lib/catalyst/backups/srv-uuid/backup-2024-01-01T00-00-00Z.tar.gz",
+      "storageMode": "local",
+      "sizeMb": 1024,
+      "status": "completed",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "completedAt": "2024-01-01T00:05:00Z",
+      "restoredAt": null
+    }
+  ],
+  "total": 15,
+  "page": 1,
+  "pageSize": 50,
+  "totalPages": 1
+}
+```
+
+**Errors:**
+- `423` — Server is suspended
+
+#### POST `/api/servers/:serverId/backups`
+
+Create a new backup. The backup is created asynchronously — the agent compresses the server data and streams it to storage.
+
+**Auth:** Session (`backup.create`)  
+**Body (optional):**
+```json
+{
+  "name": "pre-update-backup"
+}
+```
+
+- `name` — optional custom backup name (sanitized to `[a-z0-9._-]`, max 120 chars). Defaults to `backup-<ISO-timestamp>`.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Backup creation started",
+  "backupName": "pre-update-backup",
+  "backupId": "bkp_xxx"
+}
+```
+
+**Errors:**
+- `423` — Server is suspended
+- `503` — Node is offline
+- `403` — Backup allocation disabled (configure S3 or SFTP to enable)
+- `500` — Missing storage key or gateway unavailable
+
+#### POST `/api/servers/:serverId/backups/:backupId/restore`
+
+Restore a server from a backup. The server must be stopped first.
+
+**Auth:** Session (`backup.restore`)  
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Backup restoration started"
+}
+```
+
+**Errors:**
+- `400` — Server must be stopped before restoring
+- `404` — Backup not found
+- `423` — Server is suspended
+- `503` — Node is offline or failed to send restore request
+- `500` — Missing remote storage key or gateway unavailable
+
+#### DELETE `/api/servers/:serverId/backups/:backupId`
+
+Delete a backup. Removes the backup record and deletes the backup file from storage (local, S3, or SFTP).
+
+**Auth:** Session (`backup.delete`)  
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Backup deleted"
+}
+```
+
+**Errors:**
+- `404` — Backup not found
+- `423` — Server is suspended
+
+#### GET `/api/servers/:serverId/backups/:backupId/download`
+
+Download a backup file directly. For local storage, returns the file as `application/octet-stream`. For S3/SFTP, proxies the download.
+
+**Auth:** Session (`backup.read`)  
+**Response (200):** Binary file stream (`Content-Type: application/octet-stream`)
+
+**Response (404):**
+```json
+{
+  "error": "Backup file not found"
+}
+```
+
 ---
 
 ### Node Management
@@ -1718,8 +2186,8 @@ Send a command to the server console. Maximum 4096 characters. A newline is auto
 | `POST` | `/api/nodes/:id/deployment-token` | `node.create` | Generate deployment token |
 | `GET` | `/api/nodes/:id/api-key` | `node.read` | Check node API key exists |
 | `POST` | `/api/nodes/:id/api-key` | `node.create` | Generate/regenerate API key |
-| `GET` | `/api/nodes/:id/allocations` | `node.manage_allocation` | List node allocations |
-| `POST` | `/api/nodes/:id/allocations` | `node.manage_allocation` | Create allocations |
+| `GET` | `/api/nodes/:id/allocations` | `node.manage_allocation` | List node allocations (`?serverId`, `?search`) |
+| `POST` | `/api/nodes/:id/allocations` | `node.manage_allocation` | Create allocations (`alias`, `notes`) |
 | `PATCH` | `/api/nodes/:id/allocations/:allocId` | `node.manage_allocation` | Update allocation alias/notes |
 | `DELETE` | `/api/nodes/:id/allocations/:allocId` | `node.manage_allocation` | Remove allocation |
 | `GET` | `/api/nodes/:id/ip-pools` | `node.read` | List IPAM pools |
@@ -1727,6 +2195,8 @@ Send a command to the server console. Maximum 4096 characters. A newline is auto
 | `GET` | `/api/nodes/:id/assignments` | `node.assign` | List node assignments |
 | `POST` | `/api/nodes/:id/assign` | `node.assign` | Assign node to user/role |
 | `DELETE` | `/api/nodes/:id/assignments/:assignId` | `node.assign` | Remove node assignment |
+| `POST` | `/api/nodes/assign-wildcard` | `node.assign` | Assign all nodes (wildcard) to user/role |
+| `DELETE` | `/api/nodes/assign-wildcard/:targetType/:targetId` | `node.assign` | Remove wildcard assignment |
 | `GET` | `/api/nodes/accessible` | `node.read` | Get nodes accessible to user |
 | `GET` | `/api/nodes/:id/unregistered-containers` | `admin.write` | List unregistered containers |
 | `GET` | `/api/nodes/:id/unregistered-containers/:cid/suggest-template` | `admin.write` | Suggest template match |
@@ -1736,7 +2206,11 @@ Send a command to the server console. Maximum 4096 characters. A newline is auto
 
 Called by the agent binary every 30 seconds to report node health. This is an internal agent-to-backend endpoint.
 
-**Auth:** `X-Catalyst-Node-Id` + `X-Catalyst-Node-Token`  
+**Auth:** One of the following (in order of priority):
+- `X-Node-Api-Key: <node-api-key>`
+- `X-Catalyst-Node-Token: <node-api-key>`
+- `Authorization: Bearer <node-api-key>`
+
 **Body:**
 ```json
 {
@@ -1749,43 +2223,49 @@ Called by the agent binary every 30 seconds to report node health. This is an in
     "containerCount": 10,
     "networkRxBytes": 1000000,
     "networkTxBytes": 500000
-  },
-  "uptimeSeconds": 86400
+  }
 }
 ```
 
 **Response (200):**
 ```json
 {
-  "success": true,
-  "data": {
-    "acknowledged": true,
-    "nextHeartbeatInMs": 30000
-  }
+  "success": true
 }
+```
 ```
 
 #### GET `/api/nodes/:id/api-key`
 
-Check if an API key exists for this node. Returns 200 with key details if present, 404 if not.
+Check if an API key exists for this node.
 
 **Auth:** `node.read`  
-**Response (200):**
+**Response (200) — key exists:**
 ```json
 {
   "success": true,
   "data": {
     "exists": true,
-    "keyId": "key_xxx",
-    "createdAt": "2024-01-01T00:00:00Z"
+    "apiKey": {
+      "id": "key_xxx",
+      "name": "Node API Key",
+      "preview": "catalyst_A1B2...",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "enabled": true,
+      "requestCount": 15234,
+      "lastRequest": "2024-01-01T12:00:00Z"
+    }
   }
 }
 ```
 
-**Response (404):**
+**Response (200) — no key:**
 ```json
 {
-  "error": "No API key found for this node"
+  "success": true,
+  "data": {
+    "exists": false
+  }
 }
 ```
 
@@ -1794,14 +2274,28 @@ Check if an API key exists for this node. Returns 200 with key details if presen
 Generate or regenerate the API key for a node. Regenerating invalidates the previous key.
 
 **Auth:** `node.create`  
+**Body (optional):**
+```json
+{
+  "regenerate": true
+}
+```
+
 **Response (200):**
 ```json
 {
   "success": true,
   "data": {
-    "keyId": "key_xxx",
-    "apiKey": "catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6",
-    "createdAt": "2024-01-01T00:00:00Z",
+    "nodeId": "node_xxx",
+    "regenerated": true,
+    "apiKey": {
+      "id": "key_xxx",
+      "name": "Node API Key",
+      "preview": "catalyst_A1B2...",
+      "token": "catalyst_A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "enabled": true
+    },
     "warning": "This is the only time the API key will be shown. Store it securely."
   }
 }
@@ -1835,6 +2329,64 @@ Update the alias or notes for a port allocation.
 }
 ```
 
+#### GET `/api/nodes/:id/allocations`
+
+List all port allocations for a node.
+
+**Auth:** `node.manage_allocation`  
+**Query params:**
+- `serverId` — optional, filter allocations assigned to a specific server
+- `search` — optional, search by IP address, alias, or notes
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "alloc_xxx",
+      "containerPort": 25565,
+      "hostPort": 25565,
+      "ip": "192.168.1.100",
+      "alias": "Game Server 1",
+      "notes": "Primary game server for community",
+      "serverId": "srv_xxx"
+    }
+  ]
+}
+```
+
+#### POST `/api/nodes/:id/allocations`
+
+Create a new port allocation on a node.
+
+**Auth:** `node.manage_allocation`  
+**Body:**
+```json
+{
+  "containerPort": 25565,
+  "hostPort": 25565,
+  "ip": "192.168.1.100",
+  "alias": "Game Server 1",
+  "notes": "Primary game server for community"
+}
+```
+
+**Response (201):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "alloc_xxx",
+    "containerPort": 25565,
+    "hostPort": 25565,
+    "ip": "192.168.1.100",
+    "alias": "Game Server 1",
+    "notes": "Primary game server for community"
+  }
+}
+```
+
 #### GET `/api/nodes/:id/ip-pools`
 
 List IPAM (IP Address Management) macvlan pools configured for this node.
@@ -1844,17 +2396,14 @@ List IPAM (IP Address Management) macvlan pools configured for this node.
 ```json
 {
   "success": true,
-  "data": {
-    "pools": [
-      {
-        "id": "pool_xxx",
-        "name": "Production IPs",
-        "subnet": "10.0.0.0/24",
-        "gateway": "10.0.0.1",
-        "nodeId": "node_xxx"
-      }
-    ]
-  }
+  "data": [
+    {
+      "id": "pool_xxx",
+      "networkName": "Production IPs",
+      "cidr": "10.0.0.0/24",
+      "availableCount": 253
+    }
+  ]
 }
 ```
 
@@ -1863,6 +2412,10 @@ List IPAM (IP Address Management) macvlan pools configured for this node.
 List available IP addresses within the node's IP pools.
 
 **Auth:** `node.read`  
+**Query params:**
+- `networkName` — **required**, name of the IP pool to query
+- `limit` — max results (default 200, max 1000)
+
 **Response (200):**
 ```json
 {
@@ -1943,8 +2496,16 @@ Import a discovered container as a Catalyst server. Creates the database record 
   "containerId": "abc123def",
   "templateId": "tpl_xxx",
   "name": "Imported Valheim Server",
-  "userIds": ["user_xxx"],
-  "allocationId": "alloc_yyy"
+  "ownerId": "user_xxx",
+  "allocatedMemoryMb": 4096,
+  "allocatedCpuCores": 2,
+  "allocatedDiskMb": 20480,
+  "primaryPort": 2456,
+  "portBindings": ["2456:2456/udp", "2457:2457/udp"],
+  "environment": {
+    "WORLD_NAME": "MyWorld",
+    "SERVER_PASSWORD": "secret123"
+  }
 }
 ```
 
@@ -1953,9 +2514,65 @@ Import a discovered container as a Catalyst server. Creates the database record 
 {
   "success": true,
   "data": {
-    "imported": true,
-    "serverId": "srv_new",
-    "containerId": "abc123def"
+    "id": "srv_new",
+    "name": "Imported Valheim Server",
+    "status": "running",
+    "nodeId": "node_xxx",
+    "templateId": "tpl_xxx",
+    "ownerId": "user_xxx",
+    "allocatedMemoryMb": 4096,
+    "allocatedCpuCores": 2,
+    "allocatedDiskMb": 20480,
+    "containerId": "abc123def",
+    "createdAt": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+#### POST `/api/nodes/assign-wildcard`
+
+Assign all nodes (wildcard) to a user or role. This grants access to all current and future nodes.
+
+**Auth:** `node.assign`  
+**Body:**
+```json
+{
+  "targetType": "user",
+  "targetId": "user_xxx",
+  "expiresAt": "2024-12-31T23:59:59Z"
+}
+```
+
+- `targetType` — `"user"` or `"role"`
+- `targetId` — UUID of the user or role
+- `expiresAt` — optional, ISO 8601 date when the assignment expires
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "assigned": true,
+    "targetType": "user",
+    "targetId": "user_xxx",
+    "expiresAt": "2024-12-31T23:59:59Z"
+  }
+}
+```
+
+#### DELETE `/api/nodes/assign-wildcard/:targetType/:targetId`
+
+Remove a wildcard node assignment from a user or role.
+
+**Auth:** `node.assign`  
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "removed": true,
+    "targetType": "user",
+    "targetId": "user_xxx"
   }
 }
 ```
@@ -2021,20 +2638,43 @@ Import a discovered container as a Catalyst server. Creates the database record 
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/admin/stats` | `admin.read` | System-wide statistics |
+| `GET` | `/api/admin/stats` | `admin.read` or any resource read perm | System-wide statistics |
 | `GET` | `/api/admin/users` | `user.read` | List all users (paginated) |
 | `POST` | `/api/admin/users` | `user.create` | Create a user |
-| `PUT` | `/api/admin/users/:id` | `user.update` | Update a user |
+| `PUT` | `/api/admin/users/:id` | `user.update` or `user.set_roles` | Update a user |
 | `GET` | `/api/admin/users/:id/servers` | `user.read` | Get user's server access |
 | `POST` | `/api/admin/users/:id/delete` | `user.delete` | Delete a user |
 | `GET` | `/api/admin/nodes` | `node.read` | List all nodes with details |
 | `GET` | `/api/admin/servers` | `server.read` | List all servers (paginated) |
-| `POST` | `/api/admin/servers/actions` | Varied | Bulk server actions |
+| `POST` | `/api/admin/servers/actions` | Action-specific (see below) | Bulk server actions |
 | `GET` | `/api/admin/audit-logs` | `admin.read` | System audit log |
 | `GET` | `/api/admin/audit-logs/export` | `admin.write` | Export audit logs (CSV) |
 | `GET` | `/api/admin/events` | `admin.read` | SSE admin event stream |
-| `GET` | `/api/admin/update/check` | `admin.write` | Check for panel updates |
-| `POST` | `/api/admin/update/trigger` | `admin.write` | Trigger panel update |
+| `GET` | `/api/admin/health` | `admin.read` | System health check (DB + nodes) |
+| `GET` | `/api/admin/system-errors` | `admin.read` | List system errors with filtering |
+| `POST` | `/api/admin/system-errors/:id/resolve` | `admin.write` | Resolve a system error |
+| `GET` | `/api/admin/security-settings` | `admin.read` | Get security settings |
+| `PUT` | `/api/admin/security-settings` | `admin.write` | Update security settings |
+| `GET` | `/api/admin/ip-pools` | `admin.read` | List IPAM pools |
+| `POST` | `/api/admin/ip-pools` | `admin.write` | Create IPAM pool |
+| `PUT` | `/api/admin/ip-pools/:poolId` | `admin.write` | Update IPAM pool |
+| `DELETE` | `/api/admin/ip-pools/:poolId` | `admin.write` | Delete IPAM pool |
+| `GET` | `/api/admin/database-hosts` | `admin.read` | List database hosts |
+| `POST` | `/api/admin/database-hosts` | `admin.write` | Create database host |
+| `PUT` | `/api/admin/database-hosts/:hostId` | `admin.write` | Update database host |
+| `DELETE` | `/api/admin/database-hosts/:hostId` | `admin.write` | Delete database host |
+| `GET` | `/api/admin/dns-settings` | `admin.read` | Get DNS settings |
+| `PUT` | `/api/admin/dns-settings` | `admin.write` | Update DNS settings |
+| `GET` | `/api/admin/mod-manager` | `admin.read` | Get mod manager settings |
+| `PUT` | `/api/admin/mod-manager` | `admin.write` | Update mod manager settings |
+| `GET` | `/api/admin/auth-lockouts` | `admin.read` | List auth lockouts |
+| `DELETE` | `/api/admin/auth-lockouts/:lockoutId` | `admin.write` | Clear auth lockout |
+| `GET` | `/api/admin/oidc-config` | `admin.read` | Get OIDC provider config |
+| `PATCH` | `/api/admin/oidc-config` | `admin.write` | Update OIDC provider config |
+| `GET` | `/api/admin/theme-settings` | `admin.read` | Get theme settings |
+| `PATCH` | `/api/admin/theme-settings` | `admin.write` | Update theme settings |
+| `GET` | `/api/update/status` | `admin.write` | Check for panel updates |
+| `POST` | `/api/update/trigger` | `admin.write` | Trigger panel update |
 
 #### GET `/api/admin/audit-logs/export`
 
@@ -2045,6 +2685,7 @@ Export the system audit log as a CSV file. Useful for compliance and debugging.
 - `from` — start timestamp (ISO or Unix epoch)
 - `to` — end timestamp (ISO or Unix epoch)
 - `action` — filter by action type (e.g., `user_created`, `server_deleted`)
+- `resource` — filter by resource type (e.g., `server`, `user`, `node`)
 - `userId` — filter by user ID
 
 **Response (200):**
@@ -2058,9 +2699,9 @@ Returns a `text/csv` file with columns:
 - `userAgent` — actor's user agent
 - `metadata` — JSON string of additional context
 
-#### POST `/api/admin/update/trigger`
+#### POST `/api/update/trigger`
 
-Trigger a panel update to the latest available version. Downloads the update package and applies it. The panel restarts automatically after the update completes.
+Trigger a panel update to the latest available version. Downloads the update package and applies it. The panel restarts automatically after the update completes. Update status is cached for 5 minutes.
 
 **Auth:** `admin.write`  
 **Response (200):**
@@ -2091,7 +2732,67 @@ Trigger a panel update to the latest available version. Downloads the update pac
 
 Update progress events are streamed via SSE to `/api/admin/events`.
 
+#### GET `/api/admin/users` — List Users
+
+List all users with pagination and search.
+
+**Auth:** `user.read`  
+**Query params:**
+- `page` — page number (default 1)
+- `limit` — results per page (default 20, max 100)
+- `search` — filter by email or username (partial match)
+- `role` — filter by role ID
+- `status` — filter by status (`active`, `suspended`, `pending`)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "users": [
+      {
+        "id": "user_xxx",
+        "email": "user@example.com",
+        "username": "johndoe",
+        "role": "user",
+        "status": "active",
+        "createdAt": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 150,
+      "totalPages": 8
+    }
+  }
+}
+```
+
+#### POST `/api/admin/users` — Create User
+
+Create a new user account. Optionally grant server access on creation.
+
+**Auth:** `user.create`  
+**Body:**
+```json
+{
+  "email": "newuser@example.com",
+  "username": "newuser",
+  "password": "securePassword123",
+  "role": "user",
+  "serverIds": ["srv_1", "srv_2"],
+  "serverPermissions": ["server.read", "server.start"]
+}
+```
+
+**Notes:**
+- `serverIds` and `serverPermissions` are optional. If provided, the user is granted access to the specified servers with the given permissions.
+- `role` defaults to the system's default role if not specified.
+
 #### GET `/api/admin/stats` — System Statistics
+
+**Auth:** `admin.read` or any resource read permission (`user.read`, `role.read`, `node.read`, `location.read`, `template.read`, `server.read`, `apikey.manage`). Returns only counts the caller is authorized to view.
 
 **Response:**
 ```json
@@ -2109,11 +2810,181 @@ Update progress events are streamed via SSE to `/api/admin/events`.
 ```json
 {
   "serverIds": ["srv_1", "srv_2"],
-  "action": "start"
+  "action": "suspend",
+  "reason": "Billing suspended"
 }
 ```
 
 Valid actions: `start`, `stop`, `kill`, `restart`, `suspend`, `unsuspend`, `delete`
+
+**Action-specific permissions:**
+- `start` / `restart` → `server.start`
+- `stop` / `kill` → `server.stop`
+- `suspend` / `unsuspend` → `server.suspend`
+- `delete` → `server.delete`
+
+**Notes:**
+- `reason` is optional and only used with `suspend` action.
+
+#### GET `/api/admin/health` — System Health
+
+Check the overall system health including database connectivity and node status.
+
+**Auth:** `admin.read`  
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "healthy": true,
+    "database": "connected",
+    "nodesOnline": 3,
+    "nodesTotal": 3,
+    "timestamp": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+#### GET `/api/admin/system-errors` — List System Errors
+
+List system errors with optional filtering.
+
+**Auth:** `admin.read`  
+**Query params:**
+- `resolved` — filter by resolved status (`true`/`false`)
+- `limit` — max results (default 50)
+- `offset` — pagination offset
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "errors": [
+      {
+        "id": "err_xxx",
+        "message": "Node heartbeat timeout",
+        "stack": "...",
+        "resolved": false,
+        "createdAt": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "total": 12
+  }
+}
+```
+
+#### POST `/api/admin/system-errors/:id/resolve` — Resolve System Error
+
+Mark a system error as resolved.
+
+**Auth:** `admin.write`  
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "resolved": true
+  }
+}
+```
+
+#### GET `/api/admin/security-settings` / PUT `/api/admin/security-settings`
+
+Get or update global security settings.
+
+**Auth:** `admin.read` (GET), `admin.write` (PUT)  
+**Body (PUT):**
+```json
+{
+  "registrationEnabled": true,
+  "requireEmailVerification": true,
+  "maxLoginAttempts": 5,
+  "lockoutDurationMinutes": 30,
+  "passwordMinLength": 8,
+  "passwordRequireUppercase": true,
+  "passwordRequireNumbers": true,
+  "passwordRequireSpecial": true,
+  "sessionTimeoutMinutes": 60,
+  "apiKeyMaxRequestsPerMinute": 600,
+  "allowApiKeyAuth": true,
+  "allowAgentAuth": true,
+  "agentAuthMaxRequestsPerMinute": 600
+}
+```
+
+#### GET `/api/admin/ip-pools` / POST `/api/admin/ip-pools`
+
+List or create IPAM (IP Address Management) pools.
+
+**Auth:** `admin.read` (GET), `admin.write` (POST)  
+**Body (POST):**
+```json
+{
+  "name": "Production IPs",
+  "subnet": "10.0.0.0/24",
+  "gateway": "10.0.0.1",
+  "nodeId": "node_xxx"
+}
+```
+
+#### PUT `/api/admin/ip-pools/:poolId` / DELETE `/api/admin/ip-pools/:poolId`
+
+Update or delete an IPAM pool.
+
+**Auth:** `admin.write`  
+**Body (PUT):**
+```json
+{
+  "name": "Updated Pool Name",
+  "subnet": "10.0.1.0/24",
+  "gateway": "10.0.1.1"
+}
+```
+
+#### GET `/api/admin/database-hosts` / POST `/api/admin/database-hosts`
+
+List or create database hosts for server databases.
+
+**Auth:** `admin.read` (GET), `admin.write` (POST)  
+**Body (POST):**
+```json
+{
+  "name": "MySQL Primary",
+  "host": "db.example.com",
+  "port": 3306,
+  "username": "catalyst",
+  "password": "securePassword123",
+  "database": "catalyst_dbs",
+  "maxDatabases": 100
+}
+```
+
+#### PUT `/api/admin/database-hosts/:hostId` / DELETE `/api/admin/database-hosts/:hostId`
+
+Update or delete a database host.
+
+**Auth:** `admin.write`  
+**Body (PUT):** Same as POST, all fields optional.
+
+#### GET `/api/admin/oidc-config` / PATCH `/api/admin/oidc-config`
+
+Get or update OIDC (OpenID Connect) provider configuration for SSO.
+
+**Auth:** `admin.read` (GET), `admin.write` (PATCH)  
+**Body (PATCH):**
+```json
+{
+  "enabled": true,
+  "provider": "authentik",
+  "clientId": "catalyst-client-id",
+  "clientSecret": "catalyst-client-secret",
+  "authorizationEndpoint": "https://auth.example.com/application/o/authorize/",
+  "tokenEndpoint": "https://auth.example.com/application/o/token/",
+  "userInfoEndpoint": "https://auth.example.com/application/o/userinfo/",
+  "scopes": ["openid", "profile", "email"]
+}
+```
 
 ---
 
@@ -2131,8 +3002,8 @@ Valid actions: `start`, `stop`, `kill`, `restart`, `suspend`, `unsuspend`, `dele
 | `POST` | `/api/roles/:id/users/:userId` | `user.set_roles` | Assign role to user |
 | `DELETE` | `/api/roles/:id/users/:userId` | `user.set_roles` | Remove role from user |
 | `GET` | `/api/roles/:id/nodes` | `node.read` | Get nodes assigned to role |
-| `GET` | `/api/users/:userId/roles` | `user.read` | Get user's roles and permissions |
-| `GET` | `/api/users/:userId/nodes` | `node.read` | Get nodes accessible to user |
+| `GET` | `/api/roles/users/:userId/roles` | `user.read` | Get user's roles and permissions |
+| `GET` | `/api/roles/users/:userId/nodes` | `node.read` | Get nodes accessible to user via roles |
 | `GET` | `/api/roles/presets` | `role.read` | Get available permission presets |
 
 #### DELETE `/api/roles/:roleId/permissions/:permission`
@@ -2334,8 +3205,12 @@ The special permission `*` grants all permissions.
 | `GET` | `/api/nests/:id` | `template.read` | Get nest with its templates |
 | `POST` | `/api/nests` | `admin.write` | Create a nest |
 | `PUT` | `/api/nests/:id` | `admin.write` | Update a nest |
-| `DELETE` | `/api/nests/:id` | `admin.write` | Delete a nest (orphanates templates) |
-| `GET` | `/api/locations` | `template.read` | List all locations |
+| `DELETE` | `/api/nests/:id` | `admin.write` | Delete a nest |
+
+**Note on nest deletion:** Deleting a nest does **not** delete its templates. The templates' `nestId` is set to `null`, making them orphaned. You can reassign orphaned templates to a new nest later.
+
+| `GET` | `/api/locations` | `admin.read` | List all locations |
+| `GET` | `/api/locations/:id` | `admin.read` | Get location with nodes |
 | `POST` | `/api/locations` | `admin.write` | Create a location |
 | `PUT` | `/api/locations/:id` | `admin.write` | Update a location |
 | `DELETE` | `/api/locations/:id` | `admin.write` | Delete a location |
@@ -2382,28 +3257,30 @@ Import a Pterodactyl egg (template configuration) into Catalyst. Converts the eg
 - `400` — Invalid egg ID or nest mismatch
 - `409` — Template with same name already exists in this nest
 
-#### Template Structure
+#### POST `/api/templates` — Create Template
 
-Templates define how game servers are deployed:
+Create a new server template.
 
+**Auth:** `template.create`  
+**Body:**
 ```json
 {
-  "id": "tpl_xxx",
   "name": "Valheim",
   "description": "Valheim game server",
   "author": "Catalyst Team",
   "version": "1.0.0",
   "image": "ghcr.io/catalyst/valheim:latest",
   "images": [
-    { "name": "stable", "image": "ghcr.io/catalyst/valheim:1.0" },
-    { "name": "beta", "image": "ghcr.io/catalyst/valheim:beta" }
+    { "name": "stable", "label": "Stable", "image": "ghcr.io/catalyst/valheim:1.0" },
+    { "name": "beta", "label": "Beta", "image": "ghcr.io/catalyst/valheim:beta" }
   ],
   "defaultImage": "ghcr.io/catalyst/valheim:1.0",
+  "installImage": "ghcr.io/catalyst/valheim-installer:latest",
   "startup": "./valheim_server.x86_64 -name \"{{SERVER_NAME}}\" -port {{SERVER_PORT}}",
   "stopCommand": "^C",
   "sendSignalTo": "SIGINT",
-  "installImage": "ghcr.io/catalyst/valheim-installer:latest",
   "installScript": "#!/bin/bash\napt-get update && apt-get install -y valheim-server",
+  "configFile": "serverconfig.txt",
   "variables": [
     {
       "name": "SERVER_NAME",
@@ -2425,10 +3302,151 @@ Templates define how game servers are deployed:
   "supportedPorts": [2456],
   "allocatedMemoryMb": 2048,
   "allocatedCpuCores": 1,
-  "nestId": "nest_xxx",
   "features": {
     "configFile": "serverconfig.txt",
     "startupDetection": { "done": "[success] Server started" }
+  },
+  "nestId": "nest_xxx",
+  "srvService": null,
+  "srvProtocol": "tcp"
+}
+```
+
+**Required fields:** `name`, `author`, `version`, `startup`, `stopCommand`, `sendSignalTo`, `supportedPorts`, `allocatedMemoryMb`, `allocatedCpuCores`
+
+**Field details:**
+- `name` — unique template name
+- `author` — template author (required)
+- `version` — semantic version (required)
+- `image` — primary Docker image
+- `images` — array of alternative images: `{ name, label?, image }`
+- `defaultImage` — default image to use when creating servers
+- `installImage` — Docker image used during installation
+- `startup` — startup command template with `{{VARIABLE}}` interpolation
+- `stopCommand` — command to gracefully stop the server (required)
+- `sendSignalTo` — signal sent on stop: `"SIGTERM"`, `"SIGINT"`, or `"SIGKILL"` (required)
+- `installScript` — shell script run during first install
+- `configFile` — primary config file path (e.g. `server.properties`)
+- `variables` — array of environment variable definitions
+- `supportedPorts` — array of port numbers the server uses (required)
+- `allocatedMemoryMb` — default memory allocation in MB (required)
+- `allocatedCpuCores` — default CPU allocation (required)
+- `features` — arbitrary feature flags object
+- `nestId` — optional nest to group under
+- `srvService` — optional SRV record service name
+- `srvProtocol` — SRV protocol, default `"tcp"`
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": { /* created template object */ }
+}
+```
+
+**Errors:**
+- `409` — Template with same name already exists
+
+#### PUT `/api/templates/:id` — Update Template
+
+Update an existing template. All body fields are optional — only provided fields are updated.
+
+**Auth:** `template.update`  
+**Body:** Same schema as create (all fields optional).
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": { /* updated template object */ }
+}
+```
+
+#### Template Structure
+
+Templates define how game servers are deployed:
+
+```json
+{
+  "id": "tpl_xxx",
+  "name": "Valheim",
+  "description": "Valheim game server",
+  "author": "Catalyst Team",
+  "version": "1.0.0",
+  "image": "ghcr.io/catalyst/valheim:latest",
+  "images": [
+    { "name": "stable", "label": "Stable", "image": "ghcr.io/catalyst/valheim:1.0" },
+    { "name": "beta", "label": "Beta", "image": "ghcr.io/catalyst/valheim:beta" }
+  ],
+  "defaultImage": "ghcr.io/catalyst/valheim:1.0",
+  "installImage": "ghcr.io/catalyst/valheim-installer:latest",
+  "startup": "./valheim_server.x86_64 -name \"{{SERVER_NAME}}\" -port {{SERVER_PORT}}",
+  "stopCommand": "^C",
+  "sendSignalTo": "SIGINT",
+  "installScript": "#!/bin/bash\napt-get update && apt-get install -y valheim-server",
+  "configFile": "serverconfig.txt",
+  "variables": [
+    {
+      "name": "SERVER_NAME",
+      "description": "Server name",
+      "default": "My Valheim Server",
+      "required": true,
+      "input": "text",
+      "rules": []
+    }
+  ],
+  "supportedPorts": [2456],
+  "allocatedMemoryMb": 2048,
+  "allocatedCpuCores": 1,
+  "features": {
+    "configFile": "serverconfig.txt",
+    "startupDetection": { "done": "[success] Server started" }
+  },
+  "nestId": "nest_xxx",
+  "srvService": null,
+  "srvProtocol": "tcp",
+  "createdAt": "2024-01-01T00:00:00Z",
+  "updatedAt": "2024-01-01T00:00:00Z"
+}
+```
+
+---
+
+### Location Management
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/api/locations` | `admin.read` | List all locations |
+| `GET` | `/api/locations/:id` | `admin.read` | Get location with nodes |
+| `POST` | `/api/locations` | `admin.write` | Create a location |
+| `PUT` | `/api/locations/:id` | `admin.write` | Update a location |
+| `DELETE` | `/api/locations/:id` | `admin.write` | Delete a location |
+
+#### GET `/api/locations/:id`
+
+Get a single location with its associated nodes.
+
+**Auth:** `template.read`  
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "loc_xxx",
+    "name": "US East",
+    "description": "Primary US datacenter",
+    "nodes": [
+      {
+        "id": "node_xxx",
+        "name": "Node-1",
+        "hostname": "node1.example.com",
+        "isOnline": true,
+        "serverCount": 15
+      }
+    ],
+    "nodeCount": 3,
+    "createdAt": "2024-01-01T00:00:00Z",
+    "updatedAt": "2024-01-01T00:00:00Z"
   }
 }
 ```
@@ -2439,17 +3457,17 @@ Templates define how game servers are deployed:
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/alert-rules` | Session | List alert rules (filterable) |
-| `GET` | `/api/alert-rules/:id` | Session | Get a specific rule |
-| `POST` | `/api/alert-rules` | Session | Create alert rule |
-| `PUT` | `/api/alert-rules/:id` | Session | Update alert rule |
-| `DELETE` | `/api/alert-rules/:id` | Session | Delete alert rule |
-| `GET` | `/api/alerts` | Session | List alerts (paginated) |
-| `GET` | `/api/alerts/:id` | Session | Get a specific alert |
-| `POST` | `/api/alerts/:id/resolve` | Session | Resolve an alert |
-| `POST` | `/api/alerts/bulk-resolve` | Session | Bulk resolve alerts |
-| `GET` | `/api/alerts/stats` | Session | Get alert statistics |
-| `GET` | `/api/alerts/:id/deliveries` | Session | Get alert delivery log |
+| `GET` | `/api/alert-rules` | `alert.read` (server rules) or `admin` (global) | List alert rules (filterable) |
+| `GET` | `/api/alert-rules/:id` | `alert.read` | Get a specific rule |
+| `POST` | `/api/alert-rules` | `alert.create` (server rules) or `admin` (global) | Create alert rule |
+| `PUT` | `/api/alert-rules/:id` | `alert.update` (server rules) or `admin` (global) | Update alert rule |
+| `DELETE` | `/api/alert-rules/:id` | `alert.delete` (server rules) or `admin` (global) | Delete alert rule |
+| `GET` | `/api/alerts` | `alert.read` (server alerts) or `admin` (global) | List alerts (paginated) |
+| `GET` | `/api/alerts/:id` | `alert.read` | Get a specific alert |
+| `POST` | `/api/alerts/:id/resolve` | `alert.update` | Resolve an alert |
+| `POST` | `/api/alerts/bulk-resolve` | `alert.update` | Bulk resolve alerts |
+| `GET` | `/api/alerts/stats` | `alert.read` | Get alert statistics |
+| `GET` | `/api/alerts/:id/deliveries` | `alert.read` | Get alert delivery log |
 
 #### GET `/api/alerts/:alertId/deliveries`
 
@@ -2562,15 +3580,18 @@ Get alert statistics including total counts, breakdowns by severity and type, an
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/servers/:id/tasks` | Session | List scheduled tasks |
-| `GET` | `/api/servers/:id/tasks/:taskId` | Session | Get a specific task |
-| `POST` | `/api/servers/:id/tasks` | Session | Create a task |
-| `PUT` | `/api/servers/:id/tasks/:taskId` | Session | Update a task |
-| `DELETE` | `/api/servers/:id/tasks/:taskId` | Session | Delete a task |
-| `POST` | `/api/servers/:id/tasks/:taskId/execute` | Session | Execute task immediately |
+| `GET` | `/api/servers/:id/tasks` | `server.schedule` | List scheduled tasks |
+| `GET` | `/api/servers/:id/tasks/:taskId` | `server.schedule` | Get a specific task |
+| `POST` | `/api/servers/:id/tasks` | `server.schedule` | Create a task |
+| `PUT` | `/api/servers/:id/tasks/:taskId` | `server.schedule` | Update a task |
+| `DELETE` | `/api/servers/:id/tasks/:taskId` | `server.schedule` | Delete a task |
+| `POST` | `/api/servers/:id/tasks/:taskId/execute` | `server.schedule` | Execute task immediately |
 
 #### POST `/api/servers/:id/tasks` — Create Task
 
+Create a scheduled task for a server. Tasks run automatically based on a cron expression.
+
+**Auth:** Session (`server.schedule`)  
 **Body:**
 ```json
 {
@@ -2578,14 +3599,66 @@ Get alert statistics including total counts, breakdowns by severity and type, an
   "description": "Automated daily backup at 3 AM",
   "action": "backup",
   "payload": {
-    "retention": 7,
-    "compress": true
+    "retention": 7
   },
   "schedule": "0 3 * * *"
 }
 ```
 
-Valid actions: `restart`, `stop`, `start`, `backup`, `command`
+- `name` — task name (required)
+- `description` — optional human-readable description
+- `action` — task action (required). Valid: `restart`, `stop`, `start`, `backup`, `command`
+- `payload` — action-specific payload (optional, defaults to `{}`)
+  - `command` action: `{ "command": "say Server restart in 1 minute" }`
+  - `backup` action: `{ "retention": 7 }` (optional retention days)
+  - `restart`, `stop`, `start` actions: payload can be omitted or empty `{}`
+- `schedule` — cron expression in standard format (required). Example: `"0 3 * * *"` for daily at 3 AM.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "task": {
+    "id": "task_xxx",
+    "serverId": "srv_xxx",
+    "name": "Daily Backup",
+    "description": "Automated daily backup at 3 AM",
+    "action": "backup",
+    "payload": { "retention": 7 },
+    "schedule": "0 3 * * *",
+    "enabled": true,
+    "nextRunAt": "2024-01-02T03:00:00Z",
+    "createdAt": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+**Errors:**
+- `400` — Missing required fields, invalid cron expression, or invalid action
+- `404` — Server not found
+- `403` — Insufficient permissions
+- `423` — Server is suspended
+
+#### PUT `/api/servers/:id/tasks/:taskId` — Update Task
+
+Update an existing scheduled task. All fields are optional — only provided fields are updated.
+
+**Auth:** Session (`server.schedule`)  
+**Body:** Same schema as create (all fields optional).
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "task": { /* updated task */ }
+}
+```
+
+**Errors:**
+- `400` — Invalid cron expression or invalid action
+- `404` — Task or server not found
+- `403` — Insufficient permissions
+- `423` — Server is suspended
 
 ---
 
@@ -2598,7 +3671,170 @@ Valid actions: `restart`, `stop`, `start`, `backup`, `command`
 | `POST` | `/api/plugins/:name/enable` | `admin.write` | Enable or disable a plugin |
 | `POST` | `/api/plugins/:name/reload` | `admin.write` | Hot-reload a plugin |
 | `PUT` | `/api/plugins/:name/config` | `admin.write` | Update plugin configuration |
-| `GET` | `/api/plugins/:name/frontend-manifest` | Session | Get plugin frontend manifest |
+| `GET` | `/api/plugins/:name/frontend-manifest` | `admin.read` | Get plugin frontend manifest |
+
+#### GET `/api/plugins`
+
+List all installed plugins with their status and metadata.
+
+**Auth:** `admin.read`  
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "name": "webhook-notifier",
+      "version": "1.2.0",
+      "displayName": "Webhook Notifier",
+      "description": "Send server events to webhooks",
+      "author": "Example",
+      "status": "enabled",
+      "enabled": true,
+      "loadedAt": "2024-01-01T00:00:00Z",
+      "enabledAt": "2024-01-01T00:00:00Z",
+      "error": null,
+      "permissions": ["server.read", "server.start"],
+      "hasBackend": true,
+      "hasFrontend": true,
+      "dependencies": [],
+      "hasDeclaredEvents": true,
+      "declaredEvents": ["server.start", "server.stop"]
+    }
+  ]
+}
+```
+
+**Response fields:**
+- `status` — `"enabled"`, `"disabled"`, `"error"`, or `"loading"`
+- `loadedAt` — ISO timestamp when the plugin was first loaded
+- `enabledAt` — ISO timestamp when the plugin was last enabled
+- `error` — error message if the plugin failed to load, otherwise `null`
+- `hasDeclaredEvents` — whether the plugin declares event handlers
+- `declaredEvents` — array of event names the plugin handles
+
+#### GET `/api/plugins/:name`
+
+Get detailed information about a specific plugin, including its runtime state, registered routes, WebSocket handlers, and scheduled tasks.
+
+**Auth:** `admin.read`  
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "name": "webhook-notifier",
+    "version": "1.2.0",
+    "displayName": "Webhook Notifier",
+    "description": "Send server events to webhooks",
+    "author": "Example",
+    "catalystVersion": ">=1.0.0",
+    "status": "enabled",
+    "enabled": true,
+    "loadedAt": "2024-01-01T00:00:00Z",
+    "enabledAt": "2024-01-01T00:00:00Z",
+    "error": null,
+    "permissions": ["server.read", "server.start"],
+    "config": {
+      "webhookUrl": { "type": "string", "default": "" },
+      "notifyOnStart": { "type": "boolean", "default": true }
+    },
+    "configSchema": { /* raw config object */ },
+    "hasBackend": true,
+    "hasFrontend": true,
+    "routes": [
+      { "method": "POST", "url": "/api/webhooks/send" }
+    ],
+    "wsHandlers": ["webhook_events"],
+    "tasks": [{ "cron": "0 * * * *" }],
+    "dependencies": [],
+    "events": {
+      "server.start": "onServerStart",
+      "server.stop": "onServerStop"
+    },
+    "exposedApis": ["webhook-send", "webhook-list"]
+  }
+}
+```
+
+**Response fields:**
+- `configSchema` — the plugin's raw config schema object
+- `routes` — array of `{ method, url }` for backend routes registered by the plugin
+- `wsHandlers` — array of WebSocket handler names
+- `tasks` — array of `{ cron }` for scheduled tasks registered by the plugin
+- `exposedApis` — array of API names exposed by the plugin for inter-plugin communication
+
+#### POST `/api/plugins/:name/enable`
+
+Enable or disable a plugin. Enabling loads the plugin's backend and frontend. Disabling unloads it.
+
+**Auth:** `admin.write`  
+**Body:**
+```json
+{
+  "enabled": true
+}
+```
+
+- `enabled` — boolean, required
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Plugin enabled successfully"
+}
+```
+
+**Errors:**
+- `400` — Plugin failed to enable/disable
+- `404` — Plugin not found
+
+#### POST `/api/plugins/:name/reload`
+
+Hot-reload a plugin. Unloads and re-loads the plugin without restarting the panel. Useful during development.
+
+**Auth:** `admin.write`  
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Plugin reloaded successfully"
+}
+```
+
+**Errors:**
+- `400` — Plugin failed to reload
+- `404` — Plugin not found
+
+#### PUT `/api/plugins/:name/config`
+
+Update a plugin's runtime configuration. The config object must match the plugin's `configSchema`.
+
+**Auth:** `admin.write`  
+**Body:**
+```json
+{
+  "config": {
+    "webhookUrl": "https://hooks.example.com/alerts",
+    "notifyOnStart": true
+  }
+}
+```
+
+- `config` — object matching the plugin's config schema (required)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Plugin configuration updated"
+}
+```
+
+**Errors:**
+- `400` — Invalid config values
+- `404` — Plugin not found
 
 #### GET `/api/plugins/:name/frontend-manifest`
 
@@ -2796,10 +4032,15 @@ Test the connection to a Pterodactyl panel before starting a migration. Verifies
 **Body:**
 ```json
 {
-  "pterodactylUrl": "https://pterodactyl.example.com",
-  "apiKey": "ptla_xxxxxxxxxxxxxxxxxxxxxxxx"
+  "url": "https://pterodactyl.example.com",
+  "key": "ptla_xxxxxxxxxxxxxxxxxxxxxxxx",
+  "clientApiKey": "ptlc_xxxxxxxxxxxxxxxxxxxxxxxx"
 }
 ```
+
+- `url` — Pterodactyl panel URL (required)
+- `key` — Application API key (`ptla_*`) (required)
+- `clientApiKey` — Client API key (`ptlc_*`) — required for backup and file migration
 
 **Response (200):**
 ```json
@@ -2818,6 +4059,47 @@ Test the connection to a Pterodactyl panel before starting a migration. Verifies
 **Errors:**
 - `400` — Invalid API key or connection refused
 - `403` — API key lacks required permissions
+
+#### POST `/api/admin/migration/start`
+
+Start a new Pterodactyl → Catalyst migration job. Only one migration can run at a time.
+
+**Auth:** `admin.write`  
+**Body:**
+```json
+{
+  "url": "https://pterodactyl.example.com",
+  "key": "ptla_xxxxxxxxxxxxxxxxxxxxxxxx",
+  "clientApiKey": "ptlc_xxxxxxxxxxxxxxxxxxxxxxxx",
+  "scope": "full",
+  "nodeMappings": {
+    "ptero-node-1": "catalyst-node-1",
+    "ptero-node-2": "catalyst-node-2"
+  },
+  "serverMappings": {
+    "ptero-server-1": "catalyst-node-1"
+  }
+}
+```
+
+- `url` — Pterodactyl panel URL (required)
+- `key` — Application API key (`ptla_*`) (required)
+- `clientApiKey` — Client API key (`ptlc_*`) — required for backup/file migration
+- `scope` — migration scope: `"full"`, `"node"`, or `"server"` (default `"full"`)
+- `nodeMappings` — map of Pterodactyl node IDs to Catalyst node IDs. Required for `"full"` and `"node"` scopes.
+- `serverMappings` — map of Pterodactyl server IDs to Catalyst node IDs. Required for `"server"` scope.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "jobId": "job_xxx"
+}
+```
+
+**Errors:**
+- `400` — Missing URL or API key
+- `409` — A migration is already in progress
 
 #### POST `/api/admin/migration/:jobId/pause`
 
@@ -2875,8 +4157,10 @@ Get the detailed steps of a migration job with pagination. Shows each step's sta
 **Query params:**
 - `page` — page number (default 1)
 - `limit` — steps per page (default 50)
+- `phase` — filter by phase (e.g., `users`, `nodes`, `servers`)
+- `status` — filter by status (`pending`, `running`, `completed`, `failed`)
 
-**Response (200):**
+**Response (200):
 ```json
 {
   "success": true,
@@ -2938,13 +4222,20 @@ Retry a failed migration step. Useful after fixing the underlying issue that cau
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/dashboard/stats` | Session | Dashboard statistics |
-| `GET` | `/api/dashboard/activity` | Session | Recent activity feed |
-| `GET` | `/api/dashboard/resources` | Session | Cluster resource utilization |
-| `GET` | `/api/metrics` | Session | Cluster/server metrics |
-| `GET` | `/api/servers/metrics-stream` | Session | SSE server metrics stream |
+| `GET` | `/api/dashboard/stats` | `server.read` (permission-scoped response) | Dashboard statistics |
+| `GET` | `/api/dashboard/activity` | `server.read` (permission-scoped response) | Recent activity feed |
+| `GET` | `/api/dashboard/resources` | `node.read` or `admin` | Cluster resource utilization |
+| `GET` | `/api/metrics` | `server.read` | Cluster/server metrics |
+| `GET` | `/api/servers/:serverId/metrics/stream` | `server.read` | SSE server metrics stream |
+| `GET` | `/api/servers/:serverId/metrics` | `server.read` | Server metrics REST endpoint |
+| `GET` | `/api/nodes/:nodeId/metrics` | `admin.read` | Node metrics REST endpoint |
 
 #### GET `/api/dashboard/stats` — Dashboard Statistics
+
+**Auth:** Session. Response is **permission-scoped**:
+- Non-admins see counts for their own accessible servers only
+- `server.read` gates server counts, `node.read` gates node counts, `alert.read` gates alert counts
+- Missing permissions return `0` for that dimension
 
 **Response (200):**
 ```json
@@ -2961,69 +4252,49 @@ Retry a failed migration step. Useful after fixing the underlying issue that cau
 }
 ```
 
-Note: Response is cached with a role-based TTL (10 seconds for admins, 30 seconds for regular users).
+Note: Response is cached with a 10-second TTL keyed by user ID and permissions. Stats returned vary based on the user's permissions — non-admins only see counts for servers they own or have access to. Node and alert counts are only shown to users with `node.read` and `alert.read` permissions respectively.
 
 #### GET `/api/dashboard/activity` — Recent Activity Feed
+
+**Auth:** Session. Response is **permission-scoped** — non-admins see only their own activity.
 
 Get recent activity across the system, drawn from audit logs. Aggregates and maps raw event types to human-readable messages.
 
 **Auth:** Session  
 **Query params:**
-- `limit` — number of events (default 20, max 100)
-- `offset` — pagination offset
+- `limit` — number of events (default 5, max 20)
 
 **Response (200):**
 ```json
 {
   "success": true,
-  "data": {
-    "activities": [
-      {
-        "id": "act_xxx",
-        "type": "server_start",
-        "message": "user_xxx started server \"My Valheim\"",
-        "timestamp": "2024-01-01T12:00:00Z",
-        "actor": {
-          "id": "user_xxx",
-          "username": "admin"
-        },
-        "target": {
-          "type": "server",
-          "id": "srv_xxx",
-          "name": "My Valheim"
-        }
-      },
-      {
-        "id": "act_yyy",
-        "type": "user_created",
-        "message": "Admin created new user \"newuser\"",
-        "timestamp": "2024-01-01T11:00:00Z",
-        "actor": {
-          "id": "user_admin",
-          "username": "admin"
-        },
-        "target": {
-          "type": "user",
-          "id": "user_newuser",
-          "name": "newuser"
-        }
-      }
-    ],
-    "total": 500,
-    "limit": 20,
-    "offset": 0
-  }
+  "data": [
+    {
+      "id": "act_xxx",
+      "title": "Server started",
+      "detail": "server: srv_xxx",
+      "time": "2m ago",
+      "type": "server"
+    },
+    {
+      "id": "act_yyy",
+      "title": "User created",
+      "detail": "user: user_newuser",
+      "time": "1h ago",
+      "type": "user"
+    }
+  ]
 }
 ```
 
-Activity types are mapped from raw audit log actions:
-- `server_start` → "started server"
-- `server_stop` → "stopped server"
-- `user_created` → "created user"
-- `backup_created` → "created backup"
-- etc.
+**Notes:**
+- Response is cached with a 10-second TTL keyed by user ID and permissions.
+- Non-admin users only see their own activity.
+- The `time` field is a human-readable relative timestamp (e.g., "2m ago", "1h ago").
 
 #### GET `/api/dashboard/resources` — Resource Utilization
+
+**Auth:** `node.read` or `admin`. Returns zeros if the user lacks both permissions.
 
 Get aggregated resource utilization across all online nodes. Provides high-level cluster health metrics.
 
@@ -3035,25 +4306,129 @@ Get aggregated resource utilization across all online nodes. Provides high-level
   "data": {
     "cpuUtilization": 67,
     "memoryUtilization": 72,
-    "networkThroughput": 35,
-    "diskUtilization": 45,
-    "nodesOnline": 3,
-    "nodesTotal": 3,
-    "serversRunning": 38,
-    "serversTotal": 45,
-    "breakdown": [
-      {
-        "nodeId": "node_xxx",
-        "nodeName": "Production",
-        "cpuUtilization": 70,
-        "memoryUtilization": 75,
-        "serversRunning": 15,
-        "serversTotal": 15
-      }
-    ]
+    "networkThroughput": 35
   }
 }
 ```
+
+**Notes:**
+- `networkThroughput` is a placeholder/estimated value (`runningServers * 5`, capped at 100), not an actual network measurement. Real network throughput requires live agent metrics.
+- Users without `node.read` or `admin.read` permissions receive `{ cpuUtilization: 0, memoryUtilization: 0, networkThroughput: 0 }`.
+
+#### GET `/api/servers/:serverId/metrics` — Server Metrics REST
+
+Get historical server resource metrics with automatic bucketing. Returns aggregated data points evenly spaced across the requested time window.
+
+**Auth:** Session (`server.read`)  
+**Query params:**
+- `hours` — hours of history to return (default: 1, max: 168)
+- `limit` — number of buckets to return (default: 100, max: 1000)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "latest": {
+      "cpuPercent": 45.2,
+      "memoryUsageMb": 1024,
+      "diskIoMb": 5,
+      "diskUsageMb": 51200,
+      "networkRxBytes": "1000000",
+      "networkTxBytes": "500000",
+      "timestamp": "2024-01-01T12:00:00Z"
+    },
+    "averages": {
+      "cpuPercent": 42.1,
+      "memoryUsageMb": 980,
+      "diskIoMb": 4,
+      "diskUsageMb": 51000
+    },
+    "history": [
+      {
+        "cpuPercent": 40.5,
+        "memoryUsageMb": 1024,
+        "diskIoMb": 5,
+        "diskUsageMb": 51200,
+        "networkRxBytes": 0.95,
+        "networkTxBytes": 0.48,
+        "timestamp": "2024-01-01T11:00:00Z"
+      }
+    ],
+    "count": 100
+  }
+}
+```
+
+**Notes:**
+- `history` is returned in chronological order (oldest first)
+- Network values in `history` are rate-normalized to MB/s
+- Empty buckets (no data) return `null` for all metric fields
+- Suspended servers return `423` with suspension details
+
+**Errors:**
+- `403` — Forbidden (not owner, no access, no node access)
+- `404` — Server not found
+- `423` — Server is suspended
+
+#### GET `/api/nodes/:nodeId/metrics` — Node Metrics REST
+
+Get historical node resource metrics with automatic bucketing. Same bucketing logic as server metrics but for the node itself.
+
+**Auth:** `admin.read` or `admin.write` (admin only)  
+**Query params:**
+- `hours` — hours of history to return (default: 1)
+- `limit` — number of buckets to return (default: 100)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "latest": {
+      "cpuPercent": 45.2,
+      "memoryUsageMb": 12000,
+      "memoryTotalMb": 16384,
+      "diskUsageMb": 50000,
+      "diskTotalMb": 200000,
+      "networkRxBytes": "1000000",
+      "networkTxBytes": "500000",
+      "containerCount": 10,
+      "timestamp": "2024-01-01T12:00:00Z"
+    },
+    "averages": {
+      "cpuPercent": 42.1,
+      "memoryUsageMb": 11500,
+      "diskUsageMb": 48000,
+      "containerCount": 10
+    },
+    "history": [
+      {
+        "cpuPercent": 40.5,
+        "memoryUsageMb": 12000,
+        "memoryTotalMb": 16384,
+        "diskUsageMb": 50000,
+        "diskTotalMb": 200000,
+        "networkRxBytes": 0.95,
+        "networkTxBytes": 0.48,
+        "timestamp": "2024-01-01T11:00:00Z"
+      }
+    ],
+    "count": 100,
+    "node": {
+      "id": "node_xxx",
+      "name": "Production",
+      "maxMemoryMb": 16384,
+      "maxCpuCores": 8,
+      "isOnline": true
+    }
+  }
+}
+```
+
+**Errors:**
+- `403` — Admin access required
+- `404` — Node not found
 
 ---
 
@@ -3072,7 +4447,7 @@ Get aggregated resource utilization across all online nodes. Provides high-level
 
 The agent polls this endpoint every N seconds to check for pending file operations. Returns pending operations since the last poll.
 
-**Auth:** `X-Catalyst-Node-Id` + `X-Catalyst-Node-Token`  
+**Auth:** `X-Node-Id` + `X-Node-Api-Key`  
 **Query params:**
 - `since` — ISO timestamp of last poll (returns ops after this time)
 
@@ -3109,7 +4484,7 @@ The agent polls this endpoint every N seconds to check for pending file operatio
 
 Agent sends the result of a file operation as JSON (for metadata-only operations like list, delete, permission changes).
 
-**Auth:** `X-Catalyst-Node-Id` + `X-Catalyst-Node-Token`  
+**Auth:** `X-Node-Id` + `X-Node-Api-Key`  
 **Body (for `read` operation):**
 ```json
 {
@@ -3151,7 +4526,7 @@ Agent sends the result of a file operation as JSON (for metadata-only operations
 
 Agent sends binary file data for operations that require streaming (file reads/downloads). Used when the file size exceeds the JSON response size limit.
 
-**Auth:** `X-Catalyst-Node-Id` + `X-Catalyst-Node-Token`  
+**Auth:** `X-Node-Id` + `X-Node-Api-Key`  
 **Content-Type:** `application/octet-stream`  
 **Body:** Binary file data
 
@@ -3171,7 +4546,7 @@ Agent sends binary file data for operations that require streaming (file reads/d
 
 Agent fetches the upload data for write/upload operations. Returns the file content to write.
 
-**Auth:** `X-Catalyst-Node-Id` + `X-Catalyst-Node-Token`  
+**Auth:** `X-Node-Id` + `X-Node-Api-Key`  
 **Response (200):**
 ```
 Content-Type: application/octet-stream
@@ -3191,9 +4566,9 @@ No content — the upload was sent as part of the poll request.
 |--------|----------|------|-------------|
 | `GET` | `/api/sftp/connection-info` | Session | Get SFTP connection details |
 | `POST` | `/api/sftp/rotate-token` | Session | Rotate SFTP token |
-| `GET` | `/api/sftp/tokens` | Session | List all SFTP tokens for server |
-| `DELETE` | `/api/sftp/tokens/:targetUserId` | Session | Revoke token for specific user |
-| `DELETE` | `/api/sftp/tokens` | Session | Revoke all tokens for server |
+| `GET` | `/api/sftp/tokens` | Session | List SFTP tokens (non-owners see only own token) |
+| `DELETE` | `/api/sftp/tokens/:targetUserId` | Session | Revoke token for specific user (own token only unless owner) |
+| `DELETE` | `/api/sftp/tokens` | Owner only | Revoke all tokens for server |
 
 #### GET `/api/sftp/connection-info`
 
@@ -3250,30 +4625,41 @@ Get the canonical deployment script for a deployment token.
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `POST` | `/api/setup/initialize` | No | Initialize first-time setup |
-| `POST` | `/api/setup/complete` | Session | Mark setup as complete |
+| `POST` | `/api/setup/complete` | No | Complete first-time setup |
+| `GET` | `/api/setup/status` | No | Check setup status |
 | `GET` | `/api/setup/status` | No | Check setup status |
 
 #### POST `/api/setup/complete`
 
 Complete the initial setup wizard. Creates the admin user, configures theme settings, and marks the panel as ready.
 
-**Auth:** Session (from setup initialization)  
+**Auth:** No (public, idempotent if partially completed)  
 **Body:**
 ```json
 {
-  "panelName": "Catalyst Panel",
-  "primaryColor": "#3b82f6",
-  "accentColor": "#8b5cf6",
+  "email": "admin@example.com",
+  "username": "admin",
+  "password": "securePassword123",
+  "panelName": "Catalyst",
+  "primaryColor": "#0d9488",
+  "secondaryColor": "#8b5cf6",
+  "accentColor": "#06b6d4",
   "defaultTheme": "dark",
   "logoUrl": "https://example.com/logo.png",
-  "adminUser": {
-    "email": "admin@example.com",
-    "username": "admin",
-    "password": "securePassword123"
-  }
+  "metadata": {}
 }
 ```
+
+- `email` — valid email, required
+- `username` — 2–32 characters, required
+- `password` — minimum 8 characters, required
+- `panelName` — display name for the panel (default: `"Catalyst"`)
+- `primaryColor` — 6-digit hex color (default: `"#0d9488"`)
+- `secondaryColor` — 6-digit hex color (default: `"#8b5cf6"`)
+- `accentColor` — 6-digit hex color (default: `"#06b6d4"`)
+- `defaultTheme` — `"light"` or `"dark"` (default: `"dark"`)
+- `logoUrl` — optional logo URL
+- `metadata` — optional arbitrary JSON object (default: `{}`)
 
 **Response (200):**
 ```json
@@ -3327,7 +4713,7 @@ Check whether first-time setup is required. Returns `false` if a user already ex
 | Method | Endpoint | Auth | Rate Limit |
 |--------|----------|------|------------|
 | `GET` | `/health` | No | 1/minute (exempt) |
-| `GET` | `/api/update/check` | No | 600/minute |
+| `GET` | `/api/update/status` | No | 600/minute |
 | `GET` | `/api/theme-settings/public` | No | 600/minute |
 | `POST` | `/api/system-errors/report` | No | 30/minute |
 | `GET` | `/docs` | No | N/A (Swagger UI) |
@@ -3381,6 +4767,10 @@ Clients subscribe to server events:
 | `server_state_update` | Agent → Backend | Server status changes (start/stop/crash) |
 | `console_output` | Agent → Backend | Console log lines |
 | `resource_stats` | Agent → Backend | CPU/memory/disk for a server |
+| `resource_stats_batch` | Agent → Backend | Batched metrics for backfill (max 500 items) |
+| `server_state_sync` | Agent → Backend | Container state reconciliation |
+| `server_state_sync_complete` | Agent → Backend | Reconciliation completion with missing container detection |
+| `discovered_servers` | Agent → Backend | Auto-import container discovery |
 | `backup_stream_complete` | Agent → Backend | Backup stream finished |
 | `download_backup` | Agent → Backend | Binary backup download frames |
 | `file_operation_response` | Agent → Backend | File tunnel response |
@@ -3398,8 +4788,10 @@ Clients subscribe to server events:
 | `rebuild_server` | Backend → Agent | Rebuild container |
 | `create_backup` | Backend → Agent | Start backup |
 | `restore_backup` | Backend → Agent | Restore from backup |
+| `delete_server` | Backend → Agent | Remove server container |
 | `file_tunnel_request` | Backend → Agent | File tunnel operation |
 | `request_immediate_stats` | Backend → Agent | Request live metrics |
+| `resume_console` | Backend → Agent | Resume console stream after reconnect |
 
 ### Server Messages (Agent → Backend)
 
@@ -3410,6 +4802,10 @@ Clients subscribe to server events:
 | `install_start` | Installation started |
 | `install_complete` | Installation finished |
 | `metrics_update` | Server resource metrics |
+| `resource_stats_batch` | Batched metrics for backfill (max 500) |
+| `server_state_sync` | Container state reconciliation |
+| `server_state_sync_complete` | Reconciliation completion with missing container detection |
+| `discovered_servers` | Auto-import container discovery |
 | `file_operation` | File operation result |
 | `backup_status` | Backup progress/status |
 | `health_check` | Agent health report |
@@ -3429,13 +4825,14 @@ Clients subscribe to server events:
 | `create_backup` | Create a backup |
 | `restore_backup` | Restore from backup |
 | `delete_server` | Remove the server |
+| `resume_console` | Resume console stream after reconnect |
 | `resize_storage` | Resize disk |
 
 ---
 
 ## SSE Streams
 
-### Console Stream (`/api/servers/:id/console-stream`)
+### Console Stream (`/api/servers/:serverId/console/stream`)
 
 Real-time server console output via Server-Sent Events.
 

@@ -16,6 +16,9 @@ import type { FastifyInstance } from 'fastify';
 import type { WebSocketGateway } from '../websocket/gateway';
 import { auth } from '../auth.js';
 import { fromNodeHeaders } from 'better-auth/node';
+import { resolveUserPermissions } from '../lib/permissions-catalog.js';
+import { prisma } from '../db.js';
+import { hasPermission } from '../lib/permissions.js';
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const ADMIN_EVENT_TYPES = [
@@ -98,6 +101,12 @@ export function adminEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGate
         userId = session.user.id;
       } catch {
         reply.status(401).send({ error: 'Unauthorized' });
+        return;
+      }
+
+      // Authorize: require admin.read permission
+      if (userId && !(await hasPermission(prisma, userId, 'admin.read'))) {
+        reply.status(403).send({ error: 'Admin read permission required' });
         return;
       }
 

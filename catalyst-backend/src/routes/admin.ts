@@ -2105,8 +2105,8 @@ export async function adminRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
 
-      if (!(checkPerm(request, 'admin.read'))) {
-        return reply.status(403).send({ error: 'Admin read permission required' });
+      if (!(checkPerm(request, 'admin.write'))) {
+        return reply.status(403).send({ error: 'Admin write permission required' });
       }
 
       const {
@@ -2674,8 +2674,8 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
-      if (!(checkPerm(request, 'admin.write'))) {
-        return reply.status(403).send({ error: 'Admin write permission required' });
+      if (!(checkPerm(request, 'admin.read'))) {
+        return reply.status(403).send({ error: 'Admin read permission required' });
       }
       const settings = await getModManagerSettings();
       reply.send(serialize({ success: true, data: settings }));

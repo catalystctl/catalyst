@@ -469,6 +469,10 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Server not found" });
       }
 
+      if (!ensureNotSuspended(server, reply)) {
+        return;
+      }
+
       const access = await prisma.serverAccess.findFirst({
         where: {
           serverId,
