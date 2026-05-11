@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -9,7 +9,6 @@ import {
   Search,
   Filter,
   ArrowUpDown,
-  Settings,
   Trash2,
   Shield,
   Mail,
@@ -24,6 +23,15 @@ import {
   Unlink,
   Globe,
   Clock,
+  ChevronRight,
+  ChevronLeft,
+  Check,
+  Server,
+  Info,
+  Pencil,
+  Lock,
+  Eye,
+  User,
 } from 'lucide-react';
 import EmptyState from '../../components/shared/EmptyState';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
@@ -82,15 +90,18 @@ const rowVariants: Variants = {
   },
 };
 
+const stepVariants: Variants = {
+  enter: (direction: number) => ({ x: direction > 0 ? 40 : -40, opacity: 0 }),
+  center: { x: 0, opacity: 1 },
+  exit: (direction: number) => ({ x: direction > 0 ? -40 : 40, opacity: 0 }),
+};
+
 // ── Skeleton Loader ──
 function TableSkeleton() {
   return (
     <div className="space-y-1">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div
-          key={i}
-          className="flex items-center gap-4 rounded-lg px-4 py-3.5"
-        >
+        <div key={i} className="flex items-center gap-4 rounded-lg px-4 py-3.5">
           <div className="h-4 w-4 animate-pulse rounded bg-surface-3" />
           <div className="h-9 w-9 animate-pulse rounded-lg bg-surface-3" />
           <div className="flex-1 space-y-2">
@@ -109,57 +120,239 @@ function TableSkeleton() {
   );
 }
 
-// ── Modal Shell ──
-function ModalShell({
-  open,
-  onClose,
-  title,
-  subtitle,
-  children,
-  footer,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-  footer?: React.ReactNode;
+// ── Wizard Step Indicator ──
+function StepIndicator({ steps, currentStep, onStepClick, canNavigate }: {
+  steps: { label: string; icon: typeof User }[];
+  currentStep: number;
+  onStepClick: (i: number) => void;
+  canNavigate: boolean[];
 }) {
-  if (!open) return null;
   return (
-    <ModalPortal>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-        className="flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl md:m-4 md:h-auto md:max-h-[90vh]"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-4">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground ">{title}</h2>
-            {subtitle && (
-              <p className="text-xs text-muted-foreground">{subtitle}</p>
+    <div className="flex items-center justify-center gap-1">
+      {steps.map((step, i) => {
+        const Icon = step.icon;
+        const isActive = i === currentStep;
+        const isComplete = i < currentStep;
+        const canClick = canNavigate[i];
+
+        return (
+          <div key={step.label} className="flex items-center">
+            <button
+              onClick={() => canClick && onStepClick(i)}
+              disabled={!canClick}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                isActive
+                  ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20'
+                  : isComplete
+                  ? 'bg-primary/10 text-primary dark:bg-primary/20'
+                  : canClick
+                  ? 'text-muted-foreground hover:text-foreground hover:bg-surface-2'
+                  : 'text-muted-foreground/40 cursor-not-allowed'
+              }`}
+            >
+              <Icon className="h-3 w-3" />
+              <span className="hidden sm:inline">{step.label}</span>
+              {isComplete && <Check className="h-2.5 w-2.5" />}
+            </button>
+            {i < steps.length - 1 && (
+              <ChevronRight className={`mx-1 h-3 w-3 ${i < currentStep ? 'text-primary' : 'text-muted-foreground/30'}`} />
             )}
           </div>
-          <button
-            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground dark:text-foreground"
-            onClick={onClose}
-          >
-            Close
-          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Role Chip ──
+function RoleChip({ role, selected, onToggle }: { role: { id: string; name: string }; selected: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
+        selected
+          ? 'border-primary/30 bg-primary/10 text-primary shadow-sm shadow-primary/10 dark:border-primary/40 dark:bg-primary/20 dark:text-primary-300'
+          : 'border-border bg-card text-muted-foreground hover:border-primary/20 hover:text-foreground'
+      }`}
+    >
+      <Shield className={`h-3 w-3 ${selected ? 'text-primary' : ''}`} />
+      {selected && <Check className="h-2.5 w-2.5" />}
+      {role.name}
+    </button>
+  );
+}
+
+// ── Server Chip ──
+function ServerChip({ server, selected, onToggle }: { server: { id: string; name: string }; selected: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
+        selected
+          ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-700 shadow-sm shadow-cyan-500/10 dark:border-cyan-500/40 dark:bg-cyan-500/20 dark:text-cyan-300'
+          : 'border-border bg-card text-muted-foreground hover:border-cyan-500/20 hover:text-foreground'
+      }`}
+    >
+      <Server className={`h-3 w-3 ${selected ? 'text-cyan-600 dark:text-cyan-400' : ''}`} />
+      {selected && <Check className="h-2.5 w-2.5" />}
+      {server.name}
+    </button>
+  );
+}
+
+// ── Security Section (read-only, for edit modal only) ──
+function SecuritySection({ user, onWipePasskeys, onWipe2fa, onEnforce2fa, onUnlink, loading }: {
+  user: AdminUser;
+  onWipePasskeys: () => void;
+  onWipe2fa: () => void;
+  onEnforce2fa: (enforce: boolean) => void;
+  onUnlink: (accountId: string, providerId: string) => void;
+  loading: boolean;
+}) {
+  const passkeys = user.passkeys ?? [];
+  const accounts = user.accounts ?? [];
+  const has2fa = !!(user.twoFactor?.length);
+  const twoFactorEnabled = user.twoFactorEnabled ?? false;
+  const lastLogin = user.lastSuccessfulLogin;
+  const lastIp = user.lastSignInIp;
+
+  const providerLabel = (id: string) => {
+    const labels: Record<string, string> = {
+      credential: 'Email & Password',
+      whmcs: 'WHMCS',
+      paymenter: 'Paymenter',
+      google: 'Google',
+      github: 'GitHub',
+      discord: 'Discord',
+    };
+    return labels[id] ?? id;
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Sign-in info */}
+      {(lastLogin || lastIp) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {lastIp && (
+            <div className="flex items-center gap-1.5 rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs">
+              <Globe className="h-3 w-3 text-muted-foreground" />
+              <span className="text-muted-foreground">Last IP:</span>
+              <span className="font-mono text-foreground">{lastIp}</span>
+            </div>
+          )}
+          {lastLogin && (
+            <div className="flex items-center gap-1.5 rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs">
+              <Clock className="h-3 w-3 text-muted-foreground" />
+              <span className="text-muted-foreground">Last sign-in:</span>
+              <span className="text-foreground">{new Date(lastLogin).toLocaleString()}</span>
+            </div>
+          )}
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5 text-sm text-foreground dark:text-foreground">
-          {children}
+      )}
+
+      {/* 2FA status */}
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${twoFactorEnabled ? 'bg-emerald-500/10' : 'bg-surface-2'}`}>
+              <ShieldCheck className={`h-4 w-4 ${twoFactorEnabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`} />
+            </div>
+            <div>
+              <div className="text-sm font-medium text-foreground">Two-Factor Authentication</div>
+              <div className="text-[11px] text-muted-foreground">
+                {has2fa ? (twoFactorEnabled ? 'Enabled and enforced' : 'Set up but not enforced') : 'Not set up'}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {has2fa && !twoFactorEnabled && (
+              <Button variant="outline" size="sm" className="gap-1 text-xs" disabled={loading} onClick={() => onEnforce2fa(true)}>
+                <ShieldCheck className="h-3 w-3" /> Enforce
+              </Button>
+            )}
+            {twoFactorEnabled && has2fa && (
+              <Button variant="outline" size="sm" className="gap-1 text-xs" disabled={loading} onClick={() => onEnforce2fa(false)}>
+                Unenforce
+              </Button>
+            )}
+            {has2fa && (
+              <Button variant="outline" size="sm" className="gap-1 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20 dark:text-destructive" disabled={loading} onClick={onWipe2fa}>
+                <Trash2 className="h-3 w-3" /> Wipe 2FA
+              </Button>
+            )}
+          </div>
         </div>
-        {footer && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-4 text-xs">
-            {footer}
+      </div>
+
+      {/* Passkeys */}
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${passkeys.length > 0 ? 'bg-blue-500/10' : 'bg-surface-2'}`}>
+              <Fingerprint className={`h-4 w-4 ${passkeys.length > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}`} />
+            </div>
+            <div>
+              <div className="text-sm font-medium text-foreground">Passkeys</div>
+              <div className="text-[11px] text-muted-foreground">
+                {passkeys.length ? `${passkeys.length} passkey${passkeys.length === 1 ? '' : 's'} registered` : 'No passkeys registered'}
+              </div>
+            </div>
+          </div>
+          {passkeys.length > 0 && (
+            <Button variant="outline" size="sm" className="gap-1 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20 dark:text-destructive" disabled={loading} onClick={onWipePasskeys}>
+              <Trash2 className="h-3 w-3" /> Wipe all
+            </Button>
+          )}
+        </div>
+        {passkeys.length > 0 && (
+          <div className="mt-3 space-y-1.5">
+            {passkeys.map((pk) => (
+              <div key={pk.id} className="flex items-center justify-between rounded-lg bg-surface-2/50 px-3 py-2 text-xs">
+                <span className="text-muted-foreground">{pk.name || 'Unnamed passkey'}</span>
+                <span className="text-[10px] text-muted-foreground/60">{new Date(pk.createdAt).toLocaleDateString()}</span>
+              </div>
+            ))}
           </div>
         )}
-      </motion.div>
+      </div>
+
+      {/* Linked SSO accounts */}
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Link2 className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium text-foreground">Linked Accounts</span>
+        </div>
+        {accounts.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No linked accounts</p>
+        ) : (
+          <div className="space-y-2">
+            {accounts.map((account) => {
+              const isSSO = account.providerId !== 'credential';
+              return (
+                <div key={account.id} className="flex items-center justify-between rounded-lg bg-surface-2/50 px-3 py-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <KeyRound className={`h-3.5 w-3.5 ${isSSO ? 'text-primary' : 'text-muted-foreground'}`} />
+                    <span className="text-foreground">{providerLabel(account.providerId)}</span>
+                    {isSSO && (
+                      <span className="text-[10px] font-mono text-muted-foreground/60">
+                        {account.accountId.slice(0, 12)}…
+                      </span>
+                    )}
+                  </div>
+                  {isSSO && (
+                    <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-[11px] text-destructive hover:bg-destructive/5 hover:text-destructive dark:text-destructive" disabled={loading} onClick={() => onUnlink(account.id, account.providerId)}>
+                      <Unlink className="h-3 w-3" /> Unlink
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
-    </ModalPortal>
   );
 }
 
@@ -173,6 +366,9 @@ function UsersPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+
+  // View user state
+  const [viewingUser, setViewingUser] = useState<AdminUser | null>(null);
 
   // Create user state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -195,6 +391,10 @@ function UsersPage() {
   const [editRoleSearch, setEditRoleSearch] = useState('');
   const [editServerSearch, setEditServerSearch] = useState('');
   const [selectedNodeIds, setSelectedNodeIds] = useState<NodeAssignmentWithExpiration[]>([]);
+
+  // Wizard state
+  const [wizardStep, setWizardStep] = useState(0);
+  const [wizardDirection, setWizardDirection] = useState(1);
 
   // Delete/ban confirmation state
   const [deletingUser, setDeletingUser] = useState<{ id: string; username: string } | null>(null);
@@ -303,10 +503,10 @@ function UsersPage() {
   // ── Filtered role/server lists for modals ──
   const filteredModalRoles = useMemo(
     () =>
-      roles.filter((role) =>
+      sortedRoles.filter((role) =>
         role.name.toLowerCase().includes(roleSearch.trim().toLowerCase()),
       ),
-    [roles, roleSearch],
+    [sortedRoles, roleSearch],
   );
 
   const filteredModalServers = useMemo(
@@ -321,10 +521,10 @@ function UsersPage() {
 
   const filteredEditRoles = useMemo(
     () =>
-      roles.filter((role) =>
+      sortedRoles.filter((role) =>
         role.name.toLowerCase().includes(editRoleSearch.trim().toLowerCase()),
       ),
-    [roles, editRoleSearch],
+    [sortedRoles, editRoleSearch],
   );
 
   const filteredEditServers = useMemo(
@@ -350,13 +550,7 @@ function UsersPage() {
     onSuccess: () => {
       notifySuccess('User created');
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      setCreateEmail('');
-      setCreateUsername('');
-      setCreatePassword('');
-      setCreateRoleIds([]);
-      setCreateServerIds([]);
-      setRoleSearch('');
-      setServerSearch('');
+      resetCreateForm();
       setIsCreateOpen(false);
     },
     onError: (error: any) => {
@@ -466,7 +660,6 @@ function UsersPage() {
       notifySuccess('Passkeys wiped');
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
       setWipePasskeyTarget(null);
-      // Refresh the editing user data
       const updatedUser = users.find((u) => u.id === userId);
       if (updatedUser) handleEditUser(updatedUser);
     },
@@ -558,6 +751,31 @@ function UsersPage() {
     [editEmail, editUsername, editPassword],
   );
 
+  const resetCreateForm = useCallback(() => {
+    setCreateEmail('');
+    setCreateUsername('');
+    setCreatePassword('');
+    setCreateRoleIds([]);
+    setCreateServerIds([]);
+    setRoleSearch('');
+    setServerSearch('');
+    setWizardStep(0);
+  }, []);
+
+  const resetEditForm = useCallback(() => {
+    setEditingUserId(null);
+    setEditRoleSearch('');
+    setEditServerSearch('');
+    setSelectedNodeIds([]);
+    setWizardStep(0);
+  }, []);
+
+  const startView = (user: AdminUser) => {
+    setViewingUser(user);
+    setEditingUserId(null);
+    setIsCreateOpen(false);
+  };
+
   const handleEditUser = async (user: AdminUser) => {
     const nextId = user.id;
     const requestId = editingRequestRef.current + 1;
@@ -570,6 +788,7 @@ function UsersPage() {
     setEditServerIds([]);
     setEditRoleSearch('');
     setEditServerSearch('');
+    setWizardStep(0);
 
     adminApi
       .getUserServers(nextId)
@@ -619,6 +838,47 @@ function UsersPage() {
     if (!userIds.length) return;
     setDeletingUser({ id: userIds.join(','), username: label });
   };
+
+  // ── Wizard logic ──
+  const createSteps = [
+    { label: 'Account', icon: User },
+    { label: 'Roles & Servers', icon: Shield },
+    { label: 'Node Access', icon: Server },
+  ];
+
+  const editSteps = [
+    { label: 'Account', icon: User },
+    { label: 'Roles & Servers', icon: Shield },
+    { label: 'Node Access', icon: Server },
+    { label: 'Security', icon: Lock },
+  ];
+
+  const currentSteps = editingUserId ? editSteps : createSteps;
+
+  const canNavigateCreateStep = [
+    true,
+    !!(createEmail.trim() && createUsername.trim() && createPassword.trim().length >= 8),
+    !!(createEmail.trim() && createUsername.trim() && createPassword.trim().length >= 8),
+  ];
+
+  const canNavigateEditStep = [
+    true,
+    !!(editEmail.trim() && editUsername.trim() && (!editPassword || editPassword.length >= 8)),
+    !!(editEmail.trim() && editUsername.trim() && (!editPassword || editPassword.length >= 8)),
+    !!(editEmail.trim() && editUsername.trim() && (!editPassword || editPassword.length >= 8)),
+  ];
+
+  const canNavigateStep = editingUserId ? canNavigateEditStep : canNavigateCreateStep;
+
+  const goToStep = (step: number) => {
+    if (step < 0 || step >= currentSteps.length) return;
+    if (!canNavigateStep[step]) return;
+    setWizardDirection(step > wizardStep ? 1 : -1);
+    setWizardStep(step);
+  };
+
+  const isModalOpen = isCreateOpen || !!editingUserId;
+  const editingUser = editingUserId ? users.find((u) => u.id === editingUserId) : null;
 
   return (
     <motion.div
@@ -670,7 +930,7 @@ function UsersPage() {
                 {roles.length > 0 && (
                   <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
                     <Shield className="h-2.5 w-2.5" />
-                    {roles.length} roles
+                    {roles.length} role{roles.length === 1 ? '' : 's'}
                   </Badge>
                 )}
                 {bannedCount > 0 && (
@@ -684,9 +944,8 @@ function UsersPage() {
             <Button
               size="sm"
               onClick={() => {
+                resetCreateForm();
                 setIsCreateOpen(true);
-                setRoleSearch('');
-                setServerSearch('');
               }}
               className="gap-1.5"
             >
@@ -813,12 +1072,7 @@ function UsersPage() {
                     </Select>
                   </label>
                   {hasActiveFilters && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearFilters}
-                      className="gap-1.5 text-xs"
-                    >
+                    <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1.5 text-xs">
                       <X className="h-3 w-3" />
                       Clear all
                     </Button>
@@ -852,42 +1106,15 @@ function UsersPage() {
                   </button>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      handleBulkBan(selectedIds, `${selectedIds.length} users`)
-                    }
-                    disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending}
-                    className="gap-1.5 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20 dark:text-destructive dark:hover:bg-destructive/30 dark:hover:border-destructive"
-                  >
-                    <Ban className="h-3 w-3" />
-                    Ban
+                  <Button variant="outline" size="sm" onClick={() => handleBulkBan(selectedIds, `${selectedIds.length} users`)} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="gap-1.5 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20 dark:text-destructive dark:hover:bg-destructive/30 dark:hover:border-destructive">
+                    <Ban className="h-3 w-3" /> Ban
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      handleBulkUnban(selectedIds, `${selectedIds.length} users`)
-                    }
-                    disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending}
-                    className="gap-1.5 text-xs text-success hover:bg-success/5 hover:text-success hover:border-success/20 dark:text-success dark:hover:bg-success/30 dark:hover:border-success"
-                  >
-                    <CheckCircle className="h-3 w-3" />
-                    Unban
+                  <Button variant="outline" size="sm" onClick={() => handleBulkUnban(selectedIds, `${selectedIds.length} users`)} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="gap-1.5 text-xs text-success hover:bg-success/5 hover:text-success hover:border-success/20 dark:text-success dark:hover:bg-success/30 dark:hover:border-success">
+                    <CheckCircle className="h-3 w-3" /> Unban
                   </Button>
                   <div className="mx-1 h-4 w-px bg-border" />
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() =>
-                      handleBulkDelete(selectedIds, `${selectedIds.length} users`)
-                    }
-                    disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending}
-                    className="gap-1.5 text-xs"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                    Delete
+                  <Button variant="destructive" size="sm" onClick={() => handleBulkDelete(selectedIds, `${selectedIds.length} users`)} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="gap-1.5 text-xs">
+                    <Trash2 className="h-3 w-3" /> Delete
                   </Button>
                 </div>
               </div>
@@ -935,9 +1162,10 @@ function UsersPage() {
                       <motion.div
                         key={user.id}
                         variants={rowVariants}
-                        className={`group relative flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-2/50 ${
-                          isSelected ? 'bg-primary/5' : ''
+                        className={`group relative flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-2/50 cursor-pointer ${
+                          isSelected ? 'bg-primary/5' : viewingUser?.id === user.id ? 'bg-primary/5 border-l-2 border-primary' : ''
                         }`}
+                        onClick={() => startView(user)}
                       >
                         {/* Checkbox */}
                         <input
@@ -1016,13 +1244,8 @@ function UsersPage() {
                           {user.banned ? (
                             <button
                               className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-success/5 hover:text-success disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-success/30 dark:hover:text-success"
-                              onClick={() =>
-                                handleBulkUnban([user.id], user.username)
-                              }
-                              disabled={
-                                banMutation.isPending ||
-                                unbanMutation.isPending
-                              }
+                              onClick={() => handleBulkUnban([user.id], user.username)}
+                              disabled={banMutation.isPending || unbanMutation.isPending}
                               title="Unban"
                             >
                               <CheckCircle className="h-3.5 w-3.5" />
@@ -1030,47 +1253,52 @@ function UsersPage() {
                           ) : (
                             <button
                               className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-destructive/30 dark:hover:text-destructive"
-                              onClick={() =>
-                                handleBulkBan([user.id], user.username)
-                              }
-                              disabled={
-                                banMutation.isPending ||
-                                unbanMutation.isPending
-                              }
+                              onClick={() => handleBulkBan([user.id], user.username)}
+                              disabled={banMutation.isPending || unbanMutation.isPending}
                               title="Ban"
                             >
                               <Ban className="h-3.5 w-3.5" />
                             </button>
                           )}
 
+                          <button
+                            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
+                            onClick={(e) => { e.stopPropagation(); startView(user); }}
+                            title="View details"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button
                                 className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
                                 title="More"
+                                onClick={(e) => e.stopPropagation()}
                               >
                                 <MoreHorizontal className="h-3.5 w-3.5" />
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem
+                                onClick={() => startView(user)}
+                                className="gap-2 text-xs"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                View
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
                                 onClick={() => handleEditUser(user)}
                                 disabled={updateMutation.isPending}
                                 className="gap-2 text-xs"
                               >
-                                <Settings className="h-3.5 w-3.5" />
+                                <Pencil className="h-3.5 w-3.5" />
                                 Edit
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               {user.banned ? (
                                 <DropdownMenuItem
-                                  onClick={() =>
-                                    handleBulkUnban([user.id], user.username)
-                                  }
-                                  disabled={
-                                    banMutation.isPending ||
-                                    unbanMutation.isPending
-                                  }
+                                  onClick={() => handleBulkUnban([user.id], user.username)}
+                                  disabled={banMutation.isPending || unbanMutation.isPending}
                                   className="gap-2 text-xs text-success dark:text-success"
                                 >
                                   <CheckCircle className="h-3.5 w-3.5" />
@@ -1078,13 +1306,8 @@ function UsersPage() {
                                 </DropdownMenuItem>
                               ) : (
                                 <DropdownMenuItem
-                                  onClick={() =>
-                                    handleBulkBan([user.id], user.username)
-                                  }
-                                  disabled={
-                                    banMutation.isPending ||
-                                    unbanMutation.isPending
-                                  }
+                                  onClick={() => handleBulkBan([user.id], user.username)}
+                                  disabled={banMutation.isPending || unbanMutation.isPending}
                                   className="gap-2 text-xs text-destructive dark:text-destructive"
                                 >
                                   <Ban className="h-3.5 w-3.5" />
@@ -1093,12 +1316,7 @@ function UsersPage() {
                               )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                onClick={() =>
-                                  setDeletingUser({
-                                    id: user.id,
-                                    username: user.username,
-                                  })
-                                }
+                                onClick={() => setDeletingUser({ id: user.id, username: user.username })}
                                 disabled={deleteMutation.isPending}
                                 className="gap-2 text-xs text-destructive dark:text-destructive"
                               >
@@ -1127,36 +1345,16 @@ function UsersPage() {
             ) : (
               <div className="p-6">
                 <EmptyState
-                  title={
-                    search.trim() || hasActiveFilters
-                      ? 'No users found'
-                      : 'No users'
-                  }
-                  description={
-                    search.trim() || hasActiveFilters
-                      ? 'Try adjusting your search or filters.'
-                      : 'Create a user account to grant dashboard access.'
-                  }
+                  title={search.trim() || hasActiveFilters ? 'No users found' : 'No users'}
+                  description={search.trim() || hasActiveFilters ? 'Try adjusting your search or filters.' : 'Create a user account to grant dashboard access.'}
                   action={
                     hasActiveFilters ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={clearFilters}
-                      >
+                      <Button variant="outline" size="sm" onClick={clearFilters}>
                         <X className="mr-1.5 h-3.5 w-3.5" />
                         Clear filters
                       </Button>
                     ) : (
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setIsCreateOpen(true);
-                          setRoleSearch('');
-                          setServerSearch('');
-                        }}
-                        className="gap-1.5"
-                      >
+                      <Button size="sm" onClick={() => { resetCreateForm(); setIsCreateOpen(true); }} className="gap-1.5">
                         <UserPlus className="h-3.5 w-3.5" />
                         Create user
                       </Button>
@@ -1169,536 +1367,567 @@ function UsersPage() {
         </motion.div>
       </div>
 
-      {/* ── Create User Modal ── */}
-      <ModalShell
-        open={isCreateOpen}
-        onClose={() => {
-          setIsCreateOpen(false);
-          setRoleSearch('');
-          setServerSearch('');
-        }}
-        title="Create user"
-        subtitle="Assign credentials, roles, and server access."
-        footer={
-          <>
-            <span className="text-muted-foreground">
-              Passwords must be at least 8 characters.
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setIsCreateOpen(false);
-                  setRoleSearch('');
-                  setServerSearch('');
-                }}
+      {/* ── Create/Edit User Wizard Modal ── */}
+      <ModalPortal>
+        <AnimatePresence>
+          {isModalOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm"
+              onClick={(e) => { if (e.target === e.currentTarget) { resetCreateForm(); setIsCreateOpen(false); resetEditForm(); } }}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                className="flex w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl md:m-4 md:max-h-[88vh]"
               >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                disabled={!canSubmitCreate || createMutation.isPending}
-                onClick={() => createMutation.mutate()}
-              >
-                {createMutation.isPending ? 'Creating…' : 'Create user'}
-              </Button>
-            </div>
-          </>
-        }
-      >
-        <div className="space-y-6">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Account details
-            </div>
-            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-              <label className="block space-y-1">
-                <span className="text-xs text-muted-foreground">Email</span>
-                <Input
-                  type="email"
-                  value={createEmail}
-                  onChange={(e) => setCreateEmail(e.target.value)}
-                  placeholder="user@example.com"
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-xs text-muted-foreground">Username</span>
-                <Input
-                  value={createUsername}
-                  onChange={(e) => setCreateUsername(e.target.value)}
-                  placeholder="username"
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-xs text-muted-foreground">
-                  Password (min 8 chars)
-                </span>
-                <Input
-                  type="password"
-                  value={createPassword}
-                  onChange={(e) => setCreatePassword(e.target.value)}
-                  placeholder="********"
-                />
-              </label>
-            </div>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-lg border border-border/50 bg-surface-2/50 p-4 dark:bg-surface-2/30">
-              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Roles
-              </div>
-              <Input
-                value={roleSearch}
-                onChange={(e) => setRoleSearch(e.target.value)}
-                placeholder="Search roles"
-                className="mt-2 w-full"
-              />
-              <div className="mt-3 flex max-h-36 flex-wrap gap-2 overflow-y-auto">
-                {filteredModalRoles.map((role) => (
-                  <label
-                    key={role.id}
-                    className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/50 dark:border-border dark:bg-surface-0 dark:text-foreground"
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-border px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${editingUserId ? 'bg-amber-500/10' : 'bg-primary/10'}`}>
+                      {editingUserId ? <Pencil className="h-4 w-4 text-amber-600 dark:text-amber-400" /> : <UserPlus className="h-4 w-4 text-primary" />}
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-foreground">
+                        {editingUserId ? 'Edit user' : 'Create user'}
+                      </h2>
+                      <p className="text-xs text-muted-foreground">
+                        {editingUserId
+                          ? editingUser ? `${editingUser.username} · ${editingUser.email}` : 'Update user details and access.'
+                          : 'Set up a new account with roles and server access.'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                    onClick={() => { resetCreateForm(); setIsCreateOpen(false); resetEditForm(); }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={createRoleIds.includes(role.id)}
-                      onChange={() =>
-                        setCreateRoleIds((prev) => toggleItem(prev, role.id))
-                      }
-                      className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
-                    />
-                    {role.name}
-                  </label>
-                ))}
-                {!filteredModalRoles.length && (
-                  <span className="text-xs text-muted-foreground">
-                    No roles match
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="rounded-lg border border-border/50 bg-surface-2/50 p-4 dark:bg-surface-2/30">
-              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Server access
-              </div>
-              <Input
-                value={serverSearch}
-                onChange={(e) => setServerSearch(e.target.value)}
-                placeholder="Search servers"
-                className="mt-2 w-full"
-              />
-              <div className="mt-3 flex max-h-36 flex-col gap-2 overflow-y-auto">
-                {filteredModalServers.map((server) => (
-                  <label
-                    key={server.id}
-                    className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/50 dark:border-border dark:bg-surface-0 dark:text-foreground"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={createServerIds.includes(server.id)}
-                      onChange={() =>
-                        setCreateServerIds((prev) => toggleItem(prev, server.id))
-                      }
-                      className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
-                    />
-                    <span>{server.name}</span>
-                    <span className="text-[10px] text-muted-foreground">
-                      ({server.id})
-                    </span>
-                  </label>
-                ))}
-                {!filteredModalServers.length && (
-                  <span className="text-xs text-muted-foreground">
-                    No servers match
-                  </span>
-                )}
-              </div>
-            </div>
-            <NodeAssignmentsSelector
-              selectedNodes={[]}
-              onSelectionChange={() => {}}
-              disabled={false}
-              label="Node Access (optional)"
-            />
-          </div>
-        </div>
-      </ModalShell>
-
-      {/* ── Edit User Modal ── */}
-      <ModalShell
-        open={!!editingUserId}
-        onClose={() => {
-          setEditingUserId(null);
-          setEditRoleSearch('');
-          setEditServerSearch('');
-          setSelectedNodeIds([]);
-        }}
-        title="Edit user"
-        subtitle="Update profile details, roles, and server access."
-        footer={
-          <>
-            <span className="text-muted-foreground">
-              Leave password blank to keep current credentials.
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setEditingUserId(null);
-                  setEditRoleSearch('');
-                  setEditServerSearch('');
-                  setSelectedNodeIds([]);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                disabled={!canSubmitEdit || updateMutation.isPending}
-                onClick={() =>
-                  editingUserId && updateMutation.mutate(editingUserId)
-                }
-              >
-                {updateMutation.isPending ? 'Saving…' : 'Save changes'}
-              </Button>
-            </div>
-          </>
-        }
-      >
-        <div className="space-y-6">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Account details
-            </div>
-            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-              <label className="block space-y-1">
-                <span className="text-xs text-muted-foreground">Email</span>
-                <Input
-                  type="email"
-                  value={editEmail}
-                  onChange={(e) => setEditEmail(e.target.value)}
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-xs text-muted-foreground">Username</span>
-                <Input
-                  value={editUsername}
-                  onChange={(e) => setEditUsername(e.target.value)}
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-xs text-muted-foreground">
-                  Password (leave blank to keep)
-                </span>
-                <Input
-                  type="password"
-                  value={editPassword}
-                  onChange={(e) => setEditPassword(e.target.value)}
-                />
-              </label>
-            </div>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-lg border border-border/50 bg-surface-2/50 p-4 dark:bg-surface-2/30">
-              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Roles
-              </div>
-              <Input
-                value={editRoleSearch}
-                onChange={(e) => setEditRoleSearch(e.target.value)}
-                placeholder="Search roles"
-                className="mt-2 w-full"
-              />
-              <div className="mt-3 flex max-h-36 flex-wrap gap-2 overflow-y-auto">
-                {filteredEditRoles.map((role) => (
-                  <label
-                    key={role.id}
-                    className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/50 dark:border-border dark:bg-surface-0 dark:text-foreground"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={editRoleIds.includes(role.id)}
-                      onChange={() =>
-                        setEditRoleIds((prev) => toggleItem(prev, role.id))
-                      }
-                      className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
-                    />
-                    {role.name}
-                  </label>
-                ))}
-                {!filteredEditRoles.length && (
-                  <span className="text-xs text-muted-foreground">
-                    No roles match
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="rounded-lg border border-border/50 bg-surface-2/50 p-4 dark:bg-surface-2/30">
-              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Server access
-              </div>
-              <Input
-                value={editServerSearch}
-                onChange={(e) => setEditServerSearch(e.target.value)}
-                placeholder="Search servers"
-                className="mt-2 w-full"
-              />
-              <div className="mt-3 flex max-h-36 flex-col gap-2 overflow-y-auto">
-                {filteredEditServers.map((server) => (
-                  <label
-                    key={server.id}
-                    className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/50 dark:border-border dark:bg-surface-0 dark:text-foreground"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={editServerIds.includes(server.id)}
-                      onChange={() =>
-                        setEditServerIds((prev) => toggleItem(prev, server.id))
-                      }
-                      className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
-                    />
-                    <span>{server.name}</span>
-                    <span className="text-[10px] text-muted-foreground">
-                      ({server.id})
-                    </span>
-                  </label>
-                ))}
-                {!filteredEditServers.length && (
-                  <span className="text-xs text-muted-foreground">
-                    No servers match
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          <NodeAssignmentsSelector
-            userId={editingUserId ?? undefined}
-            selectedNodes={selectedNodeIds}
-            onSelectionChange={setSelectedNodeIds}
-            disabled={updateMutation.isPending}
-          />
-
-          {/* ── Security & Authentication ── */}
-          {editingUserId && (() => {
-            const editUser = users.find((u) => u.id === editingUserId);
-            if (!editUser) return null;
-            const passkeys = editUser.passkeys ?? [];
-            const accounts = editUser.accounts ?? [];
-            const has2fa = !!(editUser.twoFactor?.length);
-            const twoFactorEnabled = editUser.twoFactorEnabled ?? false;
-            const lastLogin = editUser.lastSuccessfulLogin;
-            const lastIp = editUser.lastSignInIp;
-            const ssoAccounts = accounts.filter((a) => a.providerId !== 'credential');
-            const hasPassword = accounts.some((a) => a.providerId === 'credential');
-
-            const providerLabel = (id: string) => {
-              const labels: Record<string, string> = {
-                credential: 'Email & Password',
-                whmcs: 'WHMCS',
-                paymenter: 'Paymenter',
-                google: 'Google',
-                github: 'GitHub',
-                discord: 'Discord',
-              };
-              return labels[id] ?? id;
-            };
-
-            return (
-              <div className="rounded-xl border border-border/50 bg-surface-2/50 p-4 dark:bg-surface-2/30">
-                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Security & Authentication
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
 
-                <div className="mt-3 space-y-3">
-                  {/* Sign-in info */}
-                  {(lastLogin || lastIp) && (
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                      {lastIp && (
-                        <span className="flex items-center gap-1.5 rounded-md bg-card px-2 py-1 border border-border">
-                          <Globe className="h-3 w-3" />
-                          Last IP: <span className="font-mono text-foreground">{lastIp}</span>
-                        </span>
-                      )}
-                      {lastLogin && (
-                        <span className="flex items-center gap-1.5 rounded-md bg-card px-2 py-1 border border-border">
-                          <Clock className="h-3 w-3" />
-                          Last sign-in: {new Date(lastLogin).toLocaleString()}
-                        </span>
-                      )}
+                {/* Step indicator */}
+                <div className="border-b border-border/50 px-6 py-3">
+                  <StepIndicator
+                    steps={currentSteps}
+                    currentStep={wizardStep}
+                    onStepClick={goToStep}
+                    canNavigate={canNavigateStep}
+                  />
+                </div>
+
+                {/* Step content */}
+                <div className="flex-1 overflow-y-auto px-6 py-5">
+                  <AnimatePresence mode="wait" custom={wizardDirection}>
+                    {/* Step 0: Account Details */}
+                    {wizardStep === 0 && (
+                      <motion.div
+                        key="step-account"
+                        custom={wizardDirection}
+                        variants={stepVariants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.2 }}
+                        className="space-y-5"
+                      >
+                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Account credentials
+                        </div>
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                          <label className="block space-y-1.5">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              Email <span className="text-destructive">*</span>
+                            </span>
+                            <Input
+                              type="email"
+                              value={editingUserId ? editEmail : createEmail}
+                              onChange={(e) => editingUserId ? setEditEmail(e.target.value) : setCreateEmail(e.target.value)}
+                              placeholder="user@example.com"
+                            />
+                          </label>
+                          <label className="block space-y-1.5">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              Username <span className="text-destructive">*</span>
+                            </span>
+                            <Input
+                              value={editingUserId ? editUsername : createUsername}
+                              onChange={(e) => editingUserId ? setEditUsername(e.target.value) : setCreateUsername(e.target.value)}
+                              placeholder="username"
+                            />
+                          </label>
+                          <label className="block space-y-1.5">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              {editingUserId ? 'New password (leave blank to keep)' : 'Password (min 8 chars)'}
+                              {!editingUserId && <span className="text-destructive"> *</span>}
+                            </span>
+                            <Input
+                              type="password"
+                              value={editingUserId ? editPassword : createPassword}
+                              onChange={(e) => editingUserId ? setEditPassword(e.target.value) : setCreatePassword(e.target.value)}
+                              placeholder={editingUserId ? 'Leave blank to keep current' : '********'}
+                            />
+                          </label>
+                        </div>
+
+                        {/* Validation hints */}
+                        {!editingUserId && (
+                          <div className="flex flex-wrap gap-2">
+                            <div className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] ${createEmail.trim() ? 'text-success bg-success/5' : 'text-muted-foreground bg-surface-2'}`}>
+                              {createEmail.trim() ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                              Email set
+                            </div>
+                            <div className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] ${createUsername.trim() ? 'text-success bg-success/5' : 'text-muted-foreground bg-surface-2'}`}>
+                              {createUsername.trim() ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                              Username set
+                            </div>
+                            <div className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] ${createPassword.trim().length >= 8 ? 'text-success bg-success/5' : 'text-muted-foreground bg-surface-2'}`}>
+                              {createPassword.trim().length >= 8 ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                              8+ characters
+                            </div>
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+
+                    {/* Step 1: Roles & Servers */}
+                    {wizardStep === 1 && (
+                      <motion.div
+                        key="step-roles-servers"
+                        custom={wizardDirection}
+                        variants={stepVariants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.2 }}
+                        className="space-y-6"
+                      >
+                        {/* Roles section */}
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <Shield className="h-4 w-4 text-primary" />
+                              <span className="text-sm font-semibold text-foreground">Roles</span>
+                              {(editingUserId ? editRoleIds : createRoleIds).length > 0 && (
+                                <Badge variant="default" className="tabular-nums text-[10px]">
+                                  {(editingUserId ? editRoleIds : createRoleIds).length}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="relative w-48">
+                              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                              <Input
+                                value={editingUserId ? editRoleSearch : roleSearch}
+                                onChange={(e) => editingUserId ? setEditRoleSearch(e.target.value) : setRoleSearch(e.target.value)}
+                                placeholder="Search roles…"
+                                className="h-8 pl-8 text-xs"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {(editingUserId ? filteredEditRoles : filteredModalRoles).map((role) => (
+                              <RoleChip
+                                key={role.id}
+                                role={role}
+                                selected={(editingUserId ? editRoleIds : createRoleIds).includes(role.id)}
+                                onToggle={() => editingUserId
+                                  ? setEditRoleIds((prev) => toggleItem(prev, role.id))
+                                  : setCreateRoleIds((prev) => toggleItem(prev, role.id))
+                                }
+                              />
+                            ))}
+                            {(editingUserId ? filteredEditRoles : filteredModalRoles).length === 0 && (
+                              <span className="text-xs text-muted-foreground italic">No roles match</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Servers section */}
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <Server className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+                              <span className="text-sm font-semibold text-foreground">Server Access</span>
+                              {(editingUserId ? editServerIds : createServerIds).length > 0 && (
+                                <Badge className="tabular-nums text-[10px] border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300">
+                                  {(editingUserId ? editServerIds : createServerIds).length}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="relative w-48">
+                              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                              <Input
+                                value={editingUserId ? editServerSearch : serverSearch}
+                                onChange={(e) => editingUserId ? setEditServerSearch(e.target.value) : setServerSearch(e.target.value)}
+                                placeholder="Search servers…"
+                                className="h-8 pl-8 text-xs"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {(editingUserId ? filteredEditServers : filteredModalServers).map((server) => (
+                              <ServerChip
+                                key={server.id}
+                                server={server}
+                                selected={(editingUserId ? editServerIds : createServerIds).includes(server.id)}
+                                onToggle={() => editingUserId
+                                  ? setEditServerIds((prev) => toggleItem(prev, server.id))
+                                  : setCreateServerIds((prev) => toggleItem(prev, server.id))
+                                }
+                              />
+                            ))}
+                            {(editingUserId ? filteredEditServers : filteredModalServers).length === 0 && (
+                              <span className="text-xs text-muted-foreground italic">No servers match</span>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* Step 2: Node Access */}
+                    {wizardStep === 2 && (
+                      <motion.div
+                        key="step-nodes"
+                        custom={wizardDirection}
+                        variants={stepVariants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.2 }}
+                      >
+                        <NodeAssignmentsSelector
+                          userId={editingUserId ?? undefined}
+                          selectedNodes={selectedNodeIds}
+                          onSelectionChange={setSelectedNodeIds}
+                          disabled={createMutation.isPending || updateMutation.isPending}
+                        />
+                      </motion.div>
+                    )}
+
+                    {/* Step 3: Security (edit only) */}
+                    {wizardStep === 3 && editingUserId && editingUser && (
+                      <motion.div
+                        key="step-security"
+                        custom={wizardDirection}
+                        variants={stepVariants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.2 }}
+                      >
+                        <SecuritySection
+                          user={editingUser}
+                          onWipePasskeys={() => setWipePasskeyTarget({ id: editingUser.id, username: editingUser.username, count: editingUser.passkeys?.length ?? 0 })}
+                          onWipe2fa={() => setWipe2faTarget({ id: editingUser.id, username: editingUser.username })}
+                          onEnforce2fa={(enforce) => setEnforce2faTarget({ id: editingUser.id, username: editingUser.username, enforce })}
+                          onUnlink={(accountId, providerId) => setUnlinkTarget({ userId: editingUser.id, username: editingUser.username, accountId, providerId })}
+                          loading={wipePasskeysMutation.isPending || wipe2faMutation.isPending || enforce2faMutation.isPending || unlinkAccountMutation.isPending}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Footer with navigation */}
+                <div className="flex items-center justify-between border-t border-border px-6 py-4">
+                  <div className="text-xs text-muted-foreground">
+                    {wizardStep === 0 && !editingUserId && 'All fields are required'}
+                    {wizardStep === 0 && editingUserId && 'Leave password blank to keep current'}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {wizardStep > 0 && (
+                      <Button variant="outline" size="sm" onClick={() => goToStep(wizardStep - 1)} className="gap-1">
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                        Back
+                      </Button>
+                    )}
+                    {wizardStep < currentSteps.length - 1 && (
+                      <Button
+                        size="sm"
+                        onClick={() => goToStep(wizardStep + 1)}
+                        disabled={!canNavigateStep[wizardStep + 1]}
+                        className="gap-1"
+                      >
+                        Next
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    {wizardStep === currentSteps.length - 1 && (
+                      <Button
+                        size="sm"
+                        disabled={editingUserId ? !canSubmitEdit || updateMutation.isPending : !canSubmitCreate || createMutation.isPending}
+                        onClick={() => {
+                          if (editingUserId) {
+                            updateMutation.mutate(editingUserId);
+                          } else {
+                            createMutation.mutate();
+                          }
+                        }}
+                        className="gap-1"
+                      >
+                        {createMutation.isPending || updateMutation.isPending
+                          ? 'Saving…'
+                          : editingUserId
+                          ? 'Save changes'
+                          : 'Create user'}
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="sm" onClick={() => { resetCreateForm(); setIsCreateOpen(false); resetEditForm(); }}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </ModalPortal>
+
+      {/* ── View User Modal ── */}
+      <ModalPortal>
+        <AnimatePresence>
+          {!!viewingUser && !editingUserId && !isCreateOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm"
+              onClick={(e) => { if (e.target === e.currentTarget) setViewingUser(null); }}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl md:m-4 md:max-h-[88vh]"
+              >
+                {/* Header with user identity */}
+                <div className="relative overflow-hidden px-6 py-5 border-b border-border">
+                  {/* Decorative gradient */}
+                  <div className={`absolute inset-0 ${viewingUser.banned ? 'bg-gradient-to-br from-destructive/5 via-destructive/3 to-transparent' : 'bg-gradient-to-br from-primary/5 via-primary/3 to-transparent'}`} />
+
+                  <div className="relative flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+                        viewingUser.banned
+                          ? 'bg-destructive/10 text-destructive'
+                          : 'bg-primary/10 text-primary'
+                      }`}>
+                        <User className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2.5">
+                          <h2 className="text-lg font-semibold text-foreground">{viewingUser.username}</h2>
+                          {viewingUser.banned ? (
+                            <Badge variant="destructive" className="gap-1 text-[11px]">
+                              <Ban className="h-2.5 w-2.5" /> Banned
+                            </Badge>
+                          ) : (
+                            <Badge variant="success" className="gap-1 text-[11px]">
+                              <CheckCircle className="h-2.5 w-2.5" /> Active
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+                          <Mail className="h-3 w-3" />
+                          {viewingUser.email}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                      onClick={() => setViewingUser(null)}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {/* Quick stats */}
+                  <div className="relative mt-4 flex flex-wrap gap-3">
+                    <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card/80 px-3 py-1.5 text-xs">
+                      <Shield className="h-3 w-3 text-primary" />
+                      <span className="text-muted-foreground">Roles</span>
+                      <span className="font-semibold tabular-nums text-foreground">{viewingUser.roles.length}</span>
+                    </div>
+                    {viewingUser.twoFactorEnabled && (
+                      <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card/80 px-3 py-1.5 text-xs">
+                        <ShieldCheck className="h-3 w-3 text-emerald-500" />
+                        <span className="text-emerald-700 dark:text-emerald-400">2FA Enabled</span>
+                      </div>
+                    )}
+                    {(viewingUser.passkeys?.length ?? 0) > 0 && (
+                      <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card/80 px-3 py-1.5 text-xs">
+                        <Fingerprint className="h-3 w-3 text-blue-500" />
+                        <span className="text-muted-foreground">Passkeys</span>
+                        <span className="font-semibold tabular-nums text-foreground">{viewingUser.passkeys?.length ?? 0}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card/80 px-3 py-1.5 text-xs">
+                      <Clock className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-muted-foreground">Created</span>
+                      <span className="font-medium text-foreground">{new Date(viewingUser.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    {viewingUser.lastSuccessfulLogin && (
+                      <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card/80 px-3 py-1.5 text-xs">
+                        <Clock className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-muted-foreground">Last login</span>
+                        <span className="font-medium text-foreground">{new Date(viewingUser.lastSuccessfulLogin).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                    {viewingUser.lastSignInIp && (
+                      <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card/80 px-3 py-1.5 text-xs">
+                        <Globe className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-muted-foreground">Last IP</span>
+                        <span className="font-mono font-medium text-foreground">{viewingUser.lastSignInIp}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Body */}
+                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                  {/* Roles */}
+                  {viewingUser.roles.length > 0 && (
+                    <div className="rounded-xl border border-border p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Shield className="h-4 w-4 text-primary" />
+                        <span className="text-sm font-semibold text-foreground">Roles</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {viewingUser.roles.map((role) => (
+                          <span key={role.id} className="inline-flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary dark:border-primary/30 dark:bg-primary/10 dark:text-primary-300">
+                            <Shield className="h-3 w-3" />
+                            {role.name}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )}
 
-                  {/* 2FA status */}
-                  <div className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className={`h-4 w-4 ${twoFactorEnabled ? 'text-success' : 'text-muted-foreground'}`} />
-                      <div>
-                        <span className="text-xs font-medium text-foreground">
-                          Two-Factor Authentication
-                        </span>
-                        <p className="text-[11px] text-muted-foreground">
-                          {has2fa
-                            ? twoFactorEnabled
-                              ? 'Enabled and enforced'
-                              : 'Set up but not enforced'
-                            : 'Not set up'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {has2fa && !twoFactorEnabled && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1 text-xs"
-                          disabled={enforce2faMutation.isPending}
-                          onClick={() =>
-                            setEnforce2faTarget({ id: editUser.id, username: editUser.username, enforce: true })
-                          }
-                        >
-                          <ShieldCheck className="h-3 w-3" />
-                          Enforce
-                        </Button>
-                      )}
-                      {twoFactorEnabled && has2fa && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1 text-xs"
-                          disabled={enforce2faMutation.isPending}
-                          onClick={() =>
-                            setEnforce2faTarget({ id: editUser.id, username: editUser.username, enforce: false })
-                          }
-                        >
-                          Unenforce
-                        </Button>
-                      )}
-                      {has2fa && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20 dark:text-destructive"
-                          disabled={wipe2faMutation.isPending}
-                          onClick={() =>
-                            setWipe2faTarget({ id: editUser.id, username: editUser.username })
-                          }
-                        >
-                          <Trash2 className="h-3 w-3" />
-                          Wipe 2FA
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+                  {/* Accounts & Authentication */}
+                  {(() => {
+                    const accounts = viewingUser.accounts ?? [];
+                    const passkeys = viewingUser.passkeys ?? [];
+                    const has2fa = !!(viewingUser.twoFactor?.length);
+                    const hasContent = accounts.length > 0 || passkeys.length > 0 || has2fa;
+                    if (!hasContent) return null;
 
-                  {/* Passkeys */}
-                  <div className="rounded-lg border border-border bg-card px-3 py-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Fingerprint className={`h-4 w-4 ${passkeys.length > 0 ? 'text-success' : 'text-muted-foreground'}`} />
-                        <div>
-                          <span className="text-xs font-medium text-foreground">
-                            Passkeys
-                          </span>
-                          <p className="text-[11px] text-muted-foreground">
-                            {passkeys.length
-                              ? `${passkeys.length} passkey${passkeys.length === 1 ? '' : 's'} registered`
-                              : 'No passkeys registered'}
-                          </p>
+                    const providerLabel = (id: string) => {
+                      const labels: Record<string, string> = {
+                        credential: 'Email & Password',
+                        whmcs: 'WHMCS',
+                        paymenter: 'Paymenter',
+                        google: 'Google',
+                        github: 'GitHub',
+                        discord: 'Discord',
+                      };
+                      return labels[id] ?? id;
+                    };
+
+                    return (
+                      <div className="rounded-xl border border-border p-4 space-y-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Lock className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-semibold text-foreground">Authentication</span>
                         </div>
-                      </div>
-                      {passkeys.length > 0 && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20 dark:text-destructive"
-                          disabled={wipePasskeysMutation.isPending}
-                          onClick={() =>
-                            setWipePasskeyTarget({
-                              id: editUser.id,
-                              username: editUser.username,
-                              count: passkeys.length,
-                            })
-                          }
-                        >
-                          <Trash2 className="h-3 w-3" />
-                          Wipe all
-                        </Button>
-                      )}
-                    </div>
-                    {passkeys.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {passkeys.map((pk) => (
-                          <div key={pk.id} className="flex items-center justify-between rounded-md bg-surface-2/50 px-2 py-1 text-xs">
-                            <span className="text-muted-foreground">
-                              {pk.name || 'Unnamed passkey'}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground/60">
-                              Added {new Date(pk.createdAt).toLocaleDateString()}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
 
-                  {/* Linked SSO accounts */}
-                  <div className="rounded-lg border border-border bg-card px-3 py-2">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Link2 className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-xs font-medium text-foreground">
-                        Linked Accounts
-                      </span>
-                    </div>
-                    {accounts.length === 0 ? (
-                      <p className="text-[11px] text-muted-foreground">No linked accounts</p>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {accounts.map((account) => {
-                          const isSSO = account.providerId !== 'credential';
-                          return (
-                            <div key={account.id} className="flex items-center justify-between rounded-md bg-surface-2/50 px-2 py-1.5 text-xs">
-                              <div className="flex items-center gap-2">
-                                <KeyRound className={`h-3.5 w-3.5 ${isSSO ? 'text-primary' : 'text-muted-foreground'}`} />
-                                <span className="text-foreground">{providerLabel(account.providerId)}</span>
-                                {isSSO && (
-                                  <span className="text-[10px] font-mono text-muted-foreground/60">
-                                    {account.accountId.slice(0, 12)}…
-                                  </span>
-                                )}
-                              </div>
-                              {isSSO && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 gap-1 px-2 text-[11px] text-destructive hover:bg-destructive/5 hover:text-destructive dark:text-destructive"
-                                  disabled={unlinkAccountMutation.isPending}
-                                  onClick={() =>
-                                    setUnlinkTarget({
-                                      userId: editUser.id,
-                                      username: editUser.username,
-                                      accountId: account.id,
-                                      providerId: account.providerId,
-                                    })
-                                  }
-                                >
-                                  <Unlink className="h-3 w-3" />
-                                  Unlink
-                                </Button>
-                              )}
+                        {/* 2FA */}
+                        {has2fa && (
+                          <div className="flex items-center gap-2 rounded-lg bg-surface-2/50 px-3 py-2 text-xs">
+                            <ShieldCheck className={`h-4 w-4 ${viewingUser.twoFactorEnabled ? 'text-emerald-500' : 'text-muted-foreground'}`} />
+                            <span className="text-foreground">Two-Factor Authentication</span>
+                            <Badge variant={viewingUser.twoFactorEnabled ? 'success' : 'outline'} className="text-[10px] ml-auto">
+                              {viewingUser.twoFactorEnabled ? 'Enforced' : 'Configured'}
+                            </Badge>
+                          </div>
+                        )}
+
+                        {/* Passkeys */}
+                        {passkeys.length > 0 && (
+                          <div className="rounded-lg bg-surface-2/50 px-3 py-2">
+                            <div className="flex items-center gap-2 text-xs mb-2">
+                              <Fingerprint className="h-4 w-4 text-blue-500" />
+                              <span className="text-foreground">{passkeys.length} passkey{passkeys.length === 1 ? '' : 's'}</span>
                             </div>
-                          );
-                        })}
+                            <div className="space-y-1">
+                              {passkeys.map((pk) => (
+                                <div key={pk.id} className="flex items-center justify-between text-[11px] text-muted-foreground pl-6">
+                                  <span>{pk.name || 'Unnamed passkey'}</span>
+                                  <span className="text-muted-foreground/60">{new Date(pk.createdAt).toLocaleDateString()}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Linked accounts */}
+                        {accounts.length > 0 && (
+                          <div className="rounded-lg bg-surface-2/50 px-3 py-2">
+                            <div className="flex items-center gap-2 text-xs mb-2">
+                              <Link2 className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-foreground">Linked accounts</span>
+                            </div>
+                            <div className="space-y-1">
+                              {accounts.map((account) => {
+                                const isSSO = account.providerId !== 'credential';
+                                return (
+                                  <div key={account.id} className="flex items-center gap-2 text-[11px] pl-6">
+                                    <KeyRound className={`h-3 w-3 ${isSSO ? 'text-primary' : 'text-muted-foreground'}`} />
+                                    <span className="text-foreground">{providerLabel(account.providerId)}</span>
+                                    {isSSO && (
+                                      <span className="font-mono text-muted-foreground/60">{account.accountId.slice(0, 12)}…</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
+                    );
+                  })()}
+
+                  {/* Metadata */}
+                  <div className="space-y-1 border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
+                    <div>User ID: <span className="font-mono">{viewingUser.id}</span></div>
+                    {viewingUser.updatedAt !== viewingUser.createdAt && (
+                      <div>Updated: {new Date(viewingUser.updatedAt).toLocaleDateString()} at {new Date(viewingUser.updatedAt).toLocaleTimeString()}</div>
                     )}
                   </div>
                 </div>
-              </div>
-            );
-          })()}
-        </div>
-      </ModalShell>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 border-t border-border px-6 py-4">
+                  <Button variant="outline" size="sm" onClick={() => { startView(viewingUser); handleEditUser(viewingUser); }} className="gap-1.5">
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit user
+                  </Button>
+                  {!viewingUser.banned ? (
+                    <Button variant="outline" size="sm" onClick={() => setBanTargets({ userIds: [viewingUser.id], label: viewingUser.username })} disabled={banMutation.isPending} className="gap-1.5 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20 dark:text-destructive">
+                      <Ban className="h-3.5 w-3.5" /> Ban
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={() => handleBulkUnban([viewingUser.id], viewingUser.username)} disabled={unbanMutation.isPending} className="gap-1.5 text-xs text-success hover:bg-success/5 hover:text-success hover:border-success/20 dark:text-success">
+                      <CheckCircle className="h-3.5 w-3.5" /> Unban
+                    </Button>
+                  )}
+                  <Button variant="destructive" size="sm" onClick={() => setDeletingUser({ id: viewingUser.id, username: viewingUser.username })} disabled={deleteMutation.isPending} className="gap-1.5">
+                    <Trash2 className="h-3.5 w-3.5" /> Delete
+                  </Button>
+                  <div className="flex-1" />
+                  <Button variant="ghost" size="sm" onClick={() => setViewingUser(null)}>
+                    Close
+                  </Button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </ModalPortal>
 
       {/* ── Ban Confirmation Dialog ── */}
       <ConfirmDialog
@@ -1778,9 +2007,7 @@ function UsersPage() {
         confirmText="Delete"
         cancelText="Cancel"
         variant="danger"
-        loading={
-          deleteMutation.isPending || bulkDeleteMutation.isPending
-        }
+        loading={deleteMutation.isPending || bulkDeleteMutation.isPending}
         onConfirm={() => {
           if (deletingUser) {
             const ids = deletingUser.id.split(',');
@@ -1817,10 +2044,7 @@ function UsersPage() {
         cancelText="Cancel"
         variant="danger"
         loading={wipePasskeysMutation.isPending}
-        onConfirm={() =>
-          wipePasskeyTarget &&
-          wipePasskeysMutation.mutate(wipePasskeyTarget.id)
-        }
+        onConfirm={() => wipePasskeyTarget && wipePasskeysMutation.mutate(wipePasskeyTarget.id)}
         onCancel={() => setWipePasskeyTarget(null)}
       />
 
@@ -1843,10 +2067,7 @@ function UsersPage() {
         cancelText="Cancel"
         variant="danger"
         loading={wipe2faMutation.isPending}
-        onConfirm={() =>
-          wipe2faTarget &&
-          wipe2faMutation.mutate(wipe2faTarget.id)
-        }
+        onConfirm={() => wipe2faTarget && wipe2faMutation.mutate(wipe2faTarget.id)}
         onCancel={() => setWipe2faTarget(null)}
       />
 
