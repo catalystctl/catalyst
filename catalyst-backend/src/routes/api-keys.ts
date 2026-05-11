@@ -150,6 +150,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
           expiresAt: true,
           lastRequest: true,
           requestCount: true,
+          remaining: true,
           rateLimitMax: true,
           rateLimitTimeWindow: true,
           allPermissions: true,

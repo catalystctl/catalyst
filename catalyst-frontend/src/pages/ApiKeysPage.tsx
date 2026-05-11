@@ -151,7 +151,7 @@ function StatCard({ label, value, variant = 'default' }: { label: string; value:
   };
   return (
     <div className={`flex items-center gap-3 rounded-lg border px-3.5 py-2.5 ${colorMap[variant]}`}>
-      <span className={`text-lg font-bold tabular-nums ${iconColorMap[variant]}`}>{value}</span>
+      <span className={`text-lg font-bold tabular-nums ${iconColorMap[variant]}`}>{typeof value === 'number' && value >= 1000 ? value.toLocaleString() : value}</span>
       <span className="text-xs text-muted-foreground">{label}</span>
     </div>
   );
@@ -379,12 +379,13 @@ export function ApiKeysPage() {
   }, [apiKeys, showAgentKeys, search, statusFilter]);
 
   const stats = useMemo(() => {
-    if (!apiKeys) return { total: 0, active: 0, agent: 0, expired: 0 };
+    if (!apiKeys) return { total: 0, active: 0, agent: 0, expired: 0, totalRequests: 0 };
     return {
       total: apiKeys.length,
       active: apiKeys.filter((k) => k.enabled).length,
       agent: apiKeys.filter(isAgentKey).length,
       expired: apiKeys.filter((k) => isExpired(k.expiresAt)).length,
+      totalRequests: apiKeys.reduce((sum, k) => sum + (k.requestCount || 0), 0),
     };
   }, [apiKeys]);
 
@@ -429,6 +430,7 @@ export function ApiKeysPage() {
           <StatCard label="Total" value={stats.total} />
           <StatCard label="Active" value={stats.active} variant="active" />
           <StatCard label="Agent keys" value={stats.agent} variant="agent" />
+          <StatCard label="Total Requests" value={stats.totalRequests} />
           {stats.expired > 0 && <StatCard label="Expired" value={stats.expired} variant="expired" />}
         </motion.div>
 

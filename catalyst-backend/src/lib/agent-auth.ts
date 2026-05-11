@@ -83,6 +83,7 @@ export async function verifyAgentApiKey(
     let apiKeyRecord = await prisma.apikey.findUnique({
       where: { key: hashedKey },
       select: {
+        id: true,
         enabled: true,
         expiresAt: true,
         metadata: true,
@@ -95,6 +96,7 @@ export async function verifyAgentApiKey(
       apiKeyRecord = await prisma.apikey.findUnique({
         where: { key: legacyHashedKey },
         select: {
+          id: true,
           enabled: true,
           expiresAt: true,
           metadata: true,
@@ -122,6 +124,18 @@ export async function verifyAgentApiKey(
 
     // Cache successful verification
     setCachedVerification(nodeId, hashedKey);
+
+    // Fire-and-forget: track usage (requestCount + lastRequest)
+    prisma.apikey.update({
+      where: { id: apiKeyRecord.id },
+      data: {
+        lastRequest: new Date(),
+        requestCount: { increment: 1 },
+      },
+    }).catch(() => {
+      // Best-effort — don't fail the request if tracking fails
+    });
+
     return true;
   } catch {
     return false;
