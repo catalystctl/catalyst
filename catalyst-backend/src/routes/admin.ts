@@ -409,6 +409,7 @@ export async function adminRoutes(app: FastifyInstance) {
         details: {
           email: createdUser.email,
           username: createdUser.username,
+          roles: createdUser.roles.map((role) => role.name),
           roleIds: createdUser.roles.map((role) => role.id),
           serverIds: serverIds ?? undefined,
         },
@@ -633,6 +634,7 @@ export async function adminRoutes(app: FastifyInstance) {
         details: {
           email: updatedUser.email,
           username: updatedUser.username,
+          roles: updatedUser.roles.map((role) => role.name),
           roleIds: updatedUser.roles.map((role) => role.id),
           serverIds: serverIds ?? undefined,
         },
@@ -804,7 +806,10 @@ export async function adminRoutes(app: FastifyInstance) {
         details: {
           email: existingUser.email,
           username: existingUser.username,
+          banned: existingUser.banned,
+          twoFactorEnabled: existingUser.twoFactorEnabled,
           ownedServerCount: ownedServers.length,
+          ownedServers: ownedServers.map(s => s.name),
         },
       });
 
@@ -881,6 +886,8 @@ export async function adminRoutes(app: FastifyInstance) {
           email: existingUser.email,
           username: existingUser.username,
           reason: reason || null,
+          twoFactorEnabled: existingUser.twoFactorEnabled,
+          sessionsRevoked: true,
         },
       });
 
@@ -971,7 +978,7 @@ export async function adminRoutes(app: FastifyInstance) {
         action: 'user_passkeys_wiped',
         resource: 'user',
         resourceId: userId,
-        details: { count: result.count },
+        details: { username: existingUser.username, count: result.count },
       });
       return reply.send({ success: true, wiped: result.count });
     }
@@ -995,7 +1002,7 @@ export async function adminRoutes(app: FastifyInstance) {
         action: 'user_2fa_wiped',
         resource: 'user',
         resourceId: userId,
-        details: {},
+        details: { username: existingUser.username },
       });
       return reply.send({ success: true });
     }
@@ -1029,7 +1036,7 @@ export async function adminRoutes(app: FastifyInstance) {
         action: enforce ? 'user_2fa_enforced' : 'user_2fa_unenforced',
         resource: 'user',
         resourceId: userId,
-        details: {},
+        details: { username: existingUser.username, twoFactorEnabled: !!enforce },
       });
       return reply.send({ success: true, twoFactorEnabled: !!enforce });
     }
@@ -2580,7 +2587,7 @@ export async function adminRoutes(app: FastifyInstance) {
           action: 'database.host.create',
           resource: 'database_host',
           resourceId: created.id,
-          details: { name: created.name, host: created.host, port: created.port },
+          details: { name: created.name, host: created.host, port: created.port, engine: created.engine, username: created.username },
         });
 
         // Broadcast database_host_created event
@@ -2671,7 +2678,7 @@ export async function adminRoutes(app: FastifyInstance) {
           action: 'database.host.update',
           resource: 'database_host',
           resourceId: updated.id,
-          details: { name: updated.name, host: updated.host, port: updated.port },
+          details: { name: updated.name, host: updated.host, port: updated.port, engine: updated.engine, username: updated.username },
         });
 
         // Broadcast database_host_updated event

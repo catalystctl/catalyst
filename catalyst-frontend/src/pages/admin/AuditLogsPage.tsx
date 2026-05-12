@@ -126,8 +126,14 @@ function getDateLabel(date: string): string {
 // ── Log Detail Modal ──
 function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => void }) {
   const details = log.metadata || {};
-  const detailEntries = Object.entries(details);
-  const hasDetails = detailEntries.length > 0;
+
+  // Extract actor info auto-injected by the backend
+  const actorUsername = details['_actor.username'] || log.user?.username;
+  const actorEmail = details['_actor.email'] || log.user?.email;
+
+  // Filter out internal _actor.* keys from the generic details display
+  const publicEntries = Object.entries(details).filter(([key]) => !key.startsWith('_actor'));
+  const hasDetails = publicEntries.length > 0;
   const Icon = getResourceIcon(log.resource);
   const tone = getActionTone(log.action);
 
@@ -255,8 +261,8 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
                   <User className="h-4 w-4 text-primary" />
                 </div>
                 <div>
-                  <div className="text-sm font-medium text-foreground">{log.user?.username ?? 'System'}</div>
-                  <div className="text-[11px] text-muted-foreground">{log.user?.email ?? log.userId ?? 'n/a'}</div>
+                  <div className="text-sm font-medium text-foreground">{actorUsername ?? 'System'}</div>
+                  <div className="text-[11px] text-muted-foreground">{actorEmail ?? log.userId ?? 'n/a'}</div>
                 </div>
               </div>
             </div>
@@ -296,10 +302,10 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
           {hasDetails ? (
             <div className="space-y-2">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Details ({detailEntries.length})
+                Details ({publicEntries.length})
               </span>
               <div className="space-y-2">
-                {detailEntries.map(([key, value]) => (
+                {publicEntries.map(([key, value]) => (
                   <div key={key} className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5">
                     <div className="flex items-start gap-3">
                       <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground pt-0.5 min-w-[80px]">

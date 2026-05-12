@@ -265,7 +265,7 @@ export async function roleRoutes(app: FastifyInstance) {
         action: 'role.update',
         resource: 'role',
         resourceId: roleId,
-        details: { changes: updateData },
+        details: { name: role.name, changes: updateData },
       });
 
       reply.send(serialize({
@@ -389,7 +389,7 @@ export async function roleRoutes(app: FastifyInstance) {
         action: 'role.permission.add',
         resource: 'role',
         resourceId: roleId,
-        details: { permission },
+        details: { name: role.name, permission },
       });
 
       reply.send(serialize({
@@ -453,7 +453,7 @@ export async function roleRoutes(app: FastifyInstance) {
         action: 'role.permission.remove',
         resource: 'role',
         resourceId: roleId,
-        details: { permission },
+        details: { name: role.name, permission },
       });
 
       reply.send(serialize({

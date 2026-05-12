@@ -11,20 +11,41 @@ interface AuditLogOptions {
 }
 
 /**
- * Create an audit log entry
+ * Create an audit log entry.
+ *
+ * Automatically enriches `details` with actor info (`_actor.username`,
+ * `_actor.userId`) so the frontend can display who performed the action
+ * without a separate user lookup.
  */
 export async function createAuditLog(
   userId: string,
   options: AuditLogOptions
 ): Promise<void> {
   try {
+    // Auto-enrich: look up actor username/email (best-effort, cached)
+    let actorInfo: Record<string, string> = {};
+    try {
+      const actor = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { username: true, email: true },
+      });
+      if (actor) {
+        actorInfo = { '_actor.username': actor.username, '_actor.email': actor.email };
+      }
+    } catch { /* best-effort */ }
+
+    const details = {
+      ...actorInfo,
+      ...(options.details || {}),
+    };
+
     const entry = await prisma.auditLog.create({
       data: {
         userId,
         action: options.action,
         resource: options.resource,
         resourceId: options.resourceId,
-        details: options.details || {},
+        details,
       },
     });
 
@@ -70,6 +91,8 @@ export async function logAuthAttempt(
           action: success ? 'login_success' : 'login_failed',
           resource: 'auth',
           details: {
+            '_actor.username': user.username,
+            '_actor.email': user.email,
             ip,
             userAgent,
             timestamp: new Date().toISOString(),
