@@ -159,6 +159,7 @@ export const adminApi = {
     username: string;
     password: string;
     engine?: string;
+    database?: string;
   }) => {
     const data = await apiClient.post<ApiResponse<DatabaseHost>>(
       '/api/admin/database-hosts',
@@ -175,6 +176,7 @@ export const adminApi = {
       username?: string;
       password?: string;
       engine?: string;
+      database?: string;
     },
   ) => {
     const data = await apiClient.put<ApiResponse<DatabaseHost>>(

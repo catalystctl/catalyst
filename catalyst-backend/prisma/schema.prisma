@@ -597,6 +597,7 @@ model DatabaseHost {
   username  String
   password  String
   engine    String   @default("mysql")
+  database  String   @default("postgres")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

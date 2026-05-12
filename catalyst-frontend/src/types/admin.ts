@@ -199,6 +199,7 @@ export interface DatabaseHost {
   username: string;
   password: string;
   engine: string;
+  database: string;
   createdAt: string;
   updatedAt: string;
   _count?: {

@@ -2530,13 +2530,14 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: 'Admin write permission required' });
       }
 
-      const { name, host, port, username, password, engine } = request.body as {
+      const { name, host, port, username, password, engine, database } = request.body as {
         name: string;
         host: string;
         port?: number;
         username: string;
         password: string;
         engine?: string;
+        database?: string;
       };
 
       if (!name || !host || !username || !password) {
@@ -2571,6 +2572,7 @@ export async function adminRoutes(app: FastifyInstance) {
             username: username.trim(),
             password,
             engine: resolvedEngine === 'postgres' ? 'postgresql' : (resolvedEngine || 'mysql'),
+            database: database?.trim() || (resolvedEngine === 'postgresql' || resolvedEngine === 'postgres' ? 'postgres' : undefined),
           },
         });
 
@@ -2612,13 +2614,14 @@ export async function adminRoutes(app: FastifyInstance) {
       }
 
       const { hostId } = request.params as { hostId: string };
-      const { name, host, port, username, password, engine } = request.body as {
+      const { name, host, port, username, password, engine, database } = request.body as {
         name?: string;
         host?: string;
         port?: number;
         username?: string;
         password?: string;
         engine?: string;
+        database?: string;
       };
 
       const existing = await prisma.databaseHost.findUnique({
@@ -2660,6 +2663,7 @@ export async function adminRoutes(app: FastifyInstance) {
             username: username !== undefined ? username.trim() : existing.username,
             password: password ?? existing.password,
             engine: resolvedEngine === 'postgres' ? 'postgresql' : (resolvedEngine || existing.engine),
+            database: database !== undefined ? database.trim() : existing.database,
           },
         });
 
@@ -2760,6 +2764,7 @@ export async function adminRoutes(app: FastifyInstance) {
             port: host.port,
             user: host.username,
             password: host.password,
+            database: host.database || 'postgres',
             connectionTimeoutMillis: 5000,
           });
 

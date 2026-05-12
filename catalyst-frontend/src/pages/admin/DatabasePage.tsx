@@ -315,6 +315,7 @@ function DatabasePage() {
   const [dbUsername, setDbUsername] = useState('');
   const [dbPassword, setDbPassword] = useState('');
   const [dbEngine, setDbEngine] = useState<'mysql' | 'postgresql'>('mysql');
+  const [dbDatabase, setDbDatabase] = useState('postgres');
 
   const resetForm = () => {
     setDbName('');
@@ -323,6 +324,7 @@ function DatabasePage() {
     setDbUsername('');
     setDbPassword('');
     setDbEngine('mysql');
+    setDbDatabase('postgres');
   };
 
   const canSubmit = useMemo(
@@ -340,6 +342,7 @@ function DatabasePage() {
         username: dbUsername.trim(),
         password: dbPassword,
         engine: dbEngine,
+        database: dbDatabase || undefined,
       }),
     onSuccess: () => {
       notifySuccess('Database host created');
@@ -360,6 +363,7 @@ function DatabasePage() {
         username: dbUsername.trim(),
         password: dbPassword || undefined,
         engine: dbEngine,
+        database: dbDatabase || undefined,
       }),
     onSuccess: () => {
       notifySuccess('Database host updated');
@@ -389,6 +393,7 @@ function DatabasePage() {
     setDbUsername(host.username);
     setDbPassword(host.password || '');
     setDbEngine(host.engine === 'postgresql' ? 'postgresql' : 'mysql');
+    setDbDatabase(host.database || 'postgres');
   };
 
   // Shared form fields
@@ -449,6 +454,15 @@ function DatabasePage() {
           </button>
         </div>
       </label>
+      {dbEngine === 'postgresql' && (
+        <label className="block space-y-1">
+          <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+            <Database className="h-3 w-3" /> Database
+          </span>
+          <Input value={dbDatabase} onChange={(e) => setDbDatabase(e.target.value)} placeholder="postgres" />
+          <span className="text-[10px] text-muted-foreground">The database to connect to for health checks and provisioning.</span>
+        </label>
+      )}
       <label className="block space-y-1">
         <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
           <Shield className="h-3 w-3" /> Password{editingHost ? ' (leave blank to keep)' : ''}
