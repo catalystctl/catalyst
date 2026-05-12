@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
-import { useVirtualizer } from '@tanstack/react-virtual';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
   FileCode,
@@ -25,8 +24,8 @@ import NestsManagerModal from '../../components/templates/NestsManagerModal';
 import EmptyState from '../../components/shared/EmptyState';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import { Input } from '../../components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
 import {
   Select,
   SelectContent,
@@ -48,7 +47,14 @@ import { notifyError, notifySuccess } from '../../utils/notify';
 import type { Template, Nest } from '../../types/template';
 
 // ── Animation Variants ──
-// Only used for the filter panel expand/collapse — NOT for individual rows.
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.03, delayChildren: 0.05 },
+  },
+};
+
 const itemVariants: Variants = {
   hidden: { opacity: 0, y: 12 },
   visible: {
@@ -58,8 +64,14 @@ const itemVariants: Variants = {
   },
 };
 
-// Virtual list row height (must be consistent)
-const ROW_HEIGHT = 68;
+const rowVariants: Variants = {
+  hidden: { opacity: 0, x: -8 },
+  visible: {
+    opacity: 1,
+    x: 0,
+    transition: { type: 'spring', stiffness: 400, damping: 30 },
+  },
+};
 
 // ── Skeleton Loader ──
 function TableSkeleton() {
@@ -84,41 +96,51 @@ function TableSkeleton() {
   );
 }
 
-// ── Template Row (plain div — no motion) ──
+// ── Template Row ──
 function TemplateRow({
   template,
   isSelected,
   canWrite,
-  onToggleSelect,
-  onEdit,
-  onDelete,
-  isDeletePending,
+  hideHeader,
+  selectedIds,
+  setSelectedIds,
+  setEditingTemplateId,
+  handleBulkDelete,
+  deleteMutation,
 }: {
   template: Template;
   isSelected: boolean;
   canWrite: boolean;
-  onToggleSelect: (id: string) => void;
-  onEdit: (id: string) => void;
-  onDelete: (ids: string[], label: string) => void;
-  isDeletePending: boolean;
+  hideHeader?: boolean;
+  selectedIds: string[];
+  setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
+  setEditingTemplateId: (id: string) => void;
+  handleBulkDelete: (ids: string[], label: string) => void;
+  deleteMutation: { isPending: boolean };
 }) {
-  const iconUrl = (template as any).features?.iconUrl;
+  const iconUrl = template.features?.iconUrl;
   const description = template.description?.trim() || 'No description provided.';
-  const variableCount = (template as any).variables?.length ?? 0;
 
   return (
-    <div
-      className={`group relative flex items-center gap-4 px-4 transition-colors hover:bg-surface-2/50 ${
+    <motion.div
+      key={template.id}
+      variants={rowVariants}
+      className={`group relative flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-2/50 ${
         isSelected ? 'bg-primary/5' : ''
       }`}
-      style={{ height: ROW_HEIGHT }}
     >
       {/* Checkbox */}
-      {canWrite && (
+      {canWrite && !hideHeader && (
         <input
           type="checkbox"
           checked={isSelected}
-          onChange={() => onToggleSelect(template.id)}
+          onChange={() =>
+            setSelectedIds((prev) =>
+              prev.includes(template.id)
+                ? prev.filter((id) => id !== template.id)
+                : [...prev, template.id],
+            )
+          }
           className="h-4 w-4 flex-shrink-0 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
         />
       )}
@@ -126,7 +148,7 @@ function TemplateRow({
       {/* Icon */}
       <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-border bg-surface-2">
         {iconUrl ? (
-          <img src={iconUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+          <img src={iconUrl} alt="" className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-xs font-bold uppercase text-muted-foreground">
             {template.name.slice(0, 2)}
@@ -155,11 +177,10 @@ function TemplateRow({
           <span className="font-mono text-[11px] opacity-60">
             {template.defaultImage || template.image}
           </span>
-          {variableCount > 0 && (
-            <span className="hidden md:inline">
-              {variableCount} variable{variableCount !== 1 ? 's' : ''}
-            </span>
-          )}
+          <span className="hidden md:inline">
+            {template.variables.length} variable
+            {template.variables.length !== 1 ? 's' : ''}
+          </span>
         </div>
       </div>
 
@@ -211,7 +232,7 @@ function TemplateRow({
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => onEdit(template.id)}
+                onClick={() => setEditingTemplateId(template.id)}
                 className="gap-2 text-xs"
               >
                 <FileCode className="h-3.5 w-3.5" />
@@ -219,8 +240,8 @@ function TemplateRow({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => onDelete([template.id], template.name)}
-                disabled={isDeletePending}
+                onClick={() => handleBulkDelete([template.id], template.name)}
+                disabled={deleteMutation.isPending}
                 className="gap-2 text-xs text-destructive dark:text-destructive"
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -230,7 +251,7 @@ function TemplateRow({
           </DropdownMenu>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -278,8 +299,7 @@ function TemplatesPage({ hideHeader }: Props) {
   const { data: nests = [] } = useQuery({
     queryKey: qk.nests(),
     queryFn: nestsApi.list,
-    refetchInterval: 60_000,
-    staleTime: 30_000,
+    refetchInterval: 15000,
   });
 
   const [search, setSearch] = useState('');
@@ -376,19 +396,24 @@ function TemplatesPage({ hideHeader }: Props) {
     return sorted;
   }, [templates, search, authorFilter, sort, selectedNestId]);
 
-  // Count templates per nest for the tab badges
-  const nestCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    let ungroupedCount = 0;
-    for (const t of templates) {
-      if (t.nestId) {
-        counts.set(t.nestId, (counts.get(t.nestId) || 0) + 1);
-      } else {
-        ungroupedCount++;
-      }
+  // Group templates by nest (used when "All" is selected)
+  const groupedByNest = useMemo(() => {
+    const groups = new Map<string | null, Template[]>();
+    for (const t of filteredTemplates) {
+      const key = t.nestId || null;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(t);
     }
-    return { counts, ungroupedCount };
-  }, [templates]);
+    // Sort: nests first (sorted by nest name), then ungrouped last
+    const entries = Array.from(groups.entries()).sort((a, b) => {
+      if (a[0] === null) return 1; // ungrouped goes last
+      if (b[0] === null) return -1;
+      const nestA = nestMap.get(a[0]!);
+      const nestB = nestMap.get(b[0]!);
+      return (nestA?.name || '').localeCompare(nestB?.name || '');
+    });
+    return entries;
+  }, [filteredTemplates, nestMap]);
 
   const filteredIds = useMemo(() => filteredTemplates.map((t) => t.id), [filteredTemplates]);
   const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
@@ -403,21 +428,22 @@ function TemplatesPage({ hideHeader }: Props) {
     setSelectedIds(validSelectedIds);
   }
 
-  // ── Callbacks ──
-  const handleToggleSelect = useCallback((id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  }, []);
-
-  const handleBulkDelete = useCallback((templateIds: string[], label: string) => {
-    if (!templateIds.length) return;
-    setDeleteTargets({ templateIds, label });
-  }, []);
+  // Count templates per nest for the tab badges
+  const nestCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    let ungroupedCount = 0;
+    for (const t of templates) {
+      if (t.nestId) {
+        counts.set(t.nestId, (counts.get(t.nestId) || 0) + 1);
+      } else {
+        ungroupedCount++;
+      }
+    }
+    return { counts, ungroupedCount };
+  }, [templates]);
 
   // ── Delete mutation ──
   const deleteMutation = useMutation({
-    mutationKey: ['template-bulk-delete'],
     mutationFn: (templateIds: string[]) => {
       return Promise.all(templateIds.map((id) => templatesApi.remove(id)));
     },
@@ -433,72 +459,33 @@ function TemplatesPage({ hideHeader }: Props) {
     },
   });
 
-  // ── Virtual scrolling ──
-  // When a specific nest is selected, we use a flat list.
-  // When "All" is selected with nests, we use a flat list grouped by nest headers.
+  const handleBulkDelete = (templateIds: string[], label: string) => {
+    if (!templateIds.length) return;
+    setDeleteTargets({ templateIds, label });
+  };
+
+  // Determine whether to show grouped or flat view
   const showGroupedView = selectedNestId === null && nests.length > 0;
 
-  // Build a flat virtual list that includes both template rows and nest header rows
-  const virtualItems = useMemo(() => {
-    if (showGroupedView) {
-      const groups = new Map<string | null, Template[]>();
-      for (const t of filteredTemplates) {
-        const key = t.nestId || null;
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key)!.push(t);
-      }
-      // Sort: nests first (sorted by nest name), then ungrouped last
-      const entries = Array.from(groups.entries()).sort((a, b) => {
-        if (a[0] === null) return 1;
-        if (b[0] === null) return -1;
-        const nestA = nestMap.get(a[0]!);
-        const nestB = nestMap.get(b[0]!);
-        return (nestA?.name || '').localeCompare(nestB?.name || '');
-      });
-
-      const items: Array<
-        | { type: 'header'; nestId: string | null; nest: Nest | null; count: number }
-        | { type: 'template'; template: Template }
-      > = [];
-      for (const [nestId, groupTemplates] of entries) {
-        const nest = nestId ? (nestMap.get(nestId) ?? null) : null;
-        items.push({ type: 'header', nestId, nest, count: groupTemplates.length });
-        for (const t of groupTemplates) {
-          items.push({ type: 'template', template: t });
-        }
-      }
-      return items;
-    } else {
-      return filteredTemplates.map((t) => ({
-        type: 'template' as const,
-        template: t,
-      }));
-    }
-  }, [filteredTemplates, showGroupedView, nestMap]);
-
-  const parentRef = useRef<HTMLDivElement>(null);
-
-  const virtualizer = useVirtualizer({
-    count: virtualItems.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: (index) => {
-      const item = virtualItems[index];
-      return item?.type === 'header' ? 40 : ROW_HEIGHT;
-    },
-    overscan: 10,
-  });
-
-  // ── Render ──
   return (
-    <div className="relative overflow-hidden">
+    <motion.div
+      variants={containerVariants}
+      initial={false}
+      animate="visible"
+      className="relative overflow-hidden"
+    >
+      {/* Ambient background */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-amber-500/8 to-rose-500/8 blur-3xl dark:from-amber-500/15 dark:to-rose-500/15" />
+        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-violet-500/8 to-cyan-500/8 blur-3xl dark:from-violet-500/15 dark:to-cyan-500/15" />
+      </div>
+
       <div className="relative z-10 space-y-5">
         {!hideHeader && (
           <>
             {/* ── Header ── */}
             <motion.div
               variants={itemVariants}
-              initial="hidden"
-              animate="visible"
               className="flex flex-wrap items-end justify-between gap-4"
             >
               <div className="space-y-1.5">
@@ -561,7 +548,7 @@ function TemplatesPage({ hideHeader }: Props) {
             </motion.div>
 
             {/* ── Search & Controls Bar ── */}
-            <div className="flex flex-wrap items-center gap-2.5">
+            <motion.div variants={itemVariants} className="flex flex-wrap items-center gap-2.5">
               {/* Search input */}
               <div className="relative min-w-[200px] flex-1 max-w-sm">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -609,11 +596,14 @@ function TemplatesPage({ hideHeader }: Props) {
               <span className="text-xs text-muted-foreground">
                 {filteredTemplates.length} of {templates.length}
               </span>
-            </div>
+            </motion.div>
 
             {/* ── Nest Selector Tabs ── */}
             {nests.length > 0 && (
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+              <motion.div
+                variants={itemVariants}
+                className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin"
+              >
                 <button
                   className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
                     selectedNestId === null
@@ -670,7 +660,7 @@ function TemplatesPage({ hideHeader }: Props) {
                     </span>
                   </button>
                 )}
-              </div>
+              </motion.div>
             )}
 
             {/* ── Expandable Filter Panel ── */}
@@ -805,120 +795,171 @@ function TemplatesPage({ hideHeader }: Props) {
           </>
         )}
 
-        {/* ── Virtualized Template List ── */}
-        <div className="rounded-xl border border-border bg-card/80 shadow-sm backdrop-blur-sm overflow-hidden">
-          {isLoading ? (
-            <div className="p-4">
-              <TableSkeleton />
-            </div>
-          ) : filteredTemplates.length === 0 ? (
-            <div className="p-6">
-              <EmptyState
-                title={
-                  search.trim() || hasActiveFilters ? 'No templates found' : 'No templates'
-                }
-                description={
-                  search.trim() || hasActiveFilters
-                    ? 'Try adjusting your search or filters.'
-                    : 'Create a template to bootstrap new game servers quickly.'
-                }
-                action={
-                  hasActiveFilters ? (
-                    <Button variant="outline" size="sm" onClick={clearFilters}>
-                      <X className="mr-1.5 h-3.5 w-3.5" />
-                      Clear filters
-                    </Button>
-                  ) : canWrite && !search.trim() ? (
-                    <TemplateCreateModal />
-                  ) : undefined
-                }
-              />
-            </div>
-          ) : (
-            <>
-              {/* Select-all header */}
-              {canWrite && !hideHeader && (
-                <div className="flex items-center gap-3 border-b border-border px-4 py-2">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={() =>
-                        setSelectedIds((prev) => {
-                          if (allSelected) {
-                            return prev.filter((id) => !filteredIds.includes(id));
-                          }
-                          return Array.from(new Set([...prev, ...filteredIds]));
-                        })
-                      }
-                      className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
-                    />
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Select all
-                    </span>
-                  </label>
+        {/* ── Template List ── */}
+        <motion.div variants={itemVariants}>
+          {showGroupedView ? (
+            /* ── Grouped by Nest View ── */
+            <div className="space-y-4">
+              {isLoading ? (
+                <div className="rounded-xl border border-border bg-card/80 p-4 shadow-sm backdrop-blur-sm">
+                  <TableSkeleton />
+                </div>
+              ) : groupedByNest.length > 0 ? (
+                groupedByNest.map(([nestId, groupTemplates]) => {
+                  const nest = nestId ? (nestMap.get(nestId) ?? null) : null;
+                  return (
+                    <div
+                      key={nestId ?? '__ungrouped__'}
+                      className="rounded-xl border border-border bg-card/80 shadow-sm backdrop-blur-sm overflow-hidden"
+                    >
+                      {/* Select-all header */}
+                      {canWrite && !hideHeader && (
+                        <div className="flex items-center gap-3 border-b border-border px-4 py-2">
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={
+                                groupTemplates.length > 0 &&
+                                groupTemplates.every((t) => selectedIds.includes(t.id))
+                              }
+                              onChange={() =>
+                                setSelectedIds((prev) => {
+                                  const groupIds = groupTemplates.map((t) => t.id);
+                                  if (groupIds.every((id) => prev.includes(id))) {
+                                    return prev.filter((id) => !groupIds.includes(id));
+                                  }
+                                  return Array.from(new Set([...prev, ...groupIds]));
+                                })
+                              }
+                              className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+                            />
+                            <span className="text-xs font-medium text-muted-foreground">
+                              Select all in section
+                            </span>
+                          </label>
+                        </div>
+                      )}
+                      <NestSectionHeader nest={nest} count={groupTemplates.length} />
+                      <div className="divide-y divide-border/50">
+                        {groupTemplates.map((template) => (
+                          <TemplateRow
+                            key={template.id}
+                            template={template}
+                            isSelected={selectedIds.includes(template.id)}
+                            canWrite={canWrite}
+                            hideHeader={hideHeader}
+                            selectedIds={selectedIds}
+                            setSelectedIds={setSelectedIds}
+                            setEditingTemplateId={setEditingTemplateId}
+                            handleBulkDelete={handleBulkDelete}
+                            deleteMutation={deleteMutation}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="rounded-xl border border-border bg-card/80 p-6 shadow-sm backdrop-blur-sm">
+                  <EmptyState
+                    title={search.trim() || authorFilter ? 'No templates found' : 'No templates'}
+                    description={
+                      search.trim() || authorFilter
+                        ? 'Try adjusting your search or filters.'
+                        : 'Create a template to bootstrap new game servers quickly.'
+                    }
+                    action={
+                      search.trim() || authorFilter ? (
+                        <Button variant="outline" size="sm" onClick={clearFilters}>
+                          <X className="mr-1.5 h-3.5 w-3.5" />
+                          Clear filters
+                        </Button>
+                      ) : canWrite && !search.trim() ? (
+                        <TemplateCreateModal />
+                      ) : undefined
+                    }
+                  />
                 </div>
               )}
-
-              {/* Virtualized scroll container */}
-              <div ref={parentRef} className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
-                <div
-                  style={{
-                    height: virtualizer.getTotalSize(),
-                    width: '100%',
-                    position: 'relative',
-                  }}
-                >
-                  {virtualizer.getVirtualItems().map((virtualRow) => {
-                    const item = virtualItems[virtualRow.index];
-                    if (!item) return null;
-
-                    if (item.type === 'header') {
-                      return (
-                        <div
-                          key={`header-${item.nestId ?? '__ungrouped__'}`}
-                          style={{
-                            position: 'absolute',
-                            top: virtualRow.start,
-                            left: 0,
-                            width: '100%',
-                            height: virtualRow.size,
-                          }}
-                        >
-                          <NestSectionHeader nest={item.nest} count={item.count} />
-                        </div>
-                      );
-                    }
-
-                    const template = item.template;
-                    return (
-                      <div
-                        key={template.id}
-                        style={{
-                          position: 'absolute',
-                          top: virtualRow.start,
-                          left: 0,
-                          width: '100%',
-                          height: virtualRow.size,
-                        }}
-                      >
-                        <TemplateRow
-                          template={template}
-                          isSelected={selectedIds.includes(template.id)}
-                          canWrite={canWrite}
-                          onToggleSelect={handleToggleSelect}
-                          onEdit={setEditingTemplateId}
-                          onDelete={handleBulkDelete}
-                          isDeletePending={deleteMutation.isPending}
-                        />
-                      </div>
-                    );
-                  })}
+            </div>
+          ) : (
+            /* ── Flat List View (single nest selected or no nests exist) ── */
+            <div className="rounded-xl border border-border bg-card/80 shadow-sm backdrop-blur-sm overflow-hidden">
+              {isLoading ? (
+                <div className="p-4">
+                  <TableSkeleton />
                 </div>
-              </div>
-            </>
+              ) : filteredTemplates.length > 0 ? (
+                <>
+                  {/* Select-all header */}
+                  {canWrite && !hideHeader && (
+                    <div className="flex items-center gap-3 border-b border-border px-4 py-2">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          onChange={() =>
+                            setSelectedIds((prev) => {
+                              if (allSelected) {
+                                return prev.filter((id) => !filteredIds.includes(id));
+                              }
+                              return Array.from(new Set([...prev, ...filteredIds]));
+                            })
+                          }
+                          className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+                        />
+                        <span className="text-xs font-medium text-muted-foreground">
+                          Select all
+                        </span>
+                      </label>
+                    </div>
+                  )}
+
+                  {/* Template rows */}
+                  <div className="divide-y divide-border/50">
+                    {filteredTemplates.map((template) => (
+                      <TemplateRow
+                        key={template.id}
+                        template={template}
+                        isSelected={selectedIds.includes(template.id)}
+                        canWrite={canWrite}
+                        hideHeader={hideHeader}
+                        selectedIds={selectedIds}
+                        setSelectedIds={setSelectedIds}
+                        setEditingTemplateId={setEditingTemplateId}
+                        handleBulkDelete={handleBulkDelete}
+                        deleteMutation={deleteMutation}
+                      />
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="p-6">
+                  <EmptyState
+                    title={
+                      search.trim() || hasActiveFilters ? 'No templates found' : 'No templates'
+                    }
+                    description={
+                      search.trim() || hasActiveFilters
+                        ? 'Try adjusting your search or filters.'
+                        : 'Create a template to bootstrap new game servers quickly.'
+                    }
+                    action={
+                      hasActiveFilters ? (
+                        <Button variant="outline" size="sm" onClick={clearFilters}>
+                          <X className="mr-1.5 h-3.5 w-3.5" />
+                          Clear filters
+                        </Button>
+                      ) : canWrite && !search.trim() ? (
+                        <TemplateCreateModal />
+                      ) : undefined
+                    }
+                  />
+                </div>
+              )}
+            </div>
           )}
-        </div>
+        </motion.div>
       </div>
 
       {/* ── Nests Manager Modal ── */}
@@ -961,7 +1002,7 @@ function TemplatesPage({ hideHeader }: Props) {
         variant="danger"
         loading={deleteMutation.isPending}
       />
-    </div>
+    </motion.div>
   );
 }
 

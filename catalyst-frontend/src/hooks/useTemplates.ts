@@ -6,9 +6,8 @@ import { reportSystemError } from '../services/api/systemErrors';
 export function useTemplates() {
   return useQuery({
     queryKey: qk.templates(),
-    queryFn: () => templatesApi.list({ summary: true }),
-    refetchInterval: 60_000,
-    staleTime: 30_000,
+    queryFn: templatesApi.list,
+    refetchInterval: 15000,
   });
 }
 
@@ -21,7 +20,6 @@ export function useTemplate(templateId?: string) {
       return Promise.reject(new Error('missing template id'));
     },
     enabled: Boolean(templateId),
-    refetchInterval: 60_000,
-    staleTime: 30_000,
+    refetchInterval: 15000,
   });
 }
