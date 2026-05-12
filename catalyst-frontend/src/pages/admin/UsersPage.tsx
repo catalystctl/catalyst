@@ -612,6 +612,7 @@ function UsersPage() {
   });
 
   const banMutation = useMutation({
+    mutationKey: ['admin-user-ban'],
     mutationFn: (payload: { userIds: string[]; reason?: string }) => {
       return Promise.all(
         payload.userIds.map((userId) =>
@@ -636,6 +637,7 @@ function UsersPage() {
   });
 
   const unbanMutation = useMutation({
+    mutationKey: ['admin-user-unban'],
     mutationFn: (userIds: string[]) => {
       return Promise.all(userIds.map((userId) => adminApi.unbanUser(userId)));
     },

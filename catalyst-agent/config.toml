@@ -7,10 +7,10 @@
 backend_url = "ws://192.168.1.78:3000/ws"
 
 # Unique node identifier (UUID from database)
-node_id = "cmord32k2000e67pdt0fjk48c"
+node_id = "cmp0j2dkw000bw4pdvr4l0doh"
 
 # Agent API key (required for node authentication)
-api_key = "catalyst_0oUhT_TosDr2MqtC0_qoNAoaNjJZlci3GQnaW8qrDpI"
+api_key = "catalyst_oZgbYpcpxn6QbB1EULfrudNXHqmnQzdThvQAIZN2M6c"
 
 # Hostname of this server
 hostname = "Home"

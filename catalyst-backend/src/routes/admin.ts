@@ -54,7 +54,7 @@ export async function adminRoutes(app: FastifyInstance) {
   };
 
   // Helper to check user management permissions
-  const canManageUsers = (request: any, action: 'read' | 'create' | 'update' | 'delete' | 'ban' | 'set_roles' = 'read') => {
+  const canManageUsers = (request: any, action: 'read' | 'create' | 'update' | 'delete' | 'ban' | 'unban' | 'set_roles' = 'read') => {
     const perms: string[] = request.user?.permissions ?? [];
     if (perms.includes('*')) return true;
     return perms.includes(`user.${action}`);
@@ -828,6 +828,128 @@ export async function adminRoutes(app: FastifyInstance) {
 
       return reply.send({ success: true });
     }
+  );
+
+  // Ban a user (requires user.ban permission)
+  app.post(
+    '/users/:userId/ban',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!canManageUsers(request, 'ban')) {
+        return reply.status(403).send({ error: 'User ban permission required' });
+      }
+
+      const { userId } = request.params as { userId: string };
+      const { reason } = request.body as { reason?: string } || {};
+      const user = request.user;
+
+      if (userId === user.userId) {
+        return reply.status(400).send({ error: 'Cannot ban yourself' });
+      }
+
+      const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+      if (!existingUser) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      if (existingUser.banned) {
+        return reply.status(400).send({ error: 'User is already banned' });
+      }
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: { banned: true, banReason: reason || null },
+      });
+
+      // Revoke all sessions for the banned user
+      await prisma.session.deleteMany({ where: { userId } });
+
+      // Revoke SFTP tokens
+      await revokeSftpTokensForUser(userId);
+
+      // Disconnect WebSocket sessions
+      const wsGateway = (app as any).wsGateway;
+      if (wsGateway?.disconnectUser) {
+        wsGateway.disconnectUser(userId);
+      }
+
+      await createAuditLog(user.userId, {
+        action: 'user_ban',
+        resource: 'user',
+        resourceId: userId,
+        details: {
+          email: existingUser.email,
+          username: existingUser.username,
+          reason: reason || null,
+        },
+      });
+
+      // Broadcast user_banned event to admin subscribers
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('user_updated', {
+          type: 'user_updated',
+          userId,
+          banned: true,
+          banReason: reason || null,
+          bannedBy: user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      return reply.send({ success: true });
+    },
+  );
+
+  // Unban a user (requires user.unban permission)
+  app.post(
+    '/users/:userId/unban',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!canManageUsers(request, 'unban')) {
+        return reply.status(403).send({ error: 'User unban permission required' });
+      }
+
+      const { userId } = request.params as { userId: string };
+      const user = request.user;
+
+      const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+      if (!existingUser) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      if (!existingUser.banned) {
+        return reply.status(400).send({ error: 'User is not banned' });
+      }
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: { banned: false, banReason: null },
+      });
+
+      await createAuditLog(user.userId, {
+        action: 'user_unban',
+        resource: 'user',
+        resourceId: userId,
+        details: {
+          email: existingUser.email,
+          username: existingUser.username,
+        },
+      });
+
+      // Broadcast user_unbanned event to admin subscribers
+      const wsGateway = (app as any).wsGateway;
+      if (wsGateway?.pushToAdminSubscribers) {
+        wsGateway.pushToAdminSubscribers('user_updated', {
+          type: 'user_updated',
+          userId,
+          banned: false,
+          unbannedBy: user.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      return reply.send({ success: true });
+    },
   );
 
   // ── User security management endpoints ──
