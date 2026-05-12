@@ -224,6 +224,9 @@ function HostCard({
               </div>
               <div className="mt-0.5 text-xs text-muted-foreground font-mono">{host.host}:{host.port}</div>
               <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                  {host.engine === 'postgresql' ? 'PostgreSQL' : 'MySQL'}
+                </Badge>
                 <span className="flex items-center gap-1">
                   <User className="h-3 w-3" />
                   {host.username}
@@ -248,7 +251,7 @@ function HostCard({
                 <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
                   {pingResult.version && (
                     <span className="flex items-center gap-1">
-                      MySQL v{pingResult.version}
+                      {(pingResult.engine === 'postgresql' || host.engine === 'postgresql') ? 'PostgreSQL' : 'MySQL'} v{pingResult.version.split(',')[0]}
                     </span>
                   )}
                   {pingResult.databaseCount != null && (
@@ -311,6 +314,7 @@ function DatabasePage() {
   const [dbPort, setDbPort] = useState('3306');
   const [dbUsername, setDbUsername] = useState('');
   const [dbPassword, setDbPassword] = useState('');
+  const [dbEngine, setDbEngine] = useState<'mysql' | 'postgresql'>('mysql');
 
   const resetForm = () => {
     setDbName('');
@@ -318,6 +322,7 @@ function DatabasePage() {
     setDbPort('3306');
     setDbUsername('');
     setDbPassword('');
+    setDbEngine('mysql');
   };
 
   const canSubmit = useMemo(
@@ -334,6 +339,7 @@ function DatabasePage() {
         port: dbPort ? Number(dbPort) : undefined,
         username: dbUsername.trim(),
         password: dbPassword,
+        engine: dbEngine,
       }),
     onSuccess: () => {
       notifySuccess('Database host created');
@@ -353,6 +359,7 @@ function DatabasePage() {
         port: dbPort ? Number(dbPort) : undefined,
         username: dbUsername.trim(),
         password: dbPassword || undefined,
+        engine: dbEngine,
       }),
     onSuccess: () => {
       notifySuccess('Database host updated');
@@ -381,6 +388,7 @@ function DatabasePage() {
     setDbPort(String(host.port));
     setDbUsername(host.username);
     setDbPassword(host.password || '');
+    setDbEngine(host.engine === 'postgresql' ? 'postgresql' : 'mysql');
   };
 
   // Shared form fields
@@ -403,7 +411,7 @@ function DatabasePage() {
           <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
             <Hash className="h-3 w-3" /> Port
           </span>
-          <Input value={dbPort} onChange={(e) => setDbPort(e.target.value)} placeholder="3306" />
+          <Input value={dbPort} onChange={(e) => setDbPort(e.target.value)} placeholder={dbEngine === 'postgresql' ? '5432' : '3306'} />
         </label>
         <label className="block space-y-1">
           <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
@@ -412,6 +420,35 @@ function DatabasePage() {
           <Input value={dbUsername} onChange={(e) => setDbUsername(e.target.value)} placeholder="catalyst_admin" />
         </label>
       </div>
+      <label className="block space-y-1">
+        <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+          <Database className="h-3 w-3" /> Engine
+        </span>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => { setDbEngine('mysql'); setDbPort('3306'); }}
+            className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+              dbEngine === 'mysql'
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border bg-card text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            MySQL
+          </button>
+          <button
+            type="button"
+            onClick={() => { setDbEngine('postgresql'); setDbPort('5432'); }}
+            className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+              dbEngine === 'postgresql'
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border bg-card text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            PostgreSQL
+          </button>
+        </div>
+      </label>
       <label className="block space-y-1">
         <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
           <Shield className="h-3 w-3" /> Password{editingHost ? ' (leave blank to keep)' : ''}

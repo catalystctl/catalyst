@@ -2530,12 +2530,13 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: 'Admin write permission required' });
       }
 
-      const { name, host, port, username, password } = request.body as {
+      const { name, host, port, username, password, engine } = request.body as {
         name: string;
         host: string;
         port?: number;
         username: string;
         password: string;
+        engine?: string;
       };
 
       if (!name || !host || !username || !password) {
@@ -2549,6 +2550,13 @@ export async function adminRoutes(app: FastifyInstance) {
       if (port !== undefined && (port <= 0 || port > 65535)) {
         return reply.status(400).send({ error: 'port must be between 1 and 65535' });
       }
+
+      const validEngines = ['mysql', 'postgresql', 'postgres'];
+      const resolvedEngine = engine?.toLowerCase();
+      if (resolvedEngine && !validEngines.includes(resolvedEngine)) {
+        return reply.status(400).send({ error: `engine must be one of: ${validEngines.join(', ')}` });
+      }
+
       const trimmedHost = host.trim();
       if (!/^[a-z0-9.-]+$/i.test(trimmedHost)) {
         return reply.status(400).send({ error: 'host must be a valid hostname or IP' });
@@ -2559,9 +2567,10 @@ export async function adminRoutes(app: FastifyInstance) {
           data: {
             name: name.trim(),
             host: trimmedHost,
-            port: port ?? (Number(process.env.DATABASE_HOST_PORT_DEFAULT) || 3306),
+            port: port ?? (resolvedEngine === 'postgresql' || resolvedEngine === 'postgres' ? 5432 : 3306),
             username: username.trim(),
             password,
+            engine: resolvedEngine === 'postgres' ? 'postgresql' : (resolvedEngine || 'mysql'),
           },
         });
 
@@ -2603,12 +2612,13 @@ export async function adminRoutes(app: FastifyInstance) {
       }
 
       const { hostId } = request.params as { hostId: string };
-      const { name, host, port, username, password } = request.body as {
+      const { name, host, port, username, password, engine } = request.body as {
         name?: string;
         host?: string;
         port?: number;
         username?: string;
         password?: string;
+        engine?: string;
       };
 
       const existing = await prisma.databaseHost.findUnique({
@@ -2626,6 +2636,13 @@ export async function adminRoutes(app: FastifyInstance) {
       if (port !== undefined && (port <= 0 || port > 65535)) {
         return reply.status(400).send({ error: 'port must be between 1 and 65535' });
       }
+
+      const validEngines = ['mysql', 'postgresql', 'postgres'];
+      const resolvedEngine = engine?.toLowerCase();
+      if (resolvedEngine && !validEngines.includes(resolvedEngine)) {
+        return reply.status(400).send({ error: `engine must be one of: ${validEngines.join(', ')}` });
+      }
+
       if (host !== undefined) {
         const trimmedHost = host.trim();
         if (!/^[a-z0-9.-]+$/i.test(trimmedHost)) {
@@ -2642,6 +2659,7 @@ export async function adminRoutes(app: FastifyInstance) {
             port: port ?? existing.port,
             username: username !== undefined ? username.trim() : existing.username,
             password: password ?? existing.password,
+            engine: resolvedEngine === 'postgres' ? 'postgresql' : (resolvedEngine || existing.engine),
           },
         });
 
@@ -2730,40 +2748,79 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'Database host not found' });
       }
 
+      const engine = host.engine || 'mysql';
       const start = Date.now();
+
       try {
-        // Dynamic import mysql2 to test the connection
-        const mysql = await import('mysql2/promise');
-        const connection = await mysql.createConnection({
-          host: host.host,
-          port: host.port,
-          user: host.username,
-          password: host.password,
-          connectTimeout: 5000,
-        });
+        if (engine === 'postgresql' || engine === 'postgres') {
+          // PostgreSQL connection test
+          const { Client } = await import('pg');
+          const client = new Client({
+            host: host.host,
+            port: host.port,
+            user: host.username,
+            password: host.password,
+            connectionTimeoutMillis: 5000,
+          });
 
-        // Query for version and stats
-        const [versionRows] = await connection.query('SELECT VERSION() AS version') as any;
-        const [dbRows] = await connection.query(
-          'SELECT COUNT(*) AS count FROM information_schema.schemata WHERE schema_name NOT IN (\'information_schema\', \'mysql\', \'performance_schema\', \'sys\')'
-        ) as any;
-        const [tableRows] = await connection.query(
-          'SELECT COUNT(*) AS count FROM information_schema.tables WHERE table_schema NOT IN (\'information_schema\', \'mysql\', \'performance_schema\', \'sys\')'
-        ) as any;
+          await client.connect();
 
-        await connection.end();
-        const latency = Date.now() - start;
+          const versionResult = await client.query('SELECT version() AS version');
+          const dbResult = await client.query(
+            "SELECT COUNT(*)::int AS count FROM pg_database WHERE datistemplate = false AND datname NOT IN ('postgres')"
+          );
+          const tableResult = await client.query(
+            "SELECT COUNT(*)::int AS count FROM information_schema.tables WHERE table_schema NOT IN ('information_schema', 'pg_catalog')"
+          );
 
-        return reply.send(serialize({
-          success: true,
-          data: {
-            connected: true,
-            latency,
-            version: versionRows?.[0]?.version || null,
-            databaseCount: Number(dbRows?.[0]?.count ?? 0),
-            tableCount: Number(tableRows?.[0]?.count ?? 0),
-          },
-        }));
+          await client.end();
+          const latency = Date.now() - start;
+
+          return reply.send(serialize({
+            success: true,
+            data: {
+              connected: true,
+              latency,
+              version: versionResult.rows?.[0]?.version || null,
+              databaseCount: dbResult.rows?.[0]?.count ?? 0,
+              tableCount: tableResult.rows?.[0]?.count ?? 0,
+              engine: 'postgresql',
+            },
+          }));
+        } else {
+          // MySQL connection test
+          const mysql = await import('mysql2/promise');
+          const connection = await mysql.createConnection({
+            host: host.host,
+            port: host.port,
+            user: host.username,
+            password: host.password,
+            connectTimeout: 5000,
+          });
+
+          const [versionRows] = await connection.query('SELECT VERSION() AS version') as any;
+          const [dbRows] = await connection.query(
+            "SELECT COUNT(*) AS count FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys')"
+          ) as any;
+          const [tableRows] = await connection.query(
+            "SELECT COUNT(*) AS count FROM information_schema.tables WHERE table_schema NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys')"
+          ) as any;
+
+          await connection.end();
+          const latency = Date.now() - start;
+
+          return reply.send(serialize({
+            success: true,
+            data: {
+              connected: true,
+              latency,
+              version: versionRows?.[0]?.version || null,
+              databaseCount: Number(dbRows?.[0]?.count ?? 0),
+              tableCount: Number(tableRows?.[0]?.count ?? 0),
+              engine: 'mysql',
+            },
+          }));
+        }
       } catch (err: any) {
         const latency = Date.now() - start;
         return reply.send(serialize({
@@ -2775,6 +2832,7 @@ export async function adminRoutes(app: FastifyInstance) {
             version: null,
             databaseCount: 0,
             tableCount: 0,
+            engine,
           },
         }));
       }

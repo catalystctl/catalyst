@@ -198,6 +198,7 @@ export interface DatabaseHost {
   port: number;
   username: string;
   password: string;
+  engine: string;
   createdAt: string;
   updatedAt: string;
   _count?: {
@@ -211,6 +212,7 @@ export interface DatabaseHostPingResult {
   version?: string | null;
   databaseCount?: number;
   tableCount?: number;
+  engine?: string;
   error?: string | null;
 }
 

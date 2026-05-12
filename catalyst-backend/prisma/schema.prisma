@@ -596,6 +596,7 @@ model DatabaseHost {
   port      Int      @default(3306)
   username  String
   password  String
+  engine    String   @default("mysql")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
