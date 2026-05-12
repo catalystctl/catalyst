@@ -171,7 +171,6 @@ function HostCard({
   isDeleting: boolean;
   index: number;
 }) {
-  const queryClient = useQueryClient();
   const dbCount = host._count?.databases ?? 0;
 
   const { data: pingResult, isLoading: pingLoading, refetch: refetchPing, isFetching: pingFetching } = useDatabaseHostPing(host.id);
@@ -300,6 +299,7 @@ function HostCard({
 function DatabasePage() {
   const { data: databaseHosts = [], isLoading } = useDatabaseHosts();
   const { data: dbStatus } = useDbStatus();
+  const queryClient = useQueryClient();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingHost, setEditingHost] = useState<any>(null);
