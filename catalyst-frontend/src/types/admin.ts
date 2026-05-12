@@ -167,6 +167,7 @@ export interface AuditLogEntry {
   id: string;
   action: string;
   resource: string;
+  resourceId?: string | null;
   metadata?: Record<string, any> | null;
   timestamp: string;
   ipAddress?: string | null;

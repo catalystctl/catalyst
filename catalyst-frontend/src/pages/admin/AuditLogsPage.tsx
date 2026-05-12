@@ -125,28 +125,117 @@ function getDateLabel(date: string): string {
 
 // ── Log Detail Modal ──
 function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => void }) {
-  const metadata = log.metadata || {};
-  const metadataEntries = Object.entries(metadata);
-  const hasMetadata = metadataEntries.length > 0;
+  const details = log.metadata || {};
+  const detailEntries = Object.entries(details);
+  const hasDetails = detailEntries.length > 0;
+  const Icon = getResourceIcon(log.resource);
+  const tone = getActionTone(log.action);
+
+  const toneStyles: Record<string, { bg: string; border: string; text: string; dot: string }> = {
+    success: { bg: 'bg-success/5 dark:bg-success/10', border: 'border-success/20 dark:border-success/30', text: 'text-success dark:text-success', dot: 'bg-success' },
+    danger:  { bg: 'bg-destructive/5 dark:bg-destructive/10', border: 'border-destructive/20 dark:border-destructive/30', text: 'text-destructive dark:text-destructive', dot: 'bg-destructive' },
+    warning: { bg: 'bg-warning/5 dark:bg-warning/10', border: 'border-warning/20 dark:border-warning/30', text: 'text-warning dark:text-warning', dot: 'bg-warning' },
+    neutral: { bg: 'bg-muted/30', border: 'border-border', text: 'text-muted-foreground', dot: 'bg-muted-foreground/30' },
+  };
+
+  const ts = toneStyles[tone];
+
+  const renderValue = (value: unknown, depth = 0): React.ReactNode => {
+    if (value === null || value === undefined) return <span className="text-muted-foreground/50 italic">null</span>;
+    if (typeof value === 'boolean') return <Badge variant={value ? 'success' : 'secondary'} className="text-[10px] px-1.5 py-0">{String(value)}</Badge>;
+    if (typeof value === 'number') return <span className="tabular-nums text-foreground">{value}</span>;
+    if (typeof value === 'string') {
+      // Truncate long strings
+      if (value.length > 120) return (
+        <details className="inline">
+          <summary className="cursor-pointer text-muted-foreground hover:text-foreground">{value.slice(0, 120)}…</summary>
+          <pre className="mt-1 whitespace-pre-wrap text-xs text-foreground">{value}</pre>
+        </details>
+      );
+      // Detect if it looks like an ID (cuid)
+      if (/^cmp[a-z0-9]{20,}$/.test(value)) return <code className="rounded bg-muted/50 px-1 py-0.5 text-[11px] font-mono text-muted-foreground">{value.slice(0, 12)}…</code>;
+      return <span className="text-foreground">{value}</span>;
+    }
+    if (Array.isArray(value)) {
+      if (value.length === 0) return <span className="text-muted-foreground/50 italic">empty</span>;
+      return (
+        <div className="space-y-1">
+          {value.map((item, i) => (
+            <div key={i} className="flex items-start gap-1.5 text-xs">
+              <span className="text-muted-foreground/50">{i + 1}.</span>
+              {renderValue(item, depth + 1)}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    if (typeof value === 'object') {
+      const entries = Object.entries(value as Record<string, unknown>);
+      if (entries.length === 0) return <span className="text-muted-foreground/50 italic">empty</span>;
+      if (depth >= 2) return <code className="text-[11px] text-muted-foreground">{JSON.stringify(value)}</code>;
+      return (
+        <div className={`rounded-lg border border-border/50 bg-muted/20 p-2 space-y-1.5 ${depth > 0 ? 'ml-2' : ''}`}>
+          {entries.map(([k, v]) => (
+            <div key={k} className="flex items-start gap-2 text-xs">
+              <span className="shrink-0 font-medium text-muted-foreground">{k}</span>
+              <span className="flex-1">{renderValue(v, depth + 1)}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    return <span>{String(value)}</span>;
+  };
+
+  const resourceLink = log.resource === 'server' && log.resourceId ? `/servers/${log.resourceId}` :
+    log.resource === 'node' && log.resourceId ? `/admin/nodes/${log.resourceId}` : null;
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm" onClick={onClose}>
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-        className="mx-4 w-full max-w-2xl rounded-xl border border-border bg-card shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+        className="mx-4 w-full max-w-2xl rounded-xl border border-border bg-card shadow-xl max-h-[85vh] flex flex-col"
       >
-        <div className="border-b border-border px-6 py-4">
-          <div className="flex items-start justify-between gap-3">
+        {/* ── Header ── */}
+        <div className={`relative overflow-hidden border-b border-border px-6 py-4 ${ts.bg}`}>
+          {/* Decorative gradient */}
+          <div className={`absolute inset-0 bg-gradient-to-r ${tone === 'danger' ? 'from-destructive/5 to-transparent' : tone === 'warning' ? 'from-warning/5 to-transparent' : tone === 'success' ? 'from-success/5 to-transparent' : 'from-primary/5 to-transparent'}`} />
+
+          <div className="relative flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                {createElement(getResourceIcon(log.resource), { className: 'h-4 w-4' })}
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${ts.bg} ${ts.text}`}>
+                <Icon className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-base font-semibold text-foreground">{log.action}</h2>
-                <p className="text-xs text-muted-foreground">{log.resource} · {log.id}</p>
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-base font-semibold text-foreground">
+                    {formatAction(log.action)}
+                  </h2>
+                  <span className={`h-2 w-2 rounded-full ${ts.dot}`} />
+                  <Badge variant="outline" className={`text-[10px] ${ts.border} ${ts.text}`}>
+                    {log.action}
+                  </Badge>
+                </div>
+                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                  <Badge variant="secondary" className="gap-1 text-[10px]">
+                    <Icon className="h-2.5 w-2.5" />
+                    {log.resource}
+                  </Badge>
+                  {log.resourceId && (
+                    resourceLink ? (
+                      <Link to={resourceLink} className="inline-flex items-center gap-1 font-mono text-primary transition-colors hover:underline">
+                        {log.resourceId.slice(0, 12)}…
+                        <ExternalLink className="h-2.5 w-2.5" />
+                      </Link>
+                    ) : (
+                      <code className="text-[11px] text-muted-foreground">{log.resourceId.slice(0, 12)}…</code>
+                    )
+                  )}
+                </div>
               </div>
             </div>
             <button className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" onClick={onClose}>
@@ -155,82 +244,83 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
           </div>
         </div>
 
-        <div className="space-y-5 px-6 py-5">
+        {/* ── Body (scrollable) ── */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {/* Who & When */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">User</span>
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
-                  <User className="h-3.5 w-3.5 text-primary" />
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Actor</span>
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                  <User className="h-4 w-4 text-primary" />
                 </div>
                 <div>
-                  <div className="text-sm font-medium text-foreground">{log.user?.username ?? 'Unknown'}</div>
+                  <div className="text-sm font-medium text-foreground">{log.user?.username ?? 'System'}</div>
                   <div className="text-[11px] text-muted-foreground">{log.user?.email ?? log.userId ?? 'n/a'}</div>
                 </div>
               </div>
             </div>
-            <div className="space-y-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Timestamp</span>
-              <div className="flex items-center gap-2 text-sm text-foreground">
-                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                {new Date(log.timestamp).toLocaleString()}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">When</span>
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <div className="text-sm font-medium text-foreground tabular-nums">
+                    {new Date(log.timestamp).toLocaleString()}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {formatTimeAgo(log.timestamp)} ago
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div className="space-y-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Action</span>
-              <Badge variant="outline" className="text-[11px]">{log.action}</Badge>
-            </div>
-            <div className="space-y-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Resource</span>
-              <Badge variant="secondary" className="gap-1 text-[11px]">
-                {createElement(getResourceIcon(log.resource), { className: 'h-3 w-3' })}
-                {log.resource}
-              </Badge>
-            </div>
-            <div className="space-y-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">IP Address</span>
-              <span className="block text-xs text-foreground">{log.ipAddress ?? 'n/a'}</span>
-            </div>
-            <div className="space-y-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">User ID</span>
-              <span className="block text-[11px] text-muted-foreground truncate" title={log.userId ?? 'n/a'}>{log.userId ?? 'n/a'}</span>
-            </div>
+          {/* Quick facts */}
+          <div className="flex flex-wrap items-center gap-2">
+            {log.ipAddress && (
+              <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
+                <Globe className="h-3 w-3" />
+                <span className="font-mono">{log.ipAddress}</span>
+              </div>
+            )}
+            {log.userId && (
+              <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
+                <Hash className="h-3 w-3" />
+                <code>{log.userId.slice(0, 12)}…</code>
+              </div>
+            )}
           </div>
 
-          {hasMetadata ? (
+          {/* Details / Metadata */}
+          {hasDetails ? (
             <div className="space-y-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Metadata ({metadataEntries.length})</span>
-              <div className="rounded-lg border border-border bg-muted/30 overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-border text-left">
-                      <th className="px-3 py-2 font-semibold text-muted-foreground">Key</th>
-                      <th className="px-3 py-2 font-semibold text-muted-foreground">Value</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {metadataEntries.map(([key, value]) => (
-                      <tr key={key} className="hover:bg-muted/50">
-                        <td className="px-3 py-2 text-foreground">{key}</td>
-                        <td className="max-w-xs truncate px-3 py-2 text-muted-foreground" title={JSON.stringify(value)}>
-                          {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Details ({detailEntries.length})
+              </span>
+              <div className="space-y-2">
+                {detailEntries.map(([key, value]) => (
+                  <div key={key} className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5">
+                    <div className="flex items-start gap-3">
+                      <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground pt-0.5 min-w-[80px]">
+                        {key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim()}
+                      </span>
+                      <div className="flex-1 text-xs min-w-0">
+                        {renderValue(value)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ) : (
-            <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-3 text-center text-xs text-muted-foreground">
-              No metadata recorded for this event.
+            <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-4 text-center text-xs text-muted-foreground">
+              No details recorded for this event.
             </div>
           )}
         </div>
 
+        {/* ── Footer ── */}
         <div className="flex justify-end border-t border-border px-6 py-3">
           <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
         </div>
