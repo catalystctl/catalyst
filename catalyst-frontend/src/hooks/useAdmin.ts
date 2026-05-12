@@ -80,6 +80,25 @@ export function useDatabaseHosts() {
   });
 }
 
+export function useDatabaseHostPing(hostId: string | null) {
+  return useQuery({
+    queryKey: qk.adminDatabaseHostPing(hostId!),
+    queryFn: () => adminApi.pingDatabaseHost(hostId!),
+    enabled: !!hostId,
+    refetchInterval: 60000,
+    staleTime: 30000,
+  });
+}
+
+export function useDbStatus() {
+  return useQuery({
+    queryKey: qk.adminDbStatus(),
+    queryFn: adminApi.getDbStatus,
+    refetchInterval: 30000,
+    staleTime: 15000,
+  });
+}
+
 export function useSmtpSettings() {
   return useQuery({
     queryKey: qk.adminSmtp(),

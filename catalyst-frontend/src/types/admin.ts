@@ -200,6 +200,34 @@ export interface DatabaseHost {
   password: string;
   createdAt: string;
   updatedAt: string;
+  _count?: {
+    databases: number;
+  };
+}
+
+export interface DatabaseHostPingResult {
+  connected: boolean;
+  latency: number;
+  version?: string | null;
+  databaseCount?: number;
+  tableCount?: number;
+  error?: string | null;
+}
+
+export interface DbStatusResult {
+  connected: boolean;
+  latency: number;
+  engine: string;
+  tableCount: number;
+  sizeBytes: number;
+  activeConnections: number;
+  rowCounts: {
+    users: number;
+    servers: number;
+    nodes: number;
+    sessions: number;
+  };
+  error?: string | null;
 }
 
 export interface SmtpSettings {

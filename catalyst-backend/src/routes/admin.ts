@@ -2512,6 +2512,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
       const hosts = await prisma.databaseHost.findMany({
         orderBy: { createdAt: 'desc' },
+        include: { _count: { select: { databases: true } } },
       });
 
       reply.send(serialize({ success: true, data: hosts }));
@@ -2712,6 +2713,133 @@ export async function adminRoutes(app: FastifyInstance) {
         });
       }
     }
+  );
+
+  // Database host: test connection (ping)
+  app.get(
+    '/database-hosts/:hostId/ping',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!(checkPerm(request, 'admin.read'))) {
+        return reply.status(403).send({ error: 'Admin read permission required' });
+      }
+
+      const { hostId } = request.params as { hostId: string };
+      const host = await prisma.databaseHost.findUnique({ where: { id: hostId } });
+      if (!host) {
+        return reply.status(404).send({ error: 'Database host not found' });
+      }
+
+      const start = Date.now();
+      try {
+        // Dynamic import mysql2 to test the connection
+        const mysql = await import('mysql2/promise');
+        const connection = await mysql.createConnection({
+          host: host.host,
+          port: host.port,
+          user: host.username,
+          password: host.password,
+          connectTimeout: 5000,
+        });
+
+        // Query for version and stats
+        const [versionRows] = await connection.query('SELECT VERSION() AS version') as any;
+        const [dbRows] = await connection.query(
+          'SELECT COUNT(*) AS count FROM information_schema.schemata WHERE schema_name NOT IN (\'information_schema\', \'mysql\', \'performance_schema\', \'sys\')'
+        ) as any;
+        const [tableRows] = await connection.query(
+          'SELECT COUNT(*) AS count FROM information_schema.tables WHERE table_schema NOT IN (\'information_schema\', \'mysql\', \'performance_schema\', \'sys\')'
+        ) as any;
+
+        await connection.end();
+        const latency = Date.now() - start;
+
+        return reply.send(serialize({
+          success: true,
+          data: {
+            connected: true,
+            latency,
+            version: versionRows?.[0]?.version || null,
+            databaseCount: Number(dbRows?.[0]?.count ?? 0),
+            tableCount: Number(tableRows?.[0]?.count ?? 0),
+          },
+        }));
+      } catch (err: any) {
+        const latency = Date.now() - start;
+        return reply.send(serialize({
+          success: true,
+          data: {
+            connected: false,
+            latency,
+            error: err.message || 'Connection failed',
+            version: null,
+            databaseCount: 0,
+            tableCount: 0,
+          },
+        }));
+      }
+    },
+  );
+
+  // Catalyst internal database status
+  app.get(
+    '/db-status',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!(checkPerm(request, 'admin.read'))) {
+        return reply.status(403).send({ error: 'Admin read permission required' });
+      }
+
+      const start = Date.now();
+      try {
+        const dbHealthy = await prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false);
+        const latency = Date.now() - start;
+
+        // Count tables in the Catalyst database
+        const tableCount = await prisma.$queryRaw`SELECT COUNT(*)::int AS count FROM information_schema.tables WHERE table_schema = 'public'` as any;
+
+        // Get database size
+        const dbSize = await prisma.$queryRaw`SELECT pg_database_size(current_database())::bigint AS size` as any;
+
+        // Get active connections count
+        const connections = await prisma.$queryRaw`SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname = current_database()` as any;
+
+        // Count rows per major table
+        const [users, servers, nodes, sessions] = await Promise.all([
+          prisma.user.count(),
+          prisma.server.count(),
+          prisma.node.count(),
+          prisma.session.count(),
+        ]);
+
+        return reply.send(serialize({
+          success: true,
+          data: {
+            connected: dbHealthy,
+            latency,
+            engine: 'postgresql',
+            tableCount: tableCount?.[0]?.count ?? 0,
+            sizeBytes: Number(dbSize?.[0]?.size ?? 0),
+            activeConnections: Number(connections?.[0]?.count ?? 0),
+            rowCounts: { users, servers, nodes, sessions },
+          },
+        }));
+      } catch (err: any) {
+        return reply.send(serialize({
+          success: true,
+          data: {
+            connected: false,
+            latency: Date.now() - start,
+            engine: 'postgresql',
+            error: err.message || 'Connection failed',
+            tableCount: 0,
+            sizeBytes: 0,
+            activeConnections: 0,
+            rowCounts: { users: 0, servers: 0, nodes: 0, sessions: 0 },
+          },
+        }));
+      }
+    },
   );
 
   app.get(

@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
-import { queryClient } from '@/lib/queryClient';
 import { motion, type Variants } from 'framer-motion';
 import {
   Database,
@@ -13,6 +12,14 @@ import {
   Globe,
   Hash,
   User,
+  CheckCircle2,
+  XCircle,
+  RefreshCw,
+  Loader2,
+  Layers,
+  HardDrive,
+  Cable,
+  Table2,
 } from 'lucide-react';
 import EmptyState from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/input';
@@ -20,9 +27,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
-import { useDatabaseHosts } from '../../hooks/useAdmin';
+import { useDatabaseHosts, useDatabaseHostPing, useDbStatus } from '../../hooks/useAdmin';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
 import { ModalPortal } from '@/components/ui/modal-portal';
+import type { DatabaseHostPingResult, DbStatusResult } from '../../types/admin';
 
 // ── Animation Variants ──
 const containerVariants = {
@@ -34,6 +42,15 @@ const itemVariants: Variants = {
   hidden: { opacity: 0, y: 12 },
   visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
 };
+
+// ── Helpers ──
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
 
 // ── Modal Shell ──
 function ModalShell({
@@ -71,6 +88,75 @@ function ModalShell({
   );
 }
 
+// ── Catalyst DB Status Card ──
+function CatalystDbCard({ status }: { status?: DbStatusResult }) {
+  const connected = status?.connected ?? false;
+  return (
+    <motion.div
+      variants={itemVariants}
+      className="group relative overflow-hidden rounded-xl border border-border bg-card/80 backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+    >
+      {/* Decorative gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-cyan-500/3 to-transparent pointer-events-none" />
+
+      <div className="relative p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 dark:bg-violet-500/20">
+              <Database className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-foreground dark:text-foreground">Catalyst Database</span>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">PostgreSQL</Badge>
+              </div>
+              <div className="mt-1 flex items-center gap-2">
+                {connected ? (
+                  <Badge variant="success" className="gap-1 text-[10px] px-1.5 py-0">
+                    <CheckCircle2 className="h-2.5 w-2.5" /> Connected
+                  </Badge>
+                ) : (
+                  <Badge variant="destructive" className="gap-1 text-[10px] px-1.5 py-0">
+                    <XCircle className="h-2.5 w-2.5" /> Disconnected
+                  </Badge>
+                )}
+                {status?.latency != null && (
+                  <span className="text-[11px] text-muted-foreground tabular-nums">{status.latency}ms</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {connected && status && (
+          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Table2 className="h-3 w-3 shrink-0" />
+              <span>{status.tableCount} tables</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <HardDrive className="h-3 w-3 shrink-0" />
+              <span>{formatBytes(status.sizeBytes)}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Cable className="h-3 w-3 shrink-0" />
+              <span>{status.activeConnections} connections</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Layers className="h-3 w-3 shrink-0" />
+              <span>{status.rowCounts.users} users, {status.rowCounts.servers} servers, {status.rowCounts.nodes} nodes</span>
+            </div>
+          </div>
+        )}
+
+        {!connected && status?.error && (
+          <div className="mt-2 text-[11px] text-destructive/80 truncate">{status.error}</div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
 // ── Host Card ──
 function HostCard({
   host,
@@ -85,50 +171,125 @@ function HostCard({
   isDeleting: boolean;
   index: number;
 }) {
+  const queryClient = useQueryClient();
+  const dbCount = host._count?.databases ?? 0;
+
+  const { data: pingResult, isLoading: pingLoading, refetch: refetchPing, isFetching: pingFetching } = useDatabaseHostPing(host.id);
+
+  const connected = pingResult?.connected;
+  const pingLatency = pingResult?.latency;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 300, damping: 24, delay: index * 0.03 }}
-      className="group relative overflow-hidden rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+      className="group relative overflow-hidden rounded-xl border border-border bg-card/80 backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3 min-w-0 flex-1">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/10 dark:bg-success/30">
-            <Server className="h-4 w-4 text-success dark:text-success" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="font-semibold text-foreground dark:text-foreground">{host.name}</div>
-            <div className="mt-0.5 text-xs text-muted-foreground font-mono">{host.host}:{host.port}</div>
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <User className="h-3 w-3" />
-                {host.username}
-              </span>
-              <span className="flex items-center gap-1">
-                <Hash className="h-3 w-3" />
-                Port {host.port}
-              </span>
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
+            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+              connected === true
+                ? 'bg-success/10 dark:bg-success/20'
+                : connected === false
+                  ? 'bg-destructive/10 dark:bg-destructive/20'
+                  : 'bg-muted dark:bg-muted/50'
+            }`}>
+              <Server className={`h-4 w-4 ${
+                connected === true
+                  ? 'text-success dark:text-success'
+                  : connected === false
+                    ? 'text-destructive dark:text-destructive'
+                    : 'text-muted-foreground'
+              }`} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-foreground dark:text-foreground">{host.name}</span>
+                {connected === true && (
+                  <Badge variant="success" className="gap-1 text-[10px] px-1.5 py-0">
+                    <CheckCircle2 className="h-2.5 w-2.5" /> Online
+                  </Badge>
+                )}
+                {connected === false && (
+                  <Badge variant="destructive" className="gap-1 text-[10px] px-1.5 py-0">
+                    <XCircle className="h-2.5 w-2.5" /> Offline
+                  </Badge>
+                )}
+                {pingLoading && (
+                  <Badge variant="outline" className="gap-1 text-[10px] px-1.5 py-0">
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" /> Checking
+                  </Badge>
+                )}
+              </div>
+              <div className="mt-0.5 text-xs text-muted-foreground font-mono">{host.host}:{host.port}</div>
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <User className="h-3 w-3" />
+                  {host.username}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Hash className="h-3 w-3" />
+                  Port {host.port}
+                </span>
+                {dbCount > 0 && (
+                  <span className="flex items-center gap-1">
+                    <Database className="h-3 w-3" />
+                    {dbCount} DB{dbCount !== 1 ? 's' : ''}
+                  </span>
+                )}
+                {pingLatency != null && connected === true && (
+                  <span className="tabular-nums">{pingLatency}ms</span>
+                )}
+              </div>
+
+              {/* Connection details */}
+              {connected === true && pingResult && (
+                <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                  {pingResult.version && (
+                    <span className="flex items-center gap-1">
+                      MySQL v{pingResult.version}
+                    </span>
+                  )}
+                  {pingResult.databaseCount != null && (
+                    <span>{pingResult.databaseCount} DBs, {pingResult.tableCount} tables</span>
+                  )}
+                </div>
+              )}
+              {connected === false && pingResult?.error && (
+                <div className="mt-2 text-[11px] text-destructive/80 truncate" title={pingResult.error}>
+                  {pingResult.error}
+                </div>
+              )}
             </div>
           </div>
-        </div>
 
-        <div className="flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-          <button
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
-            onClick={onEdit}
-            title="Edit"
-          >
-            <Settings className="h-3.5 w-3.5" />
-          </button>
-          <button
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
-            onClick={onDelete}
-            disabled={isDeleting}
-            title="Delete"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+            <button
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary disabled:pointer-events-none disabled:opacity-30"
+              onClick={() => refetchPing()}
+              disabled={pingFetching}
+              title="Test connection"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${pingFetching ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
+              onClick={onEdit}
+              title="Edit"
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </button>
+            <button
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
+              onClick={onDelete}
+              disabled={isDeleting}
+              title="Delete"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
     </motion.div>
@@ -138,6 +299,7 @@ function HostCard({
 // ── Main Page ──
 function DatabasePage() {
   const { data: databaseHosts = [], isLoading } = useDatabaseHosts();
+  const { data: dbStatus } = useDbStatus();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingHost, setEditingHost] = useState<any>(null);
@@ -164,6 +326,7 @@ function DatabasePage() {
   );
 
   const createMutation = useMutation({
+    mutationKey: ['admin-database-host-create'],
     mutationFn: () =>
       adminApi.createDatabaseHost({
         name: dbName.trim(),
@@ -182,6 +345,7 @@ function DatabasePage() {
   });
 
   const updateMutation = useMutation({
+    mutationKey: ['admin-database-host-update'],
     mutationFn: (payload: { hostId: string }) =>
       adminApi.updateDatabaseHost(payload.hostId, {
         name: dbName.trim(),
@@ -200,6 +364,7 @@ function DatabasePage() {
   });
 
   const deleteMutation = useMutation({
+    mutationKey: ['admin-database-host-delete'],
     mutationFn: (hostId: string) => adminApi.deleteDatabaseHost(hostId),
     onSuccess: () => {
       notifySuccess('Database host removed');
@@ -283,7 +448,7 @@ function DatabasePage() {
               </h1>
             </div>
             <p className="ml-10 text-sm text-muted-foreground">
-              Manage database hosts for server provisioning.
+              Monitor database health and manage hosts for server provisioning.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -296,6 +461,9 @@ function DatabasePage() {
             </Button>
           </div>
         </motion.div>
+
+        {/* ── Catalyst DB Status ── */}
+        <CatalystDbCard status={dbStatus} />
 
         {/* ── Host Grid ── */}
         {isLoading ? (

@@ -20,6 +20,8 @@ import type {
   RolePreset,
   SystemErrorsResponse,
   UpdateStatusResponse,
+  DatabaseHostPingResult,
+  DbStatusResult,
 } from '../../types/admin';
 
 type ApiResponse<T> = {
@@ -182,6 +184,14 @@ export const adminApi = {
   deleteDatabaseHost: async (hostId: string) => {
     const data = await apiClient.delete<ApiResponse<void>>(`/api/admin/database-hosts/${hostId}`);
     return data;
+  },
+  pingDatabaseHost: async (hostId: string) => {
+    const data = await apiClient.get<ApiResponse<DatabaseHostPingResult>>(`/api/admin/database-hosts/${hostId}/ping`);
+    return data.data;
+  },
+  getDbStatus: async () => {
+    const data = await apiClient.get<ApiResponse<DbStatusResult>>('/api/admin/db-status');
+    return data.data;
   },
   getSmtpSettings: async () => {
     const data = await apiClient.get<ApiResponse<SmtpSettings>>('/api/admin/smtp');
