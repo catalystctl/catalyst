@@ -17,8 +17,9 @@ export type BatchImportResult = {
 };
 
 export const templatesApi = {
-  list: async () => {
-    const data = await apiClient.get<ApiResponse<Template[]>>('/api/templates');
+  list: async (params?: { summary?: boolean }) => {
+    const query = params?.summary ? '?summary=true' : '';
+    const data = await apiClient.get<ApiResponse<Template[]>>(`/api/templates${query}`);
     return data.data || [];
   },
   get: async (templateId: string) => {

@@ -115,16 +115,48 @@ export async function templateRoutes(app: FastifyInstance) {
 				"template.read",
 			);
 			if (!has) return;
-			const templates = await prisma.serverTemplate.findMany({
-				orderBy: { createdAt: "desc" },
-				include: {
-					nest: {
-						select: { id: true, name: true, icon: true },
-					},
-				},
-			});
 
-			reply.send({ success: true, data: templates });
+			const { summary } = request.query as { summary?: string };
+
+			if (summary === 'true') {
+				// Lightweight list — excludes variables, installScript, features, images
+				const templates = await prisma.serverTemplate.findMany({
+					orderBy: { createdAt: "desc" },
+					select: {
+						id: true,
+						name: true,
+						description: true,
+						author: true,
+						version: true,
+						image: true,
+						defaultImage: true,
+						installImage: true,
+						installEntrypoint: true,
+						startup: true,
+						allocatedMemoryMb: true,
+						allocatedCpuCores: true,
+						nestId: true,
+						srvService: true,
+						srvProtocol: true,
+						createdAt: true,
+						nest: {
+							select: { id: true, name: true, icon: true },
+						},
+					},
+				});
+				reply.send({ success: true, data: templates });
+			} else {
+				const templates = await prisma.serverTemplate.findMany({
+					orderBy: { createdAt: "desc" },
+					include: {
+						nest: {
+							select: { id: true, name: true, icon: true },
+						},
+					},
+				});
+
+				reply.send({ success: true, data: templates });
+			}
 		},
 	);
 
