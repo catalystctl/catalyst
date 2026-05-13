@@ -465,6 +465,15 @@ step_install_deps() {
         overall_exit=1
       fi
     fi
+
+    # Push database schema so DB-dependent tests can run
+    # Maps to: bun run db:push in ci.yml test: job
+    if [[ "$overall_exit" -eq 0 && "$EVENT" != "pull_request" && ("$TARGET" == "backend" || "$TARGET" == "all") ]]; then
+      echo -e "  ${C_BOLD}[prisma] Pushing database schema...${C_RESET}"
+      if ! run_step "${step_name}_db_push" bash -c "cd catalyst-backend && bun run db:push"; then
+        overall_exit=1
+      fi
+    fi
   fi
 
   # --- Cargo fetch (agent) ---
