@@ -1,0 +1,481 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  ci.yml — Unified CI/CD Pipeline for Catalyst                                 ║
+# ║  This workflow MUST stay in sync with run-workflow.sh (the local emulator). ║
+# ║  When adding jobs/steps here, also update the step registry in run-workflow.║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+#
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  JOB INDEX                                                                    ║
+# ║                                                                              ║
+# ║  CI gates (push + PR):                                                       ║
+# ║    lint          — ESLint, cargo fmt, cargo clippy, security audit            ║
+# ║    test          — Vitest, cargo test (with Postgres service)                 ║
+# ║                                                                              ║
+# ║  Build (push only):                                                          ║
+# ║    build        — bun build + cargo build verification                       ║
+# ║                                                                              ║
+# ║  Publish (push to main/develop + tags):                                      ║
+# ║    agent-release — Build release agent binaries, upload to GitHub Release    ║
+# ║    publish-backend  — Build & push backend Docker image to GHCR              ║
+# ║    publish-frontend — Build & push frontend Docker image to GHCR             ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: CI/CD — Catalyst
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*']
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: write    # needed for agent release asset uploads
+  packages: write    # needed for GHCR docker pushes
+
+env:
+  CARGO_TERM_COLOR: always
+  PROTOC_VERSION: "25.1"
+  PROTOC_ARCH: "linux-x86_64"
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: ${{ github.repository_owner }}
+
+# ────────────────────────────────────────────────────────────────────────────────
+# CI GATES — Lint + Test (run on every push and PR)
+# ────────────────────────────────────────────────────────────────────────────────
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────────
+  # Job 1: Lint & Static Analysis
+  # Maps to: Step "Lint & Static Analysis" in run-workflow.sh
+  # ──────────────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint & Static Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # ── Dependency Install ──
+      # Maps to: step_install_deps() in run-workflow.sh
+      - name: Cache bun install
+        uses: actions/cache@v5
+        with:
+          path: |
+            node_modules
+            catalyst-backend/node_modules
+            catalyst-frontend/node_modules
+            catalyst-shared/node_modules
+          key: bun-deps-${{ runner.os }}-${{ hashFiles('bun.lock', 'bun.lockb', 'package.json') }}
+          restore-keys: bun-deps-${{ runner.os }}-
+
+      - name: Install bun dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Cache cargo registry
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: agent-cargo-deps-${{ hashFiles('catalyst-agent/Cargo.lock') }}
+          restore-keys: agent-cargo-deps-
+
+      - name: Install cargo dependencies
+        run: cargo fetch --manifest-path catalyst-agent/Cargo.toml
+
+      - name: Generate Prisma Client
+        working-directory: catalyst-backend
+        run: bunx prisma generate
+
+      # ── Lint & Static Analysis ──
+      # Maps to: step_lint() in run-workflow.sh
+      - name: Run ESLint
+        run: bun --filter='*' run lint
+
+      - name: Security audit
+        run: bun pm scan || true
+        continue-on-error: true
+
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path catalyst-agent/Cargo.toml -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --manifest-path catalyst-agent/Cargo.toml -- -D warnings
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # Job 2: Unit & Integration Tests
+  # Maps to: Step "Unit & Integration Tests" in run-workflow.sh
+  # ──────────────────────────────────────────────────────────────────────────────
+  test:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: catalyst
+          POSTGRES_PASSWORD: catalyst_dev_password
+          POSTGRES_DB: catalyst_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgresql://catalyst:catalyst_dev_password@localhost:5432/catalyst_db
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache bun install
+        uses: actions/cache@v5
+        with:
+          path: |
+            node_modules
+            catalyst-backend/node_modules
+            catalyst-frontend/node_modules
+            catalyst-shared/node_modules
+          key: bun-deps-${{ runner.os }}-${{ hashFiles('bun.lock', 'bun.lockb', 'package.json') }}
+          restore-keys: bun-deps-${{ runner.os }}-
+
+      - name: Install bun dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        working-directory: catalyst-backend
+        run: bunx prisma generate
+
+      - name: Cache cargo registry
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: agent-cargo-deps-${{ hashFiles('catalyst-agent/Cargo.lock') }}
+          restore-keys: agent-cargo-deps-
+
+      - name: Install cargo dependencies
+        run: cargo fetch --manifest-path catalyst-agent/Cargo.toml
+
+      # ── Tests ──
+      # Maps to: step_test() in run-workflow.sh
+      - name: Run Vitest
+        run: bun --filter='*' run test
+
+      - name: Run Cargo tests
+        run: cargo test --manifest-path catalyst-agent/Cargo.toml
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # Job 3: Build Verification (push to main/develop only)
+  # Maps to: Step "Build Verification" in run-workflow.sh
+  # ──────────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build Verification
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache bun install
+        uses: actions/cache@v5
+        with:
+          path: |
+            node_modules
+            catalyst-backend/node_modules
+            catalyst-frontend/node_modules
+            catalyst-shared/node_modules
+          key: bun-deps-${{ runner.os }}-${{ hashFiles('bun.lock', 'bun.lockb', 'package.json') }}
+          restore-keys: bun-deps-${{ runner.os }}-
+
+      - name: Install bun dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        working-directory: catalyst-backend
+        run: bunx prisma generate
+
+      - name: Cache cargo registry
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: agent-cargo-deps-${{ hashFiles('catalyst-agent/Cargo.lock') }}
+          restore-keys: agent-cargo-deps-
+
+      - name: Install cargo dependencies
+        run: cargo fetch --manifest-path catalyst-agent/Cargo.toml
+
+      # ── Build Verification ──
+      # Maps to: step_build_verify() in run-workflow.sh
+      - name: Build shared types
+        run: bun run build:shared
+
+      - name: Build backend
+        run: bun run build:backend
+
+      - name: Build frontend
+        run: bun run build:frontend
+
+      - name: Build agent (debug)
+        run: cargo build --manifest-path catalyst-agent/Cargo.toml
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # Job 4: Agent Release Build (v* tags only)
+  # Maps to: Step "Agent Release Build" in run-workflow.sh
+  # Builds release binaries for gnu + musl targets and uploads them as
+  # GitHub Release assets with SHA256 checksums.
+  # Merged from: agent-release.yml
+  # ──────────────────────────────────────────────────────────────────────────────
+  agent-release:
+    name: Agent Release Build (${{ matrix.target }})
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    container:
+      image: rust:1.93-bookworm
+
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            artifact_name: catalyst-agent-x86_64-linux-gnu
+          - target: x86_64-unknown-linux-musl
+            artifact_name: catalyst-agent-x86_64-linux-musl
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Cache protoc
+        id: cache-protoc
+        uses: actions/cache@v5
+        with:
+          path: /usr/local/bin/protoc
+          key: protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}
+
+      - name: Install protoc
+        if: steps.cache-protoc.outputs.cache-hit != 'true'
+        run: |
+          apt-get update && apt-get install -y unzip ca-certificates
+          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
+          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d /usr/local
+          chmod +x /usr/local/bin/protoc
+
+      - name: Install musl tools (for musl target)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: apt-get update && apt-get install -y musl-tools musl-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry + git deps
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: agent-cargo-deps-${{ hashFiles('catalyst-agent/Cargo.lock') }}
+          restore-keys: agent-cargo-deps-
+
+      - name: Cache cargo build (release ${{ matrix.target }})
+        uses: actions/cache@v5
+        with:
+          path: catalyst-agent/target/
+          key: agent-release-${{ matrix.target }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-${{ hashFiles('catalyst-agent/src/**') }}
+          restore-keys: |
+            agent-release-${{ matrix.target }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-
+            agent-release-${{ matrix.target }}-
+
+      - name: Build release
+        run: |
+          cd catalyst-agent
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename binary for release asset
+        run: |
+          mv "catalyst-agent/target/${{ matrix.target }}/release/catalyst-agent" "/tmp/${{ matrix.artifact_name }}"
+
+      - name: Generate SHA256 checksum
+        run: |
+          sha256sum "/tmp/${{ matrix.artifact_name }}" > "/tmp/${{ matrix.artifact_name }}.sha256"
+
+      - name: Upload binary as release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: /tmp/${{ matrix.artifact_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload checksum as release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: /tmp/${{ matrix.artifact_name }}.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # Job 5a: Detect Changes for Docker Publish
+  # Determines which Docker images need rebuilding based on changed paths.
+  # Merged from: docker-publish.yml
+  # ──────────────────────────────────────────────────────────────────────────────
+  detect-changes:
+    name: Detect Changes
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'catalyst-backend/**'
+              - 'catalyst-shared/**'
+              - 'bun.lock'
+              - 'bun.lockb'
+              - 'package.json'
+            frontend:
+              - 'catalyst-frontend/**'
+              - 'catalyst-shared/**'
+              - 'bun.lock'
+              - 'bun.lockb'
+              - 'package.json'
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # Job 5b: Publish Backend Docker Image
+  # Builds and pushes catalyst-backend to GHCR.
+  # Maps to: Step "Docker Publish" (backend) in run-workflow.sh
+  # Merged from: docker-publish.yml
+  # ──────────────────────────────────────────────────────────────────────────────
+  publish-backend:
+    name: Publish Backend Image
+    needs: [build, detect-changes]
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'push' &&
+      needs.detect-changes.outputs.backend == 'true'
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/catalyst-backend
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+
+      - name: Build and push
+        uses: useblacksmith/build-push-action@v2
+        with:
+          context: .
+          file: catalyst-backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # Job 5c: Publish Frontend Docker Image
+  # Builds and pushes catalyst-frontend to GHCR.
+  # Maps to: Step "Docker Publish" (frontend) in run-workflow.sh
+  # Merged from: docker-publish.yml
+  # ──────────────────────────────────────────────────────────────────────────────
+  publish-frontend:
+    name: Publish Frontend Image
+    needs: [build, detect-changes]
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'push' &&
+      needs.detect-changes.outputs.frontend == 'true'
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/catalyst-frontend
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+
+      - name: Build and push
+        uses: useblacksmith/build-push-action@v2
+        with:
+          context: .
+          file: catalyst-frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
