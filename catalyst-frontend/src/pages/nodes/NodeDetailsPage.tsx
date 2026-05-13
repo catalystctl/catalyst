@@ -285,152 +285,165 @@ function NodeDetailsPage() {
           </Link>
         </motion.div>
 
-        {/* ── Header ── */}
+        {/* ── Node Hero ── */}
         <motion.div variants={itemVariants}>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div
-                    className={`absolute -inset-1 rounded-lg opacity-20 blur-sm ${
-                      node.isOnline
-                        ? 'bg-gradient-to-r from-emerald-500 to-cyan-500'
-                        : 'bg-gradient-to-r from-zinc-400 to-zinc-500'
-                    }`}
-                  />
-                  <Server
-                    className={`relative h-7 w-7 ${
-                      node.isOnline
-                        ? 'text-success dark:text-success'
-                        : 'text-muted-foreground dark:text-muted-foreground'
-                    }`}
-                  />
+          <div className={`relative overflow-hidden rounded-2xl border backdrop-blur-sm ${
+            node.isOnline
+              ? 'border-success/20 bg-gradient-to-br from-success/5 via-card/90 to-card/80'
+              : 'border-border bg-card/80'
+          }`}>
+            {/* Subtle top accent line */}
+            <div className={`h-0.5 w-full ${
+              node.isOnline
+                ? 'bg-gradient-to-r from-transparent via-success/60 to-transparent'
+                : 'bg-gradient-to-r from-transparent via-muted-foreground/30 to-transparent'
+            }`} />
+
+            <div className="p-6">
+              {/* Top row: name + status + actions */}
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-colors ${
+                    node.isOnline
+                      ? 'border-success/30 bg-success/10 text-success'
+                      : 'border-border bg-surface-2 text-muted-foreground'
+                  }`}>
+                    <Server className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <h1 className="font-display text-2xl font-bold tracking-tight text-foreground truncate">
+                        {node.name}
+                      </h1>
+                      <Badge
+                        variant={node.isOnline ? 'success' : 'secondary'}
+                        className="shrink-0 gap-1.5"
+                      >
+                        <span className="relative flex h-1.5 w-1.5">
+                          {node.isOnline && (
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+                          )}
+                          <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
+                            node.isOnline ? 'bg-success/50' : 'bg-muted-foreground'
+                          }`} />
+                        </span>
+                        {node.isOnline ? 'Online' : 'Offline'}
+                      </Badge>
+                    </div>
+                    {/* Metadata — hostname, address, location, last seen in one compact line */}
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                      <span className="font-mono opacity-70">{node.hostname ?? 'hostname n/a'}</span>
+                      {node.publicAddress && (
+                        <>
+                          <span className="text-border/60">·</span>
+                          <span>{node.publicAddress}</span>
+                        </>
+                      )}
+                      {node.location && (
+                        <>
+                          <span className="text-border/60">·</span>
+                          <span>{node.location.name}</span>
+                        </>
+                      )}
+                      <span className="text-border/60">·</span>
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="h-2.5 w-2.5" />
+                        {lastSeen}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
-                  {node.name}
-                </h1>
-                <Badge variant={node.isOnline ? 'success' : 'secondary'} className="gap-1.5">
-                  <span className="relative flex h-1.5 w-1.5">
-                    {node.isOnline && (
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
-                    )}
-                    <span
-                      className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
-                        node.isOnline ? 'bg-success/50' : 'bg-muted-foreground'
-                      }`}
-                    />
-                  </span>
-                  {node.isOnline ? 'Online' : 'Offline'}
-                </Badge>
-              </div>
-              <div className="ml-10 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                <span className="font-mono text-xs opacity-70">
-                  {node.hostname ?? 'hostname n/a'}
-                </span>
-                <span className="text-border">·</span>
-                <span>{node.publicAddress ?? 'address n/a'}</span>
-                {node.location && (
-                  <>
-                    <span className="text-border">·</span>
-                    <span>{node.location.name}</span>
-                  </>
+
+                {/* Action buttons — stacked on mobile, row on desktop */}
+                {canWrite && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Button
+                      variant={apiKeyStatus?.exists ? 'outline' : 'default'}
+                      size="sm"
+                      onClick={handleApiKeyClick}
+                      disabled={apiKeyMutation.isPending}
+                      className="gap-1.5"
+                    >
+                      <Key className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">
+                        {apiKeyMutation.isPending
+                          ? 'Generating…'
+                          : apiKeyStatus?.exists
+                            ? 'Regenerate Key'
+                            : 'Generate Key'}
+                      </span>
+                      <span className="sm:hidden">
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => deployMutation.mutate()}
+                      disabled={deployMutation.isPending}
+                      className="gap-1.5"
+                    >
+                      <Terminal className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">{deployMutation.isPending ? 'Generating…' : 'Deploy Script'}</span>
+                    </Button>
+                    <Button asChild size="sm" variant="outline">
+                      <Link to={`/admin/nodes/${node.id}/allocations`} className="gap-1.5">
+                        <Shield className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Allocations</span>
+                      </Link>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowUpdateModal(true)}
+                      className="gap-1.5"
+                    >
+                      <Settings className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Settings</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowDeleteModal(true)}
+                      className="gap-1.5 text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20 dark:text-destructive dark:hover:bg-destructive/30 dark:hover:border-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 )}
               </div>
-              <div className="ml-10 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Clock className="h-3 w-3" />
-                Last seen {lastSeen}
-              </div>
-              {/* Agent version + update status */}
-              <div className="ml-10 flex flex-wrap items-center gap-2 text-xs">
-                {node.agentVersion ? (
-                  <>
-                    <Badge
-                      variant={stats?.agentUpdateAvailable ? 'warning' : 'outline'}
-                      className="gap-1 font-mono text-[10px]"
-                    >
-                      {stats?.agentUpdateAvailable ? (
-                        <AlertTriangle className="h-2.5 w-2.5" />
-                      ) : (
-                        <CheckCircle className="h-2.5 w-2.5" />
-                      )}
-                      Agent v{node.agentVersion}
-                      {stats?.agentUpdateAvailable && stats.latestAgentVersion && (
-                        <span className="text-muted-foreground"> → v{stats.latestAgentVersion}</span>
-                      )}
-                    </Badge>
-                    {stats?.agentUpdateAvailable && (
-                      <span className="text-amber-500">Update available</span>
+
+              {/* Agent version strip — compact row below the name */}
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                {node.agentVersion && (
+                  <Badge
+                    variant={stats?.agentUpdateAvailable ? 'warning' : 'outline'}
+                    className="gap-1 font-mono text-[10px]"
+                  >
+                    {stats?.agentUpdateAvailable ? (
+                      <AlertTriangle className="h-2.5 w-2.5" />
+                    ) : (
+                      <CheckCircle className="h-2.5 w-2.5" />
                     )}
-                    {!stats?.agentUpdateAvailable && node.isOnline && (
-                      <span className="text-emerald-500">Up to date</span>
+                    Agent v{node.agentVersion}
+                    {stats?.agentUpdateAvailable && stats.latestAgentVersion && (
+                      <span className="text-muted-foreground"> → v{stats.latestAgentVersion}</span>
                     )}
-                  </>
-                ) : node.isOnline ? (
-                  <span className="text-muted-foreground">Agent version unknown</span>
-                ) : null}
+                  </Badge>
+                )}
+                {stats?.agentUpdateAvailable && (
+                  <span className="text-amber-500">Update available</span>
+                )}
+                {!stats?.agentUpdateAvailable && node.agentVersion && node.isOnline && (
+                  <span className="text-emerald-500/70">Up to date</span>
+                )}
+                {!node.agentVersion && node.isOnline && (
+                  <span className="text-muted-foreground/60">Agent version unknown</span>
+                )}
               </div>
             </div>
-
-            {canWrite && (
-              <div className="flex flex-wrap items-center gap-2">
-                <Button asChild size="sm">
-                  <Link to={`/admin/nodes/${node.id}/allocations`} className="gap-1.5">
-                    <Shield className="h-3.5 w-3.5" />
-                    Allocations
-                  </Link>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowUpdateModal(true)}
-                  className="gap-1.5"
-                >
-                  <Settings className="h-3.5 w-3.5" />
-                  Update
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowDeleteModal(true)}
-                  className="gap-1.5 text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20 dark:text-destructive dark:hover:bg-destructive/30 dark:hover:border-destructive"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </Button>
-              </div>
-            )}
           </div>
         </motion.div>
-
-        {/* ── Agent Actions ── */}
-        {canWrite && (
-          <motion.div variants={itemVariants} className="flex flex-wrap items-center gap-2">
-            <Button
-              variant={apiKeyStatus?.exists ? 'outline' : 'default'}
-              size="sm"
-              onClick={handleApiKeyClick}
-              disabled={apiKeyMutation.isPending}
-              className="gap-1.5"
-            >
-              <Key className="h-3.5 w-3.5" />
-              {apiKeyMutation.isPending
-                ? 'Generating…'
-                : apiKeyStatus?.exists
-                  ? 'Regenerate API Key'
-                  : 'Generate API Key'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => deployMutation.mutate()}
-              disabled={deployMutation.isPending}
-              className="gap-1.5"
-            >
-              <Terminal className="h-3.5 w-3.5" />
-              {deployMutation.isPending ? 'Generating…' : 'Deploy Script'}
-            </Button>
-          </motion.div>
-        )}
 
         {/* ── Resource Grid ── */}
         <motion.div variants={itemVariants} className="grid grid-cols-1 gap-4 lg:grid-cols-3">
