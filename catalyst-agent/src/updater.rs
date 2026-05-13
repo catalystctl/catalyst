@@ -165,10 +165,10 @@ impl AgentUpdater {
 
         // Priority 2: Backend download (for self-hosted / air-gapped deployments)
         match self.download_from_backend(&temp_path).await {
-            Ok(()) => return Ok(temp_path),
+            Ok(()) => Ok(temp_path),
             Err(e) => {
                 error!("Backend download also failed: {}", e);
-                return Err(e);
+                Err(e)
             }
         }
     }

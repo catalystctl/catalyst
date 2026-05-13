@@ -736,6 +736,77 @@ describe('RBAC - Full Permission Coverage', () => {
 });
 
 describe('RBAC - Default Roles Validation', () => {
+  let defaultAdminRoleId: string;
+
+  beforeAll(async () => {
+    // Seed the default roles that the seed script would create.
+    // In CI the DB is empty, so we create them here.
+    const adminRole = await prisma.role.upsert({
+      where: { name: 'Administrator' },
+      update: {},
+      create: {
+        name: 'Administrator',
+        description: 'Full access to all resources',
+        permissions: ['*'],
+      },
+    });
+    defaultAdminRoleId = adminRole.id;
+
+    await prisma.role.upsert({
+      where: { name: 'Moderator' },
+      update: {},
+      create: {
+        name: 'Moderator',
+        description: 'Limited management access',
+        permissions: [
+          'node.read',
+          'node.update',
+          'node.view_stats',
+          'location.read',
+          'template.read',
+          'server.read',
+          'server.start',
+          'server.stop',
+        ],
+      },
+    });
+
+    await prisma.role.upsert({
+      where: { name: 'User' },
+      update: {},
+      create: {
+        name: 'User',
+        description: 'Basic user permissions',
+        permissions: ['server.read'],
+      },
+    });
+
+    // Seed the default admin user with Administrator role
+    const existingAdmin = await prisma.user.findUnique({
+      where: { email: 'admin@example.com' },
+    });
+
+    if (!existingAdmin) {
+      const adminUser = await prisma.user.create({
+        data: {
+          email: 'admin@example.com',
+          username: 'admin',
+          name: 'Admin',
+          emailVerified: true,
+          roles: {
+            connect: { id: defaultAdminRoleId },
+          },
+        },
+      });
+    }
+  });
+
+  afterAll(async () => {
+    // Cleanup seeded data
+    await prisma.user.deleteMany({ where: { email: 'admin@example.com' } });
+    await prisma.role.deleteMany({ where: { name: { in: ['Administrator', 'Moderator', 'User'] } } });
+  });
+
   it('should verify default roles exist with correct structure', async () => {
     const roles = await prisma.role.findMany({
       where: {
