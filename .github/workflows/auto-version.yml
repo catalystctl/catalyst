@@ -54,6 +54,7 @@ jobs:
           BUMP="none"
 
           while IFS= read -r msg; do
+            echo "DEBUG: processing commit: [$msg]"
             [ -z "$msg" ] && continue
 
             # Skip chore and release commits (never trigger a bump)
