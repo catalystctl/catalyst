@@ -8,6 +8,7 @@ import { serialize } from "../utils/serialize";
 import { verifyAgentApiKey } from "../lib/agent-auth";
 import { createApiKey, deleteApiKey } from "../services/api-key-service";
 import { captureSystemError } from "../services/error-logger";
+import { getUpdateStatus } from "../services/auto-updater";
 
 // ID format validation — accepts UUID, Cuid2, and other safe identifier formats.
 const ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -863,6 +864,24 @@ export async function nodeRoutes(app: FastifyInstance) {
 						stopped: node.servers.filter((s) => s.status === "stopped").length,
 					},
 					lastMetricsUpdate: latestMetrics?.timestamp || null,
+					agentVersion: node.agentVersion || null,
+					agentUpdateAvailable: node.agentVersion
+						? (() => {
+								const agentParts = node.agentVersion!.replace(/^v/, "").split(".").map(Number);
+								const latestTag = getUpdateStatus().latestVersion;
+								if (!latestTag) return null; // unknown — haven't checked yet
+								const latestParts = latestTag.replace(/^v/, "").split(".").map(Number);
+								const maxLen = Math.max(agentParts.length, latestParts.length);
+								for (let i = 0; i < maxLen; i++) {
+									const cur = agentParts[i] || 0;
+									const lat = latestParts[i] || 0;
+									if (lat > cur) return true;
+									if (lat < cur) return false;
+								}
+								return false;
+							})()
+						: null,
+					latestAgentVersion: getUpdateStatus().latestVersion || null,
 				},
 			});
 		},

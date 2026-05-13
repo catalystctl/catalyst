@@ -2,7 +2,7 @@ import type { NodeInfo } from '../../types/node';
 import EmptyState from '../shared/EmptyState';
 import NodeCard from './NodeCard';
 
-function NodeList({ nodes }: { nodes: NodeInfo[] }) {
+function NodeList({ nodes, latestAgentVersion }: { nodes: NodeInfo[]; latestAgentVersion?: string | null }) {
   if (!nodes.length) {
     return (
       <EmptyState
@@ -14,8 +14,8 @@ function NodeList({ nodes }: { nodes: NodeInfo[] }) {
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-      {nodes.map((node) => (
-        <NodeCard key={node.id} node={node} />
+      {nodes.map((node, i) => (
+        <NodeCard key={node.id} node={node} index={i} latestAgentVersion={latestAgentVersion} />
       ))}
     </div>
   );

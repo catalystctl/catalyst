@@ -15,6 +15,8 @@ import {
   ExternalLink,
   X,
   MapPin,
+  AlertTriangle,
+  CheckCircle,
 } from 'lucide-react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import EmptyState from '../../components/shared/EmptyState';
@@ -39,6 +41,7 @@ import {
   DropdownMenuTrigger,
 } from '../../components/ui/dropdown-menu';
 import { useAdminNodes } from '../../hooks/useAdmin';
+import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 import { useAuthStore } from '../../stores/authStore';
 import type { NodeInfo } from '../../types/node';
 import { nodesApi } from '../../services/api/nodes';
@@ -148,6 +151,7 @@ function NodeRow({
   setSelectedIds,
   handleBulkDelete,
   deleteMutation,
+  latestAgentVersion,
 }: {
   node: NodeInfo;
   isSelected: boolean;
@@ -156,6 +160,7 @@ function NodeRow({
   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
   handleBulkDelete: (ids: string[], label: string) => void;
   deleteMutation: { isPending: boolean };
+  latestAgentVersion?: string | null;
 }) {
   const serverCount = node._count?.servers ?? node.servers?.length ?? 0;
   const memoryGB = node.maxMemoryMb ? (node.maxMemoryMb / 1024).toFixed(1) : '0';
@@ -230,6 +235,24 @@ function NodeRow({
             </span>
             {node.isOnline ? 'Online' : 'Offline'}
           </Badge>
+          {/* Agent version badge */}
+          {node.agentVersion && (
+            <Badge
+              variant={
+                latestAgentVersion && compareVersions(node.agentVersion, latestAgentVersion)
+                  ? 'warning'
+                  : 'outline'
+              }
+              className="shrink-0 gap-1 font-mono text-[10px]"
+            >
+              {latestAgentVersion && compareVersions(node.agentVersion, latestAgentVersion) ? (
+                <AlertTriangle className="h-2.5 w-2.5" />
+              ) : (
+                <CheckCircle className="h-2.5 w-2.5" />
+              )}
+              Agent v{node.agentVersion}
+            </Badge>
+          )}
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
           <span className="font-mono text-[11px] opacity-70">
@@ -320,6 +343,7 @@ function AdminNodesPage() {
   const [locationsModalOpen, setLocationsModalOpen] = useState(false);
 
   const { data, isLoading } = useAdminNodes({ search: search.trim() || undefined });
+  const { data: updateData } = useUpdateCheck();
   const user = useAuthStore((s) => s.user);
 
   const { data: locations = [] } = useQuery({
@@ -508,6 +532,7 @@ function AdminNodesPage() {
             setSelectedIds={setSelectedIds}
             handleBulkDelete={handleBulkDelete}
             deleteMutation={deleteMutation}
+            latestAgentVersion={updateData?.latestVersion}
           />
         ))}
       </div>
@@ -920,6 +945,7 @@ function AdminNodesPage() {
                         setSelectedIds={setSelectedIds}
                         handleBulkDelete={handleBulkDelete}
                         deleteMutation={deleteMutation}
+                        latestAgentVersion={updateData?.latestVersion}
                       />
                     ))}
                   </div>
@@ -981,3 +1007,17 @@ function AdminNodesPage() {
 }
 
 export default AdminNodesPage;
+
+/** Compare semver-like versions. Returns true if `current` < `latest`. */
+function compareVersions(current: string, latest: string): boolean {
+  const cur = current.replace(/^v/, '').split('.').map(Number);
+  const lat = latest.replace(/^v/, '').split('.').map(Number);
+  const maxLen = Math.max(cur.length, lat.length);
+  for (let i = 0; i < maxLen; i++) {
+    const c = cur[i] || 0;
+    const l = lat[i] || 0;
+    if (l > c) return true;
+    if (l < c) return false;
+  }
+  return false;
+}

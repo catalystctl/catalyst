@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Server, Cpu, HardDrive, ExternalLink } from 'lucide-react';
+import { Server, Cpu, HardDrive, ExternalLink, AlertTriangle, CheckCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Badge } from '../../components/ui/badge';
 import type { NodeInfo } from '../../types/node';
@@ -7,12 +7,19 @@ import type { NodeInfo } from '../../types/node';
 type Props = {
   node: NodeInfo;
   index?: number;
+  latestAgentVersion?: string | null;
 };
 
-function NodeCard({ node, index = 0 }: Props) {
+function NodeCard({ node, index = 0, latestAgentVersion }: Props) {
   const lastSeen = node.lastSeenAt ? new Date(node.lastSeenAt).toLocaleString() : 'n/a';
   const serverCount = node._count?.servers ?? node.servers?.length ?? 0;
   const memoryGB = node.maxMemoryMb ? (node.maxMemoryMb / 1024).toFixed(1) : '0';
+
+  // Determine agent version status
+  const agentVersion = node.agentVersion;
+  const agentOutdated = agentVersion && latestAgentVersion
+    ? compareVersions(agentVersion, latestAgentVersion)
+    : false;
 
   return (
     <motion.div
@@ -80,6 +87,23 @@ function NodeCard({ node, index = 0 }: Props) {
                   </span>
                   {node.isOnline ? 'Online' : 'Offline'}
                 </Badge>
+                {/* Agent version badge */}
+                {agentVersion && (
+                  <Badge
+                    variant={agentOutdated ? 'warning' : 'outline'}
+                    className="shrink-0 gap-1 font-mono text-[10px]"
+                  >
+                    {agentOutdated ? (
+                      <AlertTriangle className="h-2.5 w-2.5" />
+                    ) : (
+                      <CheckCircle className="h-2.5 w-2.5" />
+                    )}
+                    Agent v{agentVersion}
+                    {agentOutdated && latestAgentVersion && (
+                      <span className="text-muted-foreground">→ v{latestAgentVersion}</span>
+                    )}
+                  </Badge>
+                )}
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                 <span className="font-mono text-[11px] opacity-70">{node.hostname ?? 'hostname n/a'}</span>
@@ -153,6 +177,20 @@ function NodeCard({ node, index = 0 }: Props) {
       </div>
     </motion.div>
   );
+}
+
+/** Compare semver-like versions. Returns true if `current` < `latest`. */
+function compareVersions(current: string, latest: string): boolean {
+  const cur = current.replace(/^v/, '').split('.').map(Number);
+  const lat = latest.replace(/^v/, '').split('.').map(Number);
+  const maxLen = Math.max(cur.length, lat.length);
+  for (let i = 0; i < maxLen; i++) {
+    const c = cur[i] || 0;
+    const l = lat[i] || 0;
+    if (l > c) return true;
+    if (l < c) return false;
+  }
+  return false;
 }
 
 export default NodeCard;

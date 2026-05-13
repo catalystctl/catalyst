@@ -3,6 +3,7 @@ export interface NodeInfo {
   name: string;
   locationId: string;
   isOnline: boolean;
+  agentVersion?: string | null;
   lastSeenAt?: string | null;
   description?: string | null;
   hostname?: string;
@@ -70,6 +71,9 @@ export interface NodeStats {
     stopped: number;
   };
   lastMetricsUpdate?: string | null;
+  agentVersion?: string | null;
+  agentUpdateAvailable?: boolean | null;
+  latestAgentVersion?: string | null;
 }
 
 export interface NodeMetricsPoint {

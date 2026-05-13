@@ -930,7 +930,11 @@ export class WebSocketGateway {
         try {
           await this.prisma.node.update({
             where: { id: nodeId },
-            data: { isOnline: true, lastSeenAt: new Date() },
+            data: {
+              isOnline: true,
+              lastSeenAt: new Date(),
+              ...(message.agentVersion ? { agentVersion: String(message.agentVersion) } : {}),
+            },
           });
           await this.prisma.nodeMetrics.create({
             data: {

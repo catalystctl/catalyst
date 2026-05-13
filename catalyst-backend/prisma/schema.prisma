@@ -348,6 +348,7 @@ model Node {
   maxCpuCores   Int
   memoryOverallocatePercent Int @default(0)
   cpuOverallocatePercent    Int @default(0)
+  agentVersion  String?
   isOnline      Boolean   @default(false)
   lastSeenAt    DateTime?
   createdAt     DateTime  @default(now())

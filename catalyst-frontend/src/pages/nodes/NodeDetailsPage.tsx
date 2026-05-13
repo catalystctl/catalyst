@@ -18,10 +18,13 @@ import {
   Clock,
   Shield,
   Download,
+  CheckCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { useNode, useNodeStats } from '../../hooks/useNodes';
+import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 import NodeUpdateModal from '../../components/nodes/NodeUpdateModal';
 import NodeDeleteDialog from '../../components/nodes/NodeDeleteDialog';
 import NodeMetricsCard from '../../components/nodes/NodeMetricsCard';
@@ -113,6 +116,7 @@ function NodeDetailsPage() {
   const queryClient = useQueryClient();
   const { data: node, isLoading, isError, refetch } = useNode(nodeId);
   const { data: stats } = useNodeStats(nodeId);
+  const { data: updateData } = useUpdateCheck();
   const [deployInfo, setDeployInfo] = useState<{
     deployUrl: string;
     deploymentToken: string;
@@ -335,6 +339,35 @@ function NodeDetailsPage() {
               <div className="ml-10 flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" />
                 Last seen {lastSeen}
+              </div>
+              {/* Agent version + update status */}
+              <div className="ml-10 flex flex-wrap items-center gap-2 text-xs">
+                {node.agentVersion ? (
+                  <>
+                    <Badge
+                      variant={stats?.agentUpdateAvailable ? 'warning' : 'outline'}
+                      className="gap-1 font-mono text-[10px]"
+                    >
+                      {stats?.agentUpdateAvailable ? (
+                        <AlertTriangle className="h-2.5 w-2.5" />
+                      ) : (
+                        <CheckCircle className="h-2.5 w-2.5" />
+                      )}
+                      Agent v{node.agentVersion}
+                      {stats?.agentUpdateAvailable && stats.latestAgentVersion && (
+                        <span className="text-muted-foreground"> → v{stats.latestAgentVersion}</span>
+                      )}
+                    </Badge>
+                    {stats?.agentUpdateAvailable && (
+                      <span className="text-amber-500">Update available</span>
+                    )}
+                    {!stats?.agentUpdateAvailable && node.isOnline && (
+                      <span className="text-emerald-500">Up to date</span>
+                    )}
+                  </>
+                ) : node.isOnline ? (
+                  <span className="text-muted-foreground">Agent version unknown</span>
+                ) : null}
               </div>
             </div>
 

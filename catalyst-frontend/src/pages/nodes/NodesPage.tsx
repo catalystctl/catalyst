@@ -14,6 +14,7 @@ import { useNodes } from '../../hooks/useNodes';
 import { useAuthStore } from '../../stores/authStore';
 import { locationsApi } from '../../services/api/locations';
 import type { Location } from '../../services/api/locations';
+import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 
 // ── Animation Variants ──
 const containerVariants = {
@@ -77,6 +78,7 @@ type Props = {
 function NodesPage({ hideHeader }: Props) {
   const { data: nodes = [], isLoading } = useNodes();
   const user = useAuthStore((s) => s.user);
+  const { data: updateData } = useUpdateCheck();
   const canWrite = useMemo(
     () => user?.permissions?.includes('admin.write') || user?.permissions?.includes('*'),
     [user?.permissions],
@@ -367,7 +369,7 @@ function NodesPage({ hideHeader }: Props) {
                     >
                       <LocationSectionHeader location={location} count={groupNodes.length} />
                       <div className="p-4">
-                        <NodeList nodes={groupNodes} />
+                        <NodeList nodes={groupNodes} latestAgentVersion={updateData?.latestVersion} />
                       </div>
                     </div>
                   );
@@ -405,7 +407,7 @@ function NodesPage({ hideHeader }: Props) {
                 </div>
               ) : filteredNodes.length > 0 ? (
                 <div className="p-4">
-                  <NodeList nodes={filteredNodes} />
+                  <NodeList nodes={filteredNodes} latestAgentVersion={updateData?.latestVersion} />
                 </div>
               ) : (
                 <div className="p-6">
