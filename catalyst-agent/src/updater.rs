@@ -84,7 +84,10 @@ impl AgentUpdater {
 
         self.make_executable(temp_path).await?;
 
-        info!("Agent update downloaded from GitHub Releases to {:?}", temp_path);
+        info!(
+            "Agent update downloaded from GitHub Releases to {:?}",
+            temp_path
+        );
         Ok(())
     }
 
