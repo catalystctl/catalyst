@@ -16,7 +16,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Use a PAT so the tag push triggers ci.yml's tag-based workflows.
+          # GITHUB_TOKEN pushes do not trigger other workflows (by design).
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Determine version bump
         id: bump
@@ -161,7 +163,10 @@ jobs:
           git tag -a "v$VERSION" -m "Release v$VERSION"
           git push origin main --follow-tags
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Prefer RELEASE_TOKEN (PAT) over GITHUB_TOKEN so that the tag push
+          # triggers ci.yml's agent-release job. Falls back to GITHUB_TOKEN if
+          # RELEASE_TOKEN is not configured (agent-release won't trigger then).
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Generate AI Release Notes
         id: release_notes
@@ -267,7 +272,7 @@ jobs:
           name: v${{ steps.version.outputs.new_version }}
           body_path: /tmp/release_notes.md
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Notify Discord on Release
         if: steps.bump.outputs.bump != 'none'
