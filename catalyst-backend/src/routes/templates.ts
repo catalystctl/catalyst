@@ -695,32 +695,32 @@ export async function templateRoutes(app: FastifyInstance) {
 
 					const converted = safeResult.result;
 
-					// Check for duplicate name (skip, not fail)
-					const existing = await prisma.serverTemplate.findUnique({
-						where: { name: converted.name },
-					});
-					if (existing) {
-						skipped.push({ name: converted.name });
-						continue;
-					}
-
-					// Determine nest — auto-create from egg category if no nestId provided
-					let resolvedNestId = nestId || null;
-					if (!resolvedNestId && eggData._category) {
-						const existingNest = await prisma.nest.findFirst({
-							where: { name: eggData._category },
-						});
-						if (existingNest) {
-							resolvedNestId = existingNest.id;
-						} else {
-							const newNest = await prisma.nest.create({
-								data: { name: eggData._category },
-							});
-							resolvedNestId = newNest.id;
-						}
-					}
-
 					try {
+						// Check for duplicate name (skip, not fail)
+						const existing = await prisma.serverTemplate.findUnique({
+							where: { name: converted.name },
+						});
+						if (existing) {
+							skipped.push({ name: converted.name });
+							continue;
+						}
+
+						// Determine nest — auto-create from egg category if no nestId provided
+						let resolvedNestId = nestId || null;
+						if (!resolvedNestId && eggData._category) {
+							const existingNest = await prisma.nest.findFirst({
+								where: { name: eggData._category },
+							});
+							if (existingNest) {
+								resolvedNestId = existingNest.id;
+							} else {
+								const newNest = await prisma.nest.create({
+									data: { name: eggData._category },
+								});
+								resolvedNestId = newNest.id;
+							}
+						}
+
 						const template = await prisma.serverTemplate.create({
 							data: {
 								name: converted.name,

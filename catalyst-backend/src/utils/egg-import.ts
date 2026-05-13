@@ -784,6 +784,7 @@ function validateEgg(egg: PteroEgg): ImportError[] {
 	}
 
 	const seenVarNames = new Set<string>();
+	const builtinNames = new Set(PTDL_BUILTIN_VARIABLES.map((b) => b.name));
 	for (let i = 0; i < rawVars.length; i++) {
 		const v = rawVars[i];
 
@@ -810,7 +811,6 @@ function validateEgg(egg: PteroEgg): ImportError[] {
 		seenVarNames.add(v.env_variable);
 
 		// Variable name collision with built-in PTDL vars
-		const builtinNames = new Set(PTDL_BUILTIN_VARIABLES.map((b) => b.name));
 		if (builtinNames.has(v.env_variable)) {
 			errors.push({
 				code: "VARIABLE_COLLIDES_WITH_BUILTIN",
