@@ -4,7 +4,6 @@ import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { qk } from '../../../lib/queryKeys';
 import {
   AlertTriangle,
-  Archive,
   ArrowRightLeft,
   BarChart3,
   Container,
@@ -24,6 +23,8 @@ import {
   Trash2,
   UserRoundCog,
   Zap,
+  Clock,
+  ChevronDown,
 } from 'lucide-react';
 import { serversApi } from '../../../services/api/servers';
 import { notifySuccess, notifyError } from '../../../utils/notify';
@@ -32,7 +33,6 @@ import UpdateServerModal from '../UpdateServerModal';
 import TransferServerModal from '../TransferServerModal';
 import DeleteServerDialog from '../DeleteServerDialog';
 import ServerTabCard from './ServerTabCard';
-import SectionDivider from './SectionDivider';
 
 // ── Types ──
 
@@ -156,17 +156,48 @@ function CopyableValue({ label, value }: { label: string; value: string }) {
   }, [value]);
 
   return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-xs text-muted-foreground">{label}</span>
+    <div className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-surface-2/50 px-3 py-2 dark:bg-surface-2/30">
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
       <button
         type="button"
         onClick={copy}
-        className="group flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-mono text-foreground transition-colors hover:bg-surface-2"
+        className="group flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs font-mono text-foreground transition-colors hover:bg-primary/10"
         title="Click to copy"
       >
-        <span className="max-w-[280px] truncate">{value || '—'}</span>
-        <Copy className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+        <span className="max-w-[240px] truncate">{value || '—'}</span>
+        <Copy className="h-2.5 w-2.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
       </button>
+    </div>
+  );
+}
+
+// ── Section Header ──
+
+function SectionHeader({
+  icon: Icon,
+  title,
+  description,
+  accent = 'primary',
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description?: string;
+  accent?: 'primary' | 'warning' | 'danger';
+}) {
+  const iconColor = accent === 'danger'
+    ? 'text-danger'
+    : accent === 'warning'
+      ? 'text-warning'
+      : 'text-primary';
+  return (
+    <div className="mb-3">
+      <div className="flex items-center gap-2">
+        <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      </div>
+      {description && (
+        <p className="mt-0.5 pl-5.5 text-[11px] text-muted-foreground">{description}</p>
+      )}
     </div>
   );
 }
@@ -238,6 +269,17 @@ function ConfirmAction({
   );
 }
 
+// ── Stat Chip ──
+
+function StatChip({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="rounded-lg border border-border/50 bg-surface-2/50 px-3 py-2 dark:bg-surface-2/30">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`text-sm font-semibold text-foreground ${mono ? 'font-mono' : ''}`}>{value}</div>
+    </div>
+  );
+}
+
 // ── Main Component ──
 
 export default function ServerAdminTab({
@@ -288,6 +330,7 @@ export default function ServerAdminTab({
   const [newOwnerId, setNewOwnerId] = useState('');
   const [transferOwnerPending, setTransferOwnerPending] = useState(false);
   const [transferOwnerConfirm, setTransferOwnerConfirm] = useState(false);
+  const [envExpanded, setEnvExpanded] = useState(false);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -332,8 +375,7 @@ export default function ServerAdminTab({
 
   // ── Derived ──
   const templateImages = server.template?.images ?? [];
-  const currentImageVariant =
-    server.environment?.IMAGE_VARIANT ?? '';
+  const currentImageVariant = server.environment?.IMAGE_VARIANT ?? '';
   const currentResolvedImage =
     server.environment?.TEMPLATE_IMAGE ??
     server.template?.defaultImage ??
@@ -343,8 +385,7 @@ export default function ServerAdminTab({
     templateImages.find((img) => img.name === currentImageVariant)?.label ??
     (currentImageVariant || 'Default');
 
-  const canEdit =
-    !isSuspended && server.status !== 'archived';
+  const canEdit = !isSuspended && server.status !== 'archived';
   const canEditWhenStopped =
     canEdit && (server.status === 'stopped' || server.status === 'crashed' || server.status === 'error');
 
@@ -467,26 +508,12 @@ export default function ServerAdminTab({
   }
 
   return (
-    <div className="space-y-6">
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* SERVER OVERVIEW                                                    */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      <SectionDivider title="Overview" />
-
+    <div className="space-y-4">
+      {/* ── Overview Card ── */}
       <ServerTabCard>
-        <div className="flex items-center gap-2">
-          <Server className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold text-foreground">
-            Server Information
-          </span>
-          <span
-            className={`ml-auto rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusBadgeColor}`}
-          >
-            {server.status}
-          </span>
-        </div>
+        <SectionHeader icon={Server} title="Server Information" />
 
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           <CopyableValue label="Server ID" value={server.id} />
           <CopyableValue
             label="Node"
@@ -500,153 +527,126 @@ export default function ServerAdminTab({
           <CopyableValue label="Connection" value={`${server.connection?.host ?? '—'}:${server.connection?.port ?? '—'}`} />
           <CopyableValue label="Network Mode" value={server.networkMode ?? 'bridge'} />
         </div>
-      </ServerTabCard>
 
-      {/* Environment Variables */}
-      <ServerTabCard>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Database className="h-4 w-4 text-primary" />
-            <span className="text-sm font-semibold text-foreground">
-              Environment Variables
+        {/* Environment Variables — collapsible */}
+        <div className="mt-4">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between rounded-lg border border-border/50 bg-surface-2/50 px-3 py-2 text-xs transition-colors hover:border-primary/30 dark:bg-surface-2/30"
+            onClick={() => setEnvExpanded(!envExpanded)}
+          >
+            <span className="flex items-center gap-2 text-muted-foreground">
+              <Database className="h-3.5 w-3.5 text-primary" />
+              <span className="font-medium text-foreground">Environment Variables</span>
+              <span className="text-muted-foreground">({Object.keys(server.environment ?? {}).length})</span>
             </span>
-          </div>
-          {canAdminWrite && (
-            <button
-              type="button"
-              className="rounded-md bg-surface-2 px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary dark:bg-surface-2 dark:hover:bg-primary/90/10 dark:hover:text-primary-400"
-              onClick={() => {
-                setEnvVars([...envVars, { key: '', value: '' }]);
-                setEnvDirty(true);
-              }}
-              disabled={isSuspended}
-            >
-              + Add variable
-            </button>
+            <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${envExpanded ? 'rotate-180' : ''}`} />
+          </button>
+
+          {envExpanded && (
+            <div className="mt-2 space-y-2">
+              {canAdminWrite ? (
+                <>
+                  {envVars.length === 0 && (
+                    <p className="py-3 text-center text-xs text-muted-foreground">
+                      No environment variables. Click "+ Add" to begin.
+                    </p>
+                  )}
+                  {envVars.map((row, idx) => (
+                    <div key={idx} className="group flex items-center gap-2">
+                      <input
+                        className="w-[130px] shrink-0 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] uppercase text-foreground transition-colors focus:border-primary focus:bg-card focus:outline-none"
+                        value={row.key}
+                        onChange={(e) => {
+                          const next = [...envVars];
+                          next[idx] = { ...next[idx], key: e.target.value };
+                          setEnvVars(next);
+                          setEnvDirty(true);
+                        }}
+                        placeholder="KEY"
+                        disabled={isSuspended}
+                      />
+                      <span className="text-[10px] text-foreground">=</span>
+                      <input
+                        className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] text-foreground transition-colors focus:border-primary focus:bg-card focus:outline-none"
+                        value={row.value}
+                        onChange={(e) => {
+                          const next = [...envVars];
+                          next[idx] = { ...next[idx], value: e.target.value };
+                          setEnvVars(next);
+                          setEnvDirty(true);
+                        }}
+                        placeholder="value"
+                        disabled={isSuspended}
+                      />
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-md p-1 text-foreground opacity-0 transition-all group-hover:opacity-100 hover:text-danger"
+                        onClick={() => {
+                          setEnvVars(envVars.filter((_, i) => i !== idx));
+                          setEnvDirty(true);
+                        }}
+                        disabled={isSuspended}
+                        title="Remove"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      className="rounded-md bg-surface-2 px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/10 dark:hover:text-primary-400"
+                      onClick={() => {
+                        setEnvVars([...envVars, { key: '', value: '' }]);
+                        setEnvDirty(true);
+                      }}
+                      disabled={isSuspended}
+                    >
+                      + Add
+                    </button>
+                    {envDirty && (
+                      <button
+                        type="button"
+                        className="rounded-lg bg-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
+                        onClick={() => envMutation.mutate()}
+                        disabled={isSuspended || envMutation.isPending}
+                      >
+                        {envMutation.isPending ? 'Saving…' : 'Save'}
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="divide-y divide-border">
+                  {server.environment && Object.keys(server.environment).length > 0 ? (
+                    Object.entries(server.environment).map(([key, value]) => (
+                      <div key={key} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
+                        <span className="font-mono text-[11px] uppercase text-muted-foreground">{key}</span>
+                        <span className="text-xs font-medium text-foreground">{String(value)}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="py-3 text-center text-xs text-muted-foreground">No environment variables set.</p>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
-        {canAdminWrite ? (
-          <div className="mt-4 space-y-2">
-            {envVars.length === 0 && (
-              <p className="py-4 text-center text-xs text-muted-foreground">
-                No environment variables. Click "+ Add variable" to begin.
-              </p>
-            )}
-            {envVars.map((row, idx) => (
-              <div key={idx} className="group flex items-center gap-2">
-                <input
-                  className="w-[130px] shrink-0 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] uppercase text-foreground transition-colors focus:border-primary focus:bg-card focus:outline-none "
-                  value={row.key}
-                  onChange={(e) => {
-                    const next = [...envVars];
-                    next[idx] = { ...next[idx], key: e.target.value };
-                    setEnvVars(next);
-                    setEnvDirty(true);
-                  }}
-                  placeholder="KEY"
-                  disabled={isSuspended}
-                />
-                <span className="text-[10px] text-foreground">=</span>
-                <input
-                  className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] text-foreground transition-colors focus:border-primary focus:bg-card focus:outline-none "
-                  value={row.value}
-                  onChange={(e) => {
-                    const next = [...envVars];
-                    next[idx] = { ...next[idx], value: e.target.value };
-                    setEnvVars(next);
-                    setEnvDirty(true);
-                  }}
-                  placeholder="value"
-                  disabled={isSuspended}
-                />
-                <button
-                  type="button"
-                  className="shrink-0 rounded-md p-1 text-foreground opacity-0 transition-all group-hover:opacity-100 hover:text-danger dark:hover:text-danger"
-                  onClick={() => {
-                    setEnvVars(envVars.filter((_, i) => i !== idx));
-                    setEnvDirty(true);
-                  }}
-                  disabled={isSuspended}
-                  title="Remove"
-                >
-                  <svg
-                    className="h-3.5 w-3.5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-              </div>
-            ))}
-            {envDirty && (
-              <div className="pt-2">
-                <button
-                  type="button"
-                  className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
-                  onClick={() => envMutation.mutate()}
-                  disabled={isSuspended || envMutation.isPending}
-                >
-                  {envMutation.isPending ? 'Saving…' : 'Save environment'}
-                </button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="mt-4 divide-y divide-border">
-            {server.environment &&
-            Object.keys(server.environment).length > 0 ? (
-              Object.entries(server.environment).map(([key, value]) => (
-                <div
-                  key={key}
-                  className="flex items-center justify-between py-2 first:pt-0 last:pb-0"
-                >
-                  <span className="font-mono text-[11px] uppercase text-muted-foreground">
-                    {key}
-                  </span>
-                  <span className="text-xs font-medium text-foreground">
-                    {String(value)}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <p className="py-4 text-center text-xs text-muted-foreground">
-                No environment variables set.
-              </p>
-            )}
-          </div>
-        )}
       </ServerTabCard>
 
-      {/* ═════════════════════════════════════════════════════════════════════════════════════════════════════════════════ */}
-      {/* DOCKER & CONTAINER                                                 */}
-      {/* ════════════════════════════════════════════════════════════════════════════════════════════════════════════════ */}
-      <SectionDivider title="Docker & Container" />
-
+      {/* ── Docker & Container — two-column grid ── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Image & Variant */}
         <ServerTabCard>
-          <div className="flex items-center gap-2">
-            <Container className="h-4 w-4 text-primary" />
-            <span className="text-sm font-semibold text-foreground">
-              Container Image
-            </span>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            The Docker image used to run this server container.
-          </p>
+          <SectionHeader icon={Container} title="Container Image" description="Docker image used to run this server container." />
 
-          <div className="mt-4 space-y-3">
-            <div className="rounded-lg border border-border bg-surface-2 p-3">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                Current Image
-              </div>
+          <div className="space-y-3">
+            <div className="rounded-lg border border-border/50 bg-surface-2/50 p-3 dark:bg-surface-2/30">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Current Image</div>
               <div className="mt-1 flex items-center gap-2">
                 <code className="flex-1 truncate rounded bg-card px-2 py-1 font-mono text-[11px] text-foreground">
                   {currentResolvedImage}
@@ -654,10 +654,7 @@ export default function ServerAdminTab({
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard
-                      .writeText(currentResolvedImage)
-                      .then(() => notifySuccess('Copied'))
-                      .catch(() => {});
+                    navigator.clipboard.writeText(currentResolvedImage).then(() => notifySuccess('Copied')).catch(() => {});
                   }}
                   className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
                   title="Copy image"
@@ -667,19 +664,14 @@ export default function ServerAdminTab({
               </div>
               {currentImageVariant && (
                 <div className="mt-2 text-[10px] text-muted-foreground">
-                  Variant:{' '}
-                  <span className="font-medium text-foreground">
-                    {currentImageLabel}
-                  </span>
+                  Variant: <span className="font-medium text-foreground">{currentImageLabel}</span>
                 </div>
               )}
             </div>
 
             {templateImages.length > 0 && (
               <div>
-                <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">
-                  Available Variants
-                </div>
+                <div className="mb-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">Available Variants</div>
                 <div className="space-y-1">
                   {templateImages.map((img) => (
                     <div
@@ -687,33 +679,22 @@ export default function ServerAdminTab({
                       className={`flex items-center justify-between rounded-lg border px-3 py-2 transition-colors ${
                         img.name === currentImageVariant
                           ? 'border-primary/30 bg-primary-500/5'
-                          : 'border-border bg-surface-2'
+                          : 'border-border/50 bg-surface-2/50 dark:bg-surface-2/30'
                       }`}
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs font-medium text-foreground">
-                          {img.label ?? img.name}
-                        </div>
-                        <div className="truncate font-mono text-[10px] text-muted-foreground">
-                          {img.image}
-                        </div>
+                        <div className="text-xs font-medium text-foreground">{img.label ?? img.name}</div>
+                        <div className="truncate font-mono text-[10px] text-muted-foreground">{img.image}</div>
                       </div>
                       {img.name === currentImageVariant && (
-                        <span className="ml-2 rounded-full bg-primary-500/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                          Active
-                        </span>
+                        <span className="ml-2 rounded-full bg-primary-500/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Active</span>
                       )}
                     </div>
                   ))}
                 </div>
                 <p className="mt-2 flex items-start gap-1 text-[10px] text-muted-foreground">
                   <Info className="mt-0.5 h-3 w-3 shrink-0" />
-                  Change the image variant via the{' '}
-                  <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[10px]">
-                    IMAGE_VARIANT
-                  </code>{' '}
-                  environment variable on the Configuration tab, then rebuild
-                  the container.
+                  Change the variant via the <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[10px]">IMAGE_VARIANT</code> env var, then rebuild.
                 </p>
               </div>
             )}
@@ -722,27 +703,14 @@ export default function ServerAdminTab({
 
         {/* Container Actions */}
         <ServerTabCard>
-          <div className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-primary" />
-            <span className="text-sm font-semibold text-foreground">
-              Container Actions
-            </span>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Manage the server container lifecycle.
-          </p>
+          <SectionHeader icon={Zap} title="Container Actions" description="Manage the server container lifecycle." />
 
-          <div className="mt-4 space-y-3">
+          <div className="space-y-2">
             {/* Rebuild */}
-            <div className="flex items-center justify-between rounded-lg border border-border bg-surface-2 p-3">
+            <div className="flex items-center justify-between rounded-lg border border-border/50 bg-surface-2/50 p-3 dark:bg-surface-2/30">
               <div className="min-w-0">
-                <div className="text-xs font-medium text-foreground">
-                  Rebuild Container
-                </div>
-                <div className="text-[10px] text-muted-foreground">
-                  Recreates the container from the current image. Preserves all
-                  server data.
-                </div>
+                <div className="text-xs font-medium text-foreground">Rebuild Container</div>
+                <div className="text-[10px] text-muted-foreground">Recreates from current image. Preserves all data.</div>
               </div>
               <button
                 type="button"
@@ -755,15 +723,10 @@ export default function ServerAdminTab({
             </div>
 
             {/* Reinstall */}
-            <div className="flex items-center justify-between rounded-lg border border-border bg-surface-2 p-3">
+            <div className="flex items-center justify-between rounded-lg border border-warning/20 bg-warning/5 p-3">
               <div className="min-w-0">
-                <div className="text-xs font-medium text-foreground">
-                  Reinstall
-                </div>
-                <div className="text-[10px] text-muted-foreground">
-                  Stops the server, wipes all data, and re-runs the install
-                  script.
-                </div>
+                <div className="text-xs font-medium text-foreground">Reinstall</div>
+                <div className="text-[10px] text-muted-foreground">Wipes all data, re-runs install script.</div>
               </div>
               <button
                 type="button"
@@ -776,15 +739,10 @@ export default function ServerAdminTab({
             </div>
 
             {/* Force Kill */}
-            <div className="flex items-center justify-between rounded-lg border border-danger/20 bg-danger-muted p-3">
+            <div className="flex items-center justify-between rounded-lg border border-danger/20 bg-danger/5 p-3">
               <div className="min-w-0">
-                <div className="text-xs font-medium text-foreground">
-                  Force Kill
-                </div>
-                <div className="text-[10px] text-muted-foreground">
-                  Immediately terminates the server process without graceful
-                  shutdown.
-                </div>
+                <div className="text-xs font-medium text-foreground">Force Kill</div>
+                <div className="text-[10px] text-muted-foreground">Terminates immediately, no graceful shutdown.</div>
               </div>
               <button
                 type="button"
@@ -799,55 +757,17 @@ export default function ServerAdminTab({
         </ServerTabCard>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* RESOURCES                                                          */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      <SectionDivider title="Resources" />
-
+      {/* ── Resources — two-column grid ── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Allocated Resources */}
         <ServerTabCard>
-          <div className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4 text-primary" />
-            <span className="text-sm font-semibold text-foreground">
-              Allocated Resources
-            </span>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            View and adjust the hardware resources assigned to this server.
-          </p>
+          <SectionHeader icon={BarChart3} title="Allocated Resources" description="Hardware resources assigned to this server." />
 
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            {[
-              {
-                label: 'Memory',
-                value: `${server.allocatedMemoryMb ?? 0} MB`,
-              },
-              {
-                label: 'CPU',
-                value: `${server.allocatedCpuCores ?? 0} core${(server.allocatedCpuCores ?? 0) === 1 ? '' : 's'}`,
-              },
-              {
-                label: 'Disk',
-                value: `${server.allocatedDiskMb ?? 0} MB`,
-              },
-              {
-                label: 'Swap',
-                value: `${server.allocatedSwapMb ?? 0} MB`,
-              },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="rounded-lg border border-border bg-surface-2 px-3 py-2"
-              >
-                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {item.label}
-                </div>
-                <div className="text-sm font-semibold text-foreground">
-                  {item.value}
-                </div>
-              </div>
-            ))}
+          <div className="grid grid-cols-2 gap-2">
+            <StatChip label="Memory" value={`${server.allocatedMemoryMb ?? 0} MB`} />
+            <StatChip label="CPU" value={`${server.allocatedCpuCores ?? 0} core${(server.allocatedCpuCores ?? 0) === 1 ? '' : 's'}`} />
+            <StatChip label="Disk" value={`${server.allocatedDiskMb ?? 0} MB`} />
+            <StatChip label="Swap" value={`${server.allocatedSwapMb ?? 0} MB`} />
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
@@ -858,24 +778,16 @@ export default function ServerAdminTab({
 
         {/* Port Allocations */}
         <ServerTabCard>
-          <div className="flex items-center gap-2">
-            <Network className="h-4 w-4 text-primary" />
-            <span className="text-sm font-semibold text-foreground">
-              Port Allocations
-            </span>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Manage host-to-container port bindings.
-          </p>
+          <SectionHeader icon={Network} title="Port Allocations" description="Host-to-container port bindings." />
 
           {allocationsError && (
-            <div className="mt-3 rounded-md border border-danger/30 bg-danger-muted px-3 py-2 text-xs text-danger">
+            <div className="mb-3 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">
               {allocationsError}
             </div>
           )}
 
-          {/* Add allocation form */}
-          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+          {/* Add form */}
+          <div className="grid grid-cols-2 gap-2 text-xs">
             <input
               className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
               value={newContainerPort}
@@ -906,34 +818,28 @@ export default function ServerAdminTab({
             Add allocation
           </button>
 
-          {/* Existing allocations */}
+          {/* List */}
           <div className="mt-3 space-y-1.5">
             {allocations.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border bg-surface-2/50 px-4 py-4 text-center text-[10px] text-muted-foreground">
+              <div className="rounded-lg border border-dashed border-border/50 bg-surface-2/30 px-4 py-4 text-center text-[10px] text-muted-foreground">
                 No allocations configured
               </div>
             ) : (
               allocations.map((alloc) => (
                 <div
                   key={`${alloc.containerPort}-${alloc.hostPort}`}
-                  className="flex items-center justify-between rounded-lg border border-border bg-surface-2 px-3 py-2 transition-colors hover:border-primary/20"
+                  className="flex items-center justify-between rounded-lg border border-border/50 bg-surface-2/50 px-3 py-2 transition-colors hover:border-primary/20 dark:bg-surface-2/30"
                 >
                   <div className="flex items-center gap-2">
-                    <code className="text-xs font-mono text-foreground">
-                      {alloc.containerPort}
-                    </code>
+                    <code className="text-xs font-mono text-foreground">{alloc.containerPort}</code>
                     <span className="text-muted-foreground">→</span>
-                    <code className="text-xs font-mono text-foreground">
-                      {alloc.hostPort}
-                    </code>
+                    <code className="text-xs font-mono text-foreground">{alloc.hostPort}</code>
                     {alloc.isPrimary && (
-                      <span className="rounded-full bg-primary-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">
-                        Primary
-                      </span>
+                      <span className="rounded-full bg-primary-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">Primary</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    {!alloc.isPrimary && (
+                  {!alloc.isPrimary && (
+                    <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => onSetPrimary(alloc.containerPort)}
@@ -942,8 +848,6 @@ export default function ServerAdminTab({
                       >
                         Set primary
                       </button>
-                    )}
-                    {!alloc.isPrimary && (
                       <button
                         type="button"
                         onClick={() => onRemoveAllocation(alloc.containerPort)}
@@ -952,8 +856,8 @@ export default function ServerAdminTab({
                       >
                         Remove
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               ))
             )}
@@ -961,79 +865,24 @@ export default function ServerAdminTab({
         </ServerTabCard>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* CRASH RECOVERY                                                     */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      <SectionDivider title="Recovery" />
-
+      {/* ── Crash Recovery — single card ── */}
       <ServerTabCard>
-        <div className="flex items-center gap-2">
-          <RotateCcw className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold text-foreground">
-            Crash Recovery
-          </span>
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Configure automatic restart behavior when the server process exits
-          unexpectedly.
-        </p>
+        <SectionHeader icon={RotateCcw} title="Crash Recovery" description="Automatic restart behavior when the server process exits unexpectedly." />
 
-        {/* Crash stats */}
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <div className="rounded-lg border border-border bg-surface-2 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Crashes
-            </div>
-            <div className="text-sm font-semibold text-foreground">
-              {crashCount}{' '}
-              <span className="font-normal text-muted-foreground">/</span>{' '}
-              {maxCrashCountValue}
-            </div>
-          </div>
-          <div className="rounded-lg border border-border bg-surface-2 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Policy
-            </div>
-            <div className="text-sm font-semibold capitalize text-foreground">
-              {restartPolicy}
-            </div>
-          </div>
-          <div className="rounded-lg border border-border bg-surface-2 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Last Crash
-            </div>
-            <div className="text-xs font-medium text-foreground">
-              {lastCrashAt
-                ? new Date(lastCrashAt).toLocaleString()
-                : 'Never'}
-            </div>
-          </div>
-          <div className="rounded-lg border border-border bg-surface-2 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Exit Code
-            </div>
-            <div className="text-sm font-semibold text-foreground">
-              {lastExitCode !== null && lastExitCode !== undefined
-                ? lastExitCode
-                : '—'}
-            </div>
-          </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <StatChip label="Crashes" value={`${crashCount} / ${maxCrashCountValue}`} mono />
+          <StatChip label="Policy" value={restartPolicy.replace('-', ' ')} />
+          <StatChip label="Last Crash" value={lastCrashAt ? new Date(lastCrashAt).toLocaleString() : 'Never'} />
+          <StatChip label="Exit Code" value={lastExitCode !== null && lastExitCode !== undefined ? String(lastExitCode) : '—'} mono />
         </div>
 
-        {/* Controls */}
         <div className="mt-4 flex flex-wrap items-end gap-3">
           <div className="flex-1 min-w-[160px]">
-            <label className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Restart Policy
-            </label>
+            <label className="text-[10px] uppercase tracking-wide text-muted-foreground">Restart Policy</label>
             <select
               className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
               value={restartPolicy}
-              onChange={(e) =>
-                onRestartPolicyChange(
-                  e.target.value as 'always' | 'on-failure' | 'never',
-                )
-              }
+              onChange={(e) => onRestartPolicyChange(e.target.value as 'always' | 'on-failure' | 'never')}
               disabled={isSuspended}
             >
               <option value="always">Always restart</option>
@@ -1042,9 +891,7 @@ export default function ServerAdminTab({
             </select>
           </div>
           <div className="min-w-[120px]">
-            <label className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Max Crash Count
-            </label>
+            <label className="text-[10px] uppercase tracking-wide text-muted-foreground">Max Crash Count</label>
             <input
               className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
               type="number"
@@ -1076,144 +923,96 @@ export default function ServerAdminTab({
         </div>
       </ServerTabCard>
 
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* OWNERSHIP & ACCESS                                                */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      <SectionDivider title="Ownership" />
+      {/* ── Ownership & Suspension — two-column ── */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* Transfer Ownership */}
+        <ServerTabCard>
+          <SectionHeader icon={UserRoundCog} title="Transfer Ownership" description="Transfer this server to another user." />
 
-      <ServerTabCard>
-        <div className="flex items-center gap-2">
-          <UserRoundCog className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold text-foreground">
-            Transfer Ownership
-          </span>
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Transfer this server to another user. The new owner will receive full
-          management access.
-        </p>
-
-        <div className="mt-3 flex flex-wrap items-end gap-2">
-          <div className="flex-1 min-w-[200px]">
-            <label className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              New Owner User ID
-            </label>
-            <input
-              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 font-mono text-xs text-foreground transition-all focus:border-primary focus:outline-none"
-              value={newOwnerId}
-              onChange={(e) => setNewOwnerId(e.target.value)}
-              placeholder="Enter user ID"
-              disabled={isSuspended}
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => setTransferOwnerConfirm(true)}
-            disabled={!newOwnerId.trim() || isSuspended}
-            className="rounded-md border border-warning/30 bg-warning px-3 py-2 text-xs font-semibold text-foreground shadow-sm transition-all hover:bg-warning disabled:opacity-50"
-          >
-            Transfer
-          </button>
-        </div>
-
-        {server.ownerId && (
-          <div className="mt-3 rounded-lg border border-border bg-surface-2 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Current Owner
-            </div>
-            <div className="mt-0.5 font-mono text-xs text-foreground">
-              {server.ownerId}
-            </div>
-          </div>
-        )}
-      </ServerTabCard>
-
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* SUSPENSION                                                         */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      <SectionDivider title="Suspension" />
-
-      <ServerTabCard>
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-warning" />
-          <span className="text-sm font-semibold text-foreground">
-            Server Suspension
-          </span>
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Suspend or restore access to this server.
-        </p>
-
-        {server.status === 'suspended' ? (
-          <div className="mt-4 flex items-center justify-between rounded-lg border border-warning/20 bg-warning-muted p-3">
-            <div>
-              <div className="text-xs font-medium text-foreground">
-                Server is suspended
-              </div>
-              {server.suspensionReason && (
-                <div className="mt-0.5 text-[10px] text-muted-foreground">
-                  Reason: {server.suspensionReason}
-                </div>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => onUnsuspend()}
-              disabled={unsuspendPending}
-              className="shrink-0 rounded-md border border-success/30 bg-success px-3 py-1.5 text-[10px] font-semibold text-foreground shadow-sm transition-all hover:bg-success disabled:opacity-50"
-            >
-              Unsuspend
-            </button>
-          </div>
-        ) : (
-          <div className="mt-4 flex flex-wrap items-end gap-3">
+          <div className="flex flex-wrap items-end gap-2">
             <div className="flex-1 min-w-[200px]">
-              <label className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                Suspension reason (optional)
-              </label>
+              <label className="text-[10px] uppercase tracking-wide text-muted-foreground">New Owner User ID</label>
               <input
-                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
-                value={suspendReason}
-                onChange={(e) => onSuspendReasonChange(e.target.value)}
-                placeholder="Billing, abuse, or admin notes"
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 font-mono text-xs text-foreground transition-all focus:border-primary focus:outline-none"
+                value={newOwnerId}
+                onChange={(e) => setNewOwnerId(e.target.value)}
+                placeholder="Enter user ID"
+                disabled={isSuspended}
               />
             </div>
             <button
               type="button"
-              onClick={() => onSuspend(suspendReason.trim() || undefined)}
-              disabled={suspendPending}
-              className="rounded-md bg-danger px-3 py-2 text-xs font-semibold text-foreground shadow-lg shadow-danger/20 transition-all hover:bg-danger disabled:opacity-50"
+              onClick={() => setTransferOwnerConfirm(true)}
+              disabled={!newOwnerId.trim() || isSuspended}
+              className="rounded-md border border-warning/30 bg-warning px-3 py-2 text-xs font-semibold text-foreground shadow-sm transition-all hover:bg-warning disabled:opacity-50"
             >
-              Suspend server
+              Transfer
             </button>
           </div>
-        )}
-      </ServerTabCard>
 
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* DANGER ZONE                                                        */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      <SectionDivider title="Danger Zone" />
+          {server.ownerId && (
+            <div className="mt-3 rounded-lg border border-border/50 bg-surface-2/50 px-3 py-2 dark:bg-surface-2/30">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Current Owner</div>
+              <div className="mt-0.5 font-mono text-xs text-foreground">{server.ownerId}</div>
+            </div>
+          )}
+        </ServerTabCard>
 
-      <div className="rounded-xl border border-danger/30 bg-danger-muted p-5">
-        <div className="flex items-center gap-2">
-          <Skull className="h-4 w-4 text-danger" />
-          <span className="text-sm font-semibold text-danger">
-            Irreversible Actions
-          </span>
-        </div>
-        <p className="mt-1 text-xs text-danger/80">
-          These actions are permanent and cannot be undone. Proceed with caution.
-        </p>
+        {/* Suspension */}
+        <ServerTabCard>
+          <SectionHeader icon={AlertTriangle} title="Server Suspension" accent="warning" description="Suspend or restore access to this server." />
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <DeleteServerDialog
-            serverId={serverId}
-            serverName={serverName}
-            disabled={!canDelete}
-            onDeleted={() => navigate('/servers')}
-          />
-        </div>
+          {server.status === 'suspended' ? (
+            <div className="flex items-center justify-between rounded-lg border border-warning/20 bg-warning/5 p-3">
+              <div>
+                <div className="text-xs font-medium text-foreground">Server is suspended</div>
+                {server.suspensionReason && (
+                  <div className="mt-0.5 text-[10px] text-muted-foreground">Reason: {server.suspensionReason}</div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => onUnsuspend()}
+                disabled={unsuspendPending}
+                className="shrink-0 rounded-md border border-success/30 bg-success px-3 py-1.5 text-[10px] font-semibold text-foreground shadow-sm transition-all hover:bg-success disabled:opacity-50"
+              >
+                Unsuspend
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[200px]">
+                <label className="text-[10px] uppercase tracking-wide text-muted-foreground">Suspension reason (optional)</label>
+                <input
+                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
+                  value={suspendReason}
+                  onChange={(e) => onSuspendReasonChange(e.target.value)}
+                  placeholder="Billing, abuse, or admin notes"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => onSuspend(suspendReason.trim() || undefined)}
+                disabled={suspendPending}
+                className="rounded-md bg-danger px-3 py-2 text-xs font-semibold text-foreground shadow-lg shadow-danger/20 transition-all hover:bg-danger disabled:opacity-50"
+              >
+                Suspend
+              </button>
+            </div>
+          )}
+        </ServerTabCard>
+      </div>
+
+      {/* ── Danger Zone ── */}
+      <div className="rounded-xl border border-danger/30 bg-danger/5 p-5">
+        <SectionHeader icon={Skull} title="Danger Zone" accent="danger" description="These actions are permanent and cannot be undone." />
+
+        <DeleteServerDialog
+          serverId={serverId}
+          serverName={serverName}
+          disabled={!canDelete}
+          onDeleted={() => navigate('/servers')}
+        />
       </div>
 
       {/* ── Confirm dialogs ── */}

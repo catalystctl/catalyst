@@ -26,6 +26,7 @@ import {
   Shield,
   FolderSync,
   Activity,
+  AlertTriangle,
 } from 'lucide-react';
 import { useServer } from '../../hooks/useServer';
 import { useServerMetrics } from '../../hooks/useServerMetrics';
@@ -892,40 +893,75 @@ function ServerDetailsPage() {
     >
       <div className="space-y-4">
         {/* ── Header ── */}
-        <motion.div variants={itemVariants} className="rounded-lg border border-border bg-card p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <Terminal className="h-5 w-5 shrink-0 text-primary" />
-              {isLoading ? (
-                <div className="h-7 w-48 animate-pulse rounded-md bg-muted" />
-              ) : (
-                <>
-                  <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
-                    {server.name}
-                  </h1>
-                  <ServerStatusBadge status={server.status} />
-                </>
+        <motion.div variants={itemVariants}>
+          <div className={`relative overflow-hidden rounded-2xl border backdrop-blur-sm ${
+            isSuspended
+              ? 'border-danger/20 bg-gradient-to-br from-danger/5 via-card/90 to-card/80'
+              : server?.status === 'running'
+                ? 'border-success/20 bg-gradient-to-br from-success/5 via-card/90 to-card/80'
+                : 'border-border bg-card/80'
+          }`}>
+            {/* Subtle top accent */}
+            <div className={`h-0.5 w-full ${
+              isSuspended
+                ? 'bg-gradient-to-r from-transparent via-danger/60 to-transparent'
+                : server?.status === 'running'
+                  ? 'bg-gradient-to-r from-transparent via-success/60 to-transparent'
+                  : 'bg-gradient-to-r from-transparent via-muted-foreground/30 to-transparent'
+            }`} />
+
+            <div className="p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors ${
+                    isSuspended
+                      ? 'border-danger/30 bg-danger/10 text-danger'
+                      : server?.status === 'running'
+                        ? 'border-success/30 bg-success/10 text-success'
+                        : 'border-border bg-surface-2 text-muted-foreground'
+                  }`}>
+                    <Terminal className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      {isLoading ? (
+                        <div className="h-6 w-48 animate-pulse rounded-md bg-muted" />
+                      ) : (
+                        <>
+                          <h1 className="font-display truncate text-xl font-bold tracking-tight text-foreground">
+                            {server.name}
+                          </h1>
+                          <ServerStatusBadge status={server.status} />
+                        </>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {isLoading ? 'Loading…' : `${nodeLabel} · ${nodeIp}:${nodePort}`}
+                    </p>
+                  </div>
+                </div>
+                {server ? (
+                  <ServerControls
+                    serverId={server.id}
+                    status={server.status}
+                    permissions={server.effectivePermissions}
+                  />
+                ) : (
+                  <div className="h-8 w-32 animate-pulse rounded-md bg-muted" />
+                )}
+              </div>
+
+              {isSuspended && (
+                <div className="mt-3 flex items-center gap-2 rounded-lg border border-danger/30 bg-danger-muted px-3 py-2 text-xs text-danger">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  <span className="font-semibold">Suspended</span>
+                  {server?.suspensionReason && (
+                    <span className="text-danger/80">— {server.suspensionReason}</span>
+                  )}
+                </div>
               )}
             </div>
-            {server ? (
-              <ServerControls
-                serverId={server.id}
-                status={server.status}
-                permissions={server.effectivePermissions}
-              />
-            ) : (
-              <div className="h-8 w-32 animate-pulse rounded-md bg-muted" />
-            )}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {isLoading ? 'Loading…' : `${nodeLabel} · ${nodeIp}:${nodePort}`}
-          </p>
-          {isSuspended ? (
-            <div className="mt-3 rounded-md border border-danger/30 bg-danger-muted px-3 py-2 text-xs text-danger">
-              <span className="font-semibold">Suspended</span>
-              {server?.suspensionReason ? ` — ${server.suspensionReason}` : null}
-            </div>
-          ) : null}
         </motion.div>
 
         {/* ── Tab navigation ── */}
