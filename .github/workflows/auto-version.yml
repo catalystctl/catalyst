@@ -53,8 +53,7 @@ jobs:
           # Analyze commits for bump type
           BUMP="none"
 
-          while IFS= read -r msg; do
-            echo "DEBUG: processing commit: [$msg]"
+          while IFS= read -r msg || [[ -n "$msg" ]]; do
             [ -z "$msg" ] && continue
 
             # Skip chore and release commits (never trigger a bump)
@@ -101,11 +100,6 @@ jobs:
 
           echo "bump=$BUMP" >> "$GITHUB_OUTPUT"
           echo "Detected bump type: $BUMP"
-          echo "DEBUG: COMMIT_RANGE=$COMMIT_RANGE"
-          echo "DEBUG: commits in range:"
-          git log "$COMMIT_RANGE" --oneline -- 2>&1 || echo "DEBUG: git log failed"
-          echo "DEBUG: HEAD=$(git rev-parse HEAD)"
-          echo "DEBUG: v1.3.4=$(git rev-parse v1.3.4 2>/dev/null || echo 'tag not found')"
 
       - name: Bump version
         id: version
