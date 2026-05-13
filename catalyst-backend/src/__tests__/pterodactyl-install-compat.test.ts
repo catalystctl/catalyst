@@ -258,7 +258,7 @@ function extractToolUsage(script: string): Set<string> {
 // Tests
 // ============================================================================
 
-describe('Pterodactyl Install Script Compatibility', () => {
+describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility', () => {
 
 	describe('Path compatibility (/mnt/server → /data)', () => {
 
