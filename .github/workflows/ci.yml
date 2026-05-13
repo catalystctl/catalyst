@@ -73,16 +73,21 @@ jobs:
         id: cache-protoc
         uses: actions/cache@v5
         with:
-          path: /usr/local/bin/protoc
+          path: |
+            ~/.local/bin/protoc
+            ~/.local/include/google
           key: protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}
 
       - name: Install protoc
         if: steps.cache-protoc.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get update && sudo apt-get install -y unzip
+          mkdir -p ~/.local/bin ~/.local/include
           curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
-          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d /usr/local
-          sudo chmod +x /usr/local/bin/protoc
+          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d ~/.local
+          chmod +x ~/.local/bin/protoc
+
+      - name: Add protoc to PATH
+        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       # ── Dependency Install ──
       # Maps to: step_install_deps() in run-workflow.sh
@@ -196,16 +201,21 @@ jobs:
         id: cache-protoc
         uses: actions/cache@v5
         with:
-          path: /usr/local/bin/protoc
+          path: |
+            ~/.local/bin/protoc
+            ~/.local/include/google
           key: protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}
 
       - name: Install protoc
         if: steps.cache-protoc.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get update && sudo apt-get install -y unzip
+          mkdir -p ~/.local/bin ~/.local/include
           curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
-          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d /usr/local
-          sudo chmod +x /usr/local/bin/protoc
+          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d ~/.local
+          chmod +x ~/.local/bin/protoc
+
+      - name: Add protoc to PATH
+        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       # ── Dependency Install ──
       - name: Cache bun install
@@ -290,16 +300,21 @@ jobs:
         id: cache-protoc
         uses: actions/cache@v5
         with:
-          path: /usr/local/bin/protoc
+          path: |
+            ~/.local/bin/protoc
+            ~/.local/include/google
           key: protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}
 
       - name: Install protoc
         if: steps.cache-protoc.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get update && sudo apt-get install -y unzip
+          mkdir -p ~/.local/bin ~/.local/include
           curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
-          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d /usr/local
-          sudo chmod +x /usr/local/bin/protoc
+          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d ~/.local
+          chmod +x ~/.local/bin/protoc
+
+      - name: Add protoc to PATH
+        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       # ── Dependency Install ──
       - name: Cache bun install
