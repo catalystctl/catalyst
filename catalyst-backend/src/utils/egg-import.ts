@@ -610,7 +610,7 @@ function detectCircularRefs(
 ): Array<string[]> {
 	const varMap = new Map<string, string>(); // env_variable → default_value
 	for (const v of variables) {
-		if (v.env_variable && v.default_value) {
+		if (v.env_variable && v.default_value && typeof v.default_value === 'string') {
 			varMap.set(v.env_variable, v.default_value);
 		}
 	}
@@ -636,7 +636,7 @@ function detectCircularRefs(
 		path.push(name);
 
 		const defaultValue = varMap.get(name);
-		if (defaultValue) {
+		if (defaultValue && typeof defaultValue === 'string') {
 			// Find all {{VAR}} references in the default value
 			const refs = [...defaultValue.matchAll(/\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}/g)]
 				.map((m) => m[1]);
