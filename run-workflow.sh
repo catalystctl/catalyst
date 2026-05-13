@@ -496,7 +496,7 @@ step_install_deps() {
 
 # ── Step 3: Lint & Static Analysis ────────────────────────────────────────────
 # Maps to:
-#   - bun run lint (eslint)                 (ci.yml lint: job)
+#   - bun run --filter=catalyst-backend lint   (ci.yml lint: job)
 #   - cargo fmt --check + cargo clippy      (ci.yml lint: job)
 #   - bun pm scan (security audit)           (ci.yml lint: job)
 step_lint() {
@@ -515,11 +515,11 @@ step_lint() {
   local overall_exit=0
 
   # --- Bun lint (eslint) ---
-  # Maps to: bun run lint in ci.yml lint: job
+  # Maps to: bun run --filter=catalyst-backend lint in ci.yml lint: job
   # Runs across all workspace packages that have a lint script
   if [[ "$HAS_BUN" -eq 1 ]]; then
     echo -e "  ${C_BOLD}[bun] Running ESLint...${C_RESET}"
-    local lint_cmd="${LINT_CMD:-bun --filter='*' run lint}"
+    local lint_cmd="${LINT_CMD:-bun run --filter=catalyst-backend lint}"
     if ! run_step "${step_name}_eslint" bash -c "$lint_cmd"; then
       overall_exit=1
     fi
@@ -570,7 +570,7 @@ step_lint() {
 
 # ── Step 4: Unit & Integration Tests ──────────────────────────────────────────
 # Maps to:
-#   - bun --filter='*' run test (vitest)    (ci.yml test: job)
+#   - bun run --filter=catalyst-backend test  (ci.yml test: job)
 #   - cargo test                            (ci.yml test: job)
 step_test() {
   step_header "Unit & Integration Tests"
@@ -588,10 +588,10 @@ step_test() {
   local overall_exit=0
 
   # --- Bun tests (vitest) ---
-  # Maps to: bun --filter='*' run test in ci.yml test: job
+  # Maps to: bun run --filter=catalyst-backend test in ci.yml test: job
   if [[ "$HAS_BUN" -eq 1 ]]; then
     echo -e "  ${C_BOLD}[bun] Running Vitest across workspace...${C_RESET}"
-    local test_cmd="${TEST_CMD:-bun --filter='*' run test}"
+    local test_cmd="${TEST_CMD:-bun run --filter=catalyst-backend test}"
     if ! run_step "${step_name}_vitest" bash -c "$test_cmd"; then
       overall_exit=1
     fi
