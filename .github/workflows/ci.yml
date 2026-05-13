@@ -14,11 +14,13 @@
 # ║  Build (push only):                                                          ║
 # ║    build        — bun build + cargo build verification                       ║
 # ║                                                                              ║
-# ║  Publish (push to main/develop + tags):                                      ║
-# ║    agent-release — Build release agent binaries, upload to GitHub Release    ║
-# ║    detect-changes — Determine which Docker images need rebuilding             ║
+# ║  Publish (push to main/develop):                                           ║
+# ║    detect-changes — Determine which Docker images need rebuilding           ║
 # ║    publish-backend  — Build & push backend Docker image to GHCR              ║
 # ║    publish-frontend — Build & push frontend Docker image to GHCR             ║
+# ║                                                                              ║
+# ║  Release (in auto-version.yml, not here):                                    ║
+# ║    agent-release — Build release agent binaries, upload to GitHub Release    ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 name: CI/CD — Catalyst
@@ -26,12 +28,11 @@ name: CI/CD — Catalyst
 on:
   push:
     branches: [main, develop]
-    tags: ['v*']
   pull_request:
     branches: [main, develop]
 
 permissions:
-  contents: write    # needed for agent release asset uploads
+  contents: write    # needed for GHCR docker pushes
   packages: write    # needed for GHCR docker pushes
 
 env:
@@ -379,104 +380,14 @@ jobs:
       - name: Build agent (debug)
         run: cargo build --manifest-path catalyst-agent/Cargo.toml
 
-  # ──────────────────────────────────────────────────────────────────────────────
-  # Job 4: Agent Release Build (v* tags only)
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 4 was: Agent Release Build (v* tags only)
+  # Moved to auto-version.yml — runs in the same workflow that creates
+  # the tag, so no PAT / cross-workflow trigger is needed.
   # Maps to: Step "Agent Release Build" in run-workflow.sh
-  # Builds release binaries for gnu + musl targets and uploads them as
-  # GitHub Release assets with SHA256 checksums.
-  # Merged from: agent-release.yml
-  # ──────────────────────────────────────────────────────────────────────────────
-  agent-release:
-    name: Agent Release Build (${{ matrix.target }})
-    needs: [lint, test]
-    runs-on: blacksmith-2vcpu-ubuntu-2404
-    if: startsWith(github.ref, 'refs/tags/v')
+  # ──────────────────────────────────────────────────────────────────────────
 
-    container:
-      image: rust:1.93-bookworm
-
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            artifact_name: catalyst-agent-x86_64-linux-gnu
-          - target: x86_64-unknown-linux-musl
-            artifact_name: catalyst-agent-x86_64-linux-musl
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Cache protoc
-        id: cache-protoc
-        uses: actions/cache@v5
-        with:
-          path: /usr/local/bin/protoc
-          key: protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}
-
-      - name: Install protoc
-        if: steps.cache-protoc.outputs.cache-hit != 'true'
-        run: |
-          apt-get update && apt-get install -y unzip ca-certificates
-          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
-          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d /usr/local
-          chmod +x /usr/local/bin/protoc
-
-      - name: Install musl tools (for musl target)
-        if: matrix.target == 'x86_64-unknown-linux-musl'
-        run: apt-get update && apt-get install -y musl-tools musl-dev
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Cache cargo registry + git deps
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: agent-cargo-deps-${{ hashFiles('catalyst-agent/Cargo.lock') }}
-          restore-keys: agent-cargo-deps-
-
-      - name: Cache cargo build (release ${{ matrix.target }})
-        uses: actions/cache@v5
-        with:
-          path: catalyst-agent/target/
-          key: agent-release-${{ matrix.target }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-${{ hashFiles('catalyst-agent/src/**') }}
-          restore-keys: |
-            agent-release-${{ matrix.target }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-
-            agent-release-${{ matrix.target }}-
-
-      - name: Build release
-        run: |
-          cd catalyst-agent
-          cargo build --release --target ${{ matrix.target }}
-
-      - name: Rename binary for release asset
-        run: |
-          mv "catalyst-agent/target/${{ matrix.target }}/release/catalyst-agent" "/tmp/${{ matrix.artifact_name }}"
-
-      - name: Generate SHA256 checksum
-        run: |
-          sha256sum "/tmp/${{ matrix.artifact_name }}" > "/tmp/${{ matrix.artifact_name }}.sha256"
-
-      - name: Upload binary as release asset
-        uses: softprops/action-gh-release@v2
-        with:
-          files: /tmp/${{ matrix.artifact_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload checksum as release asset
-        uses: softprops/action-gh-release@v2
-        with:
-          files: /tmp/${{ matrix.artifact_name }}.sha256
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ──────────────────────────────────────────────────────────────────────────────
+  # ──────────────────────────────────────────────────────────────────────────
   # Job 5a: Detect Changes for Docker Publish
   # Determines which Docker images need rebuilding based on changed paths.
   # Merged from: docker-publish.yml

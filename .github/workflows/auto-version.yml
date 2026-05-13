@@ -12,13 +12,15 @@ jobs:
     runs-on: ubuntu-latest
     if: github.actor != 'github-actions[bot]'
 
+    outputs:
+      bump: ${{ steps.bump.outputs.bump }}
+      new_version: ${{ steps.version.outputs.new_version }}
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # Use a PAT so the tag push triggers ci.yml's tag-based workflows.
-          # GITHUB_TOKEN pushes do not trigger other workflows (by design).
-          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Determine version bump
         id: bump
@@ -163,10 +165,7 @@ jobs:
           git tag -a "v$VERSION" -m "Release v$VERSION"
           git push origin main --follow-tags
         env:
-          # Prefer RELEASE_TOKEN (PAT) over GITHUB_TOKEN so that the tag push
-          # triggers ci.yml's agent-release job. Falls back to GITHUB_TOKEN if
-          # RELEASE_TOKEN is not configured (agent-release won't trigger then).
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate AI Release Notes
         id: release_notes
@@ -272,7 +271,7 @@ jobs:
           name: v${{ steps.version.outputs.new_version }}
           body_path: /tmp/release_notes.md
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Notify Discord on Release
         if: steps.bump.outputs.bump != 'none'
@@ -318,3 +317,107 @@ jobs:
             }' | curl -sf -H "Content-Type: application/json" -X POST "$DISCORD_RELEASE_WEBHOOK_URL" -d @-
 
           echo "✅ Discord release notification sent for ${TAG}"
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Agent Release Build — builds release agent binaries and uploads them as
+  # GitHub Release assets with SHA256 checksums.
+  #
+  # Lives in auto-version.yml (not ci.yml) because this workflow creates the
+  # tag and release. ci.yml can't be triggered by GITHUB_TOKEN tag pushes
+  # (GitHub prevents this to avoid infinite loops). Putting agent-release
+  # here means it runs in the same workflow that creates the tag — no PAT
+  # needed, no cross-workflow trigger required.
+  # ══════════════════════════════════════════════════════════════════════════════
+  agent-release:
+    name: Agent Release Build (${{ matrix.target }})
+    needs: version
+    if: needs.version.outputs.bump != 'none'
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+
+    container:
+      image: rust:1.93-bookworm
+
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            artifact_name: catalyst-agent-x86_64-linux-gnu
+          - target: x86_64-unknown-linux-musl
+            artifact_name: catalyst-agent-x86_64-linux-musl
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: v${{ needs.version.outputs.new_version }}
+
+      - name: Cache protoc
+        id: cache-protoc
+        uses: actions/cache@v5
+        with:
+          path: /usr/local/bin/protoc
+          key: protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}
+
+      - name: Install protoc
+        if: steps.cache-protoc.outputs.cache-hit != 'true'
+        run: |
+          apt-get update && apt-get install -y unzip ca-certificates
+          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
+          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d /usr/local
+          chmod +x /usr/local/bin/protoc
+
+      - name: Install musl tools (for musl target)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: apt-get update && apt-get install -y musl-tools musl-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry + git deps
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: agent-cargo-deps-${{ hashFiles('catalyst-agent/Cargo.lock') }}
+          restore-keys: agent-cargo-deps-
+
+      - name: Cache cargo build (release ${{ matrix.target }})
+        uses: actions/cache@v5
+        with:
+          path: catalyst-agent/target/
+          key: agent-release-${{ matrix.target }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-${{ hashFiles('catalyst-agent/src/**') }}
+          restore-keys: |
+            agent-release-${{ matrix.target }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-
+            agent-release-${{ matrix.target }}-
+
+      - name: Build release
+        run: |
+          cd catalyst-agent
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename binary for release asset
+        run: |
+          mv "catalyst-agent/target/${{ matrix.target }}/release/catalyst-agent" "/tmp/${{ matrix.artifact_name }}"
+
+      - name: Generate SHA256 checksum
+        run: |
+          sha256sum "/tmp/${{ matrix.artifact_name }}" > "/tmp/${{ matrix.artifact_name }}.sha256"
+
+      - name: Upload binary as release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.new_version }}
+          files: /tmp/${{ matrix.artifact_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload checksum as release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.new_version }}
+          files: /tmp/${{ matrix.artifact_name }}.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
