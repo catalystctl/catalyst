@@ -813,95 +813,112 @@ async function bootstrap() {
 		await app.register((app) => migrationRoutes(app));
 
 		// Agent binary download endpoint (public)
+		// Priority: 1) local binary (air-gapped / self-hosted), 2) GitHub Releases proxy
 		app.get(
 			"/api/agent/download",
 			{
 				config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
 			},
 			async (request, reply) => {
-			// Use musl static binary for portability across Linux distributions.
-			// Supports both x86_64 and aarch64 architectures.
 			const arch = (request.query as { arch?: string }).arch || "x86_64";
 			const normalizedArch =
 				arch === "aarch64" || arch === "arm64" ? "aarch64" : "x86_64";
-			const target = `${normalizedArch}-unknown-linux-musl`;
+			const assetName = `catalyst-agent-${normalizedArch}-linux-musl`;
 
-			// Allow overriding the agent target directory via env var.
-			// Falls back to the default location in catalyst-agent/target/.
-			const agentTargetDir =
+			// ── Priority 1: Serve a locally-placed binary (air-gapped / self-hosted) ──
+			// Set AGENT_BINARY_DIR to a directory containing pre-built binaries named
+			// by the release asset convention (e.g. catalyst-agent-x86_64-linux-musl).
+			// Falls back to the old build target directory for backward compatibility.
+			const agentBinaryDir =
+				process.env.AGENT_BINARY_DIR ||
 				process.env.AGENT_TARGET_DIR ||
 				path.resolve(process.cwd(), "..", "catalyst-agent", "target");
-			const agentPath = path.resolve(
-				agentTargetDir,
+
+			// Try the release-asset naming convention first
+			const assetPath = path.resolve(agentBinaryDir, assetName);
+			if (fs.existsSync(assetPath)) {
+				app.log.info(`Serving agent binary from local file: ${assetPath}`);
+				reply.header("Content-Type", "application/octet-stream");
+				reply.header(
+					"Content-Disposition",
+					`attachment; filename=${assetName}`,
+				);
+				return reply.send(fs.createReadStream(assetPath));
+			}
+
+			// Try the old build directory layout (target/{target}/release/catalyst-agent)
+			const target = `${normalizedArch}-unknown-linux-musl`;
+			const legacyPath = path.resolve(
+				agentBinaryDir,
 				target,
 				"release",
 				"catalyst-agent",
 			);
-
-			if (!fs.existsSync(agentPath)) {
-				// Attempt to build the agent automatically (only in development)
-				if (process.env.NODE_ENV === "production") {
-					return reply.status(404).send({
-						error: `Agent binary not found for ${target}. Please build with 'cargo build --release --target ${target}' in catalyst-agent/`,
-					});
-				}
-
-				app.log.warn(
-					`Agent binary not found for ${target}, attempting to build...`,
+			if (fs.existsSync(legacyPath)) {
+				app.log.info(`Serving agent binary from legacy build path: ${legacyPath}`);
+				reply.header("Content-Type", "application/octet-stream");
+				reply.header(
+					"Content-Disposition",
+					"attachment; filename=catalyst-agent",
 				);
-
-				const agentDir = path.resolve(process.cwd(), "..", "catalyst-agent");
-				if (!fs.existsSync(agentDir)) {
-					return reply
-						.status(404)
-						.send({ error: "Agent source code not found" });
-				}
-
-				try {
-					const { execSync } = await import("child_process");
-					app.log.info(
-						`Building agent with 'cargo build --release --target ${target}'...`,
-					);
-
-					execSync(`cargo build --release --target ${target}`, {
-						cwd: agentDir,
-						stdio: "inherit",
-						timeout: 300000, // 5 minutes
-						env: {
-							...process.env,
-							CARGO_TARGET_DIR: path.resolve(agentDir, "target"),
-						},
-					});
-
-					app.log.info("Agent built successfully");
-
-					if (!fs.existsSync(agentPath)) {
-						return reply
-							.status(500)
-							.send({ error: "Agent build completed but binary not found" });
-					}
-				} catch (err) {
-					captureSystemError({
-						level: 'error',
-						component: 'Index',
-						message: err instanceof Error ? err.message : 'Failed to build agent',
-						stack: err instanceof Error ? err.stack : undefined,
-						metadata: { context: 'agent_build' },
-					}).catch(() => {});
-					app.log.error({ err }, "Failed to build agent");
-					return reply.status(500).send({
-						error: "Failed to build agent binary",
-						details: err instanceof Error ? err.message : String(err),
-					});
-				}
+				return reply.send(fs.createReadStream(legacyPath));
 			}
 
-			reply.header("Content-Type", "application/octet-stream");
-			reply.header(
-				"Content-Disposition",
-				"attachment; filename=catalyst-agent",
+			// ── Priority 2: Proxy from GitHub Releases ──
+			const releaseRepo =
+				process.env.AGENT_RELEASE_REPO || "catalystctl/catalyst";
+			const githubUrl = `https://github.com/${releaseRepo}/releases/latest/download/${assetName}`;
+
+			app.log.info(
+				`No local binary found — proxying from GitHub Releases: ${githubUrl}`,
 			);
-			return reply.send(fs.createReadStream(agentPath));
+
+			try {
+				const response = await fetch(githubUrl, {
+					redirect: "follow",
+					signal: AbortSignal.timeout(120_000), // 2 minutes
+				});
+
+				if (!response.ok) {
+					app.log.error(
+						`GitHub Releases returned ${response.status} for ${githubUrl}`,
+					);
+					return reply.status(502).send({
+						error: `Failed to download agent from GitHub Releases (HTTP ${response.status})`,
+					});
+				}
+
+				reply.header("Content-Type", "application/octet-stream");
+				reply.header(
+					"Content-Disposition",
+					`attachment; filename=${assetName}`,
+				);
+
+				// Stream the response body directly
+				if (response.body) {
+					const reader = response.body.getReader();
+					while (true) {
+						const { done, value } = await reader.read();
+						if (done) break;
+						reply.raw.write(value);
+					}
+					reply.raw.end();
+					return reply;
+				}
+
+				// Fallback: buffer the entire response
+				const buffer = Buffer.from(await response.arrayBuffer());
+				return reply.send(buffer);
+			} catch (err) {
+				app.log.error(
+					{ err },
+					"Failed to proxy agent binary from GitHub Releases",
+				);
+				return reply.status(502).send({
+					error: "Failed to download agent binary",
+					details: err instanceof Error ? err.message : String(err),
+				});
+			}
 		});
 
 		// Canonical node deployment script endpoint (public)

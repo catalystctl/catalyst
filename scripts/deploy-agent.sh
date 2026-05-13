@@ -25,6 +25,7 @@ NODE_HOSTNAME="${4:-$(hostname -f 2>/dev/null || hostname)}"
 
 NERDCTL_VERSION="2.2.1"
 CNI_PLUGINS_VERSION="v1.4.1"
+AGENT_RELEASE_REPO="catalystctl/catalyst"
 
 # --- Helpers ------------------------------------------------------------------
 log()  { printf '[deploy-agent] %s\n' "$*"; }
@@ -115,10 +116,24 @@ normalize_backend_urls() {
 preflight() {
     log "Running pre-flight checks..."
 
-    # Check connectivity to backend
-    if ! curl -fsSL --max-time 10 "${BACKEND_HTTP_URL}/api/agent/download?arch=x86_64" -o /dev/null 2>&1; then
-        warn "Cannot reach ${BACKEND_HTTP_URL} — agent binary download may fail later."
-        warn "Ensure this node has network access to the Catalyst backend."
+    # Check connectivity — at least one binary source must be reachable
+    local github_reachable=false
+    local backend_reachable=false
+
+    if curl -fsSL --max-time 10 "https://github.com/${AGENT_RELEASE_REPO}/releases/latest" -o /dev/null 2>&1; then
+        github_reachable=true
+    fi
+    if curl -fsSL --max-time 10 "${BACKEND_HTTP_URL}/api/agent/download?arch=x86_64" -o /dev/null 2>&1; then
+        backend_reachable=true
+    fi
+
+    if [ "$github_reachable" = false ] && [ "$backend_reachable" = false ]; then
+        warn "Cannot reach GitHub Releases or ${BACKEND_HTTP_URL}."
+        warn "Ensure this node has internet access or network access to the Catalyst backend."
+    elif [ "$github_reachable" = true ]; then
+        log "GitHub Releases reachable — pre-built binary available."
+    else
+        warn "GitHub Releases unreachable. Will try backend fallback for binary download."
     fi
 
     # Check minimum kernel version (containerd needs >= 4.x roughly)
@@ -503,13 +518,36 @@ install_agent_binary() {
         *) fail "Unsupported architecture for agent binary: $(uname -m)" ;;
     esac
 
+    local tmp_binary="/tmp/catalyst-agent.${agent_arch}"
+    local asset_name="catalyst-agent-${agent_arch}-linux-musl"
+
+    # ── Priority 1: Download from GitHub Releases (pre-built, versioned) ──
+    log "Downloading Catalyst Agent binary (${asset_name}) from GitHub Releases..."
+    local release_url
+    release_url="https://github.com/${AGENT_RELEASE_REPO}/releases/latest/download/${asset_name}"
+
+    if curl -fsSL --progress-bar "$release_url" -o "$tmp_binary" 2>/dev/null; then
+        if file "$tmp_binary" | grep -qE 'ELF|script'; then
+            mv -f "$tmp_binary" /opt/catalyst-agent/catalyst-agent
+            chmod 0755 /opt/catalyst-agent/catalyst-agent
+            log "Agent binary installed from GitHub Releases."
+            return 0
+        else
+            local err_body
+            err_body="$(cat "$tmp_binary" 2>/dev/null || true)"
+            rm -f "$tmp_binary"
+            warn "GitHub Releases returned invalid response: ${err_body:0:200}"
+        fi
+    else
+        rm -f "$tmp_binary"
+        warn "GitHub Releases download failed. Falling back to backend..."
+    fi
+
+    # ── Priority 2: Download from the Catalyst backend ──
     log "Downloading Catalyst Agent binary (${agent_arch}) from backend..."
     local download_url="${BACKEND_HTTP_URL}/api/agent/download?arch=${agent_arch}"
-    local tmp_binary="/tmp/catalyst-agent.${agent_arch}"
-    local download_success=false
 
     if curl -fsSL --progress-bar "$download_url" -o "$tmp_binary" 2>/dev/null; then
-        # Validate it looks like a real binary (ELF or shebang), not an error JSON
         if file "$tmp_binary" | grep -qE 'ELF|script'; then
             mv -f "$tmp_binary" /opt/catalyst-agent/catalyst-agent
             chmod 0755 /opt/catalyst-agent/catalyst-agent
@@ -525,10 +563,10 @@ install_agent_binary() {
         rm -f "$tmp_binary"
         local http_code
         http_code="$(curl -sSL -o /dev/null -w '%{http_code}' "$download_url" 2>/dev/null || echo '000')"
-        warn "Download failed (HTTP ${http_code})."
+        warn "Backend download failed (HTTP ${http_code})."
     fi
 
-    # Fallback: check for a local build
+    # ── Priority 3: Check for a local build ──
     if [ -f "$(pwd)/target/release/catalyst-agent" ]; then
         log "Using local build from $(pwd)/target/release/catalyst-agent"
         cp "$(pwd)/target/release/catalyst-agent" /opt/catalyst-agent/catalyst-agent
@@ -536,8 +574,8 @@ install_agent_binary() {
         return 0
     fi
 
-    # Fallback: build from source on this node
-    warn "Pre-built binary not available. Will build agent from source on this node."
+    # ── Priority 4: Build from source on this node (last resort) ──
+    warn "Pre-built binary not available from any source. Will build agent from source on this node."
     warn "This requires Rust toolchain and may take several minutes."
     build_agent_from_source "$agent_arch"
     return 0

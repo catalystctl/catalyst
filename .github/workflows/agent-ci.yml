@@ -21,7 +21,7 @@ env:
   PROTOC_ARCH: "linux-x86_64"
 
 jobs:
-  # ── Fast checks: fmt + check (no compilation needed for fmt) ──
+  # ── Fast checks: fmt + check ──
   lint:
     runs-on: blacksmith-2vcpu-ubuntu-2404
     container:
@@ -125,7 +125,7 @@ jobs:
       - name: Run tests
         run: cargo test --manifest-path catalyst-agent/Cargo.toml
 
-  # ── Release builds (only after lint + test pass) ──
+  # ── Release builds (CI artifacts for dev testing) ──
   build:
     needs: [lint, test]
     runs-on: blacksmith-2vcpu-ubuntu-2404
@@ -134,7 +134,11 @@ jobs:
 
     strategy:
       matrix:
-        target: [x86_64-unknown-linux-gnu, x86_64-unknown-linux-musl]
+        include:
+          - target: x86_64-unknown-linux-gnu
+            artifact_name: catalyst-agent-x86_64-linux-gnu
+          - target: x86_64-unknown-linux-musl
+            artifact_name: catalyst-agent-x86_64-linux-musl
 
     steps:
       - uses: actions/checkout@v6
@@ -187,10 +191,14 @@ jobs:
           cd catalyst-agent
           cargo build --release --target ${{ matrix.target }}
 
-      - name: Upload artifacts
+      - name: Rename binary for release asset naming
+        run: |
+          mv "catalyst-agent/target/${{ matrix.target }}/release/catalyst-agent" "/tmp/${{ matrix.artifact_name }}"
+
+      - name: Upload CI artifact
         uses: actions/upload-artifact@v4
         with:
-          name: catalyst-agent-${{ matrix.target }}
-          path: catalyst-agent/target/${{ matrix.target }}/release/catalyst-agent
+          name: ${{ matrix.artifact_name }}
+          path: /tmp/${{ matrix.artifact_name }}
           retention-days: 7
           if-no-files-found: error
