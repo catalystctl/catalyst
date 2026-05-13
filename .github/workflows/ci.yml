@@ -8,7 +8,7 @@
 # ║  JOB INDEX                                                                    ║
 # ║                                                                              ║
 # ║  CI gates (push + PR):                                                       ║
-# ║    lint          — ESLint, cargo fmt, cargo clippy, security audit            ║
+# ║    lint          — ESLint, cargo fmt/check/clippy, security audit            ║
 # ║    test          — Vitest, cargo test (with Postgres service)                 ║
 # ║                                                                              ║
 # ║  Build (push only):                                                          ║
@@ -16,6 +16,7 @@
 # ║                                                                              ║
 # ║  Publish (push to main/develop + tags):                                      ║
 # ║    agent-release — Build release agent binaries, upload to GitHub Release    ║
+# ║    detect-changes — Determine which Docker images need rebuilding             ║
 # ║    publish-backend  — Build & push backend Docker image to GHCR              ║
 # ║    publish-frontend — Build & push frontend Docker image to GHCR             ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -51,7 +52,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   lint:
     name: Lint & Static Analysis
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
 
     steps:
       - uses: actions/checkout@v6
@@ -66,6 +67,23 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      # ── Install protoc (required by agent's protobuf dependencies) ──
+      # Was in original agent-ci.yml; missing from first version of unified workflow
+      - name: Cache protoc
+        id: cache-protoc
+        uses: actions/cache@v5
+        with:
+          path: /usr/local/bin/protoc
+          key: protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}
+
+      - name: Install protoc
+        if: steps.cache-protoc.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update && sudo apt-get install -y unzip
+          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
+          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d /usr/local
+          sudo chmod +x /usr/local/bin/protoc
+
       # ── Dependency Install ──
       # Maps to: step_install_deps() in run-workflow.sh
       - name: Cache bun install
@@ -79,10 +97,22 @@ jobs:
           key: bun-deps-${{ runner.os }}-${{ hashFiles('bun.lock', 'bun.lockb', 'package.json') }}
           restore-keys: bun-deps-${{ runner.os }}-
 
+      - name: Cache Prisma Client
+        uses: actions/cache@v5
+        with:
+          path: |
+            node_modules/.bun/@prisma+client*
+            node_modules/.prisma
+          key: prisma-client-${{ hashFiles('catalyst-backend/prisma/schema.prisma') }}
+
       - name: Install bun dependencies
         run: bun install --frozen-lockfile
 
-      - name: Cache cargo registry
+      - name: Generate Prisma Client
+        working-directory: catalyst-backend
+        run: bunx prisma generate
+
+      - name: Cache cargo registry + git deps
         uses: actions/cache@v5
         with:
           path: |
@@ -92,12 +122,17 @@ jobs:
           key: agent-cargo-deps-${{ hashFiles('catalyst-agent/Cargo.lock') }}
           restore-keys: agent-cargo-deps-
 
+      - name: Cache cargo build (check)
+        uses: actions/cache@v5
+        with:
+          path: catalyst-agent/target/
+          key: agent-check-${{ runner.os }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-${{ hashFiles('catalyst-agent/src/**') }}
+          restore-keys: |
+            agent-check-${{ runner.os }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-
+            agent-check-${{ runner.os }}-
+
       - name: Install cargo dependencies
         run: cargo fetch --manifest-path catalyst-agent/Cargo.toml
-
-      - name: Generate Prisma Client
-        working-directory: catalyst-backend
-        run: bunx prisma generate
 
       # ── Lint & Static Analysis ──
       # Maps to: step_lint() in run-workflow.sh
@@ -111,6 +146,10 @@ jobs:
       - name: Check Rust formatting
         run: cargo fmt --manifest-path catalyst-agent/Cargo.toml -- --check
 
+      # cargo check must run before clippy so the compilation artifacts exist
+      - name: Run cargo check
+        run: cargo check --manifest-path catalyst-agent/Cargo.toml
+
       - name: Run Clippy
         run: cargo clippy --manifest-path catalyst-agent/Cargo.toml -- -D warnings
 
@@ -120,7 +159,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   test:
     name: Unit & Integration Tests
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
 
     services:
       postgres:
@@ -138,6 +177,7 @@ jobs:
           - 5432:5432
 
     env:
+      # localhost is correct when NOT using container: (services bind to host)
       DATABASE_URL: postgresql://catalyst:catalyst_dev_password@localhost:5432/catalyst_db
 
     steps:
@@ -151,6 +191,23 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      # ── Install protoc ──
+      - name: Cache protoc
+        id: cache-protoc
+        uses: actions/cache@v5
+        with:
+          path: /usr/local/bin/protoc
+          key: protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}
+
+      - name: Install protoc
+        if: steps.cache-protoc.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update && sudo apt-get install -y unzip
+          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
+          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d /usr/local
+          sudo chmod +x /usr/local/bin/protoc
+
+      # ── Dependency Install ──
       - name: Cache bun install
         uses: actions/cache@v5
         with:
@@ -162,6 +219,14 @@ jobs:
           key: bun-deps-${{ runner.os }}-${{ hashFiles('bun.lock', 'bun.lockb', 'package.json') }}
           restore-keys: bun-deps-${{ runner.os }}-
 
+      - name: Cache Prisma Client
+        uses: actions/cache@v5
+        with:
+          path: |
+            node_modules/.bun/@prisma+client*
+            node_modules/.prisma
+          key: prisma-client-${{ hashFiles('catalyst-backend/prisma/schema.prisma') }}
+
       - name: Install bun dependencies
         run: bun install --frozen-lockfile
 
@@ -169,7 +234,7 @@ jobs:
         working-directory: catalyst-backend
         run: bunx prisma generate
 
-      - name: Cache cargo registry
+      - name: Cache cargo registry + git deps
         uses: actions/cache@v5
         with:
           path: |
@@ -178,6 +243,15 @@ jobs:
             ~/.cargo/git/db/
           key: agent-cargo-deps-${{ hashFiles('catalyst-agent/Cargo.lock') }}
           restore-keys: agent-cargo-deps-
+
+      - name: Cache cargo build (test)
+        uses: actions/cache@v5
+        with:
+          path: catalyst-agent/target/
+          key: agent-test-${{ runner.os }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-${{ hashFiles('catalyst-agent/src/**') }}
+          restore-keys: |
+            agent-test-${{ runner.os }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-
+            agent-test-${{ runner.os }}-
 
       - name: Install cargo dependencies
         run: cargo fetch --manifest-path catalyst-agent/Cargo.toml
@@ -197,7 +271,7 @@ jobs:
   build:
     name: Build Verification
     needs: [lint, test]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     if: github.event_name == 'push'
 
     steps:
@@ -211,6 +285,23 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      # ── Install protoc ──
+      - name: Cache protoc
+        id: cache-protoc
+        uses: actions/cache@v5
+        with:
+          path: /usr/local/bin/protoc
+          key: protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}
+
+      - name: Install protoc
+        if: steps.cache-protoc.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update && sudo apt-get install -y unzip
+          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip"
+          unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d /usr/local
+          sudo chmod +x /usr/local/bin/protoc
+
+      # ── Dependency Install ──
       - name: Cache bun install
         uses: actions/cache@v5
         with:
@@ -222,6 +313,14 @@ jobs:
           key: bun-deps-${{ runner.os }}-${{ hashFiles('bun.lock', 'bun.lockb', 'package.json') }}
           restore-keys: bun-deps-${{ runner.os }}-
 
+      - name: Cache Prisma Client
+        uses: actions/cache@v5
+        with:
+          path: |
+            node_modules/.bun/@prisma+client*
+            node_modules/.prisma
+          key: prisma-client-${{ hashFiles('catalyst-backend/prisma/schema.prisma') }}
+
       - name: Install bun dependencies
         run: bun install --frozen-lockfile
 
@@ -229,7 +328,7 @@ jobs:
         working-directory: catalyst-backend
         run: bunx prisma generate
 
-      - name: Cache cargo registry
+      - name: Cache cargo registry + git deps
         uses: actions/cache@v5
         with:
           path: |
@@ -266,7 +365,7 @@ jobs:
   agent-release:
     name: Agent Release Build (${{ matrix.target }})
     needs: [lint, test]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     if: startsWith(github.ref, 'refs/tags/v')
 
     container:
@@ -361,7 +460,7 @@ jobs:
   detect-changes:
     name: Detect Changes
     needs: [lint, test]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     if: github.event_name == 'push'
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
@@ -395,7 +494,7 @@ jobs:
   publish-backend:
     name: Publish Backend Image
     needs: [build, detect-changes]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     if: >-
       github.event_name == 'push' &&
       needs.detect-changes.outputs.backend == 'true'
@@ -442,7 +541,7 @@ jobs:
   publish-frontend:
     name: Publish Frontend Image
     needs: [build, detect-changes]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     if: >-
       github.event_name == 'push' &&
       needs.detect-changes.outputs.frontend == 'true'

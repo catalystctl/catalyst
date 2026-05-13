@@ -239,13 +239,15 @@ should_run_step() {
 detect_tools() {
   HAS_BUN=0
   HAS_CARGO=0
+  HAS_PROTOC=0
   command -v bun &>/dev/null && HAS_BUN=1
   command -v cargo &>/dev/null && HAS_CARGO=1
+  command -v protoc &>/dev/null && HAS_PROTOC=1
 
   if [[ "$TARGET" != "all" ]]; then
     # Narrow detection to requested target
     case "$TARGET" in
-      backend|frontend) HAS_CARGO=0 ;;
+      backend|frontend) HAS_CARGO=0; HAS_PROTOC=0 ;;
       agent) HAS_BUN=0 ;;
     esac
   fi
@@ -371,6 +373,13 @@ step_checkout_env() {
   else
     echo -e "    cargo:    ${C_RED}NOT FOUND${C_RESET}"
     [[ "$TARGET" == "agent" || "$TARGET" == "all" ]] && env_ok=0
+  fi
+
+  if [[ "$HAS_PROTOC" -eq 1 ]]; then
+    echo -e "    protoc:   $(protoc --version 2>/dev/null || echo 'unknown')"
+  else
+    echo -e "    protoc:   ${C_YELLOW}NOT FOUND${C_RESET}"
+    echo -e "              ${C_YELLOW}(cargo clippy/test/build may fail for agent)${C_RESET}"
   fi
 
   echo -e "    git:      $(git --version 2>/dev/null || echo 'NOT FOUND')"
