@@ -255,9 +255,9 @@ setup_environment() {
     log_info "Stopping any existing test containers..."
     docker compose $COMPOSE_FILES --env-file "$TEST_ENV_FILE" down -v 2>/dev/null || true
 
-    # Start services
+    # Start services (exclude agent — it's optional and its image may not build)
     log_info "Starting Docker Compose services..."
-    docker compose $COMPOSE_FILES --env-file "$TEST_ENV_FILE" up -d
+    docker compose $COMPOSE_FILES --env-file "$TEST_ENV_FILE" up -d backend frontend postgres redis
 
     # Wait for services to be healthy
     log_info "Waiting for services to be healthy..."
