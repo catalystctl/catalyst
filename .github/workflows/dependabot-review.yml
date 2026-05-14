@@ -2,10 +2,10 @@
 # ║  dependabot-review.yml — Supply Chain Security Gate for Dependabot PRs        ║
 # ║                                                                              ║
 # ║  Runs automatically on Dependabot pull requests to:                          ║
-# ║    1. Scan for malware & supply chain attacks (Socket.dev)                    ║
-# ║    2. Audit known vulnerabilities (npm/bun audit)                            ║
-# ║    3. Review lockfile changes for unexpected additions                       ║
-# ║    4. Check for typosquatting and suspicious package metadata                ║
+# ║    1. Scan for malware & supply chain attacks (Socket Firewall)              ║
+# ║    2. Audit known vulnerabilities (bun audit)                               ║
+# ║    3. Review lockfile changes for unexpected additions / install scripts    ║
+# ║    4. Check OSSF Scorecard                                                   ║
 # ║    5. Post a summary comment on the PR                                       ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
@@ -18,8 +18,8 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write   # to post review comments
-  security-events: write # for SARIF upload
+  pull-requests: write
+  security-events: write
 
 # Only run on Dependabot PRs — detect by branch prefix.
 # Branch prefix check handles re-opened PRs where the actor is a human.
@@ -29,9 +29,10 @@ concurrency:
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────────
-  # Gate 1: Socket.dev malware & supply chain scan
-  # Socket.dev catches: malware, typosquatting, install scripts,
-  # obfuscated code, token leaks, and suspicious package metadata.
+  # Gate 1: Socket Firewall — malware & supply chain scan
+  # Socket Firewall monitors dependency installation and catches:
+  # malware, typosquatting, install scripts, obfuscated code,
+  # token leaks, and suspicious package metadata.
   # ──────────────────────────────────────────────────────────────────────────────
   socket-scan:
     name: Socket Supply Chain Scan
@@ -40,17 +41,22 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Socket Security Scan
-        uses: SocketSecurity/socketyaml-action@v1
-        continue-on-error: true
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          # Socket.dev is free for public repos — no API key needed.
-          # For private repos, add SOCKET_SECURITY_API_KEY as a repo secret.
-          input_type: yaml
-          config_path: .github/socket.yml
+          bun-version: "1.3"
+
+      # Socket Firewall wraps the install command and blocks malicious packages
+      - name: Install Socket Firewall
+        uses: SocketDev/action@v1.3.2
+        with:
+          mode: firewall-free
+
+      - name: Install & scan dependencies
+        run: sfw bun install
 
   # ──────────────────────────────────────────────────────────────────────────────
-  # Gate 2: Vulnerability audit (npm/bun audit)
+  # Gate 2: Vulnerability audit (bun audit)
   # Checks all workspaces for known CVEs in dependencies.
   # ──────────────────────────────────────────────────────────────────────────────
   vulnerability-audit:
@@ -65,8 +71,9 @@ jobs:
         with:
           bun-version: "1.3"
 
+      # NOT using --frozen-lockfile because Dependabot PRs change the lockfile
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install
 
       - name: Audit backend dependencies
         working-directory: catalyst-backend
@@ -86,7 +93,6 @@ jobs:
 
       - name: Check for critical/high vulnerabilities
         run: |
-          # Fail if any critical or high severity issues are found
           combined=$(cat /tmp/backend-audit.txt /tmp/frontend-audit.txt 2>/dev/null)
           if echo "$combined" | grep -qiE "(critical|high severity|high)"; then
             echo "::error::Critical or high severity vulnerabilities found — review before merging"
@@ -117,7 +123,6 @@ jobs:
         run: |
           echo "## 📦 Lockfile Change Analysis" >> $GITHUB_STEP_SUMMARY
 
-          # Get the diff for lockfile
           LOCKFILE_DIFF=$(git diff origin/${{ github.base_ref }}...HEAD -- bun.lock bun.lockb 2>/dev/null || true)
 
           if [ -z "$LOCKFILE_DIFF" ]; then
@@ -125,7 +130,7 @@ jobs:
             exit 0
           fi
 
-          # Check for new packages added (lines starting with + that look like package refs)
+          # Check for new packages added
           NEW_PKGS=$(echo "$LOCKFILE_DIFF" | grep -oP '^\+.*@"?[^@]+@"?' | grep -v '^+++' || true)
 
           if [ -n "$NEW_PKGS" ]; then
@@ -136,16 +141,14 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
 
-          # Check for packages with postinstall/install scripts (common attack vector)
+          # Check for packages with install scripts (common attack vector)
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Checking for install scripts in new packages..." >> $GITHUB_STEP_SUMMARY
 
-          # Install to resolve the lockfile, then check for install scripts
-          bun install --frozen-lockfile 2>/dev/null || bun install 2>/dev/null || true
+          bun install 2>/dev/null || true
 
           SUSPICIOUS=""
           for pkg in $(echo "$NEW_PKGS" | grep -oP '@?[^@]+@[^"]+' | sed 's/@[^@]*$//' | sort -u); do
-            # Check if the package has install/postinstall scripts
             pkg_dir="node_modules/${pkg}"
             if [ -f "$pkg_dir/package.json" ]; then
               scripts=$(jq -r '.scripts | keys[]' "$pkg_dir/package.json" 2>/dev/null | grep -E "(install|postinstall|preinstall)" || true)
@@ -158,7 +161,7 @@ jobs:
           if [ -n "$SUSPICIOUS" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### ⚠️ Packages with install scripts detected" >> $GITHUB_STEP_SUMMARY
-            echo "Install scripts can execute arbitrary code during `npm install`. Review carefully." >> $GITHUB_STEP_SUMMARY
+            echo "Install scripts can execute arbitrary code during \`npm install\`. Review carefully." >> $GITHUB_STEP_SUMMARY
             echo -e "$SUSPICIOUS" >> $GITHUB_STEP_SUMMARY
           else
             echo "No install scripts found in new packages ✅" >> $GITHUB_STEP_SUMMARY
@@ -166,7 +169,7 @@ jobs:
 
   # ──────────────────────────────────────────────────────────────────────────────
   # Gate 4: OSSF Scorecard
-  # Evaluates the repo's security posture and the open source deps.
+  # Evaluates the repo's overall security posture.
   # ──────────────────────────────────────────────────────────────────────────────
   scorecard:
     name: OSSF Scorecard
@@ -176,7 +179,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Run Scorecard
-        uses: ossf/scorecard-action@v2
+        uses: ossf/scorecard-action@v2.4.3
         continue-on-error: true
         with:
           results_file: results.sarif
