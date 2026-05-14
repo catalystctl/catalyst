@@ -111,23 +111,35 @@ command -v docker >/dev/null 2>&1 || { log_error "docker not found"; exit 1; }
 log_success "Dependencies OK"
 
 log_info "Checking backend service..."
-if ! wait_for_service "${BACKEND_URL}/health" 10; then
-    log_warn "Backend not running, attempting to start..."
-    start_backend_test_mode
+if [ "${DOCKER_E2E_MODE:-}" = "true" ]; then
+    log_info "Docker E2E mode — skipping backend start (already running in container)"
+else
+    if ! wait_for_service "${BACKEND_URL}/health" 10; then
+        log_warn "Backend not running, attempting to start..."
+        start_backend_test_mode
+    fi
 fi
 log_success "Backend is ready"
 
 log_info "Checking database..."
-cd /root/catalyst3/catalyst-backend
-if ! bun run db:push > /dev/null 2>&1; then
-    log_error "Database connection failed"
-    exit 1
+if [ "${DOCKER_E2E_MODE:-}" = "true" ]; then
+    log_info "Docker E2E mode — skipping local DB check (migrations already ran)"
+else
+    cd /root/catalyst3/catalyst-backend
+    if ! bun run db:push > /dev/null 2>&1; then
+        log_error "Database connection failed"
+        exit 1
+    fi
 fi
 log_success "Database is ready"
 
 # Prepare test environment
 log_info "Preparing test environment..."
-reset_test_database
+if [ "${DOCKER_E2E_MODE:-}" = "true" ]; then
+    log_info "Docker E2E mode — skipping DB reset (already seeded)"
+else
+    reset_test_database
+fi
 log_success "Test environment ready"
 
 # Run test suites

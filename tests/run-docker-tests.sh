@@ -367,6 +367,9 @@ run_tests() {
     export TEST_LOG_DIR="$LOGS_DIR"
     mkdir -p "$TEST_LOG_DIR"
 
+    # Signal Docker E2E mode so test suites skip local-only steps
+    export DOCKER_E2E_MODE=true
+
     log_info "Running test suites with BACKEND_URL=$BACKEND_URL"
     log_info "Test arguments: ${test_args[*]:-<none>}"
 
