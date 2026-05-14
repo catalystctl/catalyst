@@ -28,6 +28,9 @@ DOCKER_DIR="$CATALYST_ROOT/catalyst-docker"
 TEST_ENV_FILE="$DOCKER_DIR/.env.test"
 COMPOSE_FILES="-f $DOCKER_DIR/docker-compose.yml -f $DOCKER_DIR/docker-compose.test.yml"
 
+# Save our script dir before sourcing libraries that may overwrite SCRIPT_DIR
+ORCHESTRATOR_DIR="$SCRIPT_DIR"
+
 # Default settings
 SKIP_BUILD=false
 SKIP_CLEANUP=false
@@ -343,7 +346,7 @@ run_tests() {
     log_section "Phase 3: Running E2E Tests"
     TEST_START_TIME=$(date +%s)
 
-    cd "$SCRIPT_DIR"
+    cd "$ORCHESTRATOR_DIR"
 
     # Build arguments for run-all-tests.sh
     local test_args=()
@@ -369,7 +372,7 @@ run_tests() {
 
     # Run the test suite
     set +e
-    bash "$SCRIPT_DIR/run-all-tests.sh" "${test_args[@]}"
+    bash "$ORCHESTRATOR_DIR/run-all-tests.sh" "${test_args[@]}"
     TEST_EXIT_CODE=$?
     set -e
 
