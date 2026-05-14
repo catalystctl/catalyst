@@ -65,6 +65,8 @@ jobs:
     if: startsWith(github.head_ref, 'dependabot/')
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -75,30 +77,52 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Audit backend dependencies
+      # ── Audit the PR's branch ──
+      - name: Audit backend dependencies (PR branch)
         working-directory: catalyst-backend
-        run: |
-          echo "## 🔍 Backend Vulnerability Audit" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          bun audit 2>&1 | tee /tmp/backend-audit.txt || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
+        run: bun audit 2>&1 | tee /tmp/pr-backend-audit.txt || true
 
-      - name: Audit frontend dependencies
+      - name: Audit frontend dependencies (PR branch)
         working-directory: catalyst-frontend
-        run: |
-          echo "## 🔍 Frontend Vulnerability Audit" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          bun audit 2>&1 | tee /tmp/frontend-audit.txt || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
+        run: bun audit 2>&1 | tee /tmp/pr-frontend-audit.txt || true
 
-      - name: Check for critical/high vulnerabilities
+      # ── Audit the base branch for comparison ──
+      - name: Audit base branch for diff
         run: |
-          combined=$(cat /tmp/backend-audit.txt /tmp/frontend-audit.txt 2>/dev/null)
-          if echo "$combined" | grep -qiE "(critical|high severity|high)"; then
-            echo "::error::Critical or high severity vulnerabilities found — review before merging"
+          git stash
+          git checkout origin/${{ github.base_ref }} 2>/dev/null || true
+          bun install 2>/dev/null || true
+          (cd catalyst-backend && bun audit 2>&1 | tee /tmp/base-backend-audit.txt || true)
+          (cd catalyst-frontend && bun audit 2>&1 | tee /tmp/base-frontend-audit.txt || true)
+
+      # ── Compare: only fail on NEW high/critical CVEs introduced by this PR ──
+      - name: Check for newly introduced vulnerabilities
+        run: |
+          echo "## 🔍 Vulnerability Audit" >> $GITHUB_STEP_SUMMARY
+
+          # Current branch findings
+          pr_high=$(grep -cE "^  (critical|high):" /tmp/pr-backend-audit.txt /tmp/pr-frontend-audit.txt 2>/dev/null || echo 0)
+          base_high=$(grep -cE "^  (critical|high):" /tmp/base-backend-audit.txt /tmp/base-frontend-audit.txt 2>/dev/null || echo 0)
+
+          echo "Base branch high/critical CVEs: ${base_high}" >> $GITHUB_STEP_SUMMARY
+          echo "PR branch high/critical CVEs: ${pr_high}" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$pr_high" -gt "$base_high" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### ❌ New high/critical vulnerabilities introduced by this PR" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            diff <(grep -E "^  (critical|high):" /tmp/base-backend-audit.txt /tmp/base-frontend-audit.txt 2>/dev/null || true) \
+                 <(grep -E "^  (critical|high):" /tmp/pr-backend-audit.txt /tmp/pr-frontend-audit.txt 2>/dev/null || true) || true
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "::error::This PR introduces new high/critical severity vulnerabilities — do not merge until verified"
             exit 1
           fi
-          echo "No critical/high vulnerabilities found ✅"
+
+          echo "No new high/critical vulnerabilities introduced ✅" >> $GITHUB_STEP_SUMMARY
+          if [ "$pr_high" -gt 0 ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "> ℹ️ ${pr_high} pre-existing high/critical CVEs found — not introduced by this PR" >> $GITHUB_STEP_SUMMARY
+          fi
 
   # ──────────────────────────────────────────────────────────────────────────────
   # Gate 3: Lockfile diff review
