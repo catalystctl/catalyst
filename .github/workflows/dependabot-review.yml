@@ -21,6 +21,12 @@ permissions:
   pull-requests: write   # to post review comments
   security-events: write # for SARIF upload
 
+# Only run on Dependabot PRs — detect by branch prefix.
+# Branch prefix check handles re-opened PRs where the actor is a human.
+concurrency:
+  group: supply-chain-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   # Gate 1: Socket.dev malware & supply chain scan
@@ -30,7 +36,7 @@ jobs:
   socket-scan:
     name: Socket Supply Chain Scan
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    if: startsWith(github.head_ref, 'dependabot/')
     steps:
       - uses: actions/checkout@v6
 
@@ -50,7 +56,7 @@ jobs:
   vulnerability-audit:
     name: Vulnerability Audit
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    if: startsWith(github.head_ref, 'dependabot/')
     steps:
       - uses: actions/checkout@v6
 
@@ -96,7 +102,7 @@ jobs:
   lockfile-review:
     name: Lockfile Diff Review
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    if: startsWith(github.head_ref, 'dependabot/')
     steps:
       - uses: actions/checkout@v6
         with:
@@ -165,7 +171,7 @@ jobs:
   scorecard:
     name: OSSF Scorecard
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    if: startsWith(github.head_ref, 'dependabot/')
     steps:
       - uses: actions/checkout@v6
 
@@ -184,7 +190,7 @@ jobs:
     name: Post Review Summary
     needs: [socket-scan, vulnerability-audit, lockfile-review, scorecard]
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]' && always()
+    if: startsWith(github.head_ref, 'dependabot/') && always()
     steps:
       - uses: actions/checkout@v6
 
