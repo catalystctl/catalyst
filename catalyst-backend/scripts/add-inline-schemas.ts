@@ -63,29 +63,18 @@ interface RouteDef {
 }
 
 const ROUTES: RouteDef[] = [
-  // Auth routes
+  // Auth routes — custom Catalyst routes only.
+  // Routes handled by Better Auth's catch-all proxy (sign-in, sign-up,
+  // sign-out, change-password, set-password, 2FA, passkeys, sessions,
+  // SSO link/list, send-verification-email, reset-password, admin) are
+  // documented by Better Auth and not listed here.
   { file: 'auth.ts', method: 'POST', path: '/register', summary: 'Register new user', description: 'Create a new user account with email and password', bodySchema: { type: 'object', properties: { email: { type: 'string', format: 'email' }, username: { type: 'string' }, password: { type: 'string', minLength: 12 } }, required: ['email', 'username', 'password'] }, responseCodes: [201, 400, 409] },
   { file: 'auth.ts', method: 'POST', path: '/login', summary: 'User login', description: 'Authenticate user with email/password. Supports 2FA and passkeys.', bodySchema: { type: 'object', properties: { email: { type: 'string' }, password: { type: 'string' }, rememberMe: { type: 'boolean' } }, required: ['email', 'password'] }, responseCodes: [200, 401] },
   { file: 'auth.ts', method: 'POST', path: '/sign-out', summary: 'Logout', description: 'Sign out the current session', responseCodes: [200] },
   { file: 'auth.ts', method: 'GET', path: '/me', summary: 'Get current user', description: 'Get the currently authenticated user', responseCodes: [200, 401] },
   { file: 'auth.ts', method: 'GET', path: '/profile', summary: 'Get profile', description: 'Get detailed user profile including permissions', responseCodes: [200, 401] },
-  { file: 'auth.ts', method: 'POST', path: '/profile/change-password', summary: 'Change password', description: 'Change the authenticated user password', bodySchema: { type: 'object', properties: { currentPassword: { type: 'string' }, newPassword: { type: 'string' } }, required: ['currentPassword', 'newPassword'] }, responseCodes: [200, 400, 401] },
-  { file: 'auth.ts', method: 'POST', path: '/profile/set-password', summary: 'Set password', description: 'Set password for SSO accounts without password', bodySchema: { type: 'object', properties: { password: { type: 'string' } }, required: ['password'] }, responseCodes: [200, 400] },
-  { file: 'auth.ts', method: 'GET', path: '/profile/two-factor', summary: 'Get 2FA status', description: 'Get two-factor authentication status', responseCodes: [200] },
-  { file: 'auth.ts', method: 'POST', path: '/profile/two-factor/enable', summary: 'Enable 2FA', description: 'Enable two-factor authentication', responseCodes: [200, 400] },
-  { file: 'auth.ts', method: 'POST', path: '/profile/two-factor/disable', summary: 'Disable 2FA', description: 'Disable two-factor authentication', bodySchema: { type: 'object', properties: { code: { type: 'string' } }, required: ['code'] }, responseCodes: [200, 400] },
-  { file: 'auth.ts', method: 'POST', path: '/profile/two-factor/generate-backup-codes', summary: 'Generate backup codes', description: 'Generate new backup codes for 2FA', responseCodes: [200] },
-  { file: 'auth.ts', method: 'GET', path: '/profile/passkeys', summary: 'List passkeys', description: 'List all registered passkeys', responseCodes: [200] },
-  { file: 'auth.ts', method: 'POST', path: '/profile/passkeys', summary: 'Create passkey', description: 'Create registration options for a new passkey', responseCodes: [200] },
-  { file: 'auth.ts', method: 'POST', path: '/profile/passkeys/verify', summary: 'Verify passkey', description: 'Verify and save a new passkey', bodySchema: { type: 'object', properties: { credential: { type: 'object' } } }, responseCodes: [200, 400] },
-  { file: 'auth.ts', method: 'DELETE', path: '/profile/passkeys/:id', summary: 'Delete passkey', description: 'Delete a registered passkey', paramsSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }, responseCodes: [200, 404] },
-  { file: 'auth.ts', method: 'PATCH', path: '/profile/passkeys/:id', summary: 'Update passkey', description: 'Update passkey name', paramsSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }, bodySchema: { type: 'object', properties: { name: { type: 'string' } } }, responseCodes: [200] },
-  { file: 'auth.ts', method: 'GET', path: '/profile/sso/accounts', summary: 'List SSO accounts', description: 'List linked SSO provider accounts', responseCodes: [200] },
-  { file: 'auth.ts', method: 'POST', path: '/profile/sso/link', summary: 'Link SSO', description: 'Link an SSO provider account', bodySchema: { type: 'object', properties: { provider: { type: 'string' } } }, responseCodes: [200, 400] },
-  { file: 'auth.ts', method: 'POST', path: '/profile/sso/unlink', summary: 'Unlink SSO', description: 'Unlink an SSO provider account', bodySchema: { type: 'object', properties: { provider: { type: 'string' } } }, responseCodes: [200, 400] },
   { file: 'auth.ts', method: 'POST', path: '/forgot-password', summary: 'Request password reset', description: 'Request a password reset email', bodySchema: { type: 'object', properties: { email: { type: 'string' } }, required: ['email'] }, responseCodes: [200] },
-  { file: 'auth.ts', method: 'GET', path: '/reset-password/validate', summary: 'Validate reset token', description: 'Validate if a password reset token is valid', querySchema: { type: 'object', properties: { token: { type: 'string' } } }, responseCodes: [200, 400] },
-  { file: 'auth.ts', method: 'POST', path: '/reset-password', summary: 'Reset password', description: 'Reset password using a token', bodySchema: { type: 'object', properties: { token: { type: 'string' }, password: { type: 'string' } }, required: ['token', 'password'] }, responseCodes: [200, 400] },
+  { file: 'auth.ts', method: 'POST', path: '/reset-password/validate', summary: 'Validate reset token', description: 'Validate if a password reset token is valid', bodySchema: { type: 'object', properties: { token: { type: 'string' } }, required: ['token'] }, responseCodes: [200, 400] },
   { file: 'auth.ts', method: 'POST', path: '/profile/delete', summary: 'Delete account', description: 'Delete the authenticated user account', bodySchema: { type: 'object', properties: { confirm: { type: 'string' } }, required: ['confirm'] }, responseCodes: [200, 400] },
 
   // Servers

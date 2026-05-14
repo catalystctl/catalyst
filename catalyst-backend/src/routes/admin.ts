@@ -173,6 +173,9 @@ export async function adminRoutes(app: FastifyInstance) {
             createdAt: true,
             updatedAt: true,
             banned: true,
+            banReason: true,
+            banExpires: true,
+            emailVerified: true,
             twoFactorEnabled: true,
             lastSuccessfulLogin: true,
             roles: {
@@ -836,6 +839,9 @@ export async function adminRoutes(app: FastifyInstance) {
   );
 
   // Ban a user (requires user.ban permission)
+  // Uses Better Auth's admin plugin banUser() for DB updates + session revocation,
+  // then Catalyst-specific post-processing (SFTP revocation, WebSocket disconnect,
+  // audit log, admin broadcast) runs via the after hook in auth.ts.
   app.post(
     '/users/:userId/ban',
     { preHandler: authenticate },
@@ -845,7 +851,7 @@ export async function adminRoutes(app: FastifyInstance) {
       }
 
       const { userId } = request.params as { userId: string };
-      const { reason } = request.body as { reason?: string } || {};
+      const { reason, expiresInSeconds } = request.body as { reason?: string; expiresInSeconds?: number } || {};
       const user = request.user;
 
       if (userId === user.userId) {
@@ -861,46 +867,36 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'User is already banned' });
       }
 
-      await prisma.user.update({
-        where: { id: userId },
-        data: { banned: true, banReason: reason || null },
-      });
-
-      // Revoke all sessions for the banned user
-      await prisma.session.deleteMany({ where: { userId } });
-
-      // Revoke SFTP tokens
-      await revokeSftpTokensForUser(userId);
-
-      // Disconnect WebSocket sessions
-      const wsGateway = (app as any).wsGateway;
-      if (wsGateway?.disconnectUser) {
-        wsGateway.disconnectUser(userId);
-      }
-
-      await createAuditLog(user.userId, {
-        action: 'user_ban',
-        resource: 'user',
-        resourceId: userId,
-        details: {
-          email: existingUser.email,
-          username: existingUser.username,
-          reason: reason || null,
-          twoFactorEnabled: existingUser.twoFactorEnabled,
-          sessionsRevoked: true,
-        },
-      });
-
-      // Broadcast user_banned event to admin subscribers
-      if (wsGateway?.pushToAdminSubscribers) {
-        wsGateway.pushToAdminSubscribers('user_updated', {
-          type: 'user_updated',
-          userId,
-          banned: true,
-          banReason: reason || null,
-          bannedBy: user.userId,
-          timestamp: new Date().toISOString(),
+      // Delegate to Better Auth's admin plugin — sets banned/banReason/banExpires
+      // and revokes all sessions.  Catalyst-specific post-processing (SFTP token
+      // revocation, WebSocket disconnect, audit log, admin broadcast) is handled
+      // by the after hook in auth.ts.
+      try {
+        await (auth.api as any).banUser({
+          headers: fromNodeHeaders(request.headers as Record<string, string | string[] | undefined>),
+          body: {
+            userId,
+            banReason: reason || 'No reason',
+            ...(expiresInSeconds ? { banExpiresIn: expiresInSeconds } : {}),
+          },
         });
+      } catch (err: any) {
+        // Better Auth may throw FORBIDDEN if the session user lacks admin plugin
+        // permissions.  Since Catalyst uses its own permission system, fall back
+        // to direct Prisma update + session revocation if the plugin rejects.
+        if (err?.status === 403 || err?.statusCode === 403) {
+          await prisma.user.update({
+            where: { id: userId },
+            data: {
+              banned: true,
+              banReason: reason || null,
+              ...(expiresInSeconds ? { banExpires: new Date(Date.now() + expiresInSeconds * 1000) } : {}),
+            },
+          });
+          await prisma.session.deleteMany({ where: { userId } });
+        } else {
+          throw err;
+        }
       }
 
       return reply.send({ success: true });
@@ -908,6 +904,9 @@ export async function adminRoutes(app: FastifyInstance) {
   );
 
   // Unban a user (requires user.unban permission)
+  // Uses Better Auth's admin plugin unbanUser() for DB updates.
+  // Catalyst-specific post-processing (audit log, admin broadcast) runs via
+  // the after hook in auth.ts.
   app.post(
     '/users/:userId/unban',
     { preHandler: authenticate },
@@ -928,31 +927,26 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'User is not banned' });
       }
 
-      await prisma.user.update({
-        where: { id: userId },
-        data: { banned: false, banReason: null },
-      });
-
-      await createAuditLog(user.userId, {
-        action: 'user_unban',
-        resource: 'user',
-        resourceId: userId,
-        details: {
-          email: existingUser.email,
-          username: existingUser.username,
-        },
-      });
-
-      // Broadcast user_unbanned event to admin subscribers
-      const wsGateway = (app as any).wsGateway;
-      if (wsGateway?.pushToAdminSubscribers) {
-        wsGateway.pushToAdminSubscribers('user_updated', {
-          type: 'user_updated',
-          userId,
-          banned: false,
-          unbannedBy: user.userId,
-          timestamp: new Date().toISOString(),
+      // Delegate to Better Auth's admin plugin — clears banned/banReason/banExpires.
+      // Catalyst-specific post-processing (audit log, admin broadcast) is handled
+      // by the after hook in auth.ts.
+      try {
+        await (auth.api as any).unbanUser({
+          headers: fromNodeHeaders(request.headers as Record<string, string | string[] | undefined>),
+          body: { userId },
         });
+      } catch (err: any) {
+        // Better Auth may throw FORBIDDEN if the session user lacks admin plugin
+        // permissions.  Since Catalyst uses its own permission system, fall back
+        // to direct Prisma update if the plugin rejects.
+        if (err?.status === 403 || err?.statusCode === 403) {
+          await prisma.user.update({
+            where: { id: userId },
+            data: { banned: false, banReason: null, banExpires: null },
+          });
+        } else {
+          throw err;
+        }
       }
 
       return reply.send({ success: true });
@@ -1074,6 +1068,53 @@ export async function adminRoutes(app: FastifyInstance) {
         resourceId: userId,
         details: { providerId: account.providerId, accountId: account.accountId },
       });
+      return reply.send({ success: true });
+    }
+  );
+
+  // Manually verify a user's email address (requires user.update)
+  // Marks the user's email as verified without sending an email.
+  app.put(
+    '/users/:userId/verify-email',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!(canManageUsers(request, 'update'))) {
+        return reply.status(403).send({ error: 'User update permission required' });
+      }
+      const { userId } = request.params as { userId: string };
+      const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+      if (!existingUser) return reply.status(404).send({ error: 'User not found' });
+
+      if (existingUser.emailVerified) {
+        return reply.status(400).send({ error: 'Email is already verified' });
+      }
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: { emailVerified: true },
+      });
+
+      await createAuditLog((request.user as any).userId, {
+        action: 'user_email_verified',
+        resource: 'user',
+        resourceId: userId,
+        details: { email: existingUser.email, username: existingUser.username, method: 'admin_manual' },
+      });
+
+      // Broadcast user_updated event
+      try {
+        const { getWsGateway } = await import('../websocket/gateway');
+        const wsGateway = getWsGateway();
+        if (wsGateway?.pushToAdminSubscribers) {
+          wsGateway.pushToAdminSubscribers('user_updated', {
+            type: 'user_updated',
+            userId,
+            emailVerified: true,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } catch { /* non-critical */ }
+
       return reply.send({ success: true });
     }
   );
@@ -2036,6 +2077,7 @@ export async function adminRoutes(app: FastifyInstance) {
         fileTunnelMaxUploadMb = DEFAULT_SECURITY_SETTINGS.fileTunnelMaxUploadMb,
         fileTunnelMaxPendingPerNode = DEFAULT_SECURITY_SETTINGS.fileTunnelMaxPendingPerNode,
         fileTunnelConcurrentMax = DEFAULT_SECURITY_SETTINGS.fileTunnelConcurrentMax,
+        requireEmailVerification = DEFAULT_SECURITY_SETTINGS.requireEmailVerification,
       } = request.body as Partial<typeof DEFAULT_SECURITY_SETTINGS>;
 
       const numericFields = [
@@ -2088,6 +2130,7 @@ export async function adminRoutes(app: FastifyInstance) {
         fileTunnelMaxUploadMb: Number(fileTunnelMaxUploadMb),
         fileTunnelMaxPendingPerNode: Number(fileTunnelMaxPendingPerNode),
         fileTunnelConcurrentMax: Number(fileTunnelConcurrentMax),
+        requireEmailVerification: Boolean(requireEmailVerification),
       });
 
       await createAuditLog(user.userId, {
@@ -2115,6 +2158,7 @@ export async function adminRoutes(app: FastifyInstance) {
           fileTunnelMaxUploadMb,
           fileTunnelMaxPendingPerNode,
           fileTunnelConcurrentMax,
+          requireEmailVerification,
         },
       });
 

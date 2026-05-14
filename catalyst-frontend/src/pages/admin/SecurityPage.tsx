@@ -11,6 +11,7 @@ import {
   Unlock,
   Info,
   FolderSync,
+  MailCheck,
 } from 'lucide-react';
 import EmptyState from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/input';
@@ -294,6 +295,7 @@ function SecurityPage() {
   const [fileTunnelMaxUploadMb, setFileTunnelMaxUploadMb] = useState('100');
   const [fileTunnelMaxPendingPerNode, setFileTunnelMaxPendingPerNode] = useState('50');
   const [fileTunnelConcurrentMax, setFileTunnelConcurrentMax] = useState('10');
+  const [requireEmailVerification, setRequireEmailVerification] = useState(true);
 
   const { data: lockoutResponse, isLoading: lockoutsLoading } = useAuthLockouts({
     page: lockoutPage,
@@ -325,6 +327,7 @@ function SecurityPage() {
     setFileTunnelMaxUploadMb(String(settings.fileTunnelMaxUploadMb ?? 100));
     setFileTunnelMaxPendingPerNode(String(settings.fileTunnelMaxPendingPerNode ?? 50));
     setFileTunnelConcurrentMax(String(settings.fileTunnelConcurrentMax ?? 10));
+    setRequireEmailVerification(settings.requireEmailVerification ?? true);
   }, [settings]);
 
   // ── Validate time window values ──
@@ -353,7 +356,8 @@ function SecurityPage() {
       validTimeWindows.has(Number(fileTunnelRateLimitWindowMs)) &&
       Number(fileTunnelMaxUploadMb) > 0 &&
       Number(fileTunnelMaxPendingPerNode) > 0 &&
-      Number(fileTunnelConcurrentMax) > 0,
+      Number(fileTunnelConcurrentMax) > 0
+    ,
     [
       authRateLimitMax, authRateLimitWindowMs,
       fileRateLimitMax, fileRateLimitWindowMs,
@@ -392,6 +396,7 @@ function SecurityPage() {
         fileTunnelMaxUploadMb: Number(fileTunnelMaxUploadMb),
         fileTunnelMaxPendingPerNode: Number(fileTunnelMaxPendingPerNode),
         fileTunnelConcurrentMax: Number(fileTunnelConcurrentMax),
+        requireEmailVerification,
       }),
     onSuccess: () => {
       notifySuccess('Security settings updated');
@@ -528,6 +533,50 @@ function SecurityPage() {
               />
             </div>
           </div>
+        </Section>
+
+        {/* ── Email Verification Section ── */}
+        <Section
+          title="Email Verification"
+          subtitle="Control whether new users must verify their email before signing in."
+          icon={<MailCheck className="h-4 w-4 text-success dark:text-success" />}
+          iconColor="bg-success/10 dark:bg-success/30"
+          footer={
+            <Button size="sm" disabled={!canSubmit || updateMutation.isPending} onClick={() => updateMutation.mutate()}>
+              {updateMutation.isPending ? 'Saving…' : 'Save settings'}
+            </Button>
+          }
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">
+                Require email verification
+              </p>
+              <p className="text-xs text-muted-foreground">
+                When enabled, new users must click a verification link in their email before they can sign in.
+                When disabled, users can sign in immediately after registration without verifying their email.
+              </p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={requireEmailVerification}
+              onClick={() => setRequireEmailVerification(!requireEmailVerification)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${requireEmailVerification ? 'bg-primary' : 'bg-surface-3'}`}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform duration-200 ease-in-out ${requireEmailVerification ? 'translate-x-5' : 'translate-x-0'}`}
+              />
+            </button>
+          </div>
+          {!requireEmailVerification && (
+            <div className="mt-3 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
+              <p className="text-xs text-warning-foreground">
+                Disabling email verification allows anyone to register with unverified email addresses. This may increase spam and abuse risk.
+              </p>
+            </div>
+          )}
         </Section>
 
         {/* ── Lockout Policy ── */}

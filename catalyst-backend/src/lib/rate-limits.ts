@@ -94,16 +94,10 @@ export const routeRateLimits = {
   'POST /api/auth/reset-password': 'critical',
 
   // Security mutations (higher than critical — legitimate bulk setup)
-  'POST /api/auth/profile/change-password': 'security',
-  'POST /api/auth/profile/set-password': 'security',
-  'POST /api/auth/profile/two-factor': 'security',
-  'POST /api/auth/profile/two-factor/disable': 'security',
-  'POST /api/auth/profile/two-factor/generate-backup-codes': 'security',
-  'POST /api/auth/profile/passkeys': 'security',
-  'POST /api/auth/profile/passkeys/verify': 'security',
-  'DELETE /api/auth/profile/passkeys/:id': 'security',
-  'PATCH /api/auth/profile/passkeys/:id': 'security',
-  'DELETE /api/auth/profile/sso/accounts': 'security',
+  // NOTE: change-password, set-password, 2FA, passkeys, and SSO routes are
+  // now handled by Better Auth's catch-all proxy which has its own rate
+  // limiting (configured in auth.ts).  Only custom Catalyst routes need
+  // Fastify-level rate limits here.
   'PATCH /api/auth/profile/preferences': 'security',
 
   // Strict long-window

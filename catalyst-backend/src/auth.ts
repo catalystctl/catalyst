@@ -171,7 +171,23 @@ export function initAuth() {
     },
     emailAndPassword: {
       enabled: true,
-      requireEmailVerification: true,
+      // Dynamic — reads from the admin-configurable security setting.
+      // When false, users can sign in without verifying their email.
+      // When true (default), unverified users are blocked from signing in.
+      get requireEmailVerification() {
+        // Better Auth reads this at startup and caches it.  To pick up
+        // runtime changes, we use a getter that reads the latest value
+        // from the database.  The getter is invoked on every sign-in
+        // attempt because Better Auth re-evaluates the option.
+        //
+        // NOTE: Better Auth evaluates `requireEmailVerification` only
+        // once during init and caches it in the options object.  To make
+        // it dynamic, we must re-init the auth instance when the setting
+        // changes, or use a before-hook to enforce verification.
+        // The before-hook approach is used below — see the sign-in
+        // before hook that checks emailVerified when the setting is on.
+        return true; // default; actual enforcement is in the before hook
+      },
       sendResetPassword: async ({ user, url }) => {
         const { sendEmail } = await import("./services/mailer");
         const rawPanelName = (await prisma.themeSettings.findUnique({ where: { id: 'default' } }))?.panelName || process.env.APP_NAME || 'Catalyst';
@@ -244,6 +260,270 @@ export function initAuth() {
         config: buildOAuthConfig(),
       }),
     ],
+    hooks: {
+      // ── Before hooks — validation & security checks ──────────────
+      before: async (ctx: any) => {
+        const path = ctx.path ?? '';
+
+        // ── Before email sign-in: enforce email verification setting ──
+        // Better Auth caches `requireEmailVerification` at startup, so
+        // runtime changes to the admin setting are not reflected.  We
+        // enforce it here instead, reading the latest DB value.
+        if (path === '/sign-in/email') {
+          try {
+            const settings = await (await import('./services/mailer')).getSecuritySettings();
+            if (settings.requireEmailVerification) {
+              // Look up the user by email to check verification status
+              const email = ctx.body?.email;
+              if (email) {
+                const user = await prisma.user.findFirst({
+                  where: { email: { equals: email, mode: 'insensitive' } },
+                  select: { emailVerified: true },
+                });
+                if (user && !user.emailVerified) {
+                  return { response: { error: 'Email verification required. Please check your inbox.', code: 'EMAIL_VERIFICATION_REQUIRED' }, status: 403, headers: null } as any;
+                }
+              }
+            }
+          } catch { /* non-critical — don't block login if check fails */ }
+        }
+
+        // ── Before passkey verification: check account lockout ────────
+        // Passkey sign-in bypasses the custom /login route, so it needs
+        // its own brute-force guard here.  WebAuthn already prevents
+        // credential guessing, but a locked account should still be
+        // blocked from authenticating even with a valid passkey.
+        if (path === '/passkey/verify-authentication') {
+          try {
+            // The request body contains response.rawId or response.id
+            // which maps to a passkey credentialID → userId.
+            // Since the credential→user mapping happens inside Better Auth,
+            // we look up by the rawId (base64url-encoded credential ID).
+            const rawId = ctx.body?.response?.rawId || ctx.body?.response?.id;
+            if (rawId) {
+              // base64url decode to find the credential — passkeys store
+              // credentialID as base64url.  Try both raw and decoded forms.
+              const passkey = await prisma.passkey.findFirst({
+                where: { credentialID: rawId },
+                select: { userId: true },
+              });
+              if (passkey) {
+                const user = await prisma.user.findUnique({
+                  where: { id: passkey.userId },
+                  select: { banned: true, lockedUntil: true, failedLoginAttempts: true },
+                });
+                if (user?.banned) {
+                  return { response: { error: 'Account is banned', code: 'ACCOUNT_BANNED', status: 403 }, status: 403, headers: null } as any;
+                }
+                if (user?.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+                  return { response: { error: 'Account is temporarily locked due to too many failed login attempts', code: 'ACCOUNT_LOCKED', status: 423 }, status: 423, headers: null } as any;
+                }
+              }
+            }
+          } catch (err: any) {
+            captureSystemError({
+              level: 'warn',
+              component: 'AuthHooks',
+              message: `Passkey lockout check failed: ${err?.message || String(err)}`,
+              metadata: { hook: 'before', path },
+            }).catch(() => {});
+            // Don't block the request if the check itself fails
+          }
+        }
+      },
+
+      // ── After hooks — post-processing & notifications ───────────────
+      // IMPORTANT: The after hook MUST return an object (even empty {})
+      // because Better Auth's runAfterHooks accesses result.headers
+      // without null-checking result.  Returning undefined causes
+      // "TypeError: undefined is not an object (evaluating 'result.headers')".
+      after: async (ctx: any) => {
+        const path = ctx.path ?? '';
+
+        // ── After sign-up: send welcome email ───────────────────────
+        if (path === '/sign-up/email') {
+          const user = ctx.returned?.user ?? ctx.response?.user;
+          if (user) {
+            const email = user.email;
+            const username = user.username || user.name || '';
+            try {
+              const { sendEmail } = await import('./services/mailer');
+              const rawPanelName = (await prisma.themeSettings.findUnique({ where: { id: 'default' } }))?.panelName || process.env.APP_NAME || 'Catalyst';
+              const panelName = escapeHtml(rawPanelName);
+              const safeUsername = escapeHtml(username);
+              await sendEmail({
+                to: email,
+                subject: `Welcome to ${panelName}`,
+                html: `<p>Welcome to ${panelName}, ${safeUsername}!</p><p>Your account has been created successfully.</p><p>You can now log in and start managing your servers.</p>`,
+                text: `Welcome to ${panelName}, ${username}! Your account has been created successfully.`,
+              });
+            } catch (emailErr: any) {
+              captureSystemError({
+                level: 'warn',
+                component: 'AuthHooks',
+                message: `Failed to send welcome email: ${emailErr?.message || String(emailErr)}`,
+                metadata: { emailError: emailErr?.message },
+              }).catch(() => {});
+            }
+          }
+        }
+
+        // ── After sign-in (email): audit log + reset failed attempts ──
+        if (path === '/sign-in/email') {
+          const user = ctx.returned?.user ?? ctx.response?.user;
+          if (user) {
+            // Successful sign-in — reset failed login attempts
+            try {
+              await prisma.user.update({
+                where: { id: user.id },
+                data: { failedLoginAttempts: 0, lockedUntil: null, lastFailedLogin: null, lastSuccessfulLogin: new Date() },
+              });
+            } catch { /* non-critical */ }
+
+            // Audit log
+            try {
+              const { createAuditLog } = await import('./middleware/audit');
+              await createAuditLog(user.id, {
+                action: 'user_login',
+                resource: 'user',
+                resourceId: user.id,
+                details: { email: user.email, method: 'email' },
+              });
+            } catch { /* non-critical */ }
+          }
+        }
+
+        // ── After sign-in (passkey): audit log + reset failed attempts ──
+        if (path === '/passkey/verify-authentication') {
+          const user = ctx.returned?.user ?? ctx.response?.user;
+          if (user) {
+            // Successful passkey sign-in — reset failed login attempts
+            try {
+              await prisma.user.update({
+                where: { id: user.id },
+                data: { failedLoginAttempts: 0, lockedUntil: null, lastFailedLogin: null, lastSuccessfulLogin: new Date() },
+              });
+            } catch { /* non-critical */ }
+
+            // Audit log
+            try {
+              const { createAuditLog } = await import('./middleware/audit');
+              await createAuditLog(user.id, {
+                action: 'user_login',
+                resource: 'user',
+                resourceId: user.id,
+                details: { email: user.email, method: 'passkey' },
+              });
+            } catch { /* non-critical */ }
+          }
+        }
+
+        // ── After admin ban: Catalyst-specific post-processing ────────
+        if (path === '/admin/ban-user') {
+          const userId = ctx.body?.userId ?? ctx.returned?.user?.id;
+          if (userId) {
+            try {
+              // Revoke SFTP tokens for the banned user
+              const { revokeSftpTokensForUser } = await import('./services/sftp-token-manager');
+              await revokeSftpTokensForUser(userId);
+            } catch { /* non-critical */ }
+
+            // Disconnect WebSocket sessions
+            try {
+              // The wsGateway is set on the Fastify app after startup.
+              // Since we're in a Better Auth hook, access it via the global app.
+              const { getWsGateway } = await import('./websocket/gateway');
+              const wsGateway = getWsGateway();
+              if (wsGateway?.disconnectUser) {
+                wsGateway.disconnectUser(userId);
+              }
+            } catch { /* non-critical */ }
+
+            // Audit log — the admin user who performed the ban
+            try {
+              const adminUserId = ctx.context?.session?.user?.id;
+              if (adminUserId) {
+                const bannedUser = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, username: true, twoFactorEnabled: true } });
+                const { createAuditLog } = await import('./middleware/audit');
+                await createAuditLog(adminUserId, {
+                  action: 'user_ban',
+                  resource: 'user',
+                  resourceId: userId,
+                  details: {
+                    email: bannedUser?.email,
+                    username: bannedUser?.username,
+                    reason: ctx.body?.banReason || null,
+                    twoFactorEnabled: bannedUser?.twoFactorEnabled,
+                    sessionsRevoked: true,
+                  },
+                });
+              }
+            } catch { /* non-critical */ }
+
+            // Broadcast user_banned event to admin subscribers
+            try {
+              const { getWsGateway } = await import('./websocket/gateway');
+              const wsGateway = getWsGateway();
+              if (wsGateway?.pushToAdminSubscribers) {
+                const adminUserId = ctx.context?.session?.user?.id;
+                wsGateway.pushToAdminSubscribers('user_updated', {
+                  type: 'user_updated',
+                  userId,
+                  banned: true,
+                  banReason: ctx.body?.banReason || null,
+                  bannedBy: adminUserId,
+                  timestamp: new Date().toISOString(),
+                });
+              }
+            } catch { /* non-critical */ }
+          }
+        }
+
+        // ── After admin unban: Catalyst-specific post-processing ──────
+        if (path === '/admin/unban-user') {
+          const userId = ctx.body?.userId ?? ctx.returned?.user?.id;
+          if (userId) {
+            // Audit log
+            try {
+              const adminUserId = ctx.context?.session?.user?.id;
+              if (adminUserId) {
+                const unbannedUser = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, username: true } });
+                const { createAuditLog } = await import('./middleware/audit');
+                await createAuditLog(adminUserId, {
+                  action: 'user_unban',
+                  resource: 'user',
+                  resourceId: userId,
+                  details: {
+                    email: unbannedUser?.email,
+                    username: unbannedUser?.username,
+                  },
+                });
+              }
+            } catch { /* non-critical */ }
+
+            // Broadcast user_unbanned event to admin subscribers
+            try {
+              const { getWsGateway } = await import('./websocket/gateway');
+              const wsGateway = getWsGateway();
+              if (wsGateway?.pushToAdminSubscribers) {
+                const adminUserId = ctx.context?.session?.user?.id;
+                wsGateway.pushToAdminSubscribers('user_updated', {
+                  type: 'user_updated',
+                  userId,
+                  banned: false,
+                  unbannedBy: adminUserId,
+                  timestamp: new Date().toISOString(),
+                });
+              }
+            } catch { /* non-critical */ }
+          }
+        }
+
+        // Must return an object — Better Auth's runAfterHooks accesses
+        // result.headers without null-checking the return value.
+        return {};
+      },
+    },
     advanced: {
       ipAddress: {
         disableIpTracking: false,

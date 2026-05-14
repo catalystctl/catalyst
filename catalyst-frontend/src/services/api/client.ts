@@ -92,7 +92,8 @@ class ApiClient {
       .find(row => row.startsWith('csrf-token='))
       ?.split('=')[1];
     if (csrfToken) {
-      authHeaders['X-CSRF-Token'] = decodeURIComponent(csrfToken);
+      // Strip CRLF to prevent theoretical HTTP header injection
+      authHeaders['X-CSRF-Token'] = decodeURIComponent(csrfToken).replace(/[\r\n]/g, '');
     }
 
     // Only set Content-Type when there's a body to send.
@@ -106,6 +107,11 @@ class ApiClient {
     if (hasBody && !finalHeaders['Content-Type']) {
       finalHeaders['Content-Type'] = 'application/json';
     }
+    // If Content-Type was explicitly set to empty string, remove it entirely.
+    // This allows FormData to set the correct multipart/form-data boundary.
+    if (finalHeaders['Content-Type'] === '') {
+      delete finalHeaders['Content-Type'];
+    }
 
     let response: Response;
     try {
@@ -114,7 +120,7 @@ class ApiClient {
         headers: finalHeaders,
         credentials,
         body: hasBody
-          ? (typeof body === 'string' ? body : JSON.stringify(body))
+          ? (body instanceof FormData ? body : typeof body === 'string' ? body : JSON.stringify(body))
           : undefined,
         signal,
       });
@@ -181,7 +187,7 @@ class ApiClient {
     }
   }
 
-  get<T>(path: string, options?: { params?: Record<string, string | number | boolean | undefined | null>; headers?: Record<string, string>; credentials?: RequestCredentials; signal?: AbortSignal }): Promise<T> {
+  get<T>(path: string, options?: { params?: Record<string, string | number | boolean | undefined | null>; headers?: Record<string, string>; credentials?: RequestCredentials; signal?: AbortSignal; responseType?: 'json' | 'blob' | 'text' }): Promise<T> {
     return this.request<T>('GET', path, options);
   }
 

@@ -678,15 +678,31 @@ async function bootstrap() {
 				// redundant backstop — if a request somehow reaches the proxy for a path
 				// that has a custom handler, return 404 instead of forwarding it to
 				// better-auth (which would produce confusing errors).
+				//
 				// NOTE: This list does NOT need to be exhaustive.  Missing a path here
 				// won't cause a bug — Fastify will route to the correct handler anyway.
+				// The guard only prevents unauthenticated requests from reaching the
+				// Better Auth catch-all when a custom Fastify route exists for the same path.
+				//
+				// Routes NOT listed here that are registered as Fastify routes:
+				//   PATCH /profile, POST /profile/avatar, DELETE /profile/avatar,
+				//   PATCH /profile/preferences, POST /profile/sso/unlink,
+				//   DELETE /profile/sessions/:id, POST /profile/delete,
+				//   GET /profile/audit-log, GET /profile/export, GET /profile/api-keys
+				// These are safe because Fastify matches them before the catch-all.
+				//
+				// Better Auth's catch-all proxy natively handles:
+				//   sign-in, sign-up, sign-out, change-password, set-password,
+				//   reset-password, 2FA (enable/disable/backup-codes), passkeys,
+				//   sessions (list/revoke), SSO (link/list-accounts/unlink-account),
+				//   send-verification-email, admin (ban/unban/set-role/list-users/...)
 				const customAuthPaths = [
-					"/api/auth/login",
-					"/api/auth/register",
-					"/api/auth/me",
-					"/api/auth/profile",
-					"/api/auth/forgot-password",
-					"/api/auth/reset-password",
+					"/api/auth/login",       // brute-force + permission enrichment
+					"/api/auth/register",     // welcome email + duplicate detection
+					"/api/auth/me",           // permissions + role enrichment
+					"/api/auth/profile",      // cross-cutting aggregation (preferences, accounts, etc.)
+					"/api/auth/forgot-password", // email normalization
+					"/api/auth/reset-password/validate", // timing-safe token check (POST)
 				];
 				if (
 					customAuthPaths.some(

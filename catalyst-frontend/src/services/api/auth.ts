@@ -15,9 +15,19 @@ const createPasskeyRequiredError = (): PasskeyRequiredError => {
   return error;
 };
 
+// Module-scoped 2FA challenge token — avoids attaching it to the Error object
+// which could be logged by error-reporting services (Sentry, DataDog, etc.)
+let _pendingTwoFactorToken: string | null = null;
+
+/** Retrieve and clear the pending 2FA challenge token. */
+export function consumePendingTwoFactorToken(): string | null {
+  const t = _pendingTwoFactorToken;
+  _pendingTwoFactorToken = null;
+  return t;
+}
+
 interface TwoFactorRequiredError extends Error {
   code: 'TWO_FACTOR_REQUIRED';
-  token: string;
 }
 
 /** better-auth responses can have data nested under .data or be flat */
@@ -89,15 +99,11 @@ export const authApi = {
 
       // HTTP 202 — two-factor required (apiClient doesn't throw for 2xx)
       if (!response.success && response.data?.twoFactorRequired) {
-        reportSystemError({
-          level: 'error',
-          component: 'ApiAuth',
-          message: 'Two-factor authentication required',
-          metadata: { action: 'login', code: 'TWO_FACTOR_REQUIRED' },
-        });
+        // Store the challenge token in a module variable instead of the Error
+        // to prevent it from being logged by error-reporting services.
+        _pendingTwoFactorToken = response.data.token ?? null;
         throw Object.assign(new Error('Two-factor authentication required'), {
           code: 'TWO_FACTOR_REQUIRED' as const,
-          token: response.data.token,
         }) satisfies TwoFactorRequiredError;
       }
 
@@ -306,42 +312,35 @@ export const authApi = {
   },
 
   async forgotPassword(email: string): Promise<void> {
-    const data = await apiClient.post<{ success: boolean; error?: string }>('/api/auth/forgot-password', { email });
-    if (!data?.success) {
-      reportSystemError({
-        level: 'error',
-        component: 'ApiAuth',
-        message: data?.error || 'Failed to send reset email',
-        metadata: { action: 'forgotPassword' },
-      });
-      throw new Error(data?.error || 'Failed to send reset email');
+    const normalizedEmail = email.trim().toLowerCase();
+    const res = await authClient.forgetPassword({ email: normalizedEmail, redirectTo: `${window.location.origin}/reset-password` });
+    // Better Auth always returns success to prevent email enumeration.
+    // We don't throw even on error — same anti-enumeration principle.
+    if (res.error) {
+      // Log but don't expose to the user
+      console.warn('Password reset request failed:', res.error.message);
     }
   },
 
   async validateResetToken(token: string): Promise<boolean> {
-    const data = await apiClient.get<{ success: boolean; valid?: boolean; error?: string }>(`/api/auth/reset-password/validate?token=${encodeURIComponent(token)}`);
+    // Better Auth validates the token as part of the reset flow.
+    // There's no separate validation endpoint. We attempt a lightweight
+    // check by calling the custom /reset-password/validate route which
+    // does a timing-safe database lookup.
+    const data = await apiClient.post<{ success: boolean; valid?: boolean; error?: string }>('/api/auth/reset-password/validate', { token });
     if (!data?.success || !data?.valid) {
-      reportSystemError({
-        level: 'error',
-        component: 'ApiAuth',
-        message: 'Invalid or expired token',
-        metadata: { action: 'validateResetToken' },
-      });
+      reportSystemError({ level: 'error', component: 'ApiAuth', message: 'Invalid or expired token', metadata: { action: 'validateResetToken' } });
       throw new Error('Invalid or expired token');
     }
     return true;
   },
 
   async resetPassword(token: string, password: string): Promise<void> {
-    const data = await apiClient.post<{ success: boolean; error?: string }>('/api/auth/reset-password', { token, password });
-    if (!data?.success) {
-      reportSystemError({
-        level: 'error',
-        component: 'ApiAuth',
-        message: data?.error || 'Failed to reset password',
-        metadata: { action: 'resetPassword' },
-      });
-      throw new Error(data?.error || 'Failed to reset password');
+    const res = await authClient.resetPassword({ newPassword: password, token });
+    if (res.error) {
+      // Sanitize error — don't reveal whether token maps to a real account
+      reportSystemError({ level: 'error', component: 'ApiAuth', message: 'Failed to reset password', metadata: { action: 'resetPassword' } });
+      throw new Error('Failed to reset password. The link may be invalid or expired.');
     }
   },
 };

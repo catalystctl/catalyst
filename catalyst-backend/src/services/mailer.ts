@@ -36,6 +36,8 @@ export type SecuritySettings = {
   lockoutDurationMinutes: number;
   auditRetentionDays: number;
   maxBufferMb: number;
+  // Email verification
+  requireEmailVerification: boolean;
   // File tunnel security settings
   fileTunnelRateLimitMax: number;
   fileTunnelRateLimitWindowMs: number;
@@ -101,6 +103,8 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   lockoutDurationMinutes: 15,
   auditRetentionDays: 90,
   maxBufferMb: 50,
+  // Email verification
+  requireEmailVerification: true,
   // File tunnel security settings
   fileTunnelRateLimitMax: 100,
   fileTunnelRateLimitWindowMs: RATE_LIMIT_TIME_WINDOWS_MS.minute,
@@ -202,6 +206,7 @@ export const getSecuritySettings = async (): Promise<SecuritySettings> => {
       settings.lockoutDurationMinutes ?? DEFAULT_SECURITY_SETTINGS.lockoutDurationMinutes,
     auditRetentionDays: settings.auditRetentionDays ?? DEFAULT_SECURITY_SETTINGS.auditRetentionDays,
     maxBufferMb: settings.maxBufferMb ?? DEFAULT_SECURITY_SETTINGS.maxBufferMb,
+    requireEmailVerification: settings.requireEmailVerification ?? DEFAULT_SECURITY_SETTINGS.requireEmailVerification,
     fileTunnelRateLimitMax: settings.fileTunnelRateLimitMax ?? DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitMax,
     fileTunnelRateLimitWindowMs: resolveWindow(settings.fileTunnelRateLimitWindowMs, DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitWindowMs),
     fileTunnelMaxUploadMb: settings.fileTunnelMaxUploadMb ?? DEFAULT_SECURITY_SETTINGS.fileTunnelMaxUploadMb,
@@ -274,6 +279,7 @@ export const upsertSecuritySettings = async (payload: SecuritySettings) => {
       lockoutDurationMinutes: payload.lockoutDurationMinutes,
       auditRetentionDays: payload.auditRetentionDays,
       maxBufferMb: payload.maxBufferMb,
+      requireEmailVerification: payload.requireEmailVerification,
       fileTunnelRateLimitMax: payload.fileTunnelRateLimitMax,
       fileTunnelRateLimitWindowMs,
       fileTunnelMaxUploadMb: payload.fileTunnelMaxUploadMb,
@@ -297,6 +303,7 @@ export const upsertSecuritySettings = async (payload: SecuritySettings) => {
       lockoutDurationMinutes: payload.lockoutDurationMinutes,
       auditRetentionDays: payload.auditRetentionDays,
       maxBufferMb: payload.maxBufferMb,
+      requireEmailVerification: payload.requireEmailVerification,
       fileTunnelRateLimitMax: payload.fileTunnelRateLimitMax,
       fileTunnelRateLimitWindowMs,
       fileTunnelMaxUploadMb: payload.fileTunnelMaxUploadMb,

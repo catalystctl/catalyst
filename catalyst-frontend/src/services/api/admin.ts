@@ -271,10 +271,10 @@ export const adminApi = {
     return data;
   },
   // Ban a user
-  banUser: async (userId: string, reason?: string) => {
+  banUser: async (userId: string, reason?: string, expiresInSeconds?: number) => {
     const data = await apiClient.post<ApiResponse<void>>(
       `/api/admin/users/${userId}/ban`,
-      { reason }
+      { reason, ...(expiresInSeconds ? { expiresInSeconds } : {}) },
     );
     return data;
   },
@@ -311,6 +311,13 @@ export const adminApi = {
   unlinkAccount: async (userId: string, accountId: string) => {
     const data = await apiClient.delete<ApiResponse<void>>(
       `/api/admin/users/${userId}/accounts/${accountId}`
+    );
+    return data;
+  },
+  // Manually verify a user's email address (no email sent)
+  verifyUserEmail: async (userId: string) => {
+    const data = await apiClient.put<ApiResponse<void>>(
+      `/api/admin/users/${userId}/verify-email`
     );
     return data;
   },

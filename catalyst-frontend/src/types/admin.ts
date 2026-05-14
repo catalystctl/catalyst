@@ -46,6 +46,9 @@ export interface AdminUser {
   updatedAt: string;
   roles: AdminUserRole[];
   banned?: boolean;
+  banReason?: string | null;
+  banExpires?: string | null;
+  emailVerified?: boolean;
   twoFactorEnabled?: boolean;
   lastSuccessfulLogin?: string | null;
   lastSignInIp?: string | null;
@@ -265,6 +268,8 @@ export interface SecuritySettings {
   lockoutDurationMinutes: number;
   auditRetentionDays: number;
   maxBufferMb: number;
+  // Email verification
+  requireEmailVerification: boolean;
   // File tunnel settings
   fileTunnelRateLimitMax: number;
   fileTunnelRateLimitWindowMs: number;

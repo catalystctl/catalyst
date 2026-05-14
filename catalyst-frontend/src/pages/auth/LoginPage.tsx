@@ -132,6 +132,11 @@ function LoginPage() {
       if (error.code === 'TWO_FACTOR_REQUIRED') {
         setTotpError(null);
         setAuthStep('totp');
+        return;
+      }
+      if (error.code === 'EMAIL_VERIFICATION_REQUIRED') {
+        notifyError('Please verify your email address before signing in. Check your inbox for a verification link.');
+        return;
       }
     }
   };
@@ -144,6 +149,15 @@ function LoginPage() {
           onError(context) {
             if (context.error?.code === 'AUTH_CANCELLED' || context.error?.name === 'AbortError')
               return;
+            // Handle account lockout/banned errors from the before hook
+            if (context.error?.code === 'ACCOUNT_LOCKED') {
+              notifyError('Account is temporarily locked due to too many failed login attempts');
+              return;
+            }
+            if (context.error?.code === 'ACCOUNT_BANNED') {
+              notifyError('Account is banned');
+              return;
+            }
             notifyError(context.error?.message || 'Passkey sign-in failed');
           },
           onSuccess(context) {

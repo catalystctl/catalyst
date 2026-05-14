@@ -57,6 +57,7 @@ model session {
   updatedAt DateTime @updatedAt
   ipAddress String?
   userAgent String?
+  impersonatedBy String?
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -125,11 +126,12 @@ model verification {
 }
 
 model twoFactor {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   secret      String
   backupCodes String
+  verified    Boolean @default(true)
   userId      String
-  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -294,6 +296,8 @@ model SystemSetting {
   fileTunnelMaxUploadMb       Int?
   fileTunnelMaxPendingPerNode Int?
   fileTunnelConcurrentMax     Int?
+  // Email verification
+  requireEmailVerification     Boolean  @default(true)
   // DNS provider settings
   dnsProvider           String?
   dnsBaseDomain         String?

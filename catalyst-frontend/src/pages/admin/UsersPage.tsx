@@ -32,6 +32,7 @@ import {
   Lock,
   Eye,
   User,
+  MailCheck,
 } from 'lucide-react';
 import EmptyState from '../../components/shared/EmptyState';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
@@ -450,6 +451,8 @@ function UsersPage() {
       filtered = filtered.filter((user) => user.banned);
     } else if (statusFilter === 'active') {
       filtered = filtered.filter((user) => !user.banned);
+    } else if (statusFilter === 'unverified') {
+      filtered = filtered.filter((user) => !user.emailVerified);
     }
     const sorted = [...filtered];
     sorted.sort((a, b) => {
@@ -497,6 +500,11 @@ function UsersPage() {
 
   const bannedCount = useMemo(
     () => users.filter((u) => u.banned).length,
+    [users],
+  );
+
+  const unverifiedCount = useMemo(
+    () => users.filter((u) => !u.emailVerified).length,
     [users],
   );
 
@@ -714,6 +722,17 @@ function UsersPage() {
     },
   });
 
+  const verifyEmailMutation = useMutation({
+    mutationFn: (userId: string) => adminApi.verifyUserEmail(userId),
+    onSuccess: () => {
+      notifySuccess('Email verified');
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    },
+    onError: (error: any) => {
+      notifyError(error?.response?.data?.error || 'Failed to verify email');
+    },
+  });
+
   const bulkDeleteMutation = useMutation({
     mutationFn: (userIds: string[]) => {
       return Promise.all(userIds.map((userId) => adminApi.deleteUser(userId)));
@@ -841,6 +860,24 @@ function UsersPage() {
     setDeletingUser({ id: userIds.join(','), username: label });
   };
 
+  const handleBulkVerifyEmails = (userIds: string[]) => {
+    if (!userIds.length) return;
+    // Only verify unverified users — filter to those that need it
+    const unverifiedIds = userIds.filter((id) => {
+      const user = users.find((u) => u.id === id);
+      return user && !user.emailVerified;
+    });
+    if (unverifiedIds.length === 0) return;
+    Promise.all(unverifiedIds.map((id) => adminApi.verifyUserEmail(id)))
+      .then(() => {
+        notifySuccess(`Verified ${unverifiedIds.length} email${unverifiedIds.length !== 1 ? 's' : ''}`);
+        queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      })
+      .catch((err: any) => {
+        notifyError(err?.response?.data?.error || 'Failed to verify emails');
+      });
+  };
+
   // ── Wizard logic ──
   const createSteps = [
     { label: 'Account', icon: User },
@@ -939,6 +976,12 @@ function UsersPage() {
                   <Badge variant="destructive" className="h-8 gap-1.5 px-3 text-xs">
                     <Ban className="h-2.5 w-2.5" />
                     {bannedCount} banned
+                  </Badge>
+                )}
+                {unverifiedCount > 0 && (
+                  <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs text-warning border-warning/30">
+                    <MailCheck className="h-2.5 w-2.5" />
+                    {unverifiedCount} unverified
                   </Badge>
                 )}
               </>
@@ -1070,6 +1113,9 @@ function UsersPage() {
                         <SelectItem value="banned">
                           Banned{bannedCount > 0 ? ` (${bannedCount})` : ''}
                         </SelectItem>
+                        <SelectItem value="unverified">
+                          Unverified{unverifiedCount > 0 ? ` (${unverifiedCount})` : ''}
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </label>
@@ -1114,6 +1160,11 @@ function UsersPage() {
                   <Button variant="outline" size="sm" onClick={() => handleBulkUnban(selectedIds, `${selectedIds.length} users`)} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="gap-1.5 text-xs text-success hover:bg-success/5 hover:text-success hover:border-success/20 dark:text-success dark:hover:bg-success/30 dark:hover:border-success">
                     <CheckCircle className="h-3 w-3" /> Unban
                   </Button>
+                  {selectedIds.some((id) => !users.find((u) => u.id === id)?.emailVerified) && (
+                    <Button variant="outline" size="sm" onClick={() => handleBulkVerifyEmails(selectedIds)} disabled={verifyEmailMutation.isPending} className="gap-1.5 text-xs text-success hover:bg-success/5 hover:text-success hover:border-success/20 dark:text-success dark:hover:bg-success/30 dark:hover:border-success">
+                      <MailCheck className="h-3 w-3" /> Verify Emails
+                    </Button>
+                  )}
                   <div className="mx-1 h-4 w-px bg-border" />
                   <Button variant="destructive" size="sm" onClick={() => handleBulkDelete(selectedIds, `${selectedIds.length} users`)} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="gap-1.5 text-xs">
                     <Trash2 className="h-3 w-3" /> Delete
@@ -1232,6 +1283,12 @@ function UsersPage() {
                                 2FA
                               </span>
                             )}
+                            {!user.emailVerified && (
+                              <span className="hidden items-center gap-1 lg:flex text-warning">
+                                <MailCheck className="h-3 w-3" />
+                                Unverified
+                              </span>
+                            )}
                             {(user.passkeys?.length ?? 0) > 0 && (
                               <span className="hidden items-center gap-1 lg:flex">
                                 <Fingerprint className="h-3 w-3 text-success" />
@@ -1260,6 +1317,16 @@ function UsersPage() {
                               title="Ban"
                             >
                               <Ban className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          {!user.emailVerified && (
+                            <button
+                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-success/5 hover:text-success disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-success/30 dark:hover:text-success"
+                              onClick={() => verifyEmailMutation.mutate(user.id)}
+                              disabled={verifyEmailMutation.isPending}
+                              title="Verify email"
+                            >
+                              <MailCheck className="h-3.5 w-3.5" />
                             </button>
                           )}
 
@@ -1314,6 +1381,16 @@ function UsersPage() {
                                 >
                                   <Ban className="h-3.5 w-3.5" />
                                   Ban
+                                </DropdownMenuItem>
+                              )}
+                              {!user.emailVerified && (
+                                <DropdownMenuItem
+                                  onClick={() => verifyEmailMutation.mutate(user.id)}
+                                  disabled={verifyEmailMutation.isPending}
+                                  className="gap-2 text-xs text-success dark:text-success"
+                                >
+                                  <MailCheck className="h-3.5 w-3.5" />
+                                  Verify Email
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuSeparator />
