@@ -1,4 +1,4 @@
-FROM rust:1.86 AS builder
+FROM rust:1-bookworm AS builder
 
 WORKDIR /app
 
@@ -21,8 +21,8 @@ FROM ubuntu:24.04
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/* && \
-    groupadd -r catalyst -g 1000 && \
-    useradd -r -g catalyst -u 1000 -s /sbin/nologin -d /var/lib/catalyst catalyst && \
+    (getent group catalyst 2>/dev/null || groupadd -r catalyst) && \
+    (getent passwd catalyst 2>/dev/null || useradd -r -g catalyst -s /sbin/nologin -d /var/lib/catalyst catalyst) && \
     mkdir -p /var/lib/catalyst && \
     chown -R catalyst:catalyst /var/lib/catalyst
 

@@ -28,6 +28,9 @@ DOCKER_DIR="$CATALYST_ROOT/catalyst-docker"
 TEST_ENV_FILE="$DOCKER_DIR/.env.test"
 COMPOSE_FILES="-f $DOCKER_DIR/docker-compose.yml -f $DOCKER_DIR/docker-compose.test.yml"
 
+# Save our script dir before sourcing libraries that may overwrite SCRIPT_DIR
+ORCHESTRATOR_DIR="$SCRIPT_DIR"
+
 # Default settings
 SKIP_BUILD=false
 SKIP_CLEANUP=false
@@ -178,28 +181,31 @@ build_images() {
 
     cd "$DOCKER_DIR"
 
-    # Ensure .env.test exists for build context
+    # Ensure .env.test exists for build context — docker compose build
+    # interpolates ALL service variables even for services not being built,
+    # so POSTGRES_PASSWORD (with :? in docker-compose.yml) must resolve.
     if [ ! -f "$TEST_ENV_FILE" ]; then
-        log_warn "No .env.test found, will generate after environment setup"
+        log_info "No .env.test found, generating before build..."
+        generate_test_env "$TEST_ENV_FILE"
     fi
 
     # Build backend image
     log_info "Building backend image..."
-    docker compose $COMPOSE_FILES build backend \
+    docker compose $COMPOSE_FILES --env-file "$TEST_ENV_FILE" build backend \
         --build-arg BUILDKIT_INLINE_CACHE=1 \
         2>&1 | tee "$LOGS_DIR/build-backend.log"
     log_success "Backend image built: catalyst-backend:test"
 
     # Build frontend image
     log_info "Building frontend image..."
-    docker compose $COMPOSE_FILES build frontend \
+    docker compose $COMPOSE_FILES --env-file "$TEST_ENV_FILE" build frontend \
         --build-arg BUILDKIT_INLINE_CACHE=1 \
         2>&1 | tee "$LOGS_DIR/build-frontend.log"
     log_success "Frontend image built: catalyst-frontend:test"
 
     # Optionally build agent image
     log_info "Building agent image..."
-    docker compose $COMPOSE_FILES build agent \
+    docker compose $COMPOSE_FILES --env-file "$TEST_ENV_FILE" build agent \
         --build-arg BUILDKIT_INLINE_CACHE=1 \
         2>&1 | tee "$LOGS_DIR/build-agent.log" || {
         log_warn "Agent image build failed (optional, some tests may be skipped)"
@@ -220,9 +226,13 @@ setup_environment() {
 
     cd "$DOCKER_DIR"
 
-    # Generate test environment
-    log_info "Generating test environment..."
-    generate_test_env "$TEST_ENV_FILE"
+    # Generate test environment (only if not already created during build phase)
+    if [ ! -f "$TEST_ENV_FILE" ]; then
+        log_info "Generating test environment..."
+        generate_test_env "$TEST_ENV_FILE"
+    else
+        log_info "Using existing test environment from build phase"
+    fi
 
     # Load the environment variables
     load_test_env "$TEST_ENV_FILE"
@@ -248,9 +258,9 @@ setup_environment() {
     log_info "Stopping any existing test containers..."
     docker compose $COMPOSE_FILES --env-file "$TEST_ENV_FILE" down -v 2>/dev/null || true
 
-    # Start services
+    # Start services (exclude agent — it's optional and its image may not build)
     log_info "Starting Docker Compose services..."
-    docker compose $COMPOSE_FILES --env-file "$TEST_ENV_FILE" up -d
+    docker compose $COMPOSE_FILES --env-file "$TEST_ENV_FILE" up -d backend frontend postgres redis
 
     # Wait for services to be healthy
     log_info "Waiting for services to be healthy..."
@@ -336,7 +346,7 @@ run_tests() {
     log_section "Phase 3: Running E2E Tests"
     TEST_START_TIME=$(date +%s)
 
-    cd "$SCRIPT_DIR"
+    cd "$ORCHESTRATOR_DIR"
 
     # Build arguments for run-all-tests.sh
     local test_args=()
@@ -357,12 +367,15 @@ run_tests() {
     export TEST_LOG_DIR="$LOGS_DIR"
     mkdir -p "$TEST_LOG_DIR"
 
+    # Signal Docker E2E mode so test suites skip local-only steps
+    export DOCKER_E2E_MODE=true
+
     log_info "Running test suites with BACKEND_URL=$BACKEND_URL"
     log_info "Test arguments: ${test_args[*]:-<none>}"
 
     # Run the test suite
     set +e
-    bash "$SCRIPT_DIR/run-all-tests.sh" "${test_args[@]}"
+    bash "$ORCHESTRATOR_DIR/run-all-tests.sh" "${test_args[@]}"
     TEST_EXIT_CODE=$?
     set -e
 

@@ -125,7 +125,7 @@ generate_test_env() {
 # =============================================================================
 
 NODE_ENV=test
-APP_NAME=Catalyst Test
+APP_NAME=Catalyst-Test
 TZ=UTC
 LOG_LEVEL=debug
 

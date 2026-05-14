@@ -5,6 +5,8 @@ import { qk } from '../../../lib/queryKeys';
 import { serversApi } from '../../../services/api/servers';
 import { notifySuccess, notifyError } from '../../../utils/notify';
 import { reportSystemError } from '../../../services/api/systemErrors';
+import CloneServerDialog from '../CloneServerDialog';
+import type { Server } from '../../../types/server';
 
 interface Props {
   serverId: string;
@@ -15,6 +17,7 @@ interface Props {
   isSuspended: boolean;
   serverStatus: string;
   subdomain: string | null;
+  server: Server;
 }
 
 const SUBDOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -28,6 +31,7 @@ export default function ServerSettingsTab({
   isSuspended,
   serverStatus,
   subdomain,
+  server,
 }: Props) {
   const queryClient = useQueryClient();
   const [subdomainInput, setSubdomainInput] = useState(subdomain ?? '');
@@ -146,6 +150,7 @@ export default function ServerSettingsTab({
             >
               Reinstall
             </button>
+            <CloneServerDialog server={server} disabled={isSuspended} />
           </div>
         </ServerTabCard>
       </div>

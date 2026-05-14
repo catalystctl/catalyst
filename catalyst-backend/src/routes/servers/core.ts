@@ -1,6 +1,33 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
-import { allocateIpForServer, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, ensureNotSuspended, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCreateSchema, shouldUseIpam, uuidv4, validateRequestBody, withConnectionInfo } from './_helpers.js';
+import { allocateIpForServer, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, ensureNotSuspended, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, shouldUseIpam, uuidv4, validateRequestBody, withConnectionInfo, WILDCARD_HOST } from './_helpers.js';
+
+/**
+ * Find the next available host port starting from `startPort`.
+ * Uses the port usage map from collectUsedHostPortsByIp and findPortConflict
+ * to avoid collisions with existing servers on the same node.
+ */
+function findAvailableHostPort(
+  usedPorts: Map<string, Set<number>>,
+  hostIp: string | null,
+  startPort: number,
+  maxPort = 65535,
+): number {
+  for (let port = startPort; port <= maxPort; port++) {
+    const conflict = findPortConflict(usedPorts, hostIp, [port]);
+    if (!conflict) {
+      return port;
+    }
+  }
+  // Fallback: scan from 1024 up to startPort
+  for (let port = 1024; port < startPort; port++) {
+    const conflict = findPortConflict(usedPorts, hostIp, [port]);
+    if (!conflict) {
+      return port;
+    }
+  }
+  throw new Error('No available host port found on this node');
+}
 
 export async function serverCoreRoutes(app: FastifyInstance) {
   app.post(
@@ -534,6 +561,453 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       }
       if (wsGatewayServerCreated?.pushToGlobalSubscribers) {
         wsGatewayServerCreated.pushToGlobalSubscribers('server_created', {
+          type: 'server_created',
+          serverId: server.id,
+          serverName: server.name,
+          ownerId: effectiveOwnerId,
+          createdBy: userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+  );
+
+  // Clone a server
+  app.post(
+    "/:serverId/clone",
+    { onRequest: [app.authenticate], preHandler: [validateRequestBody(serverCloneSchema)] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId } = request.params as { serverId: string };
+      const userId = request.user.userId;
+
+      // Permission check — cloning creates a new server, so server.create is required
+      if (!checkPerm(request, 'server.create')) {
+        return reply.status(403).send({ error: 'Insufficient permissions to create a server' });
+      }
+
+      // Fetch the source server with template, node, and location
+      const sourceServer = await prisma.server.findUnique({
+        where: { id: serverId },
+        include: { template: true, node: true, location: true },
+      });
+
+      if (!sourceServer) {
+        return reply.status(404).send({ error: 'Source server not found' });
+      }
+
+      // Check access to the source server
+      if (!(await canAccessServer(userId, sourceServer))) {
+        return reply.status(403).send({ error: 'Cannot access source server' });
+      }
+
+      const body = request.body as {
+        name?: string;
+        nodeId?: string;
+        locationId?: string;
+        allocatedMemoryMb?: number;
+        allocatedCpuCores?: number;
+        allocatedDiskMb?: number;
+        backupAllocationMb?: number;
+        databaseAllocation?: number;
+        environment?: Record<string, string>;
+        subdomain?: string | null;
+        ownerId?: string;
+      };
+
+      // Resolve overrides with defaults from source server
+      const resolvedName = body.name ?? `${sourceServer.name} Copy`;
+      const targetNodeId = body.nodeId ?? sourceServer.nodeId;
+      const resolvedLocationId = body.locationId ?? sourceServer.locationId;
+      const resolvedMemoryMb = body.allocatedMemoryMb ?? sourceServer.allocatedMemoryMb;
+      const resolvedCpuCores = body.allocatedCpuCores ?? sourceServer.allocatedCpuCores;
+      const resolvedDiskMb = body.allocatedDiskMb ?? sourceServer.allocatedDiskMb;
+      const resolvedBackupAllocationMb = body.backupAllocationMb ?? sourceServer.backupAllocationMb;
+      const resolvedDatabaseAllocation = body.databaseAllocation ?? sourceServer.databaseAllocation;
+
+      // Owner resolution — same logic as POST / (admin/API-key callers can specify a different owner)
+      const canCreate = checkIsAdmin(request, 'admin.write');
+      const hasNodeAccessResult = await hasNodeAccess(prisma, userId, targetNodeId);
+      if (!canCreate && !hasNodeAccessResult) {
+        return reply.status(403).send({ error: 'Admin access or node assignment required' });
+      }
+      const effectiveOwnerId = (canCreate || hasNodeAccessResult) && body.ownerId ? body.ownerId : userId;
+      if (effectiveOwnerId !== userId) {
+        if (!checkPerm(request, 'user.create')) {
+          return reply.status(403).send({ error: 'Insufficient permissions to create server for other user' });
+        }
+        const targetUser = await prisma.user.findUnique({ where: { id: effectiveOwnerId } });
+        if (!targetUser) {
+          return reply.status(400).send({ error: 'Specified owner does not exist' });
+        }
+      }
+
+      // Subdomain — default to null (do NOT copy source subdomain)
+      const normalizedSubdomain = typeof body.subdomain === 'string' ? body.subdomain.trim().toLowerCase() : null;
+      if (normalizedSubdomain) {
+        const existing = await prisma.server.findUnique({ where: { subdomain: normalizedSubdomain } });
+        if (existing) {
+          return reply.status(409).send({ error: 'Subdomain is already in use' });
+        }
+      }
+
+      // Validate source server's template still exists
+      if (!sourceServer.template) {
+        return reply.status(400).send({ error: 'Source server template not found' });
+      }
+
+      // Resolve environment — merge template defaults with source environment, then apply overrides
+      const templateVariables = (sourceServer.template.variables as any[]) || [];
+      const templateDefaults = templateVariables.reduce((acc: Record<string, string>, variable: any) => {
+        if (variable?.name && variable?.default !== undefined) {
+          acc[variable.name] = String(variable.default);
+        }
+        return acc;
+      }, {} as Record<string, string>);
+      const sourceEnvironment = (sourceServer.environment as Record<string, string>) || {};
+      const resolvedEnvironment = {
+        ...templateDefaults,
+        ...sourceEnvironment,
+        ...(body.environment || {}),
+      };
+
+      // Remove runtime-injected keys that should be re-resolved
+      delete resolvedEnvironment.CATALYST_NETWORK_IP;
+      delete resolvedEnvironment.TEMPLATE_IMAGE;
+
+      const resolvedImage = resolveTemplateImage(sourceServer.template, resolvedEnvironment);
+      if (!resolvedImage) {
+        return reply.status(400).send({ error: 'Template image is required' });
+      }
+
+      // Validate required template variables are provided
+      const requiredVars = templateVariables.filter((v: any) => v.required);
+      const missingVars = requiredVars.filter((v: any) => !resolvedEnvironment?.[v.name]);
+      if (missingVars.length > 0) {
+        return reply.status(400).send({
+          error: `Missing required template variables: ${missingVars.map((v: any) => v.name).join(', ')}`,
+        });
+      }
+
+      // Validate variable values against rules (same as POST /)
+      for (const variable of templateVariables) {
+        const value = resolvedEnvironment?.[variable.name];
+        if (value && variable.rules) {
+          for (const rule of variable.rules) {
+            if (rule.startsWith('between:')) {
+              const [min, max] = rule.substring(8).split(',').map(Number);
+              const numValue = Number(value);
+              if (numValue < min || numValue > max) {
+                return reply.status(400).send({ error: `Variable ${variable.name} must be between ${min} and ${max}` });
+              }
+            } else if (rule.startsWith('in:')) {
+              const allowedValues = rule.substring(3).split(',');
+              if (!allowedValues.includes(value)) {
+                return reply.status(400).send({ error: `Variable ${variable.name} must be one of: ${allowedValues.join(', ')}` });
+              }
+            } else if (rule.startsWith('regex:')) {
+              let pattern = rule.substring(6);
+              if (pattern.startsWith('/') && pattern.endsWith('/')) {
+                pattern = pattern.slice(1, -1);
+              }
+              // Validate regex pattern for ReDoS protection
+              const dangerousPatterns = [
+                /\(.*\)\{/,     // Nested quantifiers like (a+)+ or (a*)+
+                /\(\?[=:!]/,    // Lookahead/behind assertions
+                /\*.*\+|\+.*\*|\{.*,.*\}/, // Complex quantifiers
+              ];
+              const isUnsafeRegex = dangerousPatterns.some(p => p.test(pattern));
+              if (isUnsafeRegex) {
+                return reply.status(400).send({ error: `Invalid regex pattern for variable ${variable.name}: pattern contains potentially unsafe constructs` });
+              }
+              try {
+                const regex = new RegExp(pattern);
+                const startTime = Date.now();
+                const result = regex.test(value);
+                if (Date.now() - startTime > 1000) {
+                  return reply.status(400).send({ error: `Variable ${variable.name} regex validation timeout` });
+                }
+                if (!result) {
+                  return reply.status(400).send({ error: `Variable ${variable.name} does not match required pattern` });
+                }
+              } catch {
+                return reply.status(400).send({ error: `Invalid regex pattern for variable ${variable.name}: ${pattern}` });
+              }
+            }
+          }
+        }
+      }
+
+      // Validate node exists and has resources (same as POST /)
+      const node = await prisma.node.findUnique({
+        where: { id: targetNodeId },
+        include: {
+          servers: {
+            select: {
+              id: true,
+              allocatedMemoryMb: true,
+              allocatedCpuCores: true,
+              primaryPort: true,
+              primaryIp: true,
+              portBindings: true,
+              networkMode: true,
+            },
+          },
+        },
+      });
+
+      if (!node) {
+        return reply.status(404).send({ error: 'Node not found' });
+      }
+
+      // Check resource availability
+      const totalAllocatedMemory = node.servers.reduce(
+        (sum: number, s: any) => sum + (s.allocatedMemoryMb || 0), 0
+      );
+      const totalAllocatedCpu = node.servers.reduce(
+        (sum: number, s: any) => sum + (s.allocatedCpuCores || 0), 0
+      );
+
+      const effectiveMaxMemory = node.memoryOverallocatePercent === -1 ? Infinity : Math.floor(node.maxMemoryMb * (1 + node.memoryOverallocatePercent / 100));
+      const effectiveMaxCpu = node.cpuOverallocatePercent === -1 ? Infinity : node.maxCpuCores * (1 + node.cpuOverallocatePercent / 100);
+
+      if (totalAllocatedMemory + resolvedMemoryMb > effectiveMaxMemory) {
+        const available = effectiveMaxMemory === Infinity ? 'unlimited' : `${effectiveMaxMemory - totalAllocatedMemory}MB`;
+        return reply.status(400).send({
+          error: `Insufficient memory. Available: ${available}, Required: ${resolvedMemoryMb}MB`,
+        });
+      }
+
+      if (totalAllocatedCpu + resolvedCpuCores > effectiveMaxCpu) {
+        const available = effectiveMaxCpu === Infinity ? 'unlimited' : `${effectiveMaxCpu - totalAllocatedCpu} cores`;
+        return reply.status(400).send({
+          error: `Insufficient CPU. Available: ${available}, Required: ${resolvedCpuCores} cores`,
+        });
+      }
+
+      // Network configuration — copy networkMode from source, allocate fresh ports/IPs
+      const desiredNetworkMode = sourceServer.networkMode || 'mc-lan-static';
+      const isHostNetwork = desiredNetworkMode === 'host';
+
+      // Auto-assign fresh host ports for the clone.
+      // Never reuse the source server's primaryPort, primaryIp, or portBindings.
+      const usedPorts = collectUsedHostPortsByIp(node.servers);
+
+      let resolvedHostIp: string | null = null;
+      try {
+        resolvedHostIp =
+          typeof resolvedEnvironment?.CATALYST_NETWORK_IP === 'string'
+            ? normalizeHostIp(resolvedEnvironment.CATALYST_NETWORK_IP)
+            : null;
+      } catch (error: any) {
+        return reply.status(400).send({ error: error.message });
+      }
+
+      let hostNetworkIp: string | null = null;
+      if (isHostNetwork) {
+        try {
+          hostNetworkIp = resolvedHostIp ?? normalizeHostIp(node.publicAddress);
+        } catch (error: any) {
+          return reply.status(400).send({ error: error.message });
+        }
+      }
+
+      // For host network mode, no port mapping is needed
+      // For other modes, we need to auto-assign fresh host ports
+      let clonePortBindings: Record<number, number> = {};
+      let clonePrimaryPort: number;
+
+      if (isHostNetwork) {
+        // Host network — primaryPort is the container port, no host mapping needed
+        clonePrimaryPort = parsePortValue(sourceServer.primaryPort) ?? 25565;
+        // Port bindings in host mode are identity-mapped (container port = host port)
+        const sourceBindings = parseStoredPortBindings(sourceServer.portBindings);
+        for (const [containerPort] of Object.entries(sourceBindings)) {
+          const cp = parsePortValue(containerPort);
+          if (cp) clonePortBindings[cp] = cp;
+        }
+        clonePortBindings[clonePrimaryPort] = clonePrimaryPort;
+      } else if (shouldUseIpam(desiredNetworkMode)) {
+        // IPAM mode — no host port mapping needed, each container gets its own IP
+        clonePrimaryPort = parsePortValue(sourceServer.primaryPort) ?? 25565;
+        const sourceBindings = parseStoredPortBindings(sourceServer.portBindings);
+        for (const [containerPort] of Object.entries(sourceBindings)) {
+          const cp = parsePortValue(containerPort);
+          if (cp) clonePortBindings[cp] = cp; // identity map for IPAM
+        }
+        clonePortBindings[clonePrimaryPort] = clonePrimaryPort;
+      } else {
+        // Non-IPAM, non-host (bridge/mc-lan-static/mc-lan-dynamic)
+        // Auto-assign fresh host ports for each container port from the source server
+        clonePrimaryPort = parsePortValue(sourceServer.primaryPort) ?? 25565;
+        const sourceBindings = parseStoredPortBindings(sourceServer.portBindings);
+
+        // Collect all container ports from source
+        const containerPorts = Object.keys(sourceBindings).map(k => parsePortValue(k)).filter((p): p is number => p !== null);
+        if (!containerPorts.includes(clonePrimaryPort)) {
+          containerPorts.push(clonePrimaryPort);
+        }
+
+        // For each container port, find a free host port and register it
+        // to prevent collisions between the clone's own ports
+        const ipKey = resolvedHostIp || WILDCARD_HOST;
+        for (const containerPort of containerPorts) {
+          const hostPort = findAvailableHostPort(usedPorts, resolvedHostIp, containerPort);
+          clonePortBindings[containerPort] = hostPort;
+          // Register the assigned port so subsequent bindings don't conflict
+          if (!usedPorts.has(ipKey)) usedPorts.set(ipKey, new Set());
+          usedPorts.get(ipKey)!.add(hostPort);
+        }
+      }
+
+      const nextEnvironment = isHostNetwork && hostNetworkIp
+        ? { ...resolvedEnvironment, CATALYST_NETWORK_IP: hostNetworkIp }
+        : resolvedEnvironment;
+
+      // Create the cloned server in a transaction (same pattern as POST /)
+      let server;
+      try {
+        server = await prisma.$transaction(async (tx) => {
+          const created = await tx.server.create({
+            data: {
+              uuid: uuidv4(),
+              name: resolvedName,
+              templateId: sourceServer.templateId,
+              nodeId: targetNodeId,
+              locationId: resolvedLocationId,
+              ownerId: effectiveOwnerId,
+              allocatedMemoryMb: resolvedMemoryMb,
+              allocatedCpuCores: resolvedCpuCores,
+              allocatedDiskMb: resolvedDiskMb,
+              backupAllocationMb: resolvedBackupAllocationMb ?? 0,
+              databaseAllocation: resolvedDatabaseAllocation ?? 0,
+              primaryPort: clonePrimaryPort,
+              portBindings: clonePortBindings,
+              networkMode: desiredNetworkMode,
+              subdomain: normalizedSubdomain,
+              environment: {
+                ...nextEnvironment,
+                TEMPLATE_IMAGE: resolvedImage,
+              },
+              // Status is always "stopped" for a clone — never copy runtime state
+            },
+          });
+
+          // Allocate fresh IP via IPAM if needed (same as POST /)
+          if (shouldUseIpam(desiredNetworkMode)) {
+            const allocatedIp = await allocateIpForServer(tx, {
+              nodeId: targetNodeId,
+              networkName: desiredNetworkMode,
+              serverId: created.id,
+              requestedIp: null, // auto-assign
+            });
+
+            if (!allocatedIp) {
+              throw new Error('No IP pool configured for this network');
+            }
+
+            const ipamEnvironment = {
+              ...(nextEnvironment || {}),
+              TEMPLATE_IMAGE: resolvedImage,
+              CATALYST_NETWORK_IP: allocatedIp,
+            };
+
+            const updated = await tx.server.update({
+              where: { id: created.id },
+              data: {
+                primaryIp: allocatedIp,
+                environment: ipamEnvironment,
+              },
+            });
+
+            return { ...updated, environment: ipamEnvironment } as typeof updated;
+          }
+
+          return created;
+        });
+      } catch (error: any) {
+        return reply.status(400).send({ error: error.message });
+      }
+
+      // Grant owner full permissions (same as POST /)
+      await prisma.serverAccess.create({
+        data: {
+          userId: effectiveOwnerId,
+          serverId: server.id,
+          permissions: [
+            'server.start',
+            'server.stop',
+            'server.read',
+            'server.install',
+            'alert.read',
+            'alert.create',
+            'alert.update',
+            'alert.delete',
+            'file.read',
+            'file.write',
+            'console.read',
+            'console.write',
+            'server.delete',
+          ],
+        },
+      });
+
+      // Audit log
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: 'server.clone',
+          resource: 'server',
+          resourceId: server.id,
+          details: {
+            sourceServerId: sourceServer.id,
+            sourceServerName: sourceServer.name,
+            clonedByName: resolvedName,
+          },
+        },
+      });
+
+      reply.status(201).send({
+        success: true,
+        data: withConnectionInfo(server, node),
+      });
+
+      // Fire webhook for server creation
+      const webhookService: any = (app as any).webhookService;
+      if (webhookService) {
+        webhookService.serverCreated({ id: server.id, name: server.name, ownerId: effectiveOwnerId }, userId).catch(() => {});
+      }
+
+      // Trigger DNS sync if subdomain was provided
+      if (server.subdomain) {
+        const { syncServerSubdomain } = await import('../../services/dns-sync.js');
+        syncServerSubdomain({
+          id: server.id,
+          subdomain: server.subdomain,
+          primaryIp: server.primaryIp,
+          primaryPort: server.primaryPort,
+        }).catch((err: any) => {
+          captureSystemError({
+            level: 'warn',
+            component: 'DnsSync',
+            message: `Failed to sync DNS for cloned server ${server.id}: ${err?.message}`,
+          }).catch(() => {});
+        });
+      }
+
+      // Broadcast server_created event (same as POST /)
+      const wsGatewayClone = (app as any).wsGateway;
+      if (wsGatewayClone?.pushToAdminSubscribers) {
+        wsGatewayClone.pushToAdminSubscribers('server_created', {
+          type: 'server_created',
+          serverId: server.id,
+          serverName: server.name,
+          ownerId: effectiveOwnerId,
+          createdBy: userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (wsGatewayClone?.pushToGlobalSubscribers) {
+        wsGatewayClone.pushToGlobalSubscribers('server_created', {
           type: 'server_created',
           serverId: server.id,
           serverName: server.name,

@@ -89,6 +89,27 @@ export const serverCreateSchema = z.object({
 });
 
 /**
+ * Server clone validation
+ */
+export const serverCloneSchema = z.object({
+  name: serverNameSchema.optional(),
+  nodeId: z.string().min(1, 'Node ID is required').optional(),
+  locationId: z.string().min(1, 'Location ID is required').optional(),
+  allocatedMemoryMb: z.number().int().min(512).max(131072).optional(),
+  allocatedCpuCores: z.number().int().min(1).max(128).optional(),
+  allocatedDiskMb: z.number().int().min(1024).max(1048576).optional(),
+  backupAllocationMb: z.number().int().min(0).max(1048576).optional(),
+  databaseAllocation: z.number().int().min(0).max(1048576).optional(),
+  environment: z.record(z.string(), z.string().min(1).max(4096)).optional(),
+  subdomain: z.string()
+    .max(63, 'Subdomain must be at most 63 characters')
+    .regex(/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/, 'Invalid subdomain format')
+    .nullable()
+    .optional(),
+  ownerId: z.string().min(1).optional(),
+});
+
+/**
  * Server update validation
  */
 export const serverUpdateSchema = z.object({

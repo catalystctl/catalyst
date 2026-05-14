@@ -1208,6 +1208,7 @@ function ServerDetailsPage() {
               isSuspended={isSuspended}
               serverStatus={server.status}
               subdomain={server.subdomain ?? null}
+              server={server}
             />
           )}
           </Suspense>
