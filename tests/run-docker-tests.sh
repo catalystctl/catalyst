@@ -178,9 +178,12 @@ build_images() {
 
     cd "$DOCKER_DIR"
 
-    # Ensure .env.test exists for build context
+    # Ensure .env.test exists for build context — docker compose build
+    # interpolates ALL service variables even for services not being built,
+    # so POSTGRES_PASSWORD (with :? in docker-compose.yml) must resolve.
     if [ ! -f "$TEST_ENV_FILE" ]; then
-        log_warn "No .env.test found, will generate after environment setup"
+        log_info "No .env.test found, generating before build..."
+        generate_test_env "$TEST_ENV_FILE"
     fi
 
     # Build backend image
@@ -220,9 +223,13 @@ setup_environment() {
 
     cd "$DOCKER_DIR"
 
-    # Generate test environment
-    log_info "Generating test environment..."
-    generate_test_env "$TEST_ENV_FILE"
+    # Generate test environment (only if not already created during build phase)
+    if [ ! -f "$TEST_ENV_FILE" ]; then
+        log_info "Generating test environment..."
+        generate_test_env "$TEST_ENV_FILE"
+    else
+        log_info "Using existing test environment from build phase"
+    fi
 
     # Load the environment variables
     load_test_env "$TEST_ENV_FILE"
