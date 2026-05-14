@@ -172,6 +172,20 @@ export interface UpdateServerPayload {
   databaseAllocation?: number;
 }
 
+export interface CloneServerPayload {
+  name?: string;
+  nodeId?: string;
+  locationId?: string;
+  allocatedMemoryMb?: number;
+  allocatedCpuCores?: number;
+  allocatedDiskMb?: number;
+  backupAllocationMb?: number;
+  databaseAllocation?: number;
+  environment?: Record<string, string>;
+  subdomain?: string | null;
+  ownerId?: string;
+}
+
 export interface TransferServerPayload {
   targetNodeId: string;
   transferMode?: BackupStorageMode;

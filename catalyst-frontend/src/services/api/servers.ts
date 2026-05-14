@@ -5,6 +5,7 @@ import type {
   UpdateServerPayload,
   TransferServerPayload,
   CreateServerPayload,
+  CloneServerPayload,
   ServerLogs,
   RestartPolicy,
   BackupStorageMode,
@@ -31,6 +32,10 @@ export const serversApi = {
   },
   create: async (payload: CreateServerPayload) => {
     const data = await apiClient.post<ApiResponse<Server>>('/api/servers', payload);
+    return data.data;
+  },
+  clone: async (id: string, payload: CloneServerPayload) => {
+    const data = await apiClient.post<ApiResponse<Server>>(`/api/servers/${id}/clone`, payload);
     return data.data;
   },
   update: async (id: string, payload: UpdateServerPayload) => {
