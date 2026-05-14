@@ -650,8 +650,13 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         }
       }
 
+      // Validate source server's template still exists
+      if (!sourceServer.template) {
+        return reply.status(400).send({ error: 'Source server template not found' });
+      }
+
       // Resolve environment — merge template defaults with source environment, then apply overrides
-      const templateVariables = (sourceServer.template?.variables as any[]) || [];
+      const templateVariables = (sourceServer.template.variables as any[]) || [];
       const templateDefaults = templateVariables.reduce((acc: Record<string, string>, variable: any) => {
         if (variable?.name && variable?.default !== undefined) {
           acc[variable.name] = String(variable.default);
@@ -703,6 +708,16 @@ export async function serverCoreRoutes(app: FastifyInstance) {
               let pattern = rule.substring(6);
               if (pattern.startsWith('/') && pattern.endsWith('/')) {
                 pattern = pattern.slice(1, -1);
+              }
+              // Validate regex pattern for ReDoS protection
+              const dangerousPatterns = [
+                /\(.*\)\{/,     // Nested quantifiers like (a+)+ or (a*)+
+                /\(\?[=:!]/,    // Lookahead/behind assertions
+                /\*.*\+|\+.*\*|\{.*,.*\}/, // Complex quantifiers
+              ];
+              const isUnsafeRegex = dangerousPatterns.some(p => p.test(pattern));
+              if (isUnsafeRegex) {
+                return reply.status(400).send({ error: `Invalid regex pattern for variable ${variable.name}: pattern contains potentially unsafe constructs` });
               }
               try {
                 const regex = new RegExp(pattern);
