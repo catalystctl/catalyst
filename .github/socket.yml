@@ -1,0 +1,22 @@
+# Socket.dev configuration for Catalyst
+# https://docs.socket.dev/docs/socketyaml-configuration
+
+# Fail on critical and high severity issues
+fail_on:
+  - critical
+  - high
+
+# Always flag these categories
+issue_categories:
+  - malware
+  - typosquatting
+  - install_scripts
+  - obfuscated_code
+  - stolen_code
+  - unauthorized_file_access
+  - network_access
+
+# Ignore these packages from scanning (false positives)
+ignore:
+  # Add packages to ignore here if needed
+  # - example-package

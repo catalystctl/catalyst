@@ -1,0 +1,227 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  dependabot-review.yml — Supply Chain Security Gate for Dependabot PRs        ║
+# ║                                                                              ║
+# ║  Runs automatically on Dependabot pull requests to:                          ║
+# ║    1. Scan for malware & supply chain attacks (Socket.dev)                    ║
+# ║    2. Audit known vulnerabilities (npm/bun audit)                            ║
+# ║    3. Review lockfile changes for unexpected additions                       ║
+# ║    4. Check for typosquatting and suspicious package metadata                ║
+# ║    5. Post a summary comment on the PR                                       ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: Supply Chain Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  pull-requests: write   # to post review comments
+  security-events: write # for SARIF upload
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────────
+  # Gate 1: Socket.dev malware & supply chain scan
+  # Socket.dev catches: malware, typosquatting, install scripts,
+  # obfuscated code, token leaks, and suspicious package metadata.
+  # ──────────────────────────────────────────────────────────────────────────────
+  socket-scan:
+    name: Socket Supply Chain Scan
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Socket Security Scan
+        uses: SocketSecurity/socketyaml-action@v1
+        continue-on-error: true
+        with:
+          # Socket.dev is free for public repos — no API key needed.
+          # For private repos, add SOCKET_SECURITY_API_KEY as a repo secret.
+          input_type: yaml
+          config_path: .github/socket.yml
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # Gate 2: Vulnerability audit (npm/bun audit)
+  # Checks all workspaces for known CVEs in dependencies.
+  # ──────────────────────────────────────────────────────────────────────────────
+  vulnerability-audit:
+    name: Vulnerability Audit
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Audit backend dependencies
+        working-directory: catalyst-backend
+        run: |
+          echo "## 🔍 Backend Vulnerability Audit" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          bun audit 2>&1 | tee /tmp/backend-audit.txt || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Audit frontend dependencies
+        working-directory: catalyst-frontend
+        run: |
+          echo "## 🔍 Frontend Vulnerability Audit" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          bun audit 2>&1 | tee /tmp/frontend-audit.txt || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Check for critical/high vulnerabilities
+        run: |
+          # Fail if any critical or high severity issues are found
+          combined=$(cat /tmp/backend-audit.txt /tmp/frontend-audit.txt 2>/dev/null)
+          if echo "$combined" | grep -qiE "(critical|high severity|high)"; then
+            echo "::error::Critical or high severity vulnerabilities found — review before merging"
+            exit 1
+          fi
+          echo "No critical/high vulnerabilities found ✅"
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # Gate 3: Lockfile diff review
+  # Detects unexpected package additions, typosquatting, and
+  # packages with install scripts that could be malicious.
+  # ──────────────────────────────────────────────────────────────────────────────
+  lockfile-review:
+    name: Lockfile Diff Review
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3"
+
+      - name: Analyze lockfile changes
+        run: |
+          echo "## 📦 Lockfile Change Analysis" >> $GITHUB_STEP_SUMMARY
+
+          # Get the diff for lockfile
+          LOCKFILE_DIFF=$(git diff origin/${{ github.base_ref }}...HEAD -- bun.lock bun.lockb 2>/dev/null || true)
+
+          if [ -z "$LOCKFILE_DIFF" ]; then
+            echo "No lockfile changes detected" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+
+          # Check for new packages added (lines starting with + that look like package refs)
+          NEW_PKGS=$(echo "$LOCKFILE_DIFF" | grep -oP '^\+.*@"?[^@]+@"?' | grep -v '^+++' || true)
+
+          if [ -n "$NEW_PKGS" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### New packages introduced:" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "$NEW_PKGS" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Check for packages with postinstall/install scripts (common attack vector)
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Checking for install scripts in new packages..." >> $GITHUB_STEP_SUMMARY
+
+          # Install to resolve the lockfile, then check for install scripts
+          bun install --frozen-lockfile 2>/dev/null || bun install 2>/dev/null || true
+
+          SUSPICIOUS=""
+          for pkg in $(echo "$NEW_PKGS" | grep -oP '@?[^@]+@[^"]+' | sed 's/@[^@]*$//' | sort -u); do
+            # Check if the package has install/postinstall scripts
+            pkg_dir="node_modules/${pkg}"
+            if [ -f "$pkg_dir/package.json" ]; then
+              scripts=$(jq -r '.scripts | keys[]' "$pkg_dir/package.json" 2>/dev/null | grep -E "(install|postinstall|preinstall)" || true)
+              if [ -n "$scripts" ]; then
+                SUSPICIOUS="$SUSPICIOUS\n⚠️ **$pkg** has install scripts: $(echo $scripts | tr '\n' ', ')"
+              fi
+            fi
+          done
+
+          if [ -n "$SUSPICIOUS" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### ⚠️ Packages with install scripts detected" >> $GITHUB_STEP_SUMMARY
+            echo "Install scripts can execute arbitrary code during `npm install`. Review carefully." >> $GITHUB_STEP_SUMMARY
+            echo -e "$SUSPICIOUS" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No install scripts found in new packages ✅" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # Gate 4: OSSF Scorecard
+  # Evaluates the repo's security posture and the open source deps.
+  # ──────────────────────────────────────────────────────────────────────────────
+  scorecard:
+    name: OSSF Scorecard
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@v2
+        continue-on-error: true
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # Summary: Post a review comment on the Dependabot PR
+  # ──────────────────────────────────────────────────────────────────────────────
+  review-summary:
+    name: Post Review Summary
+    needs: [socket-scan, vulnerability-audit, lockfile-review, scorecard]
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]' && always()
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Post review comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const results = {
+              socket: '${{ needs.socket-scan.result }}',
+              audit: '${{ needs.vulnerability-audit.result }}',
+              lockfile: '${{ needs.lockfile-review.result }}',
+              scorecard: '${{ needs.scorecard.result }}',
+            };
+
+            const icon = (r) => {
+              if (r === 'success') return '✅';
+              if (r === 'failure') return '❌';
+              return '⚠️';
+            };
+
+            const body = `## 🔒 Supply Chain Security Review
+
+            | Check | Status |
+            |-------|--------|
+            | Socket.dev malware scan | ${icon(results.socket)} ${results.socket} |
+            | Vulnerability audit | ${icon(results.audit)} ${results.audit} |
+            | Lockfile diff review | ${icon(results.lockfile)} ${results.lockfile} |
+            | OSSF Scorecard | ${icon(results.scorecard)} ${results.scorecard} |
+
+            ${results.audit === 'failure' ? '### ⚠️ Action Required\n\nCritical or high severity vulnerabilities were found. Do **not** merge until verified.' : ''}
+            ${results.socket === 'failure' ? '### ⚠️ Action Required\n\nSocket.dev flagged potential supply chain issues. Review the findings above.' : ''}
+
+            > _This review was automatically generated by the Supply Chain Review workflow._`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.replace(/^\s+/gm, ''),
+            });
