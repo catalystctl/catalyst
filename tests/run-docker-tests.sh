@@ -188,21 +188,21 @@ build_images() {
 
     # Build backend image
     log_info "Building backend image..."
-    docker compose $COMPOSE_FILES build backend \
+    docker compose $COMPOSE_FILES --env-file "$TEST_ENV_FILE" build backend \
         --build-arg BUILDKIT_INLINE_CACHE=1 \
         2>&1 | tee "$LOGS_DIR/build-backend.log"
     log_success "Backend image built: catalyst-backend:test"
 
     # Build frontend image
     log_info "Building frontend image..."
-    docker compose $COMPOSE_FILES build frontend \
+    docker compose $COMPOSE_FILES --env-file "$TEST_ENV_FILE" build frontend \
         --build-arg BUILDKIT_INLINE_CACHE=1 \
         2>&1 | tee "$LOGS_DIR/build-frontend.log"
     log_success "Frontend image built: catalyst-frontend:test"
 
     # Optionally build agent image
     log_info "Building agent image..."
-    docker compose $COMPOSE_FILES build agent \
+    docker compose $COMPOSE_FILES --env-file "$TEST_ENV_FILE" build agent \
         --build-arg BUILDKIT_INLINE_CACHE=1 \
         2>&1 | tee "$LOGS_DIR/build-agent.log" || {
         log_warn "Agent image build failed (optional, some tests may be skipped)"
