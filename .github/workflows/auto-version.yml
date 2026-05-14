@@ -270,7 +270,7 @@ jobs:
       - name: Create GitHub Release
         if: steps.bump.outputs.bump != 'none'
         id: create_release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.version.outputs.new_version }}
           name: v${{ steps.version.outputs.new_version }}
@@ -412,7 +412,7 @@ jobs:
           sha256sum "/tmp/${{ matrix.artifact_name }}" > "/tmp/${{ matrix.artifact_name }}.sha256"
 
       - name: Upload binary as release asset
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ needs.version.outputs.new_version }}
           files: /tmp/${{ matrix.artifact_name }}
@@ -420,7 +420,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload checksum as release asset
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ needs.version.outputs.new_version }}
           files: /tmp/${{ matrix.artifact_name }}.sha256
