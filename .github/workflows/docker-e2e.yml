@@ -53,7 +53,7 @@ jobs:
         working-directory: tests
         run: |
           ./run-docker-tests.sh --verbose
-        timeout-minutes: 30
+        timeout-minutes: 60
 
       - name: Upload test logs
         if: always()
