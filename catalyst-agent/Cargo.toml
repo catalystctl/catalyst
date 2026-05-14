@@ -23,7 +23,7 @@ sha2 = "0.11"
 aes-gcm = "0.10"
 rand_08 = { package = "rand", version = "0.8" }
 base64 = "0.22"
-sysinfo = "0.38"
+sysinfo = "0.39"
 nix = { version = "0.31", features = ["fs"] }
 num_cpus = "1"
 libc = "0.2"
