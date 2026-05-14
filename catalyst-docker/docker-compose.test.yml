@@ -121,6 +121,12 @@ services:
     container_name: catalyst-frontend-test
     ports:
       - "${FRONTEND_PORT:-127.0.0.1:8080}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     deploy:
       resources:
         limits:
