@@ -30,6 +30,7 @@ let testLocationId: string;
 let testUserId: string;
 let adminRoleId: string;
 let testNodeId: string;
+let testTemplateId: string;
 const createdPoolIds: string[] = [];
 const createdAllocationIds: string[] = [];
 let nextPort = 30000;
@@ -108,6 +109,24 @@ beforeAll(async () => {
     },
   });
   testNodeId = node.id;
+
+  // Create a template so server FK constraints are satisfied
+  const template = await prisma.serverTemplate.create({
+    data: {
+      name: `test-ipv6-template-${nanoid(8)}`,
+      author: 'test',
+      version: '1.0.0',
+      image: 'ghcr.io/test/test:latest',
+      startup: './test',
+      stopCommand: 'stop',
+      sendSignalTo: 'SIGTERM',
+      variables: [],
+      supportedPorts: [],
+      allocatedMemoryMb: 1024,
+      allocatedCpuCores: 1,
+    },
+  });
+  testTemplateId = template.id;
 });
 
 afterAll(async () => {
@@ -119,6 +138,7 @@ afterAll(async () => {
     await prisma.ipPool.delete({ where: { id } }).catch(() => {});
   }
   await prisma.node.delete({ where: { id: testNodeId } }).catch(() => {});
+  await prisma.serverTemplate.delete({ where: { id: testTemplateId } }).catch(() => {});
   await prisma.user.delete({ where: { id: testUserId } }).catch(() => {});
   await prisma.role.delete({ where: { id: adminRoleId } }).catch(() => {});
   await prisma.location.delete({ where: { id: testLocationId } }).catch(() => {});
@@ -307,7 +327,7 @@ describe('IPAM - allocateIpForServer', () => {
       data: {
         uuid: nanoid(32),
         name: `test-ipv6-server-${nanoid(4)}`,
-        templateId: (await prisma.serverTemplate.findFirst())?.id || 'dummy',
+        templateId: testTemplateId,
         nodeId: testNodeId,
         locationId: testLocationId,
         ownerId: testUserId,

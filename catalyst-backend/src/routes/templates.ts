@@ -2,7 +2,8 @@ import { prisma } from "../db.js";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { hasPermission } from "../lib/permissions";
 import { serialize } from "../utils/serialize";
-import { importPterodactylEgg as convertEgg, convertStartupCommand, convertInstallScript, parseStopCommand } from "../utils/egg-import";
+import { importPterodactylEgg as convertEgg, importPterodactylEggSafe, importPterodactylEggsBatch, convertStartupCommand, convertInstallScript, parseStopCommand } from "../utils/egg-import";
+import type { ImportError, ImportSafeResult, BatchImportResult, ImportedEggResult } from "../utils/egg-import";
 
 const ensurePermission = async (
 	prisma: any,
@@ -459,7 +460,7 @@ export async function templateRoutes(app: FastifyInstance) {
 		},
 	);
 
-	// Import Pterodactyl egg (single)
+	// Import Pterodactyl egg (single) — uses structured error-returning API
 	app.post(
 		"/import-pterodactyl",
 		{ onRequest: [app.authenticate] },
@@ -483,31 +484,84 @@ export async function templateRoutes(app: FastifyInstance) {
 				}
 			}
 
-			const result = await importPterodactylEgg(egg, nestId || null, request.user.userId);
+			// Use the safe import API that returns structured errors
+			const safeResult = importPterodactylEggSafe(egg, { nestId: nestId || null });
 
-			if (result.status === "error") {
-				if (result.error === "Missing name") {
-					return reply.status(400).send({ error: "Missing required field: name" });
-				}
-				if (result.error === "Missing startup") {
-					return reply.status(400).send({ error: "Missing required field: startup" });
-				}
-				if (result.error === "Missing images") {
-					return reply.status(400).send({ error: "Missing required field: images" });
-				}
-				return reply.status(400).send({ error: result.error });
-			}
-			if (result.status === "skipped") {
-				return reply.status(409).send({ error: `A template with the name '${result.name}' already exists` });
+			// If there are error-severity validation issues, return 422 with structured errors
+			const blockingErrors = safeResult.errors.filter((e) => e.severity === "error");
+			if (blockingErrors.length > 0) {
+				return reply.status(422).send({
+					error: "Egg validation failed",
+					errors: safeResult.errors,
+				});
 			}
 
-			// Fetch the created template with nest for response
-			const template = await prisma.serverTemplate.findUnique({
-				where: { name: result.name! },
-				include: { nest: { select: { id: true, name: true, icon: true } } },
+			// Conversion succeeded — but check for warnings
+			if (!safeResult.result) {
+				// Shouldn't happen if no blocking errors, but guard against it
+				return reply.status(422).send({
+					error: "Egg conversion produced no result",
+					errors: safeResult.errors,
+				});
+			}
+
+			const converted = safeResult.result;
+
+			// Check for duplicate name
+			const existing = await prisma.serverTemplate.findUnique({
+				where: { name: converted.name },
+			});
+			if (existing) {
+				return reply.status(409).send({ error: `A template with the name '${converted.name}' already exists` });
+			}
+
+			// Determine nest — auto-create from egg category if no nestId provided
+			let resolvedNestId = nestId || null;
+			if (!resolvedNestId && egg._category) {
+				const existingNest = await prisma.nest.findFirst({
+					where: { name: egg._category },
+				});
+				if (existingNest) {
+					resolvedNestId = existingNest.id;
+				} else {
+					const newNest = await prisma.nest.create({
+						data: { name: egg._category },
+					});
+					resolvedNestId = newNest.id;
+				}
+			}
+
+			const template = await prisma.serverTemplate.create({
+				data: {
+					name: converted.name,
+					description: converted.description,
+					author: converted.author,
+					version: converted.version,
+					image: converted.image,
+					images: converted.images as any,
+					defaultImage: converted.defaultImage,
+					installImage: converted.installImage,
+					installEntrypoint: converted.installEntrypoint,
+					startup: converted.startup,
+					stopCommand: converted.stopCommand,
+					sendSignalTo: converted.sendSignalTo,
+					variables: converted.variables as any,
+					installScript: converted.installScript,
+					supportedPorts: converted.supportedPorts,
+					allocatedMemoryMb: converted.allocatedMemoryMb,
+					allocatedCpuCores: converted.allocatedCpuCores,
+					features: converted.features as any,
+					nestId: resolvedNestId,
+				},
 			});
 
-			reply.status(201).send({ success: true, data: template });
+			// Include warnings in the response even on success
+			const response: Record<string, any> = { success: true, data: template };
+			if (safeResult.errors.length > 0) {
+				response.warnings = safeResult.errors.filter((e) => e.severity === "warning");
+			}
+
+			reply.status(201).send(response);
 			const wsGateway = (app as any).wsGateway;
 			if (wsGateway?.pushToAdminSubscribers) {
 				wsGateway.pushToAdminSubscribers("template_created", {
@@ -520,7 +574,7 @@ export async function templateRoutes(app: FastifyInstance) {
 		},
 	);
 
-	// Import all Pterodactyl game eggs from GitHub
+	// Import all Pterodactyl game eggs from GitHub (batch with partial-failure)
 	app.post(
 		"/import-pterodactyl-batch",
 		{ onRequest: [app.authenticate] },
@@ -575,14 +629,10 @@ export async function templateRoutes(app: FastifyInstance) {
 
 			request.log.info({ count: treeEntries.length }, "Found eggs in repo");
 
-			// 2. Download and import each egg
-			const results = {
-				total: treeEntries.length,
-				imported: 0,
-				skipped: 0,
-				errors: 0,
-				errorDetails: [] as Array<{ name: string; error: string }>,
-			};
+			// 2. Download and import each egg with partial-failure handling
+			const imported: Array<{ name: string; template: any }> = [];
+			const skipped: Array<{ name: string }> = [];
+			const failed: Array<{ egg: string; errors: ImportError[] }> = [];
 
 			// Process eggs in batches of 5 to avoid overwhelming GitHub or the DB
 			const BATCH_SIZE = 5;
@@ -606,25 +656,111 @@ export async function templateRoutes(app: FastifyInstance) {
 								eggData._category = category;
 							}
 
-							return importPterodactylEgg(eggData, nestId || null, request.user.userId);
+							return { egg: eggData, path: entry.path };
 						} catch (err: any) {
-							return { status: "error" as const, name: entry.path, error: err.message };
+							// Fetch/parse failure — record as import failure
+							return {
+								fetchError: {
+									egg: entry.path,
+									errors: [{
+										code: "FETCH_FAILED",
+										message: `Failed to fetch or parse egg from GitHub: ${err.message}`,
+										field: "",
+										severity: "error" as const,
+									}],
+								},
+							};
 						}
 					}),
 				);
 
 				for (const r of batchResults) {
-					if (r.status === "created") results.imported++;
-					else if (r.status === "skipped") results.skipped++;
-					else {
-						results.errors++;
-						if (r.name) results.errorDetails.push({ name: r.name, error: r.error || "Unknown error" });
+					// Handle fetch failures
+					if ("fetchError" in r && r.fetchError) {
+						failed.push(r.fetchError);
+						continue;
+					}
+
+					const eggData = (r as any).egg;
+					const eggName = (eggData.name || (r as any).path || "").trim() || "(unnamed)";
+
+					// Use the safe import API for structured error handling
+					const safeResult = importPterodactylEggSafe(eggData, { nestId: nestId || null });
+
+					const blockingErrors = safeResult.errors.filter((e) => e.severity === "error");
+					if (blockingErrors.length > 0 || !safeResult.result) {
+						failed.push({ egg: eggName, errors: safeResult.errors });
+						continue;
+					}
+
+					const converted = safeResult.result;
+
+					try {
+						// Check for duplicate name (skip, not fail)
+						const existing = await prisma.serverTemplate.findUnique({
+							where: { name: converted.name },
+						});
+						if (existing) {
+							skipped.push({ name: converted.name });
+							continue;
+						}
+
+						// Determine nest — auto-create from egg category if no nestId provided
+						let resolvedNestId = nestId || null;
+						if (!resolvedNestId && eggData._category) {
+							const existingNest = await prisma.nest.findFirst({
+								where: { name: eggData._category },
+							});
+							if (existingNest) {
+								resolvedNestId = existingNest.id;
+							} else {
+								const newNest = await prisma.nest.create({
+									data: { name: eggData._category },
+								});
+								resolvedNestId = newNest.id;
+							}
+						}
+
+						const template = await prisma.serverTemplate.create({
+							data: {
+								name: converted.name,
+								description: converted.description,
+								author: converted.author,
+								version: converted.version,
+								image: converted.image,
+								images: converted.images as any,
+								defaultImage: converted.defaultImage,
+								installImage: converted.installImage,
+								installEntrypoint: converted.installEntrypoint,
+								startup: converted.startup,
+								stopCommand: converted.stopCommand,
+								sendSignalTo: converted.sendSignalTo,
+								variables: converted.variables as any,
+								installScript: converted.installScript,
+								supportedPorts: converted.supportedPorts,
+								allocatedMemoryMb: converted.allocatedMemoryMb,
+								allocatedCpuCores: converted.allocatedCpuCores,
+								features: converted.features as any,
+								nestId: resolvedNestId,
+							},
+						});
+						imported.push({ name: converted.name, template });
+					} catch (dbErr: any) {
+						failed.push({
+							egg: eggName,
+							errors: [{
+								code: "DB_WRITE_FAILED",
+								message: `Failed to write template to database: ${dbErr.message}`,
+								field: "",
+								severity: "error",
+							}],
+						});
 					}
 				}
 			}
 
 			request.log.info(
-				{ imported: results.imported, skipped: results.skipped, errors: results.errors },
+				{ imported: imported.length, skipped: skipped.length, failed: failed.length },
 				"Batch import complete",
 			);
 
@@ -633,13 +769,29 @@ export async function templateRoutes(app: FastifyInstance) {
 			if (wsGateway?.pushToAdminSubscribers) {
 				wsGateway.pushToAdminSubscribers("templates_batch_imported", {
 					type: "templates_batch_imported",
-					results,
+					imported: imported.length,
+					skipped: skipped.length,
+					failed: failed.length,
 					importedBy: request.user.userId,
 					timestamp: new Date().toISOString(),
 				});
 			}
 
-			reply.send({ success: true, data: results });
+			const result = {
+				total: treeEntries.length,
+				imported: imported.length,
+				skipped: skipped.length,
+				failed: failed.length,
+				importedTemplates: imported.map((i) => i.name),
+				skippedTemplates: skipped.map((s) => s.name),
+				failedEggs: failed,
+			};
+
+			// Return 207 Multi-Status on partial failure, 200 on full success
+			if (failed.length > 0) {
+				return reply.status(207).send({ success: false, data: result });
+			}
+			reply.send({ success: true, data: result });
 		},
 	);
 }
