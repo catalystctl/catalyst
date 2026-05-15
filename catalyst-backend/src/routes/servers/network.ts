@@ -3,6 +3,10 @@ import { prisma } from "../../db.js";
 import { hasNodeAccess } from "../../lib/permissions.js";
 import { checkIsAdmin, collectUsedHostPortsByIp, ensureNotSuspended, findPortConflict, parsePortValue, parseStoredPortBindings, shouldUseIpam } from './_helpers.js';
 
+/** Statuses that allow allocation changes. Stopped servers can always change allocations;
+ *  running servers support hot-add / hot-remove (the agent will sync firewall rules). */
+const ALLOCATION_ALLOWED_STATUSES = new Set(["stopped", "running", "crashed", "error"]);
+
 export async function serverNetworkRoutes(app: FastifyInstance) {
   app.get(
     "/:serverId/allocations",
@@ -62,7 +66,9 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
     }
   );
 
-  // Add allocation
+  // Add allocation (hot-add supported for running servers)
+  // TODO(#134): Add Zod request-body schema for containerPort/hostPort validation
+  // TODO(#134): Add RBAC middleware (rbac.checkPermission) to onRequest array
   app.post(
     "/:serverId/allocations",
     { onRequest: [app.authenticate] },
@@ -76,7 +82,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
 
       const server = await prisma.server.findUnique({
         where: { id: serverId },
-        include: { access: true },
+        include: { access: true, node: true },
       });
 
       if (!server) {
@@ -98,9 +104,10 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
-      if (server.status !== "stopped") {
+      // Allow allocation changes on stopped, running, crashed, and error servers (hot-add)
+      if (!ALLOCATION_ALLOWED_STATUSES.has(server.status)) {
         return reply.status(409).send({
-          error: "Server must be stopped to update allocations",
+          error: `Server must be in one of these statuses to update allocations: ${[...ALLOCATION_ALLOWED_STATUSES].join(', ')}`,
         });
       }
 
@@ -161,6 +168,24 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
       });
 
       const wsGateway = app.wsGateway;
+
+      // If server is running, notify the agent to open the firewall port
+      if (server.status === "running" && wsGateway?.sendToAgent) {
+        const containerIp = server.primaryIp ?? "";
+        wsGateway.sendToAgent(server.nodeId, {
+          type: "allocation_added",
+          serverId,
+          serverUuid: server.uuid,
+          containerPort: parsedContainerPort,
+          hostPort: parsedHostPort,
+          containerIp,
+          networkMode: server.networkMode ?? "bridge",
+          protocol: "tcp",
+        }).catch(() => {
+          // Best-effort — agent may be temporarily disconnected; reconciliation will catch up.
+        });
+      }
+
       if (wsGateway?.pushToAdminSubscribers) {
         wsGateway.pushToAdminSubscribers('server_updated', {
           type: 'server_updated',
@@ -191,7 +216,9 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
     }
   );
 
-  // Remove allocation
+  // TODO(#134): Port bindings read-modify-write should use prisma.$transaction
+  // with optimistic concurrency to prevent lost updates under concurrent requests.
+  // Remove allocation (hot-remove supported for running servers)
   app.delete(
     "/:serverId/allocations/:containerPort",
     { onRequest: [app.authenticate] },
@@ -204,7 +231,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
 
       const server = await prisma.server.findUnique({
         where: { id: serverId },
-        include: { access: true },
+        include: { access: true, node: true },
       });
 
       if (!server) {
@@ -226,9 +253,10 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
-      if (server.status !== "stopped") {
+      // Allow allocation removal on stopped, running, crashed, and error servers (hot-remove)
+      if (!ALLOCATION_ALLOWED_STATUSES.has(server.status)) {
         return reply.status(409).send({
-          error: "Server must be stopped to update allocations",
+          error: `Server must be in one of these statuses to update allocations: ${[...ALLOCATION_ALLOWED_STATUSES].join(', ')}`,
         });
       }
 
@@ -237,6 +265,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Invalid port value" });
       }
 
+      // Primary allocation cannot be removed regardless of server status (AC-4)
       if (parsedContainerPort === server.primaryPort) {
         return reply.status(400).send({ error: "Cannot remove primary allocation" });
       }
@@ -246,6 +275,8 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Allocation not found" });
       }
 
+      const removedHostPort = bindings[parsedContainerPort];
+
       delete bindings[parsedContainerPort];
 
       await prisma.server.update({
@@ -254,6 +285,27 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
       });
 
       const wsGateway = app.wsGateway;
+
+      // If server is running, notify the agent to close the firewall port
+      if (server.status === "running" && wsGateway?.sendToAgent) {
+        const containerIp = server.primaryIp ?? "";
+        // Send the remaining port bindings so the agent can re-add surviving rules
+        // after removing all rules for this server (remove_server_ports is server-scoped)
+        wsGateway.sendToAgent(server.nodeId, {
+          type: "allocation_removed",
+          serverId,
+          serverUuid: server.uuid,
+          containerPort: parsedContainerPort,
+          hostPort: removedHostPort,
+          containerIp,
+          networkMode: server.networkMode ?? "bridge",
+          protocol: "tcp",
+          remainingPortBindings: bindings, // the updated bindings after deletion
+        }).catch(() => {
+          // Best-effort — agent may be temporarily disconnected; reconciliation will catch up.
+        });
+      }
+
       if (wsGateway?.pushToAdminSubscribers) {
         wsGateway.pushToAdminSubscribers('server_updated', {
           type: 'server_updated',
@@ -277,7 +329,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
     }
   );
 
-  // Set primary allocation
+  // Set primary allocation (allowed when running — no firewall change needed, just metadata swap)
   app.post(
     "/:serverId/allocations/primary",
     { onRequest: [app.authenticate] },
@@ -310,9 +362,10 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
-      if (server.status !== "stopped") {
+      // Primary allocation change is allowed on stopped, running, crashed, and error servers
+      if (!ALLOCATION_ALLOWED_STATUSES.has(server.status)) {
         return reply.status(409).send({
-          error: "Server must be stopped to update allocations",
+          error: `Server must be in one of these statuses to update allocations: ${[...ALLOCATION_ALLOWED_STATUSES].join(', ')}`,
         });
       }
 

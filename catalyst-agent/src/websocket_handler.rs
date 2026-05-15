@@ -1127,6 +1127,8 @@ impl WebSocketHandler {
             Some("create_network") => self.handle_create_network(&msg, write).await?,
             Some("update_network") => self.handle_update_network(&msg, write).await?,
             Some("delete_network") => self.handle_delete_network(&msg, write).await?,
+            Some("allocation_added") => self.handle_allocation_added(&msg).await?,
+            Some("allocation_removed") => self.handle_allocation_removed(&msg).await?,
             Some("accept_eula") => self.handle_eula_response(&msg, true).await?,
             Some("decline_eula") => self.handle_eula_response(&msg, false).await?,
             Some("node_handshake_response") => {
@@ -4783,6 +4785,148 @@ impl WebSocketHandler {
                 )));
             }
         }
+
+        Ok(())
+    }
+
+    /// Handle `allocation_added` message from the backend.
+    ///
+    /// When a secondary allocation is added to a running server, the backend
+    /// sends this event so the agent can open the corresponding firewall port
+    /// and (for macvlan networks) add a port-mapping rule.
+    async fn handle_allocation_added(&self, msg: &Value) -> AgentResult<()> {
+        let server_id = msg["serverId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
+        let server_uuid = msg["serverUuid"].as_str().unwrap_or(server_id);
+        let host_port = msg["hostPort"]
+            .as_u64()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing hostPort".to_string()))?;
+        if host_port == 0 || host_port > u16::MAX as u64 {
+            return Err(AgentError::InvalidRequest(
+                "Invalid hostPort: out of valid range".to_string(),
+            ));
+        }
+        let host_port = host_port as u16;
+        let container_ip = msg["containerIp"].as_str().unwrap_or("");
+        let protocol = msg["protocol"].as_str().unwrap_or("tcp");
+
+        info!(
+            "Hot-add allocation: server={} port={}/{} ip={}",
+            server_id, host_port, protocol, container_ip
+        );
+
+        // Open firewall rule for the new host port.
+        // For host-networking or no IP, use "0.0.0.0" as fallback — same
+        // pattern as start_server so rules are consistently tracked.
+        let effective_ip = if container_ip.is_empty() {
+            "0.0.0.0"
+        } else {
+            container_ip
+        };
+        FirewallManager::allow_port(host_port, protocol, effective_ip, server_id).await?;
+
+        // Emit console notification so the user sees the change in real time
+        self.emit_console_output(
+            server_id,
+            "system",
+            &format!(
+                "[Catalyst] Allocation added: host port {} → container (hot-add)\n",
+                host_port
+            ),
+        )
+        .await?;
+
+        // Also try server_uuid as key for tracked rules, matching start_server convention
+        if server_uuid != server_id {
+            FirewallManager::allow_port(host_port, protocol, effective_ip, server_uuid).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Handle `allocation_removed` message from the backend.
+    ///
+    /// When a secondary allocation is removed from a running server, the backend
+    /// sends this event so the agent can close the firewall port and remove
+    /// any port-mapping rule for that port.
+    async fn handle_allocation_removed(&self, msg: &Value) -> AgentResult<()> {
+        let server_id = msg["serverId"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing serverId".to_string()))?;
+        let server_uuid = msg["serverUuid"].as_str().unwrap_or(server_id);
+        let host_port = msg["hostPort"]
+            .as_u64()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing hostPort".to_string()))?;
+        if host_port == 0 || host_port > u16::MAX as u64 {
+            return Err(AgentError::InvalidRequest(
+                "Invalid hostPort: out of valid range".to_string(),
+            ));
+        }
+        let host_port = host_port as u16;
+        let protocol = msg["protocol"].as_str().unwrap_or("tcp");
+
+        info!(
+            "Hot-remove allocation: server={} port={}/{}",
+            server_id, host_port, protocol
+        );
+
+        // Remove firewall rules for this server.  We remove ALL rules for
+        // the server, then re-add the remaining ones, because remove_server_ports
+        // is the only reliable API (it deduplicates by port/proto).
+        //
+        // However, for a single-port removal we can be smarter: remove the
+        // specific tracked rule and re-add the rest.  But the tracked_rules
+        // system already handles this correctly via remove_server_ports +
+        // re-add of surviving ports.  For simplicity and correctness, we
+        // use the remove + re-add pattern.
+
+        // Step 1: Remove all firewall rules for this server
+        FirewallManager::remove_server_ports(server_id).await;
+        if server_uuid != server_id {
+            FirewallManager::remove_server_ports(server_uuid).await;
+        }
+
+        // Step 2: Re-add rules for the remaining ports (from the message's portBindings
+        // if provided, or we just leave them removed — the next start_server call will
+        // re-add all ports). For hot-remove, the backend has already updated the DB,
+        // so the next reconciliation cycle will re-add remaining ports.
+        //
+        // For immediate correctness, we re-add the remaining ports from the message:
+        if let Some(bindings) = msg.get("remainingPortBindings").and_then(|v| v.as_object()) {
+            let container_ip = msg["containerIp"].as_str().unwrap_or("");
+            // Use "0.0.0.0" fallback for host-networking, matching handle_allocation_added
+            let effective_ip = if container_ip.is_empty() {
+                "0.0.0.0"
+            } else {
+                container_ip
+            };
+            for (_container_port, host_port_val) in bindings {
+                let hp_raw = host_port_val.as_u64().unwrap_or(0);
+                if hp_raw == 0 || hp_raw > u16::MAX as u64 {
+                    continue;
+                }
+                let hp = hp_raw as u16;
+                if hp != host_port {
+                    FirewallManager::allow_port(hp, protocol, effective_ip, server_id).await?;
+                    if server_uuid != server_id {
+                        FirewallManager::allow_port(hp, protocol, effective_ip, server_uuid)
+                            .await?;
+                    }
+                }
+            }
+        }
+
+        // Emit console notification
+        self.emit_console_output(
+            server_id,
+            "system",
+            &format!(
+                "[Catalyst] Allocation removed: host port {} (hot-remove)\n",
+                host_port
+            ),
+        )
+        .await?;
 
         Ok(())
     }

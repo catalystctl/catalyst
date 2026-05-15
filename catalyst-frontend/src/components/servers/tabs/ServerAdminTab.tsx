@@ -13,6 +13,7 @@ import {
   Info,
   KeyRound,
   Loader2,
+  Star,
   Network,
   Play,
   RefreshCw,
@@ -331,6 +332,9 @@ export default function ServerAdminTab({
   const [transferOwnerPending, setTransferOwnerPending] = useState(false);
   const [transferOwnerConfirm, setTransferOwnerConfirm] = useState(false);
   const [envExpanded, setEnvExpanded] = useState(false);
+  // Allocation remove confirmation for running servers
+  const [removeAllocationConfirm, setRemoveAllocationConfirm] = useState<{ open: boolean; containerPort: number | null }>({ open: false, containerPort: null });
+  const [removeAllocationHotPending, setRemoveAllocationHotPending] = useState(false);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -388,6 +392,10 @@ export default function ServerAdminTab({
   const canEdit = !isSuspended && server.status !== 'archived';
   const canEditWhenStopped =
     canEdit && (server.status === 'stopped' || server.status === 'crashed' || server.status === 'error');
+  // Allocation management is allowed on stopped AND running servers (hot-add / hot-remove)
+  const canEditAllocations =
+    canEdit && (server.status === 'stopped' || server.status === 'running' || server.status === 'crashed' || server.status === 'error');
+  const isRunning = server.status === 'running';
 
   const statusBadgeColor = (() => {
     switch (server.status) {
@@ -496,6 +504,25 @@ export default function ServerAdminTab({
       setTransferOwnerPending(false);
     }
   }, [serverId, newOwnerId]);
+
+  // ── Hot-remove allocation handler ──
+  const handleRemoveAllocation = useCallback((containerPort: number) => {
+    if (isRunning) {
+      // Show confirmation dialog for running servers
+      setRemoveAllocationConfirm({ open: true, containerPort });
+    } else {
+      onRemoveAllocation(containerPort);
+    }
+  }, [isRunning, onRemoveAllocation]);
+
+  const confirmRemoveAllocation = useCallback(() => {
+    if (removeAllocationConfirm.containerPort != null) {
+      setRemoveAllocationHotPending(true);
+      onRemoveAllocation(removeAllocationConfirm.containerPort);
+      setRemoveAllocationConfirm({ open: false, containerPort: null });
+      setRemoveAllocationHotPending(false);
+    }
+  }, [removeAllocationConfirm.containerPort, onRemoveAllocation]);
 
   // ── Guard ──
   if (!canAdminWrite) {
@@ -796,7 +823,7 @@ export default function ServerAdminTab({
               type="number"
               min={1}
               max={65535}
-              disabled={!canEditWhenStopped}
+              disabled={!canEditAllocations}
             />
             <input
               className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
@@ -806,14 +833,14 @@ export default function ServerAdminTab({
               type="number"
               min={1}
               max={65535}
-              disabled={!canEditWhenStopped}
+              disabled={!canEditAllocations}
             />
           </div>
           <button
             type="button"
             className="mt-2 w-full rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 disabled:opacity-50"
             onClick={onAddAllocation}
-            disabled={!canEditWhenStopped || addAllocationPending}
+            disabled={!canEditAllocations || addAllocationPending}
           >
             Add allocation
           </button>
@@ -828,14 +855,26 @@ export default function ServerAdminTab({
               allocations.map((alloc) => (
                 <div
                   key={`${alloc.containerPort}-${alloc.hostPort}`}
-                  className="flex items-center justify-between rounded-lg border border-border/50 bg-surface-2/50 px-3 py-2 transition-colors hover:border-primary/20 dark:bg-surface-2/30"
+                  className={`flex items-center justify-between rounded-lg border px-3 py-2 transition-colors hover:border-primary/20 dark:bg-surface-2/30 ${
+                    alloc.isPrimary
+                      ? 'border-primary/30 bg-primary-500/5 dark:bg-primary-500/10'
+                      : 'border-border/50 bg-surface-2/50'
+                  }`}
                 >
                   <div className="flex items-center gap-2">
+                    {alloc.isPrimary ? (
+                      <Star className="h-3 w-3 shrink-0 fill-primary text-primary" />
+                    ) : (
+                      <div className="h-3 w-3 shrink-0 rounded-full border border-muted-foreground/30" />
+                    )}
                     <code className="text-xs font-mono text-foreground">{alloc.containerPort}</code>
                     <span className="text-muted-foreground">→</span>
                     <code className="text-xs font-mono text-foreground">{alloc.hostPort}</code>
                     {alloc.isPrimary && (
                       <span className="rounded-full bg-primary-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">Primary</span>
+                    )}
+                    {!alloc.isPrimary && (
+                      <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">Secondary</span>
                     )}
                   </div>
                   {!alloc.isPrimary && (
@@ -843,15 +882,15 @@ export default function ServerAdminTab({
                       <button
                         type="button"
                         onClick={() => onSetPrimary(alloc.containerPort)}
-                        disabled={!canEditWhenStopped || setPrimaryPending}
+                        disabled={!canEditAllocations || setPrimaryPending}
                         className="rounded border border-border px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground disabled:opacity-50"
                       >
                         Set primary
                       </button>
                       <button
                         type="button"
-                        onClick={() => onRemoveAllocation(alloc.containerPort)}
-                        disabled={!canEditWhenStopped || removeAllocationPending}
+                        onClick={() => handleRemoveAllocation(alloc.containerPort)}
+                        disabled={!canEditAllocations || removeAllocationPending || removeAllocationHotPending}
                         className="rounded border border-danger/30 px-1.5 py-0.5 text-[9px] font-medium text-danger transition-colors hover:border-danger/50 disabled:opacity-50"
                       >
                         Remove
@@ -1055,6 +1094,17 @@ export default function ServerAdminTab({
         pending={transferOwnerPending}
         onConfirm={handleTransferOwnership}
         onCancel={() => setTransferOwnerConfirm(false)}
+      />
+      {/* Hot-remove allocation confirmation for running servers */}
+      <ConfirmAction
+        open={removeAllocationConfirm.open}
+        title="Remove Allocation from Running Server"
+        description="This server is currently running. Removing an allocation will immediately close the firewall rule for this port, making it unreachable. Players connected through this port will be disconnected. This cannot be undone while the server is running."
+        confirmLabel="Remove allocation"
+        variant="danger"
+        pending={removeAllocationHotPending}
+        onConfirm={confirmRemoveAllocation}
+        onCancel={() => setRemoveAllocationConfirm({ open: false, containerPort: null })}
       />
     </div>
   );

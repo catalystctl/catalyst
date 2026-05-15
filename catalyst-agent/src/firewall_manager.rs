@@ -132,33 +132,31 @@ fn append_tracked_rule(rule: &FirewallRule) {
 }
 
 /// Record that we added a firewall rule for a server port.
-fn track_rule(port: u16, proto: &str, server_id: &str, container_ip: &str) {
-    let mut rules = lock_rules();
-    // Avoid duplicates.
+/// Pure dedup-and-push logic: adds a rule to the vec only if it doesn't
+/// already exist.  Used by `track_rule` (production) and unit tests.
+pub(crate) fn push_dedup(rules: &mut Vec<FirewallRule>, rule: FirewallRule) -> bool {
     let exists = rules.iter().any(|r| {
-        r.port == port
-            && r.proto == proto
-            && r.server_id == server_id
-            && r.container_ip == container_ip
+        r.port == rule.port
+            && r.proto == rule.proto
+            && r.server_id == rule.server_id
+            && r.container_ip == rule.container_ip
     });
     if !exists {
-        let rule = FirewallRule {
-            port,
-            proto: proto.to_string(),
-            server_id: server_id.to_string(),
-            container_ip: container_ip.to_string(),
-        };
-        rules.push(rule.clone());
-        drop(rules);
-        append_tracked_rule(&rule);
+        rules.push(rule);
+        true
+    } else {
+        false
     }
 }
 
-/// Remove all tracked rules for a given server and return the removed rules.
-fn untrack_server_rules(server_id: &str) -> Vec<FirewallRule> {
-    let mut rules = lock_rules();
+/// Pure retain-and-collect logic: removes all rules for a server_id and
+/// returns the removed rules.  Used by `untrack_server_rules` (production)
+/// and unit tests.
+pub(crate) fn retain_and_collect(
+    rules: &mut Vec<FirewallRule>,
+    server_id: &str,
+) -> Vec<FirewallRule> {
     let mut removed = Vec::new();
-    let original_len = rules.len();
     rules.retain(|r| {
         if r.server_id == server_id {
             removed.push(r.clone());
@@ -167,6 +165,28 @@ fn untrack_server_rules(server_id: &str) -> Vec<FirewallRule> {
             true
         }
     });
+    removed
+}
+
+fn track_rule(port: u16, proto: &str, server_id: &str, container_ip: &str) {
+    let mut rules = lock_rules();
+    let rule = FirewallRule {
+        port,
+        proto: proto.to_string(),
+        server_id: server_id.to_string(),
+        container_ip: container_ip.to_string(),
+    };
+    if push_dedup(&mut rules, rule.clone()) {
+        drop(rules);
+        append_tracked_rule(&rule);
+    }
+}
+
+/// Remove all tracked rules for a given server and return the removed rules.
+fn untrack_server_rules(server_id: &str) -> Vec<FirewallRule> {
+    let mut rules = lock_rules();
+    let original_len = rules.len();
+    let removed = retain_and_collect(&mut rules, server_id);
     if removed.len() != original_len {
         drop(rules);
         save_tracked_rules();
@@ -1031,5 +1051,228 @@ mod tests {
         let remaining = lock_rules();
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].server_id, "srv-2");
+
+        // Clean up
+        drop(remaining);
+        untrack_server_rules("srv-2");
+        lock_rules().clear();
+    }
+
+    /// Multi-port firewall rule lifecycle test (issue #134).
+    /// Simulates the hot-add / hot-remove cycle for a server with multiple
+    /// secondary allocations and verifies tracked rules stay consistent.
+    ///
+    /// Uses a dedicated Vec with the production `push_dedup` / `retain_and_collect`
+    /// functions to avoid cross-test interference from global TRACKED_RULES while
+    /// still exercising the real dedup/removal logic.
+    #[test]
+    fn test_multi_port_firewall_lifecycle() {
+        let mut rules: Vec<FirewallRule> = Vec::new();
+
+        let server_id = "srv-lifecycle-134";
+        let container_ip = "10.42.0.10";
+
+        // Phase 1: Server starts with primary port only
+        push_dedup(
+            &mut rules,
+            FirewallRule {
+                port: 25565,
+                proto: "tcp".into(),
+                server_id: server_id.into(),
+                container_ip: container_ip.into(),
+            },
+        );
+        push_dedup(
+            &mut rules,
+            FirewallRule {
+                port: 25565,
+                proto: "udp".into(),
+                server_id: server_id.into(),
+                container_ip: container_ip.into(),
+            },
+        );
+        let my_rules: Vec<_> = rules.iter().filter(|r| r.server_id == server_id).collect();
+        assert_eq!(my_rules.len(), 2);
+
+        // Phase 2: Hot-add three secondary ports
+        push_dedup(
+            &mut rules,
+            FirewallRule {
+                port: 25566,
+                proto: "tcp".into(),
+                server_id: server_id.into(),
+                container_ip: container_ip.into(),
+            },
+        );
+        push_dedup(
+            &mut rules,
+            FirewallRule {
+                port: 25567,
+                proto: "tcp".into(),
+                server_id: server_id.into(),
+                container_ip: container_ip.into(),
+            },
+        );
+        push_dedup(
+            &mut rules,
+            FirewallRule {
+                port: 25568,
+                proto: "tcp".into(),
+                server_id: server_id.into(),
+                container_ip: container_ip.into(),
+            },
+        );
+        push_dedup(
+            &mut rules,
+            FirewallRule {
+                port: 25566,
+                proto: "udp".into(),
+                server_id: server_id.into(),
+                container_ip: container_ip.into(),
+            },
+        );
+        push_dedup(
+            &mut rules,
+            FirewallRule {
+                port: 25567,
+                proto: "udp".into(),
+                server_id: server_id.into(),
+                container_ip: container_ip.into(),
+            },
+        );
+        push_dedup(
+            &mut rules,
+            FirewallRule {
+                port: 25568,
+                proto: "udp".into(),
+                server_id: server_id.into(),
+                container_ip: container_ip.into(),
+            },
+        );
+        let my_rules: Vec<_> = rules.iter().filter(|r| r.server_id == server_id).collect();
+        // 2 primary (tcp+udp) + 6 secondary (3 ports × 2 protos) = 8
+        assert_eq!(my_rules.len(), 8);
+        let ports: std::collections::HashSet<u16> = my_rules.iter().map(|r| r.port).collect();
+        assert!(ports.contains(&25565));
+        assert!(ports.contains(&25566));
+        assert!(ports.contains(&25567));
+        assert!(ports.contains(&25568));
+
+        // Phase 3: Hot-remove one secondary port (remove_server_ports + re-add survivors)
+        let removed = retain_and_collect(&mut rules, server_id);
+        assert_eq!(removed.len(), 8);
+        assert!(rules
+            .iter()
+            .filter(|r| r.server_id == server_id)
+            .collect::<Vec<_>>()
+            .is_empty());
+
+        // Re-add surviving ports (all except 25568 which was removed)
+        push_dedup(
+            &mut rules,
+            FirewallRule {
+                port: 25565,
+                proto: "tcp".into(),
+                server_id: server_id.into(),
+                container_ip: container_ip.into(),
+            },
+        );
+        push_dedup(
+            &mut rules,
+            FirewallRule {
+                port: 25565,
+                proto: "udp".into(),
+                server_id: server_id.into(),
+                container_ip: container_ip.into(),
+            },
+        );
+        push_dedup(
+            &mut rules,
+            FirewallRule {
+                port: 25566,
+                proto: "tcp".into(),
+                server_id: server_id.into(),
+                container_ip: container_ip.into(),
+            },
+        );
+        push_dedup(
+            &mut rules,
+            FirewallRule {
+                port: 25566,
+                proto: "udp".into(),
+                server_id: server_id.into(),
+                container_ip: container_ip.into(),
+            },
+        );
+        push_dedup(
+            &mut rules,
+            FirewallRule {
+                port: 25567,
+                proto: "tcp".into(),
+                server_id: server_id.into(),
+                container_ip: container_ip.into(),
+            },
+        );
+        push_dedup(
+            &mut rules,
+            FirewallRule {
+                port: 25567,
+                proto: "udp".into(),
+                server_id: server_id.into(),
+                container_ip: container_ip.into(),
+            },
+        );
+        // Note: 25568 is NOT re-added (it was removed)
+        let my_rules: Vec<_> = rules.iter().filter(|r| r.server_id == server_id).collect();
+        assert_eq!(my_rules.len(), 6);
+        let ports: std::collections::HashSet<u16> = my_rules.iter().map(|r| r.port).collect();
+        assert!(!ports.contains(&25568)); // removed port should be gone
+        assert!(ports.contains(&25567)); // other ports still present
+
+        // Phase 4: Server deleted — all remaining rules removed
+        let removed = retain_and_collect(&mut rules, server_id);
+        assert_eq!(removed.len(), 6);
+        assert!(rules
+            .iter()
+            .filter(|r| r.server_id == server_id)
+            .collect::<Vec<_>>()
+            .is_empty());
+    }
+
+    /// Test that duplicate tracking is idempotent even with multi-port servers.
+    #[test]
+    fn test_multi_port_duplicate_tracking() {
+        let mut rules: Vec<FirewallRule> = Vec::new();
+
+        let server_id = "srv-dup-134";
+        let container_ip = "10.42.0.11";
+
+        // Add 5 ports using push_dedup (same function used by production track_rule)
+        for port in 30000..30005 {
+            push_dedup(
+                &mut rules,
+                FirewallRule {
+                    port,
+                    proto: "tcp".into(),
+                    server_id: server_id.into(),
+                    container_ip: container_ip.into(),
+                },
+            );
+        }
+        assert_eq!(rules.len(), 5);
+
+        // Re-add all 5 — should not increase count (dedup)
+        for port in 30000..30005 {
+            push_dedup(
+                &mut rules,
+                FirewallRule {
+                    port,
+                    proto: "tcp".into(),
+                    server_id: server_id.into(),
+                    container_ip: container_ip.into(),
+                },
+            );
+        }
+        assert_eq!(rules.len(), 5);
     }
 }
