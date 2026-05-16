@@ -1,7 +1,10 @@
 import { useEffect, useMemo, lazy, Suspense } from 'react';
 
 const Editor = lazy(() => import('@monaco-editor/react'));
-import { Download, RotateCcw, Save, X } from 'lucide-react';
+import { Download, RotateCcw, Save, X, FileCode, Circle } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { useThemeStore } from '../../stores/themeStore';
+import { getFileTypeInfo } from './fileTypes';
 
 type FileDraft = {
   path: string;
@@ -84,6 +87,9 @@ function FileEditor({
   onClose,
 }: Props) {
   const language = useMemo(() => (file ? resolveLanguage(file.name) : 'plaintext'), [file]);
+  const theme = useThemeStore((s) => s.theme);
+  const monacoTheme = theme === 'dark' ? 'vs-dark' : 'vs';
+  const fileInfo = file ? getFileTypeInfo(file.name) : null;
 
   // Ctrl+S keyboard shortcut
   useEffect(() => {
@@ -103,7 +109,6 @@ function FileEditor({
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
-      // Modern browsers ignore the custom message and show a generic one
       e.returnValue = '';
     };
 
@@ -129,24 +134,39 @@ function FileEditor({
 
   return (
     <div className="flex h-full flex-col gap-2 sm:gap-3">
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
+            {fileInfo && (
+              <div className={`flex h-6 w-6 items-center justify-center rounded-md bg-surface-2 dark:bg-surface-3`}>
+                <FileCode className={`h-3.5 w-3.5 ${fileInfo.color}`} />
+              </div>
+            )}
             <h3 className="truncate text-sm font-semibold text-foreground dark:text-foreground">
               {file.name}
             </h3>
-            {isDirty && (
-              <span className="rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning dark:bg-warning/50/20 dark:text-warning">
-                Unsaved
-              </span>
-            )}
-            {isSuspended && (
-              <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive dark:bg-destructive/50/20 dark:text-destructive">
-                Suspended
-              </span>
-            )}
+            <div className="flex items-center gap-1.5">
+              {isDirty && (
+                <motion.span
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning dark:bg-warning/15 dark:text-warning"
+                >
+                  <Circle className="h-1.5 w-1.5 fill-warning" />
+                  Unsaved
+                </motion.span>
+              )}
+              {isSuspended && (
+                <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive dark:bg-destructive/15 dark:text-destructive">
+                  Suspended
+                </span>
+              )}
+            </div>
           </div>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground dark:text-muted-foreground">{file.path}</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground dark:text-muted-foreground ml-8">
+            {file.path}
+          </p>
         </div>
         <div className="flex items-center gap-1 sm:gap-2">
           <button
@@ -154,7 +174,7 @@ function FileEditor({
             className={btnSecondary}
             onClick={onReset}
             disabled={!isDirty || isSaving || isLoading || isSuspended}
-            title="Revert changes"
+            title="Revert changes (Ctrl+Z stack)"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Revert</span>
@@ -165,7 +185,7 @@ function FileEditor({
               className={btnSecondary}
               onClick={onDownload}
               disabled={isSaving || isLoading}
-              title="Download"
+              title="Download file"
             >
               <Download className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Download</span>
@@ -183,7 +203,7 @@ function FileEditor({
           </button>
           <button
             type="button"
-            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-muted-foreground"
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:hover:bg-surface-2 dark:hover:text-foreground"
             onClick={handleClose}
             title="Close"
           >
@@ -191,34 +211,46 @@ function FileEditor({
           </button>
         </div>
       </div>
-      <div
-        className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border dark:border-border"
-      >
+
+      {/* Editor */}
+      <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border dark:border-border">
         {isLoading ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground dark:text-muted-foreground">
-            Loading file contents...
+            <div className="flex flex-col items-center gap-2">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              Loading file contents…
+            </div>
           </div>
         ) : (
-          <Suspense fallback={
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground dark:text-muted-foreground">
-              Loading editor...
-            </div>
-          }>
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground dark:text-muted-foreground">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  Loading editor…
+                </div>
+              </div>
+            }
+          >
             <Editor
               height="100%"
-              theme="vs-dark"
+              theme={monacoTheme}
               language={language}
               value={file.content}
               onChange={(value) => onChange(value ?? '')}
               options={{
                 minimap: { enabled: false },
                 fontSize: 13,
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                 scrollBeyondLastLine: false,
                 wordWrap: 'on',
                 padding: { top: 12 },
                 lineNumbers: 'on',
                 renderLineHighlight: 'line',
                 bracketPairColorization: { enabled: true },
+                automaticLayout: true,
+                overviewRulerLanes: 0,
+                renderWhitespace: 'selection',
               }}
             />
           </Suspense>
