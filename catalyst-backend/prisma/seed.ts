@@ -311,54 +311,242 @@ async function main() {
 
   console.log("✓ Admin role assigned to default user");
 
-  // Create Minecraft template
-  const minecraftTemplate = await prisma.serverTemplate.upsert({
-    where: { name: "Minecraft Server (Paper)" },
+  // Create Minecraft nest
+  const minecraftNest = await prisma.nest.upsert({
+    where: { name: "Minecraft" },
     update: {},
     create: {
-      name: "Minecraft Server (Paper)",
-      description: "High-performance Minecraft server running Paper",
+      name: "Minecraft",
+      description: "Minecraft server templates powered by mcjars.app",
+      icon: "https://s3.mcjars.app/icons/vanilla.png",
       author: "Catalyst Maintainers",
-      version: "1.20.4",
-      image: "itzg/minecraft-server:latest",
+    },
+  });
+
+  console.log("✓ Minecraft nest created");
+
+  // Create universal Minecraft template using mcjars.app
+  // Supports all server types: Vanilla, Paper, Fabric, Forge, NeoForge, Quilt,
+  // Spigot, Purpur, Folia, Pufferfish, Mohist, Arclight, Sponge, Leaves, Canvas,
+  // Velocity, BungeeCord, and more.
+  const minecraftTemplate = await prisma.serverTemplate.upsert({
+    where: { name: "Minecraft Server (Universal)" },
+    update: {},
+    create: {
+      name: "Minecraft Server (Universal)",
+      description:
+        "Universal Minecraft server template supporting all major server types via mcjars.app. " +
+        "Choose from Vanilla, Paper, Fabric, Forge, NeoForge, Quilt, Spigot, Purpur, Folia, " +
+        "Pufferfish, Mohist, Arclight, Sponge, Leaves, Canvas, Velocity, BungeeCord, and more. " +
+        "Server jars are automatically downloaded and installed from mcjars.app.",
+      author: "Catalyst Maintainers",
+      version: "1.0.0",
+      image: "eclipse-temurin:21-jre",
       images: [
-        { name: "temurin-25", label: "Eclipse Temurin 25 JRE", image: "eclipse-temurin:25-jre" },
-        { name: "temurin-21", label: "Eclipse Temurin 21 JRE", image: "eclipse-temurin:21-jre" },
-        { name: "temurin-17", label: "Eclipse Temurin 17 JRE", image: "eclipse-temurin:17-jre" },
-        { name: "temurin-11", label: "Eclipse Temurin 11 JRE", image: "eclipse-temurin:11-jre" },
-        { name: "temurin-8", label: "Eclipse Temurin 8 JRE", image: "eclipse-temurin:8-jre" },
+        { name: "temurin-25", label: "Eclipse Temurin 25 JRE (Java 25)", image: "eclipse-temurin:25-jre" },
+        { name: "temurin-21", label: "Eclipse Temurin 21 JRE (Java 21)", image: "eclipse-temurin:21-jre" },
+        { name: "temurin-17", label: "Eclipse Temurin 17 JRE (Java 17)", image: "eclipse-temurin:17-jre" },
+        { name: "temurin-11", label: "Eclipse Temurin 11 JRE (Java 11)", image: "eclipse-temurin:11-jre" },
+        { name: "temurin-8", label: "Eclipse Temurin 8 JRE (Java 8)", image: "eclipse-temurin:8-jre" },
       ],
       defaultImage: "eclipse-temurin:21-jre",
+      installImage: "eclipse-temurin:21-jdk",
+      installEntrypoint: "bash",
       startup:
-        "java -Xmx{{MEMORY}}M -Xms{{MEMORY}}M -XX:+UseG1GC -jar paper.jar nogui",
-      stopCommand: "say SERVER STOPPING",
+        "java -Xms{{MEMORY}}M -Xmx{{MEMORY}}M -XX:+UseG1GC -XX:MaxRAMPercentage=95.0 -Dterminal.jline=false -Dterminal.ansi=true $( [[ -f unix_args.txt ]] && printf %s '@unix_args.txt' || printf %s '-jar server.jar nogui' )",
+      stopCommand: "stop",
       sendSignalTo: "SIGTERM",
       variables: [
         {
+          name: "SERVER_TYPE",
+          description: "Minecraft server software type",
+          default: "paper",
+          required: true,
+          input: "select",
+          rules: ["required", "in:vanilla,paper,purpur,spigot,folia,pufferfish,fabric,forge,neoforge,quilt,mohist,arclight,sponge,leaves,canvas,velocity,bungeecord"],
+        },
+        {
+          name: "MINECRAFT_VERSION",
+          description: "Minecraft version (e.g. 1.21.4) or 'latest' for the latest release",
+          default: "latest",
+          required: true,
+          input: "text",
+        },
+        {
+          name: "BUILD_NUMBER",
+          description: "Specific build number or 'latest' for the latest build",
+          default: "latest",
+          required: false,
+          input: "text",
+        },
+        {
           name: "MEMORY",
-          description: "Amount of RAM in MB",
+          description: "Amount of RAM in MB allocated to the JVM",
           default: "1024",
           required: true,
           input: "number",
         },
         {
           name: "EULA",
-          description: "Agree to Minecraft EULA",
-          default: "true",
+          description: "Agree to the Minecraft EULA (required for Java servers)",
+          default: "false",
           required: true,
           input: "checkbox",
         },
+        {
+          name: "JVM_FLAGS",
+          description: "Additional JVM flags to append to the startup command",
+          default: "",
+          required: false,
+          input: "text",
+        },
       ],
-      supportedPorts: [25565],
+      installScript: `#!/bin/bash
+# Unified Minecraft Server Installer via mcjars.app
+# Supports: Vanilla, Paper, Fabric, Forge, NeoForge, Quilt, Spigot, Purpur,
+# Folia, Pufferfish, Mohist, Arclight, Sponge, Leaves, Canvas, Velocity, BungeeCord
+
+MCJARS_API="https://mcjars.app"
+TYPE="\${SERVER_TYPE}"
+VERSION="\${MINECRAFT_VERSION}"
+BUILD_NUM="\${BUILD_NUMBER}"
+
+echo "[mcjars] Starting installation for type=\${TYPE} version=\${VERSION} build=\${BUILD_NUM}"
+
+# Resolve 'latest' version to an actual version string
+if [ "\${VERSION}" = "latest" ] || [ -z "\${VERSION}" ]; then
+  echo "[mcjars] Resolving latest supported release for \${TYPE}..."
+  VERSION=$(curl -s "\${MCJARS_API}/api/v3/builds/types/\${TYPE}/versions" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    for v in data['versions']['data']:
+        if v.get('supported') and v.get('type') == 'RELEASE':
+            print(v['id'])
+            sys.exit(0)
+    for v in data['versions']['data']:
+        if v.get('supported'):
+            print(v['id'])
+            sys.exit(0)
+    print('ERROR: No supported versions found', file=sys.stderr)
+    sys.exit(1)
+except Exception as e:
+    print(f'ERROR: {e}', file=sys.stderr)
+    sys.exit(1)
+" 2>&1)
+  if echo "\${VERSION}" | grep -q '^ERROR'; then
+    echo "[mcjars] Failed to resolve version: \${VERSION}"
+    exit 1
+  fi
+  echo "[mcjars] Resolved latest version: \${VERSION}"
+fi
+
+# Get the required Java version from the mcjars API
+JAVA_VER=$(curl -s "\${MCJARS_API}/api/v1/version/\${VERSION}" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    print(data.get('version', {}).get('java', 21))
+except Exception:
+    print(21)
+" 2>/dev/null || echo 21)
+echo "[mcjars] Minecraft \${VERSION} requires Java \${JAVA_VER}"
+echo "[mcjars] Ensure you selected the correct Java image variant"
+
+# Resolve build UUID - latest or specific build number
+if [ "\${BUILD_NUM}" = "latest" ] || [ -z "\${BUILD_NUM}" ]; then
+  echo "[mcjars] Fetching latest build for \${TYPE} \${VERSION}..."
+  BUILD_UUID=$(curl -s "\${MCJARS_API}/api/v3/builds/types/\${TYPE}/versions/\${VERSION}/latest" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    print(data['build']['uuid'])
+except Exception as e:
+    print(f'ERROR: {e}', file=sys.stderr)
+    sys.exit(1)
+" 2>&1)
+else
+  echo "[mcjars] Fetching build \${BUILD_NUM} for \${TYPE} \${VERSION}..."
+  BUILD_UUID=$(curl -s "\${MCJARS_API}/api/v1/builds/\${TYPE}/\${VERSION}" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    target = '\${BUILD_NUM}'
+    for b in data['builds']:
+        if str(b.get('buildNumber', '')) == target or b.get('name', '').lstrip('#') == target:
+            print(b['uuid'])
+            sys.exit(0)
+    if data['builds']:
+        print(data['builds'][0]['uuid'])
+    else:
+        print('ERROR: No builds found', file=sys.stderr)
+        sys.exit(1)
+except Exception as e:
+    print(f'ERROR: {e}', file=sys.stderr)
+    sys.exit(1)
+" 2>&1)
+fi
+
+if echo "\${BUILD_UUID}" | grep -q '^ERROR'; then
+  echo "[mcjars] Failed to resolve build: \${BUILD_UUID}"
+  exit 1
+fi
+echo "[mcjars] Build UUID: \${BUILD_UUID}"
+
+# Fetch and execute the mcjars-generated install script
+echo "[mcjars] Downloading install script from mcjars.app..."
+curl -sL "\${MCJARS_API}/api/v1/script/\${BUILD_UUID}/bash" -o /tmp/mcjars_install.sh
+if [ ! -s /tmp/mcjars_install.sh ]; then
+  echo "[mcjars] ERROR: Failed to download install script"
+  exit 1
+fi
+
+echo "[mcjars] Running mcjars install script..."
+bash /tmp/mcjars_install.sh
+rm -f /tmp/mcjars_install.sh
+
+# Accept EULA if set
+if [ "\${EULA}" = "true" ]; then
+  echo "[mcjars] Accepting Minecraft EULA"
+  echo "eula=true" > eula.txt
+fi
+
+# Verify installation
+if [ -f server.jar ]; then
+  SIZE=$(stat -c%s server.jar 2>/dev/null || stat -f%z server.jar 2>/dev/null || echo '?')
+  echo "[mcjars] server.jar installed (\${SIZE} bytes)"
+elif [ -f unix_args.txt ]; then
+  echo "[mcjars] Forge/NeoForge installation detected (unix_args.txt present)"
+else
+  echo "[mcjars] WARNING: No server.jar or unix_args.txt found after installation"
+fi
+
+echo "[mcjars] Installation complete"
+      `.trim(),
+      supportedPorts: [25565, 25577],
       allocatedMemoryMb: 1024,
       allocatedCpuCores: 2,
       features: {
         restartOnExit: true,
+        startupDetection: {
+          done: ")! For help, type \"help\"",
+        },
+        iconUrl: "https://s3.mcjars.app/icons/vanilla.png",
+        tags: ["minecraft", "mcjars", "java", "gaming"],
+        updateUrl: "https://mcjars.app",
+        modManager: {
+          providers: ["curseforge", "modrinth"],
+          targets: ["forge", "fabric", "neoforge", "quilt"],
+        },
+        pluginManager: {
+          providers: ["modrinth", "spigot", "paper"],
+        },
       },
+      nestId: minecraftNest.id,
     },
   });
 
-  console.log("✓ Minecraft template created");
+  console.log("✓ Minecraft Server (Universal) template created");
 
   // Create generic Node.js template
   await prisma.serverTemplate.upsert({
@@ -379,7 +567,7 @@ async function main() {
       defaultImage: "node:20-bookworm-slim",
       installImage: "node:20-bookworm-slim",
       startup:
-        "sh -lc 'set -a; [ -f .env ] && . ./.env; set +a; CMD=\"${BOT_START_COMMAND:-${START_COMMAND:-npm start}}\"; echo \"[Catalyst] Startup command: $CMD\"; exec sh -lc \"$CMD\"'",
+        "sh -lc 'set -a; [ -f .env ] && . ./.env; set +a; CMD=\"\${BOT_START_COMMAND:-\${START_COMMAND:-npm start}}\"; echo \"[Catalyst] Startup command: $CMD\"; exec sh -lc \"$CMD\"'",
       stopCommand: "exit",
       sendSignalTo: "SIGTERM",
       variables: [
