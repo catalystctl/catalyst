@@ -88,7 +88,7 @@ function NestForm({
  Cancel
  </button>
  <button
- className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-colors hover:bg-primary/90 disabled:opacity-60"
+ className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
  onClick={() =>
  onSave({
  name: name.trim(),
@@ -359,7 +359,7 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  {nests.length} nest{nests.length !== 1 ? 's' : ''}
  </span>
  <button
- className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-colors hover:bg-primary/90"
+ className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
  onClick={() => {
  setEditingNest(null);
  setIsCreating(true);

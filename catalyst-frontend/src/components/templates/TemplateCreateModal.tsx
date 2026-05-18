@@ -585,7 +585,7 @@ function TemplateCreateModal() {
  <div>
  <div className="flex flex-wrap gap-2">
  <button
- className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-colors hover:bg-primary/90"
+ className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
  onClick={() => {
  setImportError('');
  setStep(1);
@@ -749,7 +749,7 @@ function TemplateCreateModal() {
  </button>
  {nests.length > 0 && (
  <button
- className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-colors hover:bg-primary/90"
+ className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
  onClick={() => setStep(2)}
  >
  Continue
@@ -1385,7 +1385,7 @@ function TemplateCreateModal() {
  </button>
  {step === 2 && (
  <button
- className="rounded-full bg-primary px-4 py-2 font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-colors hover:bg-primary/90 disabled:opacity-60"
+ className="rounded-full bg-primary px-4 py-2 font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
  onClick={() => mutation.mutate()}
  disabled={disableSubmit}
  >
@@ -1449,7 +1449,7 @@ function TemplateCreateModal() {
  }}
  />
  <button
- className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-colors hover:bg-primary/90 disabled:opacity-60"
+ className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
  onClick={handleImportUrl}
  disabled={!importUrl.trim() || importUrlLoading}
  >

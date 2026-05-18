@@ -2,37 +2,37 @@ import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react
 import { useNavigate, useParams } from 'react-router-dom';
 
 import {
-  ArrowUpCircle,
-  CheckSquare,
-  Download,
-  ExternalLink,
-  Loader2,
-  Package,
-  Puzzle,
-  RefreshCw,
-  Search,
-  Square,
-  Trash2,
-  Terminal,
-  FolderOpen,
-  HardDrive,
-  Clock,
-  Database,
-  BarChart3,
-  Bell,
-  Wrench,
-  Users,
-  Settings,
-  Shield,
-  FolderSync,
-  Activity,
-  AlertTriangle,
+ ArrowUpCircle,
+ CheckSquare,
+ Download,
+ ExternalLink,
+ Loader2,
+ Package,
+ Puzzle,
+ RefreshCw,
+ Search,
+ Square,
+ Trash2,
+ Terminal,
+ FolderOpen,
+ HardDrive,
+ Clock,
+ Database,
+ BarChart3,
+ Bell,
+ Wrench,
+ Users,
+ Settings,
+ Shield,
+ FolderSync,
+ Activity,
+ AlertTriangle,
 } from 'lucide-react';
 import { useServer } from '../../hooks/useServer';
 import { useServerMetrics } from '../../hooks/useServerMetrics';
 import {
-  useServerMetricsHistory,
-  type MetricsTimeRange,
+ useServerMetricsHistory,
+ type MetricsTimeRange,
 } from '../../hooks/useServerMetricsHistory';
 import { useTasks } from '../../hooks/useTasks';
 import { useServerDatabases } from '../../hooks/useServerDatabases';
@@ -49,9 +49,9 @@ import { getErrorMessage } from '../../utils/errors';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { reportSystemError } from '../../services/api/systemErrors';
 import type {
-  ServerAccessEntry,
-  ServerInvite,
-  ServerPermissionsResponse,
+ ServerAccessEntry,
+ ServerInvite,
+ ServerPermissionsResponse,
 } from '../../types/server';
 
 import ServerControls from '../../components/servers/ServerControls';
@@ -77,1133 +77,1133 @@ const AlertsPage = lazy(() => import('../alerts/AlertsPage'));
 
 // ── Tab labels & icons ──
 const tabLabels = {
-  console: 'Console',
-  files: 'Files',
-  sftp: 'SFTP',
-  backups: 'Backups',
-  tasks: 'Tasks',
-  databases: 'Databases',
-  metrics: 'Metrics',
-  alerts: 'Alerts',
-  activity: 'Activity',
-  modManager: 'Mod Manager',
-  pluginManager: 'Plugin Manager',
-  configuration: 'Configuration',
-  users: 'Users',
-  settings: 'Settings',
-  admin: 'Admin',
+ console: 'Console',
+ files: 'Files',
+ sftp: 'SFTP',
+ backups: 'Backups',
+ tasks: 'Tasks',
+ databases: 'Databases',
+ metrics: 'Metrics',
+ alerts: 'Alerts',
+ activity: 'Activity',
+ modManager: 'Mod Manager',
+ pluginManager: 'Plugin Manager',
+ configuration: 'Configuration',
+ users: 'Users',
+ settings: 'Settings',
+ admin: 'Admin',
 } as const;
 
 const tabIcons: Record<
-  keyof typeof tabLabels,
-  React.ComponentType<{ className?: string }>
+ keyof typeof tabLabels,
+ React.ComponentType<{ className?: string }>
 > = {
-  console: Terminal,
-  files: FolderOpen,
-  sftp: FolderSync,
-  backups: HardDrive,
-  tasks: Clock,
-  databases: Database,
-  metrics: BarChart3,
-  alerts: Bell,
-  activity: Activity,
-  modManager: Package,
-  pluginManager: Puzzle,
-  configuration: Wrench,
-  users: Users,
-  settings: Settings,
-  admin: Shield,
+ console: Terminal,
+ files: FolderOpen,
+ sftp: FolderSync,
+ backups: HardDrive,
+ tasks: Clock,
+ databases: Database,
+ metrics: BarChart3,
+ alerts: Bell,
+ activity: Activity,
+ modManager: Package,
+ pluginManager: Puzzle,
+ configuration: Wrench,
+ users: Users,
+ settings: Settings,
+ admin: Shield,
 };
 
 
 
 function TabSkeleton() {
-  return (
-    <div className="flex h-96 items-center justify-center">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-    </div>
-  );
+ return (
+ <div className="flex h-96 items-center justify-center">
+ <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+ </div>
+ );
 }
 
 function ServerDetailsPage() {
-  const { serverId, tab } = useParams();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const { data: server, isLoading, isError, refetch } = useServer(serverId);
-  const liveMetrics = useServerMetrics(serverId, server?.allocatedMemoryMb);
-  const user = useAuthStore((s) => s.user);
-
-  // ── Metrics ──
-  const [metricsTimeRange, setMetricsTimeRange] = useState<MetricsTimeRange>({
-    hours: 1,
-    limit: 60,
-    label: '1 hour',
-  });
-  const { data: metricsHistory } = useServerMetricsHistory(
-    serverId,
-    metricsTimeRange,
-  );
-
-  // ── Console ──
-  const consoleScrollback = 2000;
-  const {
-    entries,
-    send,
-    isConnected,
-    streamStatus,
-    isLoading: consoleLoading,
-    isError: consoleError,
-    refetch: refetchConsole,
-    clear: clearConsole,
-  } = useConsole(serverId, {
-    initialLines: consoleScrollback,
-    maxEntries: consoleScrollback,
-  });
-
-  useEffect(() => {
-    if (!serverId) return;
-    refetchConsole().catch(() => {});
-  }, [refetchConsole, serverId]);
-
-  // ── EULA ──
-  const { eulaPrompt, isLoading: eulaLoading, respond: respondEula } =
-    useEulaPrompt(serverId);
-
-  // ── Auth / permissions ──
-  const isAdmin = useMemo(
-    () =>
-      user?.permissions?.includes('*') ||
-      user?.permissions?.includes('admin.read') ||
-      user?.permissions?.includes('admin.write'),
-    [user?.permissions],
-  );
-  const canAdminWrite = useMemo(
-    () =>
-      user?.permissions?.includes('*') ||
-      user?.permissions?.includes('admin.write'),
-    [user?.permissions],
-  );
-  const serverPerms = useMemo(
-    () => new Set(server?.effectivePermissions ?? []),
-    [server?.effectivePermissions],
-  );
-  const hasServerPerm = useCallback(
-    (perm: string) => {
-      if (serverPerms.size === 0) return isAdmin;
-      return serverPerms.has(perm);
-    },
-    [serverPerms, isAdmin],
-  );
-
-  // ── Derived state ──
-  const isSuspended = server?.status === 'suspended';
-  const activeTab = useMemo(() => {
-    const key = tab ?? 'console';
-    return key in tabLabels ? (key as keyof typeof tabLabels) : 'console';
-  }, [tab]);
-
-  // canSend: allow commands when SSE is connected (or reconnecting) AND server is running
-  const canSend =
-    (isConnected || streamStatus === 'reconnecting') &&
-    Boolean(serverId) &&
-    server?.status === 'running' &&
-    !isSuspended &&
-    hasServerPerm('console.write');
-
-  const serverGameVersion =
-    server?.environment?.MC_VERSION ||
-    server?.environment?.MINECRAFT_VERSION ||
-    server?.environment?.GAME_VERSION ||
-    server?.environment?.SERVER_VERSION ||
-    server?.environment?.VERSION;
-
-  // ── Tasks ──
-  const { data: tasks = [], isLoading: tasksLoading } = useTasks(serverId);
-
-  // ── Databases ──
-  const {
-    data: databases = [],
-    isLoading: databasesLoading,
-    isError: databasesError,
-  } = useServerDatabases(serverId);
-  const { data: databaseHosts = [] } = useDatabaseHosts();
-  const canManageDatabases =
-    user?.permissions?.includes('*') ||
-    user?.permissions?.includes('admin.read') ||
-    user?.permissions?.includes('database.create') ||
-    user?.permissions?.includes('database.read') ||
-    user?.permissions?.includes('database.rotate') ||
-    user?.permissions?.includes('database.delete') ||
-    Boolean(server && user?.id && server.ownerId === user.id);
-  const databaseAllocation = server?.databaseAllocation ?? 0;
-
-  // ── Permissions / Users ──
-  const { data: permissionsData } = useQuery<ServerPermissionsResponse>({
-    queryKey: qk.serverPermissions(serverId ?? ''),
-    queryFn: () => serversApi.permissions(serverId ?? ''),
-    enabled: Boolean(serverId),
-    refetchInterval: 10000,
-  });
-  const { data: invites = [] } = useQuery<ServerInvite[]>({
-    queryKey: qk.serverInvites(serverId ?? ''),
-    queryFn: () => serversApi.listInvites(serverId ?? ''),
-    enabled: Boolean(serverId),
-    refetchInterval: 10000,
-  });
-
-  // ── Allocations (admin) ──
-  const allocationsQuery = useQuery({
-    queryKey: qk.serverAllocations(serverId ?? ''),
-    queryFn: () => serversApi.allocations(serverId ?? ''),
-    enabled: Boolean(serverId),
-    refetchInterval: 10000,
-  });
-  const allocations = allocationsQuery.data ?? [];
-  const allocationsError = allocationsQuery.error
-    ? getErrorMessage(allocationsQuery.error, 'Unable to load allocations')
-    : null;
-
-  // ── State: Settings ──
-  const [serverName, setServerName] = useState('');
-
-  // ── State: Admin ──
-  const [suspendReason, setSuspendReason] = useState('');
-  const [newContainerPort, setNewContainerPort] = useState('');
-  const [newHostPort, setNewHostPort] = useState('');
-  const [restartPolicy, setRestartPolicy] = useState<
-    'always' | 'on-failure' | 'never'
-  >('on-failure');
-  const [maxCrashCount, setMaxCrashCount] = useState('5');
-
-  // ── State: Configuration ──
-  const [startupCommand, setStartupCommand] = useState('');
-
-  // ── State: Users ──
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [invitePreset, setInvitePreset] = useState<
-    'readOnly' | 'power' | 'full' | 'custom'
-  >('readOnly');
-  const [invitePermissions, setInvitePermissions] = useState<string[]>([]);
-  const [accessPermissions, setAccessPermissions] = useState<
-    Record<string, string[]>
-  >({});
-
-  // ── State: Databases ──
-  const [databaseHostId, setDatabaseHostId] = useState('');
-  const [databaseName, setDatabaseName] = useState('');
-
-  // ── Sync server data to local state ──
-  useEffect(() => {
-    if (!server?.name) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing form from server data
-    setServerName(server.name);
-  }, [server?.name]);
-
-  useEffect(() => {
-    if (!server) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing form from server data
-    setRestartPolicy(server.restartPolicy ?? 'on-failure');
-    setMaxCrashCount(
-      server.maxCrashCount !== undefined && server.maxCrashCount !== null
-        ? String(server.maxCrashCount)
-        : '5',
-    );
-  }, [server?.id, server?.restartPolicy, server?.maxCrashCount]);
-
-  useEffect(() => {
-    if (!server) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing form from server data
-    setStartupCommand(
-      server.startupCommand ?? server.template?.startup ?? '',
-    );
-  }, [server?.id, server?.startupCommand, server?.template?.startup]);
-
-  useEffect(() => {
-    if (!permissionsData?.data) return;
-    const nextPermissions: Record<string, string[]> = {};
-    permissionsData.data.forEach((entry) => {
-      nextPermissions[entry.userId] = entry.permissions;
-    });
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing permissions from API
-    setAccessPermissions(nextPermissions);
-  }, [permissionsData?.data]);
-
-  useEffect(() => {
-    if (!permissionsData?.presets) return;
-    if (invitePreset !== 'custom') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- applying preset from API
-      setInvitePermissions(permissionsData.presets[invitePreset]);
-    }
-  }, [invitePreset, permissionsData?.presets]);
-
-  // ── Permission options ──
-  const permissionOptions = useMemo(() => {
-    const base = [
-      'server.read',
-      'server.start',
-      'server.stop',
-      'server.install',
-      'server.transfer',
-      'server.delete',
-      'alert.read',
-      'alert.create',
-      'alert.update',
-      'alert.delete',
-      'console.read',
-      'console.write',
-      'file.read',
-      'file.write',
-      'database.read',
-      'database.create',
-      'database.rotate',
-      'database.delete',
-    ];
-    const all = new Set<string>(base);
-    permissionsData?.data?.forEach((entry) =>
-      entry.permissions.forEach((perm) => all.add(perm)),
-    );
-    if (permissionsData?.presets) {
-      Object.values(permissionsData.presets).forEach((list) =>
-        list.forEach((perm) => all.add(perm)),
-      );
-    }
-    return Array.from(all).sort();
-  }, [permissionsData]);
-
-  // ── Mutations ──
-  const pauseMutation = useMutation({
-    mutationFn: (task: { id: string; enabled: boolean }) => {
-      if (!server?.id) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'pauseMutation' } });
-        throw new Error('Server not loaded');
-      }
-      return tasksApi.update(server.id, task.id, { enabled: !task.enabled });
-    },
-    onSuccess: () => {
-      if (server?.id)
-        queryClient.invalidateQueries({ queryKey: qk.tasks(server.id) });
-      notifySuccess('Task updated');
-    },
-    onError: (error: any) =>
-      notifyError(error?.response?.data?.error || 'Failed to update task'),
-  });
-
-  const deleteTaskMutation = useMutation({
-    mutationFn: (taskId: string) => {
-      if (!server?.id) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'deleteTaskMutation' } });
-        throw new Error('Server not loaded');
-      }
-      return tasksApi.remove(server.id, taskId);
-    },
-    onSuccess: () => {
-      if (server?.id)
-        queryClient.invalidateQueries({ queryKey: qk.tasks(server.id) });
-      notifySuccess('Task deleted');
-    },
-    onError: (error: any) =>
-      notifyError(error?.response?.data?.error || 'Failed to delete task'),
-  });
-
-  const createDatabaseMutation = useMutation({
-    mutationFn: () => {
-      if (!server?.id) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'createDatabaseMutation' } });
-        throw new Error('Server not loaded');
-      }
-      if (!databaseHostId) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Database host required', metadata: { context: 'createDatabaseMutation' } });
-        throw new Error('Database host required');
-      }
-      return databasesApi.create(server.id, {
-        hostId: databaseHostId,
-        name: databaseName.trim() || undefined,
-      });
-    },
-    onSuccess: () => {
-      if (server?.id)
-        queryClient.invalidateQueries({
-          queryKey: qk.serverDatabases(server.id),
-        });
-      setDatabaseName('');
-      notifySuccess('Database created');
-    },
-    onError: (error: any) =>
-      notifyError(error?.response?.data?.error || 'Failed to create database'),
-  });
-
-  const rotateDatabaseMutation = useMutation({
-    mutationFn: (databaseId: string) => {
-      if (!server?.id) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'rotateDatabaseMutation' } });
-        throw new Error('Server not loaded');
-      }
-      return databasesApi.rotatePassword(server.id, databaseId);
-    },
-    onSuccess: () => {
-      if (server?.id)
-        queryClient.invalidateQueries({
-          queryKey: qk.serverDatabases(server.id),
-        });
-      notifySuccess('Database password rotated');
-    },
-    onError: (error: any) =>
-      notifyError(
-        error?.response?.data?.error || 'Failed to rotate password',
-      ),
-  });
-
-  const deleteDatabaseMutation = useMutation({
-    mutationFn: (databaseId: string) => {
-      if (!server?.id) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'deleteDatabaseMutation' } });
-        throw new Error('Server not loaded');
-      }
-      return databasesApi.remove(server.id, databaseId);
-    },
-    onSuccess: () => {
-      if (server?.id)
-        queryClient.invalidateQueries({
-          queryKey: qk.serverDatabases(server.id),
-        });
-      notifySuccess('Database deleted');
-    },
-    onError: (error: any) =>
-      notifyError(error?.response?.data?.error || 'Failed to delete database'),
-  });
-
-  const suspendMutation = useMutation({
-    mutationFn: (reason?: string) => {
-      if (!server?.id) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'suspendMutation' } });
-        throw new Error('Server not loaded');
-      }
-      return serversApi.suspend(server.id, reason);
-    },
-    onSuccess: () => {
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: qk.server(server?.id) }),
-        queryClient.invalidateQueries({ queryKey: ['servers'] }),
-      ]);
-      notifySuccess('Server suspended');
-      setSuspendReason('');
-    },
-    onError: (error: any) =>
-      notifyError(
-        error?.response?.data?.error || 'Failed to suspend server',
-      ),
-  });
-
-  const unsuspendMutation = useMutation({
-    mutationFn: () => {
-      if (!server?.id) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'unsuspendMutation' } });
-        throw new Error('Server not loaded');
-      }
-      return serversApi.unsuspend(server.id);
-    },
-    onSuccess: () => {
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: qk.server(server?.id) }),
-        queryClient.invalidateQueries({ queryKey: ['servers'] }),
-      ]);
-      notifySuccess('Server unsuspended');
-    },
-    onError: (error: any) =>
-      notifyError(
-        error?.response?.data?.error || 'Failed to unsuspend server',
-      ),
-  });
-
-  const addAllocationMutation = useMutation({
-    mutationFn: async () => {
-      if (!serverId) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'addAllocationMutation' } });
-        throw new Error('Missing server id');
-      }
-      const containerPort = Number(newContainerPort);
-      const hostPort = Number(newHostPort || newContainerPort);
-      if (!Number.isFinite(containerPort) || containerPort <= 0) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Invalid container port', metadata: { context: 'addAllocationMutation' } });
-        throw new Error('Invalid container port');
-      }
-      if (!Number.isFinite(hostPort) || hostPort <= 0) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Invalid host port', metadata: { context: 'addAllocationMutation' } });
-        throw new Error('Invalid host port');
-      }
-      return serversApi.addAllocation(serverId, {
-        containerPort,
-        hostPort,
-      });
-    },
-    onSuccess: () => {
-      notifySuccess('Allocation added');
-      setNewContainerPort('');
-      setNewHostPort('');
-      queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
-      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-    },
-    onError: (error: any) =>
-      notifyError(
-        error?.response?.data?.error ||
-          error?.message ||
-          'Failed to add allocation',
-      ),
-  });
-
-  const removeAllocationMutation = useMutation({
-    mutationFn: async (containerPort: number) => {
-      if (!serverId) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'removeAllocationMutation' } });
-        throw new Error('Missing server id');
-      }
-      return serversApi.removeAllocation(serverId, containerPort);
-    },
-    onSuccess: () => {
-      notifySuccess('Allocation removed');
-      queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
-      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-    },
-    onError: (error: any) =>
-      notifyError(
-        error?.response?.data?.error || 'Failed to remove allocation',
-      ),
-  });
-
-  const setPrimaryMutation = useMutation({
-    mutationFn: async (containerPort: number) => {
-      if (!serverId) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'setPrimaryMutation' } });
-        throw new Error('Missing server id');
-      }
-      return serversApi.setPrimaryAllocation(serverId, containerPort);
-    },
-    onSuccess: () => {
-      notifySuccess('Primary allocation updated');
-      queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
-      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-    },
-    onError: (error: any) =>
-      notifyError(
-        error?.response?.data?.error ||
-          'Failed to update primary allocation',
-      ),
-  });
-
-  const restartPolicyMutation = useMutation({
-    mutationFn: async () => {
-      if (!serverId) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'restartPolicyMutation' } });
-        throw new Error('Missing server id');
-      }
-      const parsedMax =
-        maxCrashCount.trim() === '' ? undefined : Number(maxCrashCount);
-      const minCrashCount = restartPolicy === 'always' ? 1 : 0;
-      if (
-        parsedMax !== undefined &&
-        (!Number.isFinite(parsedMax) ||
-          parsedMax < minCrashCount ||
-          parsedMax > 100)
-      ) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: `Max crash count must be between ${minCrashCount} and 100`, metadata: { context: 'restartPolicyMutation' } });
-        throw new Error(
-          `Max crash count must be between ${minCrashCount} and 100`,
-        );
-      }
-      return serversApi.updateRestartPolicy(serverId, {
-        restartPolicy,
-        maxCrashCount: parsedMax,
-      });
-    },
-    onSuccess: () => {
-      notifySuccess('Restart policy updated');
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: qk.server(serverId) }),
-        queryClient.invalidateQueries({ queryKey: ['servers'] }),
-      ]);
-    },
-    onError: (error: any) =>
-      notifyError(
-        error?.response?.data?.error ||
-          error?.message ||
-          'Failed to update restart policy',
-      ),
-  });
-
-  const resetCrashCountMutation = useMutation({
-    mutationFn: async () => {
-      if (!serverId) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'resetCrashCountMutation' } });
-        throw new Error('Missing server id');
-      }
-      return serversApi.resetCrashCount(serverId);
-    },
-    onSuccess: () => {
-      notifySuccess('Crash count reset');
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: qk.server(serverId) }),
-        queryClient.invalidateQueries({ queryKey: ['servers'] }),
-      ]);
-    },
-    onError: (error: any) =>
-      notifyError(
-        error?.response?.data?.error ||
-          error?.message ||
-          'Failed to reset crash count',
-      ),
-  });
-
-  const renameServerMutation = useMutation({
-    mutationFn: () => {
-      if (!serverId) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'renameServerMutation' } });
-        throw new Error('Missing server id');
-      }
-      const nextName = serverName.trim();
-      if (!nextName) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server name is required', metadata: { context: 'renameServerMutation' } });
-        throw new Error('Server name is required');
-      }
-      return serversApi.update(serverId, { name: nextName });
-    },
-    onSuccess: () => {
-      notifySuccess('Server name updated');
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: qk.server(serverId) }),
-        queryClient.invalidateQueries({ queryKey: ['servers'] }),
-      ]);
-    },
-    onError: (error: any) =>
-      notifyError(
-        error?.response?.data?.error ||
-          error?.message ||
-          'Failed to rename server',
-      ),
-  });
-
-  const startupCommandMutation = useMutation({
-    mutationFn: () => {
-      if (!serverId) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'startupCommandMutation' } });
-        throw new Error('Missing server id');
-      }
-      const trimmed = startupCommand.trim();
-      const templateDefault = server?.template?.startup ?? '';
-      return serversApi.update(serverId, {
-        startupCommand: trimmed === templateDefault ? null : trimmed || null,
-      });
-    },
-    onSuccess: () => {
-      notifySuccess('Startup command updated');
-      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-    },
-    onError: (error: any) =>
-      notifyError(
-        error?.response?.data?.error ||
-          error?.message ||
-          'Failed to update startup command',
-      ),
-  });
-
-  const createInviteMutation = useMutation({
-    mutationFn: () => {
-      if (!serverId) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'createInviteMutation' } });
-        throw new Error('Missing server id');
-      }
-      return serversApi.createInvite(serverId, {
-        email: inviteEmail.trim(),
-        permissions:
-          invitePreset === 'custom'
-            ? invitePermissions
-            : (permissionsData?.presets[invitePreset] ?? []),
-      });
-    },
-    onSuccess: () => {
-      notifySuccess('Invite sent');
-      setInviteEmail('');
-      queryClient.invalidateQueries({
-        queryKey: qk.serverInvites(serverId),
-      });
-    },
-    onError: (error: any) =>
-      notifyError(error?.response?.data?.error || 'Failed to send invite'),
-  });
-
-  const cancelInviteMutation = useMutation({
-    mutationFn: (inviteId: string) => {
-      if (!serverId) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'cancelInviteMutation' } });
-        throw new Error('Missing server id');
-      }
-      return serversApi.cancelInvite(serverId, inviteId);
-    },
-    onSuccess: () => {
-      notifySuccess('Invite cancelled');
-      queryClient.invalidateQueries({
-        queryKey: qk.serverInvites(serverId),
-      });
-    },
-    onError: (error: any) =>
-      notifyError(
-        error?.response?.data?.error || 'Failed to cancel invite',
-      ),
-  });
-
-  const saveAccessMutation = useMutation({
-    mutationFn: (entry: ServerAccessEntry) => {
-      if (!serverId) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'saveAccessMutation' } });
-        throw new Error('Missing server id');
-      }
-      const permissions = accessPermissions[entry.userId] ?? [];
-      return serversApi.upsertAccess(serverId, {
-        targetUserId: entry.userId,
-        permissions,
-      });
-    },
-    onSuccess: () => {
-      notifySuccess('Permissions updated');
-      queryClient.invalidateQueries({
-        queryKey: qk.serverPermissions(serverId),
-      });
-    },
-    onError: (error: any) =>
-      notifyError(
-        error?.response?.data?.error || 'Failed to update permissions',
-      ),
-  });
-
-  const removeAccessMutation = useMutation({
-    mutationFn: (targetUserId: string) => {
-      if (!serverId) {
-        reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'removeAccessMutation' } });
-        throw new Error('Missing server id');
-      }
-      return serversApi.removeAccess(serverId, targetUserId);
-    },
-    onSuccess: () => {
-      notifySuccess('Access removed');
-      queryClient.invalidateQueries({
-        queryKey: qk.serverPermissions(serverId),
-      });
-    },
-    onError: (error: any) =>
-      notifyError(
-        error?.response?.data?.error || 'Failed to remove access',
-      ),
-  });
-
-  const handleResetStartupCommand = () => {
-    if (!serverId || !server) return;
-    setStartupCommand(server.template?.startup ?? '');
-    serversApi
-      .update(serverId, { startupCommand: null })
-      .then(() => {
-        notifySuccess('Reset to template default');
-        queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
-      })
-      .catch(() => notifyError('Failed to reset startup command'));
-  };
-
-  // ── Tab visibility filter (BEFORE early returns so hook count is always the same) ──
-  const modManagerConfig = server?.template?.features?.modManager;
-  const pluginManagerConfig = server?.template?.features?.pluginManager;
-  const visibleTabs = useMemo(() => {
-    return Object.entries(tabLabels).filter(([key]) => {
-      if (key === 'admin')
-        return canAdminWrite || hasServerPerm('server.delete');
-      if (key === 'console') return hasServerPerm('console.read');
-      if (key === 'files') return hasServerPerm('file.read');
-      if (key === 'backups') return hasServerPerm('backup.read');
-      if (key === 'databases') return hasServerPerm('database.read');
-      if (key === 'schedules') return hasServerPerm('server.schedule');
-      if (key === 'modManager') return Boolean(modManagerConfig);
-      if (key === 'pluginManager') return Boolean(pluginManagerConfig);
-      if (key === 'activity') return hasServerPerm('server.read');
-      return true;
-    });
-  }, [
-    canAdminWrite,
-    hasServerPerm,
-    modManagerConfig,
-    pluginManagerConfig,
-  ]);
-
-  // ── Error state (fatal — don't render anything) ──
-  if (isError) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="rounded-lg border border-danger/30 bg-danger-muted px-6 py-4 text-center">
-          <p className="text-sm text-danger">Unable to load server details.</p>
-          <div className="mt-3 flex items-center justify-center gap-2">
-            <button
-              onClick={() => refetch()}
-              className="rounded-md border border-border/40 px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
-            >
-              Retry
-            </button>
-            <button
-              onClick={() => navigate('/servers')}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              ← Back to servers
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Derived values (nullable while server is loading) ──
-  const nodeLabel = server?.node?.name ?? server?.nodeName ?? server?.nodeId ?? '…';
-  const nodeIp =
-    server?.connection?.host ??
-    server?.primaryIp ??
-    server?.node?.publicAddress ??
-    server?.node?.hostname ??
-    'n/a';
-  const nodePort = server?.primaryPort ?? 'n/a';
-  const diskLimitMb = server?.allocatedDiskMb ?? 0;
-  const liveDiskUsageMb = liveMetrics?.diskUsageMb;
-  const liveDiskTotalMb = liveMetrics?.diskTotalMb;
-
-  return (
-    <div>
-      <div className="space-y-4">
-        {/* ── Header ── */}
-        <div>
-          <div className={`relative overflow-hidden rounded-2xl border backdrop-blur-sm ${
-            isSuspended
-              ? 'border-danger/20 bg-gradient-to-br from-danger/5 via-card/90 to-card/80'
-              : server?.status === 'running'
-                ? 'border-success/20 bg-gradient-to-br from-success/5 via-card/90 to-card/80'
-                : 'border-border bg-card/80'
-          }`}>
-            {/* Subtle top accent */}
-            <div className={`h-0.5 w-full ${
-              isSuspended
-                ? 'bg-gradient-to-r from-transparent via-danger/60 to-transparent'
-                : server?.status === 'running'
-                  ? 'bg-gradient-to-r from-transparent via-success/60 to-transparent'
-                  : 'bg-gradient-to-r from-transparent via-muted-foreground/30 to-transparent'
-            }`} />
-
-            <div className="p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors ${
-                    isSuspended
-                      ? 'border-danger/30 bg-danger/10 text-danger'
-                      : server?.status === 'running'
-                        ? 'border-success/30 bg-success/10 text-success'
-                        : 'border-border bg-surface-2 text-muted-foreground'
-                  }`}>
-                    <Terminal className="h-4.5 w-4.5" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2.5">
-                      {isLoading ? (
-                        <div className="h-6 w-48 animate-pulse rounded-md bg-muted" />
-                      ) : (
-                        <>
-                          <h1 className="font-display truncate text-xl font-bold tracking-tight text-foreground">
-                            {server.name}
-                          </h1>
-                          <ServerStatusBadge status={server.status} />
-                        </>
-                      )}
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {isLoading ? 'Loading…' : `${nodeLabel} · ${nodeIp}:${nodePort}`}
-                    </p>
-                  </div>
-                </div>
-                {server ? (
-                  <ServerControls
-                    serverId={server.id}
-                    status={server.status}
-                    permissions={server.effectivePermissions}
-                  />
-                ) : (
-                  <div className="h-8 w-32 animate-pulse rounded-md bg-muted" />
-                )}
-              </div>
-
-              {isSuspended && (
-                <div className="mt-3 flex items-center gap-2 rounded-lg border border-danger/30 bg-danger-muted px-3 py-2 text-xs text-danger">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                  <span className="font-semibold">Suspended</span>
-                  {server?.suspensionReason && (
-                    <span className="text-danger/80">— {server.suspensionReason}</span>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ── Tab navigation ── */}
-        <div className="flex flex-wrap gap-1 rounded-xl border border-border/40 bg-surface-2/40 p-1.5 shadow-[inset_0_1px_0_hsl(var(--card)/0.5)]">
-          {visibleTabs.map(([key, label]) => {
-            const isActive = activeTab === key;
-            const Icon = tabIcons[key as keyof typeof tabLabels];
-            return (
-              <button
-                key={key}
-                type="button"
-                title={label}
-                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
-                  isActive
-                    ? 'bg-primary text-primary-foreground shadow-[0_0_8px_-1px_hsl(var(--primary)/0.25),0_1px_2px_hsl(var(--primary)/0.15)]'
-                    : 'text-muted-foreground hover:bg-surface-2/60 hover:text-foreground'
-                }`}
-                onClick={() => server && navigate(`/servers/${server.id}/${key}`)}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* ── Tab Content ── */}
-        <div>
-          <Suspense fallback={<TabSkeleton />}>
-          {activeTab === 'console' && (
-            <ServerConsoleTab
-              liveMetrics={liveMetrics}
-              liveDiskUsageMb={liveDiskUsageMb}
-              liveDiskTotalMb={liveDiskTotalMb}
-              isConnected={isConnected}
-              canSend={!!canSend}
-              entries={entries}
-              send={send}
-              clearConsole={clearConsole}
-              isLoading={consoleLoading}
-              isError={consoleError}
-              refetch={refetchConsole}
-            />
-          )}
-
-          {activeTab === 'files' && server && (
-            <ServerTabCard>
-              <FileManager
-                serverId={server.id}
-                isSuspended={isSuspended}
-              />
-            </ServerTabCard>
-          )}
-
-          {activeTab === 'sftp' && server && (
-            <ServerSftpTab
-              serverId={server.id}
-              ownerId={server.ownerId}
-              currentUserId={user?.id}
-            />
-          )}
-
-          {activeTab === 'backups' && server && (
-            <ServerTabCard>
-              <BackupSection
-                serverId={server.id}
-                serverStatus={server.status}
-                isSuspended={isSuspended}
-              />
-            </ServerTabCard>
-          )}
-
-          {activeTab === 'tasks' && server && (
-            <ServerTasksTab
-              serverId={server.id}
-              isSuspended={isSuspended}
-              tasks={tasks}
-              tasksLoading={tasksLoading}
-              onPause={(task) => pauseMutation.mutate(task)}
-              pausePending={pauseMutation.isPending}
-              onDelete={(taskId) => deleteTaskMutation.mutate(taskId)}
-              deletePending={deleteTaskMutation.isPending}
-            />
-          )}
-
-          {activeTab === 'databases' && server && (
-            <ServerDatabasesTab
-              serverId={server.id}
-              isSuspended={isSuspended}
-              databases={databases}
-              databasesLoading={databasesLoading}
-              databasesError={databasesError}
-              databaseHosts={databaseHosts}
-              databaseAllocation={databaseAllocation}
-              canManageDatabases={canManageDatabases}
-              databaseHostId={databaseHostId}
-              onDatabaseHostIdChange={setDatabaseHostId}
-              databaseName={databaseName}
-              onDatabaseNameChange={setDatabaseName}
-              createPending={createDatabaseMutation.isPending}
-              onCreate={() => createDatabaseMutation.mutate()}
-              rotatePending={rotateDatabaseMutation.isPending}
-              onRotate={(id) => rotateDatabaseMutation.mutate(id)}
-              deletePending={deleteDatabaseMutation.isPending}
-              onDelete={(id) => deleteDatabaseMutation.mutate(id)}
-            />
-          )}
-
-          {activeTab === 'metrics' && server && (
-            <ServerMetricsTab
-              serverCpuPercent={server.cpuPercent ?? 0}
-              serverMemoryPercent={server.memoryPercent ?? 0}
-              allocatedMemoryMb={server.allocatedMemoryMb ?? 0}
-              allocatedDiskMb={diskLimitMb}
-              liveMetrics={liveMetrics}
-              isConnected={isConnected}
-              metricsHistory={metricsHistory}
-              metricsTimeRange={metricsTimeRange}
-              onMetricsTimeRangeChange={setMetricsTimeRange}
-            />
-          )}
-
-          {activeTab === 'alerts' && server && (
-            <div className="space-y-4">
-              <AlertsPage serverId={server.id} />
-            </div>
-          )}
-
-          {activeTab === 'activity' && server && (
-            <ServerActivityLogTab serverId={server.id} />
-          )}
-
-          {activeTab === 'modManager' && (
-            <ServerModManagerTab
-              serverId={serverId}
-              serverGameVersion={serverGameVersion}
-              modManagerConfig={modManagerConfig}
-            />
-          )}
-
-          {activeTab === 'pluginManager' && (
-            <ServerPluginManagerTab
-              serverId={serverId}
-              serverGameVersion={serverGameVersion}
-              pluginManagerConfig={pluginManagerConfig}
-            />
-          )}
-
-          {activeTab === 'users' && server && (
-            <ServerUsersTab
-              serverId={server.id}
-              ownerId={server.ownerId}
-              inviteEmail={inviteEmail}
-              onInviteEmailChange={setInviteEmail}
-              invitePreset={invitePreset}
-              onInvitePresetChange={setInvitePreset}
-              invitePermissions={invitePermissions}
-              onInvitePermissionsChange={setInvitePermissions}
-              permissionPresets={permissionsData?.presets ?? {}}
-              permissionOptions={permissionOptions}
-              createInvitePending={createInviteMutation.isPending}
-              onCreateInvite={() => createInviteMutation.mutate()}
-              permissionsData={permissionsData?.data}
-              accessPermissions={accessPermissions}
-              onAccessPermissionsChange={setAccessPermissions}
-              saveAccessPending={saveAccessMutation.isPending}
-              onSaveAccess={(entry) => saveAccessMutation.mutate(entry)}
-              removeAccessPending={removeAccessMutation.isPending}
-              onRemoveAccess={(userId) =>
-                removeAccessMutation.mutate(userId)
-              }
-              invites={invites}
-              cancelInvitePending={cancelInviteMutation.isPending}
-              onCancelInvite={(inviteId) =>
-                cancelInviteMutation.mutate(inviteId)
-              }
-            />
-          )}
-
-          {activeTab === 'configuration' && server && (
-            <ServerConfigurationTab
-              serverId={serverId}
-              isSuspended={isSuspended}
-              isAdmin={isAdmin}
-              server={server}
-              startupCommand={startupCommand}
-              onStartupCommandChange={setStartupCommand}
-              startupCommandPending={startupCommandMutation.isPending}
-              onSaveStartupCommand={() => startupCommandMutation.mutate()}
-              onResetStartupCommand={handleResetStartupCommand}
-            />
-          )}
-
-          {activeTab === 'admin' && server && (
-            <ServerAdminTab
-              serverId={server.id}
-              serverName={server.name}
-              server={server}
-              isSuspended={isSuspended}
-              canAdminWrite={canAdminWrite}
-              suspendReason={suspendReason}
-              onSuspendReasonChange={setSuspendReason}
-              suspendPending={suspendMutation.isPending}
-              onSuspend={(reason) => suspendMutation.mutate(reason)}
-              unsuspendPending={unsuspendMutation.isPending}
-              onUnsuspend={() => unsuspendMutation.mutate()}
-              allocations={allocations}
-              allocationsError={allocationsError}
-              newContainerPort={newContainerPort}
-              onNewContainerPortChange={setNewContainerPort}
-              newHostPort={newHostPort}
-              onNewHostPortChange={setNewHostPort}
-              addAllocationPending={addAllocationMutation.isPending}
-              onAddAllocation={() => addAllocationMutation.mutate()}
-              removeAllocationPending={removeAllocationMutation.isPending}
-              onRemoveAllocation={(port) =>
-                removeAllocationMutation.mutate(port)
-              }
-              setPrimaryPending={setPrimaryMutation.isPending}
-              onSetPrimary={(port) => setPrimaryMutation.mutate(port)}
-              restartPolicy={restartPolicy}
-              onRestartPolicyChange={setRestartPolicy}
-              maxCrashCount={maxCrashCount}
-              onMaxCrashCountChange={setMaxCrashCount}
-              crashCount={server.crashCount ?? 0}
-              maxCrashCountValue={server.maxCrashCount ?? 0}
-              lastCrashAt={server.lastCrashAt}
-              lastExitCode={server.lastExitCode}
-              restartPolicyPending={restartPolicyMutation.isPending}
-              onSaveRestartPolicy={() => restartPolicyMutation.mutate()}
-              resetCrashCountPending={resetCrashCountMutation.isPending}
-              onResetCrashCount={() => resetCrashCountMutation.mutate()}
-              canDelete={hasServerPerm('server.delete')}
-            />
-          )}
-
-          {activeTab === 'settings' && server && (
-            <ServerSettingsTab
-              serverId={server.id}
-              serverName={serverName}
-              onServerNameChange={setServerName}
-              renamePending={renameServerMutation.isPending}
-              onRename={() => renameServerMutation.mutate()}
-              isSuspended={isSuspended}
-              serverStatus={server.status}
-              subdomain={server.subdomain ?? null}
-              server={server}
-            />
-          )}
-          </Suspense>
-        </div>
-      </div>
-
-      {eulaPrompt && (
-        <EulaModal
-          eulaText={eulaPrompt.eulaText}
-          isLoading={eulaLoading}
-          onAccept={() => respondEula(true)}
-          onDecline={() => respondEula(false)}
-        />
-      )}
-    </div>
-  );
+ const { serverId, tab } = useParams();
+ const navigate = useNavigate();
+ const queryClient = useQueryClient();
+ const { data: server, isLoading, isError, refetch } = useServer(serverId);
+ const liveMetrics = useServerMetrics(serverId, server?.allocatedMemoryMb);
+ const user = useAuthStore((s) => s.user);
+
+ // ── Metrics ──
+ const [metricsTimeRange, setMetricsTimeRange] = useState<MetricsTimeRange>({
+ hours: 1,
+ limit: 60,
+ label: '1 hour',
+ });
+ const { data: metricsHistory } = useServerMetricsHistory(
+ serverId,
+ metricsTimeRange,
+ );
+
+ // ── Console ──
+ const consoleScrollback = 2000;
+ const {
+ entries,
+ send,
+ isConnected,
+ streamStatus,
+ isLoading: consoleLoading,
+ isError: consoleError,
+ refetch: refetchConsole,
+ clear: clearConsole,
+ } = useConsole(serverId, {
+ initialLines: consoleScrollback,
+ maxEntries: consoleScrollback,
+ });
+
+ useEffect(() => {
+ if (!serverId) return;
+ refetchConsole().catch(() => {});
+ }, [refetchConsole, serverId]);
+
+ // ── EULA ──
+ const { eulaPrompt, isLoading: eulaLoading, respond: respondEula } =
+ useEulaPrompt(serverId);
+
+ // ── Auth / permissions ──
+ const isAdmin = useMemo(
+ () =>
+ user?.permissions?.includes('*') ||
+ user?.permissions?.includes('admin.read') ||
+ user?.permissions?.includes('admin.write'),
+ [user?.permissions],
+ );
+ const canAdminWrite = useMemo(
+ () =>
+ user?.permissions?.includes('*') ||
+ user?.permissions?.includes('admin.write'),
+ [user?.permissions],
+ );
+ const serverPerms = useMemo(
+ () => new Set(server?.effectivePermissions ?? []),
+ [server?.effectivePermissions],
+ );
+ const hasServerPerm = useCallback(
+ (perm: string) => {
+ if (serverPerms.size === 0) return isAdmin;
+ return serverPerms.has(perm);
+ },
+ [serverPerms, isAdmin],
+ );
+
+ // ── Derived state ──
+ const isSuspended = server?.status === 'suspended';
+ const activeTab = useMemo(() => {
+ const key = tab ?? 'console';
+ return key in tabLabels ? (key as keyof typeof tabLabels) : 'console';
+ }, [tab]);
+
+ // canSend: allow commands when SSE is connected (or reconnecting) AND server is running
+ const canSend =
+ (isConnected || streamStatus === 'reconnecting') &&
+ Boolean(serverId) &&
+ server?.status === 'running' &&
+ !isSuspended &&
+ hasServerPerm('console.write');
+
+ const serverGameVersion =
+ server?.environment?.MC_VERSION ||
+ server?.environment?.MINECRAFT_VERSION ||
+ server?.environment?.GAME_VERSION ||
+ server?.environment?.SERVER_VERSION ||
+ server?.environment?.VERSION;
+
+ // ── Tasks ──
+ const { data: tasks = [], isLoading: tasksLoading } = useTasks(serverId);
+
+ // ── Databases ──
+ const {
+ data: databases = [],
+ isLoading: databasesLoading,
+ isError: databasesError,
+ } = useServerDatabases(serverId);
+ const { data: databaseHosts = [] } = useDatabaseHosts();
+ const canManageDatabases =
+ user?.permissions?.includes('*') ||
+ user?.permissions?.includes('admin.read') ||
+ user?.permissions?.includes('database.create') ||
+ user?.permissions?.includes('database.read') ||
+ user?.permissions?.includes('database.rotate') ||
+ user?.permissions?.includes('database.delete') ||
+ Boolean(server && user?.id && server.ownerId === user.id);
+ const databaseAllocation = server?.databaseAllocation ?? 0;
+
+ // ── Permissions / Users ──
+ const { data: permissionsData } = useQuery<ServerPermissionsResponse>({
+ queryKey: qk.serverPermissions(serverId ?? ''),
+ queryFn: () => serversApi.permissions(serverId ?? ''),
+ enabled: Boolean(serverId),
+ refetchInterval: 10000,
+ });
+ const { data: invites = [] } = useQuery<ServerInvite[]>({
+ queryKey: qk.serverInvites(serverId ?? ''),
+ queryFn: () => serversApi.listInvites(serverId ?? ''),
+ enabled: Boolean(serverId),
+ refetchInterval: 10000,
+ });
+
+ // ── Allocations (admin) ──
+ const allocationsQuery = useQuery({
+ queryKey: qk.serverAllocations(serverId ?? ''),
+ queryFn: () => serversApi.allocations(serverId ?? ''),
+ enabled: Boolean(serverId),
+ refetchInterval: 10000,
+ });
+ const allocations = allocationsQuery.data ?? [];
+ const allocationsError = allocationsQuery.error
+ ? getErrorMessage(allocationsQuery.error, 'Unable to load allocations')
+ : null;
+
+ // ── State: Settings ──
+ const [serverName, setServerName] = useState('');
+
+ // ── State: Admin ──
+ const [suspendReason, setSuspendReason] = useState('');
+ const [newContainerPort, setNewContainerPort] = useState('');
+ const [newHostPort, setNewHostPort] = useState('');
+ const [restartPolicy, setRestartPolicy] = useState<
+ 'always' | 'on-failure' | 'never'
+ >('on-failure');
+ const [maxCrashCount, setMaxCrashCount] = useState('5');
+
+ // ── State: Configuration ──
+ const [startupCommand, setStartupCommand] = useState('');
+
+ // ── State: Users ──
+ const [inviteEmail, setInviteEmail] = useState('');
+ const [invitePreset, setInvitePreset] = useState<
+ 'readOnly' | 'power' | 'full' | 'custom'
+ >('readOnly');
+ const [invitePermissions, setInvitePermissions] = useState<string[]>([]);
+ const [accessPermissions, setAccessPermissions] = useState<
+ Record<string, string[]>
+ >({});
+
+ // ── State: Databases ──
+ const [databaseHostId, setDatabaseHostId] = useState('');
+ const [databaseName, setDatabaseName] = useState('');
+
+ // ── Sync server data to local state ──
+ useEffect(() => {
+ if (!server?.name) return;
+ // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing form from server data
+ setServerName(server.name);
+ }, [server?.name]);
+
+ useEffect(() => {
+ if (!server) return;
+ // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing form from server data
+ setRestartPolicy(server.restartPolicy ?? 'on-failure');
+ setMaxCrashCount(
+ server.maxCrashCount !== undefined && server.maxCrashCount !== null
+ ? String(server.maxCrashCount)
+ : '5',
+ );
+ }, [server?.id, server?.restartPolicy, server?.maxCrashCount]);
+
+ useEffect(() => {
+ if (!server) return;
+ // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing form from server data
+ setStartupCommand(
+ server.startupCommand ?? server.template?.startup ?? '',
+ );
+ }, [server?.id, server?.startupCommand, server?.template?.startup]);
+
+ useEffect(() => {
+ if (!permissionsData?.data) return;
+ const nextPermissions: Record<string, string[]> = {};
+ permissionsData.data.forEach((entry) => {
+ nextPermissions[entry.userId] = entry.permissions;
+ });
+ // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing permissions from API
+ setAccessPermissions(nextPermissions);
+ }, [permissionsData?.data]);
+
+ useEffect(() => {
+ if (!permissionsData?.presets) return;
+ if (invitePreset !== 'custom') {
+ // eslint-disable-next-line react-hooks/set-state-in-effect -- applying preset from API
+ setInvitePermissions(permissionsData.presets[invitePreset]);
+ }
+ }, [invitePreset, permissionsData?.presets]);
+
+ // ── Permission options ──
+ const permissionOptions = useMemo(() => {
+ const base = [
+ 'server.read',
+ 'server.start',
+ 'server.stop',
+ 'server.install',
+ 'server.transfer',
+ 'server.delete',
+ 'alert.read',
+ 'alert.create',
+ 'alert.update',
+ 'alert.delete',
+ 'console.read',
+ 'console.write',
+ 'file.read',
+ 'file.write',
+ 'database.read',
+ 'database.create',
+ 'database.rotate',
+ 'database.delete',
+ ];
+ const all = new Set<string>(base);
+ permissionsData?.data?.forEach((entry) =>
+ entry.permissions.forEach((perm) => all.add(perm)),
+ );
+ if (permissionsData?.presets) {
+ Object.values(permissionsData.presets).forEach((list) =>
+ list.forEach((perm) => all.add(perm)),
+ );
+ }
+ return Array.from(all).sort();
+ }, [permissionsData]);
+
+ // ── Mutations ──
+ const pauseMutation = useMutation({
+ mutationFn: (task: { id: string; enabled: boolean }) => {
+ if (!server?.id) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'pauseMutation' } });
+ throw new Error('Server not loaded');
+ }
+ return tasksApi.update(server.id, task.id, { enabled: !task.enabled });
+ },
+ onSuccess: () => {
+ if (server?.id)
+ queryClient.invalidateQueries({ queryKey: qk.tasks(server.id) });
+ notifySuccess('Task updated');
+ },
+ onError: (error: any) =>
+ notifyError(error?.response?.data?.error || 'Failed to update task'),
+ });
+
+ const deleteTaskMutation = useMutation({
+ mutationFn: (taskId: string) => {
+ if (!server?.id) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'deleteTaskMutation' } });
+ throw new Error('Server not loaded');
+ }
+ return tasksApi.remove(server.id, taskId);
+ },
+ onSuccess: () => {
+ if (server?.id)
+ queryClient.invalidateQueries({ queryKey: qk.tasks(server.id) });
+ notifySuccess('Task deleted');
+ },
+ onError: (error: any) =>
+ notifyError(error?.response?.data?.error || 'Failed to delete task'),
+ });
+
+ const createDatabaseMutation = useMutation({
+ mutationFn: () => {
+ if (!server?.id) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'createDatabaseMutation' } });
+ throw new Error('Server not loaded');
+ }
+ if (!databaseHostId) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Database host required', metadata: { context: 'createDatabaseMutation' } });
+ throw new Error('Database host required');
+ }
+ return databasesApi.create(server.id, {
+ hostId: databaseHostId,
+ name: databaseName.trim() || undefined,
+ });
+ },
+ onSuccess: () => {
+ if (server?.id)
+ queryClient.invalidateQueries({
+ queryKey: qk.serverDatabases(server.id),
+ });
+ setDatabaseName('');
+ notifySuccess('Database created');
+ },
+ onError: (error: any) =>
+ notifyError(error?.response?.data?.error || 'Failed to create database'),
+ });
+
+ const rotateDatabaseMutation = useMutation({
+ mutationFn: (databaseId: string) => {
+ if (!server?.id) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'rotateDatabaseMutation' } });
+ throw new Error('Server not loaded');
+ }
+ return databasesApi.rotatePassword(server.id, databaseId);
+ },
+ onSuccess: () => {
+ if (server?.id)
+ queryClient.invalidateQueries({
+ queryKey: qk.serverDatabases(server.id),
+ });
+ notifySuccess('Database password rotated');
+ },
+ onError: (error: any) =>
+ notifyError(
+ error?.response?.data?.error || 'Failed to rotate password',
+ ),
+ });
+
+ const deleteDatabaseMutation = useMutation({
+ mutationFn: (databaseId: string) => {
+ if (!server?.id) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'deleteDatabaseMutation' } });
+ throw new Error('Server not loaded');
+ }
+ return databasesApi.remove(server.id, databaseId);
+ },
+ onSuccess: () => {
+ if (server?.id)
+ queryClient.invalidateQueries({
+ queryKey: qk.serverDatabases(server.id),
+ });
+ notifySuccess('Database deleted');
+ },
+ onError: (error: any) =>
+ notifyError(error?.response?.data?.error || 'Failed to delete database'),
+ });
+
+ const suspendMutation = useMutation({
+ mutationFn: (reason?: string) => {
+ if (!server?.id) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'suspendMutation' } });
+ throw new Error('Server not loaded');
+ }
+ return serversApi.suspend(server.id, reason);
+ },
+ onSuccess: () => {
+ Promise.all([
+ queryClient.invalidateQueries({ queryKey: qk.server(server?.id) }),
+ queryClient.invalidateQueries({ queryKey: ['servers'] }),
+ ]);
+ notifySuccess('Server suspended');
+ setSuspendReason('');
+ },
+ onError: (error: any) =>
+ notifyError(
+ error?.response?.data?.error || 'Failed to suspend server',
+ ),
+ });
+
+ const unsuspendMutation = useMutation({
+ mutationFn: () => {
+ if (!server?.id) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server not loaded', metadata: { context: 'unsuspendMutation' } });
+ throw new Error('Server not loaded');
+ }
+ return serversApi.unsuspend(server.id);
+ },
+ onSuccess: () => {
+ Promise.all([
+ queryClient.invalidateQueries({ queryKey: qk.server(server?.id) }),
+ queryClient.invalidateQueries({ queryKey: ['servers'] }),
+ ]);
+ notifySuccess('Server unsuspended');
+ },
+ onError: (error: any) =>
+ notifyError(
+ error?.response?.data?.error || 'Failed to unsuspend server',
+ ),
+ });
+
+ const addAllocationMutation = useMutation({
+ mutationFn: async () => {
+ if (!serverId) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'addAllocationMutation' } });
+ throw new Error('Missing server id');
+ }
+ const containerPort = Number(newContainerPort);
+ const hostPort = Number(newHostPort || newContainerPort);
+ if (!Number.isFinite(containerPort) || containerPort <= 0) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Invalid container port', metadata: { context: 'addAllocationMutation' } });
+ throw new Error('Invalid container port');
+ }
+ if (!Number.isFinite(hostPort) || hostPort <= 0) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Invalid host port', metadata: { context: 'addAllocationMutation' } });
+ throw new Error('Invalid host port');
+ }
+ return serversApi.addAllocation(serverId, {
+ containerPort,
+ hostPort,
+ });
+ },
+ onSuccess: () => {
+ notifySuccess('Allocation added');
+ setNewContainerPort('');
+ setNewHostPort('');
+ queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ },
+ onError: (error: any) =>
+ notifyError(
+ error?.response?.data?.error ||
+ error?.message ||
+ 'Failed to add allocation',
+ ),
+ });
+
+ const removeAllocationMutation = useMutation({
+ mutationFn: async (containerPort: number) => {
+ if (!serverId) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'removeAllocationMutation' } });
+ throw new Error('Missing server id');
+ }
+ return serversApi.removeAllocation(serverId, containerPort);
+ },
+ onSuccess: () => {
+ notifySuccess('Allocation removed');
+ queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ },
+ onError: (error: any) =>
+ notifyError(
+ error?.response?.data?.error || 'Failed to remove allocation',
+ ),
+ });
+
+ const setPrimaryMutation = useMutation({
+ mutationFn: async (containerPort: number) => {
+ if (!serverId) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'setPrimaryMutation' } });
+ throw new Error('Missing server id');
+ }
+ return serversApi.setPrimaryAllocation(serverId, containerPort);
+ },
+ onSuccess: () => {
+ notifySuccess('Primary allocation updated');
+ queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ },
+ onError: (error: any) =>
+ notifyError(
+ error?.response?.data?.error ||
+ 'Failed to update primary allocation',
+ ),
+ });
+
+ const restartPolicyMutation = useMutation({
+ mutationFn: async () => {
+ if (!serverId) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'restartPolicyMutation' } });
+ throw new Error('Missing server id');
+ }
+ const parsedMax =
+ maxCrashCount.trim() === '' ? undefined : Number(maxCrashCount);
+ const minCrashCount = restartPolicy === 'always' ? 1 : 0;
+ if (
+ parsedMax !== undefined &&
+ (!Number.isFinite(parsedMax) ||
+ parsedMax < minCrashCount ||
+ parsedMax > 100)
+ ) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: `Max crash count must be between ${minCrashCount} and 100`, metadata: { context: 'restartPolicyMutation' } });
+ throw new Error(
+ `Max crash count must be between ${minCrashCount} and 100`,
+ );
+ }
+ return serversApi.updateRestartPolicy(serverId, {
+ restartPolicy,
+ maxCrashCount: parsedMax,
+ });
+ },
+ onSuccess: () => {
+ notifySuccess('Restart policy updated');
+ Promise.all([
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) }),
+ queryClient.invalidateQueries({ queryKey: ['servers'] }),
+ ]);
+ },
+ onError: (error: any) =>
+ notifyError(
+ error?.response?.data?.error ||
+ error?.message ||
+ 'Failed to update restart policy',
+ ),
+ });
+
+ const resetCrashCountMutation = useMutation({
+ mutationFn: async () => {
+ if (!serverId) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'resetCrashCountMutation' } });
+ throw new Error('Missing server id');
+ }
+ return serversApi.resetCrashCount(serverId);
+ },
+ onSuccess: () => {
+ notifySuccess('Crash count reset');
+ Promise.all([
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) }),
+ queryClient.invalidateQueries({ queryKey: ['servers'] }),
+ ]);
+ },
+ onError: (error: any) =>
+ notifyError(
+ error?.response?.data?.error ||
+ error?.message ||
+ 'Failed to reset crash count',
+ ),
+ });
+
+ const renameServerMutation = useMutation({
+ mutationFn: () => {
+ if (!serverId) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'renameServerMutation' } });
+ throw new Error('Missing server id');
+ }
+ const nextName = serverName.trim();
+ if (!nextName) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server name is required', metadata: { context: 'renameServerMutation' } });
+ throw new Error('Server name is required');
+ }
+ return serversApi.update(serverId, { name: nextName });
+ },
+ onSuccess: () => {
+ notifySuccess('Server name updated');
+ Promise.all([
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) }),
+ queryClient.invalidateQueries({ queryKey: ['servers'] }),
+ ]);
+ },
+ onError: (error: any) =>
+ notifyError(
+ error?.response?.data?.error ||
+ error?.message ||
+ 'Failed to rename server',
+ ),
+ });
+
+ const startupCommandMutation = useMutation({
+ mutationFn: () => {
+ if (!serverId) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'startupCommandMutation' } });
+ throw new Error('Missing server id');
+ }
+ const trimmed = startupCommand.trim();
+ const templateDefault = server?.template?.startup ?? '';
+ return serversApi.update(serverId, {
+ startupCommand: trimmed === templateDefault ? null : trimmed || null,
+ });
+ },
+ onSuccess: () => {
+ notifySuccess('Startup command updated');
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ },
+ onError: (error: any) =>
+ notifyError(
+ error?.response?.data?.error ||
+ error?.message ||
+ 'Failed to update startup command',
+ ),
+ });
+
+ const createInviteMutation = useMutation({
+ mutationFn: () => {
+ if (!serverId) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'createInviteMutation' } });
+ throw new Error('Missing server id');
+ }
+ return serversApi.createInvite(serverId, {
+ email: inviteEmail.trim(),
+ permissions:
+ invitePreset === 'custom'
+ ? invitePermissions
+ : (permissionsData?.presets[invitePreset] ?? []),
+ });
+ },
+ onSuccess: () => {
+ notifySuccess('Invite sent');
+ setInviteEmail('');
+ queryClient.invalidateQueries({
+ queryKey: qk.serverInvites(serverId),
+ });
+ },
+ onError: (error: any) =>
+ notifyError(error?.response?.data?.error || 'Failed to send invite'),
+ });
+
+ const cancelInviteMutation = useMutation({
+ mutationFn: (inviteId: string) => {
+ if (!serverId) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'cancelInviteMutation' } });
+ throw new Error('Missing server id');
+ }
+ return serversApi.cancelInvite(serverId, inviteId);
+ },
+ onSuccess: () => {
+ notifySuccess('Invite cancelled');
+ queryClient.invalidateQueries({
+ queryKey: qk.serverInvites(serverId),
+ });
+ },
+ onError: (error: any) =>
+ notifyError(
+ error?.response?.data?.error || 'Failed to cancel invite',
+ ),
+ });
+
+ const saveAccessMutation = useMutation({
+ mutationFn: (entry: ServerAccessEntry) => {
+ if (!serverId) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'saveAccessMutation' } });
+ throw new Error('Missing server id');
+ }
+ const permissions = accessPermissions[entry.userId] ?? [];
+ return serversApi.upsertAccess(serverId, {
+ targetUserId: entry.userId,
+ permissions,
+ });
+ },
+ onSuccess: () => {
+ notifySuccess('Permissions updated');
+ queryClient.invalidateQueries({
+ queryKey: qk.serverPermissions(serverId),
+ });
+ },
+ onError: (error: any) =>
+ notifyError(
+ error?.response?.data?.error || 'Failed to update permissions',
+ ),
+ });
+
+ const removeAccessMutation = useMutation({
+ mutationFn: (targetUserId: string) => {
+ if (!serverId) {
+ reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'removeAccessMutation' } });
+ throw new Error('Missing server id');
+ }
+ return serversApi.removeAccess(serverId, targetUserId);
+ },
+ onSuccess: () => {
+ notifySuccess('Access removed');
+ queryClient.invalidateQueries({
+ queryKey: qk.serverPermissions(serverId),
+ });
+ },
+ onError: (error: any) =>
+ notifyError(
+ error?.response?.data?.error || 'Failed to remove access',
+ ),
+ });
+
+ const handleResetStartupCommand = () => {
+ if (!serverId || !server) return;
+ setStartupCommand(server.template?.startup ?? '');
+ serversApi
+ .update(serverId, { startupCommand: null })
+ .then(() => {
+ notifySuccess('Reset to template default');
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ })
+ .catch(() => notifyError('Failed to reset startup command'));
+ };
+
+ // ── Tab visibility filter (BEFORE early returns so hook count is always the same) ──
+ const modManagerConfig = server?.template?.features?.modManager;
+ const pluginManagerConfig = server?.template?.features?.pluginManager;
+ const visibleTabs = useMemo(() => {
+ return Object.entries(tabLabels).filter(([key]) => {
+ if (key === 'admin')
+ return canAdminWrite || hasServerPerm('server.delete');
+ if (key === 'console') return hasServerPerm('console.read');
+ if (key === 'files') return hasServerPerm('file.read');
+ if (key === 'backups') return hasServerPerm('backup.read');
+ if (key === 'databases') return hasServerPerm('database.read');
+ if (key === 'schedules') return hasServerPerm('server.schedule');
+ if (key === 'modManager') return Boolean(modManagerConfig);
+ if (key === 'pluginManager') return Boolean(pluginManagerConfig);
+ if (key === 'activity') return hasServerPerm('server.read');
+ return true;
+ });
+ }, [
+ canAdminWrite,
+ hasServerPerm,
+ modManagerConfig,
+ pluginManagerConfig,
+ ]);
+
+ // ── Error state (fatal — don't render anything) ──
+ if (isError) {
+ return (
+ <div className="flex items-center justify-center p-8">
+ <div className="rounded-lg border border-danger/30 bg-danger-muted px-6 py-4 text-center">
+ <p className="text-sm text-danger">Unable to load server details.</p>
+ <div className="mt-3 flex items-center justify-center gap-2">
+ <button
+ onClick={() => refetch()}
+ className="rounded-md border border-border/40 px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+ >
+ Retry
+ </button>
+ <button
+ onClick={() => navigate('/servers')}
+ className="text-xs text-muted-foreground hover:text-foreground"
+ >
+ ← Back to servers
+ </button>
+ </div>
+ </div>
+ </div>
+ );
+ }
+
+ // ── Derived values (nullable while server is loading) ──
+ const nodeLabel = server?.node?.name ?? server?.nodeName ?? server?.nodeId ?? '…';
+ const nodeIp =
+ server?.connection?.host ??
+ server?.primaryIp ??
+ server?.node?.publicAddress ??
+ server?.node?.hostname ??
+ 'n/a';
+ const nodePort = server?.primaryPort ?? 'n/a';
+ const diskLimitMb = server?.allocatedDiskMb ?? 0;
+ const liveDiskUsageMb = liveMetrics?.diskUsageMb;
+ const liveDiskTotalMb = liveMetrics?.diskTotalMb;
+
+ return (
+ <div>
+ <div className="space-y-4">
+ {/* ── Header ── */}
+ <div>
+ <div className={`relative overflow-hidden rounded-2xl border backdrop-blur-sm ${
+ isSuspended
+ ? 'border-danger/20 bg-gradient-to-br from-danger/5 via-card/90 to-card/80'
+ : server?.status === 'running'
+ ? 'border-success/20 bg-gradient-to-br from-success/5 via-card/90 to-card/80'
+ : 'border-border bg-card/80'
+ }`}>
+ {/* Subtle top accent */}
+ <div className={`h-0.5 w-full ${
+ isSuspended
+ ? 'bg-gradient-to-r from-transparent via-danger/60 to-transparent'
+ : server?.status === 'running'
+ ? 'bg-gradient-to-r from-transparent via-success/60 to-transparent'
+ : 'bg-gradient-to-r from-transparent via-muted-foreground/30 to-transparent'
+ }`} />
+
+ <div className="p-5">
+ <div className="flex flex-wrap items-center justify-between gap-3">
+ <div className="flex items-center gap-3 min-w-0">
+ <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors ${
+ isSuspended
+ ? 'border-danger/30 bg-danger/10 text-danger'
+ : server?.status === 'running'
+ ? 'border-success/30 bg-success/10 text-success'
+ : 'border-border bg-surface-2 text-muted-foreground'
+ }`}>
+ <Terminal className="h-4.5 w-4.5" />
+ </div>
+ <div className="min-w-0">
+ <div className="flex flex-wrap items-center gap-2.5">
+ {isLoading ? (
+ <div className="h-6 w-48 animate-pulse rounded-md bg-muted" />
+ ) : (
+ <>
+ <h1 className="font-display truncate text-xl font-bold tracking-tight text-foreground">
+ {server.name}
+ </h1>
+ <ServerStatusBadge status={server.status} />
+ </>
+ )}
+ </div>
+ <p className="mt-1 text-xs text-muted-foreground">
+ {isLoading ? 'Loading…' : `${nodeLabel} · ${nodeIp}:${nodePort}`}
+ </p>
+ </div>
+ </div>
+ {server ? (
+ <ServerControls
+ serverId={server.id}
+ status={server.status}
+ permissions={server.effectivePermissions}
+ />
+ ) : (
+ <div className="h-8 w-32 animate-pulse rounded-md bg-muted" />
+ )}
+ </div>
+
+ {isSuspended && (
+ <div className="mt-3 flex items-center gap-2 rounded-lg border border-danger/30 bg-danger-muted px-3 py-2 text-xs text-danger">
+ <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+ <span className="font-semibold">Suspended</span>
+ {server?.suspensionReason && (
+ <span className="text-danger/80">— {server.suspensionReason}</span>
+ )}
+ </div>
+ )}
+ </div>
+ </div>
+ </div>
+
+ {/* ── Tab navigation ── */}
+ <div className="flex flex-wrap gap-1 rounded-xl border border-border/40 bg-surface-2/40 p-1.5 ">
+ {visibleTabs.map(([key, label]) => {
+ const isActive = activeTab === key;
+ const Icon = tabIcons[key as keyof typeof tabLabels];
+ return (
+ <button
+ key={key}
+ type="button"
+ title={label}
+ className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
+ isActive
+ ? 'bg-primary text-primary-foreground '
+ : 'text-muted-foreground hover:bg-surface-2/60 hover:text-foreground'
+ }`}
+ onClick={() => server && navigate(`/servers/${server.id}/${key}`)}
+ >
+ <Icon className="h-3.5 w-3.5" />
+ <span className="hidden sm:inline">{label}</span>
+ </button>
+ );
+ })}
+ </div>
+
+ {/* ── Tab Content ── */}
+ <div>
+ <Suspense fallback={<TabSkeleton />}>
+ {activeTab === 'console' && (
+ <ServerConsoleTab
+ liveMetrics={liveMetrics}
+ liveDiskUsageMb={liveDiskUsageMb}
+ liveDiskTotalMb={liveDiskTotalMb}
+ isConnected={isConnected}
+ canSend={!!canSend}
+ entries={entries}
+ send={send}
+ clearConsole={clearConsole}
+ isLoading={consoleLoading}
+ isError={consoleError}
+ refetch={refetchConsole}
+ />
+ )}
+
+ {activeTab === 'files' && server && (
+ <ServerTabCard>
+ <FileManager
+ serverId={server.id}
+ isSuspended={isSuspended}
+ />
+ </ServerTabCard>
+ )}
+
+ {activeTab === 'sftp' && server && (
+ <ServerSftpTab
+ serverId={server.id}
+ ownerId={server.ownerId}
+ currentUserId={user?.id}
+ />
+ )}
+
+ {activeTab === 'backups' && server && (
+ <ServerTabCard>
+ <BackupSection
+ serverId={server.id}
+ serverStatus={server.status}
+ isSuspended={isSuspended}
+ />
+ </ServerTabCard>
+ )}
+
+ {activeTab === 'tasks' && server && (
+ <ServerTasksTab
+ serverId={server.id}
+ isSuspended={isSuspended}
+ tasks={tasks}
+ tasksLoading={tasksLoading}
+ onPause={(task) => pauseMutation.mutate(task)}
+ pausePending={pauseMutation.isPending}
+ onDelete={(taskId) => deleteTaskMutation.mutate(taskId)}
+ deletePending={deleteTaskMutation.isPending}
+ />
+ )}
+
+ {activeTab === 'databases' && server && (
+ <ServerDatabasesTab
+ serverId={server.id}
+ isSuspended={isSuspended}
+ databases={databases}
+ databasesLoading={databasesLoading}
+ databasesError={databasesError}
+ databaseHosts={databaseHosts}
+ databaseAllocation={databaseAllocation}
+ canManageDatabases={canManageDatabases}
+ databaseHostId={databaseHostId}
+ onDatabaseHostIdChange={setDatabaseHostId}
+ databaseName={databaseName}
+ onDatabaseNameChange={setDatabaseName}
+ createPending={createDatabaseMutation.isPending}
+ onCreate={() => createDatabaseMutation.mutate()}
+ rotatePending={rotateDatabaseMutation.isPending}
+ onRotate={(id) => rotateDatabaseMutation.mutate(id)}
+ deletePending={deleteDatabaseMutation.isPending}
+ onDelete={(id) => deleteDatabaseMutation.mutate(id)}
+ />
+ )}
+
+ {activeTab === 'metrics' && server && (
+ <ServerMetricsTab
+ serverCpuPercent={server.cpuPercent ?? 0}
+ serverMemoryPercent={server.memoryPercent ?? 0}
+ allocatedMemoryMb={server.allocatedMemoryMb ?? 0}
+ allocatedDiskMb={diskLimitMb}
+ liveMetrics={liveMetrics}
+ isConnected={isConnected}
+ metricsHistory={metricsHistory}
+ metricsTimeRange={metricsTimeRange}
+ onMetricsTimeRangeChange={setMetricsTimeRange}
+ />
+ )}
+
+ {activeTab === 'alerts' && server && (
+ <div className="space-y-4">
+ <AlertsPage serverId={server.id} />
+ </div>
+ )}
+
+ {activeTab === 'activity' && server && (
+ <ServerActivityLogTab serverId={server.id} />
+ )}
+
+ {activeTab === 'modManager' && (
+ <ServerModManagerTab
+ serverId={serverId}
+ serverGameVersion={serverGameVersion}
+ modManagerConfig={modManagerConfig}
+ />
+ )}
+
+ {activeTab === 'pluginManager' && (
+ <ServerPluginManagerTab
+ serverId={serverId}
+ serverGameVersion={serverGameVersion}
+ pluginManagerConfig={pluginManagerConfig}
+ />
+ )}
+
+ {activeTab === 'users' && server && (
+ <ServerUsersTab
+ serverId={server.id}
+ ownerId={server.ownerId}
+ inviteEmail={inviteEmail}
+ onInviteEmailChange={setInviteEmail}
+ invitePreset={invitePreset}
+ onInvitePresetChange={setInvitePreset}
+ invitePermissions={invitePermissions}
+ onInvitePermissionsChange={setInvitePermissions}
+ permissionPresets={permissionsData?.presets ?? {}}
+ permissionOptions={permissionOptions}
+ createInvitePending={createInviteMutation.isPending}
+ onCreateInvite={() => createInviteMutation.mutate()}
+ permissionsData={permissionsData?.data}
+ accessPermissions={accessPermissions}
+ onAccessPermissionsChange={setAccessPermissions}
+ saveAccessPending={saveAccessMutation.isPending}
+ onSaveAccess={(entry) => saveAccessMutation.mutate(entry)}
+ removeAccessPending={removeAccessMutation.isPending}
+ onRemoveAccess={(userId) =>
+ removeAccessMutation.mutate(userId)
+ }
+ invites={invites}
+ cancelInvitePending={cancelInviteMutation.isPending}
+ onCancelInvite={(inviteId) =>
+ cancelInviteMutation.mutate(inviteId)
+ }
+ />
+ )}
+
+ {activeTab === 'configuration' && server && (
+ <ServerConfigurationTab
+ serverId={serverId}
+ isSuspended={isSuspended}
+ isAdmin={isAdmin}
+ server={server}
+ startupCommand={startupCommand}
+ onStartupCommandChange={setStartupCommand}
+ startupCommandPending={startupCommandMutation.isPending}
+ onSaveStartupCommand={() => startupCommandMutation.mutate()}
+ onResetStartupCommand={handleResetStartupCommand}
+ />
+ )}
+
+ {activeTab === 'admin' && server && (
+ <ServerAdminTab
+ serverId={server.id}
+ serverName={server.name}
+ server={server}
+ isSuspended={isSuspended}
+ canAdminWrite={canAdminWrite}
+ suspendReason={suspendReason}
+ onSuspendReasonChange={setSuspendReason}
+ suspendPending={suspendMutation.isPending}
+ onSuspend={(reason) => suspendMutation.mutate(reason)}
+ unsuspendPending={unsuspendMutation.isPending}
+ onUnsuspend={() => unsuspendMutation.mutate()}
+ allocations={allocations}
+ allocationsError={allocationsError}
+ newContainerPort={newContainerPort}
+ onNewContainerPortChange={setNewContainerPort}
+ newHostPort={newHostPort}
+ onNewHostPortChange={setNewHostPort}
+ addAllocationPending={addAllocationMutation.isPending}
+ onAddAllocation={() => addAllocationMutation.mutate()}
+ removeAllocationPending={removeAllocationMutation.isPending}
+ onRemoveAllocation={(port) =>
+ removeAllocationMutation.mutate(port)
+ }
+ setPrimaryPending={setPrimaryMutation.isPending}
+ onSetPrimary={(port) => setPrimaryMutation.mutate(port)}
+ restartPolicy={restartPolicy}
+ onRestartPolicyChange={setRestartPolicy}
+ maxCrashCount={maxCrashCount}
+ onMaxCrashCountChange={setMaxCrashCount}
+ crashCount={server.crashCount ?? 0}
+ maxCrashCountValue={server.maxCrashCount ?? 0}
+ lastCrashAt={server.lastCrashAt}
+ lastExitCode={server.lastExitCode}
+ restartPolicyPending={restartPolicyMutation.isPending}
+ onSaveRestartPolicy={() => restartPolicyMutation.mutate()}
+ resetCrashCountPending={resetCrashCountMutation.isPending}
+ onResetCrashCount={() => resetCrashCountMutation.mutate()}
+ canDelete={hasServerPerm('server.delete')}
+ />
+ )}
+
+ {activeTab === 'settings' && server && (
+ <ServerSettingsTab
+ serverId={server.id}
+ serverName={serverName}
+ onServerNameChange={setServerName}
+ renamePending={renameServerMutation.isPending}
+ onRename={() => renameServerMutation.mutate()}
+ isSuspended={isSuspended}
+ serverStatus={server.status}
+ subdomain={server.subdomain ?? null}
+ server={server}
+ />
+ )}
+ </Suspense>
+ </div>
+ </div>
+
+ {eulaPrompt && (
+ <EulaModal
+ eulaText={eulaPrompt.eulaText}
+ isLoading={eulaLoading}
+ onAccept={() => respondEula(true)}
+ onDecline={() => respondEula(false)}
+ />
+ )}
+ </div>
+ );
 }
 
 export default ServerDetailsPage;

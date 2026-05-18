@@ -9,225 +9,225 @@ import type { Task } from '../../types/task';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
 export const actionOptions: Array<{ value: Task['action']; label: string }> = [
-  { value: 'restart', label: 'Restart server' },
-  { value: 'start', label: 'Start server' },
-  { value: 'stop', label: 'Stop server' },
-  { value: 'backup', label: 'Create backup' },
-  { value: 'command', label: 'Send command' },
+ { value: 'restart', label: 'Restart server' },
+ { value: 'start', label: 'Start server' },
+ { value: 'stop', label: 'Stop server' },
+ { value: 'backup', label: 'Create backup' },
+ { value: 'command', label: 'Send command' },
 ];
 
 function CreateTaskModal({ serverId, disabled = false }: { serverId: string; disabled?: boolean }) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [repeat, setRepeat] = useState<'minute' | 'hour' | 'daily' | 'weekly' | 'monthly'>('daily');
-  const [startDate, setStartDate] = useState(() => {
-    const now = new Date();
-    now.setMinutes(0, 0, 0);
-    now.setHours(now.getHours() + 1);
-    return now.toISOString().slice(0, 16);
-  });
-  const [weekday, setWeekday] = useState('0');
-  const [action, setAction] = useState<Task['action']>('restart');
-  const [command, setCommand] = useState('');
+ const [open, setOpen] = useState(false);
+ const [name, setName] = useState('');
+ const [repeat, setRepeat] = useState<'minute' | 'hour' | 'daily' | 'weekly' | 'monthly'>('daily');
+ const [startDate, setStartDate] = useState(() => {
+ const now = new Date();
+ now.setMinutes(0, 0, 0);
+ now.setHours(now.getHours() + 1);
+ return now.toISOString().slice(0, 16);
+ });
+ const [weekday, setWeekday] = useState('0');
+ const [action, setAction] = useState<Task['action']>('restart');
+ const [command, setCommand] = useState('');
 
-  const timezoneLabel = useMemo(() => {
-    try {
-      const parts = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' })
-        .formatToParts(new Date());
-      return parts.find((part) => part.type === 'timeZoneName')?.value ?? '';
-    } catch {
-      return '';
-    }
-  }, []);
+ const timezoneLabel = useMemo(() => {
+ try {
+ const parts = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' })
+ .formatToParts(new Date());
+ return parts.find((part) => part.type === 'timeZoneName')?.value ?? '';
+ } catch {
+ return '';
+ }
+ }, []);
 
-  const buildCron = (isoValue: string, cadence: typeof repeat, dayOfWeek: string) => {
-    const base = new Date(isoValue);
-    if (Number.isNaN(base.getTime())) return '';
-    if (cadence === 'minute') return '* * * * *';
-    if (cadence === 'hour') return `${base.getUTCMinutes()} * * * *`;
-    if (cadence === 'daily') return `${base.getUTCMinutes()} ${base.getUTCHours()} * * *`;
-    if (cadence === 'weekly') {
-      const targetWeekday = Number(dayOfWeek);
-      const currentWeekday = base.getDay();
-      const delta = (targetWeekday - currentWeekday + 7) % 7;
-      const target = new Date(base);
-      target.setDate(base.getDate() + delta);
-      return `${target.getUTCMinutes()} ${target.getUTCHours()} * * ${target.getUTCDay()}`;
-    }
-    return `${base.getUTCMinutes()} ${base.getUTCHours()} ${base.getUTCDate()} * *`;
-  };
+ const buildCron = (isoValue: string, cadence: typeof repeat, dayOfWeek: string) => {
+ const base = new Date(isoValue);
+ if (Number.isNaN(base.getTime())) return '';
+ if (cadence === 'minute') return '* * * * *';
+ if (cadence === 'hour') return `${base.getUTCMinutes()} * * * *`;
+ if (cadence === 'daily') return `${base.getUTCMinutes()} ${base.getUTCHours()} * * *`;
+ if (cadence === 'weekly') {
+ const targetWeekday = Number(dayOfWeek);
+ const currentWeekday = base.getDay();
+ const delta = (targetWeekday - currentWeekday + 7) % 7;
+ const target = new Date(base);
+ target.setDate(base.getDate() + delta);
+ return `${target.getUTCMinutes()} ${target.getUTCHours()} * * ${target.getUTCDay()}`;
+ }
+ return `${base.getUTCMinutes()} ${base.getUTCHours()} ${base.getUTCDate()} * *`;
+ };
 
-  const mutation = useMutation({
-    mutationFn: () => {
-      const schedule = buildCron(startDate, repeat, weekday);
-      if (!schedule) {
-        reportSystemError({ level: 'error', component: 'CreateTaskModal', message: 'Invalid start time', metadata: { context: 'create task mutation' } });
-        throw new Error('Invalid start time');
-      }
-      return tasksApi.create(serverId, {
-        name: name.trim(),
-        action,
-        schedule,
-        payload: action === 'command' && command.trim() ? { command: command.trim() } : {},
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.tasks(serverId) });
-      notifySuccess('Task created');
-      setOpen(false);
-      setName('');
-      setRepeat('daily');
-      setWeekday('0');
-      setStartDate(() => {
-        const now = new Date();
-        now.setMinutes(0, 0, 0);
-        now.setHours(now.getHours() + 1);
-        return now.toISOString().slice(0, 16);
-      });
-      setAction('restart');
-      setCommand('');
-    },
-    onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to create task';
-      notifyError(message);
-    },
-  });
+ const mutation = useMutation({
+ mutationFn: () => {
+ const schedule = buildCron(startDate, repeat, weekday);
+ if (!schedule) {
+ reportSystemError({ level: 'error', component: 'CreateTaskModal', message: 'Invalid start time', metadata: { context: 'create task mutation' } });
+ throw new Error('Invalid start time');
+ }
+ return tasksApi.create(serverId, {
+ name: name.trim(),
+ action,
+ schedule,
+ payload: action === 'command' && command.trim() ? { command: command.trim() } : {},
+ });
+ },
+ onSuccess: () => {
+ queryClient.invalidateQueries({ queryKey: qk.tasks(serverId) });
+ notifySuccess('Task created');
+ setOpen(false);
+ setName('');
+ setRepeat('daily');
+ setWeekday('0');
+ setStartDate(() => {
+ const now = new Date();
+ now.setMinutes(0, 0, 0);
+ now.setHours(now.getHours() + 1);
+ return now.toISOString().slice(0, 16);
+ });
+ setAction('restart');
+ setCommand('');
+ },
+ onError: (error: any) => {
+ const message = error?.response?.data?.error || 'Failed to create task';
+ notifyError(message);
+ },
+ });
 
-  const disableSubmit = useMemo(() => {
-    if (!name.trim()) return true;
-    if (!startDate) return true;
-    if (action === 'command' && !command.trim()) return true;
-    return mutation.isPending || disabled;
-  }, [action, command, name, startDate, mutation.isPending, disabled]);
+ const disableSubmit = useMemo(() => {
+ if (!name.trim()) return true;
+ if (!startDate) return true;
+ if (action === 'command' && !command.trim()) return true;
+ return mutation.isPending || disabled;
+ }, [action, command, name, startDate, mutation.isPending, disabled]);
 
-  return (
-    <div>
-      <button
-        type="button"
-        className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
-        onClick={() => {
-          if (!disabled) setOpen(true);
-        }}
-        disabled={disabled}
-      >
-        Create task
-      </button>
-      {open ? (
-        <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-foreground">Create task</h2>
-              <button
-                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary dark:border-border dark:text-foreground dark:hover:border-primary/30"
-                onClick={() => setOpen(false)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="mt-4 space-y-3 text-sm text-muted-foreground dark:text-foreground">
-              <label className="block space-y-1">
-                <span className="text-muted-foreground dark:text-muted-foreground">Name</span>
-                <input
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:text-foreground  dark:hover:border-primary/30"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Nightly restart"
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-muted-foreground dark:text-muted-foreground">Action</span>
-                <select
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:text-foreground  dark:hover:border-primary/30"
-                  value={action}
-                  onChange={(event) => setAction(event.target.value as Task['action'])}
-                >
-                  {actionOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {action === 'command' ? (
-                <label className="block space-y-1">
-                  <span className="text-muted-foreground dark:text-muted-foreground">Command</span>
-                  <input
-                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:text-foreground  dark:hover:border-primary/30"
-                    value={command}
-                    onChange={(event) => setCommand(event.target.value)}
-                    placeholder="say Server restart in 5 minutes"
-                  />
-                </label>
-              ) : null}
-              <label className="block space-y-1">
-                <span className="text-muted-foreground dark:text-muted-foreground">Start time</span>
-                <input
-                  type="datetime-local"
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:text-foreground  dark:hover:border-primary/30"
-                  value={startDate}
-                  onChange={(event) => setStartDate(event.target.value)}
-                />
-                <span className="text-xs text-muted-foreground dark:text-muted-foreground">
-                  {timezoneLabel
-                    ? `Times are interpreted using your local timezone (${timezoneLabel}).`
-                    : 'Times are interpreted using your local timezone.'}
-                </span>
-              </label>
-              <label className="block space-y-1">
-                <span className="text-muted-foreground dark:text-muted-foreground">Repeat</span>
-                <select
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:text-foreground  dark:hover:border-primary/30"
-                  value={repeat}
-                  onChange={(event) => setRepeat(event.target.value as typeof repeat)}
-                >
-                  <option value="minute">Every minute</option>
-                  <option value="hour">Every hour</option>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
-              </label>
-              {repeat === 'weekly' ? (
-                <label className="block space-y-1">
-                  <span className="text-muted-foreground dark:text-muted-foreground">Day of week</span>
-                  <select
-                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:text-foreground  dark:hover:border-primary/30"
-                    value={weekday}
-                    onChange={(event) => setWeekday(event.target.value)}
-                  >
-                    <option value="0">Sunday</option>
-                    <option value="1">Monday</option>
-                    <option value="2">Tuesday</option>
-                    <option value="3">Wednesday</option>
-                    <option value="4">Thursday</option>
-                    <option value="5">Friday</option>
-                    <option value="6">Saturday</option>
-                  </select>
-                </label>
-              ) : null}
-            </div>
-            <div className="mt-5 flex justify-end gap-2 text-xs">
-              <button
-                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:text-foreground dark:hover:border-primary/30"
-                onClick={() => setOpen(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="rounded-md bg-primary px-4 py-2 font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
-                onClick={() => mutation.mutate()}
-                disabled={disableSubmit}
-              >
-                {mutation.isPending ? 'Creating...' : 'Create'}
-              </button>
-            </div>
-          </div>
-        </div>
-        </ModalPortal>
-      ) : null}
-    </div>
-  );
+ return (
+ <div>
+ <button
+ type="button"
+ className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
+ onClick={() => {
+ if (!disabled) setOpen(true);
+ }}
+ disabled={disabled}
+ >
+ Create task
+ </button>
+ {open ? (
+ <ModalPortal>
+ <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
+ <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border">
+ <div className="flex items-center justify-between">
+ <h2 className="text-lg font-semibold text-foreground">Create task</h2>
+ <button
+ className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary dark:border-border dark:text-foreground dark:hover:border-primary/30"
+ onClick={() => setOpen(false)}
+ >
+ Close
+ </button>
+ </div>
+ <div className="mt-4 space-y-3 text-sm text-muted-foreground dark:text-foreground">
+ <label className="block space-y-1">
+ <span className="text-muted-foreground dark:text-muted-foreground">Name</span>
+ <input
+ className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:text-foreground dark:hover:border-primary/30"
+ value={name}
+ onChange={(event) => setName(event.target.value)}
+ placeholder="Nightly restart"
+ />
+ </label>
+ <label className="block space-y-1">
+ <span className="text-muted-foreground dark:text-muted-foreground">Action</span>
+ <select
+ className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:text-foreground dark:hover:border-primary/30"
+ value={action}
+ onChange={(event) => setAction(event.target.value as Task['action'])}
+ >
+ {actionOptions.map((option) => (
+ <option key={option.value} value={option.value}>
+ {option.label}
+ </option>
+ ))}
+ </select>
+ </label>
+ {action === 'command' ? (
+ <label className="block space-y-1">
+ <span className="text-muted-foreground dark:text-muted-foreground">Command</span>
+ <input
+ className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:text-foreground dark:hover:border-primary/30"
+ value={command}
+ onChange={(event) => setCommand(event.target.value)}
+ placeholder="say Server restart in 5 minutes"
+ />
+ </label>
+ ) : null}
+ <label className="block space-y-1">
+ <span className="text-muted-foreground dark:text-muted-foreground">Start time</span>
+ <input
+ type="datetime-local"
+ className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:text-foreground dark:hover:border-primary/30"
+ value={startDate}
+ onChange={(event) => setStartDate(event.target.value)}
+ />
+ <span className="text-xs text-muted-foreground dark:text-muted-foreground">
+ {timezoneLabel
+ ? `Times are interpreted using your local timezone (${timezoneLabel}).`
+ : 'Times are interpreted using your local timezone.'}
+ </span>
+ </label>
+ <label className="block space-y-1">
+ <span className="text-muted-foreground dark:text-muted-foreground">Repeat</span>
+ <select
+ className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:text-foreground dark:hover:border-primary/30"
+ value={repeat}
+ onChange={(event) => setRepeat(event.target.value as typeof repeat)}
+ >
+ <option value="minute">Every minute</option>
+ <option value="hour">Every hour</option>
+ <option value="daily">Daily</option>
+ <option value="weekly">Weekly</option>
+ <option value="monthly">Monthly</option>
+ </select>
+ </label>
+ {repeat === 'weekly' ? (
+ <label className="block space-y-1">
+ <span className="text-muted-foreground dark:text-muted-foreground">Day of week</span>
+ <select
+ className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:text-foreground dark:hover:border-primary/30"
+ value={weekday}
+ onChange={(event) => setWeekday(event.target.value)}
+ >
+ <option value="0">Sunday</option>
+ <option value="1">Monday</option>
+ <option value="2">Tuesday</option>
+ <option value="3">Wednesday</option>
+ <option value="4">Thursday</option>
+ <option value="5">Friday</option>
+ <option value="6">Saturday</option>
+ </select>
+ </label>
+ ) : null}
+ </div>
+ <div className="mt-5 flex justify-end gap-2 text-xs">
+ <button
+ className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:text-foreground dark:hover:border-primary/30"
+ onClick={() => setOpen(false)}
+ >
+ Cancel
+ </button>
+ <button
+ className="rounded-md bg-primary px-4 py-2 font-semibold text-primary-foreground transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
+ onClick={() => mutation.mutate()}
+ disabled={disableSubmit}
+ >
+ {mutation.isPending ? 'Creating...' : 'Create'}
+ </button>
+ </div>
+ </div>
+ </div>
+ </ModalPortal>
+ ) : null}
+ </div>
+ );
 }
 
 export default CreateTaskModal;

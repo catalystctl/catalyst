@@ -16,42 +16,42 @@ import '@fontsource-variable/jetbrains-mono';
 
 // Register service worker for caching
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/sw.js')
-      .then((reg) => debugLog('[SW] Registered:', reg.scope))
-      .catch((err) => console.warn('[SW] Registration failed:', err));
-  });
+ window.addEventListener('load', () => {
+ navigator.serviceWorker
+ .register('/sw.js')
+ .then((reg) => debugLog('[SW] Registered:', reg.scope))
+ .catch((err) => console.warn('[SW] Registration failed:', err));
+ });
 }
 
 window.addEventListener('error', (event) => {
-  reportSystemError({
-    level: 'error',
-    component: 'GlobalWindowError',
-    message: event.message || 'Unknown error',
-    stack: event.error?.stack,
-    metadata: { filename: event.filename, lineno: event.lineno, colno: event.colno },
-  });
+ reportSystemError({
+ level: 'error',
+ component: 'GlobalWindowError',
+ message: event.message || 'Unknown error',
+ stack: event.error?.stack,
+ metadata: { filename: event.filename, lineno: event.lineno, colno: event.colno },
+ });
 });
 
 window.addEventListener('unhandledrejection', (event) => {
-  const reason = event.reason;
-  reportSystemError({
-    level: 'error',
-    component: 'UnhandledRejection',
-    message: reason instanceof Error ? reason.message : String(reason),
-    stack: reason instanceof Error ? reason.stack : undefined,
-    metadata: { type: 'unhandledrejection' },
-  });
+ const reason = event.reason;
+ reportSystemError({
+ level: 'error',
+ component: 'UnhandledRejection',
+ message: reason instanceof Error ? reason.message : String(reason),
+ stack: reason instanceof Error ? reason.stack : undefined,
+ metadata: { type: 'unhandledrejection' },
+ });
 });
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-      <ReactQueryDevtools initialIsOpen={false} />
-    </QueryClientProvider>
-  </React.StrictMode>,
+ <React.StrictMode>
+ <QueryClientProvider client={queryClient}>
+ <BrowserRouter>
+ <App />
+ </BrowserRouter>
+ <ReactQueryDevtools initialIsOpen={false} />
+ </QueryClientProvider>
+ </React.StrictMode>,
 );

@@ -65,7 +65,7 @@ function TemplateProviderEditor({
  onClick={() => onModManagerEnabledChange(!modManagerEnabled)}
  className={`${pillBase} ${
  modManagerEnabled
- ? 'border-primary bg-primary text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)]'
+ ? 'border-primary bg-primary text-primary-foreground '
  : 'border-border bg-card text-muted-foreground hover:border-primary hover:text-foreground'
  }`}
  >
@@ -112,7 +112,7 @@ function TemplateProviderEditor({
  onClick={() => onPluginManagerEnabledChange(!pluginManagerEnabled)}
  className={`${pillBase} ${
  pluginManagerEnabled
- ? 'border-primary bg-primary text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)]'
+ ? 'border-primary bg-primary text-primary-foreground '
  : 'border-border bg-card text-muted-foreground hover:border-primary hover:text-foreground'
  }`}
  >

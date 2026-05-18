@@ -43,7 +43,7 @@ function TemplateDeleteDialog({ templateId, templateName, onDeleted, buttonClass
  <button
  className={
  buttonClassName ||
- 'rounded-md bg-destructive px-3 py-1 text-xs font-semibold text-destructive-foreground shadow-[0_0_6px_-1px_hsl(var(--destructive)/0.2)] transition-colors hover:bg-destructive/90'
+ 'rounded-md bg-destructive px-3 py-1 text-xs font-semibold text-destructive-foreground transition-colors hover:bg-destructive/90'
  }
  onClick={() => setOpen(true)}
  >
@@ -67,7 +67,7 @@ function TemplateDeleteDialog({ templateId, templateName, onDeleted, buttonClass
  Cancel
  </button>
  <button
- className="rounded-md bg-destructive px-4 py-2 font-semibold text-destructive-foreground shadow-[0_0_6px_-1px_hsl(var(--destructive)/0.2)] transition-colors hover:bg-destructive/90 disabled:opacity-60"
+ className="rounded-md bg-destructive px-4 py-2 font-semibold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-60"
  onClick={() => mutation.mutate()}
  disabled={mutation.isPending}
  >

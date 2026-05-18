@@ -8,109 +8,109 @@ import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { BrandFooter } from '../../components/shared/BrandFooter';
 
 function ForgotPasswordPage() {
-  const [email, setEmail] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const { panelName, logoUrl } = usePanelBranding();
+ const [email, setEmail] = useState('');
+ const [isLoading, setIsLoading] = useState(false);
+ const [isSubmitted, setIsSubmitted] = useState(false);
+ const { panelName, logoUrl } = usePanelBranding();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+ const handleSubmit = async (e: React.FormEvent) => {
+ e.preventDefault();
 
-    if (!email.trim()) {
-      notifyError('Please enter your email address');
-      return;
-    }
+ if (!email.trim()) {
+ notifyError('Please enter your email address');
+ return;
+ }
 
-    setIsLoading(true);
-    try {
-      await authApi.forgotPassword(email.trim());
-      setIsSubmitted(true);
-      notifySuccess('Password reset email sent');
-    } catch (error: unknown) {
-      reportSystemError({
-        level: 'error',
-        component: 'ForgotPasswordPage',
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-        metadata: { context: 'handleSubmit' },
-      });
-      notifyError(getErrorMessage(error, 'Failed to send reset email'));
-    } finally {
-      setIsLoading(false);
-    }
-  };
+ setIsLoading(true);
+ try {
+ await authApi.forgotPassword(email.trim());
+ setIsSubmitted(true);
+ notifySuccess('Password reset email sent');
+ } catch (error: unknown) {
+ reportSystemError({
+ level: 'error',
+ component: 'ForgotPasswordPage',
+ message: error instanceof Error ? error.message : String(error),
+ stack: error instanceof Error ? error.stack : undefined,
+ metadata: { context: 'handleSubmit' },
+ });
+ notifyError(getErrorMessage(error, 'Failed to send reset email'));
+ } finally {
+ setIsLoading(false);
+ }
+ };
 
-  return (
-    <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
-      <div className="w-full max-w-md rounded-xl border border-border/30 bg-card px-6 py-8 shadow-surface">
-        <div className="flex flex-col items-center text-center">
-          <img src={logoUrl} alt={`${panelName} logo`} className="h-12 w-12" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
-          <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-            {panelName} Panel
-          </span>
-        </div>
+ return (
+ <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
+ <div className="w-full max-w-md rounded-xl border border-border/30 bg-card px-6 py-8 shadow-surface">
+ <div className="flex flex-col items-center text-center">
+ <img src={logoUrl} alt={`${panelName} logo`} className="h-12 w-12" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
+ <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+ {panelName} Panel
+ </span>
+ </div>
 
-        <h1 className="mt-6 text-2xl font-semibold text-foreground">
-          Forgot password?
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Enter your email address and we'll send you a link to reset your password.
-        </p>
+ <h1 className="mt-6 text-2xl font-semibold text-foreground">
+ Forgot password?
+ </h1>
+ <p className="mt-2 text-sm text-muted-foreground">
+ Enter your email address and we'll send you a link to reset your password.
+ </p>
 
-        {isSubmitted ? (
-          <div className="mt-6 space-y-4">
-            <div className="rounded-lg border border-success/20 bg-success/5 px-4 py-4">
-              <p className="text-sm text-success">
-                If an account exists with that email address, we've sent a password reset link.
-                Please check your inbox (and spam folder).
-              </p>
-            </div>
-            <Link
-              to="/login"
-              className="block w-full rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-colors hover:bg-primary/90"
-            >
-              Back to login
-            </Link>
-          </div>
-        ) : (
-          <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-            <div className="space-y-2">
-              <label className="block text-sm text-muted-foreground" htmlFor="email">
-                Email address
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
+ {isSubmitted ? (
+ <div className="mt-6 space-y-4">
+ <div className="rounded-lg border border-success/20 bg-success/5 px-4 py-4">
+ <p className="text-sm text-success">
+ If an account exists with that email address, we've sent a password reset link.
+ Please check your inbox (and spam folder).
+ </p>
+ </div>
+ <Link
+ to="/login"
+ className="block w-full rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+ >
+ Back to login
+ </Link>
+ </div>
+ ) : (
+ <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+ <div className="space-y-2">
+ <label className="block text-sm text-muted-foreground" htmlFor="email">
+ Email address
+ </label>
+ <input
+ id="email"
+ type="email"
+ autoComplete="email"
+ className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
+ placeholder="you@example.com"
+ value={email}
+ onChange={(e) => setEmail(e.target.value)}
+ />
+ </div>
 
-            <button
-              type="submit"
-              className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-colors hover:bg-primary/90 disabled:opacity-70"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Sending...' : 'Send reset link'}
-            </button>
+ <button
+ type="submit"
+ className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-70"
+ disabled={isLoading}
+ >
+ {isLoading ? 'Sending...' : 'Send reset link'}
+ </button>
 
-            <div className="text-center">
-              <Link
-                to="/login"
-                className="text-sm font-medium text-primary-600 transition-colors hover:text-primary"
-              >
-                Back to login
-              </Link>
-            </div>
-          </form>
-        )}
-      </div>
-      <BrandFooter />
-    </div>
-  );
+ <div className="text-center">
+ <Link
+ to="/login"
+ className="text-sm font-medium text-primary-600 transition-colors hover:text-primary"
+ >
+ Back to login
+ </Link>
+ </div>
+ </form>
+ )}
+ </div>
+ <BrandFooter />
+ </div>
+ );
 }
 
 export default ForgotPasswordPage;

@@ -13,28 +13,28 @@ import PluginErrorBoundary from '../plugins/PluginErrorBoundary';
  * The route param `:pluginRouteName` comes from App.tsx's catch-all route.
  */
 export default function PluginRoutePage() {
-  const { pluginRouteName } = useParams<{ pluginRouteName: string }>();
-  const { reloadPlugins, initialized, loading } = usePluginContext();
-  const routes = usePluginRoutes();
+ const { pluginRouteName } = useParams<{ pluginRouteName: string }>();
+ const { reloadPlugins, initialized, loading } = usePluginContext();
+ const routes = usePluginRoutes();
 
-  useEffect(() => {
-    if (!initialized && !loading) {
-      reloadPlugins();
-    }
-  }, [initialized, loading, reloadPlugins]);
+ useEffect(() => {
+ if (!initialized && !loading) {
+ reloadPlugins();
+ }
+ }, [initialized, loading, reloadPlugins]);
 
-  // Match the current path against plugin route paths
-  const currentPath = `/${pluginRouteName}`;
-  const matched = routes.find((r) => r.path === currentPath);
+ // Match the current path against plugin route paths
+ const currentPath = `/${pluginRouteName}`;
+ const matched = routes.find((r) => r.path === currentPath);
 
-  if (!matched) {
-    return <Navigate to="/dashboard" replace />;
-  }
+ if (!matched) {
+ return <Navigate to="/dashboard" replace />;
+ }
 
-  const Component = matched.component;
-  return (
-    <PluginErrorBoundary pluginName={matched.path}>
-      <Component />
-    </PluginErrorBoundary>
-  );
+ const Component = matched.component;
+ return (
+ <PluginErrorBoundary pluginName={matched.path}>
+ <Component />
+ </PluginErrorBoundary>
+ );
 }

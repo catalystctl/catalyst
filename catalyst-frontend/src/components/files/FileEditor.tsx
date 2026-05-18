@@ -7,257 +7,257 @@ import { useThemeStore } from '../../stores/themeStore';
 import { getFileTypeInfo } from './fileTypes';
 
 type FileDraft = {
-  path: string;
-  name: string;
-  content: string;
-  originalContent: string;
+ path: string;
+ name: string;
+ content: string;
+ originalContent: string;
 };
 
 type Props = {
-  file: FileDraft | null;
-  isLoading: boolean;
-  isSaving: boolean;
-  isDirty: boolean;
-  isSuspended?: boolean;
-  onChange: (value: string) => void;
-  onSave: () => void;
-  onDownload?: () => void;
-  onReset: () => void;
-  onClose: () => void;
+ file: FileDraft | null;
+ isLoading: boolean;
+ isSaving: boolean;
+ isDirty: boolean;
+ isSuspended?: boolean;
+ onChange: (value: string) => void;
+ onSave: () => void;
+ onDownload?: () => void;
+ onReset: () => void;
+ onClose: () => void;
 };
 
 const resolveLanguage = (fileName: string) => {
-  const extension = fileName.split('.').pop()?.toLowerCase() ?? '';
-  switch (extension) {
-    case 'json':
-      return 'json';
-    case 'yml':
-    case 'yaml':
-      return 'yaml';
-    case 'js':
-    case 'jsx':
-      return 'javascript';
-    case 'ts':
-    case 'tsx':
-      return 'typescript';
-    case 'sh':
-    case 'bash':
-      return 'shell';
-    case 'properties':
-    case 'cfg':
-    case 'ini':
-      return 'ini';
-    case 'toml':
-      return 'toml';
-    case 'xml':
-      return 'xml';
-    case 'html':
-    case 'htm':
-      return 'html';
-    case 'css':
-      return 'css';
-    case 'md':
-    case 'markdown':
-      return 'markdown';
-    case 'sql':
-      return 'sql';
-    case 'py':
-      return 'python';
-    case 'rs':
-      return 'rust';
-    case 'java':
-      return 'java';
-    case 'log':
-    case 'txt':
-    default:
-      return 'plaintext';
-  }
+ const extension = fileName.split('.').pop()?.toLowerCase() ?? '';
+ switch (extension) {
+ case 'json':
+ return 'json';
+ case 'yml':
+ case 'yaml':
+ return 'yaml';
+ case 'js':
+ case 'jsx':
+ return 'javascript';
+ case 'ts':
+ case 'tsx':
+ return 'typescript';
+ case 'sh':
+ case 'bash':
+ return 'shell';
+ case 'properties':
+ case 'cfg':
+ case 'ini':
+ return 'ini';
+ case 'toml':
+ return 'toml';
+ case 'xml':
+ return 'xml';
+ case 'html':
+ case 'htm':
+ return 'html';
+ case 'css':
+ return 'css';
+ case 'md':
+ case 'markdown':
+ return 'markdown';
+ case 'sql':
+ return 'sql';
+ case 'py':
+ return 'python';
+ case 'rs':
+ return 'rust';
+ case 'java':
+ return 'java';
+ case 'log':
+ case 'txt':
+ default:
+ return 'plaintext';
+ }
 };
 
 function FileEditor({
-  file,
-  isLoading,
-  isSaving,
-  isDirty,
-  isSuspended = false,
-  onChange,
-  onSave,
-  onDownload,
-  onReset,
-  onClose,
+ file,
+ isLoading,
+ isSaving,
+ isDirty,
+ isSuspended = false,
+ onChange,
+ onSave,
+ onDownload,
+ onReset,
+ onClose,
 }: Props) {
-  const language = useMemo(() => (file ? resolveLanguage(file.name) : 'plaintext'), [file]);
-  const theme = useThemeStore((s) => s.theme);
-  const monacoTheme = theme === 'dark' ? 'vs-dark' : 'vs';
-  const fileInfo = file ? getFileTypeInfo(file.name) : null;
+ const language = useMemo(() => (file ? resolveLanguage(file.name) : 'plaintext'), [file]);
+ const theme = useThemeStore((s) => s.theme);
+ const monacoTheme = theme === 'dark' ? 'vs-dark' : 'vs';
+ const fileInfo = file ? getFileTypeInfo(file.name) : null;
 
-  // Ctrl+S keyboard shortcut
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        if (isDirty && !isSaving && !isSuspended) onSave();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isDirty, isSaving, isSuspended, onSave]);
+ // Ctrl+S keyboard shortcut
+ useEffect(() => {
+ const handleKeyDown = (e: KeyboardEvent) => {
+ if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+ e.preventDefault();
+ if (isDirty && !isSaving && !isSuspended) onSave();
+ }
+ };
+ window.addEventListener('keydown', handleKeyDown);
+ return () => window.removeEventListener('keydown', handleKeyDown);
+ }, [isDirty, isSaving, isSuspended, onSave]);
 
-  // Warn before closing page with unsaved changes
-  useEffect(() => {
-    if (!isDirty) return;
+ // Warn before closing page with unsaved changes
+ useEffect(() => {
+ if (!isDirty) return;
 
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
+ const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+ e.preventDefault();
+ e.returnValue = '';
+ };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isDirty]);
+ window.addEventListener('beforeunload', handleBeforeUnload);
+ return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+ }, [isDirty]);
 
-  // Handle close with unsaved changes confirmation
-  const handleClose = () => {
-    if (isDirty) {
-      const confirmed = window.confirm('You have unsaved changes. Are you sure you want to close this file?');
-      if (!confirmed) return;
-    }
-    onClose();
-  };
+ // Handle close with unsaved changes confirmation
+ const handleClose = () => {
+ if (isDirty) {
+ const confirmed = window.confirm('You have unsaved changes. Are you sure you want to close this file?');
+ if (!confirmed) return;
+ }
+ onClose();
+ };
 
-  if (!file) return null;
+ if (!file) return null;
 
-  const btnSecondary =
-    'inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 dark:border-border dark:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-foreground';
-  const btnPrimary =
-    'inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50';
+ const btnSecondary =
+ 'inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 dark:border-border dark:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-foreground';
+ const btnPrimary =
+ 'inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50';
 
-  return (
-    <div className="flex h-full flex-col gap-2 sm:gap-3">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            {fileInfo && (
-              <div className={`flex h-6 w-6 items-center justify-center rounded-md bg-surface-2 dark:bg-surface-3`}>
-                <FileCode className={`h-3.5 w-3.5 ${fileInfo.color}`} />
-              </div>
-            )}
-            <h3 className="truncate text-sm font-semibold text-foreground dark:text-foreground">
-              {file.name}
-            </h3>
-            <div className="flex items-center gap-1.5">
-              {isDirty && (
-                <motion.span
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning dark:bg-warning/15 dark:text-warning"
-                >
-                  <Circle className="h-1.5 w-1.5 fill-warning" />
-                  Unsaved
-                </motion.span>
-              )}
-              {isSuspended && (
-                <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive dark:bg-destructive/15 dark:text-destructive">
-                  Suspended
-                </span>
-              )}
-            </div>
-          </div>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground dark:text-muted-foreground ml-8">
-            {file.path}
-          </p>
-        </div>
-        <div className="flex items-center gap-1 sm:gap-2">
-          <button
-            type="button"
-            className={btnSecondary}
-            onClick={onReset}
-            disabled={!isDirty || isSaving || isLoading || isSuspended}
-            title="Revert changes (Ctrl+Z stack)"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Revert</span>
-          </button>
-          {onDownload && (
-            <button
-              type="button"
-              className={btnSecondary}
-              onClick={onDownload}
-              disabled={isSaving || isLoading}
-              title="Download file"
-            >
-              <Download className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Download</span>
-            </button>
-          )}
-          <button
-            type="button"
-            className={btnPrimary}
-            onClick={onSave}
-            disabled={!isDirty || isSaving || isLoading || isSuspended}
-            title="Save (Ctrl+S)"
-          >
-            <Save className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Save</span>
-          </button>
-          <button
-            type="button"
-            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:hover:bg-surface-2 dark:hover:text-foreground"
-            onClick={handleClose}
-            title="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
+ return (
+ <div className="flex h-full flex-col gap-2 sm:gap-3">
+ {/* Header */}
+ <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+ <div className="min-w-0 flex-1">
+ <div className="flex items-center gap-2">
+ {fileInfo && (
+ <div className={`flex h-6 w-6 items-center justify-center rounded-md bg-surface-2 dark:bg-surface-3`}>
+ <FileCode className={`h-3.5 w-3.5 ${fileInfo.color}`} />
+ </div>
+ )}
+ <h3 className="truncate text-sm font-semibold text-foreground dark:text-foreground">
+ {file.name}
+ </h3>
+ <div className="flex items-center gap-1.5">
+ {isDirty && (
+ <motion.span
+ initial={{ opacity: 0, scale: 0.8 }}
+ animate={{ opacity: 1, scale: 1 }}
+ className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning dark:bg-warning/15 dark:text-warning"
+ >
+ <Circle className="h-1.5 w-1.5 fill-warning" />
+ Unsaved
+ </motion.span>
+ )}
+ {isSuspended && (
+ <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive dark:bg-destructive/15 dark:text-destructive">
+ Suspended
+ </span>
+ )}
+ </div>
+ </div>
+ <p className="mt-0.5 truncate text-xs text-muted-foreground dark:text-muted-foreground ml-8">
+ {file.path}
+ </p>
+ </div>
+ <div className="flex items-center gap-1 sm:gap-2">
+ <button
+ type="button"
+ className={btnSecondary}
+ onClick={onReset}
+ disabled={!isDirty || isSaving || isLoading || isSuspended}
+ title="Revert changes (Ctrl+Z stack)"
+ >
+ <RotateCcw className="h-3.5 w-3.5" />
+ <span className="hidden sm:inline">Revert</span>
+ </button>
+ {onDownload && (
+ <button
+ type="button"
+ className={btnSecondary}
+ onClick={onDownload}
+ disabled={isSaving || isLoading}
+ title="Download file"
+ >
+ <Download className="h-3.5 w-3.5" />
+ <span className="hidden sm:inline">Download</span>
+ </button>
+ )}
+ <button
+ type="button"
+ className={btnPrimary}
+ onClick={onSave}
+ disabled={!isDirty || isSaving || isLoading || isSuspended}
+ title="Save (Ctrl+S)"
+ >
+ <Save className="h-3.5 w-3.5" />
+ <span className="hidden sm:inline">Save</span>
+ </button>
+ <button
+ type="button"
+ className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground dark:hover:bg-surface-2 dark:hover:text-foreground"
+ onClick={handleClose}
+ title="Close"
+ >
+ <X className="h-4 w-4" />
+ </button>
+ </div>
+ </div>
 
-      {/* Editor */}
-      <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border dark:border-border">
-        {isLoading ? (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground dark:text-muted-foreground">
-            <div className="flex flex-col items-center gap-2">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              Loading file contents…
-            </div>
-          </div>
-        ) : (
-          <Suspense
-            fallback={
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground dark:text-muted-foreground">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                  Loading editor…
-                </div>
-              </div>
-            }
-          >
-            <Editor
-              height="100%"
-              theme={monacoTheme}
-              language={language}
-              value={file.content}
-              onChange={(value) => onChange(value ?? '')}
-              options={{
-                minimap: { enabled: false },
-                fontSize: 13,
-                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                scrollBeyondLastLine: false,
-                wordWrap: 'on',
-                padding: { top: 12 },
-                lineNumbers: 'on',
-                renderLineHighlight: 'line',
-                bracketPairColorization: { enabled: true },
-                automaticLayout: true,
-                overviewRulerLanes: 0,
-                renderWhitespace: 'selection',
-              }}
-            />
-          </Suspense>
-        )}
-      </div>
-    </div>
-  );
+ {/* Editor */}
+ <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border dark:border-border">
+ {isLoading ? (
+ <div className="flex h-full items-center justify-center text-sm text-muted-foreground dark:text-muted-foreground">
+ <div className="flex flex-col items-center gap-2">
+ <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+ Loading file contents…
+ </div>
+ </div>
+ ) : (
+ <Suspense
+ fallback={
+ <div className="flex h-full items-center justify-center text-sm text-muted-foreground dark:text-muted-foreground">
+ <div className="flex flex-col items-center gap-2">
+ <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+ Loading editor…
+ </div>
+ </div>
+ }
+ >
+ <Editor
+ height="100%"
+ theme={monacoTheme}
+ language={language}
+ value={file.content}
+ onChange={(value) => onChange(value ?? '')}
+ options={{
+ minimap: { enabled: false },
+ fontSize: 13,
+ fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+ scrollBeyondLastLine: false,
+ wordWrap: 'on',
+ padding: { top: 12 },
+ lineNumbers: 'on',
+ renderLineHighlight: 'line',
+ bracketPairColorization: { enabled: true },
+ automaticLayout: true,
+ overviewRulerLanes: 0,
+ renderWhitespace: 'selection',
+ }}
+ />
+ </Suspense>
+ )}
+ </div>
+ </div>
+ );
 }
 
 export default FileEditor;

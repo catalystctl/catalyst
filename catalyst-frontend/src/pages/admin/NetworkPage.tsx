@@ -1,17 +1,17 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
-  Activity,
-  Server,
-  Shield,
-  User,
-  Key,
-  AlertTriangle,
-  HardDrive,
-  Filter,
-  Search,
-  RefreshCw,
-  ExternalLink,
-  Zap,
+ Activity,
+ Server,
+ Shield,
+ User,
+ Key,
+ AlertTriangle,
+ HardDrive,
+ Filter,
+ Search,
+ RefreshCw,
+ ExternalLink,
+ Zap,
 } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
@@ -31,440 +31,440 @@ const REFRESH_INTERVAL = 15_000;
 const PAGE_SIZE = 40;
 
 const RESOURCE_FILTERS = [
-  { value: '', label: 'All Events' },
-  { value: 'server', label: 'Servers' },
-  { value: 'node', label: 'Nodes' },
-  { value: 'user', label: 'Users' },
-  { value: 'role', label: 'Roles' },
-  { value: 'api_key', label: 'API Keys' },
-  { value: 'auth', label: 'Auth' },
-  { value: 'backup', label: 'Backups' },
-  { value: 'alert', label: 'Alerts' },
-  { value: 'template', label: 'Templates' },
-  { value: 'smtp', label: 'Email' },
-  { value: 'security', label: 'Security' },
+ { value: '', label: 'All Events' },
+ { value: 'server', label: 'Servers' },
+ { value: 'node', label: 'Nodes' },
+ { value: 'user', label: 'Users' },
+ { value: 'role', label: 'Roles' },
+ { value: 'api_key', label: 'API Keys' },
+ { value: 'auth', label: 'Auth' },
+ { value: 'backup', label: 'Backups' },
+ { value: 'alert', label: 'Alerts' },
+ { value: 'template', label: 'Templates' },
+ { value: 'smtp', label: 'Email' },
+ { value: 'security', label: 'Security' },
 ];
 
 // ── Helpers ──
 function formatAction(action: string): string {
-  const map: Record<string, string> = {
-    'server.start': 'Server started',
-    'server.stop': 'Server stopped',
-    'server.restart': 'Server restarted',
-    'server.create': 'Server created',
-    'server.delete': 'Server deleted',
-    'server.suspend': 'Server suspended',
-    'server.unsuspend': 'Server unsuspended',
-    'server.update': 'Server updated',
-    'server.bulk_start': 'Bulk servers started',
-    'server.bulk_stop': 'Bulk servers stopped',
-    'server.bulk_restart': 'Bulk servers restarted',
-    'server.bulk_delete': 'Bulk servers deleted',
-    'server.bulk_suspend': 'Bulk servers suspended',
-    'server.bulk_unsuspend': 'Bulk servers unsuspended',
-    'backup.create': 'Backup created',
-    'backup.restore': 'Backup restored',
-    'backup.delete': 'Backup deleted',
-    'node.create': 'Node created',
-    'node.update': 'Node updated',
-    'node.delete': 'Node deleted',
-    'node.connect': 'Node connected',
-    'node.disconnect': 'Node disconnected',
-    'user.create': 'User created',
-    'user.update': 'User updated',
-    'user.delete': 'User deleted',
-    'user.set_roles': 'User roles changed',
-    'user.ban': 'User banned',
-    'user.unban': 'User unbanned',
-    'role.create': 'Role created',
-    'role.update': 'Role updated',
-    'role.delete': 'Role deleted',
-    'login_success': 'Successful login',
-    'login_failed': 'Failed login attempt',
-    'logout': 'User logged out',
-    'api_key.create': 'API key created',
-    'api_key.delete': 'API key deleted',
-    'api_key.regenerate': 'API key regenerated',
-    'alert.create': 'Alert created',
-    'alert.resolve': 'Alert resolved',
-    'alert.delete': 'Alert deleted',
-    'template.create': 'Template created',
-    'template.update': 'Template updated',
-    'template.delete': 'Template deleted',
-    'smtp.update': 'Email settings updated',
-    'smtp.test': 'Email test sent',
-    'security.update': 'Security settings updated',
-    'theme.update': 'Theme settings updated',
-    'database.create': 'Database host created',
-    'database.update': 'Database host updated',
-    'database.delete': 'Database host deleted',
-  };
+ const map: Record<string, string> = {
+ 'server.start': 'Server started',
+ 'server.stop': 'Server stopped',
+ 'server.restart': 'Server restarted',
+ 'server.create': 'Server created',
+ 'server.delete': 'Server deleted',
+ 'server.suspend': 'Server suspended',
+ 'server.unsuspend': 'Server unsuspended',
+ 'server.update': 'Server updated',
+ 'server.bulk_start': 'Bulk servers started',
+ 'server.bulk_stop': 'Bulk servers stopped',
+ 'server.bulk_restart': 'Bulk servers restarted',
+ 'server.bulk_delete': 'Bulk servers deleted',
+ 'server.bulk_suspend': 'Bulk servers suspended',
+ 'server.bulk_unsuspend': 'Bulk servers unsuspended',
+ 'backup.create': 'Backup created',
+ 'backup.restore': 'Backup restored',
+ 'backup.delete': 'Backup deleted',
+ 'node.create': 'Node created',
+ 'node.update': 'Node updated',
+ 'node.delete': 'Node deleted',
+ 'node.connect': 'Node connected',
+ 'node.disconnect': 'Node disconnected',
+ 'user.create': 'User created',
+ 'user.update': 'User updated',
+ 'user.delete': 'User deleted',
+ 'user.set_roles': 'User roles changed',
+ 'user.ban': 'User banned',
+ 'user.unban': 'User unbanned',
+ 'role.create': 'Role created',
+ 'role.update': 'Role updated',
+ 'role.delete': 'Role deleted',
+ 'login_success': 'Successful login',
+ 'login_failed': 'Failed login attempt',
+ 'logout': 'User logged out',
+ 'api_key.create': 'API key created',
+ 'api_key.delete': 'API key deleted',
+ 'api_key.regenerate': 'API key regenerated',
+ 'alert.create': 'Alert created',
+ 'alert.resolve': 'Alert resolved',
+ 'alert.delete': 'Alert deleted',
+ 'template.create': 'Template created',
+ 'template.update': 'Template updated',
+ 'template.delete': 'Template deleted',
+ 'smtp.update': 'Email settings updated',
+ 'smtp.test': 'Email test sent',
+ 'security.update': 'Security settings updated',
+ 'theme.update': 'Theme settings updated',
+ 'database.create': 'Database host created',
+ 'database.update': 'Database host updated',
+ 'database.delete': 'Database host deleted',
+ };
 
-  if (map[action]) return map[action];
+ if (map[action]) return map[action];
 
-  return action
-    .split(/[._]/g)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+ return action
+ .split(/[._]/g)
+ .filter(Boolean)
+ .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+ .join(' ');
 }
 
 function getResourceIcon(resource: string) {
-  const icons: Record<string, React.ElementType> = {
-    server: Server,
-    node: HardDrive,
-    user: User,
-    role: Shield,
-    api_key: Key,
-    auth: User,
-    alert: AlertTriangle,
-    backup: HardDrive,
-    template: Server,
-    smtp: Zap,
-    security: Shield,
-    database: HardDrive,
-  };
-  return icons[resource] || Activity;
+ const icons: Record<string, React.ElementType> = {
+ server: Server,
+ node: HardDrive,
+ user: User,
+ role: Shield,
+ api_key: Key,
+ auth: User,
+ alert: AlertTriangle,
+ backup: HardDrive,
+ template: Server,
+ smtp: Zap,
+ security: Shield,
+ database: HardDrive,
+ };
+ return icons[resource] || Activity;
 }
 
 function getResourceColor(resource: string) {
-  const colors: Record<string, string> = {
-    server: 'text-primary bg-primary/10 border-primary/20',
-    node: 'text-success bg-success/5 border-success/20',
-    user: 'text-sky-500 bg-sky-50 border-sky-200',
-    role: 'text-violet-500 bg-violet-50 border-violet-200',
-    api_key: 'text-warning bg-warning/5 border-warning/20',
-    auth: 'text-destructive bg-destructive/5 border-destructive/20',
-    alert: 'text-orange-500 bg-orange-50 border-orange-200',
-    backup: 'text-cyan-500 bg-cyan-50 border-cyan-200',
-    template: 'text-fuchsia-500 bg-fuchsia-50 border-fuchsia-200',
-    smtp: 'text-pink-500 bg-pink-50 border-pink-200',
-    security: 'text-destructive bg-red-50 border-red-200',
-    database: 'text-teal-500 bg-teal-50 border-teal-200',
-  };
-  return colors[resource] || 'text-muted-foreground bg-surface-0 border-border';
+ const colors: Record<string, string> = {
+ server: 'text-primary bg-primary/10 border-primary/20',
+ node: 'text-success bg-success/5 border-success/20',
+ user: 'text-sky-500 bg-sky-50 border-sky-200',
+ role: 'text-violet-500 bg-violet-50 border-violet-200',
+ api_key: 'text-warning bg-warning/5 border-warning/20',
+ auth: 'text-destructive bg-destructive/5 border-destructive/20',
+ alert: 'text-orange-500 bg-orange-50 border-orange-200',
+ backup: 'text-cyan-500 bg-cyan-50 border-cyan-200',
+ template: 'text-fuchsia-500 bg-fuchsia-50 border-fuchsia-200',
+ smtp: 'text-pink-500 bg-pink-50 border-pink-200',
+ security: 'text-destructive bg-red-50 border-red-200',
+ database: 'text-teal-500 bg-teal-50 border-teal-200',
+ };
+ return colors[resource] || 'text-muted-foreground bg-surface-0 border-border';
 }
 
 function getActionTone(action: string): 'success' | 'warning' | 'danger' | 'neutral' {
-  if (action.includes('delete') || action.includes('ban') || action.includes('failed') || action.includes('disconnect')) return 'danger';
-  if (action.includes('suspend') || action.includes('alert')) return 'warning';
-  if (action.includes('start') || action.includes('create') || action.includes('resolve') || action.includes('connect') || action.includes('unsuspend') || action.includes('unban') || action.includes('success')) return 'success';
-  return 'neutral';
+ if (action.includes('delete') || action.includes('ban') || action.includes('failed') || action.includes('disconnect')) return 'danger';
+ if (action.includes('suspend') || action.includes('alert')) return 'warning';
+ if (action.includes('start') || action.includes('create') || action.includes('resolve') || action.includes('connect') || action.includes('unsuspend') || action.includes('unban') || action.includes('success')) return 'success';
+ return 'neutral';
 }
 
 function getDotColor(tone: 'success' | 'warning' | 'danger' | 'neutral') {
-  switch (tone) {
-    case 'success': return 'bg-success/50';
-    case 'warning': return 'bg-warning/50';
-    case 'danger': return 'bg-destructive/50';
-    case 'neutral': return 'bg-surface-3';
-  }
+ switch (tone) {
+ case 'success': return 'bg-success/50';
+ case 'warning': return 'bg-warning/50';
+ case 'danger': return 'bg-destructive/50';
+ case 'neutral': return 'bg-surface-3';
+ }
 }
 
 function formatTimeAgo(date: string): string {
-  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  return `${Math.floor(seconds / 86400)}d ago`;
+ const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+ if (seconds < 60) return `${seconds}s ago`;
+ if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+ if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+ return `${Math.floor(seconds / 86400)}d ago`;
 }
 
 function formatFullTime(date: string): string {
-  return new Date(date).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+ return new Date(date).toLocaleString(undefined, {
+ month: 'short',
+ day: 'numeric',
+ hour: '2-digit',
+ minute: '2-digit',
+ second: '2-digit',
+ });
 }
 
 function formatDetails(details: unknown): string | null {
-  if (details === null || details === undefined) return null;
-  if (typeof details === 'string') return details;
-  if (typeof details === 'number' || typeof details === 'boolean') return String(details);
-  try {
-    const json = JSON.stringify(details);
-    return json.length > 200 ? `${json.slice(0, 197)}...` : json;
-  } catch {
-    return String(details);
-  }
+ if (details === null || details === undefined) return null;
+ if (typeof details === 'string') return details;
+ if (typeof details === 'number' || typeof details === 'boolean') return String(details);
+ try {
+ const json = JSON.stringify(details);
+ return json.length > 200 ? `${json.slice(0, 197)}...` : json;
+ } catch {
+ return String(details);
+ }
 }
 
 function isToday(date: string): boolean {
-  const d = new Date(date);
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+ const d = new Date(date);
+ const now = new Date();
+ return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
 }
 
 function isYesterday(date: string): boolean {
-  const d = new Date(date);
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  return d.getFullYear() === yesterday.getFullYear() && d.getMonth() === yesterday.getMonth() && d.getDate() === yesterday.getDate();
+ const d = new Date(date);
+ const yesterday = new Date();
+ yesterday.setDate(yesterday.getDate() - 1);
+ return d.getFullYear() === yesterday.getFullYear() && d.getMonth() === yesterday.getMonth() && d.getDate() === yesterday.getDate();
 }
 
 function getDateLabel(date: string): string {
-  if (isToday(date)) return 'Today';
-  if (isYesterday(date)) return 'Yesterday';
-  return new Date(date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+ if (isToday(date)) return 'Today';
+ if (isYesterday(date)) return 'Yesterday';
+ return new Date(date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 }
 
 // ── Component ──
 function ActivityPage() {
-  const [page, setPage] = useState(1);
-  const [resourceFilter, setResourceFilter] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [livePoll, setLivePoll] = useState(true);
+ const [page, setPage] = useState(1);
+ const [resourceFilter, setResourceFilter] = useState('');
+ const [searchQuery, setSearchQuery] = useState('');
+ const [livePoll, setLivePoll] = useState(true);
 
-  const queryParams = useMemo(() => ({
-    page: Number.isFinite(page) ? page : 1,
-    limit: PAGE_SIZE,
-    ...(resourceFilter ? { resource: resourceFilter } : {}),
-  }), [page, resourceFilter]);
+ const queryParams = useMemo(() => ({
+ page: Number.isFinite(page) ? page : 1,
+ limit: PAGE_SIZE,
+ ...(resourceFilter ? { resource: resourceFilter } : {}),
+ }), [page, resourceFilter]);
 
-  const { data, isLoading, isError, refetch, isFetching } = useAuditLogs(queryParams);
+ const { data, isLoading, isError, refetch, isFetching } = useAuditLogs(queryParams);
 
-  const logs = data?.logs ?? [];
-  const pagination = data?.pagination;
-  const totalLogs = pagination?.total ?? 0;
+ const logs = data?.logs ?? [];
+ const pagination = data?.pagination;
+ const totalLogs = pagination?.total ?? 0;
 
-  // Live poll
-  useEffect(() => {
-    if (!livePoll) return;
-    const interval = setInterval(() => refetch(), REFRESH_INTERVAL);
-    return () => clearInterval(interval);
-  }, [livePoll, refetch]);
+ // Live poll
+ useEffect(() => {
+ if (!livePoll) return;
+ const interval = setInterval(() => refetch(), REFRESH_INTERVAL);
+ return () => clearInterval(interval);
+ }, [livePoll, refetch]);
 
-  const grouped = useMemo(() => {
-    const groups = new Map<string, AuditLogEntry[]>();
-    for (const log of logs) {
-      const label = getDateLabel(log.timestamp);
-      if (!groups.has(label)) groups.set(label, []);
-      groups.get(label)!.push(log);
-    }
-    return groups;
-  }, [logs]);
+ const grouped = useMemo(() => {
+ const groups = new Map<string, AuditLogEntry[]>();
+ for (const log of logs) {
+ const label = getDateLabel(log.timestamp);
+ if (!groups.has(label)) groups.set(label, []);
+ groups.get(label)!.push(log);
+ }
+ return groups;
+ }, [logs]);
 
-  return (
-    <div className="space-y-5">
-      {/* ── Header ── */}
-      <TabHeader
-        icon={Activity}
-        title="Activity"
-        description="Live event stream across your entire cluster"
-        actions={
-          <div className="flex items-center gap-2">
-            {livePoll && (
-              <Badge variant="outline" className="gap-1.5 border-success/30 text-success">
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success/50" />
-                </span>
-                Live
-              </Badge>
-            )}
-            <Badge variant="secondary" className="text-xs">
-              {totalLogs.toLocaleString()} events
-            </Badge>
-          </div>
-        }
-      />
+ return (
+ <div className="space-y-5">
+ {/* ── Header ── */}
+ <TabHeader
+ icon={Activity}
+ title="Activity"
+ description="Live event stream across your entire cluster"
+ actions={
+ <div className="flex items-center gap-2">
+ {livePoll && (
+ <Badge variant="outline" className="gap-1.5 border-success/30 text-success">
+ <span className="relative flex h-1.5 w-1.5">
+ <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+ <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success/50" />
+ </span>
+ Live
+ </Badge>
+ )}
+ <Badge variant="secondary" className="text-xs">
+ {totalLogs.toLocaleString()} events
+ </Badge>
+ </div>
+ }
+ />
 
-      {/* ── Filters ── */}
-      <ServerTabCard>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-card px-3 py-1.5">
-            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-            <select
-              className="appearance-none bg-transparent text-sm font-medium text-foreground outline-none"
-              value={resourceFilter}
-              onChange={(e) => { setResourceFilter(e.target.value); setPage(1); }}
-            >
-              {RESOURCE_FILTERS.map((f) => (
-                <option key={f.value} value={f.value}>{f.label}</option>
-              ))}
-            </select>
-          </div>
+ {/* ── Filters ── */}
+ <ServerTabCard>
+ <div className="flex flex-wrap items-center gap-3">
+ <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-card px-3 py-1.5">
+ <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+ <select
+ className="appearance-none bg-transparent text-sm font-medium text-foreground outline-none"
+ value={resourceFilter}
+ onChange={(e) => { setResourceFilter(e.target.value); setPage(1); }}
+ >
+ {RESOURCE_FILTERS.map((f) => (
+ <option key={f.value} value={f.value}>{f.label}</option>
+ ))}
+ </select>
+ </div>
 
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              className="w-full rounded-lg border border-border/40 bg-card py-1.5 pl-9 pr-3 text-sm text-foreground transition-colors focus:border-primary focus:outline-none"
-              placeholder="Search actions, users, resources…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+ <div className="relative flex-1 min-w-[200px] max-w-sm">
+ <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+ <input
+ type="text"
+ className="w-full rounded-lg border border-border/40 bg-card py-1.5 pl-9 pr-3 text-sm text-foreground transition-colors focus:border-primary focus:outline-none"
+ placeholder="Search actions, users, resources…"
+ value={searchQuery}
+ onChange={(e) => setSearchQuery(e.target.value)}
+ />
+ </div>
 
-          <div className="ml-auto flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLivePoll(!livePoll)}
-              className={`gap-1.5 text-xs ${livePoll ? 'border-success/30 text-success' : ''}`}
-            >
-              <RefreshCw className={`h-3 w-3 ${livePoll && isFetching ? 'animate-spin' : ''}`} />
-              {livePoll ? 'Auto-refresh' : 'Paused'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => refetch()}
-              className="gap-1.5 text-xs"
-            >
-              <RefreshCw className="h-3 w-3" />
-              Refresh
-            </Button>
-          </div>
-        </div>
-      </ServerTabCard>
+ <div className="ml-auto flex items-center gap-2">
+ <Button
+ variant="outline"
+ size="sm"
+ onClick={() => setLivePoll(!livePoll)}
+ className={`gap-1.5 text-xs ${livePoll ? 'border-success/30 text-success' : ''}`}
+ >
+ <RefreshCw className={`h-3 w-3 ${livePoll && isFetching ? 'animate-spin' : ''}`} />
+ {livePoll ? 'Auto-refresh' : 'Paused'}
+ </Button>
+ <Button
+ variant="outline"
+ size="sm"
+ onClick={() => refetch()}
+ className="gap-1.5 text-xs"
+ >
+ <RefreshCw className="h-3 w-3" />
+ Refresh
+ </Button>
+ </div>
+ </div>
+ </ServerTabCard>
 
-      {/* ── Feed ── */}
-      <div>
-        {isLoading ? (
-          <TabLoadingState rows={8} rowHeight="h-16" />
-        ) : isError ? (
-          <TabErrorState
-            message="Failed to load activity feed."
-            onRetry={() => refetch()}
-          />
-        ) : logs.length === 0 ? (
-          <TabEmptyState
-            title="No activity yet"
-            description="Events will appear here as actions are performed across the cluster."
-          />
-        ) : (
-          <div className="space-y-6">
-            {Array.from(grouped.entries()).map(([dateLabel, entries]) => (
-              <div key={dateLabel}>
-                {/* Date divider */}
-                <div className="mb-3 flex items-center gap-3">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                    {dateLabel}
-                  </h3>
-                  <div className="h-px flex-1 bg-border" />
-                  <Badge variant="outline" className="text-[10px]">
-                    {entries.length}
-                  </Badge>
-                </div>
+ {/* ── Feed ── */}
+ <div>
+ {isLoading ? (
+ <TabLoadingState rows={8} rowHeight="h-16" />
+ ) : isError ? (
+ <TabErrorState
+ message="Failed to load activity feed."
+ onRetry={() => refetch()}
+ />
+ ) : logs.length === 0 ? (
+ <TabEmptyState
+ title="No activity yet"
+ description="Events will appear here as actions are performed across the cluster."
+ />
+ ) : (
+ <div className="space-y-6">
+ {Array.from(grouped.entries()).map(([dateLabel, entries]) => (
+ <div key={dateLabel}>
+ {/* Date divider */}
+ <div className="mb-3 flex items-center gap-3">
+ <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+ {dateLabel}
+ </h3>
+ <div className="h-px flex-1 bg-border" />
+ <Badge variant="outline" className="text-[10px]">
+ {entries.length}
+ </Badge>
+ </div>
 
-                {/* Entries */}
-                <div className="space-y-2">
-                  {entries
-                    .filter((log) => {
-                      if (!searchQuery.trim()) return true;
-                      const q = searchQuery.toLowerCase();
-                      return (
-                        log.action.toLowerCase().includes(q) ||
-                        log.resource.toLowerCase().includes(q) ||
-                        log.user?.username?.toLowerCase().includes(q) ||
-                        log.resourceId?.toLowerCase().includes(q) ||
-                        formatDetails(log.details)?.toLowerCase().includes(q)
-                      );
-                    })
-                    .map((log) => {
-                      const Icon = getResourceIcon(log.resource);
-                      const colorClass = getResourceColor(log.resource);
-                      const tone = getActionTone(log.action);
-                      const actionLabel = formatAction(log.action);
-                      const details = log.details ? formatDetails(log.details) : null;
-                      const resourceId = log.resourceId;
-                      const resourceType = log.resource;
+ {/* Entries */}
+ <div className="space-y-2">
+ {entries
+ .filter((log) => {
+ if (!searchQuery.trim()) return true;
+ const q = searchQuery.toLowerCase();
+ return (
+ log.action.toLowerCase().includes(q) ||
+ log.resource.toLowerCase().includes(q) ||
+ log.user?.username?.toLowerCase().includes(q) ||
+ log.resourceId?.toLowerCase().includes(q) ||
+ formatDetails(log.details)?.toLowerCase().includes(q)
+ );
+ })
+ .map((log) => {
+ const Icon = getResourceIcon(log.resource);
+ const colorClass = getResourceColor(log.resource);
+ const tone = getActionTone(log.action);
+ const actionLabel = formatAction(log.action);
+ const details = log.details ? formatDetails(log.details) : null;
+ const resourceId = log.resourceId;
+ const resourceType = log.resource;
 
-                      // Determine if we can link to the resource
-                      let resourceLink: string | null = null;
-                      if (resourceType === 'server' && resourceId) resourceLink = `/servers/${resourceId}`;
-                      if (resourceType === 'node' && resourceId) resourceLink = `/admin/nodes/${resourceId}`;
+ // Determine if we can link to the resource
+ let resourceLink: string | null = null;
+ if (resourceType === 'server' && resourceId) resourceLink = `/servers/${resourceId}`;
+ if (resourceType === 'node' && resourceId) resourceLink = `/admin/nodes/${resourceId}`;
 
-                      return (
-                        <div
-                          key={log.id}
-                          className="group relative flex items-start gap-3 rounded-lg border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
-                        >
-                          <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
-                          {/* Icon */}
-                          <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${colorClass}`}>
-                            <Icon className="h-4 w-4" />
-                          </div>
+ return (
+ <div
+ key={log.id}
+ className="group relative flex items-start gap-3 rounded-lg border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
+ >
+ <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
+ {/* Icon */}
+ <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${colorClass}`}>
+ <Icon className="h-4 w-4" />
+ </div>
 
-                          {/* Content */}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-foreground">
-                                {actionLabel}
-                              </span>
-                              <span className={`h-1.5 w-1.5 rounded-full ${getDotColor(tone)}`} />
-                            </div>
+ {/* Content */}
+ <div className="min-w-0 flex-1">
+ <div className="flex items-center gap-2">
+ <span className="text-sm font-medium text-foreground">
+ {actionLabel}
+ </span>
+ <span className={`h-1.5 w-1.5 rounded-full ${getDotColor(tone)}`} />
+ </div>
 
-                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                              {/* User */}
-                              {log.user?.username && (
-                                <span className="font-medium text-foreground/70">
-                                  {log.user.username}
-                                </span>
-                              )}
+ <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+ {/* User */}
+ {log.user?.username && (
+ <span className="font-medium text-foreground/70">
+ {log.user.username}
+ </span>
+ )}
 
-                              {/* Resource link */}
-                              {resourceLink && resourceId ? (
-                                <Link
-                                  to={resourceLink}
-                                  className="inline-flex items-center gap-1 font-mono text-primary transition-colors hover:text-primary/80"
-                                >
-                                  {resourceType}:{resourceId.slice(0, 8)}
-                                  <ExternalLink className="h-2.5 w-2.5" />
-                                </Link>
-                              ) : resourceId ? (
-                                <span className="font-mono">
-                                  {resourceType}:{resourceId.slice(0, 8)}
-                                </span>
-                              ) : (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                                  {log.resource}
-                                </Badge>
-                              )}
+ {/* Resource link */}
+ {resourceLink && resourceId ? (
+ <Link
+ to={resourceLink}
+ className="inline-flex items-center gap-1 font-mono text-primary transition-colors hover:text-primary/80"
+ >
+ {resourceType}:{resourceId.slice(0, 8)}
+ <ExternalLink className="h-2.5 w-2.5" />
+ </Link>
+ ) : resourceId ? (
+ <span className="font-mono">
+ {resourceType}:{resourceId.slice(0, 8)}
+ </span>
+ ) : (
+ <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+ {log.resource}
+ </Badge>
+ )}
 
-                              {/* Details */}
-                              {details && details !== '{}' && (
-                                <span className="truncate max-w-xs font-mono text-[11px] opacity-60">
-                                  {details}
-                                </span>
-                              )}
-                            </div>
-                          </div>
+ {/* Details */}
+ {details && details !== '{}' && (
+ <span className="truncate max-w-xs font-mono text-[11px] opacity-60">
+ {details}
+ </span>
+ )}
+ </div>
+ </div>
 
-                          {/* Time */}
-                          <div className="flex shrink-0 flex-col items-end gap-0.5">
-                            <span
-                              className="text-[11px] text-muted-foreground"
-                              title={formatFullTime(log.timestamp)}
-                            >
-                              {formatTimeAgo(log.timestamp)}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+ {/* Time */}
+ <div className="flex shrink-0 flex-col items-end gap-0.5">
+ <span
+ className="text-[11px] text-muted-foreground"
+ title={formatFullTime(log.timestamp)}
+ >
+ {formatTimeAgo(log.timestamp)}
+ </span>
+ </div>
+ </div>
+ );
+ })}
+ </div>
+ </div>
+ ))}
+ </div>
+ )}
+ </div>
 
-      {/* ── Pagination ── */}
-      {pagination && pagination.totalPages > 1 && (
-        <div>
-          <Pagination
-            page={page}
-            totalPages={pagination.totalPages}
-            onPageChange={setPage}
-          />
-        </div>
-      )}
-    </div>
-  );
+ {/* ── Pagination ── */}
+ {pagination && pagination.totalPages > 1 && (
+ <div>
+ <Pagination
+ page={page}
+ totalPages={pagination.totalPages}
+ onPageChange={setPage}
+ />
+ </div>
+ )}
+ </div>
+ );
 }
 
 export default ActivityPage;

@@ -1099,7 +1099,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  Cancel
  </button>
  <button
- className="rounded-full bg-primary px-4 py-2 font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-colors hover:bg-primary/90 disabled:opacity-60"
+ className="rounded-full bg-primary px-4 py-2 font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
  onClick={() => mutation.mutate()}
  disabled={disableSubmit}
  >
