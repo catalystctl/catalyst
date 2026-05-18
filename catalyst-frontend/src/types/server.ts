@@ -6,6 +6,7 @@ export type ServerStatus =
   | 'stopping'
   | 'crashed'
   | 'transferring'
+  | 'cloning'
   | 'suspended';
 
 export type RestartPolicy = 'always' | 'on-failure' | 'never';
@@ -184,6 +185,9 @@ export interface CloneServerPayload {
   environment?: Record<string, string>;
   subdomain?: string | null;
   ownerId?: string;
+  allocationId?: string;
+  networkMode?: string;
+  copyFiles?: boolean;
 }
 
 export interface TransferServerPayload {

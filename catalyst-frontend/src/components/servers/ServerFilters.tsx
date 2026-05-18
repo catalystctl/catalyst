@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Search, X } from 'lucide-react';
 
 const statuses: ServerStatus[] = [
- 'running', 'stopped', 'installing', 'starting', 'stopping', 'crashed', 'transferring', 'suspended',
+ 'running', 'stopped', 'installing', 'starting', 'stopping', 'crashed', 'transferring', 'cloning', 'suspended',
 ];
 
 type Props = {

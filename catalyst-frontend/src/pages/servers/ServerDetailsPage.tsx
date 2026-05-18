@@ -27,6 +27,7 @@ import {
  FolderSync,
  Activity,
  AlertTriangle,
+ Copy,
 } from 'lucide-react';
 import { useServer } from '../../hooks/useServer';
 import { useServerMetrics } from '../../hooks/useServerMetrics';
@@ -935,6 +936,19 @@ function ServerDetailsPage() {
  {server?.suspensionReason && (
  <span className="text-danger/80">— {server.suspensionReason}</span>
  )}
+ </div>
+ )}
+ {server?.status === 'cloning' && (
+ <div className="mt-3 flex items-center gap-3 rounded-lg border border-info/30 bg-info-muted px-3 py-2 text-xs text-info">
+ <Copy className="h-3.5 w-3.5 shrink-0 animate-pulse" />
+ <span className="font-semibold">Cloning Files</span>
+ <span className="text-info/80">— Server files are being copied from the source server. The server cannot be started until the copy completes.</span>
+ <div className="ml-auto flex items-center gap-2">
+ <div className="h-1.5 w-24 overflow-hidden rounded-full bg-info/20">
+ <div className="h-full w-2/3 animate-pulse rounded-full bg-info/60" />
+ </div>
+ <span className="text-[10px] text-info/60">Copying...</span>
+ </div>
  </div>
  )}
  </div>

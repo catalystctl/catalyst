@@ -107,6 +107,9 @@ export const serverCloneSchema = z.object({
     .nullable()
     .optional(),
   ownerId: z.string().min(1).optional(),
+  allocationId: z.string().min(1).optional(),
+  networkMode: z.enum(['bridge', 'macvlan', 'host', 'mc-lan-static', 'mc-lan-dynamic']).optional(),
+  copyFiles: z.boolean().default(false),
 });
 
 /**

@@ -1090,6 +1090,16 @@ impl WebSocketHandler {
                 self.handle_prepare_restore_stream(&msg, write).await?
             }
             Some("finish_restore_stream") => self.handle_finish_restore_stream(&msg, write).await?,
+            Some("clone_server_files") => {
+                let handler = self.clone();
+                let msg = msg.clone();
+                let write = Arc::clone(write);
+                tokio::spawn(async move {
+                    if let Err(e) = handler.handle_clone_server_files(&msg, &write).await {
+                        error!("Error in handle_clone_server_files handler: {}", e);
+                    }
+                });
+            }
             Some("resize_storage") => self.handle_resize_storage(&msg, write).await?,
             Some("resume_console") => self.resume_console(&msg).await?,
             Some("request_immediate_stats") => {
@@ -4210,6 +4220,92 @@ impl WebSocketHandler {
         }
 
         Ok(candidate)
+    }
+
+    /// Copy server files from one server directory to another on the same node.
+    /// Used during cloning when source and target are on the same node.
+    /// Uses cp -a to preserve permissions, ownership, and symlinks.
+    async fn handle_clone_server_files(
+        &self,
+        msg: &Value,
+        write: &Arc<tokio::sync::Mutex<WsWrite>>,
+    ) -> AgentResult<()> {
+        let source_uuid = msg["sourceServerUuid"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing sourceServerUuid".to_string()))?;
+        let target_uuid = msg["targetServerUuid"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidRequest("Missing targetServerUuid".to_string()))?;
+        let server_id = msg["serverId"]
+            .as_str()
+            .unwrap_or(target_uuid);
+
+        validate_safe_path_segment(source_uuid, "sourceServerUuid")?;
+        validate_safe_path_segment(target_uuid, "targetServerUuid")?;
+
+        let source_dir = self.config.server.data_dir.join(source_uuid);
+        let target_dir = self.config.server.data_dir.join(target_uuid);
+
+        if !source_dir.exists() {
+            let event = json!({
+                "type": "clone_files_complete",
+                "serverId": server_id,
+                "success": false,
+                "error": format!("Source server directory not found: {}", source_dir.display()),
+            });
+            let mut w = write.lock().await;
+            w.send(Message::Text(event.to_string().into())).await.map_err(|e| AgentError::NetworkError(e.to_string()))?;
+            return Ok(());
+        }
+
+        // Create target directory if it doesn't exist
+        if !target_dir.exists() {
+            tokio::fs::create_dir_all(&target_dir)
+                .await
+                .map_err(|e| AgentError::IoError(format!("Failed to create target directory: {}", e)))?;
+        }
+
+        info!("Cloning files from {} to {}", source_dir.display(), target_dir.display());
+
+        // Use cp -a to copy all files preserving permissions, ownership, symlinks
+        let status = tokio::process::Command::new("cp")
+            .arg("-a")
+            .arg(format!("{}/.", source_dir.display()))
+            .arg(&target_dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .status()
+            .await
+            .map_err(|e| AgentError::IoError(format!("Failed to spawn cp: {}", e)))?;
+
+        if !status.success() {
+            let event = json!({
+                "type": "clone_files_complete",
+                "serverId": server_id,
+                "success": false,
+                "error": format!("cp -a exited with code {}", status.code().unwrap_or(-1)),
+            });
+            let mut w = write.lock().await;
+            w.send(Message::Text(event.to_string().into())).await.map_err(|e| AgentError::NetworkError(e.to_string()))?;
+            return Ok(());
+        }
+
+        // Chown the target directory to the container user
+        if let Err(e) = chown_to_container_user(&target_dir).await {
+            warn!("Failed to chown cloned files: {}", e);
+        }
+
+        info!("File clone complete for {} -> {}", source_uuid, target_uuid);
+
+        let event = json!({
+            "type": "clone_files_complete",
+            "serverId": server_id,
+            "success": true,
+        });
+        let mut w = write.lock().await;
+        w.send(Message::Text(event.to_string().into())).await.map_err(|e| AgentError::NetworkError(e.to_string()))?;
+
+        Ok(())
     }
 
     async fn handle_resize_storage(

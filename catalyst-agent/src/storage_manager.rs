@@ -150,16 +150,25 @@ impl StorageManager {
 
         info!("Migrating existing data for {}", server_uuid);
         self.mount_image(image_path, &migrate_dir).await?;
-        let src = format!("{}/", mount_dir.display());
-        let dst = format!("{}/", migrate_dir.display());
+        let mount_dir_str = format!("{}/", mount_dir.display());
+        let mount_dir_dot = format!("{}/.", mount_dir.display());
+        let migrate_dir_str = format!("{}/", migrate_dir.display());
         let result = spawn_blocking(move || {
-            run_with_timeout("rsync", &["-a", src.as_str(), dst.as_str()], 3600)
+            // Prefer rsync for efficiency, fall back to cp -a if rsync is unavailable
+            if std::path::PathBuf::from("/usr/bin/rsync").exists()
+                || std::path::PathBuf::from("/usr/local/bin/rsync").exists()
+            {
+                run_with_timeout("rsync", &["-a", mount_dir_str.as_str(), migrate_dir_str.as_str()], 3600)
+            } else {
+                // cp -a with src/. copies directory contents (not the dir itself)
+                run_with_timeout("cp", &["-a", mount_dir_dot.as_str(), migrate_dir_str.as_str()], 3600)
+            }
         })
         .await
-        .map_err(|e| AgentError::FileSystemError(format!("rsync task failed: {}", e)))?;
+        .map_err(|e| AgentError::FileSystemError(format!("data migration task failed: {}", e)))?;
         if let Err(e) = result {
             warn!(
-                "Migration rsync failed for {}, cleaning up: {}",
+                "Migration failed for {}, cleaning up: {}",
                 server_uuid, e
             );
             let _ = self.unmount(&migrate_dir).await;

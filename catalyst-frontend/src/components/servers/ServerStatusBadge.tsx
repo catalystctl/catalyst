@@ -1,4 +1,4 @@
-import { Play, Square, Loader2, AlertTriangle, ArrowRightLeft, Ban } from 'lucide-react';
+import { Play, Square, Loader2, AlertTriangle, ArrowRightLeft, Ban, Copy } from 'lucide-react';
 import type { ServerStatus } from '../../types/server';
 
 const colorMap: Record<ServerStatus, string> = {
@@ -9,6 +9,7 @@ const colorMap: Record<ServerStatus, string> = {
  stopping: 'bg-warning-muted text-warning',
  crashed: 'bg-danger-muted text-danger',
  transferring: 'bg-info-muted text-info',
+ cloning: 'bg-info-muted text-info',
  suspended: 'bg-danger-muted text-danger',
 };
 
@@ -20,6 +21,7 @@ const iconMap: Record<ServerStatus, React.ReactNode> = {
  stopping: <Loader2 className="h-3 w-3 animate-spin" />,
  crashed: <AlertTriangle className="h-3 w-3" />,
  transferring: <ArrowRightLeft className="h-3 w-3" />,
+ cloning: <Copy className="h-3 w-3 animate-pulse" />,
  suspended: <Ban className="h-3 w-3" />,
 };
 

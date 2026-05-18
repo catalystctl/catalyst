@@ -4,7 +4,7 @@ import { serversApi } from '../services/api/servers';
 import { reportSystemError } from '../services/api/systemErrors';
 import type { Server } from '../types/server';
 
-const transitionalStatuses = new Set(['installing', 'starting', 'stopping', 'transferring']);
+const transitionalStatuses = new Set(['installing', 'starting', 'stopping', 'transferring', 'cloning']);
 
 export function useServer(id?: string) {
   return useQuery({

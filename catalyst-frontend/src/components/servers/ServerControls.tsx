@@ -26,6 +26,7 @@ const OPTIMISTIC_STATUS: Record<string, ServerStatus> = {
 function ServerControls({ serverId, status, permissions }: Props) {
  const queryClient = useQueryClient();
  const isSuspended = status === 'suspended';
+ const isCloning = status === 'cloning';
  const [showKillConfirm, setShowKillConfirm] = useState(false);
 
  const p = new Set(permissions ?? []);
@@ -128,7 +129,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
  <Button
  size="sm"
  className="bg-success text-success-foreground hover:opacity-90"
- disabled={start.isPending || status === 'running' || isSuspended}
+ disabled={start.isPending || status === 'running' || isSuspended || isCloning}
  onClick={() => start.mutate()}
  >
  Start
@@ -138,7 +139,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
  <Button
  size="sm"
  variant="secondary"
- disabled={stop.isPending || status === 'stopped' || isSuspended}
+ disabled={stop.isPending || status === 'stopped' || isSuspended || isCloning}
  onClick={() => stop.mutate()}
  >
  Stop
@@ -147,7 +148,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
  {canRestart && (
  <Button
  size="sm"
- disabled={restart.isPending || isSuspended}
+ disabled={restart.isPending || isSuspended || isCloning}
  onClick={() => restart.mutate()}
  >
  Restart
@@ -157,7 +158,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
  <Button
  size="sm"
  variant="destructive"
- disabled={kill.isPending || isSuspended || status === 'stopped'}
+ disabled={kill.isPending || isSuspended || status === 'stopped' || isCloning}
  onClick={() => setShowKillConfirm(true)}
  >
  Kill

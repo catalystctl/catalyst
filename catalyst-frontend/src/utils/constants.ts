@@ -6,4 +6,5 @@ export const SERVER_STATUS_LABELS: Record<string, string> = {
   stopping: 'Stopping',
   crashed: 'Crashed',
   transferring: 'Transferring',
+  cloning: 'Cloning Files',
 };

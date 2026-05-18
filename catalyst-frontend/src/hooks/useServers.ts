@@ -3,7 +3,7 @@ import { qk } from '../lib/queryKeys';
 import { serversApi } from '../services/api/servers';
 import type { Server, ServerListParams } from '../types/server';
 
-const transitionalStatuses = new Set(['installing', 'starting', 'stopping', 'transferring']);
+const transitionalStatuses = new Set(['installing', 'starting', 'stopping', 'transferring', 'cloning']);
 
 export function useServers(params?: ServerListParams) {
   return useQuery({

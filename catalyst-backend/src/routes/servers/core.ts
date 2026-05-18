@@ -612,6 +612,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         environment?: Record<string, string>;
         subdomain?: string | null;
         ownerId?: string;
+        allocationId?: string;
+        networkMode?: string;
+        copyFiles?: boolean;
       };
 
       // Resolve overrides with defaults from source server
@@ -784,8 +787,8 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         });
       }
 
-      // Network configuration — copy networkMode from source, allocate fresh ports/IPs
-      const desiredNetworkMode = sourceServer.networkMode || 'mc-lan-static';
+      // Network configuration — allow override, default to source server's mode
+      const desiredNetworkMode = body.networkMode || sourceServer.networkMode || 'mc-lan-static';
       const isHostNetwork = desiredNetworkMode === 'host';
 
       // Auto-assign fresh host ports for the clone.
@@ -863,6 +866,34 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         ? { ...resolvedEnvironment, CATALYST_NETWORK_IP: hostNetworkIp }
         : resolvedEnvironment;
 
+      // Validate allocationId if provided
+      const cloneAllocationId = body.allocationId;
+      let allocationIp: string | null = null;
+      let allocationPort: number | null = null;
+      if (cloneAllocationId) {
+        if (shouldUseIpam(desiredNetworkMode)) {
+          return reply.status(400).send({ error: 'Allocation IDs are only valid for bridge/host networking' });
+        }
+        const allocation = await prisma.nodeAllocation.findUnique({
+          where: { id: cloneAllocationId },
+        });
+        if (!allocation || allocation.nodeId !== targetNodeId) {
+          return reply.status(404).send({ error: 'Allocation not found' });
+        }
+        if (allocation.serverId) {
+          return reply.status(409).send({ error: 'Allocation is already assigned to a server' });
+        }
+        allocationIp = allocation.ip;
+        allocationPort = allocation.port;
+        // Override primary port and IP from the allocation
+        clonePrimaryPort = allocationPort;
+        hostNetworkIp = allocationIp;
+      }
+
+      const finalEnvironment = allocationIp
+        ? { ...nextEnvironment, CATALYST_NETWORK_IP: allocationIp }
+        : nextEnvironment;
+
       // Create the cloned server in a transaction (same pattern as POST /)
       let server;
       try {
@@ -885,12 +916,33 @@ export async function serverCoreRoutes(app: FastifyInstance) {
               networkMode: desiredNetworkMode,
               subdomain: normalizedSubdomain,
               environment: {
-                ...nextEnvironment,
+                ...finalEnvironment,
                 TEMPLATE_IMAGE: resolvedImage,
               },
               // Status is always "stopped" for a clone — never copy runtime state
             },
           });
+
+          // Assign allocation to the server if provided
+          if (cloneAllocationId) {
+            const updated = await tx.server.update({
+              where: { id: created.id },
+              data: {
+                primaryIp: allocationIp,
+                primaryPort: allocationPort ?? clonePrimaryPort,
+                environment: {
+                  ...finalEnvironment,
+                  TEMPLATE_IMAGE: resolvedImage,
+                  CATALYST_NETWORK_IP: allocationIp,
+                },
+              },
+            });
+            await tx.nodeAllocation.update({
+              where: { id: cloneAllocationId },
+              data: { serverId: created.id },
+            });
+            return updated as typeof created;
+          }
 
           // Allocate fresh IP via IPAM if needed (same as POST /)
           if (shouldUseIpam(desiredNetworkMode)) {
@@ -966,10 +1018,179 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         },
       });
 
-      reply.status(201).send({
-        success: true,
-        data: withConnectionInfo(server, node),
-      });
+      // If copyFiles is requested, set status to "cloning" and kick off async file copy
+      const shouldCopyFiles = body.copyFiles === true;
+      if (shouldCopyFiles) {
+        await prisma.server.update({
+          where: { id: server.id },
+          data: { status: 'cloning' },
+        });
+
+        // Broadcast the cloning status update immediately
+        const wsGatewayCloning = (app as any).wsGateway;
+        if (wsGatewayCloning?.pushToGlobalSubscribers) {
+          wsGatewayCloning.pushToGlobalSubscribers('server_state_update', {
+            type: 'server_state_update',
+            serverId: server.id,
+            state: 'cloning',
+          });
+        }
+
+        reply.status(201).send({
+          success: true,
+          data: withConnectionInfo({ ...server, status: 'cloning' }, node),
+        });
+      } else {
+        reply.status(201).send({
+          success: true,
+          data: withConnectionInfo(server, node),
+        });
+      }
+
+      // Async file copy (fire-and-forget from the request's perspective)
+      if (shouldCopyFiles) {
+        const cloneServerId = server.id;
+        const cloneServerUuid = (server as any).uuid;
+        const sourceUuid = sourceServer.uuid;
+        const sourceNodeId = sourceServer.nodeId;
+        const targetNodeIdFinal = targetNodeId;
+        const isSameNode = sourceNodeId === targetNodeIdFinal;
+
+        // Log start of file copy
+        await prisma.serverLog.create({
+          data: {
+            serverId: cloneServerId,
+            stream: 'system',
+            data: 'File copy from source server started...',
+          },
+        });
+
+        const wsGatewayFileCopy = (app as any).wsGateway;
+
+        // Perform file copy in background
+        (async () => {
+          try {
+            if (!wsGatewayFileCopy) {
+              throw new Error('WebSocket gateway not available');
+            }
+
+            if (isSameNode) {
+              // Same-node: tell agent to cp -a the data directory
+              const result = await wsGatewayFileCopy.requestFromAgent(targetNodeIdFinal, {
+                type: 'clone_server_files',
+                serverId: cloneServerId,
+                sourceServerUuid: sourceUuid,
+                targetServerUuid: cloneServerUuid,
+              }, 300000); // 5 min timeout for large servers
+
+              if (!result?.success) {
+                throw new Error(result?.error || 'Agent file copy failed');
+              }
+            } else {
+              // Cross-node: use backup stream relay (same as transfer)
+              const requestId = crypto.randomUUID();
+
+              // Prepare restore on target agent
+              const targetNode = await prisma.node.findUnique({ where: { id: targetNodeIdFinal } });
+              if (!targetNode) {
+                throw new Error('Target node not found');
+              }
+              const targetServerDir = `${targetNode.serverDataDir || '/var/lib/catalyst/servers'}/${cloneServerUuid}`;
+
+              const prepareResult = await wsGatewayFileCopy.requestFromAgent(targetNodeIdFinal, {
+                type: 'prepare_restore_stream',
+                requestId,
+                serverId: cloneServerId,
+                serverUuid: cloneServerUuid,
+                serverDir: targetServerDir,
+              }, 15000);
+
+              if (!prepareResult?.success) {
+                throw new Error(prepareResult?.error || 'Target agent failed to prepare for file copy');
+              }
+
+              // Set up binary relay
+              const relayPromise = wsGatewayFileCopy.relayBackupStream(sourceNodeId, targetNodeIdFinal);
+
+              // Tell source agent to start streaming
+              wsGatewayFileCopy.sendToAgent(sourceNodeId, {
+                type: 'start_backup_stream',
+                requestId,
+                serverId: sourceServer.id,
+                serverUuid: sourceUuid,
+              });
+
+              // Wait for relay to complete
+              await relayPromise;
+
+              // Finish restore on target
+              const finishResult = await wsGatewayFileCopy.requestFromAgent(targetNodeIdFinal, {
+                type: 'finish_restore_stream',
+                requestId,
+                serverId: cloneServerId,
+                serverUuid: cloneServerUuid,
+              }, 30000);
+
+              if (!finishResult?.success) {
+                throw new Error(finishResult?.error || 'Target agent failed to finish file copy');
+              }
+            }
+
+            // Success — update status to stopped
+            await prisma.server.update({
+              where: { id: cloneServerId },
+              data: { status: 'stopped' },
+            });
+
+            await prisma.serverLog.create({
+              data: {
+                serverId: cloneServerId,
+                stream: 'system',
+                data: 'File copy complete. Server is ready to start.',
+              },
+            });
+
+            // Broadcast status update
+            const wsGatewayDone = (app as any).wsGateway;
+            if (wsGatewayDone?.pushToGlobalSubscribers) {
+              wsGatewayDone.pushToGlobalSubscribers('server_state_update', {
+                type: 'server_state_update',
+                serverId: cloneServerId,
+                state: 'stopped',
+              });
+            }
+          } catch (err: any) {
+            // Failure — still set to stopped but log the error
+            await prisma.server.update({
+              where: { id: cloneServerId },
+              data: { status: 'stopped' },
+            });
+
+            await prisma.serverLog.create({
+              data: {
+                serverId: cloneServerId,
+                stream: 'system',
+                data: `File copy failed: ${err.message}. Server was created but files were not copied.`,
+              },
+            });
+
+            const wsGatewayFail = (app as any).wsGateway;
+            if (wsGatewayFail?.pushToGlobalSubscribers) {
+              wsGatewayFail.pushToGlobalSubscribers('server_state_update', {
+                type: 'server_state_update',
+                serverId: cloneServerId,
+                state: 'stopped',
+              });
+            }
+
+            captureSystemError({
+              level: 'error',
+              component: 'CloneFiles',
+              message: `File copy failed for clone ${cloneServerId}: ${err.message}`,
+            }).catch(() => {});
+          }
+        })();
+      }
 
       // Fire webhook for server creation
       const webhookService: any = (app as any).webhookService;
