@@ -65,7 +65,7 @@ function ServersPage() {
  data?.forEach((server) => {
  if (server.status === 'running') { counts.running += 1; return; }
  if (server.status === 'stopped') { counts.stopped += 1; return; }
- if (['installing', 'starting', 'stopping', 'transferring', 'cloning'].includes(server.status)) { counts.transitioning += 1; return; }
+ if (['installing', 'starting', 'stopping', 'transferring', 'cloning', 'restoring', 'creating_backup'].includes(server.status)) { counts.transitioning += 1; return; }
  if (server.status === 'crashed' || server.status === 'suspended') { counts.issues += 1; }
  });
  return counts;

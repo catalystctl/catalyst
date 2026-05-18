@@ -15,6 +15,7 @@ import { randomUUID } from "crypto";
 import { serialize } from '../utils/serialize';
 import { captureSystemError } from '../services/error-logger';
 import { hasNodeAccess } from '../lib/permissions';
+import { ServerState } from '../shared-types';
 
 export async function backupRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
@@ -119,10 +120,31 @@ export async function backupRoutes(app: FastifyInstance) {
         return reply.status(503).send({ error: "Node is offline" });
       }
 
+      // Atomically transition server to CREATING_BACKUP to prevent concurrent
+      // start operations during the backup (TOCTOU fix). Only allowed from STOPPED.
+      const lockResult = await prisma.server.updateMany({
+        where: { id: serverId, status: ServerState.STOPPED },
+        data: { status: ServerState.CREATING_BACKUP },
+      });
+      if (lockResult.count === 0) {
+        // Server was no longer stopped (race with start/another operation)
+        const current = await prisma.server.findUnique({
+          where: { id: serverId },
+          select: { status: true },
+        });
+        if (current?.status === ServerState.CREATING_BACKUP) {
+          return reply.status(409).send({ error: "A backup is already in progress" });
+        }
+        return reply.status(409).send({
+          error: `Server must be stopped before creating a backup (current: ${current?.status ?? "unknown"})`,
+        });
+      }
+
        const mode = resolveBackupStorageMode(server);
        const allocationMb = server.backupAllocationMb ?? 0;
        const hasExternalStorage = mode === "s3" || mode === "sftp";
        if (allocationMb <= 0 && !hasExternalStorage) {
+         await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
          return reply.status(403).send({
            error: "Backup allocation disabled. Configure S3 or SFTP to enable backups.",
          });
@@ -141,9 +163,11 @@ export async function backupRoutes(app: FastifyInstance) {
        const serverDir = buildServerDir(server.uuid);
 
        if (mode === "s3" && !storageKey) {
+         await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
          return reply.status(500).send({ error: "Missing S3 storage key" });
        }
        if (mode === "sftp" && !storageKey) {
+         await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
          return reply.status(500).send({ error: "Missing SFTP storage key" });
        }
 
@@ -164,6 +188,8 @@ export async function backupRoutes(app: FastifyInstance) {
       // Send backup request to agent
       const gateway = app.wsGateway;
       if (!gateway) {
+        // Revert status on early failure
+        await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
         return reply.status(500).send({ error: "Gateway not available" });
       }
       const success = await gateway.sendToAgent(server.nodeId, {
@@ -178,6 +204,8 @@ export async function backupRoutes(app: FastifyInstance) {
 
       if (!success) {
         await prisma.backup.delete({ where: { id: backupRecord.id } });
+        // Revert status on failure
+        await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
         return reply.status(503).send({ error: "Failed to send backup request to agent" });
       }
 
@@ -370,15 +398,29 @@ export async function backupRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Backup not found" });
       }
 
-      // Check if server is stopped
-      if (server.status !== "stopped") {
-        return reply.status(400).send({
-          error: "Server must be stopped before restoring",
+      // Atomically transition server to RESTORING to prevent concurrent
+      // start operations during the restore (TOCTOU fix). Only allowed from STOPPED.
+      const lockResult = await prisma.server.updateMany({
+        where: { id: serverId, status: ServerState.STOPPED },
+        data: { status: ServerState.RESTORING },
+      });
+      if (lockResult.count === 0) {
+        const current = await prisma.server.findUnique({
+          where: { id: serverId },
+          select: { status: true },
+        });
+        if (current?.status === ServerState.RESTORING) {
+          return reply.status(409).send({ error: "A restore is already in progress" });
+        }
+        return reply.status(409).send({
+          error: `Server must be stopped before restoring (current: ${current?.status ?? "unknown"})`,
         });
       }
 
       // Check if node is online
       if (!server.node.isOnline) {
+        // Revert status since we can't proceed
+        await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
         return reply.status(503).send({ error: "Node is offline" });
       }
 
@@ -386,27 +428,34 @@ export async function backupRoutes(app: FastifyInstance) {
 
       const gateway = app.wsGateway;
       if (!gateway) {
+        await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
         return reply.status(500).send({ error: "Gateway not available" });
       }
        let restorePath = backup.path;
        if (backup.storageMode === "s3" || backup.storageMode === "sftp") {
          const { storageKey } = backup.metadata as { storageKey?: string };
          if (!storageKey) {
+           await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
            return reply
              .status(500)
              .send({ error: `Missing ${backup.storageMode?.toUpperCase() || "remote"} storage key` });
          }
           const tmpPath = `${BACKUP_DIR}/${server.uuid}/${backup.name}.tar.gz`;
-          await fs.mkdir(`${BACKUP_DIR}/${server.uuid}`, { recursive: true });
-          const { stream } = await openStorageStream(backup, server);
-         await new Promise<void>((resolve, reject) => {
-           const writeStream = createWriteStream(tmpPath);
-           stream.pipe(writeStream);
-           stream.on("error", reject);
-           writeStream.on("finish", () => resolve());
-           writeStream.on("error", reject);
-         });
-         restorePath = tmpPath;
+          try {
+            await fs.mkdir(`${BACKUP_DIR}/${server.uuid}`, { recursive: true });
+            const { stream } = await openStorageStream(backup, server);
+            await new Promise<void>((resolve, reject) => {
+              const writeStream = createWriteStream(tmpPath);
+              stream.pipe(writeStream);
+              stream.on("error", reject);
+              writeStream.on("finish", () => resolve());
+              writeStream.on("error", reject);
+            });
+            restorePath = tmpPath;
+          } catch (dlError: any) {
+            await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
+            return reply.status(500).send({ error: dlError?.message || "Failed to download backup from remote storage" });
+          }
        }
 
       // Send restore request to agent
@@ -420,6 +469,7 @@ export async function backupRoutes(app: FastifyInstance) {
       });
 
       if (!success) {
+        await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
         return reply.status(503).send({ error: "Failed to send restore request to agent" });
       }
 

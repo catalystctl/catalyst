@@ -17,6 +17,8 @@ export enum ServerState {
   SUSPENDED = "suspended",
   ARCHIVED = "archived",
   ERROR = "error",
+  RESTORING = "restoring",
+  CREATING_BACKUP = "creating_backup",
 }
 
 export enum NetworkMode {

@@ -77,6 +77,18 @@ function getStatusConfig(serverStatus: string) {
  dot: 'bg-warning/50',
  label: serverStatus === 'starting' ? 'Starting' : 'Stopping',
  };
+ case 'restoring':
+ return {
+ variant: 'warning' as const,
+ dot: 'bg-warning/50',
+ label: 'Restoring',
+ };
+ case 'creating_backup':
+ return {
+ variant: 'warning' as const,
+ dot: 'bg-warning/50',
+ label: 'Creating Backup',
+ };
  default:
  return {
  variant: 'secondary' as const,
@@ -563,7 +575,7 @@ function AdminServersPage() {
  const isSuspended = server.status === 'suspended';
  const isRunning = server.status === 'running';
  const isStopped = server.status === 'stopped';
- const isBusy = server.status === 'starting' || server.status === 'stopping';
+ const isBusy = server.status === 'starting' || server.status === 'stopping' || server.status === 'restoring' || server.status === 'creating_backup';
 
  return (
  <div

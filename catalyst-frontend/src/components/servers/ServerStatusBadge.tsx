@@ -1,4 +1,4 @@
-import { Play, Square, Loader2, AlertTriangle, ArrowRightLeft, Ban, Copy } from 'lucide-react';
+import { Play, Square, Loader2, AlertTriangle, ArrowRightLeft, Ban, Copy, HardDriveDownload, Archive, OctagonX } from 'lucide-react';
 import type { ServerStatus } from '../../types/server';
 
 const colorMap: Record<ServerStatus, string> = {
@@ -11,6 +11,10 @@ const colorMap: Record<ServerStatus, string> = {
  transferring: 'bg-info-muted text-info',
  cloning: 'bg-info-muted text-info',
  suspended: 'bg-danger-muted text-danger',
+ restoring: 'bg-info-muted text-info',
+ creating_backup: 'bg-info-muted text-info',
+ archived: 'bg-surface-3 text-muted-foreground',
+ error: 'bg-danger-muted text-danger',
 };
 
 const iconMap: Record<ServerStatus, React.ReactNode> = {
@@ -23,6 +27,10 @@ const iconMap: Record<ServerStatus, React.ReactNode> = {
  transferring: <ArrowRightLeft className="h-3 w-3" />,
  cloning: <Copy className="h-3 w-3 animate-pulse" />,
  suspended: <Ban className="h-3 w-3" />,
+ restoring: <HardDriveDownload className="h-3 w-3 animate-pulse" />,
+ creating_backup: <Archive className="h-3 w-3 animate-pulse" />,
+ archived: <Archive className="h-3 w-3" />,
+ error: <OctagonX className="h-3 w-3" />,
 };
 
 function ServerStatusBadge({ status }: { status: ServerStatus }) {

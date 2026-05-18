@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db";
-import { createApiKey, deleteApiKey as deleteApiKeyService } from "../services/api-key-service";
+import { createApiKey, deleteApiKey as deleteApiKeyService, updateApiKey as updateApiKeyService } from "../services/api-key-service";
 import { PERMISSION_CATEGORIES, hasPermission } from "../lib/permissions-catalog";
 import { serialize } from '../utils/serialize';
 import { captureSystemError } from "../services/error-logger";
@@ -223,32 +223,11 @@ export async function apiKeyRoutes(app: FastifyInstance) {
       const { id } = request.params;
       const body = updateApiKeySchema.parse(request.body);
 
-      const updateData: any = { updatedAt: new Date() };
-      if (body.name !== undefined) updateData.name = body.name;
-      if (body.enabled !== undefined) updateData.enabled = body.enabled;
-      if (body.rateLimitMax !== undefined) {
-        updateData.rateLimitMax = body.rateLimitMax;
-        updateData.refillAmount = body.rateLimitMax;
-      }
-      if (body.rateLimitTimeWindow !== undefined) {
-        updateData.rateLimitTimeWindow = body.rateLimitTimeWindow;
-        updateData.refillInterval = body.rateLimitTimeWindow;
-      }
+      const apiKey = await updateApiKeyService(id, body);
 
-      const apiKey = await prisma.apikey.update({
-        where: { id },
-        data: updateData,
-        select: {
-          id: true, name: true, prefix: true, start: true, enabled: true,
-          expiresAt: true, lastRequest: true, requestCount: true, remaining: true,
-          rateLimitMax: true, rateLimitTimeWindow: true,
-          allPermissions: true, permissions: true, metadata: true,
-          createdAt: true, updatedAt: true, userId: true,
-          user: {
-            select: { id: true, username: true, email: true },
-          },
-        },
-      });
+      if (!apiKey) {
+        return reply.status(404).send({ success: false, error: "API key not found" });
+      }
 
       await prisma.auditLog.create({
         data: {

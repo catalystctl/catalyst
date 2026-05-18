@@ -17,7 +17,7 @@ export class ServerStateMachine {
   private static readonly TRANSITIONS: Map<ServerState, ServerState[]> = new Map([
     [
       ServerState.STOPPED,
-      [ServerState.INSTALLING, ServerState.STARTING, ServerState.ERROR, ServerState.SUSPENDED, ServerState.ARCHIVED],
+      [ServerState.INSTALLING, ServerState.STARTING, ServerState.ERROR, ServerState.SUSPENDED, ServerState.ARCHIVED, ServerState.RESTORING, ServerState.CREATING_BACKUP],
     ],
     [ServerState.INSTALLING, [ServerState.STOPPED, ServerState.ERROR]],
     [
@@ -33,6 +33,9 @@ export class ServerStateMachine {
     [ServerState.SUSPENDED, [ServerState.STOPPED, ServerState.STARTING, ServerState.ERROR]],
     [ServerState.ARCHIVED, [ServerState.STOPPED, ServerState.ERROR]],
     [ServerState.ERROR, [ServerState.STOPPED, ServerState.INSTALLING, ServerState.STARTING, ServerState.STOPPING]],
+    // Transitional states for backup operations — always return to STOPPED on completion
+    [ServerState.RESTORING, [ServerState.STOPPED, ServerState.ERROR]],
+    [ServerState.CREATING_BACKUP, [ServerState.STOPPED, ServerState.ERROR]],
   ]);
 
   /**
@@ -102,6 +105,6 @@ export class ServerStateMachine {
    * Check if server is transitioning
    */
   static isTransitioning(state: ServerState): boolean {
-    return [ServerState.STARTING, ServerState.STOPPING].includes(state);
+    return [ServerState.STARTING, ServerState.STOPPING, ServerState.RESTORING, ServerState.CREATING_BACKUP].includes(state);
   }
 }

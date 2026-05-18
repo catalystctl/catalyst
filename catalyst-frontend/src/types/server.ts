@@ -7,7 +7,11 @@ export type ServerStatus =
   | 'crashed'
   | 'transferring'
   | 'cloning'
-  | 'suspended';
+  | 'suspended'
+  | 'restoring'
+  | 'creating_backup'
+  | 'archived'
+  | 'error';
 
 export type RestartPolicy = 'always' | 'on-failure' | 'never';
 export type BackupStorageMode = 'local' | 's3' | 'sftp' | 'stream';

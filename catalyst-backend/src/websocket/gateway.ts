@@ -1575,7 +1575,7 @@ export class WebSocketGateway {
             nodeId,
             // Only check servers that aren't already in terminal states
             status: {
-              notIn: [ServerState.STOPPED, ServerState.ERROR]
+              notIn: [ServerState.STOPPED, ServerState.ERROR, ServerState.CREATING_BACKUP, ServerState.RESTORING]
             }
           },
           select: { id: true, uuid: true, status: true, suspendedAt: true }
@@ -1623,6 +1623,14 @@ export class WebSocketGateway {
           where: { id: message.serverId },
           include: { node: true },
         });
+
+        // Transition server back to STOPPED after backup completes
+        if (server?.status === ServerState.CREATING_BACKUP) {
+          await this.prisma.server.update({
+            where: { id: message.serverId },
+            data: { status: ServerState.STOPPED },
+          });
+        }
 
         if (!server) {
           return;
@@ -1811,6 +1819,11 @@ export class WebSocketGateway {
         }
 
       } else if (message.type === "backup_restore_complete") {
+        // Transition server back to STOPPED after restore completes
+        await this.prisma.server.updateMany({
+          where: { id: message.serverId, status: ServerState.RESTORING },
+          data: { status: ServerState.STOPPED },
+        });
         await this.routeToClients(message.serverId, message);
       } else if (message.type === "backup_delete_complete") {
         await this.routeToClients(message.serverId, message);
