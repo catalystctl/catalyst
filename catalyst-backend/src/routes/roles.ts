@@ -217,6 +217,14 @@ export async function roleRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'Role not found' });
       }
 
+      // Prevent self-modification: users cannot update a role they are assigned to
+      const selfAssigned = await prisma.user.findFirst({
+        where: { id: userId, roles: { some: { id: roleId } } },
+      });
+      if (selfAssigned) {
+        return reply.status(403).send({ error: 'Cannot modify a role you are assigned to' });
+      }
+
       // Check for duplicate name
       if (name && name.trim() !== role.name) {
         const existing = await prisma.role.findFirst({
@@ -374,6 +382,14 @@ export async function roleRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'Role not found' });
       }
 
+      // Prevent self-modification: users cannot add permissions to a role they are assigned to
+      const selfAssigned = await prisma.user.findFirst({
+        where: { id: userId, roles: { some: { id: roleId } } },
+      });
+      if (selfAssigned) {
+        return reply.status(403).send({ error: 'Cannot modify a role you are assigned to' });
+      }
+
       if (role.permissions.includes(permission)) {
         return reply.status(409).send({ error: 'Role already has this permission' });
       }
@@ -438,6 +454,14 @@ export async function roleRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'Role not found' });
       }
 
+      // Prevent self-modification: users cannot remove permissions from a role they are assigned to
+      const selfAssigned = await prisma.user.findFirst({
+        where: { id: userId, roles: { some: { id: roleId } } },
+      });
+      if (selfAssigned) {
+        return reply.status(403).send({ error: 'Cannot modify a role you are assigned to' });
+      }
+
       if (!role.permissions.includes(permission)) {
         return reply.status(404).send({ error: 'Role does not have this permission' });
       }
@@ -498,6 +522,11 @@ export async function roleRoutes(app: FastifyInstance) {
 
       if (!user) {
         return reply.status(404).send({ error: 'User not found' });
+      }
+
+      // Prevent self-assignment: users cannot assign roles to themselves
+      if (userId === currentUserId) {
+        return reply.status(403).send({ error: 'Cannot assign roles to yourself' });
       }
 
       // Validate current user has all permissions in the target role
@@ -585,6 +614,11 @@ export async function roleRoutes(app: FastifyInstance) {
 
       if (!userWithRole) {
         return reply.status(404).send({ error: 'User does not have this role' });
+      }
+
+      // Prevent self-removal: users cannot remove roles from themselves
+      if (userId === currentUserId) {
+        return reply.status(403).send({ error: 'Cannot remove roles from yourself' });
       }
 
       await prisma.user.update({

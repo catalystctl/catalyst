@@ -290,6 +290,26 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'One or more roles are invalid' });
       }
 
+      // Validate that the acting user can grant all permissions in the assigned roles
+      // This prevents privilege escalation: an admin with user.create but not *
+      // should not be able to create a user with a role that has permissions they don't have.
+      if (roleIds?.length) {
+        const actingPerms: string[] = user?.permissions ?? [];
+        const actingHasWildcard = actingPerms.includes('*');
+        if (!actingHasWildcard) {
+          for (const role of rolesToAssign) {
+            const cantGrant = (role.permissions as string[]).filter(
+              (p) => !actingPerms.includes(p),
+            );
+            if (cantGrant.length > 0) {
+              return reply.status(403).send({
+                error: `Cannot assign role with permissions you don't have: ${cantGrant.join(', ')}`,
+              });
+            }
+          }
+        }
+      }
+
       let serverAccessIds: string[] = [];
       let defaultPermissions: string[] | undefined;
       if (serverIds?.length) {
@@ -462,6 +482,11 @@ export async function adminRoutes(app: FastifyInstance) {
         if (!(canManageUsers(request, 'set_roles'))) {
           return reply.status(403).send({ error: 'User set_roles permission required' });
         }
+
+        // Prevent self-modification: users cannot change their own roles
+        if (userId === user.userId) {
+          return reply.status(403).send({ error: 'Cannot modify your own roles' });
+        }
       } else {
         if (!(canManageUsers(request, 'update'))) {
           return reply.status(403).send({ error: 'User update permission required' });
@@ -487,6 +512,26 @@ export async function adminRoutes(app: FastifyInstance) {
 
       if (roleIds?.length && rolesToAssign.length !== roleIds.length) {
         return reply.status(400).send({ error: 'One or more roles are invalid' });
+      }
+
+      // Validate that the acting user can grant all permissions in the assigned roles
+      // This prevents privilege escalation: an admin with user.set_roles but not *
+      // should not be able to assign a role with permissions they don't have.
+      if (roleIds?.length) {
+        const actingPerms: string[] = user?.permissions ?? [];
+        const actingHasWildcard = actingPerms.includes('*');
+        if (!actingHasWildcard) {
+          for (const role of rolesToAssign) {
+            const cantGrant = (role.permissions as string[]).filter(
+              (p) => !actingPerms.includes(p),
+            );
+            if (cantGrant.length > 0) {
+              return reply.status(403).send({
+                error: `Cannot assign role with permissions you don't have: ${cantGrant.join(', ')}`,
+              });
+            }
+          }
+        }
       }
 
       if (email || username) {
