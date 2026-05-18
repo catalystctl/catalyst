@@ -18,7 +18,7 @@ export const rolesApi = {
   // List all roles
   list: async () => {
     const data = await apiClient.get<ApiResponse<Role[]>>('/api/roles');
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
 
   // Get a single role by ID
@@ -89,6 +89,6 @@ export const rolesApi = {
   // Get role presets
   getPresets: async () => {
     const data = await apiClient.get<ApiResponse<RolePreset[]>>('/api/roles/presets');
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
 };

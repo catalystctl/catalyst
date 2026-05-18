@@ -131,7 +131,7 @@ export const adminApi = {
   },
   listIpPools: async () => {
     const data = await apiClient.get<ApiResponse<IpPool[]>>('/api/admin/ip-pools');
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
   createIpPool: async (payload: CreateIpPoolPayload) => {
     const data = await apiClient.post<ApiResponse<IpPool>>('/api/admin/ip-pools', payload);
@@ -150,7 +150,7 @@ export const adminApi = {
   },
   listDatabaseHosts: async () => {
     const data = await apiClient.get<ApiResponse<DatabaseHost[]>>('/api/admin/database-hosts');
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
   createDatabaseHost: async (payload: {
     name: string;
@@ -345,7 +345,7 @@ export const adminApi = {
   // Get role presets
   getRolePresets: async () => {
     const data = await apiClient.get<ApiResponse<RolePreset[]>>('/api/roles/presets');
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
   listSystemErrors: async (params?: {
     page?: number;

@@ -21,7 +21,6 @@ import {
  Plus,
  Command,
  Loader2,
- Activity,
  Terminal,
  FolderOpen,
  FolderSync,
@@ -778,8 +777,8 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  const items: SearchItem[] = [];
 
  // Servers + their tabs
- if (servers) {
- for (const server of servers as any[]) {
+ if (Array.isArray(servers)) {
+ for (const server of servers) {
  items.push({
  id: `server-${server.id}`,
  label: server.name,
@@ -811,16 +810,16 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  }
 
  // Nodes + allocation pages
- if (nodes) {
- for (const node of nodes as any[]) {
+ if (Array.isArray(nodes)) {
+ for (const node of nodes) {
  items.push({
  id: `node-${node.id}`,
  label: node.name,
- description: `${node.fqdn || node.host || ''} · ${node.allocationsCount ?? 0} allocations`,
+ description: `${node.hostname || node.publicAddress || ''} · ${node._count?.servers ?? 0} servers`,
  icon: MonitorDot,
  to: `/admin/nodes/${node.id}`,
  category: 'Nodes',
- keywords: [node.fqdn || '', node.host || '', 'node', 'machine'],
+ keywords: [node.hostname || '', node.publicAddress || '', 'node', 'machine'],
  badge: 'Admin',
  path: `/admin/nodes/${node.id}`,
  });
@@ -844,16 +843,16 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  }
 
  // Templates
- if (templates) {
- for (const tmpl of templates as any[]) {
+ if (Array.isArray(templates)) {
+ for (const tmpl of templates) {
  items.push({
  id: `template-${tmpl.id}`,
  label: tmpl.name,
- description: tmpl.description || tmpl.nest || 'Server template',
+ description: tmpl.description || tmpl.nest?.name || 'Server template',
  icon: FileText,
  to: `/admin/templates/${tmpl.id}`,
  category: 'Templates',
- keywords: [tmpl.nest || '', 'template', 'egg', 'server template'],
+ keywords: [tmpl.nest?.name || '', 'template', 'egg', 'server template'],
  badge: 'Admin',
  path: `/admin/templates/${tmpl.id}`,
  });

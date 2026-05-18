@@ -24,7 +24,7 @@ export type NodeAssignment = {
 export const nodesApi = {
   list: async () => {
     const data = await apiClient.get<ApiResponse<NodeInfo[]>>('/api/nodes');
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
   get: async (nodeId: string) => {
     const data = await apiClient.get<ApiResponse<NodeInfo>>(`/api/nodes/${nodeId}`);
@@ -113,21 +113,21 @@ export const nodesApi = {
     const data = await apiClient.get<
       ApiResponse<Array<{ id: string; networkName: string; cidr: string; availableCount: number }>>
     >(`/api/nodes/${nodeId}/ip-pools`);
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
   availableIps: async (nodeId: string, networkName: string, limit = 200) => {
     const data = await apiClient.get<ApiResponse<string[]>>(
       `/api/nodes/${nodeId}/ip-availability`,
       { params: { networkName, limit } },
     );
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
   allocations: async (nodeId: string, params?: { search?: string; serverId?: string }) => {
     const data = await apiClient.get<ApiResponse<NodeAllocation[]>>(
       `/api/nodes/${nodeId}/allocations`,
       { params },
     );
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
   createAllocations: async (
     nodeId: string,
@@ -187,7 +187,7 @@ export const nodesApi = {
     const data = await apiClient.get<ApiResponse<NodeAssignment[]>>(
       `/api/nodes/${nodeId}/assignments`,
     );
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
 
   assignNode: async (
@@ -214,7 +214,7 @@ export const nodesApi = {
 
   getAccessibleNodes: async () => {
     const data = await apiClient.get<ApiResponse<NodeInfo[]>>('/api/nodes/accessible');
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
 
   // Wildcard assignment - assign all nodes (current and future)
@@ -256,7 +256,7 @@ export const nodesApi = {
         }>
       >
     >(`/api/nodes/${nodeId}/unregistered-containers`);
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
 
   // Suggest template match for an unregistered container
@@ -271,7 +271,7 @@ export const nodesApi = {
         }>
       >
     >(`/api/nodes/${nodeId}/unregistered-containers/${containerId}/suggest-template`);
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
 
   // Import a discovered container as a server

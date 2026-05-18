@@ -12,7 +12,7 @@ export const databasesApi = {
     const data = await apiClient.get<ApiResponse<ServerDatabase[]>>(
       `/api/servers/${serverId}/databases`,
     );
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
   create: async (serverId: string, payload: { name?: string; hostId: string }) => {
     const data = await apiClient.post<ApiResponse<ServerDatabase>>(

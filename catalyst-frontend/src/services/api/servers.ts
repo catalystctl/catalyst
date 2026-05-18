@@ -24,7 +24,7 @@ type ApiResponse<T> = {
 export const serversApi = {
   list: async (params?: ServerListParams) => {
     const data = await apiClient.get<ApiResponse<Server[]>>('/api/servers', { params });
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
   get: async (id: string) => {
     const data = await apiClient.get<ApiResponse<Server>>(`/api/servers/${id}`);
@@ -91,7 +91,7 @@ export const serversApi = {
       `/api/servers/${id}/logs`,
       { params },
     );
-    return data.data?.logs || [];
+    return Array.isArray(data.data?.logs) ? data.data.logs : [];
   },
   metrics: async (id: string, params?: { hours?: number; limit?: number }) => {
     const data = await apiClient.get<ApiResponse<any>>(`/api/servers/${id}/metrics`, { params });
@@ -99,7 +99,7 @@ export const serversApi = {
   },
   allocations: async (id: string) => {
     const data = await apiClient.get<ApiResponse<any>>(`/api/servers/${id}/allocations`);
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
   addAllocation: async (id: string, payload: { containerPort: number; hostPort: number }) => {
     const data = await apiClient.post<ApiResponse<any>>(`/api/servers/${id}/allocations`, payload);
@@ -157,7 +157,7 @@ export const serversApi = {
   },
   listInvites: async (id: string) => {
     const data = await apiClient.get<ApiResponse<ServerInvite[]>>(`/api/servers/${id}/invites`);
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
   createInvite: async (id: string, payload: { email: string; permissions: string[] }) => {
     const data = await apiClient.post<ApiResponse<ServerInvite>>(
@@ -303,7 +303,7 @@ export const serversApi = {
     const data = await apiClient.get<ApiResponse<import('../../types/server').ServerStartupVariable[]>>(
       `/api/servers/${id}/variables`,
     );
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
 
   updateVariables: async (id: string, payload: Record<string, string>) => {

@@ -17,7 +17,7 @@ type ApiResponse<T> = {
 export const locationsApi = {
   list: async (): Promise<Location[]> => {
     const data = await apiClient.get<ApiResponse<Location[]>>('/api/locations');
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
   create: async (payload: { name: string; description?: string }) => {
     const data = await apiClient.post<ApiResponse<Location>>('/api/locations', payload);

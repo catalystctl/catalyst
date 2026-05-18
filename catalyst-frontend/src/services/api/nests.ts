@@ -11,7 +11,7 @@ type ApiResponse<T> = {
 export const nestsApi = {
   list: async (): Promise<Nest[]> => {
     const data = await apiClient.get<ApiResponse<Nest[]>>('/api/nests');
-    return data.data || [];
+    return Array.isArray(data.data) ? data.data : [];
   },
   create: async (payload: {
     name: string;

@@ -100,7 +100,7 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
   // Keyed by serverId + initialLines so remounting with the same params
   // still loads cached data into the fresh state.
   useEffect(() => {
-    if (!serverId || !logsQuery.data) return;
+    if (!serverId || !Array.isArray(logsQuery.data)) return;
 
     const key = `${serverId}:${initialLines}`;
     if (loadedKeyRef.current === key) return;
