@@ -1,4 +1,3 @@
-import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 interface StatsCardProps {
@@ -13,33 +12,43 @@ interface StatsCardProps {
 
 export function StatsCard({ title, value, subtitle, icon, variant = 'default', onClick, className }: StatsCardProps) {
   const variantStyles = {
-    default: '',
-    success: 'border-l-2 border-l-success',
-    danger: 'border-l-2 border-l-danger',
-    warning: 'border-l-2 border-l-warning',
-    info: 'border-l-2 border-l-info',
+    default: 'border-border/30',
+    success: 'border-success/30',
+    danger: 'border-danger/30',
+    warning: 'border-warning/30',
+    info: 'border-info/30',
   };
 
-  const iconStyles = {
-    default: 'text-muted-foreground',
-    success: 'text-success',
-    danger: 'text-danger',
-    warning: 'text-warning',
-    info: 'text-info',
+  const iconBgStyles = {
+    default: 'bg-surface-2/30 text-muted-foreground',
+    success: 'bg-success/10 text-success',
+    danger: 'bg-danger/10 text-danger',
+    warning: 'bg-warning/10 text-warning',
+    info: 'bg-info/10 text-info',
   };
 
   return (
-    <Card className={cn('transition-all duration-200 hover:shadow-elevated dark:hover:shadow-elevated-dark', onClick && 'cursor-pointer', variantStyles[variant], className)} onClick={onClick}>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{title}</p>
-            <p className="mt-1 text-2xl font-display font-bold text-foreground">{value}</p>
-            {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
-          </div>
-          {icon && <div className={cn('text-lg', iconStyles[variant])}>{icon}</div>}
+    <div
+      className={cn(
+        'rounded-md border bg-surface-2/30 px-3 py-2 transition-all duration-150',
+        variantStyles[variant],
+        onClick && 'cursor-pointer hover:border-primary/20 hover:bg-primary/[0.02]',
+        className,
+      )}
+      onClick={onClick}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{title}</p>
+          <p className="mt-1 text-sm font-semibold font-mono tabular-nums text-foreground">{value}</p>
+          {subtitle && <p className="mt-0.5 text-[10px] text-muted-foreground/40">{subtitle}</p>}
         </div>
-      </CardContent>
-    </Card>
+        {icon && (
+          <div className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-md', iconBgStyles[variant])}>
+            {icon}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

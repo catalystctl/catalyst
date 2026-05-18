@@ -1,17 +1,11 @@
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, type Variants } from 'framer-motion';
 import type { Server } from '../../types/server';
 import ServerStatusBadge from './ServerStatusBadge';
 import ServerControls from './ServerControls';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ServerIcon, Globe, Terminal, ChevronRight, HardDrive, Cpu, MemoryStick } from 'lucide-react';
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 8 },
-  visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 400, damping: 30 } },
-};
 
 const clampPercent = (value: number) => Math.min(100, Math.max(0, value));
 const formatPercent = (value?: number | null) =>
@@ -24,9 +18,9 @@ const formatMB = (mb: number) => {
 const barColor = (val: number) =>
   val > 80 ? 'bg-danger' : val > 60 ? 'bg-warning' : 'bg-primary';
 
-function MiniBar({ value, className }: { value: number; className?: string }) {
+function MiniBar({ value }: { value: number }) {
   return (
-    <div className={`h-1 w-16 overflow-hidden rounded-full bg-surface-2 ${className}`}>
+    <div className="h-1 w-16 overflow-hidden rounded-full bg-surface-2/30">
       <div
         className={`h-full rounded-full transition-all duration-500 ${barColor(value)}`}
         style={{ width: `${value}%` }}
@@ -68,10 +62,10 @@ function ServerListItem({ server }: { server: Server }) {
   const diskBar = diskPercent ?? 0;
 
   return (
-    <motion.div
-      variants={itemVariants}
-      className="group flex items-center gap-4 rounded-xl border border-border/50 bg-card/80 px-4 py-3 backdrop-blur-sm transition-all duration-200 hover:border-primary/20 hover:shadow-md"
-    >
+    <div className="group relative flex items-center gap-4 rounded-lg border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]">
+      {/* Left accent bar */}
+      <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
+
       {/* Status indicator */}
       <div className="shrink-0">
         <ServerStatusBadge status={server.status} />
@@ -99,19 +93,19 @@ function ServerListItem({ server }: { server: Server }) {
 
       {/* Resource bars — hidden on small screens */}
       <div className="hidden items-center gap-4 lg:flex">
-        <div className="flex items-center gap-2 text-[11px]">
-          <Cpu className="h-3 w-3 text-muted-foreground" />
-          <span className="w-8 text-right tabular-nums text-foreground">{formatPercent(cpuPercent)}</span>
+        <div className="flex items-center gap-2">
+          <Cpu className="h-3 w-3 text-muted-foreground/50" />
+          <span className="w-8 text-right font-mono text-[10px] tabular-nums text-foreground">{formatPercent(cpuPercent)}</span>
           <MiniBar value={cpuBar} />
         </div>
-        <div className="flex items-center gap-2 text-[11px]">
-          <MemoryStick className="h-3 w-3 text-muted-foreground" />
-          <span className="w-8 text-right tabular-nums text-foreground">{formatPercent(memoryPercent)}</span>
+        <div className="flex items-center gap-2">
+          <MemoryStick className="h-3 w-3 text-muted-foreground/50" />
+          <span className="w-8 text-right font-mono text-[10px] tabular-nums text-foreground">{formatPercent(memoryPercent)}</span>
           <MiniBar value={memoryBar} />
         </div>
-        <div className="flex items-center gap-2 text-[11px]">
-          <HardDrive className="h-3 w-3 text-muted-foreground" />
-          <span className="w-12 text-right tabular-nums text-foreground">
+        <div className="flex items-center gap-2">
+          <HardDrive className="h-3 w-3 text-muted-foreground/50" />
+          <span className="w-12 text-right font-mono text-[10px] tabular-nums text-foreground">
             {server.diskUsageMb != null && diskTotalMb
               ? `${formatMB(server.diskUsageMb)}/${formatMB(diskTotalMb)}`
               : formatPercent(diskPercent)}
@@ -128,19 +122,19 @@ function ServerListItem({ server }: { server: Server }) {
           size="sm"
           asChild
           disabled={isSuspended}
-          className="hidden sm:inline-flex"
+          className="hidden sm:inline-flex border-border/40"
         >
           <Link to={isSuspended ? '#' : `/servers/${server.id}/console`} className="flex items-center gap-1">
             <Terminal className="h-3 w-3" />
           </Link>
         </Button>
-        <Button size="sm" asChild>
+        <Button size="sm" asChild className="shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)]">
           <Link to={`/servers/${server.id}`} className="flex items-center gap-1">
             <ChevronRight className="h-3.5 w-3.5" />
           </Link>
         </Button>
       </div>
-    </motion.div>
+    </div>
   );
 }
 

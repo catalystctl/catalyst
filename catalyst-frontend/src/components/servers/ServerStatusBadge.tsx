@@ -2,7 +2,7 @@ import { Play, Square, Loader2, AlertTriangle, ArrowRightLeft, Ban } from 'lucid
 import type { ServerStatus } from '../../types/server';
 
 const colorMap: Record<ServerStatus, string> = {
-  stopped: 'bg-surface-3 text-muted-foreground dark:bg-surface-2 dark:text-muted-foreground',
+  stopped: 'bg-surface-3 text-muted-foreground',
   installing: 'bg-primary-muted text-primary',
   starting: 'bg-primary-muted text-primary',
   running: 'bg-success-muted text-success',

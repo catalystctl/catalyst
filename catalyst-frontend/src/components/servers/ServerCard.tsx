@@ -1,6 +1,5 @@
 import { memo, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, type Variants } from 'framer-motion';
 import type { Server } from '../../types/server';
 import ServerStatusBadge from './ServerStatusBadge';
 import ServerControls from './ServerControls';
@@ -8,11 +7,6 @@ import { notifyError } from '../../utils/notify';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ServerIcon, Globe, Terminal, ChevronRight } from 'lucide-react';
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
-};
 
 const clampPercent = (value: number) => Math.min(100, Math.max(0, value));
 const formatPercent = (value?: number | null) =>
@@ -72,18 +66,18 @@ function ServerCard({ server }: { server: Server }) {
   );
 
   return (
-    <motion.div
-      variants={itemVariants}
-      className="group relative overflow-hidden rounded-xl border border-border bg-card/80 backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:border-primary/20"
-    >
-      <div className="p-5">
+    <div className="group relative overflow-hidden rounded-lg border border-border/30 bg-card transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]">
+      {/* Left accent bar */}
+      <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
+
+      <div className="p-5 pl-6">
         {/* Header */}
         <div className="mb-4 flex items-start justify-between gap-4">
           <div className="flex-1 space-y-2">
             <div className="flex items-center gap-2">
               <Link
                 to={`/servers/${server.id}`}
-                className="font-display text-xl font-bold text-foreground transition-colors hover:text-primary"
+                className="font-display text-sm font-semibold text-foreground transition-colors hover:text-primary"
               >
                 {server.name}
               </Link>
@@ -113,11 +107,11 @@ function ServerCard({ server }: { server: Server }) {
         <div className="mb-4 grid gap-3 md:grid-cols-3">
           {metrics.map((metric) => (
             <div key={metric.label} className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium uppercase tracking-wider text-muted-foreground">{metric.label}</span>
-                <span className="font-semibold text-foreground">{metric.display}</span>
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{metric.label}</span>
+                <span className="font-mono text-[11px] tabular-nums text-foreground">{metric.display}</span>
               </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+              <div className="h-1.5 overflow-hidden rounded-full bg-surface-2/30">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${barColor(metric.bar)}`}
                   style={{ width: `${metric.bar}%` }}
@@ -128,7 +122,7 @@ function ServerCard({ server }: { server: Server }) {
         </div>
 
         {/* Actions */}
-        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/30 pt-4">
           <ServerControls serverId={server.id} status={server.status} permissions={server.effectivePermissions} />
           <Button
             variant="outline"
@@ -148,7 +142,7 @@ function ServerCard({ server }: { server: Server }) {
               Console
             </Link>
           </Button>
-          <Button size="sm" asChild className="ml-auto">
+          <Button size="sm" asChild className="ml-auto shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)]">
             <Link to={`/servers/${server.id}`} className="flex items-center gap-1.5">
               Manage
               <ChevronRight className="h-3.5 w-3.5" />
@@ -156,7 +150,7 @@ function ServerCard({ server }: { server: Server }) {
           </Button>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
