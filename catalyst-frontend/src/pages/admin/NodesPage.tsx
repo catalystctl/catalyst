@@ -51,7 +51,6 @@ import TabHeader from '../../components/servers/tabs/TabHeader';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 import StatGrid from '../../components/servers/tabs/StatGrid';
 import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
-import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 
 // ── Helpers ──
 const formatMemory = (mb: number) => {

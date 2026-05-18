@@ -20,7 +20,7 @@ import {
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import StatGrid from '../../components/servers/tabs/StatGrid';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
-import SectionHeader from '../../components/servers/tabs/SectionHeader';
+
 import { useAdminHealth, useAdminStats, useDnsSettings, useModManagerSettings, useSmtpSettings } from '../../hooks/useAdmin';
 import UpdateSettings from '../../components/admin/UpdateSettings';
 import { adminApi } from '../../services/api/admin';
@@ -181,9 +181,6 @@ function SystemPage() {
  setDnsCloudflareApiToken(dnsSettings.cloudflareApiToken ?? '');
  setDnsCloudflareZoneId(dnsSettings.cloudflareZoneId ?? '');
  }, [dnsSettings]);
-
- const isHealthy = health?.status === 'healthy';
- const dbStatus = health?.database ?? 'checking';
 
  const healthItems = [
  {

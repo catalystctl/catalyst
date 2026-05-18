@@ -123,7 +123,7 @@ function RuleRow({
 }
 
 // ── Alert Row ──
-function AlertRow({ alert, showAdminTargets, onResolve, isPending, index }: {
+function AlertRow({ alert, showAdminTargets, onResolve, isPending }: {
  alert: any; showAdminTargets: boolean; onResolve: () => void; isPending: boolean; index: number;
 }) {
  const severityAccent = alert.severity === 'critical'

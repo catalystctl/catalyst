@@ -115,8 +115,6 @@ const tabIcons: Record<
  admin: Shield,
 };
 
-
-
 function TabSkeleton() {
  return (
  <div className="flex h-96 items-center justify-center">

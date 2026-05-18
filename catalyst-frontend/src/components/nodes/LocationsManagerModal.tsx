@@ -7,7 +7,6 @@ import { locationsApi, type Location } from '../../services/api/locations';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import ConfirmDialog from '../shared/ConfirmDialog';
 import { ModalPortal } from '@/components/ui/modal-portal';
-import SectionHeader from '../servers/tabs/SectionHeader';
 
 /**
  * Maps a `returnTo` identifier (sent by the opening modal) to the

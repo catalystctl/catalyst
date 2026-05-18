@@ -111,7 +111,7 @@ function PermissionsDisplay({
 
  {!collapsed && (
  <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5 pl-1">
- {entries.map(([catId, { perms: catPerms }]) =>
+ {entries.map(([{ perms: catPerms }]) =>
  catPerms.map((perm) => (
  <div key={perm} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
  <span className="h-1 w-1 rounded-full bg-primary/40" />

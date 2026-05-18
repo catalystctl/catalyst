@@ -32,7 +32,7 @@ import {
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
-import { Checkbox } from '../../components/ui/checkbox';
+
 import {
  Select,
  SelectContent,
@@ -758,7 +758,7 @@ export default function MigrationPage() {
  queryKey: ['migration-steps', activeJobId],
  queryFn: () => migrationApi.getSteps(activeJobId!, { limit: 500 }),
  enabled: !!activeJobId,
- refetchInterval: (query) => {
+ refetchInterval: (_query) => {
  const job = activeJob;
  if (!job) return 2000;
  return ['running', 'validating', 'paused'].includes(job.status) ? 2000 : false;
@@ -1071,7 +1071,6 @@ export default function MigrationPage() {
  </div>
  )}
 
-
  {/* Backup slot warnings */}
  <BackupSlotWarnings serversList={testResult?.serversList} />
 
@@ -1306,7 +1305,7 @@ export default function MigrationPage() {
  const sc = stepStatusConfig[status];
  const PhaseIconComp = PhaseIcon;
  const isCurrentPhase = activeJob.currentPhase === phase.id;
- const completedInPhase = steps.filter(s => s.status === 'completed').length;
+
  const failedInPhase = steps.filter(s => s.status === 'failed').length;
 
  return (

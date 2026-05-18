@@ -11,7 +11,7 @@ import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 import SectionHeader from '../../components/servers/tabs/SectionHeader';
 import StatGrid from '../../components/servers/tabs/StatGrid';
 import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
-import { ServerIcon, Play, Square, AlertTriangle, BarChart3, LayoutGrid, List, Shield, Users, Globe } from 'lucide-react';
+import { ServerIcon, BarChart3, LayoutGrid, List, Shield, Users, Globe } from 'lucide-react';
 
 type AccessFilter = 'all' | 'owned' | 'other';
 
@@ -81,7 +81,6 @@ function ServersPage() {
  }, [data, user?.id]);
 
  const totalServers = data?.length ?? 0;
- const filteredServers = filtered.length;
 
  return (
  <div className="space-y-4">

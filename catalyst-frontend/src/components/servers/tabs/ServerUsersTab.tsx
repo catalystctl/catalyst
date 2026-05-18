@@ -42,8 +42,6 @@ interface Props {
  onCancelInvite: (inviteId: string) => void;
 }
 
-
-
 export default function ServerUsersTab({
  serverId,
  ownerId,

@@ -36,7 +36,7 @@ const STREAM_COLORS: Record<string, { dot: string; active: string; inactive: str
 function ServerConsolePage() {
  const { serverId } = useParams();
  const { data: server } = useServer(serverId);
- const { entries, send, isConnected, isConnecting, isLoading, isError, refetch, clear, streamStatus } = useConsole(serverId);
+ const { entries, send, isConnected, isLoading, isError, refetch, clear, streamStatus } = useConsole(serverId);
  const { eulaPrompt, isLoading: eulaLoading, respond: respondEula } = useEulaPrompt(serverId);
 
  const [command, setCommand] = useState('');

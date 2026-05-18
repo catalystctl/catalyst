@@ -28,7 +28,6 @@ import {
 } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
-import SectionHeader from '../../components/servers/tabs/SectionHeader';
 
 const stepLabels = ['Welcome', 'Admin Account', 'Appearance'];
 const stepIcons = [Sparkles, User, Palette];
@@ -63,7 +62,7 @@ function SetupPage() {
  const { recheck } = useSetupStatus();
 
  const [currentStep, setCurrentStep] = useState(0);
- const [direction, setDirection] = useState(1);
+ const [_, setDirection] = useState(1);
  const [isSubmitting, setIsSubmitting] = useState(false);
  const [error, setError] = useState<string | null>(null);
  const [alreadySetup, setAlreadySetup] = useState(false);
@@ -232,7 +231,7 @@ function SetupPage() {
  setError(null);
 
  try {
- const response = await apiClient.post<{
+ await apiClient.post<{
  success: boolean;
  data: {
  id: string;

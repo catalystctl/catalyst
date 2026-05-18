@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { filesApi } from '../../../services/api/files';
 import {
@@ -13,7 +13,7 @@ import { notifyError, notifySuccess } from '../../../utils/notify';
 import { reportSystemError } from '../../../services/api/systemErrors';
 import SectionDivider from './SectionDivider';
 import SectionHeader from './SectionHeader';
-import StatGrid from './StatGrid';
+
 import ServerStartupVariablesSection from './ServerStartupVariablesSection';
 import ServerTabCard from './ServerTabCard';
 import TabHeader from './TabHeader';

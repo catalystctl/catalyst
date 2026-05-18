@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { serversApi } from '../../services/api/servers';
 import { qk } from '../../lib/queryKeys';
-import { queryClient } from '../../lib/queryClient';
+
 import { optimisticSet, optimisticInvalidate } from '../../lib/queryUtils';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { ConfirmDialog } from '../shared/ConfirmDialog';

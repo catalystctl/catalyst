@@ -23,7 +23,7 @@ import {
  Sparkles,
  Globe,
 } from 'lucide-react';
-import EmptyState from '../../components/shared/EmptyState';
+
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -34,9 +34,9 @@ import type { NodeAssignmentWithExpiration } from '../../components/admin/NodeAs
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
 import { ModalPortal } from '@/components/ui/modal-portal';
 import TabHeader from '../../components/servers/tabs/TabHeader';
-import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+
 import SectionHeader from '../../components/servers/tabs/SectionHeader';
-import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
+
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 
 // ── Permission categories ──────────────────────────────────────────────

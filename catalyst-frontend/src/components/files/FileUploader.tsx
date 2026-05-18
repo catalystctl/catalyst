@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Upload, X, File, Check } from 'lucide-react';
+import { Upload, X, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileTypeIcon } from './FileTypeIcon';
 

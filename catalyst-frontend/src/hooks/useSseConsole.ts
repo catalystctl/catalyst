@@ -30,7 +30,6 @@ type ConsoleOptions = {
   maxEntries?: number;
 };
 
-const FLUSH_INTERVAL = 32;
 const MAX_BATCH_SIZE = 50;
 
 // Module-level tracking so remounting the same server doesn't wipe logs.

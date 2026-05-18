@@ -967,11 +967,7 @@ test.describe('Modals & Dialogs', () => {
 
       const dialog = page.locator('[role="dialog"], [data-state="open"]').first();
       if (await dialog.isVisible().catch(() => false)) {
-        // Click the overlay (backdrop) — typically the parent container
-        const overlay = page.locator(
-          '[data-state="open"] > :first-child',
-        ).first();
-        // Alternative: click at top-left corner of the dialog's parent
+        // Click at top-left corner of the dialog's parent
         await page.mouse.click(10, 10);
         await page.waitForTimeout(500);
 

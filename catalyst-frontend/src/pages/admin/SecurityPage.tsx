@@ -30,7 +30,6 @@ import {
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 import SectionHeader from '../../components/servers/tabs/SectionHeader';
-import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 
 // ── Time Window Constants ──
 const TIME_WINDOWS = [
@@ -40,11 +39,6 @@ const TIME_WINDOWS = [
  { value: '86400000', label: 'day' },
  { value: '2592000000', label: 'month' },
 ] as const;
-
-const resolveWindowLabel = (ms: number): string => {
- const match = TIME_WINDOWS.find((w) => Number(w.value) === ms);
- return match ? match.label : 'minute';
-};
 
 // ── Tooltip Helper ──
 function Tooltip({ text }: { text: string }) {

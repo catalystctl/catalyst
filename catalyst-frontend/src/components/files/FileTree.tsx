@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
-import { queryClient } from '@/lib/queryClient';
-import { ChevronDown, ChevronRight, Folder, FolderOpen, Server } from 'lucide-react';
+
+import { ChevronDown, Folder, FolderOpen, Server } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { filesApi } from '../../services/api/files';
 import type { FileEntry } from '../../types/file';

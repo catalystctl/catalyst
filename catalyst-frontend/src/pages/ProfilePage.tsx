@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useProfile, useProfileSsoAccounts, useSessions, useAuditLog, useProfileApiKeys } from '../hooks/useProfile';
 import { useAuthStore } from '../stores/authStore';
-import { type Passkey, type UserSession, type AuditLogEntry, type ApiKeySummary, profileApi } from '../services/api/profile';
+import { type Passkey, profileApi } from '../services/api/profile';
 import { notifyError, notifySuccess } from '../utils/notify';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,6 @@ import SectionHeader from '../components/servers/tabs/SectionHeader';
 import StatGrid from '../components/servers/tabs/StatGrid';
 import TabLoadingState from '../components/servers/tabs/TabLoadingState';
 import TabEmptyState from '../components/servers/tabs/TabEmptyState';
-import DataField from '../components/servers/tabs/DataField';
 
 // ── Helpers ──
 const fmtDate = (d: string | null | undefined) => !d ? 'N/A' : new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });

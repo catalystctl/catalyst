@@ -3,5 +3,10 @@
     "Codegeex.GenerationPreference": "automatic",
     "Codegeex.Chat.LanguagePreference": "中文",
     "Codegeex.Comment.LanguagePreference": "中文",
-    "Codegeex.CommitMessage.LanguagePreference": "中文"
+    "Codegeex.CommitMessage.LanguagePreference": "中文",
+    "typescript.tsdk": "catalyst-frontend/node_modules/typescript/lib",
+    "typescript.enableProjectDiagnostics": true,
+    "typescript.projectLanguageService": {
+        "enabled": true
+    }
 }

@@ -190,7 +190,6 @@ function applyThemeToDOM(
   const s1Key = isDark ? 'darkSurface1' : 'lightSurface1';
   const s2Key = isDark ? 'darkSurface2' : 'lightSurface2';
   const s3Key = isDark ? 'darkSurface3' : 'lightSurface3';
-  const otherS1 = isDark ? 'lightSurface1' : 'darkSurface1';
 
   if (colors[bgKey]) {
     root.style.setProperty('--background', hexToHSL(colors[bgKey]));
@@ -250,7 +249,7 @@ let pendingPreview: {
 } | null = null;
 
 function schedulePreview(getState: () => ThemeState) {
-  const { theme, themeSettings } = getState();
+  const { themeSettings } = getState();
   const base = themeSettings || defaultThemeSettings;
 
   pendingPreview = {

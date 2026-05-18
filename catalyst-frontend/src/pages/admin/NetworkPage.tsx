@@ -20,7 +20,7 @@ import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import TabErrorState from '../../components/servers/tabs/TabErrorState';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
-import { Skeleton } from '../../components/ui/skeleton';
+
 import Pagination from '../../components/shared/Pagination';
 import { useAuditLogs } from '../../hooks/useAdmin';
 import type { AuditLogEntry } from '../../types/admin';

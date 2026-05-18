@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "catalyst-frontend" },
+    { "path": "catalyst-frontend/tsconfig.node" },
+    { "path": "catalyst-backend" },
+    { "path": "catalyst-backend/tsconfig.scripts" },
+    { "path": "catalyst-shared" },
+    { "path": "catalyst-plugins" }
+  ]
+}

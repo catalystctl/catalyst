@@ -1,6 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { qk } from '@/lib/queryKeys';
+
 import { motion, AnimatePresence } from 'framer-motion';
 import {
  ArrowUp,
@@ -30,7 +30,7 @@ import FileUploader from './FileUploader';
 import { useFileManager } from '../../hooks/useFileManager';
 import { filesApi } from '../../services/api/files';
 import type { FileEntry } from '../../types/file';
-import { formatFileMode, formatBytes } from '../../utils/formatters';
+import { formatFileMode } from '../../utils/formatters';
 import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
 import { buildBreadcrumbs, getParentPath, joinPath, normalizePath } from '../../utils/filePaths';
 import { ModalPortal } from '@/components/ui/modal-portal';

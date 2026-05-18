@@ -25,8 +25,7 @@ import type { PluginManifest } from '../../plugins/types';
 import { ModalPortal } from '@/components/ui/modal-portal';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
-import SectionHeader from '../../components/servers/tabs/SectionHeader';
-import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
+
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 
 // ── Helpers ──

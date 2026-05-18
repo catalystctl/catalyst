@@ -178,7 +178,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         }
         const err = error as { response?: { data?: { error?: unknown } }; message?: string };
         const rawError = err.response?.data?.error;
-        const message = (typeof rawError === 'string' ? rawError : (rawError as { message?: string; error?: string })?.message || (rawError as { message?: string; error?: string })?.error) || err.message || 'Session expired';
+
         // Clean up any remaining localStorage items from previous token-based auth
         localStorage.removeItem('catalyst-auth-token');
         localStorage.removeItem('catalyst-session-token');

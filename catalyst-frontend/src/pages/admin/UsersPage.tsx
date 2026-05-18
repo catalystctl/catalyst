@@ -353,7 +353,6 @@ function UsersPage() {
  const [enforce2faTarget, setEnforce2faTarget] = useState<{ id: string; username: string; enforce: boolean } | null>(null);
  const [unlinkTarget, setUnlinkTarget] = useState<{ userId: string; username: string; accountId: string; providerId: string } | null>(null);
 
-
  const { data, isLoading } = useAdminUsers({
  page,
  limit: pageSize,

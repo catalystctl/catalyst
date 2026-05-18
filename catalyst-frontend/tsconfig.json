@@ -17,10 +17,11 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["vite/client"],
     "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "paths": {
       "@/*": ["src/*"]
     }
   },
-  "include": ["src", "../catalyst-plugins/**/frontend"],
+  "include": ["src", "vitest.config.ts", "vitest.setup.ts", "playwright.config.ts", "e2e"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

@@ -1,5 +1,5 @@
 import ServerTabCard from './ServerTabCard';
-import StatGrid from './StatGrid';
+
 import TabHeader from './TabHeader';
 import TabEmptyState from './TabEmptyState';
 import TabLoadingState from './TabLoadingState';
