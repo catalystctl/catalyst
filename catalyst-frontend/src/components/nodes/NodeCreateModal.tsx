@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { MapPin, ArrowRight, CheckCircle, Loader2, Copy } from 'lucide-react';
+import { MapPin, ArrowRight, CheckCircle, Loader2, Copy, ChevronDown, ChevronRight } from 'lucide-react';
 import { nodesApi } from '../../services/api/nodes';
 import { locationsApi } from '../../services/api/locations';
 
@@ -40,6 +40,17 @@ function NodeCreateModal(_props: Props) {
  const [memoryOverallocate, setMemoryOverallocate] = useState('0');
  const [cpuOverallocate, setCpuOverallocate] = useState('0');
  const [serverDataDir, setServerDataDir] = useState('/var/lib/catalyst/servers');
+ const [consoleLogDir, setConsoleLogDir] = useState('');
+ const [cniDir, setCniDir] = useState('');
+ const [cniBinDir, setCniBinDir] = useState('');
+ const [cniDataDir, setCniDataDir] = useState('');
+ const [cniResultsDir, setCniResultsDir] = useState('');
+ const [cniBridgeName, setCniBridgeName] = useState('');
+ const [cniBridgeSubnet, setCniBridgeSubnet] = useState('');
+ const [systemdOverrideDir, setSystemdOverrideDir] = useState('');
+ const [agentConfigPath, setAgentConfigPath] = useState('');
+ const [agentReleaseRepo, setAgentReleaseRepo] = useState('');
+ const [showAdvanced, setShowAdvanced] = useState(false);
  const [deployInfo, setDeployInfo] = useState<{
  deployUrl: string;
  deploymentToken: string;
@@ -85,6 +96,16 @@ function NodeCreateModal(_props: Props) {
  memoryOverallocatePercent: Number(memoryOverallocate),
  cpuOverallocatePercent: Number(cpuOverallocate),
  serverDataDir: serverDataDir || undefined,
+ consoleLogDir: consoleLogDir || undefined,
+ cniDir: cniDir || undefined,
+ cniBinDir: cniBinDir || undefined,
+ cniDataDir: cniDataDir || undefined,
+ cniResultsDir: cniResultsDir || undefined,
+ cniBridgeName: cniBridgeName || undefined,
+ cniBridgeSubnet: cniBridgeSubnet || undefined,
+ systemdOverrideDir: systemdOverrideDir || undefined,
+ agentConfigPath: agentConfigPath || undefined,
+ agentReleaseRepo: agentReleaseRepo || undefined,
  });
  return created;
  },
@@ -135,6 +156,17 @@ function NodeCreateModal(_props: Props) {
  setMemoryOverallocate('0');
  setCpuOverallocate('0');
  setServerDataDir('/var/lib/catalyst/servers');
+ setConsoleLogDir('');
+ setCniDir('');
+ setCniBinDir('');
+ setCniDataDir('');
+ setCniResultsDir('');
+ setCniBridgeName('');
+ setCniBridgeSubnet('');
+ setSystemdOverrideDir('');
+ setAgentConfigPath('');
+ setAgentReleaseRepo('');
+ setShowAdvanced(false);
  setDeployInfo(null);
  setCreatedNodeId(null);
  createMutation.reset();
@@ -435,6 +467,123 @@ function NodeCreateModal(_props: Props) {
  0 = no over-allocation, -1 = unlimited
  </p>
  </label>
+ </div>
+
+ {/* Advanced Agent Paths — collapsed by default */}
+ <div className="space-y-1">
+ <button
+ type="button"
+ className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+ onClick={() => setShowAdvanced(!showAdvanced)}
+ >
+ {showAdvanced ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+ Advanced agent paths
+ </button>
+ {showAdvanced && (
+ <div className="space-y-3 rounded-lg border border-border/30 bg-surface-2/30 px-3 py-3">
+ <label className="block space-y-1">
+ <span className="text-muted-foreground">Console log directory</span>
+ <input
+ className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ value={consoleLogDir}
+ onChange={(e) => setConsoleLogDir(e.target.value)}
+ placeholder="Defaults to {data_dir}/console"
+ />
+ </label>
+ <div className="grid grid-cols-2 gap-3">
+ <label className="block space-y-1">
+ <span className="text-muted-foreground">CNI config dir</span>
+ <input
+ className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ value={cniDir}
+ onChange={(e) => setCniDir(e.target.value)}
+ placeholder="/etc/cni/net.d"
+ />
+ </label>
+ <label className="block space-y-1">
+ <span className="text-muted-foreground">CNI bin dir</span>
+ <input
+ className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ value={cniBinDir}
+ onChange={(e) => setCniBinDir(e.target.value)}
+ placeholder="/opt/cni/bin"
+ />
+ </label>
+ </div>
+ <div className="grid grid-cols-2 gap-3">
+ <label className="block space-y-1">
+ <span className="text-muted-foreground">CNI data dir</span>
+ <input
+ className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ value={cniDataDir}
+ onChange={(e) => setCniDataDir(e.target.value)}
+ placeholder="/var/lib/cni/networks"
+ />
+ </label>
+ <label className="block space-y-1">
+ <span className="text-muted-foreground">CNI results dir</span>
+ <input
+ className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ value={cniResultsDir}
+ onChange={(e) => setCniResultsDir(e.target.value)}
+ placeholder="/var/lib/cni/results"
+ />
+ </label>
+ </div>
+ <div className="grid grid-cols-2 gap-3">
+ <label className="block space-y-1">
+ <span className="text-muted-foreground">CNI bridge name</span>
+ <input
+ className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ value={cniBridgeName}
+ onChange={(e) => setCniBridgeName(e.target.value)}
+ placeholder="catalyst0"
+ />
+ </label>
+ <label className="block space-y-1">
+ <span className="text-muted-foreground">CNI bridge subnet</span>
+ <input
+ className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ value={cniBridgeSubnet}
+ onChange={(e) => setCniBridgeSubnet(e.target.value)}
+ placeholder="10.42.0.0/16"
+ />
+ </label>
+ </div>
+ <label className="block space-y-1">
+ <span className="text-muted-foreground">Systemd override dir</span>
+ <input
+ className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ value={systemdOverrideDir}
+ onChange={(e) => setSystemdOverrideDir(e.target.value)}
+ placeholder="/etc/systemd/system/containerd.service.d"
+ />
+ </label>
+ <div className="grid grid-cols-2 gap-3">
+ <label className="block space-y-1">
+ <span className="text-muted-foreground">Agent config path</span>
+ <input
+ className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ value={agentConfigPath}
+ onChange={(e) => setAgentConfigPath(e.target.value)}
+ placeholder="/opt/catalyst-agent/config.toml"
+ />
+ </label>
+ <label className="block space-y-1">
+ <span className="text-muted-foreground">Agent release repo</span>
+ <input
+ className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ value={agentReleaseRepo}
+ onChange={(e) => setAgentReleaseRepo(e.target.value)}
+ placeholder="catalystctl/catalyst"
+ />
+ </label>
+ </div>
+ <p className="text-xs text-muted-foreground">
+ Leave blank to use agent defaults. These paths are written into the node's config.toml during deployment.
+ </p>
+ </div>
+ )}
  </div>
  </div>
  <div className="flex justify-between gap-2 border-t border-border/30 px-6 py-4 text-xs">

@@ -343,6 +343,16 @@ model Node {
   name          String    @unique
   description   String?
   serverDataDir String    @default("/var/lib/catalyst/servers")
+  consoleLogDir      String?
+  cniDir             String?
+  cniBinDir          String?
+  cniDataDir         String?
+  cniResultsDir      String?
+  cniBridgeName      String?
+  cniBridgeSubnet    String?
+  systemdOverrideDir String?
+  agentConfigPath    String?
+  agentReleaseRepo   String?
   locationId    String
   location      Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
   hostname      String

@@ -1013,6 +1013,7 @@ async function bootstrap() {
 				deployToken.node.id,
 				deployToken.node.hostname,
 				apiKeyValue,
+				deployToken.node,
 			);
 
 			reply.type("text/plain").send(script);
@@ -1486,8 +1487,27 @@ function generateDeploymentScript(
 	nodeId: string,
 	hostName: string,
 	apiKey: string,
+	node: any,
 ): string {
 	const shellEscape = (value: string) => `'${value.replace(/'/g, `'"'"'`)}'`;
+
+	// Build env var exports for any custom agent paths the admin configured.
+	// The deploy-agent.sh will pick these up and write them into config.toml.
+	const pathEnvLines: string[] = [];
+	if (node.serverDataDir) pathEnvLines.push(`DATA_DIR=${shellEscape(node.serverDataDir)}`);
+	if (node.consoleLogDir) pathEnvLines.push(`CONSOLE_LOG_DIR=${shellEscape(node.consoleLogDir)}`);
+	if (node.cniDir) pathEnvLines.push(`CNI_DIR=${shellEscape(node.cniDir)}`);
+	if (node.cniBinDir) pathEnvLines.push(`CNI_BIN_DIR=${shellEscape(node.cniBinDir)}`);
+	if (node.cniDataDir) pathEnvLines.push(`CNI_DATA_DIR=${shellEscape(node.cniDataDir)}`);
+	if (node.cniResultsDir) pathEnvLines.push(`CNI_RESULTS_DIR=${shellEscape(node.cniResultsDir)}`);
+	if (node.cniBridgeName) pathEnvLines.push(`CNI_BRIDGE_NAME=${shellEscape(node.cniBridgeName)}`);
+	if (node.cniBridgeSubnet) pathEnvLines.push(`CNI_BRIDGE_SUBNET=${shellEscape(node.cniBridgeSubnet)}`);
+	if (node.systemdOverrideDir) pathEnvLines.push(`SYSTEMD_OVERRIDE_DIR=${shellEscape(node.systemdOverrideDir)}`);
+	if (node.agentConfigPath) pathEnvLines.push(`CATALYST_CONFIG_PATH=${shellEscape(node.agentConfigPath)}`);
+	if (node.agentReleaseRepo) pathEnvLines.push(`AGENT_RELEASE_REPO=${shellEscape(node.agentReleaseRepo)}`);
+	const pathExports = pathEnvLines.length > 0
+		? `\n# --- Custom agent paths (from node configuration) ---\n${pathEnvLines.join("\n")}\n`
+		: "";
 
 	return `#!/usr/bin/env bash
 set -euo pipefail
@@ -1516,7 +1536,7 @@ BACKEND_HTTP_URL="\${BACKEND_HTTP_URL%/}"
 NODE_ID=${shellEscape(nodeId)}
 NODE_API_KEY=${shellEscape(apiKey)}
 NODE_HOSTNAME=${shellEscape(hostName)}
-
+${pathExports}
 DEPLOY_SCRIPT_URL="\${BACKEND_HTTP_URL}/api/agent/deploy-script"
 TMP_SCRIPT="$(mktemp /tmp/catalyst-deploy-agent.XXXXXX.sh)"
 

@@ -162,6 +162,16 @@ export async function nodeRoutes(app: FastifyInstance) {
 				maxMemoryMb,
 				maxCpuCores,
 				serverDataDir,
+				consoleLogDir,
+				cniDir,
+				cniBinDir,
+				cniDataDir,
+				cniResultsDir,
+				cniBridgeName,
+				cniBridgeSubnet,
+				systemdOverrideDir,
+				agentConfigPath,
+				agentReleaseRepo,
 				memoryOverallocatePercent,
 				cpuOverallocatePercent,
 			} = request.body as {
@@ -173,6 +183,16 @@ export async function nodeRoutes(app: FastifyInstance) {
 				maxMemoryMb: number;
 				maxCpuCores: number;
 				serverDataDir?: string;
+				consoleLogDir?: string;
+				cniDir?: string;
+				cniBinDir?: string;
+				cniDataDir?: string;
+				cniResultsDir?: string;
+				cniBridgeName?: string;
+				cniBridgeSubnet?: string;
+				systemdOverrideDir?: string;
+				agentConfigPath?: string;
+				agentReleaseRepo?: string;
 				memoryOverallocatePercent?: number;
 				cpuOverallocatePercent?: number;
 			};
@@ -250,6 +270,16 @@ export async function nodeRoutes(app: FastifyInstance) {
 					maxMemoryMb,
 					maxCpuCores,
 					serverDataDir: serverDataDir || undefined,
+					consoleLogDir: consoleLogDir || undefined,
+					cniDir: cniDir || undefined,
+					cniBinDir: cniBinDir || undefined,
+					cniDataDir: cniDataDir || undefined,
+					cniResultsDir: cniResultsDir || undefined,
+					cniBridgeName: cniBridgeName || undefined,
+					cniBridgeSubnet: cniBridgeSubnet || undefined,
+					systemdOverrideDir: systemdOverrideDir || undefined,
+					agentConfigPath: agentConfigPath || undefined,
+					agentReleaseRepo: agentReleaseRepo || undefined,
 					memoryOverallocatePercent: validatedMemoryOverallocatePercent,
 					cpuOverallocatePercent: validatedCpuOverallocatePercent,
 				},
@@ -667,6 +697,16 @@ export async function nodeRoutes(app: FastifyInstance) {
 				maxMemoryMb,
 				maxCpuCores,
 				serverDataDir,
+				consoleLogDir,
+				cniDir,
+				cniBinDir,
+				cniDataDir,
+				cniResultsDir,
+				cniBridgeName,
+				cniBridgeSubnet,
+				systemdOverrideDir,
+				agentConfigPath,
+				agentReleaseRepo,
 				memoryOverallocatePercent,
 				cpuOverallocatePercent,
 			} = request.body as {
@@ -677,6 +717,16 @@ export async function nodeRoutes(app: FastifyInstance) {
 				maxMemoryMb?: number;
 				maxCpuCores?: number;
 				serverDataDir?: string;
+				consoleLogDir?: string;
+				cniDir?: string;
+				cniBinDir?: string;
+				cniDataDir?: string;
+				cniResultsDir?: string;
+				cniBridgeName?: string;
+				cniBridgeSubnet?: string;
+				systemdOverrideDir?: string;
+				agentConfigPath?: string;
+				agentReleaseRepo?: string;
 				memoryOverallocatePercent?: number;
 				cpuOverallocatePercent?: number;
 			};
@@ -735,6 +785,16 @@ export async function nodeRoutes(app: FastifyInstance) {
 					maxMemoryMb,
 					maxCpuCores,
 					serverDataDir,
+					consoleLogDir,
+					cniDir,
+					cniBinDir,
+					cniDataDir,
+					cniResultsDir,
+					cniBridgeName,
+					cniBridgeSubnet,
+					systemdOverrideDir,
+					agentConfigPath,
+					agentReleaseRepo,
 					memoryOverallocatePercent,
 					cpuOverallocatePercent,
 				},

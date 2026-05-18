@@ -52,6 +52,16 @@ export const nodesApi = {
     memoryOverallocatePercent?: number;
     cpuOverallocatePercent?: number;
     serverDataDir?: string;
+    consoleLogDir?: string;
+    cniDir?: string;
+    cniBinDir?: string;
+    cniDataDir?: string;
+    cniResultsDir?: string;
+    cniBridgeName?: string;
+    cniBridgeSubnet?: string;
+    systemdOverrideDir?: string;
+    agentConfigPath?: string;
+    agentReleaseRepo?: string;
   }) => {
     const data = await apiClient.post<ApiResponse<NodeInfo>>('/api/nodes', payload);
     return data.data;
@@ -69,6 +79,16 @@ export const nodesApi = {
       memoryOverallocatePercent?: number;
       cpuOverallocatePercent?: number;
       serverDataDir?: string;
+      consoleLogDir?: string;
+      cniDir?: string;
+      cniBinDir?: string;
+      cniDataDir?: string;
+      cniResultsDir?: string;
+      cniBridgeName?: string;
+      cniBridgeSubnet?: string;
+      systemdOverrideDir?: string;
+      agentConfigPath?: string;
+      agentReleaseRepo?: string;
     },
   ) => {
     const data = await apiClient.put<ApiResponse<NodeInfo>>(`/api/nodes/${nodeId}`, payload);

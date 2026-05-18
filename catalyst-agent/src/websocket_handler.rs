@@ -22,7 +22,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::config::CniNetworkConfig;
 use crate::{
-    runtime_manager::{rotate_logs, CONSOLE_BASE_DIR},
+    runtime_manager::rotate_logs,
     AgentConfig, AgentError, AgentResult, ContainerdRuntime, FileManager, FirewallManager,
     NetworkManager, StorageManager,
 };
@@ -478,6 +478,7 @@ pub struct WebSocketHandler {
     runtime: Arc<ContainerdRuntime>,
     file_manager: Arc<FileManager>,
     storage_manager: Arc<StorageManager>,
+    network_manager: NetworkManager,
     backend_connected: Arc<RwLock<bool>>,
     write: Arc<RwLock<Option<Arc<tokio::sync::Mutex<WsWrite>>>>>,
     active_log_streams: Arc<RwLock<HashSet<String>>>,
@@ -509,6 +510,7 @@ impl Clone for WebSocketHandler {
             runtime: self.runtime.clone(),
             file_manager: self.file_manager.clone(),
             storage_manager: self.storage_manager.clone(),
+            network_manager: self.network_manager.clone(),
             backend_connected: self.backend_connected.clone(),
             write: self.write.clone(),
             active_log_streams: self.active_log_streams.clone(),
@@ -544,11 +546,16 @@ impl WebSocketHandler {
         storage_manager: Arc<StorageManager>,
         backend_connected: Arc<RwLock<bool>>,
     ) -> Self {
+        let network_manager = NetworkManager::new(
+            config.containerd.cni_dir.clone(),
+            config.agent.config_path.clone(),
+        );
         Self {
             config,
             runtime,
             file_manager,
             storage_manager,
+            network_manager,
             backend_connected,
             write: Arc::new(RwLock::new(None)),
             active_log_streams: Arc::new(RwLock::new(HashSet::new())),
@@ -620,13 +627,14 @@ impl WebSocketHandler {
         // Spawn periodic log rotation task (every 5 minutes)
         {
             let runtime = self.runtime.clone();
+            let console_log_dir = self.config.server.console_log_dir.clone();
             tokio::spawn(async move {
                 loop {
                     tokio::time::sleep(Duration::from_secs(300)).await;
                     // Rotate logs for all running containers
                     if let Ok(containers) = runtime.list_containers().await {
                         for c in &containers {
-                            rotate_logs(&c.id).await;
+                            rotate_logs(&console_log_dir, &c.id).await;
                         }
                     }
                 }
@@ -2335,7 +2343,7 @@ impl WebSocketHandler {
         let container_id = container_id.to_string();
         tokio::spawn(async move {
             // Rotate logs if they exceed the size limit
-            rotate_logs(&container_id).await;
+            rotate_logs(&handler.config.server.console_log_dir, &container_id).await;
 
             // First, clean up any stale streams for this server
             // This prevents issues when switching from installer to game server container
@@ -2379,7 +2387,7 @@ impl WebSocketHandler {
 
     async fn stream_container_logs(&self, server_id: &str, container_id: &str) -> AgentResult<()> {
         let _log_stream = self.runtime.spawn_log_stream(container_id).await?;
-        let base = std::path::PathBuf::from(CONSOLE_BASE_DIR).join(container_id);
+        let base = self.config.server.console_log_dir.join(container_id);
         let stdout_path = base.join("stdout");
         let stderr_path = base.join("stderr");
 
@@ -4654,7 +4662,7 @@ impl WebSocketHandler {
     ) -> AgentResult<()> {
         let network = self.parse_network_config(msg)?;
 
-        let result = NetworkManager::create_network(&network).await;
+        let result = self.network_manager.create_network(&network).await;
 
         let event = match &result {
             Ok(_) => json!({
@@ -4692,7 +4700,7 @@ impl WebSocketHandler {
 
         let network = self.parse_network_config(msg)?;
 
-        let result = NetworkManager::update_network(old_name, &network).await;
+        let result = self.network_manager.update_network(old_name, &network).await;
 
         let event = match &result {
             Ok(_) => json!({
@@ -4730,7 +4738,7 @@ impl WebSocketHandler {
             .as_str()
             .ok_or_else(|| AgentError::InvalidRequest("Missing networkName".to_string()))?;
 
-        let result = NetworkManager::delete_network(network_name).await;
+        let result = self.network_manager.delete_network(network_name).await;
 
         let event = match &result {
             Ok(_) => json!({

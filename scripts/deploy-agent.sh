@@ -607,16 +607,28 @@ backend_url = "${escaped_backend}"
 node_id = "${escaped_node}"
 api_key = "${escaped_api_key}"
 hostname = "${escaped_hostname}"
-data_dir = "/var/lib/catalyst"
+data_dir = "${DATA_DIR:-/var/lib/catalyst}"
+${CONSOLE_LOG_DIR:+console_log_dir = "$CONSOLE_LOG_DIR"}
 max_connections = 100
 
 [containerd]
 socket_path = "/run/containerd/containerd.sock"
 namespace = "catalyst"
+${CNI_DIR:+cni_dir = "$CNI_DIR"}
+${CNI_BIN_DIR:+cni_bin_dir = "$CNI_BIN_DIR"}
+${CNI_DATA_DIR:+cni_data_dir = "$CNI_DATA_DIR"}
+${CNI_RESULTS_DIR:+cni_results_dir = "$CNI_RESULTS_DIR"}
+${CNI_BRIDGE_NAME:+cni_bridge_name = "$CNI_BRIDGE_NAME"}
+${CNI_BRIDGE_SUBNET:+cni_bridge_subnet = "$CNI_BRIDGE_SUBNET"}
+${SYSTEMD_OVERRIDE_DIR:+systemd_override_dir = "$SYSTEMD_OVERRIDE_DIR"}
 
 [logging]
 level = "info"
 format = "json"
+
+[agent]
+${CATALYST_CONFIG_PATH:+config_path = "$CATALYST_CONFIG_PATH"}
+${AGENT_RELEASE_REPO:+release_repo = "$AGENT_RELEASE_REPO"}
 EOF
 
     chmod 0600 /opt/catalyst-agent/config.toml

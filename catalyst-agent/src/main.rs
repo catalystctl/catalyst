@@ -49,13 +49,20 @@ impl CatalystAgent {
                 config.containerd.socket_path.clone(),
                 config.containerd.namespace.clone(),
                 config.networking.dns_servers.clone(),
+                config.server.console_log_dir.clone(),
+                config.containerd.cni_results_dir.clone(),
+                config.containerd.cni_data_dir.clone(),
+                config.containerd.cni_dir.clone(),
+                config.containerd.cni_bin_dir.clone(),
+                config.containerd.cni_bridge_name.clone(),
+                config.containerd.cni_bridge_subnet.clone(),
             )
             .await?,
         );
 
         // Initialize firewall manager — loads persisted rule state from disk
         // so rules can be cleaned up even after agent restart.
-        FirewallManager::init();
+        FirewallManager::init(&config.server.data_dir);
 
         // FileManager uses the same base data_dir as storage - servers are stored at {data_dir}/{server_uuid}
         let file_manager = Arc::new(FileManager::new(config.server.data_dir.clone()));
@@ -224,15 +231,38 @@ async fn main() -> AgentResult<()> {
     let config_path = config_path.as_deref().unwrap_or("./config.toml");
     // Load config first so logging level/format can be applied.
     // Do not silently fall back to env if an explicit config file exists but is invalid.
+    // Resolution order:
+    //   1. Explicit --config path
+    //   2. CATALYST_CONFIG_PATH env var
+    //   3. ./config.toml (cwd)
+    //   4. /opt/catalyst-agent/config.toml (system default)
+    //   5. Pure env-var config (no file)
     let config = {
         let explicit = std::path::Path::new(config_path);
+        let env_config = std::env::var("CATALYST_CONFIG_PATH").ok();
         let system = std::path::Path::new("/opt/catalyst-agent/config.toml");
 
         if explicit.exists() {
-            AgentConfig::from_file(config_path).map_err(AgentError::ConfigError)?
+            info!("Loading config from explicit path: {}", config_path);
+            let mut c = AgentConfig::from_file(config_path).map_err(AgentError::ConfigError)?;
+            // Store the resolved path so NetworkManager can persist to it
+            c.agent.config_path = std::path::PathBuf::from(config_path);
+            c
+        } else if let Some(ref env_path) = env_config {
+            if std::path::Path::new(env_path).exists() {
+                info!("Loading config from CATALYST_CONFIG_PATH: {}", env_path);
+                let mut c = AgentConfig::from_file(env_path).map_err(AgentError::ConfigError)?;
+                c.agent.config_path = std::path::PathBuf::from(env_path);
+                c
+            } else {
+                AgentConfig::from_env().map_err(AgentError::ConfigError)?
+            }
         } else if system.exists() {
-            AgentConfig::from_file("/opt/catalyst-agent/config.toml")
-                .map_err(AgentError::ConfigError)?
+            info!("Loading config from system default: /opt/catalyst-agent/config.toml");
+            let mut c = AgentConfig::from_file("/opt/catalyst-agent/config.toml")
+                .map_err(AgentError::ConfigError)?;
+            c.agent.config_path = std::path::PathBuf::from("/opt/catalyst-agent/config.toml");
+            c
         } else {
             AgentConfig::from_env().map_err(AgentError::ConfigError)?
         }

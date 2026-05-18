@@ -5,11 +5,11 @@ use tracing::{error, info, warn};
 use crate::{AgentConfig, AgentError, AgentResult};
 
 /// GitHub repository that hosts agent release binaries.
-const AGENT_RELEASE_REPO: &str = "catalystctl/catalyst";
-
+/// Set from config.agent.release_repo (default: "catalystctl/catalyst").
 pub struct AgentUpdater {
     backend_url: String,
     current_binary_path: PathBuf,
+    release_repo: String,
 }
 
 impl AgentUpdater {
@@ -17,9 +17,11 @@ impl AgentUpdater {
         let backend_url = config.server.backend_url.clone();
         let current_binary_path =
             std::env::current_exe().unwrap_or_else(|_| PathBuf::from("./catalyst-agent"));
+        let release_repo = config.agent.release_repo.clone();
         Self {
             backend_url,
             current_binary_path,
+            release_repo,
         }
     }
 
@@ -44,7 +46,7 @@ impl AgentUpdater {
         let asset_name = Self::asset_name();
         let download_url = format!(
             "https://github.com/{}/releases/latest/download/{}",
-            AGENT_RELEASE_REPO, asset_name
+            self.release_repo, asset_name
         );
 
         info!(

@@ -11,11 +11,21 @@
 # Optional environment variables (with defaults):
 #   BACKEND_URL          - WebSocket backend URL (default: ws://localhost:3000/ws)
 #   DATA_DIR             - Data directory for container volumes (default: /var/lib/catalyst)
+#   CONSOLE_LOG_DIR      - Directory for container console I/O logs (default: {DATA_DIR}/console)
 #   CONTAINERD_SOCKET    - Path to containerd socket (default: /run/containerd/containerd.sock)
 #   CONTAINERD_NAMESPACE - Containerd namespace (default: catalyst)
+#   CNI_DIR              - CNI network config directory (default: /etc/cni/net.d)
+#   CNI_BIN_DIR          - CNI plugin binary directory (default: /opt/cni/bin)
+#   CNI_DATA_DIR         - IPAM lease storage directory (default: /var/lib/cni/networks)
+#   CNI_RESULTS_DIR      - CNI result/state directory (default: /var/lib/cni/results)
+#   CNI_BRIDGE_NAME      - Bridge interface name (default: catalyst0)
+#   CNI_BRIDGE_SUBNET    - Bridge subnet CIDR (default: 10.42.0.0/16)
+#   SYSTEMD_OVERRIDE_DIR - Systemd override dir for containerd (default: /etc/systemd/system/containerd.service.d)
 #   LOG_LEVEL            - Log level: trace, debug, info, warn, error (default: info)
 #   HOSTNAME             - Hostname of this server (default: auto-detected)
 #   MAX_CONNECTIONS      - Maximum concurrent WebSocket connections (default: 100)
+#   CATALYST_CONFIG_PATH - Path to config.toml for persistence (default: /opt/catalyst-agent/config.toml)
+#   AGENT_RELEASE_REPO   - GitHub repo for agent release binaries (default: catalystctl/catalyst)
 #
 # Security / Development:
 #   CATALYST_ALLOW_INSECURE_WS - Set to "1" to allow insecure ws:// connections (dev only)
@@ -41,6 +51,11 @@ hostname = "node1.example.com"
 # Data directory for container volumes
 data_dir = "/var/lib/catalyst"
 
+# Directory for container console I/O (stdout/stderr FIFOs and log files).
+# When not explicitly set, derives from data_dir (e.g. /var/lib/catalyst/console).
+# Override this to place console logs on a separate filesystem.
+# console_log_dir = "/var/log/catalyst/console"
+
 # Maximum concurrent WebSocket connections
 max_connections = 100
 
@@ -50,6 +65,27 @@ socket_path = "/run/containerd/containerd.sock"
 
 # Containerd namespace for Catalyst containers
 namespace = "catalyst"
+
+# Directory where CNI network configuration files (.conflist) are stored
+# cni_dir = "/etc/cni/net.d"
+
+# Directory where CNI plugin binaries are installed
+# cni_bin_dir = "/opt/cni/bin"
+
+# Directory used by the host-local IPAM plugin for lease storage
+# cni_data_dir = "/var/lib/cni/networks"
+
+# Directory for CNI result/state files and port-forward state
+# cni_results_dir = "/var/lib/cni/results"
+
+# Bridge interface name for the default NAT network
+# cni_bridge_name = "catalyst0"
+
+# Subnet for the default bridge NAT network
+# cni_bridge_subnet = "10.42.0.0/16"
+
+# Systemd override directory for the containerd service unit
+# systemd_override_dir = "/etc/systemd/system/containerd.service.d"
 
 [networking]
 # Configure one or more macvlan networks (optional). If omitted, the agent will
@@ -77,3 +113,10 @@ level = "info"
 
 # Log format: json or text
 format = "json"
+
+[agent]
+# Path to the agent's config.toml (used by NetworkManager for persistence).
+# config_path = "/opt/catalyst-agent/config.toml"
+
+# GitHub repository for agent release binaries.
+# release_repo = "catalystctl/catalyst"

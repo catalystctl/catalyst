@@ -47,8 +47,6 @@ use crate::firewall_manager::FirewallManager;
 
 const RUNTIME_NAME: &str = "io.containerd.runc.v2";
 const SPEC_TYPE_URL: &str = "types.containerd.io/opencontainers/runtime-spec/1/Spec";
-pub const CONSOLE_BASE_DIR: &str = "/var/log/catalyst/console";
-const PORT_FWD_STATE_DIR: &str = "/var/lib/cni/results";
 const MAX_LOG_SIZE: u64 = 10 * 1024 * 1024; // 10MB per file
 const LOG_BACKUP_COUNT: usize = 2;
 
@@ -182,8 +180,8 @@ async fn read_block_io(cgroup_path: &str) -> Option<(u64, u64, String)> {
 }
 
 /// Rotate log files if they exceed MAX_LOG_SIZE
-pub async fn rotate_logs(container_id: &str) {
-    let io_dir = PathBuf::from(CONSOLE_BASE_DIR).join(container_id);
+pub async fn rotate_logs(console_log_dir: &Path, container_id: &str) {
+    let io_dir = console_log_dir.join(container_id);
     for log_name in &["stdout", "stderr"] {
         let log_path = io_dir.join(log_name);
         if let Ok(metadata) = tokio::fs::metadata(&log_path).await {
@@ -288,27 +286,37 @@ impl DeviceProfile {
     }
 }
 
-// CNI plugin directories to search, in order of preference
+// CNI plugin directories to search as fallback, in order of preference
 // Fedora/RHEL install to /usr/libexec/cni, others typically use /opt/cni/bin
-const CNI_BIN_DIRS: &[&str] = &["/opt/cni/bin", "/usr/libexec/cni"];
+const CNI_FALLBACK_BIN_DIRS: &[&str] = &["/usr/libexec/cni", "/usr/lib/cni"];
 
-/// Discover the CNI plugin directory by checking which one has required plugins
-fn discover_cni_bin_dir() -> &'static str {
+/// Discover the CNI plugin directory: check the configured dir first,
+/// then fall back to standard locations.
+fn discover_cni_bin_dir(configured_dir: &Path) -> PathBuf {
     const REQUIRED_PLUGINS: &[&str] = &["bridge", "host-local", "macvlan"];
 
-    for dir in CNI_BIN_DIRS {
+    // Check the configured directory first
+    let has_all = REQUIRED_PLUGINS
+        .iter()
+        .all(|plugin| configured_dir.join(plugin).exists());
+    if has_all {
+        return configured_dir.to_path_buf();
+    }
+
+    // Fall back to standard locations
+    for dir in CNI_FALLBACK_BIN_DIRS {
         let has_all = REQUIRED_PLUGINS
             .iter()
             .all(|plugin| Path::new(&format!("{}/{}", dir, plugin)).exists());
         if has_all {
-            return dir;
+            return PathBuf::from(dir);
         }
     }
 
-    // Default to /opt/cni/bin if no directory has all plugins
-    // (error will be raised later when plugin is not found)
-    CNI_BIN_DIRS[0]
+    // Default to the configured dir (error will be raised later when plugin is not found)
+    configured_dir.to_path_buf()
 }
+
 const PORT_FWD_STATE_PREFIX: &str = "catalyst-";
 const MAX_CONTENT_BLOB_SIZE: usize = 100 * 1024 * 1024; // 100MB
 
@@ -412,6 +420,7 @@ pub struct InstallerHandle {
     channel: tonic::transport::Channel,
     pub stdout_path: PathBuf,
     pub stderr_path: PathBuf,
+    console_log_dir: PathBuf,
 }
 
 impl InstallerHandle {
@@ -449,7 +458,7 @@ impl InstallerHandle {
         let req = with_namespace!(req, &self.namespace);
         let _ = snaps.remove(req).await;
 
-        let io_dir = PathBuf::from(CONSOLE_BASE_DIR).join(&self.container_id);
+        let io_dir = self.console_log_dir.join(&self.container_id);
         let _ = fs::remove_dir_all(&io_dir);
         Ok(())
     }
@@ -465,6 +474,20 @@ pub struct ContainerdRuntime {
     cpu_tracker: Arc<CpuTracker>,
     cgroup_paths: Arc<RwLock<HashMap<String, String>>>,
     container_list_cache: Arc<RwLock<(Vec<ContainerInfo>, Instant)>>,
+    /// Directory for container console I/O (stdout/stderr FIFOs and log files).
+    console_log_dir: PathBuf,
+    /// Directory for CNI result/state files and port-forward state.
+    cni_results_dir: PathBuf,
+    /// Directory used by the host-local IPAM plugin for lease storage.
+    cni_data_dir: PathBuf,
+    /// Directory where CNI network configuration files are stored.
+    cni_dir: PathBuf,
+    /// Directory where CNI plugin binaries are installed.
+    cni_bin_dir: PathBuf,
+    /// Bridge interface name for the default NAT network.
+    cni_bridge_name: String,
+    /// Subnet for the default bridge NAT network.
+    cni_bridge_subnet: String,
 }
 
 impl ContainerdRuntime {
@@ -473,7 +496,23 @@ impl ContainerdRuntime {
         socket_path: PathBuf,
         namespace: String,
         dns_servers: Vec<String>,
+        console_log_dir: PathBuf,
+        cni_results_dir: PathBuf,
+        cni_data_dir: PathBuf,
+        cni_dir: PathBuf,
+        cni_bin_dir: PathBuf,
+        cni_bridge_name: String,
+        cni_bridge_subnet: String,
     ) -> AgentResult<Self> {
+        // Ensure console log directory exists
+        fs::create_dir_all(&console_log_dir).map_err(|e| {
+            AgentError::ContainerError(format!(
+                "Failed to create console log dir {}: {}",
+                console_log_dir.display(),
+                e
+            ))
+        })?;
+
         let channel = containerd_client::connect(&socket_path)
             .await
             .map_err(|e| {
@@ -485,6 +524,11 @@ impl ContainerdRuntime {
             })?;
         info!("Connected to containerd at {}", socket_path.display());
         info!("DNS servers configured for containers: {:?}", dns_servers);
+        info!("Console log dir: {}", console_log_dir.display());
+        info!("CNI results dir: {}", cni_results_dir.display());
+        info!("CNI data dir: {}", cni_data_dir.display());
+        info!("CNI config dir: {}", cni_dir.display());
+        info!("CNI bridge: {} ({})", cni_bridge_name, cni_bridge_subnet);
         Ok(Self {
             socket_path: socket_path.to_string_lossy().to_string(),
             namespace,
@@ -497,6 +541,13 @@ impl ContainerdRuntime {
                 Vec::new(),
                 Instant::now() - Duration::from_secs(10),
             ))),
+            console_log_dir,
+            cni_results_dir,
+            cni_data_dir,
+            cni_dir,
+            cni_bin_dir,
+            cni_bridge_name,
+            cni_bridge_subnet,
         })
     }
 
@@ -515,7 +566,7 @@ impl ContainerdRuntime {
         let (image_entrypoint, image_cmd) = self.get_image_entrypoint(&qualified_image).await;
 
         // Prepare I/O paths
-        let io_dir = PathBuf::from(CONSOLE_BASE_DIR).join(config.container_id);
+        let io_dir = self.console_log_dir.join(config.container_id);
         fs::create_dir_all(&io_dir).map_err(|e| {
             AgentError::ContainerError(format!("Failed to create I/O directory: {}", e))
         })?;
@@ -732,7 +783,7 @@ impl ContainerdRuntime {
         );
         self.ensure_image(image).await?;
 
-        let io_dir = PathBuf::from(CONSOLE_BASE_DIR).join(&container_id);
+        let io_dir = self.console_log_dir.join(&container_id);
         fs::create_dir_all(&io_dir)
             .map_err(|e| AgentError::ContainerError(format!("mkdir: {}", e)))?;
         // Restrict I/O directory to root-only
@@ -955,6 +1006,7 @@ impl ContainerdRuntime {
             channel: self.channel.clone(),
             stdout_path,
             stderr_path,
+            console_log_dir: self.console_log_dir.clone(),
         })
     }
 
@@ -1006,7 +1058,7 @@ impl ContainerdRuntime {
             .get_snapshot_mounts(&snap_key)
             .await
             .unwrap_or_default();
-        let io_dir = PathBuf::from(CONSOLE_BASE_DIR).join(container_id);
+        let io_dir = self.console_log_dir.join(container_id);
 
         let req = CreateTaskRequest {
             container_id: container_id.to_string(),
@@ -1242,7 +1294,7 @@ impl ContainerdRuntime {
             let mut cg_map = self.cgroup_paths.write().await;
             cg_map.remove(container_id);
         }
-        let _ = fs::remove_dir_all(PathBuf::from(CONSOLE_BASE_DIR).join(container_id));
+        let _ = fs::remove_dir_all(self.console_log_dir.join(container_id));
         Ok(())
     }
 
@@ -1290,7 +1342,7 @@ impl ContainerdRuntime {
 
         // Fallback: exec
         let exec_id = format!("stdin-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-        let io_dir = PathBuf::from(CONSOLE_BASE_DIR).join(container_id);
+        let io_dir = self.console_log_dir.join(container_id);
         let ep = io_dir.join(format!("e-{}-in", exec_id));
         let eo = io_dir.join(format!("e-{}-out", exec_id));
         if ep.exists() {
@@ -1358,7 +1410,7 @@ impl ContainerdRuntime {
     // -- Logs --
 
     pub async fn get_logs(&self, container_id: &str, lines: Option<u32>) -> AgentResult<String> {
-        let base = PathBuf::from(CONSOLE_BASE_DIR).join(container_id);
+        let base = self.console_log_dir.join(container_id);
         let mut output = String::new();
         for name in ["stdout", "stderr"] {
             if let Ok(content) = tokio::fs::read_to_string(base.join(name)).await {
@@ -1383,7 +1435,7 @@ impl ContainerdRuntime {
     {
         use tokio::io::{AsyncBufReadExt, AsyncSeekExt, SeekFrom};
 
-        let base = PathBuf::from(CONSOLE_BASE_DIR).join(container_id);
+        let base = self.console_log_dir.join(container_id);
         let stdout_path = base.join("stdout");
         let stderr_path = base.join("stderr");
 
@@ -1466,7 +1518,7 @@ impl ContainerdRuntime {
 
     pub async fn spawn_log_stream(&self, container_id: &str) -> AgentResult<LogStream> {
         info!("Starting log stream for container: {}", container_id);
-        let base = PathBuf::from(CONSOLE_BASE_DIR).join(container_id);
+        let base = self.console_log_dir.join(container_id);
         let stdout = if base.join("stdout").exists() {
             Some(tokio::fs::File::open(base.join("stdout")).await?)
         } else {
@@ -1686,7 +1738,7 @@ impl ContainerdRuntime {
 
     pub async fn get_container_ip(&self, container_id: &str) -> AgentResult<String> {
         // Check CNI result file
-        let cni_state = format!("/var/lib/cni/results/catalyst-{}", container_id);
+        let cni_state = self.cni_results_dir.join(format!("catalyst-{}", container_id));
         if let Ok(content) = tokio::fs::read_to_string(&cni_state).await {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
                 if let Some(ips) = v.get("ips").and_then(|v| v.as_array()) {
@@ -1702,7 +1754,7 @@ impl ContainerdRuntime {
             }
         }
         // Fallback: scan CNI networks dir
-        if let Ok(mut entries) = tokio::fs::read_dir("/var/lib/cni/networks").await {
+        if let Ok(mut entries) = tokio::fs::read_dir(&self.cni_data_dir).await {
             while let Ok(Some(entry)) = entries.next_entry().await {
                 let d = entry.path();
                 if let Ok(md) = tokio::fs::metadata(&d).await {
@@ -1807,7 +1859,7 @@ impl ContainerdRuntime {
 
     pub async fn exec(&self, container_id: &str, command: Vec<&str>) -> AgentResult<String> {
         let exec_id = format!("exec-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-        let io_dir = PathBuf::from(CONSOLE_BASE_DIR).join(container_id);
+        let io_dir = self.console_log_dir.join(container_id);
         fs::create_dir_all(&io_dir).ok();
         let op = io_dir.join(format!("{}-out", exec_id));
         let ep = io_dir.join(format!("{}-err", exec_id));
@@ -2033,7 +2085,7 @@ impl ContainerdRuntime {
     // -- IP allocation --
 
     pub async fn clean_stale_ip_allocations(&self, network: &str) -> AgentResult<usize> {
-        let dir = format!("/var/lib/cni/networks/{}", network);
+        let dir = self.cni_data_dir.join(network);
         let mut entries = match tokio::fs::read_dir(&dir).await {
             Ok(e) => e,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
@@ -2087,8 +2139,8 @@ impl ContainerdRuntime {
         Ok(removed)
     }
 
-    pub fn release_static_ip(network: &str, ip: &str) -> std::io::Result<()> {
-        fs::remove_file(format!("/var/lib/cni/networks/{}/{}", network, ip))
+    pub fn release_static_ip(cni_data_dir: &Path, network: &str, ip: &str) -> std::io::Result<()> {
+        fs::remove_file(cni_data_dir.join(network).join(ip))
     }
 
     // -- Internal helpers --
@@ -2113,7 +2165,7 @@ impl ContainerdRuntime {
         if self.container_io.lock().await.contains_key(container_id) {
             return Ok(true);
         }
-        let io_dir = PathBuf::from(CONSOLE_BASE_DIR).join(container_id);
+        let io_dir = self.console_log_dir.join(container_id);
         let stdin_path = io_dir.join("stdin");
         if !stdin_path.exists() {
             return Ok(false);
@@ -2599,6 +2651,31 @@ impl ContainerdRuntime {
         }))
     }
 
+    /// Derive bridge IP range (rangeStart, rangeEnd, gateway) from a subnet string like "10.42.0.0/16".
+    /// Returns sensible defaults: gateway at .1, range starts at .10, ends near broadcast.
+    fn derive_bridge_range(subnet: &str) -> (String, String, String) {
+        let (addr_str, prefix_str) = match subnet.split_once('/') {
+            Some(pair) => pair,
+            None => return ("10.42.0.10".into(), "10.42.255.250".into(), "10.42.0.1".into()),
+        };
+        let prefix: u32 = match prefix_str.parse() {
+            Ok(p) if p <= 32 => p,
+            _ => return ("10.42.0.10".into(), "10.42.255.250".into(), "10.42.0.1".into()),
+        };
+        let addr: std::net::Ipv4Addr = match addr_str.parse() {
+            Ok(a) => a,
+            Err(_) => return ("10.42.0.10".into(), "10.42.255.250".into(), "10.42.0.1".into()),
+        };
+        let addr_u32 = u32::from(addr);
+        let mask = if prefix == 0 { 0 } else { u32::MAX << (32 - prefix) };
+        let network = addr_u32 & mask;
+        let broadcast = network | (!mask);
+        let gateway = std::net::Ipv4Addr::from(network + 1);
+        let range_start = std::net::Ipv4Addr::from(network + 10);
+        let range_end = std::net::Ipv4Addr::from(broadcast - 5);
+        (range_start.to_string(), range_end.to_string(), gateway.to_string())
+    }
+
     async fn setup_cni_network(
         &self,
         container_id: &str,
@@ -2628,31 +2705,34 @@ impl ContainerdRuntime {
         };
 
         let mut cfg = if network == "bridge" || network == "default" {
-            // Bridge network uses NAT with private subnet 10.42.0.0/16
+            // Bridge network uses NAT with private subnet (configurable via containerd.cni_bridge_subnet)
             // This matches the macvlan config structure with rangeStart/rangeEnd/gateway
+            let bridge_subnet = &self.cni_bridge_subnet;
+            // Parse subnet to derive rangeStart, rangeEnd, and gateway
+            let (range_start, range_end, gateway_ip) = Self::derive_bridge_range(bridge_subnet);
             serde_json::json!({
                 "cniVersion": "1.0.0",
                 "name": "catalyst",
                 "type": "bridge",
-                "bridge": "catalyst0",
+                "bridge": self.cni_bridge_name,
                 "isGateway": true,
                 "ipMasq": true,
                 "dns": dns_config,
                 "ipam": {
                     "type": "host-local",
                     "ranges": [[{
-                        "subnet": "10.42.0.0/16",
-                        "rangeStart": "10.42.0.10",
-                        "rangeEnd": "10.42.255.250",
-                        "gateway": "10.42.0.1"
+                        "subnet": bridge_subnet,
+                        "rangeStart": range_start,
+                        "rangeEnd": range_end,
+                        "gateway": gateway_ip
                     }]],
                     "routes": [{"dst": "0.0.0.0/0"}],
-                    "dataDir": "/var/lib/cni/networks"
+                    "dataDir": self.cni_data_dir.to_string_lossy()
                 }
             })
         } else {
             // For custom networks, prefer explicit CNI config written by NetworkManager.
-            if let Some(mut cfg) = load_named_cni_plugin_config(network) {
+            if let Some(mut cfg) = load_named_cni_plugin_config(&self.cni_dir, network) {
                 // Add DNS config if not present
                 if cfg.get("dns").is_none() {
                     cfg["dns"] = dns_config.clone();
@@ -2696,7 +2776,7 @@ impl ContainerdRuntime {
                             "gateway": gateway
                         }]],
                         "routes": [{"dst": route_dst}],
-                        "dataDir": "/var/lib/cni/networks"
+                        "dataDir": self.cni_data_dir.to_string_lossy()
                     }
                 })
             }
@@ -2722,14 +2802,14 @@ impl ContainerdRuntime {
             }
         }
         // Store CNI config for proper teardown
-        let cfg_path = format!("/var/lib/cni/results/catalyst-{}-config", container_id);
+        let cfg_path = self.cni_results_dir.join(format!("catalyst-{}-config", container_id));
         if let Ok(j) = serde_json::to_string(&cfg) {
             let _ = fs::write(&cfg_path, &j);
         }
         let result = self
             .exec_cni_plugin(&cfg, "ADD", container_id, &netns, "eth0")
             .await?;
-        let rp = format!("/var/lib/cni/results/catalyst-{}", container_id);
+        let rp = self.cni_results_dir.join(format!("catalyst-{}", container_id));
         if let Ok(j) = serde_json::to_string_pretty(&result) {
             let _ = fs::write(&rp, &j);
         }
@@ -2767,10 +2847,10 @@ impl ContainerdRuntime {
                     container_ip: cip.to_string(),
                     forwards,
                 };
-                let state_path = format!(
-                    "{}/{}{}-ports.json",
-                    PORT_FWD_STATE_DIR, PORT_FWD_STATE_PREFIX, container_id
-                );
+                let state_path = self.cni_results_dir.join(format!(
+                    "{}{}-ports.json",
+                    PORT_FWD_STATE_PREFIX, container_id
+                ));
                 if let Ok(j) = serde_json::to_string_pretty(&state) {
                     let _ = fs::write(&state_path, &j);
                 }
@@ -2799,12 +2879,13 @@ impl ContainerdRuntime {
         let iface = external_iface.as_str();
 
         // Check if rules already exist to avoid duplicates
+        let bridge_name = &self.cni_bridge_name;
         let check_output = Command::new("iptables")
             .args([
                 "-C",
                 "FORWARD",
                 "-i",
-                "catalyst0",
+                bridge_name,
                 "-o",
                 iface,
                 "-j",
@@ -2822,7 +2903,7 @@ impl ContainerdRuntime {
                         "FORWARD",
                         "1",
                         "-i",
-                        "catalyst0",
+                        bridge_name,
                         "-o",
                         iface,
                         "-j",
@@ -2832,7 +2913,7 @@ impl ContainerdRuntime {
                     .await;
                 match result {
                     Ok(o) if o.status.success() => {
-                        info!("Added FORWARD rule: catalyst0 -> {}", iface)
+                        info!("Added FORWARD rule: {} -> {}", bridge_name, iface)
                     }
                     Ok(o) => warn!(
                         "Failed to add FORWARD rule: {}",
@@ -2849,7 +2930,7 @@ impl ContainerdRuntime {
                         "-i",
                         iface,
                         "-o",
-                        "catalyst0",
+                        bridge_name,
                         "-j",
                         "ACCEPT",
                     ])
@@ -2858,8 +2939,8 @@ impl ContainerdRuntime {
                 match result {
                     Ok(o) if o.status.success() => {
                         info!(
-                            "Added FORWARD rule: {} -> catalyst0 (allow new connections)",
-                            iface
+                            "Added FORWARD rule: {} -> {} (allow new connections)",
+                            iface, bridge_name
                         )
                     }
                     Ok(o) => warn!(
@@ -2923,12 +3004,12 @@ impl ContainerdRuntime {
         ifname: &str,
     ) -> AgentResult<serde_json::Value> {
         let ptype = config["type"].as_str().unwrap_or("bridge");
-        let cni_bin_dir = discover_cni_bin_dir();
-        let ppath = format!("{}/{}", cni_bin_dir, ptype);
+        let cni_bin_dir = discover_cni_bin_dir(&self.cni_bin_dir);
+        let ppath = format!("{}/{}", cni_bin_dir.display(), ptype);
         if !Path::new(&ppath).exists() {
             return Err(AgentError::ContainerError(format!(
                 "CNI plugin not found: {} (searched directories: {:?})",
-                ppath, CNI_BIN_DIRS
+                ppath, CNI_FALLBACK_BIN_DIRS
             )));
         }
         let cfg =
@@ -3056,10 +3137,10 @@ impl ContainerdRuntime {
     }
 
     async fn teardown_port_forward(&self, container_id: &str) -> AgentResult<()> {
-        let state_path = format!(
-            "{}/{}{}-ports.json",
-            PORT_FWD_STATE_DIR, PORT_FWD_STATE_PREFIX, container_id
-        );
+        let state_path = self.cni_results_dir.join(format!(
+            "{}{}-ports.json",
+            PORT_FWD_STATE_PREFIX, container_id
+        ));
         if !Path::new(&state_path).exists() {
             return Ok(());
         }
@@ -3067,7 +3148,7 @@ impl ContainerdRuntime {
         let raw = match fs::read_to_string(&state_path) {
             Ok(v) => v,
             Err(e) => {
-                warn!("Failed to read port-forward state {}: {}", state_path, e);
+                warn!("Failed to read port-forward state {}: {}", state_path.display(), e);
                 let _ = fs::remove_file(&state_path);
                 return Ok(());
             }
@@ -3075,7 +3156,7 @@ impl ContainerdRuntime {
         let state: PortForwardState = match serde_json::from_str(&raw) {
             Ok(v) => v,
             Err(e) => {
-                warn!("Failed to parse port-forward state {}: {}", state_path, e);
+                warn!("Failed to parse port-forward state {}: {}", state_path.display(), e);
                 let _ = fs::remove_file(&state_path);
                 return Ok(());
             }
@@ -3184,15 +3265,15 @@ impl ContainerdRuntime {
 
     async fn teardown_cni_network(&self, container_id: &str) -> AgentResult<()> {
         let _ = self.teardown_port_forward(container_id).await;
-        let rp = format!("/var/lib/cni/results/catalyst-{}", container_id);
-        if !Path::new(&rp).exists() {
+        let rp = self.cni_results_dir.join(format!("catalyst-{}", container_id));
+        if !rp.exists() {
             return Ok(());
         }
         // Load stored CNI config for proper teardown (bridge vs macvlan)
-        let cfg_path = format!("/var/lib/cni/results/catalyst-{}-config", container_id);
+        let cfg_path = self.cni_results_dir.join(format!("catalyst-{}-config", container_id));
         let cfg = fs::read_to_string(&cfg_path).ok()
             .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
-            .unwrap_or_else(|| serde_json::json!({"cniVersion":"1.0.0","name":"catalyst","type":"bridge","bridge":"catalyst0","ipam":{"type":"host-local","dataDir":"/var/lib/cni/networks"}}));
+            .unwrap_or_else(|| serde_json::json!({"cniVersion":"1.0.0","name":"catalyst","type":"bridge","bridge":self.cni_bridge_name,"ipam":{"type":"host-local","dataDir":self.cni_data_dir.to_string_lossy()}}));
         let mut tasks = TasksClient::new(self.channel.clone());
         let req = containerd_client::services::v1::GetRequest {
             container_id: container_id.to_string(),
@@ -3219,7 +3300,8 @@ impl ContainerdRuntime {
             // lease file from the data directory.
             let ipam_data_dir = cfg["ipam"]["dataDir"]
                 .as_str()
-                .unwrap_or("/var/lib/cni/networks");
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| self.cni_data_dir.to_string_lossy().to_string());
             let ipam_dir = PathBuf::from(ipam_data_dir).join("catalyst");
             let result_json = tokio::fs::read_to_string(&rp)
                 .await
@@ -3250,7 +3332,7 @@ impl ContainerdRuntime {
     }
 
     fn cleanup_io(&self, container_id: &str) {
-        let _ = fs::remove_dir_all(PathBuf::from(CONSOLE_BASE_DIR).join(container_id));
+        let _ = fs::remove_dir_all(self.console_log_dir.join(container_id));
     }
 
     /// Scan stored CNI result files and release IPAM leases for containers
@@ -3258,7 +3340,7 @@ impl ContainerdRuntime {
     /// to prevent stale allocations from blocking new containers.
     pub async fn cleanup_stale_cni_leases(&self) {
         // --- Phase 1: Release leases via CNI result files ---
-        let results_dir = Path::new("/var/lib/cni/results");
+        let results_dir = &self.cni_results_dir;
         if tokio::fs::try_exists(results_dir).await.unwrap_or(false) {
             if let Ok(mut entries) = tokio::fs::read_dir(results_dir).await {
                 let mut stale_results: Vec<(String, String)> = Vec::new();
@@ -3287,7 +3369,7 @@ impl ContainerdRuntime {
                             container_id, e
                         );
                     }
-                    let cfg_path = format!("/var/lib/cni/results/catalyst-{}-config", container_id);
+                    let cfg_path = self.cni_results_dir.join(format!("catalyst-{}-config", container_id));
                     let _ = tokio::fs::remove_file(result_path).await;
                     let _ = tokio::fs::remove_file(&cfg_path).await;
                 }
@@ -3298,11 +3380,11 @@ impl ContainerdRuntime {
         // Even if result files are gone (e.g. agent was force-killed), the
         // host-local IPAM plugin may still hold lease files.  Cross-reference
         // each lease file's container ID against containerd.
-        let ipam_base = Path::new("/var/lib/cni/networks/catalyst");
-        if !tokio::fs::try_exists(ipam_base).await.unwrap_or(false) {
+        let ipam_base = self.cni_data_dir.join("catalyst");
+        if !tokio::fs::try_exists(&ipam_base).await.unwrap_or(false) {
             return;
         }
-        if let Ok(mut entries) = tokio::fs::read_dir(ipam_base).await {
+        if let Ok(mut entries) = tokio::fs::read_dir(&ipam_base).await {
             while let Ok(Some(entry)) = entries.next_entry().await {
                 let path = entry.path();
                 if let Ok(md) = tokio::fs::metadata(&path).await {
@@ -3340,10 +3422,10 @@ impl ContainerdRuntime {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn load_named_cni_plugin_config(network: &str) -> Option<serde_json::Value> {
+fn load_named_cni_plugin_config(cni_dir: &Path, network: &str) -> Option<serde_json::Value> {
     let candidates = [
-        format!("/etc/cni/net.d/{}.conflist", network),
-        format!("/etc/cni/net.d/{}.conf", network),
+        cni_dir.join(format!("{}.conflist", network)),
+        cni_dir.join(format!("{}.conf", network)),
     ];
 
     for path in candidates {
@@ -3356,7 +3438,7 @@ fn load_named_cni_plugin_config(network: &str) -> Option<serde_json::Value> {
             Err(e) => {
                 warn!(
                     "Invalid CNI config JSON at {} for network {}: {}",
-                    path, network, e
+                    path.display(), network, e
                 );
                 continue;
             }
@@ -3378,7 +3460,7 @@ fn load_named_cni_plugin_config(network: &str) -> Option<serde_json::Value> {
                         .cloned()
                         .unwrap_or_else(|| serde_json::json!("0.4.0"));
                 }
-                info!("Loaded CNI network '{}' from {}", network, path);
+                info!("Loaded CNI network '{}' from {}", network, path.display());
                 return Some(cfg);
             }
         }
@@ -3392,7 +3474,7 @@ fn load_named_cni_plugin_config(network: &str) -> Option<serde_json::Value> {
             if cfg.get("cniVersion").is_none() {
                 cfg["cniVersion"] = serde_json::json!("0.4.0");
             }
-            info!("Loaded CNI network '{}' from {}", network, path);
+            info!("Loaded CNI network '{}' from {}", network, path.display());
             return Some(cfg);
         }
     }

@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
 use tokio::io::AsyncWriteExt;
@@ -132,7 +132,7 @@ impl SystemSetup {
         Self::ensure_oci_runtime(&pkg_manager).await?;
 
         // 4. Ensure containerd service/socket is ready
-        Self::ensure_containerd_running().await?;
+        Self::ensure_containerd_running(config).await?;
 
         // 5. Ensure IP tooling is available (iproute2)
         Self::ensure_iproute(&pkg_manager).await?;
@@ -141,7 +141,7 @@ impl SystemSetup {
         Self::ensure_iptables(&pkg_manager).await?;
 
         // 7. Ensure CNI plugin binaries are installed
-        Self::ensure_cni_plugins(&pkg_manager).await?;
+        Self::ensure_cni_plugins(&pkg_manager, config).await?;
 
         // 8. Setup CNI networking only (static host-local IPAM)
         Self::setup_cni_static_networking(config).await?;
@@ -295,7 +295,7 @@ impl SystemSetup {
 
     /// Ensure containerd is started and socket exists, and the current user
     /// can access the socket.
-    async fn ensure_containerd_running() -> Result<(), AgentError> {
+    async fn ensure_containerd_running(config: &AgentConfig) -> Result<(), AgentError> {
         let has_systemctl = Command::new("which")
             .arg("systemctl")
             .output()
@@ -305,7 +305,7 @@ impl SystemSetup {
 
         // Ensure the socket is group-accessible.
         // containerd defaults to root:root 0600 which blocks non-root users.
-        if let Err(e) = Self::configure_containerd_socket_access(has_systemctl).await {
+        if let Err(e) = Self::configure_containerd_socket_access(has_systemctl, config).await {
             warn!("Containerd socket access configuration failed: {}", e);
         }
 
@@ -313,7 +313,8 @@ impl SystemSetup {
         // started by the deploy script or a previous boot.  Restarting
         // containerd while the agent itself is starting can cause race
         // conditions and rapid crash-loops.
-        if Path::new("/run/containerd/containerd.sock").exists() {
+        let socket_path = &config.containerd.socket_path;
+        if socket_path.exists() {
             info!("✓ containerd socket already present");
         } else if has_systemctl {
             Self::run_command("systemctl", &["daemon-reload"], None).await?;
@@ -323,21 +324,22 @@ impl SystemSetup {
         }
 
         let mut attempts = 10;
-        while attempts > 0 && !Path::new("/run/containerd/containerd.sock").exists() {
+        while attempts > 0 && !socket_path.exists() {
             attempts -= 1;
             tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         }
 
-        if !Path::new("/run/containerd/containerd.sock").exists() {
-            return Err(AgentError::InternalError(
-                "containerd socket is not available at /run/containerd/containerd.sock".to_string(),
-            ));
+        if !socket_path.exists() {
+            return Err(AgentError::InternalError(format!(
+                "containerd socket is not available at {}",
+                socket_path.display()
+            )));
         }
 
         // Verify the current user can actually connect.
         if !is_root() {
             use std::os::unix::fs::{MetadataExt, PermissionsExt};
-            let meta = fs::metadata("/run/containerd/containerd.sock").map_err(|e| {
+            let meta = fs::metadata(socket_path).map_err(|e| {
                 AgentError::InternalError(format!("Cannot stat containerd socket: {}", e))
             })?;
             let mode = meta.permissions().mode();
@@ -363,7 +365,7 @@ impl SystemSetup {
     /// Returns `Ok(())` on success, logs warnings on failure but does not
     /// hard-fail so that the chmod fallback in `ensure_containerd_running`
     /// can still run.
-    async fn configure_containerd_socket_access(has_systemctl: bool) -> Result<(), AgentError> {
+    async fn configure_containerd_socket_access(has_systemctl: bool, config: &AgentConfig) -> Result<(), AgentError> {
         if is_root() {
             return Ok(());
         }
@@ -408,14 +410,14 @@ impl SystemSetup {
         //    group "containerd" and mode 0660.
         //    Skip entirely on non-systemd systems (e.g. Alpine with OpenRC).
         if has_systemctl && std::path::Path::new("/run/systemd/system").exists() {
-            let override_dir = "/etc/systemd/system/containerd.service.d";
+            let override_dir = config.containerd.systemd_override_dir.to_string_lossy().to_string();
             let override_file = format!("{}/override.conf", override_dir);
 
             // Only write if the override doesn't already exist.
             let exists = Path::new(&override_file).exists();
             if !exists {
                 // Create the directory via sudo (needs elevated privileges).
-                if let Err(e) = Self::run_command("mkdir", &["-p", override_dir], None).await {
+                if let Err(e) = Self::run_command("mkdir", &["-p", &override_dir], None).await {
                     warn!(
                         "Could not create containerd override dir (non-fatal): {}",
                         e
@@ -423,9 +425,13 @@ impl SystemSetup {
                     return Ok(());
                 }
 
-                let content = "[Service]\n\
-                    ExecStartPre=-/bin/chown root:containerd /run/containerd\n\
-                    ExecStartPost=-/bin/chmod 660 /run/containerd/containerd.sock\n";
+                let socket_dir = config.containerd.socket_path.parent()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "/run/containerd".to_string());
+                let socket_file = config.containerd.socket_path.to_string_lossy().to_string();
+                let content = format!("[Service]\n\
+                    ExecStartPre=-/bin/chown root:containerd {}\n\
+                    ExecStartPost=-/bin/chmod 660 {}\n", socket_dir, socket_file);
 
                 // Write to a user-writable temp location, then sudo-copy to
                 // the protected systemd directory.
@@ -674,8 +680,8 @@ impl SystemSetup {
     }
 
     /// Ensure required CNI plugin binaries are installed
-    async fn ensure_cni_plugins(pkg_manager: &str) -> Result<(), AgentError> {
-        if Self::has_required_cni_plugins() {
+    async fn ensure_cni_plugins(pkg_manager: &str, config: &AgentConfig) -> Result<(), AgentError> {
+        if Self::has_required_cni_plugins_with(config) {
             info!("✓ Required CNI plugins already installed");
             return Ok(());
         }
@@ -716,7 +722,7 @@ impl SystemSetup {
             _ => false,
         };
 
-        if packaged_install && Self::has_required_cni_plugins() {
+        if packaged_install && Self::has_required_cni_plugins_with(config) {
             info!("✓ Required CNI plugins installed via package manager");
             return Ok(());
         }
@@ -737,8 +743,9 @@ impl SystemSetup {
             version, arch, version
         );
 
-        fs::create_dir_all("/opt/cni/bin")
-            .map_err(|e| AgentError::IoError(format!("Failed to create /opt/cni/bin: {}", e)))?;
+        let cni_bin_dir = config.containerd.cni_bin_dir.to_string_lossy().to_string();
+        fs::create_dir_all(&*cni_bin_dir)
+            .map_err(|e| AgentError::IoError(format!("Failed to create {}: {}", cni_bin_dir, e)))?;
         let archive_path = format!("/tmp/cni-plugins-{}-{}.tgz", version, arch);
         Self::run_command("curl", &["-fsSL", "-o", &archive_path, &url], None).await?;
 
@@ -779,13 +786,13 @@ impl SystemSetup {
 
         Self::run_command(
             "tar",
-            &["-xz", "-C", "/opt/cni/bin", "-f", &archive_path],
+            &["-xz", "-C", &cni_bin_dir, "-f", &archive_path],
             None,
         )
         .await?;
         let _ = fs::remove_file(&archive_path);
 
-        if !Self::has_required_cni_plugins() {
+        if !Self::has_required_cni_plugins_with(config) {
             return Err(AgentError::InternalError(
                 "CNI plugins installation completed but required binaries are still missing"
                     .to_string(),
@@ -796,18 +803,26 @@ impl SystemSetup {
         Ok(())
     }
 
-    fn has_required_cni_plugins() -> bool {
-        const REQUIRED: [&str; 4] = ["bridge", "host-local", "portmap", "macvlan"];
-        // Check every CNI plugin directory used across distros:
-        //   /opt/cni/bin           — upstream tarball / Debian packages
-        //   /usr/libexec/cni       — Fedora / RHEL packages
-        //   /usr/lib/cni           — Arch / Alpine / openSUSE packages
-        const CNI_BIN_DIRS: [&str; 3] = ["/opt/cni/bin", "/usr/libexec/cni", "/usr/lib/cni"];
+    fn has_required_cni_plugins_with(config: &AgentConfig) -> bool {
+        let configured = config.containerd.cni_bin_dir.to_string_lossy().to_string();
+        // Check the configured dir first, then standard fallbacks
+        let mut dirs: Vec<&str> = vec![&configured];
+        dirs.extend_from_slice(&["/usr/libexec/cni", "/usr/lib/cni"]);
+        // We need owned strings for the first entry, so use a different approach
+        Self::has_required_cni_plugins_check_paths(&[
+            config.containerd.cni_bin_dir.clone(),
+            PathBuf::from("/usr/libexec/cni"),
+            PathBuf::from("/usr/lib/cni"),
+        ])
+    }
 
-        for dir in CNI_BIN_DIRS {
+    fn has_required_cni_plugins_check_paths(dirs: &[PathBuf]) -> bool {
+        const REQUIRED: [&str; 4] = ["bridge", "host-local", "portmap", "macvlan"];
+
+        for dir in dirs {
             let has_all = REQUIRED
                 .iter()
-                .all(|name| Path::new(&format!("{}/{}", dir, name)).exists());
+                .all(|name| dir.join(name).exists());
             if has_all {
                 return true;
             }
@@ -821,7 +836,7 @@ impl SystemSetup {
     /// logged but the config is NOT overwritten — overwriting a network
     /// config while containers are using it would break their connectivity.
     async fn setup_cni_static_networking(config: &AgentConfig) -> Result<(), AgentError> {
-        let cni_dir = "/etc/cni/net.d";
+        let cni_dir = &config.containerd.cni_dir;
 
         // Create CNI directory if it doesn't exist
         fs::create_dir_all(cni_dir)
@@ -841,7 +856,7 @@ impl SystemSetup {
         };
 
         for network in networks {
-            let cni_config_path = format!("{}/{}.conflist", cni_dir, network.name);
+            let cni_config_path = cni_dir.join(format!("{}.conflist", network.name));
             let existing_config = if Path::new(&cni_config_path).exists() {
                 match fs::read_to_string(&cni_config_path) {
                     Ok(raw) => serde_json::from_str::<serde_json::Value>(&raw).ok(),
@@ -922,7 +937,7 @@ impl SystemSetup {
                         existing_iface, interface,
                         existing_subnet, cidr,
                         existing_gateway, gateway,
-                        cni_config_path
+                        cni_config_path.display()
                     );
                     continue;
                 }
@@ -939,7 +954,7 @@ impl SystemSetup {
                 .map_err(|e| AgentError::IoError(format!("Failed to write CNI config: {}", e)))?;
             info!(
                 "✓ Created CNI static network configuration at {}",
-                cni_config_path
+                cni_config_path.display()
             );
         }
 

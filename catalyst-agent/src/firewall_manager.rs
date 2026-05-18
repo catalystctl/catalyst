@@ -20,13 +20,10 @@ async fn run_firewall_command(cmd: &str, args: &[&str]) -> AgentResult<std::proc
 
 static IPTABLES_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-/// Persistent state file that tracks which firewall rules the agent has
-/// created, so they can be reliably removed on server deletion and survive
-/// agent restarts.
-///
-/// Format (one JSON object per line):
-///   {"port":25565,"server_id":"srv-abc","container_ip":"10.42.0.5","proto":"tcp"}
-const RULE_STATE_FILE: &str = "/var/lib/catalyst/firewall-rules.jsonl";
+/// Persistent state file path — set once at startup via `FirewallManager::init()`.
+/// Derives from the agent's `data_dir` so that firewall rule state follows
+/// the data directory when the user overrides it.
+static RULE_STATE_FILE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
 
 // ---------------------------------------------------------------------------
 // Firewall manager
@@ -66,19 +63,25 @@ fn lock_rules() -> std::sync::MutexGuard<'static, Vec<FirewallRule>> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+/// Return the rule state file path, panicking if init() was never called.
+fn rule_state_file() -> &'static std::path::PathBuf {
+    RULE_STATE_FILE.get().expect("FirewallManager::init() was not called before using rule state")
+}
+
 /// Load tracked rules from the persistent state file, merging with any
 /// already loaded in memory (used on agent startup).
 fn load_tracked_rules() {
+    let state_file = rule_state_file();
     let mut rules = lock_rules();
     if !rules.is_empty() {
         return; // already loaded
     }
 
-    if !Path::new(RULE_STATE_FILE).exists() {
+    if !Path::new(state_file).exists() {
         return;
     }
 
-    match std::fs::read_to_string(RULE_STATE_FILE) {
+    match std::fs::read_to_string(state_file) {
         Ok(contents) => {
             let count = contents
                 .lines()
@@ -89,7 +92,7 @@ fn load_tracked_rules() {
             if count > 0 {
                 info!(
                     "Loaded {} tracked firewall rules from {}",
-                    count, RULE_STATE_FILE
+                    count, state_file.display()
                 );
             }
         }
@@ -99,8 +102,9 @@ fn load_tracked_rules() {
 
 /// Persist tracked rules to disk.
 fn save_tracked_rules() {
+    let state_file = rule_state_file();
     let rules = lock_rules();
-    let temp = format!("{}.tmp", RULE_STATE_FILE);
+    let temp = state_file.with_extension("jsonl.tmp");
     let data = rules
         .iter()
         .map(|r| serde_json::to_string(r).unwrap_or_default())
@@ -112,19 +116,20 @@ fn save_tracked_rules() {
         warn!("Could not save firewall rule state: {}", e);
         return;
     }
-    if let Err(e) = std::fs::rename(&temp, RULE_STATE_FILE) {
+    if let Err(e) = std::fs::rename(&temp, state_file) {
         warn!("Could not atomically replace firewall rule state: {}", e);
-        let _ = std::fs::remove_file(&temp);
+        let _ = std::fs::remove_file(&state_file.with_extension("jsonl.tmp"));
     }
 }
 
 /// Append a single rule to the state file without rewriting the whole file.
 fn append_tracked_rule(rule: &FirewallRule) {
+    let state_file = rule_state_file();
     let line = format!("{}\n", serde_json::to_string(rule).unwrap_or_default());
     if let Err(e) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(RULE_STATE_FILE)
+        .open(state_file)
         .and_then(|mut f| f.write_all(line.as_bytes()))
     {
         warn!("Could not append firewall rule state: {}", e);
@@ -295,8 +300,17 @@ impl FirewallManager {
         ft
     }
 
-    /// Ensure tracked rules are loaded from disk.  Call once at startup.
-    pub fn init() {
+    /// Initialize the firewall manager with the agent's data directory.
+    /// Sets the persistent rule state file path to `{data_dir}/firewall-rules.jsonl`
+    /// and loads any existing tracked rules from disk.
+    /// Call once at startup.
+    pub fn init(data_dir: &std::path::Path) {
+        let state_file = data_dir.join("firewall-rules.jsonl");
+        let _ = RULE_STATE_FILE.set(state_file);
+        info!(
+            "Firewall rule state file: {}",
+            rule_state_file().display()
+        );
         load_tracked_rules();
     }
 

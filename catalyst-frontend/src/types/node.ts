@@ -9,6 +9,16 @@ export interface NodeInfo {
   hostname?: string;
   publicAddress?: string;
   serverDataDir?: string;
+  consoleLogDir?: string | null;
+  cniDir?: string | null;
+  cniBinDir?: string | null;
+  cniDataDir?: string | null;
+  cniResultsDir?: string | null;
+  cniBridgeName?: string | null;
+  cniBridgeSubnet?: string | null;
+  systemdOverrideDir?: string | null;
+  agentConfigPath?: string | null;
+  agentReleaseRepo?: string | null;
   maxMemoryMb?: number;
   maxCpuCores?: number;
   memoryOverallocatePercent?: number;

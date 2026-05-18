@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::Duration;
 use tokio::fs;
 use tokio::process::Command;
@@ -19,13 +20,25 @@ async fn run_network_command(cmd: &str, args: &[&str]) -> Result<std::process::O
     Ok(output)
 }
 
-const CNI_DIR: &str = "/etc/cni/net.d";
-const CONFIG_PATH: &str = "/opt/catalyst-agent/config.toml";
-
 /// Network Manager - Handles dynamic network configuration
-pub struct NetworkManager;
+/// All paths are configurable via the agent config (cni_dir, config_path).
+#[derive(Clone)]
+pub struct NetworkManager {
+    cni_dir: PathBuf,
+    config_path: PathBuf,
+}
 
 impl NetworkManager {
+    /// Create a new NetworkManager with the given CNI directory and config path.
+    pub fn new(cni_dir: PathBuf, config_path: PathBuf) -> Self {
+        info!(
+            "NetworkManager initialized: cni_dir={}, config_path={}",
+            cni_dir.display(),
+            config_path.display()
+        );
+        Self { cni_dir, config_path }
+    }
+
     fn validate_label(name: &str, max_len: usize, context: &str) -> Result<(), AgentError> {
         let name = name.trim();
         if name.is_empty() || name.len() > max_len {
@@ -80,9 +93,9 @@ impl NetworkManager {
     }
 
     /// Create a new CNI network configuration
-    pub async fn create_network(network: &CniNetworkConfig) -> Result<(), AgentError> {
+    pub async fn create_network(&self, network: &CniNetworkConfig) -> Result<(), AgentError> {
         Self::validate_network_name(&network.name)?;
-        let cni_config_path = format!("{}/{}.conflist", CNI_DIR, network.name);
+        let cni_config_path = self.cni_dir.join(format!("{}.conflist", network.name));
 
         // Check if network already exists
         if fs::try_exists(&cni_config_path).await.unwrap_or(false) {
@@ -139,11 +152,11 @@ impl NetworkManager {
 
         info!(
             "✓ Created CNI network '{}' at {}",
-            network.name, cni_config_path
+            network.name, cni_config_path.display()
         );
 
         // Update config.toml to persist the network
-        if let Err(e) = Self::persist_to_config(
+        if let Err(e) = self.persist_to_config(
             network,
             &interface,
             &cidr,
@@ -161,13 +174,13 @@ impl NetworkManager {
     }
 
     /// Update an existing CNI network configuration
-    pub async fn update_network(
+    pub async fn update_network(&self, 
         old_name: &str,
         network: &CniNetworkConfig,
     ) -> Result<(), AgentError> {
         Self::validate_network_name(old_name)?;
         Self::validate_network_name(&network.name)?;
-        let old_cni_path = format!("{}/{}.conflist", CNI_DIR, old_name);
+        let old_cni_path = self.cni_dir.join(format!("{}.conflist", old_name));
 
         // Check if old network exists
         if !fs::try_exists(&old_cni_path).await.unwrap_or(false) {
@@ -186,7 +199,7 @@ impl NetworkManager {
         }
 
         // Create new config (will handle rename)
-        let cni_config_path = format!("{}/{}.conflist", CNI_DIR, network.name);
+        let cni_config_path = self.cni_dir.join(format!("{}.conflist", network.name));
 
         // Detect interface if not specified
         let interface = if let Some(ref iface) = network.interface {
@@ -235,11 +248,11 @@ impl NetworkManager {
 
         info!(
             "✓ Updated CNI network '{}' at {}",
-            network.name, cni_config_path
+            network.name, cni_config_path.display()
         );
 
         // Update config.toml
-        if let Err(e) = Self::update_config(
+        if let Err(e) = self.update_config(
             old_name,
             network,
             &interface,
@@ -258,9 +271,9 @@ impl NetworkManager {
     }
 
     /// Delete a CNI network configuration
-    pub async fn delete_network(network_name: &str) -> Result<(), AgentError> {
+    pub async fn delete_network(&self, network_name: &str) -> Result<(), AgentError> {
         Self::validate_network_name(network_name)?;
-        let cni_config_path = format!("{}/{}.conflist", CNI_DIR, network_name);
+        let cni_config_path = self.cni_dir.join(format!("{}.conflist", network_name));
 
         // Check if network exists
         if !fs::try_exists(&cni_config_path).await.unwrap_or(false) {
@@ -278,7 +291,7 @@ impl NetworkManager {
         info!("✓ Deleted CNI network '{}'", network_name);
 
         // Remove from config.toml
-        Self::remove_from_config(network_name).await?;
+        self.remove_from_config(network_name).await?;
 
         Ok(())
     }
@@ -328,7 +341,7 @@ impl NetworkManager {
     }
 
     /// Persist network configuration to config.toml
-    async fn persist_to_config(
+    async fn persist_to_config(&self, 
         network: &CniNetworkConfig,
         interface: &str,
         cidr: &str,
@@ -336,7 +349,7 @@ impl NetworkManager {
         range_start: &str,
         range_end: &str,
     ) -> Result<(), AgentError> {
-        let mut config = Self::load_agent_config_toml().await?;
+        let mut config = self.load_agent_config_toml().await?;
         let networks = Self::networks_array_mut(&mut config)?;
 
         // If already present, treat as idempotent.
@@ -349,7 +362,7 @@ impl NetworkManager {
         }) {
             info!(
                 "✓ Network '{}' already present in {}",
-                network.name, CONFIG_PATH
+                network.name, self.config_path.display()
             );
             return Ok(());
         }
@@ -363,13 +376,13 @@ impl NetworkManager {
             range_end,
         ));
 
-        Self::store_agent_config_toml(&config).await?;
-        info!("✓ Persisted network '{}' to {}", network.name, CONFIG_PATH);
+        self.store_agent_config_toml(&config).await?;
+        info!("✓ Persisted network '{}' to {}", network.name, self.config_path.display());
         Ok(())
     }
 
     /// Update network configuration in config.toml
-    async fn update_config(
+    async fn update_config(&self, 
         old_name: &str,
         network: &CniNetworkConfig,
         interface: &str,
@@ -378,7 +391,7 @@ impl NetworkManager {
         range_start: &str,
         range_end: &str,
     ) -> Result<(), AgentError> {
-        let mut config = Self::load_agent_config_toml().await?;
+        let mut config = self.load_agent_config_toml().await?;
         let networks = Self::networks_array_mut(&mut config)?;
 
         let mut updated = false;
@@ -418,18 +431,18 @@ impl NetworkManager {
             ));
         }
 
-        Self::store_agent_config_toml(&config).await?;
-        info!("✓ Updated network '{}' in {}", network.name, CONFIG_PATH);
+        self.store_agent_config_toml(&config).await?;
+        info!("✓ Updated network '{}' in {}", network.name, self.config_path.display());
         Ok(())
     }
 
     /// Remove network configuration from config.toml
-    async fn remove_from_config(network_name: &str) -> Result<(), AgentError> {
-        if !fs::try_exists(CONFIG_PATH).await.unwrap_or(false) {
+    async fn remove_from_config(&self, network_name: &str) -> Result<(), AgentError> {
+        if !fs::try_exists(&self.config_path).await.unwrap_or(false) {
             return Ok(());
         }
 
-        let mut config = Self::load_agent_config_toml().await?;
+        let mut config = self.load_agent_config_toml().await?;
         let Ok(networks) = Self::networks_array_mut(&mut config) else {
             return Ok(());
         };
@@ -442,26 +455,26 @@ impl NetworkManager {
                 != Some(network_name)
         });
 
-        Self::store_agent_config_toml(&config).await?;
-        info!("✓ Removed network '{}' from {}", network_name, CONFIG_PATH);
+        self.store_agent_config_toml(&config).await?;
+        info!("✓ Removed network '{}' from {}", network_name, self.config_path.display());
         Ok(())
     }
 
-    async fn load_agent_config_toml() -> Result<TomlValue, AgentError> {
-        if !fs::try_exists(CONFIG_PATH).await.unwrap_or(false) {
+    async fn load_agent_config_toml(&self) -> Result<TomlValue, AgentError> {
+        if !fs::try_exists(&self.config_path).await.unwrap_or(false) {
             return Ok(TomlValue::Table(toml::value::Table::new()));
         }
-        let raw = fs::read_to_string(CONFIG_PATH)
+        let raw = fs::read_to_string(&self.config_path)
             .await
             .map_err(|e| AgentError::IoError(format!("Failed to read config: {}", e)))?;
         toml::from_str::<TomlValue>(&raw)
             .map_err(|e| AgentError::IoError(format!("Failed to parse config TOML: {}", e)))
     }
 
-    async fn store_agent_config_toml(value: &TomlValue) -> Result<(), AgentError> {
+    async fn store_agent_config_toml(&self, value: &TomlValue) -> Result<(), AgentError> {
         let raw = toml::to_string_pretty(value)
             .map_err(|e| AgentError::IoError(format!("Failed to serialize config TOML: {}", e)))?;
-        fs::write(CONFIG_PATH, raw)
+        fs::write(&self.config_path, raw)
             .await
             .map_err(|e| AgentError::IoError(format!("Failed to write config: {}", e)))
     }
