@@ -47,14 +47,14 @@ export function NodeAssignmentsSelector({
 
  // Fetch available nodes
  const { data: nodes = [], isLoading: nodesLoading } = useQuery({
- queryKey: ['nodes'],
+ queryKey: qk.nodes(),
  queryFn: () => nodesApi.list(),
- refetchInterval: 10000,
+ staleTime: 60_000,
  });
 
  // Fetch current assignments for roles
  const { data: roleAssignmentsData, isLoading: roleAssignmentsLoading } = useQuery({
- queryKey: ['roles', roleId, 'nodes'],
+ queryKey: qk.roleNodes(roleId!),
  queryFn: async () => {
  if (!roleId) return { data: [], hasWildcard: false };
  const response = await fetch(`/api/roles/${roleId}/nodes`, {
@@ -64,12 +64,12 @@ export function NodeAssignmentsSelector({
  return { data: data.data || [], hasWildcard: data.hasWildcard || false };
  },
  enabled: !!roleId,
- refetchInterval: 10000,
+ staleTime: 60_000,
  });
 
  // Fetch current assignments for users
  const { data: userAssignmentsData, isLoading: userAssignmentsLoading } = useQuery({
- queryKey: ['users', userId, 'nodes'],
+ queryKey: qk.userNodes(userId!),
  queryFn: async () => {
  if (!userId) return { data: [], hasWildcard: false };
  const response = await fetch(`/api/roles/users/${userId}/nodes`, {
@@ -79,7 +79,7 @@ export function NodeAssignmentsSelector({
  return { data: data.data || [], hasWildcard: data.hasWildcard || false };
  },
  enabled: !!userId,
- refetchInterval: 10000,
+ staleTime: 60_000,
  });
 
  // Initialize selections from fetched data
@@ -154,9 +154,9 @@ export function NodeAssignmentsSelector({
  }
  // Invalidate queries after successful API call
  Promise.all([
- queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId) }),
- queryClient.invalidateQueries({ queryKey: qk.userNodes(userId) }),
- queryClient.invalidateQueries({ queryKey: ['nodes'] }),
+ queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId!) }),
+ queryClient.invalidateQueries({ queryKey: qk.userNodes(userId!) }),
+ queryClient.invalidateQueries({ queryKey: qk.nodes() }),
  ]);
  } catch (error: unknown) {
  reportSystemError({
@@ -181,8 +181,8 @@ export function NodeAssignmentsSelector({
  setHasWildcard(true);
  } else {
  // We tried to add but failed - restore previous selection
- queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId) });
- queryClient.invalidateQueries({ queryKey: qk.userNodes(userId) });
+ queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId!) });
+ queryClient.invalidateQueries({ queryKey: qk.userNodes(userId!) });
  }
  }
  };
@@ -240,9 +240,9 @@ export function NodeAssignmentsSelector({
 
  notifySuccess('Node assigned');
  Promise.all([
- queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId) }),
- queryClient.invalidateQueries({ queryKey: qk.userNodes(userId) }),
- queryClient.invalidateQueries({ queryKey: ['nodes'] }),
+ queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId!) }),
+ queryClient.invalidateQueries({ queryKey: qk.userNodes(userId!) }),
+ queryClient.invalidateQueries({ queryKey: qk.nodes() }),
  ]);
  return true;
  } catch (error: unknown) {
@@ -274,9 +274,9 @@ export function NodeAssignmentsSelector({
  await nodesApi.removeAssignment(nodeId, assignment.id);
  notifySuccess('Node unassigned');
  Promise.all([
- queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId) }),
- queryClient.invalidateQueries({ queryKey: qk.userNodes(userId) }),
- queryClient.invalidateQueries({ queryKey: ['nodes'] }),
+ queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId!) }),
+ queryClient.invalidateQueries({ queryKey: qk.userNodes(userId!) }),
+ queryClient.invalidateQueries({ queryKey: qk.nodes() }),
  ]);
  return true;
  }
@@ -330,9 +330,9 @@ export function NodeAssignmentsSelector({
  setExpirationDate('');
  notifySuccess('Expiration updated');
  Promise.all([
- queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId) }),
- queryClient.invalidateQueries({ queryKey: qk.userNodes(userId) }),
- queryClient.invalidateQueries({ queryKey: ['nodes'] }),
+ queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId!) }),
+ queryClient.invalidateQueries({ queryKey: qk.userNodes(userId!) }),
+ queryClient.invalidateQueries({ queryKey: qk.nodes() }),
  ]);
  } catch (error: unknown) {
  reportSystemError({

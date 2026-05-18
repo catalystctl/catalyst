@@ -34,10 +34,12 @@ function TransferServerModal({ serverId, disabled = false }: Props) {
  transferMode,
  }),
  onSuccess: () => {
- queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
- queryClient.invalidateQueries({ queryKey: ['servers'] });
  notifySuccess('Transfer started');
  setOpen(false);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: () => notifyError('Failed to transfer server'),
  });

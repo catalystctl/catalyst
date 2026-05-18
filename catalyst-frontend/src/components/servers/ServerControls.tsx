@@ -36,7 +36,9 @@ function ServerControls({ serverId, status, permissions }: Props) {
  const canKill = canStop;
 
  /** Snapshot + optimistic update + return snapshot for rollback */
- function snapshotAndOptimistic(nextStatus: ServerStatus) {
+ async function snapshotAndOptimistic(nextStatus: ServerStatus) {
+ await queryClient.cancelQueries({ queryKey: qk.server(serverId) });
+ await queryClient.cancelQueries({ queryKey: qk.servers() });
  const prevServer = queryClient.getQueryData(qk.server(serverId));
  optimisticSet(queryClient, qk.server(serverId), (srv: Server) =>
  srv ? { ...srv, status: nextStatus, lastExitCode: undefined } : srv,

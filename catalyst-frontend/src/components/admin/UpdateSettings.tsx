@@ -49,7 +49,8 @@ export default function UpdateSettings() {
  const { data: status, isLoading } = useQuery({
  queryKey: qk.adminUpdateStatus(),
  queryFn: adminApi.updateStatus,
- refetchInterval: 30000,
+ staleTime: 15_000,
+ refetchInterval: 30_000,
  });
 
  const triggerMutation = useMutation({
@@ -60,6 +61,8 @@ export default function UpdateSettings() {
  } else {
  notifyError(result.message || 'Update failed');
  }
+ },
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminUpdateStatus() });
  },
  onError: (error: any) => {

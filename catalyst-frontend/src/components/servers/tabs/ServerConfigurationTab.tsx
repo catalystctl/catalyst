@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { qk } from '../../../lib/queryKeys';
 import { filesApi } from '../../../services/api/files';
 import {
  detectConfigFormat,
@@ -286,10 +287,10 @@ export default function ServerConfigurationTab({
  const content = serializeConfig(target.format, record);
  await filesApi.write(serverId, target.path, content);
  },
- onSuccess: () => {
- notifySuccess('Configuration saved');
+ onSuccess: () => notifySuccess('Configuration saved'),
+ onSettled: () => {
  if (serverId) {
- queryClient.invalidateQueries({ queryKey: ['files', serverId] });
+ queryClient.invalidateQueries({ queryKey: qk.files(serverId, '/') });
  }
  },
  onError: (error: any) => {

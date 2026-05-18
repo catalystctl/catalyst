@@ -500,9 +500,11 @@ function UsersPage() {
  }),
  onSuccess: () => {
  notifySuccess('User created');
- queryClient.invalidateQueries({ queryKey: ['admin-users'] });
  resetCreateForm();
  setIsCreateOpen(false);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  },
  onError: (error: any) => {
  const rawError = error?.response?.data?.error;
@@ -525,13 +527,13 @@ function UsersPage() {
  }),
  onSuccess: () => {
  notifySuccess('User updated');
- Promise.all([
- queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
- queryClient.invalidateQueries({ queryKey: qk.adminRoles() }),
- ]);
  setEditingUserId(null);
  setEditRoleSearch('');
  setEditServerSearch('');
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
+ queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
  },
  onError: (error: any) => {
  const rawError = error?.response?.data?.error;
@@ -547,10 +549,10 @@ function UsersPage() {
  mutationFn: (userId: string) => adminApi.deleteUser(userId),
  onSuccess: () => {
  notifySuccess('User deleted');
- Promise.all([
- queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
- queryClient.invalidateQueries({ queryKey: qk.adminRoles() }),
- ]);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
+ queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
  },
  onError: (error: any) => {
  const rawError = error?.response?.data?.error;
@@ -563,7 +565,7 @@ function UsersPage() {
  });
 
  const banMutation = useMutation({
- mutationKey: ['admin-user-ban'],
+ mutationKey: qk.mutation.adminUserBan(),
  mutationFn: (payload: { userIds: string[]; reason?: string }) => {
  return Promise.all(
  payload.userIds.map((userId) =>
@@ -575,10 +577,12 @@ function UsersPage() {
  notifySuccess(
  `${variables.userIds.length} user${variables.userIds.length === 1 ? '' : 's'} banned`,
  );
- queryClient.invalidateQueries({ queryKey: ['admin-users'] });
  setSelectedIds([]);
  setBanTargets(null);
  setBanReason('');
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  },
  onError: (error: any) => {
  const message =
@@ -588,7 +592,7 @@ function UsersPage() {
  });
 
  const unbanMutation = useMutation({
- mutationKey: ['admin-user-unban'],
+ mutationKey: qk.mutation.adminUserUnban(),
  mutationFn: (userIds: string[]) => {
  return Promise.all(userIds.map((userId) => adminApi.unbanUser(userId)));
  },
@@ -596,9 +600,11 @@ function UsersPage() {
  notifySuccess(
  `${userIds.length} user${userIds.length === 1 ? '' : 's'} unbanned`,
  );
- queryClient.invalidateQueries({ queryKey: ['admin-users'] });
  setSelectedIds([]);
  setUnbanTargets(null);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  },
  onError: (error: any) => {
  const message =
@@ -611,10 +617,12 @@ function UsersPage() {
  mutationFn: (userId: string) => adminApi.wipePasskeys(userId),
  onSuccess: (_data, userId) => {
  notifySuccess('Passkeys wiped');
- queryClient.invalidateQueries({ queryKey: ['admin-users'] });
  setWipePasskeyTarget(null);
  const updatedUser = users.find((u) => u.id === userId);
  if (updatedUser) handleEditUser(updatedUser);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  },
  onError: (error: any) => {
  notifyError(error?.response?.data?.error || 'Failed to wipe passkeys');
@@ -625,10 +633,12 @@ function UsersPage() {
  mutationFn: (userId: string) => adminApi.wipeTwoFactor(userId),
  onSuccess: (_data, userId) => {
  notifySuccess('2FA wiped');
- queryClient.invalidateQueries({ queryKey: ['admin-users'] });
  setWipe2faTarget(null);
  const updatedUser = users.find((u) => u.id === userId);
  if (updatedUser) handleEditUser(updatedUser);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  },
  onError: (error: any) => {
  notifyError(error?.response?.data?.error || 'Failed to wipe 2FA');
@@ -640,10 +650,12 @@ function UsersPage() {
  adminApi.enforceTwoFactor(userId, enforce),
  onSuccess: (_data, variables) => {
  notifySuccess(variables.enforce ? '2FA enforcement enabled' : '2FA enforcement disabled');
- queryClient.invalidateQueries({ queryKey: ['admin-users'] });
  setEnforce2faTarget(null);
  const updatedUser = users.find((u) => u.id === variables.userId);
  if (updatedUser) handleEditUser(updatedUser);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  },
  onError: (error: any) => {
  notifyError(error?.response?.data?.error || 'Failed to update 2FA enforcement');
@@ -655,10 +667,12 @@ function UsersPage() {
  adminApi.unlinkAccount(userId, accountId),
  onSuccess: (_data, variables) => {
  notifySuccess('SSO account unlinked');
- queryClient.invalidateQueries({ queryKey: ['admin-users'] });
  setUnlinkTarget(null);
  const updatedUser = users.find((u) => u.id === variables.userId);
  if (updatedUser) handleEditUser(updatedUser);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  },
  onError: (error: any) => {
  notifyError(error?.response?.data?.error || 'Failed to unlink SSO account');
@@ -669,7 +683,9 @@ function UsersPage() {
  mutationFn: (userId: string) => adminApi.verifyUserEmail(userId),
  onSuccess: () => {
  notifySuccess('Email verified');
- queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  },
  onError: (error: any) => {
  notifyError(error?.response?.data?.error || 'Failed to verify email');
@@ -684,12 +700,12 @@ function UsersPage() {
  notifySuccess(
  `${userIds.length} user${userIds.length === 1 ? '' : 's'} deleted`,
  );
- Promise.all([
- queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
- queryClient.invalidateQueries({ queryKey: qk.adminRoles() }),
- ]);
  setSelectedIds([]);
  setDeletingUser(null);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
+ queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
  },
  onError: (error: any) => {
  const message =
@@ -814,7 +830,7 @@ function UsersPage() {
  Promise.all(unverifiedIds.map((id) => adminApi.verifyUserEmail(id)))
  .then(() => {
  notifySuccess(`Verified ${unverifiedIds.length} email${unverifiedIds.length !== 1 ? 's' : ''}`);
- queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+ queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
  })
  .catch((err: any) => {
  notifyError(err?.response?.data?.error || 'Failed to verify emails');

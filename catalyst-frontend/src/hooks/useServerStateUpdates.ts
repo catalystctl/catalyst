@@ -9,6 +9,7 @@
 import { useEffect, useRef } from 'react';
 import { useQueryClient, type Query } from '@tanstack/react-query';
 import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
+import { qk } from '../lib/queryKeys';
 
 const DEBOUNCE_MS = 16; // ~60fps
 
@@ -21,7 +22,7 @@ export function useServerStateUpdates() {
   const processUpdates = () => {
     if (isProcessing.current || !pendingUpdates.current?.size) return;
     isProcessing.current = true;
-    
+
     const q = queryClient as any;
     const updates = pendingUpdates.current;
     pendingUpdates.current = new Map();
@@ -34,7 +35,7 @@ export function useServerStateUpdates() {
       // Update single server query
       q.setQueriesData(
         { predicate: (query: Query) =>
-          Array.isArray(query.queryKey) && query.queryKey[0] === 'server' },
+          Array.isArray(query.queryKey) && query.queryKey[0] === 'servers' && query.queryKey.length >= 2 && typeof query.queryKey[1] === 'string' },
         (prev: any) => {
           if (!prev || typeof prev !== 'object') return prev;
           if (!matchesId(prev)) return prev;
@@ -54,7 +55,7 @@ export function useServerStateUpdates() {
     // Update servers list once for all changes
     q.setQueriesData(
       { predicate: (query: Query) =>
-        Array.isArray(query.queryKey) && query.queryKey[0] === 'servers' },
+        Array.isArray(query.queryKey) && query.queryKey[0] === 'servers' && (query.queryKey.length === 1 || query.queryKey[1] === null) },
       (prev: any) => {
         if (!Array.isArray(prev)) return prev;
         return prev.map((srv: any) => {
@@ -65,7 +66,7 @@ export function useServerStateUpdates() {
     );
 
     // Invalidate queries in single batch
-    q.invalidateQueries({ queryKey: ['server'] });
+    q.invalidateQueries({ queryKey: qk.servers() });
 
     isProcessing.current = false;
   };
@@ -98,7 +99,7 @@ export function useServerStateUpdates() {
           scheduleProcess();
           // Invalidate file queries when server starts/stops (new files may be generated)
           if (state === 'running' || state === 'stopped' || state === 'offline') {
-            (queryClient as any).invalidateQueries({ queryKey: ['files', serverId] });
+            (queryClient as any).invalidateQueries({ queryKey: qk.files(serverId, '') });
           }
           return;
         }
@@ -114,8 +115,8 @@ export function useServerStateUpdates() {
               return prev.filter((srv: any) => srv?.id !== serverId && srv?.uuid !== serverId);
             },
           );
-          q.removeQueries({ queryKey: ['server', serverId] });
-          q.invalidateQueries({ queryKey: ['servers'] });
+          q.removeQueries({ queryKey: qk.server(serverId) });
+          q.invalidateQueries({ queryKey: qk.servers() });
           return;
         }
 
@@ -123,8 +124,7 @@ export function useServerStateUpdates() {
         if (type === 'server_created' || type === 'server_updated' || type === 'server_suspended' || type === 'server_unsuspended') {
           const q = queryClient as any;
           Promise.all([
-            q.invalidateQueries({ queryKey: ['servers'] }),
-            q.invalidateQueries({ queryKey: ['server'] }),
+            q.invalidateQueries({ queryKey: qk.servers() }),
           ]);
           return;
         }
@@ -137,18 +137,18 @@ export function useServerStateUpdates() {
           type === 'backup_restore_complete' ||
           type === 'backup_delete_complete'
         ) {
-          (queryClient as any).invalidateQueries({ queryKey: ['backups', serverId] });
+          (queryClient as any).invalidateQueries({ queryKey: qk.backups(serverId) });
         }
 
         if (type === 'server_files_changed') {
-          (queryClient as any).invalidateQueries({ queryKey: ['files', serverId] });
+          (queryClient as any).invalidateQueries({ queryKey: qk.files(serverId, '') });
         }
 
         // Task execution events
         if (type === 'task_progress' || type === 'task_complete') {
           const serverId = String(data.serverId ?? '');
           if (serverId) {
-            (queryClient as any).invalidateQueries({ queryKey: ['tasks', serverId] });
+            (queryClient as any).invalidateQueries({ queryKey: qk.tasks(serverId) });
           }
         }
 
@@ -156,7 +156,7 @@ export function useServerStateUpdates() {
         if (type === 'mod_install_complete' || type === 'mod_uninstall_complete' || type === 'mod_update_complete') {
           const serverId = String(data.serverId ?? '');
           if (serverId) {
-            (queryClient as any).invalidateQueries({ queryKey: ['mod-manager-installed', serverId] });
+            (queryClient as any).invalidateQueries({ queryKey: qk.modManagerInstalled(serverId, '') });
           }
         }
 
@@ -164,7 +164,7 @@ export function useServerStateUpdates() {
         if (type === 'plugin_install_complete' || type === 'plugin_uninstall_complete' || type === 'plugin_update_complete') {
           const serverId = String(data.serverId ?? '');
           if (serverId) {
-            (queryClient as any).invalidateQueries({ queryKey: ['plugin-manager-installed', serverId] });
+            (queryClient as any).invalidateQueries({ queryKey: qk.pluginManagerInstalled(serverId) });
           }
         }
       },

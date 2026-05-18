@@ -121,7 +121,7 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  const { data: nests = [], isLoading } = useQuery({
  queryKey: qk.nests(),
  queryFn: nestsApi.list,
- refetchInterval: 15000,
+ staleTime: 60_000,
  });
 
  // Listen for the `returnTo` field in the open-nests-modal event
@@ -138,8 +138,6 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  mutationFn: nestsApi.create,
  onSuccess: (created) => {
  notifySuccess('Nest created');
- queryClient.invalidateQueries({ queryKey: qk.nests() });
- queryClient.invalidateQueries({ queryKey: qk.templates() });
  setIsCreating(false);
  // If opened from another modal, send the user back after creation
  if (returnToRef.current) {
@@ -158,6 +156,10 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  const message = error?.response?.data?.error || 'Failed to create nest';
  notifyError(message);
  },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.nests() });
+ queryClient.invalidateQueries({ queryKey: qk.templates() });
+ },
  });
 
  const updateMutation = useMutation({
@@ -165,13 +167,15 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  nestsApi.update(id, payload),
  onSuccess: () => {
  notifySuccess('Nest updated');
- queryClient.invalidateQueries({ queryKey: qk.nests() });
- queryClient.invalidateQueries({ queryKey: qk.templates() });
  setEditingNest(null);
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to update nest';
  notifyError(message);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.nests() });
+ queryClient.invalidateQueries({ queryKey: qk.templates() });
  },
  });
 
@@ -179,13 +183,15 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  mutationFn: nestsApi.remove,
  onSuccess: () => {
  notifySuccess('Nest deleted');
- queryClient.invalidateQueries({ queryKey: qk.nests() });
- queryClient.invalidateQueries({ queryKey: qk.templates() });
  setDeleteTarget(null);
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to delete nest';
  notifyError(message);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.nests() });
+ queryClient.invalidateQueries({ queryKey: qk.templates() });
  },
  });
 

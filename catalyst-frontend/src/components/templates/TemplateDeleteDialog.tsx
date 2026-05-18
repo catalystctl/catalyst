@@ -25,8 +25,6 @@ function TemplateDeleteDialog({ templateId, templateName, onDeleted, buttonClass
  const mutation = useMutation({
  mutationFn: () => templatesApi.remove(templateId),
  onSuccess: () => {
- queryClient.invalidateQueries({ queryKey: qk.templates() });
- queryClient.invalidateQueries({ queryKey: qk.template(templateId) });
  notifySuccess('Template deleted');
  setOpen(false);
  onDeleted?.();
@@ -34,6 +32,10 @@ function TemplateDeleteDialog({ templateId, templateName, onDeleted, buttonClass
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to delete template';
  notifyError(message);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.templates() });
+ queryClient.invalidateQueries({ queryKey: qk.template(templateId) });
  },
  });
 

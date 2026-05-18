@@ -190,9 +190,11 @@ function OidcProviderSection() {
  const oidcMutation = useMutation({
  mutationFn: (localConfigs: typeof configs) => adminApi.updateOidcConfig(localConfigs),
  onSuccess: () => {
+ toast.success('OAuth configuration saved. A server restart may be required.');
+ },
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminThemeSettings() });
  queryClient.invalidateQueries({ queryKey: qk.adminOidcConfig() });
- toast.success('OAuth configuration saved. A server restart may be required.');
  },
  onError: (err: any) => {
  toast.error(err.response?.data?.error || 'Failed to save OAuth configuration');
@@ -523,7 +525,6 @@ function ThemeSettingsPage() {
  const updateMutation = useMutation({
  mutationFn: (payload: any) => adminApi.updateThemeSettings(payload),
  onSuccess: (data) => {
- queryClient.invalidateQueries({ queryKey: qk.adminThemeSettings() });
  const savedColors = (data.metadata as any)?.themeColors as ThemeColors | undefined;
  applyThemeSettings(
  {
@@ -540,6 +541,9 @@ function ThemeSettingsPage() {
  data.customCss,
  );
  toast.success('Theme settings updated');
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminThemeSettings() });
  },
  onError: (error: any) => {
  toast.error(error.response?.data?.error || 'Failed to update theme settings');

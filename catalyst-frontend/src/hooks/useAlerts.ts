@@ -6,6 +6,8 @@ export function useAlerts() {
   return useQuery({
     queryKey: qk.alerts(),
     queryFn: () => alertsApi.list({ resolved: false, scope: 'mine' }),
-    refetchInterval: 10000,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }

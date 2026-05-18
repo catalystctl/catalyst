@@ -6,7 +6,9 @@ export function useAdminStats() {
   return useQuery({
     queryKey: qk.adminStats(),
     queryFn: adminApi.stats,
-    refetchInterval: 30000,
+    staleTime: 60_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -14,7 +16,9 @@ export function useAdminHealth() {
   return useQuery({
     queryKey: qk.adminHealth(),
     queryFn: adminApi.health,
-    refetchInterval: 15000,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -22,7 +26,9 @@ export function useAdminUsers(params?: { page?: number; limit?: number; search?:
   return useQuery({
     queryKey: qk.adminUsers(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listUsers(params),
-    refetchInterval: 10000,
+    staleTime: 60_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -30,7 +36,9 @@ export function useAdminRoles() {
   return useQuery({
     queryKey: qk.adminRoles(),
     queryFn: adminApi.listRoles,
-    refetchInterval: 10000,
+    staleTime: 60_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -44,7 +52,9 @@ export function useAdminServers(params?: {
   return useQuery({
     queryKey: qk.adminServers(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listServers(params),
-    refetchInterval: 10000,
+    staleTime: 60_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -52,7 +62,9 @@ export function useAdminNodes(params?: { search?: string }) {
   return useQuery({
     queryKey: qk.adminNodes(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listNodes(params),
-    refetchInterval: 30000,
+    staleTime: 60_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -68,7 +80,9 @@ export function useAuditLogs(params?: {
   return useQuery({
     queryKey: qk.adminAuditLogs(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listAuditLogs(params),
-    refetchInterval: 15000,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -76,7 +90,8 @@ export function useDatabaseHosts() {
   return useQuery({
     queryKey: qk.adminDatabaseHosts(),
     queryFn: adminApi.listDatabaseHosts,
-    refetchInterval: 15000,
+    staleTime: 5 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -85,8 +100,7 @@ export function useDatabaseHostPing(hostId: string | null) {
     queryKey: qk.adminDatabaseHostPing(hostId!),
     queryFn: () => adminApi.pingDatabaseHost(hostId!),
     enabled: !!hostId,
-    refetchInterval: 60000,
-    staleTime: 30000,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -94,8 +108,8 @@ export function useDbStatus() {
   return useQuery({
     queryKey: qk.adminDbStatus(),
     queryFn: adminApi.getDbStatus,
-    refetchInterval: 30000,
-    staleTime: 15000,
+    staleTime: 5 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -103,7 +117,8 @@ export function useSmtpSettings() {
   return useQuery({
     queryKey: qk.adminSmtp(),
     queryFn: adminApi.getSmtpSettings,
-    refetchInterval: 30000,
+    staleTime: 10 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -111,7 +126,8 @@ export function useSecuritySettings() {
   return useQuery({
     queryKey: qk.adminSecuritySettings(),
     queryFn: adminApi.getSecuritySettings,
-    refetchInterval: 30000,
+    staleTime: 10 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -119,7 +135,8 @@ export function useModManagerSettings() {
   return useQuery({
     queryKey: qk.adminModManager(),
     queryFn: adminApi.getModManagerSettings,
-    refetchInterval: 30000,
+    staleTime: 10 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -127,7 +144,9 @@ export function useAuthLockouts(params?: { page?: number; limit?: number; search
   return useQuery({
     queryKey: qk.adminAuthLockouts(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listAuthLockouts(params),
-    refetchInterval: 15000,
+    staleTime: 60_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -135,7 +154,8 @@ export function useThemeSettings() {
   return useQuery({
     queryKey: qk.adminThemeSettings(),
     queryFn: adminApi.getThemeSettings,
-    refetchInterval: 30000,
+    staleTime: 10 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -143,7 +163,8 @@ export function useOidcConfig() {
   return useQuery({
     queryKey: qk.adminOidcConfig(),
     queryFn: adminApi.getOidcConfig,
-    refetchInterval: 30000,
+    staleTime: 10 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -151,7 +172,8 @@ export function useDnsSettings() {
   return useQuery({
     queryKey: qk.adminDnsSettings(),
     queryFn: adminApi.getDnsSettings,
-    refetchInterval: 30000,
+    staleTime: 10 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -167,7 +189,9 @@ export function useSystemErrors(params?: {
   return useQuery({
     queryKey: qk.adminSystemErrors(params as Record<string, unknown> | undefined),
     queryFn: () => adminApi.listSystemErrors(params),
-    refetchInterval: 15000,
+    staleTime: 60_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -176,19 +200,10 @@ export function useResolveSystemError() {
   return useMutation({
     mutationFn: (id: string) => adminApi.resolveSystemError(id),
     onMutate: async (id: string) => {
-      await queryClient.cancelQueries({
-        predicate: (query) =>
-          Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-system-errors',
-      });
-      const previousData = queryClient.getQueriesData({
-        predicate: (query) =>
-          Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-system-errors',
-      });
+      await queryClient.cancelQueries({ queryKey: qk.adminSystemErrors() });
+      const previousData = queryClient.getQueriesData({ queryKey: qk.adminSystemErrors() });
       queryClient.setQueriesData(
-        {
-          predicate: (query) =>
-            Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-system-errors',
-        },
+        { queryKey: qk.adminSystemErrors() },
         (prev: any) => {
           if (!prev || typeof prev !== 'object') return prev;
           if ('errors' in prev && Array.isArray(prev.errors)) {
@@ -212,10 +227,7 @@ export function useResolveSystemError() {
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({
-        predicate: (query) =>
-          Array.isArray(query.queryKey) && query.queryKey[0] === 'admin-system-errors',
-      });
+      queryClient.invalidateQueries({ queryKey: qk.adminSystemErrors() });
     },
   });
 }

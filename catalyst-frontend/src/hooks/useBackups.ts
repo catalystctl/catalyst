@@ -29,12 +29,12 @@ export function useBackups(serverId?: string, options?: { page?: number; limit?:
           type !== 'backup_delete_complete'
         ) return;
 
-        queryClient.invalidateQueries({ queryKey: ['backups', serverId] });
+        queryClient.invalidateQueries({ queryKey: qk.backups(serverId) });
 
         // Follow-up fetch to pick up updated size/metadata after remote upload
         if (type === 'backup_complete') {
           setTimeout(() => {
-            queryClient.invalidateQueries({ queryKey: ['backups', serverId] });
+            queryClient.invalidateQueries({ queryKey: qk.backups(serverId) });
           }, 1500);
         }
       },
@@ -48,6 +48,7 @@ export function useBackups(serverId?: string, options?: { page?: number; limit?:
     queryKey: qk.backups(serverId!, page, limit),
     queryFn: () => backupsApi.list(serverId!, { page, limit }),
     enabled: Boolean(serverId),
+    placeholderData: (prev) => prev,
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data) return false;
@@ -57,5 +58,6 @@ export function useBackups(serverId?: string, options?: { page?: number; limit?:
       }
       return 15000;
     },
+    staleTime: 30_000,
   });
 }

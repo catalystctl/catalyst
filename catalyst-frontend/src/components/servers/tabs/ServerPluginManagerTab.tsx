@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
  ArrowLeftRight,
  ArrowUpCircle,
@@ -18,6 +18,7 @@ import {
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { formatBytes } from '../../../utils/formatters';
 import { pluginManagerApi } from '../../../services/api/pluginManager';
+import { qk } from '../../../lib/queryKeys';
 import {
  notifyError,
  notifySuccess,
@@ -187,6 +188,7 @@ export default function ServerPluginManagerTab({
  serverGameVersion,
  pluginManagerConfig,
 }: Props) {
+ const queryClient = useQueryClient();
  // ── Provider state ──
  const pluginManagerProviders = pluginManagerConfig?.providers ?? [];
  const [pluginProvider, setPluginProvider] = useState('modrinth');
@@ -253,11 +255,10 @@ export default function ServerPluginManagerTab({
 
  // ── Queries ──
  const { data: pluginGameVersionTags } = useQuery({
- queryKey: ['plugin-manager-game-versions', serverId, pluginProvider],
+ queryKey: qk.pluginManagerGameVersions(serverId ?? '', pluginProvider),
  queryFn: () => pluginManagerApi.gameVersions(serverId ?? '', pluginProvider),
  enabled: Boolean(serverId && pluginProvider === 'modrinth'),
  staleTime: 10 * 60 * 1000,
- refetchOnWindowFocus: true,
  });
 
  const {
@@ -265,14 +266,7 @@ export default function ServerPluginManagerTab({
  isLoading: pluginSearchLoading,
  isError: pluginSearchError,
  } = useQuery({
- queryKey: [
- 'plugin-manager-search',
- serverId,
- pluginProvider,
- pluginQuery,
- pluginGameVersion,
- searchPage,
- ],
+ queryKey: qk.pluginManagerSearch(serverId ?? '', pluginProvider, pluginQuery.trim(), pluginGameVersion.trim(), searchPage),
  queryFn: () =>
  pluginManagerApi.search(serverId ?? '', {
  provider: pluginProvider,
@@ -288,12 +282,7 @@ export default function ServerPluginManagerTab({
  isLoading: pluginVersionsLoading,
  isError: pluginVersionsError,
  } = useQuery({
- queryKey: [
- 'plugin-manager-versions',
- serverId,
- pluginProvider,
- selectedPlugin,
- ],
+ queryKey: qk.pluginManagerVersions(serverId ?? '', pluginProvider, selectedPlugin ?? ''),
  queryFn: () =>
  pluginManagerApi.versions(serverId ?? '', {
  provider: pluginProvider,
@@ -306,7 +295,7 @@ export default function ServerPluginManagerTab({
  data: installedPlugins = [],
  refetch: refetchInstalledPlugins,
  } = useQuery({
- queryKey: ['plugin-manager-installed', serverId],
+ queryKey: qk.pluginManagerInstalled(serverId ?? ''),
  queryFn: () => pluginManagerApi.installed(serverId ?? ''),
  enabled: Boolean(serverId && pluginManagerConfig),
  refetchInterval: 10000,
@@ -316,9 +305,9 @@ export default function ServerPluginManagerTab({
  const uninstallPluginMutation = useMutation({
  mutationFn: (filename: string) =>
  pluginManagerApi.uninstall(serverId!, filename),
- onSuccess: () => {
- notifySuccess('Plugin removed');
- refetchInstalledPlugins();
+ onSuccess: () => notifySuccess('Plugin removed'),
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.pluginManagerInstalled(serverId ?? '') });
  },
  onError: (error: any) => {
  notifyError(
@@ -340,9 +329,9 @@ export default function ServerPluginManagerTab({
  projectName: selectedPluginName || undefined,
  });
  },
- onSuccess: () => {
- notifySuccess('Plugin installed successfully');
- refetchInstalledPlugins();
+ onSuccess: () => notifySuccess('Plugin installed successfully'),
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.pluginManagerInstalled(serverId ?? '') });
  },
  onError: (error: any) => {
  notifyError(

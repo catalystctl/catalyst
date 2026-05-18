@@ -618,23 +618,25 @@ function RolesPage() {
  const { data: roles = [], isLoading } = useQuery({
  queryKey: qk.adminRoles(),
  queryFn: rolesApi.list,
- refetchInterval: 10000,
+ staleTime: 60_000,
  });
 
  // Fetch presets
  const { data: presets = [] } = useQuery({
- queryKey: ['role-presets'],
+ queryKey: qk.rolePresets(),
  queryFn: rolesApi.getPresets,
- refetchInterval: 30000,
+ staleTime: 60_000,
  });
 
  const createMutation = useMutation({
  mutationFn: (data: { name: string; description?: string; permissions: string[] }) => rolesApi.create(data),
  onSuccess: () => {
  notifySuccess('Role created');
- queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
  resetForm();
  setIsCreateOpen(false);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
  },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to create role'),
  });
@@ -644,9 +646,11 @@ function RolesPage() {
  rolesApi.update(roleId, data),
  onSuccess: () => {
  notifySuccess('Role updated');
- queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
  resetForm();
  setEditingRole(null);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
  },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update role'),
  });
@@ -655,8 +659,10 @@ function RolesPage() {
  mutationFn: (roleId: string) => rolesApi.delete(roleId),
  onSuccess: () => {
  notifySuccess('Role deleted');
- queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
  setViewingRole(null);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
  },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to delete role'),
  });

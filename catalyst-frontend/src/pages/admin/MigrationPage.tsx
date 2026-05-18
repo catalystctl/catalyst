@@ -719,17 +719,19 @@ export default function MigrationPage() {
 
  // Fetch Catalyst nodes (migration targets)
  const { data: catalystNodes = [] } = useQuery<CatalystNodeOption[]>({
- queryKey: ['catalyst-nodes'],
+ queryKey: qk.catalystNodes(),
  queryFn: migrationApi.getCatalystNodes,
- refetchInterval: 15000,
+ staleTime: 30_000,
+ refetchInterval: 30_000,
  });
 
  const onlineNodes = catalystNodes.filter(n => n.isOnline);
 
  // Fetch migration jobs
  const { data: jobs, isLoading: loadingJobs } = useQuery<MigrationJob[]>({
- queryKey: ['migration-jobs'],
+ queryKey: qk.migrationJobs(),
  queryFn: migrationApi.listJobs,
+ staleTime: 30_000,
  refetchInterval: (query) => {
  const data = query.state.data;
  if (!Array.isArray(data)) return false;
@@ -743,9 +745,10 @@ export default function MigrationPage() {
 
  // Fetch active job
  const { data: activeJob } = useQuery({
- queryKey: ['migration-job', activeJobId],
+ queryKey: qk.migrationJob(activeJobId!),
  queryFn: () => migrationApi.getStatus(activeJobId!),
  enabled: !!activeJobId,
+ staleTime: 30_000,
  refetchInterval: (query) => {
  const job = query.state.data;
  if (!job) return false;
@@ -755,9 +758,10 @@ export default function MigrationPage() {
 
  // Fetch steps for active job
  const { data: activeSteps, isLoading: loadingSteps } = useQuery({
- queryKey: ['migration-steps', activeJobId],
+ queryKey: qk.migrationSteps(activeJobId!),
  queryFn: () => migrationApi.getSteps(activeJobId!, { limit: 500 }),
  enabled: !!activeJobId,
+ staleTime: 30_000,
  refetchInterval: (_query) => {
  const job = activeJob;
  if (!job) return 2000;
@@ -827,8 +831,10 @@ export default function MigrationPage() {
  onSuccess: (data) => {
  setActiveJobId(data.jobId);
  setActiveTab('progress');
- queryClient.invalidateQueries({ queryKey: qk.migrationJobs() });
  notifySuccess('Migration started');
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.migrationJobs() });
  },
  onError: (err: any) => {
  notifyError(err.response?.data?.error || 'Failed to start migration');
@@ -838,9 +844,11 @@ export default function MigrationPage() {
  const pauseMutation = useMutation({
  mutationFn: () => migrationApi.pause(activeJobId!),
  onSuccess: () => {
+ notifyInfo('Migration paused');
+ },
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.migrationJob(activeJobId!) });
  queryClient.invalidateQueries({ queryKey: qk.migrationJobs() });
- notifyInfo('Migration paused');
  },
  onError: (err: any) => notifyError(err.response?.data?.error || 'Failed to pause'),
  });
@@ -848,9 +856,11 @@ export default function MigrationPage() {
  const resumeMutation = useMutation({
  mutationFn: () => migrationApi.resume(activeJobId!),
  onSuccess: () => {
+ notifySuccess('Migration resumed');
+ },
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.migrationJob(activeJobId!) });
  queryClient.invalidateQueries({ queryKey: qk.migrationJobs() });
- notifySuccess('Migration resumed');
  },
  onError: (err: any) => notifyError(err.response?.data?.error || 'Failed to resume'),
  });
@@ -858,9 +868,11 @@ export default function MigrationPage() {
  const cancelMutation = useMutation({
  mutationFn: () => migrationApi.cancel(activeJobId!),
  onSuccess: () => {
+ notifyInfo('Migration cancelled');
+ },
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.migrationJob(activeJobId!) });
  queryClient.invalidateQueries({ queryKey: qk.migrationJobs() });
- notifyInfo('Migration cancelled');
  },
  onError: (err: any) => notifyError(err.response?.data?.error || 'Failed to cancel'),
  });
@@ -868,9 +880,11 @@ export default function MigrationPage() {
  const retryMutation = useMutation({
  mutationFn: (stepId: string) => migrationApi.retryStep(activeJobId!, stepId),
  onSuccess: () => {
+ notifySuccess('Step queued for retry');
+ },
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.migrationJob(activeJobId!) });
  queryClient.invalidateQueries({ queryKey: qk.migrationSteps(activeJobId!) });
- notifySuccess('Step queued for retry');
  },
  onError: (err: any) => notifyError(err.response?.data?.error || 'Retry failed'),
  });
@@ -1390,7 +1404,7 @@ export default function MigrationPage() {
  <div className="flex items-center justify-between pb-3">
  <h3 className="text-sm font-semibold text-foreground">Migration History</h3>
  <button
- onClick={() => queryClient.invalidateQueries({ queryKey: ['migration-jobs'] })}
+ onClick={() => queryClient.invalidateQueries({ queryKey: qk.migrationJobs() })}
  className="text-muted-foreground hover:text-foreground"
  >
  <RefreshCw className="h-4 w-4" />

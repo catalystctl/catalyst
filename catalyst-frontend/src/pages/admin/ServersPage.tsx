@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import {
  Play,
@@ -229,11 +230,13 @@ function AdminServersPage() {
  `${failedCount} server${failedCount === 1 ? '' : 's'} failed to ${variables.action}.`,
  );
  }
- queryClient.invalidateQueries({ queryKey: ['admin-servers'] });
  setSelectedIds([]);
  setSuspendTargets(null);
  setDeleteTargets(null);
  setSuspendReason('');
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminServers() });
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to run server action';

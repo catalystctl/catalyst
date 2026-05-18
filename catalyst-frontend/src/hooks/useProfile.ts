@@ -8,6 +8,7 @@ export function useProfile() {
     queryFn: profileApi.getProfile,
     staleTime: 60_000,
     refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -15,7 +16,7 @@ export function useProfileSsoAccounts() {
   return useQuery({
     queryKey: qk.profileSsoAccounts(),
     queryFn: profileApi.listSsoAccounts,
-    refetchInterval: 30_000,
+    staleTime: 60_000,
   });
 }
 
@@ -23,7 +24,7 @@ export function useSessions() {
   return useQuery({
     queryKey: qk.profileSessions(),
     queryFn: profileApi.listSessions,
-    refetchInterval: 30_000,
+    staleTime: 60_000,
   });
 }
 
@@ -31,7 +32,9 @@ export function useAuditLog(limit = 50, offset = 0) {
   return useQuery({
     queryKey: qk.profileAuditLog(limit, offset),
     queryFn: () => profileApi.getAuditLog(limit, offset),
-    refetchInterval: 15_000,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -39,6 +42,6 @@ export function useProfileApiKeys() {
   return useQuery({
     queryKey: qk.profileApiKeys(),
     queryFn: profileApi.getApiKeys,
-    refetchInterval: 15000,
+    staleTime: 60_000,
   });
 }

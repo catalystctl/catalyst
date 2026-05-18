@@ -9,15 +9,16 @@
  * Only connects if the user has admin permissions (avoids 401 spam on /api/admin/events).
  */
 import { useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type Query } from '@tanstack/react-query';
 import { useAuthStore } from '../stores/authStore';
 import { createAdminEventsStream, type AdminEventType } from '../services/api/admin-events';
+import { qk } from '../lib/queryKeys';
 import type { AdminUser, SystemError } from '../types/admin';
-import type { ServerTemplate } from '../types/template';
+import type { Template } from '../types/template';
 
 export function useSseAdminEvents() {
   const queryClient = useQueryClient();
-  const permissions = useAuthStore((s) => s.permissions);
+  const permissions = useAuthStore((s) => s.user?.permissions);
   const isAdmin = permissions?.includes('admin.read') || permissions?.includes('admin.write') || permissions?.includes('*');
 
   useEffect(() => {
@@ -32,8 +33,8 @@ export function useSseAdminEvents() {
           const newUser = data.user as AdminUser;
           if (!newUser) return;
           Promise.all([
-            q.invalidateQueries({ queryKey: ['dashboard-activity'] }),
-            q.invalidateQueries({ queryKey: ['dashboard-resources'] }),
+            q.invalidateQueries({ queryKey: qk.dashboardActivity() }),
+            q.invalidateQueries({ queryKey: qk.dashboardResources() }),
           ]);
           q.setQueriesData(
             { predicate: (query: Query) =>
@@ -57,12 +58,12 @@ export function useSseAdminEvents() {
           const userId = String(data.userId ?? '');
           if (!userId) return;
           Promise.all([
-            q.invalidateQueries({ queryKey: ['admin-users'] }),
+            q.invalidateQueries({ queryKey: qk.adminUsers() }),
             // Also invalidate profile query if the updated user is the current user
-            q.invalidateQueries({ queryKey: ['profile'] }),
-            q.invalidateQueries({ queryKey: ['my-permissions'] }),
+            q.invalidateQueries({ queryKey: qk.profile() }),
+            q.invalidateQueries({ queryKey: qk.myPermissions() }),
             // Also invalidate dashboard activity since user changes are notable events
-            q.invalidateQueries({ queryKey: ['dashboard-activity'] }),
+            q.invalidateQueries({ queryKey: qk.dashboardActivity() }),
           ]);
 
           // If the updated user is the current user, refresh the auth store
@@ -78,8 +79,8 @@ export function useSseAdminEvents() {
           const deletedUserId = String(data.userId ?? '');
           if (!deletedUserId) return;
           Promise.all([
-            q.invalidateQueries({ queryKey: ['dashboard-activity'] }),
-            q.invalidateQueries({ queryKey: ['dashboard-resources'] }),
+            q.invalidateQueries({ queryKey: qk.dashboardActivity() }),
+            q.invalidateQueries({ queryKey: qk.dashboardResources() }),
           ]);
           q.setQueriesData(
             { predicate: (query: Query) =>
@@ -100,29 +101,29 @@ export function useSseAdminEvents() {
         // ── Server Events ───────────────────────────────────────────
         if (type === 'server_created') {
           Promise.all([
-            q.invalidateQueries({ queryKey: ['admin-servers'] }),
-            q.invalidateQueries({ queryKey: ['servers'] }),
-            q.invalidateQueries({ queryKey: ['node-allocations'] }),
-            q.invalidateQueries({ queryKey: ['dashboard-stats'] }),
-            q.invalidateQueries({ queryKey: ['admin-stats'] }),
-            q.invalidateQueries({ queryKey: ['dashboard-activity'] }),
-            q.invalidateQueries({ queryKey: ['dashboard-resources'] }),
+            q.invalidateQueries({ queryKey: qk.adminServers() }),
+            q.invalidateQueries({ queryKey: qk.servers() }),
+            q.invalidateQueries({ queryKey: qk.adminNodeAllocations(String(data.nodeId ?? '')) }),
+            q.invalidateQueries({ queryKey: qk.dashboardStats() }),
+            q.invalidateQueries({ queryKey: qk.adminStats() }),
+            q.invalidateQueries({ queryKey: qk.dashboardActivity() }),
+            q.invalidateQueries({ queryKey: qk.dashboardResources() }),
           ]);
         }
 
         if (type === 'server_deleted') {
           const serverId = String(data.serverId ?? '');
           Promise.all([
-            q.invalidateQueries({ queryKey: ['admin-servers'] }),
-            q.invalidateQueries({ queryKey: ['servers'] }),
-            q.invalidateQueries({ queryKey: ['node-allocations'] }),
-            q.invalidateQueries({ queryKey: ['dashboard-stats'] }),
-            q.invalidateQueries({ queryKey: ['admin-stats'] }),
-            q.invalidateQueries({ queryKey: ['dashboard-activity'] }),
-            q.invalidateQueries({ queryKey: ['dashboard-resources'] }),
+            q.invalidateQueries({ queryKey: qk.adminServers() }),
+            q.invalidateQueries({ queryKey: qk.servers() }),
+            q.invalidateQueries({ queryKey: qk.adminNodeAllocations(String(data.nodeId ?? '')) }),
+            q.invalidateQueries({ queryKey: qk.dashboardStats() }),
+            q.invalidateQueries({ queryKey: qk.adminStats() }),
+            q.invalidateQueries({ queryKey: qk.dashboardActivity() }),
+            q.invalidateQueries({ queryKey: qk.dashboardResources() }),
           ]);
           if (serverId) {
-            q.removeQueries({ queryKey: ['server', serverId] });
+            q.removeQueries({ queryKey: qk.server(serverId) });
           }
         }
 
@@ -131,74 +132,74 @@ export function useSseAdminEvents() {
           const serverId = String(data.serverId ?? '');
           // Invalidate server detail and list caches
           Promise.all([
-            q.invalidateQueries({ queryKey: ['server'] }),
-            q.invalidateQueries({ queryKey: ['servers'] }),
-            q.invalidateQueries({ queryKey: ['admin-servers'] }),
-            q.invalidateQueries({ queryKey: ['node-allocations'] }),
-            q.invalidateQueries({ queryKey: ['dashboard-stats'] }),
-            q.invalidateQueries({ queryKey: ['admin-stats'] }),
-            q.invalidateQueries({ queryKey: ['dashboard-activity'] }),
-            q.invalidateQueries({ queryKey: ['dashboard-resources'] }),
+            q.invalidateQueries({ queryKey: qk.servers() }),
+            q.invalidateQueries({ queryKey: qk.adminServers() }),
+            q.invalidateQueries({ queryKey: qk.adminNodeAllocations(String(data.nodeId ?? '')) }),
+            q.invalidateQueries({ queryKey: qk.dashboardStats() }),
+            q.invalidateQueries({ queryKey: qk.adminStats() }),
+            q.invalidateQueries({ queryKey: qk.dashboardActivity() }),
+            q.invalidateQueries({ queryKey: qk.dashboardResources() }),
           ]);
-          // Also invalidate server permissions and invites (access changes)
+          // Also invalidate server detail, permissions and invites (access changes)
           if (serverId) {
-            q.invalidateQueries({ queryKey: ['server-permissions', serverId] });
-            q.invalidateQueries({ queryKey: ['server-invites', serverId] });
-            q.invalidateQueries({ queryKey: ['server-allocations', serverId] });
+            q.invalidateQueries({ queryKey: qk.server(serverId) });
+            q.invalidateQueries({ queryKey: qk.serverPermissions(serverId) });
+            q.invalidateQueries({ queryKey: qk.serverInvites(serverId) });
+            q.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
           }
         }
 
         // ── Node Events ─────────────────────────────────────────────
         if (type === 'node_created' || type === 'node_deleted') {
           Promise.all([
-            q.invalidateQueries({ queryKey: ['admin-nodes'] }),
-            q.invalidateQueries({ queryKey: ['nodes'] }),
-            q.invalidateQueries({ queryKey: ['nodes', 'accessible'] }),
-            q.invalidateQueries({ queryKey: ['node-allocations'] }),
-            q.invalidateQueries({ queryKey: ['dashboard-stats'] }),
-            q.invalidateQueries({ queryKey: ['admin-stats'] }),
-            q.invalidateQueries({ queryKey: ['admin-health'] }),
-            q.invalidateQueries({ queryKey: ['dashboard-activity'] }),
-            q.invalidateQueries({ queryKey: ['dashboard-resources'] }),
+            q.invalidateQueries({ queryKey: qk.adminNodes() }),
+            q.invalidateQueries({ queryKey: qk.nodes() }),
+            q.invalidateQueries({ queryKey: qk.accessibleNodes() }),
+            q.invalidateQueries({ queryKey: qk.adminNodeAllocations(String(data.nodeId ?? '')) }),
+            q.invalidateQueries({ queryKey: qk.dashboardStats() }),
+            q.invalidateQueries({ queryKey: qk.adminStats() }),
+            q.invalidateQueries({ queryKey: qk.adminHealth() }),
+            q.invalidateQueries({ queryKey: qk.dashboardActivity() }),
+            q.invalidateQueries({ queryKey: qk.dashboardResources() }),
           ]);
           if (type === 'node_deleted') {
             const nodeId = String(data.nodeId ?? '');
             if (nodeId) {
-              q.removeQueries({ queryKey: ['node', nodeId] });
-              q.removeQueries({ queryKey: ['node-allocations', nodeId] });
+              q.removeQueries({ queryKey: qk.node(nodeId) });
+              q.removeQueries({ queryKey: qk.adminNodeAllocations(nodeId) });
             }
           }
         }
 
         if (type === 'node_updated') {
           Promise.all([
-            q.invalidateQueries({ queryKey: ['admin-nodes'] }),
-            q.invalidateQueries({ queryKey: ['nodes'] }),
-            q.invalidateQueries({ queryKey: ['nodes', 'accessible'] }),
-            q.invalidateQueries({ queryKey: ['node-allocations'] }),
-            q.invalidateQueries({ queryKey: ['admin-health'] }),
-            q.invalidateQueries({ queryKey: ['locations'] }),
-            q.invalidateQueries({ queryKey: ['cluster-metrics'] }),
+            q.invalidateQueries({ queryKey: qk.adminNodes() }),
+            q.invalidateQueries({ queryKey: qk.nodes() }),
+            q.invalidateQueries({ queryKey: qk.accessibleNodes() }),
+            q.invalidateQueries({ queryKey: qk.adminNodeAllocations(String(data.nodeId ?? '')) }),
+            q.invalidateQueries({ queryKey: qk.adminHealth() }),
+            q.invalidateQueries({ queryKey: qk.locations() }),
+            q.invalidateQueries({ queryKey: qk.clusterMetrics() }),
           ]);
           const nodeId = String(data.nodeId ?? '');
           if (nodeId) {
-            q.invalidateQueries({ queryKey: ['node', nodeId] });
-            q.invalidateQueries({ queryKey: ['node-stats', nodeId] });
-            q.invalidateQueries({ queryKey: ['node-metrics', nodeId] });
-            q.invalidateQueries({ queryKey: ['node-allocations', nodeId] });
+            q.invalidateQueries({ queryKey: qk.node(nodeId) });
+            q.invalidateQueries({ queryKey: qk.nodeStats(nodeId) });
+            q.invalidateQueries({ queryKey: qk.nodeMetrics(nodeId) });
+            q.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId) });
           }
         }
 
         // ── Template Events ─────────────────────────────────────────
         if (type === 'template_created') {
-          const template = data.template as ServerTemplate;
+          const template = data.template as Template;
           if (!template) return;
           q.setQueriesData(
             { predicate: (query: Query) =>
               Array.isArray(query.queryKey) && query.queryKey[0] === 'templates' },
             (prev: any) => {
               if (!prev || !Array.isArray(prev)) return prev;
-              if (prev.some((t: ServerTemplate) => t.id === template.id)) return prev;
+              if (prev.some((t: Template) => t.id === template.id)) return prev;
               return [template, ...prev];
             },
           );
@@ -208,8 +209,8 @@ export function useSseAdminEvents() {
           const templateId = String(data.templateId ?? '');
           if (!templateId) return;
           Promise.all([
-            q.invalidateQueries({ queryKey: ['templates'] }),
-            q.invalidateQueries({ queryKey: ['template', templateId] }),
+            q.invalidateQueries({ queryKey: qk.templates() }),
+            q.invalidateQueries({ queryKey: qk.template(templateId) }),
           ]);
         }
 
@@ -221,20 +222,20 @@ export function useSseAdminEvents() {
               Array.isArray(query.queryKey) && query.queryKey[0] === 'templates' },
             (prev: any) => {
               if (!prev || !Array.isArray(prev)) return prev;
-              return prev.filter((t: ServerTemplate) => t.id !== templateId);
+              return prev.filter((t: Template) => t.id !== templateId);
             },
           );
-          q.invalidateQueries({ queryKey: ['template', templateId] });
+          q.invalidateQueries({ queryKey: qk.template(templateId) });
         }
 
         // ── Role Events ─────────────────────────────────────────────
         if (type === 'role_created' || type === 'role_updated' || type === 'role_deleted') {
-          q.invalidateQueries({ queryKey: ['admin-roles'] });
+          q.invalidateQueries({ queryKey: qk.adminRoles() });
           // Role changes affect permissions — invalidate server-permissions and my-permissions
           if (type === 'role_updated') {
             Promise.all([
-              q.invalidateQueries({ queryKey: ['server-permissions'] }),
-              q.invalidateQueries({ queryKey: ['my-permissions'] }),
+              q.invalidateQueries({ queryKey: qk.serverPermissions('') }),
+              q.invalidateQueries({ queryKey: qk.myPermissions() }),
             ]);
           }
           if (type === 'role_deleted') {
@@ -245,50 +246,50 @@ export function useSseAdminEvents() {
 
         // ── Alert Rule Events ───────────────────────────────────────
         if (type === 'alert_rule_created' || type === 'alert_rule_updated' || type === 'alert_rule_deleted') {
-          q.invalidateQueries({ queryKey: ['alert-rules'] });
+          q.invalidateQueries({ queryKey: qk.alertRules() });
         }
 
         // ── Alert Instance Events ───────────────────────────────────
         if (type === 'alert_created' || type === 'alert_resolved' || type === 'alert_deleted') {
           Promise.all([
-            q.invalidateQueries({ queryKey: ['alerts'] }),
-            q.invalidateQueries({ queryKey: ['alerts-stats'] }),
-            q.invalidateQueries({ queryKey: ['dashboard-stats'] }),
-            q.invalidateQueries({ queryKey: ['admin-stats'] }),
+            q.invalidateQueries({ queryKey: qk.alerts() }),
+            q.invalidateQueries({ queryKey: qk.alertStats() }),
+            q.invalidateQueries({ queryKey: qk.dashboardStats() }),
+            q.invalidateQueries({ queryKey: qk.adminStats() }),
           ]);
         }
 
         // ── API Key Events ─────────────────────────────────────────
         if (type === 'api_key_created' || type === 'api_key_updated' || type === 'api_key_deleted') {
           Promise.all([
-            q.invalidateQueries({ queryKey: ['api-keys'] }),
-            q.invalidateQueries({ queryKey: ['profile-api-keys'] }),
-            q.invalidateQueries({ queryKey: ['node-api-key'] }),
+            q.invalidateQueries({ queryKey: qk.apiKeys() }),
+            q.invalidateQueries({ queryKey: qk.profileApiKeys() }),
+            q.invalidateQueries({ queryKey: qk.nodeApiKey('') }),
           ]);
         }
 
         // ── Location Events ────────────────────────────────────────
         if (type === 'location_created' || type === 'location_updated' || type === 'location_deleted') {
           Promise.all([
-            q.invalidateQueries({ queryKey: ['locations'] }),
-            q.invalidateQueries({ queryKey: ['admin-nodes'] }),
-            q.invalidateQueries({ queryKey: ['nodes'] }),
+            q.invalidateQueries({ queryKey: qk.locations() }),
+            q.invalidateQueries({ queryKey: qk.adminNodes() }),
+            q.invalidateQueries({ queryKey: qk.nodes() }),
           ]);
         }
 
         // ── Nest Events ────────────────────────────────────────────
         if (type === 'nest_created' || type === 'nest_updated' || type === 'nest_deleted') {
           Promise.all([
-            q.invalidateQueries({ queryKey: ['nests'] }),
-            q.invalidateQueries({ queryKey: ['templates'] }),
+            q.invalidateQueries({ queryKey: qk.nests() }),
+            q.invalidateQueries({ queryKey: qk.templates() }),
           ]);
         }
 
         // ── Database Host Events ───────────────────────────────────
         if (type === 'database_host_created' || type === 'database_host_updated' || type === 'database_host_deleted') {
           Promise.all([
-            q.invalidateQueries({ queryKey: ['database-hosts'] }),
-            q.invalidateQueries({ queryKey: ['admin-database-hosts'] }),
+            q.invalidateQueries({ queryKey: qk.databaseHosts() }),
+            q.invalidateQueries({ queryKey: qk.adminDatabaseHosts() }),
           ]);
         }
 
@@ -296,55 +297,54 @@ export function useSseAdminEvents() {
         if (type === 'ip_pool_created' || type === 'ip_pool_updated' || type === 'ip_pool_deleted') {
           const nodeId = String(data.nodeId ?? '');
           Promise.all([
-            ...(nodeId ? [q.invalidateQueries({ queryKey: ['ip-pools', nodeId] })] : []),
-            q.invalidateQueries({ queryKey: ['ip-pools'] }),
-            q.invalidateQueries({ queryKey: ['admin-nodes'] }),
-            q.invalidateQueries({ queryKey: ['nodes'] }),
+            ...(nodeId ? [q.invalidateQueries({ queryKey: qk.adminIpPools(nodeId) })] : []),
+            q.invalidateQueries({ queryKey: qk.adminIpPools('') }),
+            q.invalidateQueries({ queryKey: qk.adminNodes() }),
+            q.invalidateQueries({ queryKey: qk.nodes() }),
           ]);
         }
 
         // ── Settings Events ──────────────────────────────────────────
         if (type === 'security_settings_updated') {
-          q.invalidateQueries({ queryKey: ['admin-security-settings'] });
+          q.invalidateQueries({ queryKey: qk.adminSecuritySettings() });
         }
         if (type === 'smtp_settings_updated') {
-          q.invalidateQueries({ queryKey: ['admin-smtp'] });
+          q.invalidateQueries({ queryKey: qk.adminSmtp() });
         }
         if (type === 'theme_settings_updated') {
-          q.invalidateQueries({ queryKey: ['admin-theme-settings'] });
+          q.invalidateQueries({ queryKey: qk.adminThemeSettings() });
         }
         if (type === 'system_settings_updated') {
           Promise.all([
-            q.invalidateQueries({ queryKey: ['admin-mod-manager'] }),
-            q.invalidateQueries({ queryKey: ['admin-smtp'] }),
-            q.invalidateQueries({ queryKey: ['admin-security-settings'] }),
+            q.invalidateQueries({ queryKey: qk.adminModManager() }),
+            q.invalidateQueries({ queryKey: qk.adminSmtp() }),
+            q.invalidateQueries({ queryKey: qk.adminSecuritySettings() }),
           ]);
         }
         if (type === 'oidc_settings_updated') {
           // OIDC config uses local state, invalidate any related queries
-          q.invalidateQueries({ queryKey: ['admin-oidc-config'] });
+          q.invalidateQueries({ queryKey: qk.adminOidcConfig() });
         }
         if (type === 'plugin_updated') {
           Promise.all([
-            q.invalidateQueries({ queryKey: ['admin-plugins'] }),
-            q.invalidateQueries({ queryKey: ['plugins'] }),
+            q.invalidateQueries({ queryKey: qk.adminPlugins() }),
           ]);
         }
         if (type === 'audit_log_created') {
           Promise.all([
-            q.invalidateQueries({ queryKey: ['admin-audit-logs'] }),
-            q.invalidateQueries({ queryKey: ['profile-audit-log'] }),
+            q.invalidateQueries({ queryKey: qk.adminAuditLogs() }),
+            q.invalidateQueries({ queryKey: qk.profileAuditLog() }),
           ]);
         }
         if (type === 'auth_lockout_created' || type === 'auth_lockout_cleared') {
-          q.invalidateQueries({ queryKey: ['admin-auth-lockouts'] });
+          q.invalidateQueries({ queryKey: qk.adminAuthLockouts() });
         }
 
         // ── Task Events (M-11) ──────────────────────────────────────
         if (type === 'task_created' || type === 'task_updated' || type === 'task_deleted') {
           const serverId = String(data.serverId ?? '');
           if (serverId) {
-            q.invalidateQueries({ queryKey: ['tasks', serverId] });
+            q.invalidateQueries({ queryKey: qk.tasks(serverId) });
           }
         }
 
@@ -352,7 +352,7 @@ export function useSseAdminEvents() {
         if (type === 'database_created' || type === 'database_deleted' || type === 'database_password_rotated') {
           const serverId = String(data.serverId ?? '');
           if (serverId) {
-            q.invalidateQueries({ queryKey: ['server-databases', serverId] });
+            q.invalidateQueries({ queryKey: qk.serverDatabases(serverId) });
           }
         }
 
@@ -362,22 +362,22 @@ export function useSseAdminEvents() {
           const roleId = String(data.roleId ?? '');
           const userId = String(data.userId ?? '');
           if (nodeId) {
-            q.invalidateQueries({ queryKey: ['nodes', nodeId, 'assignments'] });
+            q.invalidateQueries({ queryKey: qk.nodeAssignments(nodeId) });
           }
           if (roleId) {
-            q.invalidateQueries({ queryKey: ['roles', roleId, 'nodes'] });
+            q.invalidateQueries({ queryKey: qk.roleNodes(roleId) });
           }
           if (userId) {
-            q.invalidateQueries({ queryKey: ['users', userId, 'nodes'] });
+            q.invalidateQueries({ queryKey: qk.userNodes(userId) });
           }
-          q.invalidateQueries({ queryKey: ['nodes'] });
+          q.invalidateQueries({ queryKey: qk.nodes() });
         }
 
         // ── Mod Manager Events ───────────────────────────────────────
         if (type === 'mod_install_complete' || type === 'mod_uninstall_complete' || type === 'mod_update_complete') {
           const serverId = String(data.serverId ?? '');
           if (serverId) {
-            q.invalidateQueries({ queryKey: ['mod-manager-installed'] });
+            q.invalidateQueries({ queryKey: qk.modManagerInstalled(serverId, '') });
           }
         }
 
@@ -404,7 +404,7 @@ export function useSseAdminEvents() {
         if (type === 'plugin_install_complete' || type === 'plugin_uninstall_complete' || type === 'plugin_update_complete') {
           const serverId = String(data.serverId ?? '');
           if (serverId) {
-            q.invalidateQueries({ queryKey: ['plugin-manager-installed'] });
+            q.invalidateQueries({ queryKey: qk.pluginManagerInstalled(serverId) });
           }
         }
       },

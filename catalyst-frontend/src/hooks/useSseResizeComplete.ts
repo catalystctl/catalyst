@@ -7,6 +7,7 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
+import { qk } from '../lib/queryKeys';
 import { notifyError, notifySuccess } from '../utils/notify';
 
 type ResizeResult = { success: boolean; error?: string };
@@ -35,10 +36,10 @@ export function useSseResizeComplete(
         }
 
         Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['server', serverId] }),
-          queryClient.invalidateQueries({ queryKey: ['servers'] }),
-          queryClient.invalidateQueries({ queryKey: ['dashboard-resources'] }),
-          queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] }),
+          queryClient.invalidateQueries({ queryKey: qk.server(serverId) }),
+          queryClient.invalidateQueries({ queryKey: qk.servers() }),
+          queryClient.invalidateQueries({ queryKey: qk.dashboardResources() }),
+          queryClient.invalidateQueries({ queryKey: qk.dashboardStats() }),
         ]);
 
         onComplete(result);

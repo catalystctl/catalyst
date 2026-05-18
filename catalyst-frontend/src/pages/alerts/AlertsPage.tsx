@@ -250,19 +250,21 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
 
  // Queries
  const { data: alertData, isLoading: alertsLoading } = useQuery({
- queryKey: ['alerts', filterResolved, serverId, scope],
+ queryKey: qk.alerts({ filterResolved, serverId, scope }),
  queryFn: () => alertsApi.list({
  resolved: filterResolved === 'all' ? undefined : filterResolved === 'true',
  serverId,
  scope,
  }),
- refetchInterval: 10000,
+ staleTime: 30_000,
+ refetchInterval: 30_000,
  });
  const { data: alertStats } = useQuery({
- queryKey: ['alerts-stats', scope, serverId],
+ queryKey: qk.alertStats({ scope, serverId }),
  queryFn: () => alertsApi.statsScoped({ scope }),
  enabled: !serverId,
- refetchInterval: 10000,
+ staleTime: 30_000,
+ refetchInterval: 30_000,
  });
  const { data: alertRules = [] } = useAlertRules({
  scope,
@@ -339,10 +341,12 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  });
  },
  onSuccess: () => {
- queryClient.invalidateQueries({ queryKey: ['alert-rules'] });
  notifySuccess('Alert rule created');
  setShowRuleModal(false);
  resetRuleForm();
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.alertRules() });
  },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to create alert rule'),
  });
@@ -350,11 +354,13 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  const updateRuleMutation = useMutation({
  mutationFn: (payload: { rule: AlertRule; updates: any }) => alertsApi.updateRule(payload.rule.id, payload.updates),
  onSuccess: () => {
- queryClient.invalidateQueries({ queryKey: ['alert-rules'] });
  notifySuccess('Alert rule updated');
  setShowRuleModal(false);
  setEditingRule(null);
  resetRuleForm();
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.alertRules() });
  },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update alert rule'),
  });
@@ -362,29 +368,31 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  const deleteRuleMutation = useMutation({
  mutationFn: (ruleId: string) => alertsApi.deleteRule(ruleId),
  onSuccess: () => {
- queryClient.invalidateQueries({ queryKey: ['alert-rules'] });
  notifySuccess('Alert rule deleted');
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.alertRules() });
  },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to delete alert rule'),
  });
 
  const invalidateAlerts = () => {
- Promise.all([
- queryClient.invalidateQueries({ queryKey: qk.alerts() }),
- queryClient.invalidateQueries({ queryKey: qk.alertStats() }),
- queryClient.invalidateQueries({ queryKey: ['alert-rules'] }),
- ]);
+ queryClient.invalidateQueries({ queryKey: qk.alerts() });
+ queryClient.invalidateQueries({ queryKey: qk.alertStats() });
+ queryClient.invalidateQueries({ queryKey: qk.alertRules() });
  };
 
  const resolveAlertMutation = useMutation({
  mutationFn: (alertId: string) => alertsApi.resolve(alertId),
- onSuccess: () => { invalidateAlerts(); notifySuccess('Alert resolved'); },
+ onSuccess: () => { notifySuccess('Alert resolved'); },
+ onSettled: () => { invalidateAlerts(); },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to resolve alert'),
  });
 
  const bulkResolveMutation = useMutation({
  mutationFn: (alertIds: string[]) => alertsApi.bulkResolve(alertIds),
- onSuccess: () => { invalidateAlerts(); notifySuccess('Alerts resolved'); },
+ onSuccess: () => { notifySuccess('Alerts resolved'); },
+ onSettled: () => { invalidateAlerts(); },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to resolve alerts'),
  });
 

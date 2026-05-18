@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import { backupsApi } from '../../services/api/backups';
 import { notifyError, notifySuccess } from '../../utils/notify';
@@ -12,7 +13,6 @@ function CreateBackupModal({ serverId, disabled = false }: { serverId: string; d
  const mutation = useMutation({
  mutationFn: () => backupsApi.create(serverId, { name: name.trim() || undefined }),
  onSuccess: () => {
- queryClient.invalidateQueries({ queryKey: ['backups', serverId] });
  notifySuccess('Backup creation started');
  setOpen(false);
  setName('');
@@ -20,6 +20,9 @@ function CreateBackupModal({ serverId, disabled = false }: { serverId: string; d
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to create backup';
  notifyError(message);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.backups(serverId) });
  },
  });
 

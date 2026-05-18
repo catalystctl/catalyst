@@ -14,6 +14,7 @@ export function useServerDatabases(serverId?: string) {
       return databasesApi.list(serverId);
     },
     enabled: Boolean(serverId),
-    refetchInterval: 10000,
+    placeholderData: (prev) => prev,
+    staleTime: 60_000,
   });
 }

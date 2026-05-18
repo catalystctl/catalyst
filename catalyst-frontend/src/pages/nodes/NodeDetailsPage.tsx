@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { qk } from '../../lib/queryKeys';
 import {
  Server,
  Cpu,
@@ -129,10 +130,11 @@ function NodeDetailsPage() {
 
  // Check if API key exists for this node
  const { data: apiKeyStatus } = useQuery({
- queryKey: ['node-api-key', nodeId],
+ queryKey: qk.nodeApiKey(nodeId!),
  queryFn: () => nodesApi.checkApiKey(nodeId!),
  enabled: !!nodeId,
- refetchInterval: 30000,
+ staleTime: 30_000,
+ refetchInterval: 30_000,
  });
 
  const deployMutation = useMutation({
@@ -146,6 +148,9 @@ function NodeDetailsPage() {
  onSuccess: (info) => {
  setDeployInfo(info ?? null);
  notifySuccess('Deployment script regenerated');
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.nodeApiKey(nodeId!) });
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to regenerate deployment script';
@@ -164,8 +169,10 @@ function NodeDetailsPage() {
  },
  onSuccess: (info) => {
  setGeneratedApiKey(info?.apiKey ?? null);
- queryClient.invalidateQueries({ queryKey: ['node-api-key', nodeId] });
  notifySuccess(info?.regenerated ? 'API key regenerated' : 'API key generated');
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.nodeApiKey(nodeId!) });
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to generate API key';
@@ -183,10 +190,11 @@ function NodeDetailsPage() {
  );
 
  const { data: unregisteredContainers = [] } = useQuery({
- queryKey: ['unregistered-containers', nodeId],
+ queryKey: qk.unregisteredContainers(nodeId!),
  queryFn: () => nodesApi.getUnregisteredContainers(nodeId!),
  enabled: !!nodeId,
- refetchInterval: 30000,
+ staleTime: 60_000,
+ refetchInterval: 30_000,
  });
 
  const canAssignNodes = useMemo(

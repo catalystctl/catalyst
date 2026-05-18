@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ModalPortal } from '@/components/ui/modal-portal';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
 import { serversApi } from '../../services/api/servers';
 import { useTemplates } from '../../hooks/useTemplates';
 import { useNodes, useAccessibleNodes } from '../../hooks/useNodes';
@@ -272,9 +273,6 @@ function CreateServerModal() {
  return server;
  },
  onSuccess: (server) => {
- queryClient.invalidateQueries({
- predicate: (query) => Array.isArray(query.queryKey) && query.queryKey[0] === 'servers',
- });
  notifySuccess('Server created and installation started');
  setOpen(false);
  setName('');
@@ -294,6 +292,10 @@ function CreateServerModal() {
  if (server?.id) {
  navigate(`/servers/${server.id}/console`);
  }
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
+ queryClient.invalidateQueries({ queryKey: qk.adminServers() });
  },
  onError: (error: any) => {
  console.error('Server creation error:', error?.response?.data || error);

@@ -41,10 +41,10 @@ export default function ServerSettingsTab({
 
  const updateSubdomainMutation = useMutation({
  mutationFn: (value: string | null) => serversApi.updateSubdomain(serverId, value),
- onSuccess: () => {
- notifySuccess('Subdomain updated');
+ onSuccess: () => notifySuccess('Subdomain updated'),
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
- queryClient.invalidateQueries({ queryKey: ['servers'] });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update subdomain'),
  });
@@ -57,8 +57,6 @@ export default function ServerSettingsTab({
  const handleReinstall = async () => {
  try {
  await serversApi.install(serverId);
- queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
- queryClient.invalidateQueries({ queryKey: ['servers'] });
  notifySuccess('Reinstall started');
  } catch (error: unknown) {
  reportSystemError({
@@ -69,6 +67,9 @@ export default function ServerSettingsTab({
  metadata: { context: 'reinstall server' },
  });
  notifyError(error instanceof Error ? error.message : 'Failed to reinstall server');
+ } finally {
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
  }
  };
 

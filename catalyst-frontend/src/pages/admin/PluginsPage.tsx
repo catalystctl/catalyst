@@ -188,7 +188,8 @@ function PluginSettingsModal({
  queryKey: qk.adminPlugin(pluginName),
  queryFn: () => fetchPluginDetails(pluginName),
  enabled: open,
- refetchInterval: 10000,
+ staleTime: 60_000,
+ refetchInterval: 30_000,
  });
 
  const manifestSchema = pluginDetails?.configSchema ?? {};
@@ -208,10 +209,12 @@ function PluginSettingsModal({
  const updateMutation = useMutation({
  mutationFn: (newConfig: PluginConfig) => updatePluginConfig(pluginName, newConfig),
  onSuccess: () => {
- queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
- queryClient.invalidateQueries({ queryKey: qk.adminPlugin(pluginName) });
  toast.success('Plugin configuration updated');
  onOpenChange(false);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
+ queryClient.invalidateQueries({ queryKey: qk.adminPlugin(pluginName) });
  },
  onError: (error: any) => toast.error(error.message || 'Failed to update configuration'),
  });
@@ -389,33 +392,38 @@ export default function PluginsPage() {
  const [settingsPlugin, setSettingsPlugin] = useState<string | null>(null);
 
  const { data: plugins, isLoading } = useQuery({
- queryKey: ['admin-plugins'],
+ queryKey: qk.adminPlugins(),
  queryFn: fetchPlugins,
- refetchInterval: 15000,
+ staleTime: 60_000,
+ refetchInterval: 30_000,
  });
 
  const toggleMutation = useMutation({
  mutationFn: ({ name, enabled }: { name: string; enabled: boolean }) => togglePlugin(name, enabled),
  onMutate: ({ name }) => setProcessingPlugin(name),
  onSuccess: (_, { enabled }) => {
- queryClient.invalidateQueries({ queryKey: ['admin-plugins'] });
  reloadPlugins();
  toast.success(`Plugin ${enabled ? 'enabled' : 'disabled'} successfully`);
  },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
+ setProcessingPlugin(null);
+ },
  onError: (error: any) => toast.error(error.message || 'Failed to toggle plugin'),
- onSettled: () => setProcessingPlugin(null),
  });
 
  const reloadMutation = useMutation({
  mutationFn: (name: string) => reloadPlugin(name),
  onMutate: (name) => setProcessingPlugin(name),
  onSuccess: () => {
- queryClient.invalidateQueries({ queryKey: ['admin-plugins'] });
  reloadPlugins();
  toast.success('Plugin reloaded successfully');
  },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
+ setProcessingPlugin(null);
+ },
  onError: (error: any) => toast.error(error.message || 'Failed to reload plugin'),
- onSettled: () => setProcessingPlugin(null),
  });
 
  const enabledCount = plugins?.filter((p) => p.enabled).length ?? 0;

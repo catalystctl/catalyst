@@ -72,7 +72,6 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
  });
  },
  onSuccess: () => {
- queryClient.invalidateQueries({ queryKey: qk.tasks(serverId) });
  notifySuccess('Task created');
  setOpen(false);
  setName('');
@@ -90,6 +89,9 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to create task';
  notifyError(message);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.tasks(serverId) });
  },
  });
 

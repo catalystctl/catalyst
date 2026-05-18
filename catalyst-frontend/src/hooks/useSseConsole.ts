@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { qk } from '../lib/queryKeys';
 import { serversApi } from '../services/api/servers';
 import { consoleSseClient, type ConsoleStreamEvent, type StreamStatus } from '../services/api/console';
 import { reportSystemError } from '../services/api/systemErrors';
@@ -81,7 +82,7 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
 
   // ── Load initial log history via REST ──
   const logsQuery = useQuery({
-    queryKey: ['server-logs', serverId, initialLines],
+    queryKey: qk.serverLogs(serverId, initialLines),
     queryFn: () =>
       serverId
         ? serversApi.logs(serverId, { lines: initialLines })

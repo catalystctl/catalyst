@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import { backupsApi } from '../../services/api/backups';
 import { notifyError, notifySuccess } from '../../utils/notify';
@@ -20,13 +21,15 @@ function DeleteBackupDialog({
  const mutation = useMutation({
  mutationFn: () => backupsApi.remove(serverId, backup.id),
  onSuccess: () => {
- queryClient.invalidateQueries({ queryKey: ['backups', serverId] });
  notifySuccess('Backup deleted');
  setOpen(false);
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to delete backup';
  notifyError(message);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.backups(serverId) });
  },
  });
 

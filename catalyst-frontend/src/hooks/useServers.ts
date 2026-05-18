@@ -10,11 +10,13 @@ export function useServers(params?: ServerListParams) {
     queryKey: qk.servers(params as Record<string, unknown> | undefined),
     queryFn: () => serversApi.list(params),
     staleTime: 30_000,
+    placeholderData: (prev) => prev,
     refetchInterval: (query) =>
       (query.state.data as Server[] | undefined)?.some((server) =>
         transitionalStatuses.has(server.status),
       )
         ? 2000
         : 10000,
+    refetchIntervalInBackground: false,
   });
 }

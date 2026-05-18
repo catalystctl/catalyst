@@ -370,8 +370,8 @@ function SecurityPage() {
  fileTunnelConcurrentMax: Number(fileTunnelConcurrentMax),
  requireEmailVerification,
  }),
- onSuccess: () => {
- notifySuccess('Security settings updated');
+ onSuccess: () => notifySuccess('Security settings updated'),
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminSecuritySettings() });
  },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update security settings'),
@@ -379,9 +379,9 @@ function SecurityPage() {
 
  const clearMutation = useMutation({
  mutationFn: (lockoutId: string) => adminApi.clearAuthLockout(lockoutId),
- onSuccess: () => {
- notifySuccess('Lockout cleared');
- queryClient.invalidateQueries({ queryKey: ['admin-auth-lockouts'] });
+ onSuccess: () => notifySuccess('Lockout cleared'),
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminAuthLockouts() });
  },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to clear lockout'),
  });

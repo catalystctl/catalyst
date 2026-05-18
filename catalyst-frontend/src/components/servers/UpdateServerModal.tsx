@@ -6,7 +6,7 @@ import { serversApi } from '../../services/api/servers';
 import type { UpdateServerPayload } from '../../types/server';
 import { useServer } from '../../hooks/useServer';
 import { useSseResizeComplete } from '../../hooks/useSseResizeComplete';
-import { notifyError } from '../../utils/notify';
+import { notifyError, notifySuccess } from '../../utils/notify';
 import { nodesApi } from '../../services/api/nodes';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
@@ -90,8 +90,6 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
  return undefined;
  },
  onSuccess: () => {
- queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
- queryClient.invalidateQueries({ queryKey: ['servers'] });
  if (diskValue !== existingDiskMb) {
  notifySuccess('Storage resize initiated');
  setResizeDone(false); // Wait for SSE event to close modal
@@ -99,6 +97,10 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
  notifySuccess('Server updated');
  setOpen(false);
  }
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: () => notifyError('Failed to update server'),
  });

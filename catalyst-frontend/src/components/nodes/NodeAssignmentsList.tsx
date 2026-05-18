@@ -17,9 +17,9 @@ type Props = {
 function NodeAssignmentsList({ nodeId, canManage }: Props) {
 
  const { data: assignments = [], isLoading } = useQuery({
- queryKey: ['nodes', nodeId, 'assignments'],
+ queryKey: qk.nodeAssignments(nodeId),
  queryFn: () => nodesApi.getAssignments(nodeId),
- refetchInterval: 10000,
+ staleTime: 30_000,
  });
 
  const removeMutation = useMutation({
@@ -27,8 +27,10 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
  return nodesApi.removeAssignment(nodeId, assignmentId);
  },
  onSuccess: () => {
- queryClient.invalidateQueries({ queryKey: qk.nodeAssignments(nodeId) });
  notifySuccess('Assignment removed');
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.nodeAssignments(nodeId) });
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to remove assignment';

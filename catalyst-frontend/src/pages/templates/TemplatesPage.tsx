@@ -251,7 +251,7 @@ function TemplatesPage({ hideHeader }: Props) {
  const { data: nests = [] } = useQuery({
  queryKey: qk.nests(),
  queryFn: nestsApi.list,
- refetchInterval: 15000,
+ staleTime: 5 * 60 * 1000,
  });
 
  const [search, setSearch] = useState('');
@@ -395,9 +395,11 @@ function TemplatesPage({ hideHeader }: Props) {
  },
  onSuccess: (_data, templateIds) => {
  notifySuccess(`${templateIds.length} template${templateIds.length === 1 ? '' : 's'} deleted`);
- queryClient.invalidateQueries({ queryKey: qk.templates() });
  setSelectedIds([]);
  setDeleteTargets(null);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.templates() });
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to delete template(s)';

@@ -16,9 +16,11 @@ export function useServer(id?: string) {
     },
     enabled: Boolean(id),
     staleTime: 15_000,
+    placeholderData: (prev) => prev,
     refetchInterval: (query) => {
       const data = query.state.data as Server | undefined;
       return data && transitionalStatuses.has(data.status) ? 2000 : 10000;
     },
+    refetchIntervalInBackground: false,
   });
 }

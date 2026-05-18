@@ -1,5 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
 
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -22,6 +23,7 @@ import {
  Menu,
  HardDrive,
  Search,
+ Shield,
 } from 'lucide-react';
 import FileEditor from './FileEditor';
 import FileList from './FileList';
@@ -211,7 +213,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  const allSelected = sortedFiles.length > 0 && selectedPaths.size === sortedFiles.length;
 
  const invalidateFiles = () => {
- queryClient.invalidateQueries({ queryKey: ['files', serverId] });
+ queryClient.invalidateQueries({ queryKey: qk.files(serverId, path) });
  };
 
  const createMutation = useMutation({
@@ -229,7 +231,6 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  return { name, path: targetPath, isDirectory: false, size: 0 } as FileEntry;
  },
  onSuccess: (entry) => {
- invalidateFiles();
  setCreateName('');
  setCreateContent('');
  setCreateMode(null);
@@ -241,6 +242,9 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  onError: (error: any) => {
  notifyError(error?.message || 'Failed to create item');
  },
+ onSettled: () => {
+ invalidateFiles();
+ },
  });
 
  const saveMutation = useMutation({
@@ -251,10 +255,12 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  onSuccess: () => {
  markActiveSaved();
  notifySuccess('File saved');
- invalidateFiles();
  },
  onError: (error: any) => {
  notifyError(error?.message || 'Failed to save file');
+ },
+ onSettled: () => {
+ invalidateFiles();
  },
  });
 
@@ -263,7 +269,6 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  await Promise.all(paths.map((target) => filesApi.remove(serverId, target)));
  },
  onSuccess: (_, paths) => {
- invalidateFiles();
  setSelectedPaths(new Set());
  setConfirmDelete(false);
  if (activeFile && paths.includes(activeFile.path)) {
@@ -274,6 +279,9 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  onError: (error: any) => {
  notifyError(error?.message || 'Failed to delete selection');
  },
+ onSettled: () => {
+ invalidateFiles();
+ },
  });
 
  const uploadMutation = useMutation({
@@ -281,12 +289,14 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  await filesApi.upload(serverId, path, files, onProgress);
  },
  onSuccess: () => {
- invalidateFiles();
  setShowUpload(false);
  notifySuccess('Upload complete');
  },
  onError: (error: any) => {
  notifyError(error?.message || 'Failed to upload files');
+ },
+ onSettled: () => {
+ invalidateFiles();
  },
  });
 
@@ -294,7 +304,6 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  mutationFn: async ({ paths, archive }: { paths: string[]; archive: string }) =>
  filesApi.compress(serverId, { paths, archiveName: archive }),
  onSuccess: (data) => {
- invalidateFiles();
  setShowCompress(false);
  notifySuccess(data?.archivePath ? `Archive created at ${data.archivePath}` : 'Archive created');
  },
@@ -303,13 +312,15 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  if (bufErr) return setBufferError(bufErr);
  notifyError(error?.message || 'Failed to compress files');
  },
+ onSettled: () => {
+ invalidateFiles();
+ },
  });
 
  const decompressMutation = useMutation({
  mutationFn: async ({ archivePath, targetPath }: { archivePath: string; targetPath: string }) =>
  filesApi.decompress(serverId, { archivePath, targetPath }),
  onSuccess: () => {
- invalidateFiles();
  setShowDecompress(false);
  notifySuccess('Archive extracted');
  },
@@ -318,18 +329,23 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  if (bufErr) return setBufferError(bufErr);
  notifyError(error?.message || 'Failed to extract archive');
  },
+ onSettled: () => {
+ invalidateFiles();
+ },
  });
 
  const permissionsMutation = useMutation({
  mutationFn: async ({ path: targetPath, mode }: { path: string; mode: number }) =>
  filesApi.updatePermissions(serverId, targetPath, mode),
  onSuccess: () => {
- invalidateFiles();
  setPermissionsEntry(null);
  notifySuccess('Permissions updated');
  },
  onError: (error: any) => {
  notifyError(error?.message || 'Failed to update permissions');
+ },
+ onSettled: () => {
+ invalidateFiles();
  },
  });
 
@@ -337,12 +353,14 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  mutationFn: async ({ from, to }: { from: string; to: string }) =>
  filesApi.rename(serverId, from, to),
  onSuccess: () => {
- invalidateFiles();
  setRenamingEntry(null);
  notifySuccess('Renamed');
  },
  onError: (error: any) => {
  notifyError(error?.message || 'Failed to rename');
+ },
+ onSettled: () => {
+ invalidateFiles();
  },
  });
 

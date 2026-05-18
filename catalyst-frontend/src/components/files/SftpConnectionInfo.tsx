@@ -53,26 +53,27 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  const [now, setNow] = useState(() => Date.now());
 
  const { data: sftpInfo, isLoading } = useQuery({
- queryKey: ['sftp-connection-info', serverId],
+ queryKey: qk.sftpConnectionInfo(serverId),
  queryFn: () => serversApi.getSftpConnectionInfo(serverId, selectedTtl),
- staleTime: 30 * 1000,
- refetchInterval: 15000,
+ staleTime: 30_000,
+ refetchInterval: 15_000,
  });
 
  const { data: tokens = [], isLoading: tokensLoading } = useQuery({
- queryKey: ['sftp-tokens', serverId],
+ queryKey: qk.sftpTokens(serverId),
  queryFn: () => serversApi.listSftpTokens(serverId),
- staleTime: 5000,
- refetchInterval: 5000,
+ staleTime: 30_000,
  });
 
  const rotateMutation = useMutation({
  mutationFn: (ttlMs?: number) => serversApi.rotateSftpToken(serverId, ttlMs),
  onSuccess: () => {
  notifySuccess('SFTP password rotated');
+ setShowPassword(false);
+ },
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.sftpConnectionInfo(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.sftpTokens(serverId) });
- setShowPassword(false);
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to rotate SFTP token';
@@ -84,11 +85,13 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  mutationFn: (targetUserId: string) => serversApi.revokeSftpToken(serverId, targetUserId),
  onSuccess: (_data, targetUserId) => {
  notifySuccess('SFTP session revoked');
- queryClient.invalidateQueries({ queryKey: qk.sftpTokens(serverId) });
- queryClient.invalidateQueries({ queryKey: qk.sftpConnectionInfo(serverId) });
  if (tokens.some(t => t.userId === targetUserId && t.isSelf)) {
  setShowPassword(false);
  }
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.sftpTokens(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.sftpConnectionInfo(serverId) });
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to revoke token';
@@ -100,9 +103,11 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  mutationFn: () => serversApi.revokeAllSftpTokens(serverId),
  onSuccess: (data) => {
  notifySuccess(`Revoked ${data.revoked} SFTP session${data.revoked !== 1 ? 's' : ''}`);
+ setShowPassword(false);
+ },
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.sftpTokens(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.sftpConnectionInfo(serverId) });
- setShowPassword(false);
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to revoke all tokens';

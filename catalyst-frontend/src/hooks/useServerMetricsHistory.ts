@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { qk } from '../lib/queryKeys';
 import { serversApi } from '../services/api/servers';
 import { reportSystemError } from '../services/api/systemErrors';
 
@@ -12,7 +13,7 @@ export function useServerMetricsHistory(serverId?: string, timeRange?: MetricsTi
   const range = timeRange || { hours: 1, limit: 60, label: '1 hour' };
 
   return useQuery({
-    queryKey: ['server-metrics', serverId, range.hours, range.limit],
+    queryKey: qk.serverMetrics(serverId!, { hours: range.hours, limit: range.limit }),
     queryFn: () => {
       if (serverId) return serversApi.metrics(serverId, { hours: range.hours, limit: range.limit });
       reportSystemError({ level: 'error', component: 'useServerMetricsHistory', message: 'missing server id', metadata: { context: 'query' } });

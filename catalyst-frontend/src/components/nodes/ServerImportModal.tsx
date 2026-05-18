@@ -6,6 +6,7 @@ import { Badge } from '../ui/badge';
 import { nodesApi } from '../../services/api/nodes';
 import { templatesApi } from '../../services/api/templates';
 import { adminApi } from '../../services/api/admin';
+import { qk } from '../../lib/queryKeys';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { ModalPortal } from '@/components/ui/modal-portal';
 import Combobox from '@/components/ui/combobox';
@@ -58,14 +59,14 @@ export default function ServerImportModal({
 
  // Fetch templates for dropdown
  const { data: templates = [] } = useQuery({
- queryKey: ['templates'],
+ queryKey: qk.templates(),
  queryFn: () => templatesApi.list(),
  enabled: open,
  });
 
  // Fetch users for owner dropdown
  const { data: usersData } = useQuery({
- queryKey: ['admin-users'],
+ queryKey: qk.adminUsers(),
  queryFn: () => adminApi.listUsers(),
  enabled: open,
  });
@@ -100,15 +101,19 @@ export default function ServerImportModal({
  },
  onSuccess: () => {
  notifySuccess('Server imported successfully');
- queryClient.invalidateQueries({ queryKey: ['node', nodeId] });
- queryClient.invalidateQueries({ queryKey: ['node-stats', nodeId] });
- queryClient.invalidateQueries({ queryKey: ['unregistered-containers', nodeId] });
  setImportingId(null);
  setFormState((prev) => {
  const next = { ...prev };
  delete next[importingId!];
  return next;
  });
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.node(nodeId) });
+ queryClient.invalidateQueries({ queryKey: qk.nodeStats(nodeId) });
+ queryClient.invalidateQueries({ queryKey: qk.unregisteredContainers(nodeId) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
+ queryClient.invalidateQueries({ queryKey: qk.adminServers() });
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || error?.message || 'Failed to import server';

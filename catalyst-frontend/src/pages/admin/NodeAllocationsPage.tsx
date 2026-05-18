@@ -96,20 +96,22 @@ function NodeAllocationsPage() {
 
  // Fetch port allocations (NodeAllocation)
  const { data: allocations = [], isLoading: allocationsLoading } = useQuery<NodeAllocation[]>({
- queryKey: ['node-allocations', nodeId],
+ queryKey: qk.adminNodeAllocations(nodeId!),
  queryFn: async () => {
  const response = await apiClient.get(`/api/nodes/${nodeId}/allocations`);
  return response.data ?? [];
  },
  enabled: !!nodeId,
- refetchInterval: 10000,
+ staleTime: 30_000,
+ refetchInterval: 30_000,
  });
 
  // Fetch IP pools (IpAllocation via pools)
  const { data: allPools = [], isLoading: poolsLoading } = useQuery({
  queryKey: qk.adminIpPools(nodeId!),
  queryFn: adminApi.listIpPools,
- refetchInterval: 15000,
+ staleTime: 30_000,
+ refetchInterval: 30_000,
  });
 
  const nodePools = useMemo(() => (allPools as IpPool[]).filter((p: IpPool) => p.nodeId === nodeId), [allPools, nodeId]);
@@ -126,11 +128,13 @@ function NodeAllocationsPage() {
  onSuccess: (response) => {
  const created = response.data?.data?.created || 0;
  notifySuccess(`Created ${created} port allocation${created !== 1 ? 's' : ''}`);
- queryClient.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId) });
  setShowCreatePortModal(false);
  setIpInput('');
  setPortsInput('');
  setAliasInput('');
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId!) });
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to create port allocations';
@@ -144,7 +148,9 @@ function NodeAllocationsPage() {
  },
  onSuccess: () => {
  notifySuccess('Port allocation deleted');
- queryClient.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId) });
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId!) });
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to delete port allocation';
@@ -166,13 +172,15 @@ function NodeAllocationsPage() {
  }),
  onSuccess: () => {
  notifySuccess('IP pool created');
- queryClient.invalidateQueries({ queryKey: qk.adminIpPools(nodeId) });
  setShowCreatePoolModal(false);
  setCidr('');
  setGateway('');
  setStartIp('');
  setEndIp('');
  setReserved('');
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminIpPools(nodeId!) });
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to create IP pool';
@@ -184,7 +192,9 @@ function NodeAllocationsPage() {
  mutationFn: (poolId: string) => adminApi.deleteIpPool(poolId),
  onSuccess: () => {
  notifySuccess('IP pool deleted');
- queryClient.invalidateQueries({ queryKey: qk.adminIpPools(nodeId) });
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminIpPools(nodeId!) });
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to delete IP pool';

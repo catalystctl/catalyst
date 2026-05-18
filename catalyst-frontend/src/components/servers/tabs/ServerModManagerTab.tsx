@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
  ArrowLeftRight,
  ArrowUpCircle,
@@ -16,6 +16,7 @@ import {
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { formatBytes } from '../../../utils/formatters';
 import { modManagerApi } from '../../../services/api/modManager';
+import { qk } from '../../../lib/queryKeys';
 import {
  notifyError,
  notifySuccess,
@@ -227,6 +228,7 @@ export default function ServerModManagerTab({
  serverGameVersion,
  modManagerConfig,
 }: Props) {
+ const queryClient = useQueryClient();
  // ── Provider options ──
  const modProviderOptions = useMemo<ModManagerProviderOption[]>(() => {
  const providers = Array.isArray(modManagerConfig?.providers)
@@ -360,11 +362,10 @@ export default function ServerModManagerTab({
 
  // ── Queries ──
  const { data: modGameVersionTags } = useQuery({
- queryKey: ['mod-manager-game-versions', serverId, modProvider, modProviderGame],
+ queryKey: qk.modManagerGameVersions(serverId ?? '', modProvider, modProviderGame ?? ''),
  queryFn: () => modManagerApi.gameVersions(serverId ?? '', modProvider, modProviderGame || undefined),
  enabled: Boolean(serverId && modProvider === 'modrinth'),
  staleTime: 10 * 60 * 1000,
- refetchOnWindowFocus: true,
  });
 
  const {
@@ -372,17 +373,7 @@ export default function ServerModManagerTab({
  isLoading: modSearchLoading,
  isError: modSearchError,
  } = useQuery({
- queryKey: [
- 'mod-manager-search',
- serverId,
- modProvider,
- modProviderGame,
- modQuery,
- modTarget,
- modLoader,
- modGameVersion,
- searchPage,
- ],
+ queryKey: qk.modManagerSearch(serverId ?? '', modProvider, modQuery.trim(), modGameVersion.trim(), searchPage),
  queryFn: () =>
  modManagerApi.search(serverId ?? '', {
  provider: modProvider,
@@ -401,13 +392,7 @@ export default function ServerModManagerTab({
  isLoading: modVersionsLoading,
  isError: modVersionsError,
  } = useQuery({
- queryKey: [
- 'mod-manager-versions',
- serverId,
- modProvider,
- modProviderGame,
- selectedProject,
- ],
+ queryKey: qk.modManagerVersions(serverId ?? '', modProvider, modProviderGame ?? '', selectedProject ?? '', 1),
  queryFn: () =>
  modManagerApi.versions(serverId ?? '', {
  provider: modProvider,
@@ -421,7 +406,7 @@ export default function ServerModManagerTab({
  data: installedMods = [],
  refetch: refetchInstalledMods,
  } = useQuery({
- queryKey: ['mod-manager-installed', serverId, modTarget],
+ queryKey: qk.modManagerInstalled(serverId ?? '', modTarget),
  queryFn: () => modManagerApi.installed(serverId ?? '', modTarget),
  enabled: Boolean(serverId && modManagerConfig),
  refetchInterval: 10000,
@@ -431,9 +416,9 @@ export default function ServerModManagerTab({
  const uninstallModMutation = useMutation({
  mutationFn: (filename: string) =>
  modManagerApi.uninstall(serverId!, filename, modTarget),
- onSuccess: () => {
- notifySuccess('Mod removed');
- refetchInstalledMods();
+ onSuccess: () => notifySuccess('Mod removed'),
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.modManagerInstalled(serverId ?? '', modTarget) });
  },
  onError: (error: any) => {
  notifyError(error?.response?.data?.error || 'Failed to remove mod');
@@ -455,9 +440,9 @@ export default function ServerModManagerTab({
  projectName: selectedProjectName || undefined,
  });
  },
- onSuccess: () => {
- notifySuccess('Mod installed successfully');
- refetchInstalledMods();
+ onSuccess: () => notifySuccess('Mod installed successfully'),
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.modManagerInstalled(serverId ?? '', modTarget) });
  },
  onError: (error: any) => {
  notifyError(error?.response?.data?.error || 'Failed to install mod');

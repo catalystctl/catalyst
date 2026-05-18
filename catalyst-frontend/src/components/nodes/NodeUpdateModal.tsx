@@ -60,7 +60,7 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  const { data: locations = [] } = useQuery({
  queryKey: qk.locations(),
  queryFn: locationsApi.list,
- refetchInterval: 15000,
+ staleTime: 5 * 60 * 1000,
  });
 
  const mutation = useMutation({
@@ -80,13 +80,15 @@ function NodeUpdateModal({ node, open: controlledOpen, onOpenChange, createdLoca
  serverDataDir: serverDataDir || undefined,
  }),
  onSuccess: () => {
+ notifySuccess('Node updated');
+ setOpen(false);
+ },
+ onSettled: () => {
  Promise.all([
  queryClient.invalidateQueries({ queryKey: qk.nodes() }),
  queryClient.invalidateQueries({ queryKey: qk.node(node.id) }),
- queryClient.invalidateQueries({ queryKey: ['admin-nodes'] }),
+ queryClient.invalidateQueries({ queryKey: qk.adminNodes() }),
  ]);
- notifySuccess('Node updated');
- setOpen(false);
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to update node';

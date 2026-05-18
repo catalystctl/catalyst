@@ -36,13 +36,15 @@ function EditTaskModal({
  payload: action === 'command' && command.trim() ? { command: command.trim() } : {},
  }),
  onSuccess: () => {
- queryClient.invalidateQueries({ queryKey: qk.tasks(serverId) });
  notifySuccess('Task updated');
  setOpen(false);
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to update task';
  notifyError(message);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.tasks(serverId) });
  },
  });
 

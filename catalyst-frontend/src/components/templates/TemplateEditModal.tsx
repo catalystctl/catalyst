@@ -378,14 +378,16 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  nestId: nestId || null,
  }),
  onSuccess: () => {
- queryClient.invalidateQueries({ queryKey: qk.templates() });
- queryClient.invalidateQueries({ queryKey: qk.template(template.id) });
  notifySuccess('Template updated');
  setOpen(false);
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to update template';
  notifyError(message);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.templates() });
+ queryClient.invalidateQueries({ queryKey: qk.template(template.id) });
  },
  });
 

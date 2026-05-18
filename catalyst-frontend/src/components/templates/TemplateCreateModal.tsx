@@ -111,7 +111,7 @@ function TemplateCreateModal() {
  const { data: nests = [] } = useQuery({
  queryKey: qk.nests(),
  queryFn: nestsApi.list,
- refetchInterval: 15000,
+ staleTime: 5 * 60 * 1000,
  });
 
  const parsedPorts = useMemo(
@@ -285,8 +285,6 @@ function TemplateCreateModal() {
  ...(nestId ? { nestId } : {}),
  }),
  onSuccess: () => {
- queryClient.invalidateQueries({ queryKey: qk.templates() });
- queryClient.invalidateQueries({ queryKey: qk.nests() });
  notifySuccess('Template created');
  setOpen(false);
  setName('');
@@ -324,6 +322,10 @@ function TemplateCreateModal() {
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to create template';
  notifyError(message);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.templates() });
+ queryClient.invalidateQueries({ queryKey: qk.nests() });
  },
  });
 

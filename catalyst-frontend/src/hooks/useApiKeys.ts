@@ -10,7 +10,9 @@ export function useApiKeys() {
   return useQuery({
     queryKey: qk.apiKeys(),
     queryFn: () => apiKeyService.list(),
-    refetchInterval: 15000,
+    staleTime: 60_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -22,7 +24,7 @@ export function useApiKey(id: string | undefined) {
     queryKey: qk.apiKeyDetail(id!),
     queryFn: () => apiKeyService.get(id!),
     enabled: !!id,
-    refetchInterval: 15000,
+    staleTime: 60_000,
   });
 }
 
@@ -34,7 +36,9 @@ export function useApiKeyUsage(id: string | undefined) {
     queryKey: qk.apiKeyUsage(id!),
     queryFn: () => apiKeyService.getUsage(id!),
     enabled: !!id,
-    refetchInterval: 30000,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -46,7 +50,6 @@ export function usePermissionsCatalog() {
     queryKey: qk.permissionsCatalog(),
     queryFn: () => apiKeyService.getPermissionsCatalog(),
     staleTime: 10 * 60 * 1000, // Catalog rarely changes
-    refetchOnWindowFocus: true,
   });
 }
 
@@ -70,7 +73,6 @@ export function useCreateApiKey() {
   return useMutation({
     mutationFn: (data: CreateApiKeyRequest) => apiKeyService.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.apiKeys() });
       toast.success('API key created successfully');
     },
     onError: (error: any) => {
@@ -92,15 +94,16 @@ export function useUpdateApiKey() {
     mutationFn: ({ id, data }: { id: string; data: UpdateApiKeyRequest }) =>
       apiKeyService.update(id, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: qk.apiKeys() });
-      queryClient.invalidateQueries({ queryKey: qk.apiKeyVariable(variables.id) });
       toast.success('API key updated successfully');
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to update API key');
     },
-    onSettled: () => {
+    onSettled: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: qk.apiKeys() });
+      if (variables) {
+        queryClient.invalidateQueries({ queryKey: qk.apiKeyVariable(variables.id) });
+      }
     },
   });
 }
@@ -122,7 +125,6 @@ export function useDeleteApiKey() {
       return { previous };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: qk.apiKeys() });
       toast.success('API key revoked successfully');
     },
     onError: (_error, _id, context) => {

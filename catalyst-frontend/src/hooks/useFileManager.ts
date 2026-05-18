@@ -34,10 +34,8 @@ export function useFileManager(serverId?: string, initialPath = '/') {
     },
     enabled: Boolean(serverId),
     refetchInterval: 10000,
-    // Refresh files when user switches back to the tab (server state may have changed)
-    refetchOnWindowFocus: true,
-    // Treat file listings as stale after 30s so refetchOnWindowFocus triggers refresh
     staleTime: 30_000,
+    refetchIntervalInBackground: false,
   });
 
   const openFile = useCallback(

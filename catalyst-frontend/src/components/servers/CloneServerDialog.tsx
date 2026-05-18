@@ -64,7 +64,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
 
   // Fetch users for owner dropdown (admin only)
   const { data: usersData } = useQuery({
-    queryKey: ['admin-users'],
+    queryKey: qk.adminUsers({ limit: 200 }),
     queryFn: () => adminApi.listUsers({ limit: 200 }),
     enabled: open && isAdmin,
   });
@@ -172,16 +172,18 @@ function CloneServerDialog({ server, disabled = false }: Props) {
       return serversApi.clone(server.id, payload);
     },
     onSuccess: (newServer) => {
-      queryClient.invalidateQueries({ queryKey: ['servers'] });
-      queryClient.invalidateQueries({ queryKey: qk.server(server.id) });
-      if (newServer?.id) {
-        queryClient.invalidateQueries({ queryKey: qk.server(newServer.id) });
-      }
       notifySuccess(copyFiles ? 'Server clone started — copying files...' : 'Server cloned successfully');
       setOpen(false);
       // Navigate to the new server's page
       if (newServer?.id) {
         navigate(`/servers/${newServer.id}`);
+      }
+    },
+    onSettled: (newServer) => {
+      queryClient.invalidateQueries({ queryKey: qk.servers() });
+      queryClient.invalidateQueries({ queryKey: qk.server(server.id) });
+      if (newServer?.id) {
+        queryClient.invalidateQueries({ queryKey: qk.server(newServer.id) });
       }
     },
     onError: (error: any) => {

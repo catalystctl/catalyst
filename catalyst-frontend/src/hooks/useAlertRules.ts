@@ -12,6 +12,6 @@ export function useAlertRules(params?: {
   return useQuery({
     queryKey: qk.alertRules(params as Record<string, unknown> | undefined),
     queryFn: () => alertsApi.listRules(params),
-    refetchInterval: 10000,
+    staleTime: 60_000,
   });
 }

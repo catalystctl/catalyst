@@ -307,7 +307,10 @@ export default function ServerAdminTab({
  onSuccess: () => {
  notifySuccess('Environment variables updated');
  setEnvDirty(false);
+ },
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) =>
  notifyError(
@@ -342,8 +345,6 @@ export default function ServerAdminTab({
  setRebuildPending(true);
  await serversApi.rebuild(serverId);
  notifySuccess('Container rebuild initiated');
- queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
- queryClient.invalidateQueries({ queryKey: ['servers'] });
  setRebuildConfirm(false);
  } catch (err: unknown) {
  reportSystemError({
@@ -356,6 +357,9 @@ export default function ServerAdminTab({
  notifyError(err instanceof Error ? err.message : 'Failed to rebuild container');
  } finally {
  setRebuildPending(false);
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
+ queryClient.invalidateQueries({ queryKey: qk.tasks(serverId) });
  }
  }, [serverId]);
 
@@ -364,8 +368,6 @@ export default function ServerAdminTab({
  setKillPending(true);
  await serversApi.kill(serverId);
  notifySuccess('Server process killed');
- queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
- queryClient.invalidateQueries({ queryKey: ['servers'] });
  setKillConfirm(false);
  } catch (err: unknown) {
  reportSystemError({
@@ -378,6 +380,8 @@ export default function ServerAdminTab({
  notifyError(err instanceof Error ? err.message : 'Failed to kill server');
  } finally {
  setKillPending(false);
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
  }
  }, [serverId]);
 
@@ -386,8 +390,6 @@ export default function ServerAdminTab({
  setReinstallPending(true);
  await serversApi.install(serverId);
  notifySuccess('Reinstall initiated');
- queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
- queryClient.invalidateQueries({ queryKey: ['servers'] });
  setReinstallConfirm(false);
  } catch (err: unknown) {
  reportSystemError({
@@ -400,6 +402,8 @@ export default function ServerAdminTab({
  notifyError(err instanceof Error ? err.message : 'Failed to reinstall');
  } finally {
  setReinstallPending(false);
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
  }
  }, [serverId]);
 
@@ -408,9 +412,6 @@ export default function ServerAdminTab({
  setTransferOwnerPending(true);
  await serversApi.transferOwnership(serverId, { newOwnerId: newOwnerId.trim() });
  notifySuccess('Ownership transferred');
- queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
- queryClient.invalidateQueries({ queryKey: ['servers'] });
- queryClient.invalidateQueries({ queryKey: qk.serverPermissions(serverId) });
  setNewOwnerId('');
  setTransferOwnerConfirm(false);
  } catch (err: unknown) {
@@ -424,6 +425,9 @@ export default function ServerAdminTab({
  notifyError(err instanceof Error ? err.message : 'Failed to transfer ownership');
  } finally {
  setTransferOwnerPending(false);
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
+ queryClient.invalidateQueries({ queryKey: qk.serverPermissions(serverId) });
  }
  }, [serverId, newOwnerId]);
 

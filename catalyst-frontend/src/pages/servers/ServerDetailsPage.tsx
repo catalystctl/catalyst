@@ -241,13 +241,14 @@ function ServerDetailsPage() {
  queryKey: qk.serverPermissions(serverId ?? ''),
  queryFn: () => serversApi.permissions(serverId ?? ''),
  enabled: Boolean(serverId),
- refetchInterval: 10000,
+ staleTime: 60_000,
  });
  const { data: invites = [] } = useQuery<ServerInvite[]>({
  queryKey: qk.serverInvites(serverId ?? ''),
  queryFn: () => serversApi.listInvites(serverId ?? ''),
  enabled: Boolean(serverId),
- refetchInterval: 10000,
+ staleTime: 30_000,
+ refetchInterval: 30_000,
  });
 
  // ── Allocations (admin) ──
@@ -255,7 +256,8 @@ function ServerDetailsPage() {
  queryKey: qk.serverAllocations(serverId ?? ''),
  queryFn: () => serversApi.allocations(serverId ?? ''),
  enabled: Boolean(serverId),
- refetchInterval: 10000,
+ staleTime: 30_000,
+ refetchInterval: 30_000,
  });
  const allocations = allocationsQuery.data ?? [];
  const allocationsError = allocationsQuery.error
@@ -378,10 +380,10 @@ function ServerDetailsPage() {
  }
  return tasksApi.update(server.id, task.id, { enabled: !task.enabled });
  },
- onSuccess: () => {
+ onSuccess: () => notifySuccess('Task updated'),
+ onSettled: () => {
  if (server?.id)
  queryClient.invalidateQueries({ queryKey: qk.tasks(server.id) });
- notifySuccess('Task updated');
  },
  onError: (error: any) =>
  notifyError(error?.response?.data?.error || 'Failed to update task'),
@@ -395,10 +397,10 @@ function ServerDetailsPage() {
  }
  return tasksApi.remove(server.id, taskId);
  },
- onSuccess: () => {
+ onSuccess: () => notifySuccess('Task deleted'),
+ onSettled: () => {
  if (server?.id)
  queryClient.invalidateQueries({ queryKey: qk.tasks(server.id) });
- notifySuccess('Task deleted');
  },
  onError: (error: any) =>
  notifyError(error?.response?.data?.error || 'Failed to delete task'),
@@ -420,12 +422,14 @@ function ServerDetailsPage() {
  });
  },
  onSuccess: () => {
+ setDatabaseName('');
+ notifySuccess('Database created');
+ },
+ onSettled: () => {
  if (server?.id)
  queryClient.invalidateQueries({
  queryKey: qk.serverDatabases(server.id),
  });
- setDatabaseName('');
- notifySuccess('Database created');
  },
  onError: (error: any) =>
  notifyError(error?.response?.data?.error || 'Failed to create database'),
@@ -439,12 +443,12 @@ function ServerDetailsPage() {
  }
  return databasesApi.rotatePassword(server.id, databaseId);
  },
- onSuccess: () => {
+ onSuccess: () => notifySuccess('Database password rotated'),
+ onSettled: () => {
  if (server?.id)
  queryClient.invalidateQueries({
  queryKey: qk.serverDatabases(server.id),
  });
- notifySuccess('Database password rotated');
  },
  onError: (error: any) =>
  notifyError(
@@ -460,12 +464,12 @@ function ServerDetailsPage() {
  }
  return databasesApi.remove(server.id, databaseId);
  },
- onSuccess: () => {
+ onSuccess: () => notifySuccess('Database deleted'),
+ onSettled: () => {
  if (server?.id)
  queryClient.invalidateQueries({
  queryKey: qk.serverDatabases(server.id),
  });
- notifySuccess('Database deleted');
  },
  onError: (error: any) =>
  notifyError(error?.response?.data?.error || 'Failed to delete database'),
@@ -480,12 +484,12 @@ function ServerDetailsPage() {
  return serversApi.suspend(server.id, reason);
  },
  onSuccess: () => {
- Promise.all([
- queryClient.invalidateQueries({ queryKey: qk.server(server?.id) }),
- queryClient.invalidateQueries({ queryKey: ['servers'] }),
- ]);
  notifySuccess('Server suspended');
  setSuspendReason('');
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.server(server?.id) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) =>
  notifyError(
@@ -501,12 +505,10 @@ function ServerDetailsPage() {
  }
  return serversApi.unsuspend(server.id);
  },
- onSuccess: () => {
- Promise.all([
- queryClient.invalidateQueries({ queryKey: qk.server(server?.id) }),
- queryClient.invalidateQueries({ queryKey: ['servers'] }),
- ]);
- notifySuccess('Server unsuspended');
+ onSuccess: () => notifySuccess('Server unsuspended'),
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.server(server?.id) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) =>
  notifyError(
@@ -536,9 +538,11 @@ function ServerDetailsPage() {
  });
  },
  onSuccess: () => {
- notifySuccess('Allocation added');
  setNewContainerPort('');
  setNewHostPort('');
+ notifySuccess('Allocation added');
+ },
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  },
@@ -558,8 +562,8 @@ function ServerDetailsPage() {
  }
  return serversApi.removeAllocation(serverId, containerPort);
  },
- onSuccess: () => {
- notifySuccess('Allocation removed');
+ onSuccess: () => notifySuccess('Allocation removed'),
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  },
@@ -577,8 +581,8 @@ function ServerDetailsPage() {
  }
  return serversApi.setPrimaryAllocation(serverId, containerPort);
  },
- onSuccess: () => {
- notifySuccess('Primary allocation updated');
+ onSuccess: () => notifySuccess('Primary allocation updated'),
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  },
@@ -614,12 +618,10 @@ function ServerDetailsPage() {
  maxCrashCount: parsedMax,
  });
  },
- onSuccess: () => {
- notifySuccess('Restart policy updated');
- Promise.all([
- queryClient.invalidateQueries({ queryKey: qk.server(serverId) }),
- queryClient.invalidateQueries({ queryKey: ['servers'] }),
- ]);
+ onSuccess: () => notifySuccess('Restart policy updated'),
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) =>
  notifyError(
@@ -637,12 +639,10 @@ function ServerDetailsPage() {
  }
  return serversApi.resetCrashCount(serverId);
  },
- onSuccess: () => {
- notifySuccess('Crash count reset');
- Promise.all([
- queryClient.invalidateQueries({ queryKey: qk.server(serverId) }),
- queryClient.invalidateQueries({ queryKey: ['servers'] }),
- ]);
+ onSuccess: () => notifySuccess('Crash count reset'),
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) =>
  notifyError(
@@ -665,12 +665,10 @@ function ServerDetailsPage() {
  }
  return serversApi.update(serverId, { name: nextName });
  },
- onSuccess: () => {
- notifySuccess('Server name updated');
- Promise.all([
- queryClient.invalidateQueries({ queryKey: qk.server(serverId) }),
- queryClient.invalidateQueries({ queryKey: ['servers'] }),
- ]);
+ onSuccess: () => notifySuccess('Server name updated'),
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) =>
  notifyError(
@@ -692,8 +690,8 @@ function ServerDetailsPage() {
  startupCommand: trimmed === templateDefault ? null : trimmed || null,
  });
  },
- onSuccess: () => {
- notifySuccess('Startup command updated');
+ onSuccess: () => notifySuccess('Startup command updated'),
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  },
  onError: (error: any) =>
@@ -719,8 +717,10 @@ function ServerDetailsPage() {
  });
  },
  onSuccess: () => {
- notifySuccess('Invite sent');
  setInviteEmail('');
+ notifySuccess('Invite sent');
+ },
+ onSettled: () => {
  queryClient.invalidateQueries({
  queryKey: qk.serverInvites(serverId),
  });
@@ -737,8 +737,8 @@ function ServerDetailsPage() {
  }
  return serversApi.cancelInvite(serverId, inviteId);
  },
- onSuccess: () => {
- notifySuccess('Invite cancelled');
+ onSuccess: () => notifySuccess('Invite cancelled'),
+ onSettled: () => {
  queryClient.invalidateQueries({
  queryKey: qk.serverInvites(serverId),
  });
@@ -761,8 +761,8 @@ function ServerDetailsPage() {
  permissions,
  });
  },
- onSuccess: () => {
- notifySuccess('Permissions updated');
+ onSuccess: () => notifySuccess('Permissions updated'),
+ onSettled: () => {
  queryClient.invalidateQueries({
  queryKey: qk.serverPermissions(serverId),
  });
@@ -781,8 +781,8 @@ function ServerDetailsPage() {
  }
  return serversApi.removeAccess(serverId, targetUserId);
  },
- onSuccess: () => {
- notifySuccess('Access removed');
+ onSuccess: () => notifySuccess('Access removed'),
+ onSettled: () => {
  queryClient.invalidateQueries({
  queryKey: qk.serverPermissions(serverId),
  });

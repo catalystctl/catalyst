@@ -322,7 +322,7 @@ function AdminNodesPage() {
  const { data: locations = [] } = useQuery({
  queryKey: qk.locations(),
  queryFn: locationsApi.list,
- refetchInterval: 30000,
+ staleTime: 5 * 60 * 1000,
  });
 
  const canWrite = useMemo(
@@ -452,9 +452,11 @@ function AdminNodesPage() {
  },
  onSuccess: (_data, nodeIds) => {
  notifySuccess(`${nodeIds.length} node${nodeIds.length === 1 ? '' : 's'} deleted`);
- queryClient.invalidateQueries({ queryKey: ['admin-nodes'] });
  setSelectedIds([]);
  setDeleteTargets(null);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminNodes() });
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to delete node(s)';

@@ -297,7 +297,7 @@ function DatabasePage() {
  );
 
  const createMutation = useMutation({
- mutationKey: ['admin-database-host-create'],
+ mutationKey: qk.mutation.adminDatabaseHostCreate(),
  mutationFn: () =>
  adminApi.createDatabaseHost({
  name: dbName.trim(),
@@ -310,15 +310,17 @@ function DatabasePage() {
  }),
  onSuccess: () => {
  notifySuccess('Database host created');
- queryClient.invalidateQueries({ queryKey: qk.adminDatabaseHosts() });
  resetForm();
  setIsCreateOpen(false);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminDatabaseHosts() });
  },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to create database host'),
  });
 
  const updateMutation = useMutation({
- mutationKey: ['admin-database-host-update'],
+ mutationKey: qk.mutation.adminDatabaseHostUpdate(),
  mutationFn: (payload: { hostId: string }) =>
  adminApi.updateDatabaseHost(payload.hostId, {
  name: dbName.trim(),
@@ -331,20 +333,24 @@ function DatabasePage() {
  }),
  onSuccess: () => {
  notifySuccess('Database host updated');
- queryClient.invalidateQueries({ queryKey: qk.adminDatabaseHosts() });
  setEditingHost(null);
  resetForm();
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminDatabaseHosts() });
  },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update database host'),
  });
 
  const deleteMutation = useMutation({
- mutationKey: ['admin-database-host-delete'],
+ mutationKey: qk.mutation.adminDatabaseHostDelete(),
  mutationFn: (hostId: string) => adminApi.deleteDatabaseHost(hostId),
  onSuccess: () => {
  notifySuccess('Database host removed');
- queryClient.invalidateQueries({ queryKey: qk.adminDatabaseHosts() });
  setDeletingHost(null);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminDatabaseHosts() });
  },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to delete database host'),
  });

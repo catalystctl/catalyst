@@ -7,7 +7,7 @@ export function useNodes() {
   return useQuery({
     queryKey: qk.nodes(),
     queryFn: nodesApi.list,
-    refetchInterval: 15000,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -24,7 +24,7 @@ export function useAccessibleNodes() {
         hasWildcard: data.hasWildcard || false,
       };
     },
-    refetchInterval: 15000,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -37,7 +37,8 @@ export function useNode(nodeId?: string) {
       return Promise.reject(new Error('missing node id'));
     },
     enabled: Boolean(nodeId),
-    refetchInterval: 10000,
+    staleTime: 5 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -50,7 +51,9 @@ export function useNodeStats(nodeId?: string) {
       return Promise.reject(new Error('missing node id'));
     },
     enabled: Boolean(nodeId),
-    refetchInterval: 10000,
+    staleTime: 15_000,
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -63,6 +66,8 @@ export function useNodeMetrics(nodeId?: string) {
       return Promise.reject(new Error('missing node id'));
     },
     enabled: Boolean(nodeId),
-    refetchInterval: 15000,
+    staleTime: 15_000,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
   });
 }

@@ -69,7 +69,7 @@ function NodeCreateModal(_props: Props) {
  const { data: locations = [] } = useQuery({
  queryKey: qk.locations(),
  queryFn: locationsApi.list,
- refetchInterval: 15000,
+ staleTime: 5 * 60 * 1000,
  });
 
  const createMutation = useMutation({
@@ -89,10 +89,6 @@ function NodeCreateModal(_props: Props) {
  return created;
  },
  onSuccess: (created) => {
- Promise.all([
- queryClient.invalidateQueries({ queryKey: qk.nodes() }),
- queryClient.invalidateQueries({ queryKey: ['admin-nodes'] }),
- ]);
  notifySuccess('Node registered');
  setCreatedNodeId(created?.id ?? null);
  // Move to step 3 (deploy script) and immediately fetch the deployment token
@@ -100,6 +96,12 @@ function NodeCreateModal(_props: Props) {
  if (created?.id) {
  deployTokenMutation.mutate(created.id);
  }
+ },
+ onSettled: () => {
+ Promise.all([
+ queryClient.invalidateQueries({ queryKey: qk.nodes() }),
+ queryClient.invalidateQueries({ queryKey: qk.adminNodes() }),
+ ]);
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to register node';

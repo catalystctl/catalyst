@@ -110,8 +110,8 @@ function SystemPage() {
  maxConnections: smtpMaxConnections.trim() ? Number(smtpMaxConnections) : null,
  maxMessages: smtpMaxMessages.trim() ? Number(smtpMaxMessages) : null,
  }),
- onSuccess: () => {
- notifySuccess('SMTP settings updated');
+ onSuccess: () => notifySuccess('SMTP settings updated'),
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminSmtp() });
  },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update SMTP settings'),
@@ -126,8 +126,8 @@ function SystemPage() {
  cloudflareApiToken: dnsCloudflareApiToken.trim() || null,
  cloudflareZoneId: dnsCloudflareZoneId.trim() || null,
  }),
- onSuccess: () => {
- notifySuccess('DNS settings updated');
+ onSuccess: () => notifySuccess('DNS settings updated'),
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminDnsSettings() });
  },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update DNS settings'),
@@ -139,8 +139,8 @@ function SystemPage() {
  curseforgeApiKey: curseforgeApiKey.trim() || null,
  modrinthApiKey: modrinthApiKey.trim() || null,
  }),
- onSuccess: () => {
- notifySuccess('Mod manager settings updated');
+ onSuccess: () => notifySuccess('Mod manager settings updated'),
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminModManager() });
  },
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update mod manager settings'),

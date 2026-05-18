@@ -97,7 +97,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  const { data: locations = [], isLoading } = useQuery({
  queryKey: qk.locations(),
  queryFn: locationsApi.list,
- refetchInterval: 15000,
+ staleTime: 60_000,
  });
 
  // Listen for the `returnTo` field in the open-locations-modal event
@@ -114,11 +114,6 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  mutationFn: locationsApi.create,
  onSuccess: (created) => {
  notifySuccess('Location created');
- Promise.all([
- queryClient.invalidateQueries({ queryKey: qk.locations() }),
- queryClient.invalidateQueries({ queryKey: qk.nodes() }),
- queryClient.invalidateQueries({ queryKey: ['admin-nodes'] }),
- ]);
  setIsCreating(false);
  // If opened from another modal, send the user back after creation
  if (returnToRef.current) {
@@ -137,6 +132,13 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  const message = error?.response?.data?.error || 'Failed to create location';
  notifyError(message);
  },
+ onSettled: () => {
+ Promise.all([
+ queryClient.invalidateQueries({ queryKey: qk.locations() }),
+ queryClient.invalidateQueries({ queryKey: qk.nodes() }),
+ queryClient.invalidateQueries({ queryKey: qk.adminNodes() }),
+ ]);
+ },
  });
 
  const updateMutation = useMutation({
@@ -144,16 +146,18 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  locationsApi.update(id, payload),
  onSuccess: () => {
  notifySuccess('Location updated');
- Promise.all([
- queryClient.invalidateQueries({ queryKey: qk.locations() }),
- queryClient.invalidateQueries({ queryKey: qk.nodes() }),
- queryClient.invalidateQueries({ queryKey: ['admin-nodes'] }),
- ]);
  setEditingLocation(null);
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to update location';
  notifyError(message);
+ },
+ onSettled: () => {
+ Promise.all([
+ queryClient.invalidateQueries({ queryKey: qk.locations() }),
+ queryClient.invalidateQueries({ queryKey: qk.nodes() }),
+ queryClient.invalidateQueries({ queryKey: qk.adminNodes() }),
+ ]);
  },
  });
 
@@ -161,16 +165,18 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
  mutationFn: locationsApi.remove,
  onSuccess: () => {
  notifySuccess('Location deleted');
- Promise.all([
- queryClient.invalidateQueries({ queryKey: qk.locations() }),
- queryClient.invalidateQueries({ queryKey: qk.nodes() }),
- queryClient.invalidateQueries({ queryKey: ['admin-nodes'] }),
- ]);
  setDeleteTarget(null);
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to delete location';
  notifyError(message);
+ },
+ onSettled: () => {
+ Promise.all([
+ queryClient.invalidateQueries({ queryKey: qk.locations() }),
+ queryClient.invalidateQueries({ queryKey: qk.nodes() }),
+ queryClient.invalidateQueries({ queryKey: qk.adminNodes() }),
+ ]);
  },
  });
 

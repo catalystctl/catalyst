@@ -31,7 +31,7 @@ export default function ServerStartupVariablesSection({
  queryKey: qk.serverVariables(serverId),
  queryFn: () => serversApi.getVariables(serverId),
  enabled: Boolean(serverId),
- refetchInterval: 15000,
+ staleTime: 60_000,
  });
 
  // Sync local values when variables load
@@ -52,9 +52,11 @@ export default function ServerStartupVariablesSection({
  serversApi.updateVariables(serverId, payload),
  onSuccess: () => {
  notifySuccess('Startup variables saved');
+ setTouched(new Set());
+ },
+ onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.serverVariables(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
- setTouched(new Set());
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || error?.message || 'Failed to save variables';

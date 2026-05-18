@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { qk } from '../lib/queryKeys';
 import { nodesApi } from '../services/api/nodes';
 import { useAdminNodes } from './useAdmin';
 import { useRef } from 'react';
@@ -86,7 +87,7 @@ export function useClusterMetrics(refreshInterval = 5000) {
   const prevBytesRef = useRef<Map<string, { rx: bigint; tx: bigint; ts: number }>>(new Map());
 
   return useQuery({
-    queryKey: ['cluster-metrics', nodes.map((n) => n.id)],
+    queryKey: qk.clusterMetrics(nodes.map((n) => n.id)),
     queryFn: async (): Promise<ClusterMetrics> => {
       const nodeMetrics: NodeMetricData[] = [];
 
@@ -191,7 +192,10 @@ export function useClusterHistoricalMetrics(range: TimeRange = '1h') {
   const nodes = nodesData?.nodes ?? [];
 
   return useQuery({
-    queryKey: ['cluster-historical-metrics', range, nodes.map((n) => n.id)],
+    queryKey: qk.clusterHistoricalMetrics(
+      { hours: TIME_RANGE_HOURS[range], limit: TIME_RANGE_LIMITS[range] },
+      nodes.map((n) => n.id),
+    ),
     queryFn: async (): Promise<ClusterHistoricalMetrics> => {
       const hours = TIME_RANGE_HOURS[range];
       const limit = TIME_RANGE_LIMITS[range];
@@ -279,6 +283,7 @@ export function useClusterHistoricalMetrics(range: TimeRange = '1h') {
     },
     staleTime: 30_000,
     refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
     enabled: nodes.length > 0,
   });
 }

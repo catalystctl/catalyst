@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { qk } from '../lib/queryKeys';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { serversApi } from '../services/api/servers';
 import { notifyError, notifySuccess } from '../utils/notify';
@@ -21,13 +22,13 @@ function InvitesPage() {
  const [registerUsername, setRegisterUsername] = useState('');
  const [registerPassword, setRegisterPassword] = useState('');
  const { data: invitePreview } = useQuery<ServerInvitePreview>({
- queryKey: ['invite-preview', token],
+ queryKey: qk.invitePreview(token ?? ''),
  queryFn: async () => {
  const response = await serversApi.previewInvite(token ?? '');
  return response.data;
  },
  enabled: Boolean(token),
- refetchInterval: 10000,
+ staleTime: 60_000,
  });
  useEffect(() => {
  if (!invitePreview?.email) return;
@@ -39,8 +40,10 @@ function InvitesPage() {
  onSuccess: () => {
  setAccepted(true);
  notifySuccess('Invite accepted');
- queryClient.invalidateQueries({ queryKey: ['servers'] });
  navigate('/servers');
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to accept invite';
@@ -74,8 +77,10 @@ function InvitesPage() {
  });
  }
  notifySuccess('Account created and invite accepted');
- queryClient.invalidateQueries({ queryKey: ['servers'] });
  navigate('/servers');
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to accept invite';

@@ -25,18 +25,18 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
 
  // Fetch users for selection
  const { data: usersData, isLoading: usersLoading } = useQuery({
- queryKey: ['admin', 'users', 'list', search],
+ queryKey: qk.adminUsers({ search }),
  queryFn: () => adminApi.listUsers({ search, limit: 50 }),
  enabled: open && targetType === 'user',
- refetchInterval: 10000,
+ staleTime: 60_000,
  });
 
  // Fetch roles for selection
  const { data: rolesData, isLoading: rolesLoading } = useQuery({
- queryKey: ['roles', 'list'],
+ queryKey: qk.adminRoles(),
  queryFn: () => rolesApi.list(),
  enabled: open && targetType === 'role',
- refetchInterval: 10000,
+ staleTime: 60_000,
  });
 
  // Create assignment mutation
@@ -53,9 +53,11 @@ function NodeAssignmentModal({ nodeId, open, onClose }: Props) {
  });
  },
  onSuccess: () => {
- queryClient.invalidateQueries({ queryKey: qk.nodeAssignments(nodeId) });
  notifySuccess('Node assigned successfully');
  handleClose();
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.nodeAssignments(nodeId) });
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to assign node';
