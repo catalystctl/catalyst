@@ -24,8 +24,12 @@ function NodeDeleteDialog({ nodeId, nodeName, open: controlledOpen, onOpenChange
  const mutation = useMutation({
  mutationFn: () => nodesApi.remove(nodeId),
  onMutate: async () => {
- await queryClient.cancelQueries({ queryKey: qk.nodes() });
- const prev = queryClient.getQueryData(qk.nodes());
+ await queryClient.cancelQueries({
+ predicate: (q: any) => Array.isArray(q.queryKey) && q.queryKey[0] === 'nodes',
+ });
+ const prev = queryClient.getQueriesData({
+ predicate: (q: any) => Array.isArray(q.queryKey) && q.queryKey[0] === 'nodes',
+ });
  queryClient.setQueriesData(
  { predicate: (q: any) => Array.isArray(q.queryKey) && q.queryKey[0] === 'nodes' },
  (nodes: any[]) => Array.isArray(nodes) ? nodes.filter((n: any) => n.id !== nodeId) : nodes,
@@ -33,7 +37,11 @@ function NodeDeleteDialog({ nodeId, nodeName, open: controlledOpen, onOpenChange
  return { prev };
  },
  onError: (_err, _vars, ctx) => {
- if (ctx?.prev) queryClient.setQueryData(qk.nodes(), ctx.prev);
+ if (ctx?.prev) {
+ for (const [queryKey, data] of ctx.prev) {
+ queryClient.setQueryData(queryKey, data);
+ }
+ }
  const message = _err?.response?.data?.error || 'Failed to delete node';
  notifyError(message);
  },

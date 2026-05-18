@@ -134,7 +134,7 @@ function NodeDetailsPage() {
  queryFn: () => nodesApi.checkApiKey(nodeId!),
  enabled: !!nodeId,
  staleTime: 30_000,
- refetchInterval: 30_000,
+ placeholderData: (prev) => prev,
  });
 
  const deployMutation = useMutation({
@@ -194,7 +194,6 @@ function NodeDetailsPage() {
  queryFn: () => nodesApi.getUnregisteredContainers(nodeId!),
  enabled: !!nodeId,
  staleTime: 60_000,
- refetchInterval: 30_000,
  });
 
  const canAssignNodes = useMemo(

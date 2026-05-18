@@ -237,6 +237,7 @@ function AdminServersPage() {
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminServers() });
+ queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) => {
  const message = error?.response?.data?.error || 'Failed to run server action';

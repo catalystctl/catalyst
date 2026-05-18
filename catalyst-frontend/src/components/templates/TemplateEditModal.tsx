@@ -122,6 +122,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
  const { data: nests = [] } = useQuery({
  queryKey: qk.nests(),
  queryFn: nestsApi.list,
+ staleTime: 5 * 60 * 1000,
  });
 
  const parsedPorts = useMemo(

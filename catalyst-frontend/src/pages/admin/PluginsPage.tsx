@@ -395,7 +395,6 @@ export default function PluginsPage() {
  queryKey: qk.adminPlugins(),
  queryFn: fetchPlugins,
  staleTime: 60_000,
- refetchInterval: 30_000,
  });
 
  const toggleMutation = useMutation({

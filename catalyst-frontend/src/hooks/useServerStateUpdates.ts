@@ -68,6 +68,11 @@ export function useServerStateUpdates() {
     // Invalidate queries in single batch
     q.invalidateQueries({ queryKey: qk.servers() });
 
+    // Invalidate server detail queries for each updated server
+    for (const serverId of updates.keys()) {
+      q.invalidateQueries({ queryKey: qk.server(serverId) });
+    }
+
     isProcessing.current = false;
   };
 
@@ -99,7 +104,7 @@ export function useServerStateUpdates() {
           scheduleProcess();
           // Invalidate file queries when server starts/stops (new files may be generated)
           if (state === 'running' || state === 'stopped' || state === 'offline') {
-            (queryClient as any).invalidateQueries({ queryKey: qk.files(serverId, '') });
+            (queryClient as any).invalidateQueries({ queryKey: qk.files(serverId) });
           }
           return;
         }
@@ -115,7 +120,13 @@ export function useServerStateUpdates() {
               return prev.filter((srv: any) => srv?.id !== serverId && srv?.uuid !== serverId);
             },
           );
+          // Remove all detail queries for the deleted server
           q.removeQueries({ queryKey: qk.server(serverId) });
+          q.removeQueries({ queryKey: qk.serverPermissions(serverId) });
+          q.removeQueries({ queryKey: qk.serverInvites(serverId) });
+          q.removeQueries({ queryKey: qk.serverAllocations(serverId) });
+          q.removeQueries({ queryKey: qk.backups(serverId) });
+          q.removeQueries({ queryKey: qk.tasks(serverId) });
           q.invalidateQueries({ queryKey: qk.servers() });
           return;
         }
@@ -123,9 +134,12 @@ export function useServerStateUpdates() {
         // Server lifecycle events — invalidate list and detail caches
         if (type === 'server_created' || type === 'server_updated' || type === 'server_suspended' || type === 'server_unsuspended') {
           const q = queryClient as any;
-          Promise.all([
-            q.invalidateQueries({ queryKey: qk.servers() }),
-          ]);
+          q.invalidateQueries({ queryKey: qk.servers() });
+          if (serverId) {
+            q.invalidateQueries({ queryKey: qk.server(serverId) });
+            q.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
+            q.invalidateQueries({ queryKey: qk.serverPermissions(serverId) });
+          }
           return;
         }
 
@@ -141,7 +155,7 @@ export function useServerStateUpdates() {
         }
 
         if (type === 'server_files_changed') {
-          (queryClient as any).invalidateQueries({ queryKey: qk.files(serverId, '') });
+          (queryClient as any).invalidateQueries({ queryKey: qk.files(serverId) });
         }
 
         // Task execution events
@@ -156,7 +170,7 @@ export function useServerStateUpdates() {
         if (type === 'mod_install_complete' || type === 'mod_uninstall_complete' || type === 'mod_update_complete') {
           const serverId = String(data.serverId ?? '');
           if (serverId) {
-            (queryClient as any).invalidateQueries({ queryKey: qk.modManagerInstalled(serverId, '') });
+            (queryClient as any).invalidateQueries({ queryKey: qk.modManagerInstalled(serverId) });
           }
         }
 
@@ -165,6 +179,20 @@ export function useServerStateUpdates() {
           const serverId = String(data.serverId ?? '');
           if (serverId) {
             (queryClient as any).invalidateQueries({ queryKey: qk.pluginManagerInstalled(serverId) });
+          }
+        }
+
+        // Alert events - invalidate alert queries
+        if (type === 'alert') {
+          (queryClient as any).invalidateQueries({ queryKey: qk.alerts() });
+          (queryClient as any).invalidateQueries({ queryKey: qk.alertStats() });
+        }
+
+        // Resource stats events - invalidate server metrics
+        if (type === 'resource_stats') {
+          const serverId = String(data.serverId ?? '');
+          if (serverId) {
+            (queryClient as any).invalidateQueries({ queryKey: qk.serverMetrics(serverId) });
           }
         }
       },

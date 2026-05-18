@@ -45,7 +45,7 @@ export function useBackups(serverId?: string, options?: { page?: number; limit?:
   }, [serverId, queryClient]);
 
   return useQuery({
-    queryKey: qk.backups(serverId!, page, limit),
+    queryKey: qk.backups(serverId!, { page, limit }),
     queryFn: () => backupsApi.list(serverId!, { page, limit }),
     enabled: Boolean(serverId),
     placeholderData: (prev) => prev,

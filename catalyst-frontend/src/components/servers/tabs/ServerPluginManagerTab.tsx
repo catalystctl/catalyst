@@ -298,7 +298,9 @@ export default function ServerPluginManagerTab({
  queryKey: qk.pluginManagerInstalled(serverId ?? ''),
  queryFn: () => pluginManagerApi.installed(serverId ?? ''),
  enabled: Boolean(serverId && pluginManagerConfig),
+ staleTime: 300_000,
  refetchInterval: 10000,
+ refetchIntervalInBackground: false,
  });
 
  // ── Mutations ──

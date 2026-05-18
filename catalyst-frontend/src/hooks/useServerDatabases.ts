@@ -15,6 +15,6 @@ export function useServerDatabases(serverId?: string) {
     },
     enabled: Boolean(serverId),
     placeholderData: (prev) => prev,
-    staleTime: 60_000,
+    staleTime: 5 * 60 * 1000,
   });
 }

@@ -62,6 +62,7 @@ export default function ServerImportModal({
  queryKey: qk.templates(),
  queryFn: () => templatesApi.list(),
  enabled: open,
+ staleTime: 5 * 60 * 1000,
  });
 
  // Fetch users for owner dropdown
@@ -69,6 +70,7 @@ export default function ServerImportModal({
  queryKey: qk.adminUsers(),
  queryFn: () => adminApi.listUsers(),
  enabled: open,
+ staleTime: 5 * 60 * 1000,
  });
  const users = usersData?.users ?? [];
 

@@ -241,14 +241,13 @@ function ServerDetailsPage() {
  queryKey: qk.serverPermissions(serverId ?? ''),
  queryFn: () => serversApi.permissions(serverId ?? ''),
  enabled: Boolean(serverId),
- staleTime: 60_000,
+ staleTime: 5 * 60 * 1000,
  });
  const { data: invites = [] } = useQuery<ServerInvite[]>({
  queryKey: qk.serverInvites(serverId ?? ''),
  queryFn: () => serversApi.listInvites(serverId ?? ''),
  enabled: Boolean(serverId),
- staleTime: 30_000,
- refetchInterval: 30_000,
+ staleTime: 10 * 60 * 1000,
  });
 
  // ── Allocations (admin) ──

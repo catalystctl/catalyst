@@ -57,6 +57,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  queryFn: () => serversApi.getSftpConnectionInfo(serverId, selectedTtl),
  staleTime: 30_000,
  refetchInterval: 15_000,
+ refetchIntervalInBackground: false,
  });
 
  const { data: tokens = [], isLoading: tokensLoading } = useQuery({

@@ -7,6 +7,7 @@ import { queryClient } from '@/lib/queryClient';
 import { serversApi } from '../../services/api/servers';
 import { nodesApi } from '../../services/api/nodes';
 import { adminApi } from '../../services/api/admin';
+import { useAccessibleNodes } from '../../hooks/useNodes';
 import { useAuthStore } from '../../stores/authStore';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { Button } from '@/components/ui/button';
@@ -38,23 +39,13 @@ function CloneServerDialog({ server, disabled = false }: Props) {
     user?.permissions?.includes('admin.write');
 
   // Fetch available nodes for the dropdown
-  const { data: accessibleNodesData } = useQuery({
-    queryKey: qk.accessibleNodes(),
-    queryFn: async () => {
-      const res = await fetch('/api/nodes/accessible', {
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error('Failed to fetch accessible nodes');
-      return res.json();
-    },
-    enabled: open,
-  });
+  const { data: accessibleNodesData } = useAccessibleNodes();
 
   const { data: allNodes } = useQuery({
     queryKey: qk.nodes(),
     queryFn: () => nodesApi.list(),
     enabled: open && isAdmin,
+    staleTime: 5 * 60 * 1000,
   });
 
   const availableNodes: Array<{ id: string; name: string }> =
@@ -67,6 +58,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
     queryKey: qk.adminUsers({ limit: 200 }),
     queryFn: () => adminApi.listUsers({ limit: 200 }),
     enabled: open && isAdmin,
+    staleTime: 5 * 60 * 1000,
   });
 
   const users = usersData?.users ?? [];

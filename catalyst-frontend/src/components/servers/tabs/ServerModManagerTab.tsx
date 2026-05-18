@@ -409,7 +409,9 @@ export default function ServerModManagerTab({
  queryKey: qk.modManagerInstalled(serverId ?? '', modTarget),
  queryFn: () => modManagerApi.installed(serverId ?? '', modTarget),
  enabled: Boolean(serverId && modManagerConfig),
+ staleTime: 300_000,
  refetchInterval: 10000,
+ refetchIntervalInBackground: false,
  });
 
  // ── Mutations ──

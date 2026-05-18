@@ -36,9 +36,7 @@ export function useAdminRoles() {
   return useQuery({
     queryKey: qk.adminRoles(),
     queryFn: adminApi.listRoles,
-    staleTime: 60_000,
-    refetchInterval: 30_000,
-    refetchIntervalInBackground: false,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

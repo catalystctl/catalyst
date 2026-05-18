@@ -64,6 +64,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
  onSettled: () => {
  optimisticInvalidate(queryClient, qk.server(serverId));
  optimisticInvalidate(queryClient, qk.servers());
+ optimisticInvalidate(queryClient, qk.adminServers());
  },
  });
 
@@ -80,6 +81,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
  onSettled: () => {
  optimisticInvalidate(queryClient, qk.server(serverId));
  optimisticInvalidate(queryClient, qk.servers());
+ optimisticInvalidate(queryClient, qk.adminServers());
  },
  });
 
@@ -96,6 +98,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
  onSettled: () => {
  optimisticInvalidate(queryClient, qk.server(serverId));
  optimisticInvalidate(queryClient, qk.servers());
+ optimisticInvalidate(queryClient, qk.adminServers());
  },
  });
 
@@ -113,6 +116,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
  onSettled: () => {
  optimisticInvalidate(queryClient, qk.server(serverId));
  optimisticInvalidate(queryClient, qk.servers());
+ optimisticInvalidate(queryClient, qk.adminServers());
  },
  onSuccess: () => {
  notifySuccess('Server killed');

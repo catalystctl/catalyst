@@ -721,8 +721,7 @@ export default function MigrationPage() {
  const { data: catalystNodes = [] } = useQuery<CatalystNodeOption[]>({
  queryKey: qk.catalystNodes(),
  queryFn: migrationApi.getCatalystNodes,
- staleTime: 30_000,
- refetchInterval: 30_000,
+ staleTime: 5 * 60 * 1000,
  });
 
  const onlineNodes = catalystNodes.filter(n => n.isOnline);

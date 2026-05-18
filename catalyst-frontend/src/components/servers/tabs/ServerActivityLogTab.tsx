@@ -35,6 +35,8 @@ export default function ServerActivityLogTab({ serverId }: Props) {
  enabled: Boolean(serverId),
  staleTime: 30_000,
  refetchInterval: 10_000,
+ refetchIntervalInBackground: false,
+ placeholderData: (prev) => prev,
  });
 
  const items = data?.data ?? [];

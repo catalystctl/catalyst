@@ -37,6 +37,7 @@ function FileTreeNode({ serverId, entry, depth, activePath, expanded, onToggle, 
  refetchOnWindowFocus: false,
  staleTime: 30_000,
  refetchInterval: 15_000,
+ refetchIntervalInBackground: false,
  });
  const childDirectories = useMemo(
  () => (data ? sortDirectories(data.files) : []),
@@ -144,6 +145,7 @@ function FileTree({ serverId, activePath, onNavigate }: Props) {
  refetchOnWindowFocus: false,
  staleTime: 30_000,
  refetchInterval: 15_000,
+ refetchIntervalInBackground: false,
  });
 
  const directories = useMemo(() => (data ? sortDirectories(data.files) : []), [data]);

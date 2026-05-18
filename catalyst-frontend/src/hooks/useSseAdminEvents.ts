@@ -100,10 +100,11 @@ export function useSseAdminEvents() {
 
         // ── Server Events ───────────────────────────────────────────
         if (type === 'server_created') {
+          const nodeId = String(data.nodeId ?? '');
           Promise.all([
             q.invalidateQueries({ queryKey: qk.adminServers() }),
             q.invalidateQueries({ queryKey: qk.servers() }),
-            q.invalidateQueries({ queryKey: qk.adminNodeAllocations(String(data.nodeId ?? '')) }),
+            ...(nodeId ? [q.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId) })] : []),
             q.invalidateQueries({ queryKey: qk.dashboardStats() }),
             q.invalidateQueries({ queryKey: qk.adminStats() }),
             q.invalidateQueries({ queryKey: qk.dashboardActivity() }),
@@ -113,10 +114,11 @@ export function useSseAdminEvents() {
 
         if (type === 'server_deleted') {
           const serverId = String(data.serverId ?? '');
+          const nodeId = String(data.nodeId ?? '');
           Promise.all([
             q.invalidateQueries({ queryKey: qk.adminServers() }),
             q.invalidateQueries({ queryKey: qk.servers() }),
-            q.invalidateQueries({ queryKey: qk.adminNodeAllocations(String(data.nodeId ?? '')) }),
+            ...(nodeId ? [q.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId) })] : []),
             q.invalidateQueries({ queryKey: qk.dashboardStats() }),
             q.invalidateQueries({ queryKey: qk.adminStats() }),
             q.invalidateQueries({ queryKey: qk.dashboardActivity() }),
@@ -124,17 +126,23 @@ export function useSseAdminEvents() {
           ]);
           if (serverId) {
             q.removeQueries({ queryKey: qk.server(serverId) });
+            q.removeQueries({ queryKey: qk.serverPermissions(serverId) });
+            q.removeQueries({ queryKey: qk.serverInvites(serverId) });
+            q.removeQueries({ queryKey: qk.serverAllocations(serverId) });
+            q.removeQueries({ queryKey: qk.backups(serverId) });
+            q.removeQueries({ queryKey: qk.tasks(serverId) });
           }
         }
 
         // ── Server Update/Suspend/Unsuspend Events ──────────────────
         if (type === 'server_updated' || type === 'server_suspended' || type === 'server_unsuspended') {
           const serverId = String(data.serverId ?? '');
+          const nodeId = String(data.nodeId ?? '');
           // Invalidate server detail and list caches
           Promise.all([
             q.invalidateQueries({ queryKey: qk.servers() }),
             q.invalidateQueries({ queryKey: qk.adminServers() }),
-            q.invalidateQueries({ queryKey: qk.adminNodeAllocations(String(data.nodeId ?? '')) }),
+            ...(nodeId ? [q.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId) })] : []),
             q.invalidateQueries({ queryKey: qk.dashboardStats() }),
             q.invalidateQueries({ queryKey: qk.adminStats() }),
             q.invalidateQueries({ queryKey: qk.dashboardActivity() }),
@@ -151,11 +159,12 @@ export function useSseAdminEvents() {
 
         // ── Node Events ─────────────────────────────────────────────
         if (type === 'node_created' || type === 'node_deleted') {
+          const nodeId = String(data.nodeId ?? '');
           Promise.all([
             q.invalidateQueries({ queryKey: qk.adminNodes() }),
             q.invalidateQueries({ queryKey: qk.nodes() }),
             q.invalidateQueries({ queryKey: qk.accessibleNodes() }),
-            q.invalidateQueries({ queryKey: qk.adminNodeAllocations(String(data.nodeId ?? '')) }),
+            ...(nodeId ? [q.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId) })] : []),
             q.invalidateQueries({ queryKey: qk.dashboardStats() }),
             q.invalidateQueries({ queryKey: qk.adminStats() }),
             q.invalidateQueries({ queryKey: qk.adminHealth() }),
@@ -163,25 +172,26 @@ export function useSseAdminEvents() {
             q.invalidateQueries({ queryKey: qk.dashboardResources() }),
           ]);
           if (type === 'node_deleted') {
-            const nodeId = String(data.nodeId ?? '');
             if (nodeId) {
               q.removeQueries({ queryKey: qk.node(nodeId) });
+              q.removeQueries({ queryKey: qk.nodeStats(nodeId) });
+              q.removeQueries({ queryKey: qk.nodeMetrics(nodeId) });
               q.removeQueries({ queryKey: qk.adminNodeAllocations(nodeId) });
             }
           }
         }
 
         if (type === 'node_updated') {
+          const nodeId = String(data.nodeId ?? '');
           Promise.all([
             q.invalidateQueries({ queryKey: qk.adminNodes() }),
             q.invalidateQueries({ queryKey: qk.nodes() }),
             q.invalidateQueries({ queryKey: qk.accessibleNodes() }),
-            q.invalidateQueries({ queryKey: qk.adminNodeAllocations(String(data.nodeId ?? '')) }),
+            ...(nodeId ? [q.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId) })] : []),
             q.invalidateQueries({ queryKey: qk.adminHealth() }),
             q.invalidateQueries({ queryKey: qk.locations() }),
             q.invalidateQueries({ queryKey: qk.clusterMetrics() }),
           ]);
-          const nodeId = String(data.nodeId ?? '');
           if (nodeId) {
             q.invalidateQueries({ queryKey: qk.node(nodeId) });
             q.invalidateQueries({ queryKey: qk.nodeStats(nodeId) });
@@ -203,6 +213,8 @@ export function useSseAdminEvents() {
               return [template, ...prev];
             },
           );
+          // Reconcile with server after optimistic insert
+          q.invalidateQueries({ queryKey: qk.templates() });
         }
 
         if (type === 'template_updated') {
@@ -226,6 +238,8 @@ export function useSseAdminEvents() {
             },
           );
           q.invalidateQueries({ queryKey: qk.template(templateId) });
+          // Reconcile with server after optimistic removal
+          q.invalidateQueries({ queryKey: qk.templates() });
         }
 
         // ── Role Events ─────────────────────────────────────────────
@@ -234,7 +248,12 @@ export function useSseAdminEvents() {
           // Role changes affect permissions — invalidate server-permissions and my-permissions
           if (type === 'role_updated') {
             Promise.all([
-              q.invalidateQueries({ queryKey: qk.serverPermissions('') }),
+              q.invalidateQueries({
+                predicate: (query: any) =>
+                  Array.isArray(query.queryKey) &&
+                  query.queryKey[0] === 'servers' &&
+                  query.queryKey[2] === 'permissions',
+              }),
               q.invalidateQueries({ queryKey: qk.myPermissions() }),
             ]);
           }
@@ -264,7 +283,12 @@ export function useSseAdminEvents() {
           Promise.all([
             q.invalidateQueries({ queryKey: qk.apiKeys() }),
             q.invalidateQueries({ queryKey: qk.profileApiKeys() }),
-            q.invalidateQueries({ queryKey: qk.nodeApiKey('') }),
+            q.invalidateQueries({
+              predicate: (query: any) =>
+                Array.isArray(query.queryKey) &&
+                query.queryKey[0] === 'nodes' &&
+                query.queryKey[2] === 'api-key',
+            }),
           ]);
         }
 
@@ -296,12 +320,18 @@ export function useSseAdminEvents() {
         // ── IP Pool Events ─────────────────────────────────────────
         if (type === 'ip_pool_created' || type === 'ip_pool_updated' || type === 'ip_pool_deleted') {
           const nodeId = String(data.nodeId ?? '');
-          Promise.all([
-            ...(nodeId ? [q.invalidateQueries({ queryKey: qk.adminIpPools(nodeId) })] : []),
-            q.invalidateQueries({ queryKey: qk.adminIpPools('') }),
-            q.invalidateQueries({ queryKey: qk.adminNodes() }),
-            q.invalidateQueries({ queryKey: qk.nodes() }),
-          ]);
+          if (nodeId) {
+            q.invalidateQueries({ queryKey: qk.adminIpPools(nodeId) });
+          } else {
+            // No nodeId in event — invalidate all IP pool queries via predicate
+            q.invalidateQueries({
+              predicate: (query: any) =>
+                Array.isArray(query.queryKey) &&
+                query.queryKey[0] === 'ip-pools',
+            });
+          }
+          q.invalidateQueries({ queryKey: qk.adminNodes() });
+          q.invalidateQueries({ queryKey: qk.nodes() });
         }
 
         // ── Settings Events ──────────────────────────────────────────
@@ -377,7 +407,7 @@ export function useSseAdminEvents() {
         if (type === 'mod_install_complete' || type === 'mod_uninstall_complete' || type === 'mod_update_complete') {
           const serverId = String(data.serverId ?? '');
           if (serverId) {
-            q.invalidateQueries({ queryKey: qk.modManagerInstalled(serverId, '') });
+            q.invalidateQueries({ queryKey: qk.modManagerInstalled(serverId) });
           }
         }
 
@@ -398,6 +428,8 @@ export function useSseAdminEvents() {
               return prev;
             },
           );
+          // Reconcile with server after optimistic prepend
+          q.invalidateQueries({ queryKey: qk.adminSystemErrors() });
         }
 
         // ── Plugin Manager Events ────────────────────────────────────

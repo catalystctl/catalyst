@@ -5,44 +5,52 @@
  * Convention: plural prefix for entity collections, then id, then sub-entity.
  *   e.g. ['servers'] → ['servers', id] → ['servers', id, 'variables']
  * This ensures invalidateQueries(['servers']) catches both list and detail queries.
+ *
+ * IMPORTANT: Parameterized keys use conditional inclusion — when no params are
+ * provided, the key is just the prefix (e.g. ['servers']), so prefix-based
+ * invalidation works correctly in TanStack Query v5.
+ *   qk.servers()              → ['servers']               — prefix matches ALL
+ *   qk.servers({status:'run'}) → ['servers', {status:'run'}] — specific filter
+ *   qk.server(id)             → ['servers', id]          — specific detail
  */
 export const qk = {
-  // ── Auth ──────────────────────────────────────────────────────────
-  session: () => ['session'] as const,
-
   // ── Server ──────────────────────────────────────────────────────────
-  servers: (filters?: Record<string, unknown>) => ['servers', filters ?? null] as const,
+  servers: (filters?: Record<string, unknown>) =>
+    filters ? ['servers', filters] as const : ['servers'] as const,
   server: (id: string) => ['servers', id] as const,
   serverPermissions: (id: string) => ['servers', id, 'permissions'] as const,
   serverInvites: (id: string) => ['servers', id, 'invites'] as const,
   serverAllocations: (id: string) => ['servers', id, 'allocations'] as const,
-  serverActivity: (id: string, params?: Record<string, unknown>) => ['servers', id, 'activity', params ?? null] as const,
+  serverActivity: (id: string, params?: Record<string, unknown>) =>
+    params ? ['servers', id, 'activity', params] as const : ['servers', id, 'activity'] as const,
   serverVariables: (id: string) => ['servers', id, 'variables'] as const,
 
   // ── Server Metrics ─────────────────────────────────────────────────
   serverMetrics: (serverId: string, params?: { hours?: number; limit?: number }) =>
-    ['servers', serverId, 'metrics', params ?? null] as const,
+    params ? ['servers', serverId, 'metrics', params] as const : ['servers', serverId, 'metrics'] as const,
 
   // ── Server Logs ────────────────────────────────────────────────────
   serverLogs: (serverId: string, initialLines?: number) =>
-    ['servers', serverId, 'logs', initialLines ?? null] as const,
+    initialLines ? ['servers', serverId, 'logs', initialLines] as const : ['servers', serverId, 'logs'] as const,
 
   // ── Backups ─────────────────────────────────────────────────────────
-  backups: (serverId: string, page = 1, limit = 10) =>
-    ['servers', serverId, 'backups', { page, limit }] as const,
+  backups: (serverId: string, params?: { page?: number; limit?: number }) =>
+    params ? ['servers', serverId, 'backups', params] as const : ['servers', serverId, 'backups'] as const,
 
   // ── Tasks ──────────────────────────────────────────────────────────
   tasks: (serverId: string) => ['servers', serverId, 'tasks'] as const,
 
   // ── Files ──────────────────────────────────────────────────────────
-  files: (serverId: string, path: string) => ['servers', serverId, 'files', path] as const,
+  files: (serverId: string, path?: string) =>
+    path ? ['servers', serverId, 'files', path] as const : ['servers', serverId, 'files'] as const,
 
   // ── Databases ──────────────────────────────────────────────────────
   serverDatabases: (serverId: string) => ['servers', serverId, 'databases'] as const,
   databaseHosts: () => ['database-hosts'] as const,
 
   // ── Nodes ───────────────────────────────────────────────────────────
-  nodes: (filters?: Record<string, unknown>) => ['nodes', filters ?? null] as const,
+  nodes: (filters?: Record<string, unknown>) =>
+    filters ? ['nodes', filters] as const : ['nodes'] as const,
   node: (id: string) => ['nodes', id] as const,
   nodeAssignments: (nodeId: string) => ['nodes', nodeId, 'assignments'] as const,
   nodeApiKey: (nodeId: string) => ['nodes', nodeId, 'api-key'] as const,
@@ -64,18 +72,21 @@ export const qk = {
   // ── Dashboard ───────────────────────────────────────────────────────
   dashboard: () => ['dashboard'] as const,
   dashboardStats: () => ['dashboard-stats'] as const,
-  clusterMetrics: (nodeIds?: string[]) => ['cluster-metrics', nodeIds ?? null] as const,
+  clusterMetrics: (nodeIds?: string[]) =>
+    nodeIds ? ['cluster-metrics', nodeIds] as const : ['cluster-metrics'] as const,
   clusterHistoricalMetrics: (range: { hours: number; limit: number }, nodeIds: string[]) =>
     ['cluster-historical-metrics', range, nodeIds] as const,
-  dashboardActivity: (params?: Record<string, unknown>) => ['dashboard-activity', params ?? null] as const,
+  dashboardActivity: (params?: Record<string, unknown>) =>
+    params ? ['dashboard-activity', params] as const : ['dashboard-activity'] as const,
   dashboardResources: () => ['dashboard-resources'] as const,
 
   // ── Alerts ──────────────────────────────────────────────────────────
   alerts: (params?: { filterResolved?: boolean; serverId?: string; scope?: string }) =>
-    ['alerts', params ?? null] as const,
-  alertRules: (params?: Record<string, unknown>) => ['alert-rules', params ?? null] as const,
+    params ? ['alerts', params] as const : ['alerts'] as const,
+  alertRules: (params?: Record<string, unknown>) =>
+    params ? ['alert-rules', params] as const : ['alert-rules'] as const,
   alertStats: (params?: { scope?: string; serverId?: string }) =>
-    ['alerts-stats', params ?? null] as const,
+    params ? ['alerts-stats', params] as const : ['alerts-stats'] as const,
 
   // ── API Keys ─────────────────────────────────────────────────────────
   apiKeys: () => ['api-keys'] as const,
@@ -113,25 +124,32 @@ export const qk = {
     ['servers', serverId, 'mod-manager', 'search', provider, query, game, page] as const,
   modManagerVersions: (serverId: string, provider: string, game: string, query: string, page: number) =>
     ['servers', serverId, 'mod-manager', 'versions', provider, game, query, page] as const,
-  modManagerInstalled: (serverId: string, target: string) =>
-    ['servers', serverId, 'mod-manager', 'installed', target] as const,
+  modManagerInstalled: (serverId: string, target?: string) =>
+    target ? ['servers', serverId, 'mod-manager', 'installed', target] as const : ['servers', serverId, 'mod-manager', 'installed'] as const,
 
   // ── Admin ───────────────────────────────────────────────────────────
   adminStats: () => ['admin-stats'] as const,
   adminHealth: () => ['admin-health'] as const,
-  adminAuditLogs: (params?: Record<string, unknown>) => ['admin-audit-logs', params ?? null] as const,
-  adminUsers: (params?: Record<string, unknown>) => ['admin-users', params ?? null] as const,
-  adminNodes: (params?: Record<string, unknown>) => ['admin-nodes', params ?? null] as const,
-  adminServers: (params?: Record<string, unknown>) => ['admin-servers', params ?? null] as const,
-  adminPlugins: (params?: Record<string, unknown>) => ['admin-plugins', params ?? null] as const,
+  adminAuditLogs: (params?: Record<string, unknown>) =>
+    params ? ['admin-audit-logs', params] as const : ['admin-audit-logs'] as const,
+  adminUsers: (params?: Record<string, unknown>) =>
+    params ? ['admin-users', params] as const : ['admin-users'] as const,
+  adminNodes: (params?: Record<string, unknown>) =>
+    params ? ['admin-nodes', params] as const : ['admin-nodes'] as const,
+  adminServers: (params?: Record<string, unknown>) =>
+    params ? ['admin-servers', params] as const : ['admin-servers'] as const,
+  adminPlugins: (params?: Record<string, unknown>) =>
+    params ? ['admin-plugins', params] as const : ['admin-plugins'] as const,
   adminPlugin: (name: string) => ['admin-plugin', name] as const,
   adminRoles: () => ['admin-roles'] as const,
   adminSmtp: () => ['admin-smtp'] as const,
   adminModManager: () => ['admin-mod-manager'] as const,
   adminDnsSettings: () => ['admin-dns-settings'] as const,
   adminSecuritySettings: () => ['admin-security-settings'] as const,
-  adminAuthLockouts: (params?: Record<string, unknown>) => ['admin-auth-lockouts', params ?? null] as const,
-  adminSystemErrors: (params?: Record<string, unknown>) => ['admin-system-errors', params ?? null] as const,
+  adminAuthLockouts: (params?: Record<string, unknown>) =>
+    params ? ['admin-auth-lockouts', params] as const : ['admin-auth-lockouts'] as const,
+  adminSystemErrors: (params?: Record<string, unknown>) =>
+    params ? ['admin-system-errors', params] as const : ['admin-system-errors'] as const,
   adminDatabaseHosts: () => ['admin-database-hosts'] as const,
   adminDatabaseHostPing: (hostId: string) => ['admin-database-host-ping', hostId] as const,
   adminDbStatus: () => ['admin-db-status'] as const,
@@ -148,7 +166,7 @@ export const qk = {
   profileSessions: () => ['profile-sessions'] as const,
   profileSsoAccounts: () => ['profile-sso-accounts'] as const,
   profileAuditLog: (limit?: number, offset?: number) =>
-    ['profile-audit-log', limit ?? null, offset ?? null] as const,
+    (limit || offset) ? ['profile-audit-log', limit ?? null, offset ?? null] as const : ['profile-audit-log'] as const,
 
   // ── Migration ────────────────────────────────────────────────────────
   migrationJobs: () => ['migration-jobs'] as const,
