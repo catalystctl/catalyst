@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
-import { motion, AnimatePresence, type Variants } from 'framer-motion';
+import { cn } from '@/lib/utils';
 import {
   ArrowRightLeft,
   Play,
@@ -31,7 +31,6 @@ import {
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
-import { Card } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Checkbox } from '../../components/ui/checkbox';
 import {
@@ -41,6 +40,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select';
+import TabHeader from '../../components/servers/tabs/TabHeader';
+import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import StatGrid from '../../components/servers/tabs/StatGrid';
+import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
+import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
+import TabErrorState from '../../components/servers/tabs/TabErrorState';
 import { migrationApi } from '../../services/api/migration';
 import { notifySuccess, notifyError, notifyInfo } from '../../utils/notify';
 import type {
@@ -52,25 +57,7 @@ import type {
   CatalystNodeOption,
   PterodactylServerInfo,
 } from '../../types/migration';
-import { MIGRATION_PHASES, PHASE_STATUS_COLORS } from '../../types/migration';
-
-// ── Animation Variants ──
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.04, delayChildren: 0.05 },
-  },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { type: 'spring', stiffness: 300, damping: 24 },
-  },
-};
+import { MIGRATION_PHASES } from '../../types/migration';
 
 // ── Status helpers ──
 const statusConfig: Record<string, { label: string; variant: 'default' | 'success' | 'destructive' | 'secondary' | 'outline'; icon: any }> = {
@@ -100,9 +87,9 @@ function StatusBadge({ status }: { status: string }) {
 
 const stepStatusConfig: Record<string, { label: string; color: string; icon: any; bg: string }> = {
   pending: { label: 'Pending', color: 'text-muted-foreground', icon: Clock, bg: '' },
-  running: { label: 'Running', color: 'text-info', icon: Loader2, bg: 'bg-info/50/10' },
+  running: { label: 'Running', color: 'text-primary', icon: Loader2, bg: 'bg-primary/10' },
   completed: { label: 'Done', color: 'text-success', icon: CheckCircle2, bg: '' },
-  failed: { label: 'Failed', color: 'text-destructive', icon: XCircle, bg: 'bg-destructive/50/10' },
+  failed: { label: 'Failed', color: 'text-destructive', icon: XCircle, bg: 'bg-destructive/10' },
   skipped: { label: 'Skipped', color: 'text-muted-foreground', icon: Clock, bg: '' },
 };
 
@@ -182,17 +169,13 @@ function ProgressBar({ progress }: { progress: { total: number; completed: numbe
       </div>
       <div className="h-2 w-full rounded-full bg-surface-2 overflow-hidden">
         <div className="flex h-full">
-          <motion.div
-            className="h-full bg-success/50"
-            initial={{ width: 0 }}
-            animate={{ width: `${completedPct}%` }}
-            transition={{ duration: 0.5 }}
+          <div
+            className="h-full bg-success/50 transition-all duration-500"
+            style={{ width: `${completedPct}%` }}
           />
-          <motion.div
-            className="h-full bg-destructive/50"
-            initial={{ width: 0 }}
-            animate={{ width: `${failedPct}%` }}
-            transition={{ duration: 0.5 }}
+          <div
+            className="h-full bg-destructive/50 transition-all duration-500"
+            style={{ width: `${failedPct}%` }}
           />
         </div>
       </div>
@@ -218,10 +201,8 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
         const StepIcon = sc.icon;
         const showError = step.status === 'failed' && errorStepId === step.id;
         return (
-          <motion.div
+          <div
             key={step.id}
-            initial={{ opacity: 0, x: -4 }}
-            animate={{ opacity: 1, x: 0 }}
             className={`${sc.bg} rounded px-2 py-1 -mx-2`}
           >
             <div className="flex items-center gap-2">
@@ -249,7 +230,7 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
                   </button>
                   <button
                     onClick={() => onRetry(step.id)}
-                    className="text-xs text-info hover:text-blue-300"
+                    className="text-xs text-primary hover:text-primary/80"
                     title="Retry"
                   >
                     <RefreshCw className="h-3 w-3" />
@@ -261,17 +242,13 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
               )}
             </div>
             {showError && step.error && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="mt-1 pl-5"
-              >
-                <p className="text-xs text-destructive bg-red-950/40 border border-red-800/30 rounded px-2 py-1.5 break-all">
+              <div className="mt-1 pl-5">
+                <p className="text-xs text-destructive bg-danger/5 border border-danger/20 rounded px-2 py-1.5 break-all">
                   {step.error}
                 </p>
-              </motion.div>
+              </div>
             )}
-          </motion.div>
+          </div>
         );
       })}
       {steps.length > 5 && failedSteps.length === 0 && (
@@ -347,7 +324,7 @@ function WhatGetsMigratedCard() {
   ];
 
   return (
-    <Card className="p-5 bg-card border border-border">
+    <ServerTabCard>
       <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
         <ArrowRightLeft className="h-4 w-4 text-primary" />
         What Gets Migrated
@@ -373,7 +350,7 @@ function WhatGetsMigratedCard() {
           </div>
         ))}
       </div>
-    </Card>
+    </ServerTabCard>
   );
 }
 
@@ -499,11 +476,7 @@ function NodeMappingSection({
   }, [servers]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, height: 0 }}
-      animate={{ opacity: 1, height: 'auto' }}
-      className="space-y-2"
-    >
+    <div className="space-y-2">
       <label className="text-sm font-medium text-foreground">
         Map Pterodactyl Nodes to Catalyst Nodes
       </label>
@@ -538,7 +511,7 @@ function NodeMappingSection({
                       setNodeMappings(prev => ({ ...prev, [String(node.id)]: v }))
                     }
                   >
-                    <SelectTrigger className="w-48 bg-surface-2 border-border text-foreground text-xs h-8">
+                    <SelectTrigger className="w-48 bg-card border-border/40 text-foreground text-xs h-8">
                       <SelectValue placeholder="Select target node" />
                     </SelectTrigger>
                     <SelectContent>
@@ -556,11 +529,7 @@ function NodeMappingSection({
                 </div>
               </div>
               {expanded && nodeServers.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="border-t border-border/50 bg-surface-1/50"
-                >
+                <div className="border-t border-border/50 bg-surface-1/50">
                   <div className="px-4 py-2">
                     <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-2">
                       Servers on this node ({nodeServers.length})
@@ -580,13 +549,13 @@ function NodeMappingSection({
                       ))}
                     </div>
                   </div>
-                </motion.div>
+                </div>
               )}
             </div>
           );
         })}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -605,11 +574,7 @@ function ServerMappingList({
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, height: 0 }}
-      animate={{ opacity: 1, height: 'auto' }}
-      className="space-y-2"
-    >
+    <div className="space-y-2">
       <label className="text-sm font-medium text-foreground">
         Map Pterodactyl Servers to Catalyst Nodes
       </label>
@@ -662,7 +627,7 @@ function ServerMappingList({
                       setServerMappings(prev => ({ ...prev, [String(server.id)]: v }))
                     }
                   >
-                    <SelectTrigger className="w-48 bg-surface-2 border-border text-foreground text-xs h-8">
+                    <SelectTrigger className="w-48 bg-card border-border/40 text-foreground text-xs h-8">
                       <SelectValue placeholder="Select target node" />
                     </SelectTrigger>
                     <SelectContent>
@@ -680,19 +645,15 @@ function ServerMappingList({
                 </div>
               </div>
               {expanded && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="px-4 pb-3 border-t border-border/50 bg-surface-1/50"
-                >
+                <div className="px-4 pb-3 border-t border-border/50 bg-surface-1/50">
                   <ServerImportSummary server={server} />
-                </motion.div>
+                </div>
               )}
             </div>
           );
         })}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -704,11 +665,7 @@ function BackupSlotWarnings({ serversList }: { serversList?: Array<{ id: number;
   if (noSlotServers.length === 0 && fullSlotServers.length === 0) return null;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, height: 0 }}
-      animate={{ opacity: 1, height: 'auto' }}
-      className="space-y-2"
-    >
+    <div className="space-y-2">
       {noSlotServers.length > 0 && (
         <div className="rounded-lg border border-warning/50 bg-warning/30 p-3">
           <div className="flex items-center gap-2 text-warning">
@@ -739,7 +696,7 @@ function BackupSlotWarnings({ serversList }: { serversList?: Array<{ id: number;
           </p>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }
 
@@ -977,574 +934,506 @@ export default function MigrationPage() {
     return () => clearInterval(timer);
   }, [activeJob?.startedAt, activeJob?.status]);
 
+  const tabs = [
+    { id: 'new' as const, label: 'New Migration' },
+    { id: 'progress' as const, label: 'Active Migration', show: !!activeJobId },
+    { id: 'history' as const, label: 'History' },
+  ].filter(t => t.show !== false);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
-            <ArrowRightLeft className="h-6 w-6 text-primary" />
-            Migration
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Migrate servers from Pterodactyl to Catalyst
-          </p>
-        </div>
-      </div>
+      <TabHeader
+        icon={ArrowRightLeft}
+        title="Migration"
+        description="Migrate servers from Pterodactyl to Catalyst"
+      />
 
       {/* Tab Bar */}
-      <div className="flex gap-1 border-b border-border pb-px">
-        {[
-          { id: 'new' as const, label: 'New Migration' },
-          { id: 'progress' as const, label: 'Active Migration', show: !!activeJobId },
-          { id: 'history' as const, label: 'History' },
-        ]
-          .filter(t => t.show !== false)
-          .map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 text-sm font-medium transition-colors relative ${
-                activeTab === tab.id
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {tab.label}
-              {activeTab === tab.id && (
-                <motion.div
-                  layoutId="migration-tab"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
-                />
-              )}
-            </button>
-          ))}
+      <div className="inline-flex gap-1 rounded-xl border border-border/40 bg-surface-2/40 p-1.5 shadow-[inset_0_1px_0_hsl(var(--card)/0.5)]">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              'px-3 py-1.5 text-sm font-medium rounded-lg transition-all',
+              activeTab === tab.id
+                ? 'bg-primary text-primary-foreground shadow-[0_0_8px_-1px_hsl(var(--primary)/0.25)]'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      <AnimatePresence mode="wait">
-        {/* TAB: New Migration */}
-        {activeTab === 'new' && (
-          <motion.div
-            key="new"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-          >
-            <WhatGetsMigratedCard />
-            <Card className="p-6 bg-card border border-border mt-6">
-              <h2 className="text-lg font-semibold text-foreground mb-1">Connect to Pterodactyl</h2>
-              <p className="text-sm text-muted-foreground mb-6">
-                Enter your Pterodactyl panel URL and Application API key. After connecting,
-                you will map Pterodactyl nodes or servers to <strong>existing online Catalyst nodes</strong>.
-              </p>
+      {/* TAB: New Migration */}
+      {activeTab === 'new' && (
+        <div>
+          <WhatGetsMigratedCard />
+          <ServerTabCard className="mt-5">
+            <h2 className="text-lg font-semibold text-foreground mb-1">Connect to Pterodactyl</h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              Enter your Pterodactyl panel URL and Application API key. After connecting,
+              you will map Pterodactyl nodes or servers to <strong>existing online Catalyst nodes</strong>.
+            </p>
 
-              <div className="space-y-4">
-                {/* Panel URL */}
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">Panel URL</label>
+            <div className="space-y-4">
+              {/* Panel URL */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">Panel URL</label>
+                <Input
+                  value={panelUrl}
+                  onChange={(e) => setPanelUrl(e.target.value)}
+                  placeholder="http://panel.example.com"
+                  className="border-border/40 bg-card"
+                />
+              </div>
+
+              {/* API Key */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">Application API Key</label>
+                <div className="relative">
                   <Input
-                    value={panelUrl}
-                    onChange={(e) => setPanelUrl(e.target.value)}
-                    placeholder="http://panel.example.com"
-                    className="bg-surface-1 border-border text-foreground"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    type={showKey ? 'text' : 'password'}
+                    placeholder="ptla_..."
+                    className="border-border/40 bg-card pr-10"
                   />
-                </div>
-
-                {/* API Key */}
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">Application API Key</label>
-                  <div className="relative">
-                    <Input
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      type={showKey ? 'text' : 'password'}
-                      placeholder="ptla_..."
-                      className="bg-surface-1 border-border text-foreground pr-10"
-                    />
-                    <button
-                      onClick={() => setShowKey(!showKey)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Client API Key */}
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">
-                    Client API Key{" "}
-                    <span className="text-muted-foreground font-normal">(for file migration)</span>
-                  </label>
-                  <div className="relative">
-                    <Input
-                      value={clientApiKey}
-                      onChange={(e) => setClientApiKey(e.target.value)}
-                      type={showClientKey ? 'text' : 'password'}
-                      placeholder="ptlc_..."
-                      className="bg-surface-1 border-border text-foreground pr-10"
-                    />
-                    <button
-                      onClick={() => setShowClientKey(!showClientKey)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Required for backup creation and file migration. Create in Pterodactyl → API Credentials → Client API.
-                  </p>
-                </div>
-
-                {/* Test Result */}
-                {testResult && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    className={`rounded-lg border p-4 ${
-                      testResult.success
-                        ? 'border-success/50 bg-success/30'
-                        : 'border-red-800/50 bg-red-950/30'
-                    }`}
+                  <button
+                    onClick={() => setShowKey(!showKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
-                    <div className="flex items-center gap-2 mb-2">
-                      {testResult.success ? (
-                        <CheckCircle2 className="h-4 w-4 text-success" />
-                      ) : (
-                        <XCircle className="h-4 w-4 text-destructive" />
-                      )}
-                      <span className={`text-sm font-medium ${testResult.success ? 'text-success' : 'text-destructive'}`}>
-                        {testResult.success ? `Connected (v${testResult.version || '1.x'})` : 'Connection Failed'}
-                      </span>
-                    </div>
-                    {!testResult.success ? (
-                      <p className="text-sm text-destructive">{testResult.error}</p>
-                    ) : testResult.stats ? (
-                      <div className="grid grid-cols-5 gap-3 mt-2">
-                        {[
-                          { label: 'Locations', value: testResult.stats.locations, icon: MapPin },
-                          { label: 'Nodes', value: testResult.stats.nodes, icon: Server },
-                          { label: 'Nests', value: testResult.stats.nests, icon: Shield },
-                          { label: 'Users', value: testResult.stats.users, icon: Users },
-                          { label: 'Servers', value: testResult.stats.servers, icon: Server },
-                        ].map(stat => (
-                          <div key={stat.label} className="text-center">
-                            <stat.icon className="h-4 w-4 text-muted-foreground mx-auto mb-1" />
-                            <div className="text-lg font-semibold text-foreground">{stat.value}</div>
-                            <div className="text-xs text-muted-foreground">{stat.label}</div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </motion.div>
-                )}
-
-
-                {/* Backup slot warnings */}
-                <BackupSlotWarnings serversList={testResult?.serversList} />
-
-                {/* Migration Scope (only shown after successful test) */}
-                {testResult?.success && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    className="space-y-3"
-                  >
-                    <label className="text-sm font-medium text-foreground">Migration Scope</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {([
-                        { value: 'full' as const, label: 'Full Migration', desc: 'Map all Ptero nodes to Catalyst nodes' },
-                        { value: 'node' as const, label: 'Node by Node', desc: 'Select which Ptero nodes to migrate' },
-                        { value: 'server' as const, label: 'Server by Server', desc: 'Map individual servers to Catalyst nodes' },
-                      ]).map(opt => (
-                        <button
-                          key={opt.value}
-                          onClick={() => {
-                            setMigrationScope(opt.value);
-                            setNodeMappings({});
-                            setServerMappings({});
-                          }}
-                          className={`rounded-lg border p-3 text-left transition-colors ${
-                            migrationScope === opt.value
-                              ? 'border-primary bg-primary/10'
-                              : 'border-border bg-surface-1 hover:border-border'
-                          }`}
-                        >
-                          <div className={`text-sm font-medium ${migrationScope === opt.value ? 'text-foreground' : 'text-foreground'}`}>
-                            {opt.label}
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">{opt.desc}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Online nodes warning */}
-                {testResult?.success && onlineNodes.length === 0 && (
-                  <div className="rounded-lg border border-warning/50 bg-warning/30 p-3">
-                    <div className="flex items-center gap-2 text-warning">
-                      <WifiOff className="h-4 w-4" />
-                      <span className="text-sm font-medium">No online Catalyst nodes</span>
-                    </div>
-                    <p className="text-sm text-warning/80 mt-1">
-                      Migration requires at least one Catalyst node to be online. Start the agent on your nodes first.
-                    </p>
-                  </div>
-                )}
-
-                {/* Node Mapping (full / node scope) */}
-                {testResult?.success && (migrationScope === 'full' || migrationScope === 'node')
-                  && testResult.nodesList && testResult.nodesList.length > 0 && onlineNodes.length > 0 && (
-                  <NodeMappingSection
-                    nodes={testResult.nodesList}
-                    servers={testResult.serversList || []}
-                    nodeMappings={nodeMappings}
-                    setNodeMappings={setNodeMappings}
-                    onlineNodes={onlineNodes}
-                    scope={migrationScope}
-                  />
-                )}
-
-                {/* Server Mapping (server scope) */}
-                {testResult?.success && migrationScope === 'server'
-                  && testResult.serversList && testResult.serversList.length > 0 && onlineNodes.length > 0 && (
-                  <ServerMappingList
-                    servers={testResult.serversList}
-                    serverMappings={serverMappings}
-                    setServerMappings={setServerMappings}
-                    onlineNodes={onlineNodes}
-                  />
-                )}
-
-                {/* Mapping summary */}
-                {testResult?.success && onlineNodes.length > 0 && (
-                  <div className="text-xs text-muted-foreground space-y-1">
-                    {migrationScope === 'server' && (
-                      <p>{Object.keys(serverMappings).length} of {testResult.serversList?.length || 0} servers mapped</p>
-                    )}
-                    {(migrationScope === 'full' || migrationScope === 'node') && (
-                      <p>{Object.keys(nodeMappings).length} of {
-                        migrationScope === 'full' ? testResult.nodesList?.length || 0 : 'selected'
-                      } nodes mapped</p>
-                    )}
-                  </div>
-                )}
-
-                {/* Actions */}
-                <div className="flex gap-3 pt-2">
-                  <Button
-                    onClick={() => testMutation.mutate()}
-                    disabled={!panelUrl || !apiKey || testing}
-                    variant="outline"
-                    className="gap-2"
-                  >
-                    {testing ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <ExternalLink className="h-4 w-4" />
-                    )}
-                    Test Connection
-                  </Button>
-                  <Button
-                    onClick={() => startMutation.mutate()}
-                    disabled={
-                      !testResult?.success ||
-                      startMutation.isPending ||
-                      onlineNodes.length === 0 ||
-                      (migrationScope === 'server' && Object.keys(serverMappings).length === 0) ||
-                      ((migrationScope === 'full') && Object.keys(nodeMappings).length !== (testResult.nodesList?.length || 0)) ||
-                      (migrationScope === 'node' && Object.keys(nodeMappings).length === 0)
-                    }
-                    className="gap-2"
-                  >
-                    {startMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Play className="h-4 w-4" />
-                    )}
-                    Start Migration
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          </motion.div>
-        )}
-
-        {/* TAB: Active Migration Progress */}
-        {activeTab === 'progress' && activeJob && (
-          <motion.div
-            key="progress"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            className="space-y-6"
-          >
-            {/* Status Header */}
-            <Card className="p-6 bg-card border border-border">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <StatusBadge status={activeJob.status} />
-                  <div>
-                    <h2 className="text-lg font-semibold text-foreground">Migration Progress</h2>
-                    <p className="text-sm text-muted-foreground">
-                      {activeJob.sourceUrl}
-                      {activeJob.currentPhase && (
-                        <span className="text-muted-foreground">
-                          {' '}— Phase: <span className="text-foreground">{activeJob.currentPhase}</span>
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  {activeJob.status === 'running' && (
-                    <Button
-                      onClick={() => pauseMutation.mutate()}
-                      disabled={pauseMutation.isPending}
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5"
-                    >
-                      <Pause className="h-3.5 w-3.5" />
-                      Pause
-                    </Button>
-                  )}
-                  {activeJob.status === 'paused' && (
-                    <Button
-                      onClick={() => resumeMutation.mutate()}
-                      disabled={resumeMutation.isPending}
-                      size="sm"
-                      className="gap-1.5"
-                    >
-                      <Play className="h-3.5 w-3.5" />
-                      Resume
-                    </Button>
-                  )}
-                  {(activeJob.status === 'running' || activeJob.status === 'paused') && (
-                    <Button
-                      onClick={() => cancelMutation.mutate()}
-                      disabled={cancelMutation.isPending}
-                      variant="destructive"
-                      size="sm"
-                      className="gap-1.5"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                      Cancel
-                    </Button>
-                  )}
+                    <Eye className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
 
-              {/* Progress Bar */}
-              <ProgressBar progress={activeJob.progress} />
+              {/* Client API Key */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">
+                  Client API Key{" "}
+                  <span className="text-muted-foreground font-normal">(for file migration)</span>
+                </label>
+                <div className="relative">
+                  <Input
+                    value={clientApiKey}
+                    onChange={(e) => setClientApiKey(e.target.value)}
+                    type={showClientKey ? 'text' : 'password'}
+                    placeholder="ptlc_..."
+                    className="border-border/40 bg-card pr-10"
+                  />
+                  <button
+                    onClick={() => setShowClientKey(!showClientKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Required for backup creation and file migration. Create in Pterodactyl → API Credentials → Client API.
+                </p>
+              </div>
 
-              {/* Current step detail */}
-              {['running', 'validating'].includes(activeJob.status) && activeJob.currentPhase && (() => {
-                const phaseSteps = stepsByPhase[activeJob.currentPhase] || [];
-                const runningStep = phaseSteps.find(s => s.status === 'running');
-                if (!runningStep) return null;
-                return (
-                  <div className="mt-3 flex items-center gap-2 text-xs text-info">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    <span>
-                      {stepLabel(runningStep.action, runningStep.metadata as Record<string, unknown>)}
-                      {runningStep.sourceId && <span className="text-info/60"> #{runningStep.sourceId}</span>}
+              {/* Test Result */}
+              {testResult && (
+                <div className={`rounded-lg border p-4 ${
+                  testResult.success
+                    ? 'border-success/30 bg-success/5'
+                    : 'border-danger/30 bg-danger/5'
+                }`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    {testResult.success ? (
+                      <CheckCircle2 className="h-4 w-4 text-success" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-destructive" />
+                    )}
+                    <span className={`text-sm font-medium ${testResult.success ? 'text-success' : 'text-destructive'}`}>
+                      {testResult.success ? `Connected (v${testResult.version || '1.x'})` : 'Connection Failed'}
                     </span>
                   </div>
-                );
-              })()}
-              {activeJob.error && (
-                <div className="mt-4 rounded-lg border border-red-800/50 bg-red-950/30 p-3">
-                  <div className="flex items-center gap-2 text-destructive">
-                    <AlertTriangle className="h-4 w-4" />
-                    <span className="text-sm font-medium">Error</span>
-                  </div>
-                  <p className="text-sm text-destructive/80 mt-1">{activeJob.error}</p>
+                  {!testResult.success ? (
+                    <p className="text-sm text-destructive">{testResult.error}</p>
+                  ) : testResult.stats ? (
+                    <StatGrid
+                      items={[
+                        { label: 'Locations', value: testResult.stats.locations },
+                        { label: 'Nodes', value: testResult.stats.nodes },
+                        { label: 'Nests', value: testResult.stats.nests },
+                        { label: 'Users', value: testResult.stats.users },
+                        { label: 'Servers', value: testResult.stats.servers },
+                      ]}
+                      columns={3}
+                      className="mt-2"
+                    />
+                  ) : null}
                 </div>
               )}
 
-              {/* Timing & Stats */}
-              <div className="flex gap-6 mt-4 text-xs text-muted-foreground">
-                <span>Started: {activeJob.startedAt ? new Date(activeJob.startedAt).toLocaleString() : '—'}</span>
-                {['running', 'validating'].includes(activeJob.status) && elapsed > 0 && (
-                  <span className="text-muted-foreground font-medium">Elapsed: {formatDuration(elapsed)}</span>
+
+              {/* Backup slot warnings */}
+              <BackupSlotWarnings serversList={testResult?.serversList} />
+
+              {/* Migration Scope (only shown after successful test) */}
+              {testResult?.success && (
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-foreground">Migration Scope</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { value: 'full' as const, label: 'Full Migration', desc: 'Map all Ptero nodes to Catalyst nodes' },
+                      { value: 'node' as const, label: 'Node by Node', desc: 'Select which Ptero nodes to migrate' },
+                      { value: 'server' as const, label: 'Server by Server', desc: 'Map individual servers to Catalyst nodes' },
+                    ]).map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => {
+                          setMigrationScope(opt.value);
+                          setNodeMappings({});
+                          setServerMappings({});
+                        }}
+                        className={`rounded-lg border p-3 text-left transition-colors ${
+                          migrationScope === opt.value
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-surface-1 hover:border-border'
+                        }`}
+                      >
+                        <div className="text-sm font-medium text-foreground">
+                          {opt.label}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">{opt.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Online nodes warning */}
+              {testResult?.success && onlineNodes.length === 0 && (
+                <TabErrorState
+                  message="No online Catalyst nodes detected. Migration requires at least one Catalyst node to be online. Start the agent on your nodes first."
+                />
+              )}
+
+              {/* Node Mapping (full / node scope) */}
+              {testResult?.success && (migrationScope === 'full' || migrationScope === 'node')
+                && testResult.nodesList && testResult.nodesList.length > 0 && onlineNodes.length > 0 && (
+                <NodeMappingSection
+                  nodes={testResult.nodesList}
+                  servers={testResult.serversList || []}
+                  nodeMappings={nodeMappings}
+                  setNodeMappings={setNodeMappings}
+                  onlineNodes={onlineNodes}
+                  scope={migrationScope}
+                />
+              )}
+
+              {/* Server Mapping (server scope) */}
+              {testResult?.success && migrationScope === 'server'
+                && testResult.serversList && testResult.serversList.length > 0 && onlineNodes.length > 0 && (
+                <ServerMappingList
+                  servers={testResult.serversList}
+                  serverMappings={serverMappings}
+                  setServerMappings={setServerMappings}
+                  onlineNodes={onlineNodes}
+                />
+              )}
+
+              {/* Mapping summary */}
+              {testResult?.success && onlineNodes.length > 0 && (
+                <div className="text-xs text-muted-foreground space-y-1">
+                  {migrationScope === 'server' && (
+                    <p>{Object.keys(serverMappings).length} of {testResult.serversList?.length || 0} servers mapped</p>
+                  )}
+                  {(migrationScope === 'full' || migrationScope === 'node') && (
+                    <p>{Object.keys(nodeMappings).length} of {
+                      migrationScope === 'full' ? testResult.nodesList?.length || 0 : 'selected'
+                    } nodes mapped</p>
+                  )}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-2">
+                <Button
+                  onClick={() => testMutation.mutate()}
+                  disabled={!panelUrl || !apiKey || testing}
+                  variant="outline"
+                  className="gap-2"
+                >
+                  {testing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ExternalLink className="h-4 w-4" />
+                  )}
+                  Test Connection
+                </Button>
+                <Button
+                  onClick={() => startMutation.mutate()}
+                  disabled={
+                    !testResult?.success ||
+                    startMutation.isPending ||
+                    onlineNodes.length === 0 ||
+                    (migrationScope === 'server' && Object.keys(serverMappings).length === 0) ||
+                    ((migrationScope === 'full') && Object.keys(nodeMappings).length !== (testResult.nodesList?.length || 0)) ||
+                    (migrationScope === 'node' && Object.keys(nodeMappings).length === 0)
+                  }
+                  className="gap-2 shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)]"
+                >
+                  {startMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
+                  Start Migration
+                </Button>
+              </div>
+            </div>
+          </ServerTabCard>
+        </div>
+      )}
+
+      {/* TAB: Active Migration Progress */}
+      {activeTab === 'progress' && activeJob && (
+        <div className="space-y-5">
+          {/* Status Header */}
+          <ServerTabCard>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <StatusBadge status={activeJob.status} />
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">Migration Progress</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {activeJob.sourceUrl}
+                    {activeJob.currentPhase && (
+                      <span className="text-muted-foreground">
+                        {' '}— Phase: <span className="text-foreground">{activeJob.currentPhase}</span>
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                {activeJob.status === 'running' && (
+                  <Button
+                    onClick={() => pauseMutation.mutate()}
+                    disabled={pauseMutation.isPending}
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                  >
+                    <Pause className="h-3.5 w-3.5" />
+                    Pause
+                  </Button>
                 )}
-                {activeJob.completedAt && activeJob.startedAt && (
-                  <span className="text-muted-foreground">
-                    Duration: {formatDuration(new Date(activeJob.completedAt).getTime() - new Date(activeJob.startedAt).getTime())}
+                {activeJob.status === 'paused' && (
+                  <Button
+                    onClick={() => resumeMutation.mutate()}
+                    disabled={resumeMutation.isPending}
+                    size="sm"
+                    className="gap-1.5 shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)]"
+                  >
+                    <Play className="h-3.5 w-3.5" />
+                    Resume
+                  </Button>
+                )}
+                {(activeJob.status === 'running' || activeJob.status === 'paused') && (
+                  <Button
+                    onClick={() => cancelMutation.mutate()}
+                    disabled={cancelMutation.isPending}
+                    variant="destructive"
+                    size="sm"
+                    className="gap-1.5 shadow-[0_0_6px_-1px_hsl(var(--danger)/0.2)]"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <ProgressBar progress={activeJob.progress} />
+
+            {/* Current step detail */}
+            {['running', 'validating'].includes(activeJob.status) && activeJob.currentPhase && (() => {
+              const phaseSteps = stepsByPhase[activeJob.currentPhase] || [];
+              const runningStep = phaseSteps.find(s => s.status === 'running');
+              if (!runningStep) return null;
+              return (
+                <div className="mt-3 flex items-center gap-2 text-xs text-primary">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>
+                    {stepLabel(runningStep.action, runningStep.metadata as Record<string, unknown>)}
+                    {runningStep.sourceId && <span className="text-primary/60"> #{runningStep.sourceId}</span>}
                   </span>
-                )}
+                </div>
+              );
+            })()}
+            {activeJob.error && (
+              <div className="mt-4 rounded-lg border border-danger/25 bg-danger/5 p-3">
+                <div className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span className="text-sm font-medium">Error</span>
+                </div>
+                <p className="text-sm text-destructive/80 mt-1">{activeJob.error}</p>
               </div>
-            </Card>
+            )}
 
-            {/* Phase List */}
-            <Card className="bg-card border border-border overflow-hidden">
-              <div className="p-4 border-b border-border">
-                <h3 className="text-sm font-semibold text-foreground">Migration Phases</h3>
-              </div>
-              <motion.div
-                variants={containerVariants}
-                initial="hidden"
-                animate="visible"
-              >
-                {MIGRATION_PHASES.map((phase) => {
-                  const status = phaseStatuses[phase.id] || 'pending';
-                  const steps = stepsByPhase[phase.id] || [];
-                  const sc = stepStatusConfig[status];
-                  const PhaseIconComp = PhaseIcon;
-                  const isCurrentPhase = activeJob.currentPhase === phase.id;
-                  const completedInPhase = steps.filter(s => s.status === 'completed').length;
-                  const failedInPhase = steps.filter(s => s.status === 'failed').length;
+            {/* Timing & Stats */}
+            <div className="flex gap-6 mt-4 text-xs text-muted-foreground">
+              <span>Started: {activeJob.startedAt ? new Date(activeJob.startedAt).toLocaleString() : '—'}</span>
+              {['running', 'validating'].includes(activeJob.status) && elapsed > 0 && (
+                <span className="text-muted-foreground font-medium">Elapsed: {formatDuration(elapsed)}</span>
+              )}
+              {activeJob.completedAt && activeJob.startedAt && (
+                <span className="text-muted-foreground">
+                  Duration: {formatDuration(new Date(activeJob.completedAt).getTime() - new Date(activeJob.startedAt).getTime())}
+                </span>
+              )}
+            </div>
+          </ServerTabCard>
 
-                  return (
-                    <motion.div
-                      key={phase.id}
-                      variants={itemVariants}
-                      ref={isCurrentPhase ? activePhaseRef : undefined}
-                      className={`border-b border-border/50 last:border-0 ${
-                        isCurrentPhase ? 'bg-surface-2/30' : ''
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 px-4 py-3">
-                        <div className={`flex-shrink-0 ${sc.color}`}>
-                          {status === 'running' ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <PhaseIconComp phaseId={phase.id} />
+          {/* Phase List */}
+          <ServerTabCard className="overflow-hidden">
+            <div className="pb-3">
+              <h3 className="text-sm font-semibold text-foreground">Migration Phases</h3>
+            </div>
+            <div>
+              {MIGRATION_PHASES.map((phase) => {
+                const status = phaseStatuses[phase.id] || 'pending';
+                const steps = stepsByPhase[phase.id] || [];
+                const sc = stepStatusConfig[status];
+                const PhaseIconComp = PhaseIcon;
+                const isCurrentPhase = activeJob.currentPhase === phase.id;
+                const completedInPhase = steps.filter(s => s.status === 'completed').length;
+                const failedInPhase = steps.filter(s => s.status === 'failed').length;
+
+                return (
+                  <div
+                    key={phase.id}
+                    ref={isCurrentPhase ? activePhaseRef : undefined}
+                    className={`border-b border-border/50 last:border-0 ${
+                      isCurrentPhase ? 'bg-surface-2/30' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <div className={`flex-shrink-0 ${sc.color}`}>
+                        {status === 'running' ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <PhaseIconComp phaseId={phase.id} />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-foreground">{phase.label}</span>
+                          {isCurrentPhase && (
+                            <Badge variant="default" className="text-[10px] px-1.5 py-0">CURRENT</Badge>
                           )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-foreground">{phase.label}</span>
-                            {isCurrentPhase && (
-                              <Badge variant="default" className="text-[10px] px-1.5 py-0">CURRENT</Badge>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {(() => {
+                            if (steps.length === 0) {
+                              return 'Waiting...';
+                            }
+                            const skippedInPhase = steps.filter(s => s.status === 'skipped' || (s.status === 'completed' && skipReason(s.status, s.metadata as Record<string, unknown>)));
+                            const realCompleted = steps.filter(s => s.status === 'completed' && !skipReason(s.status, s.metadata as Record<string, unknown>));
+                            const parts: string[] = [];
+                            if (realCompleted.length > 0) parts.push(`${realCompleted.length} completed`);
+                            if (skippedInPhase.length > 0) parts.push(`${skippedInPhase.length} skipped`);
+                            if (failedInPhase > 0) parts.push(`${failedInPhase} failed`);
+                            return parts.join(' · ') || `${steps.length} steps`;
+                          })()}
+                        </div>
+                        {/* Inline error preview for phase with failures */}
+                        {failedInPhase > 0 && status !== 'running' && (
+                          <div className="mt-1.5">
+                            {steps.filter(s => s.status === 'failed').slice(0, 2).map(s => (
+                              <div key={s.id} className="text-[11px] text-destructive/80 truncate max-w-md">
+                                {stepLabel(s.action, s.metadata as Record<string, unknown>)}: {s.error}
+                              </div>
+                            ))}
+                            {failedInPhase > 2 && (
+                              <div className="text-[11px] text-muted-foreground">
+                                +{failedInPhase - 2} more errors
+                              </div>
                             )}
                           </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            {(() => {
-                              if (steps.length === 0) {
-                                return 'Waiting...';
-                              }
-                              const skippedInPhase = steps.filter(s => s.status === 'skipped' || (s.status === 'completed' && skipReason(s.status, s.metadata as Record<string, unknown>)));
-                              const realCompleted = steps.filter(s => s.status === 'completed' && !skipReason(s.status, s.metadata as Record<string, unknown>));
-                              const parts: string[] = [];
-                              if (realCompleted.length > 0) parts.push(`${realCompleted.length} completed`);
-                              if (skippedInPhase.length > 0) parts.push(`${skippedInPhase.length} skipped`);
-                              if (failedInPhase > 0) parts.push(`${failedInPhase} failed`);
-                              return parts.join(' · ') || `${steps.length} steps`;
-                            })()}
-                          </div>
-                          {/* Inline error preview for phase with failures */}
-                          {failedInPhase > 0 && status !== 'running' && (
-                            <div className="mt-1.5">
-                              {steps.filter(s => s.status === 'failed').slice(0, 2).map(s => (
-                                <div key={s.id} className="text-[11px] text-destructive/80 truncate max-w-md">
-                                  {stepLabel(s.action, s.metadata as Record<string, unknown>)}: {s.error}
-                                </div>
-                              ))}
-                              {failedInPhase > 2 && (
-                                <div className="text-[11px] text-muted-foreground">
-                                  +{failedInPhase - 2} more errors
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <span className={`text-xs font-medium ${sc.color}`}>
-                          {sc.label}
-                        </span>
+                        )}
                       </div>
-                      {steps.length > 0 && (
-                        <PhaseSteps steps={steps} onRetry={handleRetryStep} />
-                      )}
-                    </motion.div>
-                  );
-                })}
-              </motion.div>
-            </Card>
-          </motion.div>
-        )}
+                      <span className={`text-xs font-medium ${sc.color}`}>
+                        {sc.label}
+                      </span>
+                    </div>
+                    {steps.length > 0 && (
+                      <PhaseSteps steps={steps} onRetry={handleRetryStep} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </ServerTabCard>
+        </div>
+      )}
 
-        {/* TAB: Active Migration - No Job */}
-        {activeTab === 'progress' && !activeJob && (
-          <motion.div
-            key="progress-empty"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-          >
-            <Card className="p-8 bg-card border border-border text-center">
-              <ArrowRightLeft className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-              <h3 className="text-sm font-medium text-foreground">No active migration</h3>
-              <p className="text-xs text-muted-foreground mt-1">Start a new migration to see progress here.</p>
-            </Card>
-          </motion.div>
-        )}
+      {/* TAB: Active Migration - No Job */}
+      {activeTab === 'progress' && !activeJob && (
+        <TabEmptyState
+          title="No active migration"
+          description="Start a new migration to see progress here."
+        />
+      )}
 
-        {/* TAB: History */}
-        {activeTab === 'history' && (
-          <motion.div
-            key="history"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-          >
-            <Card className="bg-card border border-border overflow-hidden">
-              <div className="p-4 border-b border-border flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-foreground">Migration History</h3>
+      {/* TAB: History */}
+      {activeTab === 'history' && (
+        <ServerTabCard className="overflow-hidden">
+          <div className="flex items-center justify-between pb-3">
+            <h3 className="text-sm font-semibold text-foreground">Migration History</h3>
+            <button
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['migration-jobs'] })}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
+          {loadingJobs ? (
+            <TabLoadingState rows={4} />
+          ) : safeJobs.length === 0 ? (
+            <TabEmptyState
+              title="No migration jobs yet"
+              description="Start a new migration to see it here."
+            />
+          ) : (
+            <div className="divide-y divide-border/50">
+              {safeJobs.map(job => (
                 <button
-                  onClick={() => queryClient.invalidateQueries({ queryKey: ['migration-jobs'] })}
-                  className="text-muted-foreground hover:text-foreground"
+                  key={job.id}
+                  onClick={() => {
+                    setActiveJobId(job.id);
+                    setActiveTab('progress');
+                  }}
+                  className="w-full flex items-center gap-4 px-4 py-3 hover:bg-surface-2/30 transition-colors text-left"
                 >
-                  <RefreshCw className="h-4 w-4" />
+                  <StatusBadge status={job.status} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-foreground truncate">{job.sourceUrl}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {job.progress?.completed || 0}/{job.progress?.total || 0} steps
+                      {' · '}
+                      {new Date(job.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                  {job.error && (
+                    <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0" />
+                  )}
+                  <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 </button>
-              </div>
-              {loadingJobs ? (
-                <div className="p-8 text-center text-muted-foreground">
-                  <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
-                  Loading...
-                </div>
-              ) : safeJobs.length === 0 ? (
-                <div className="p-8 text-center text-muted-foreground">
-                  No migration jobs yet
-                </div>
-              ) : (
-                <div className="divide-y divide-border/50">
-                  {safeJobs.map(job => (
-                    <button
-                      key={job.id}
-                      onClick={() => {
-                        setActiveJobId(job.id);
-                        setActiveTab('progress');
-                      }}
-                      className="w-full flex items-center gap-4 px-4 py-3 hover:bg-surface-2/30 transition-colors text-left"
-                    >
-                      <StatusBadge status={job.status} />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm text-foreground truncate">{job.sourceUrl}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {job.progress?.completed || 0}/{job.progress?.total || 0} steps
-                          {' · '}
-                          {new Date(job.createdAt).toLocaleDateString()}
-                        </div>
-                      </div>
-                      {job.error && (
-                        <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0" />
-                      )}
-                      <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              ))}
+            </div>
+          )}
+        </ServerTabCard>
+      )}
     </div>
   );
 }

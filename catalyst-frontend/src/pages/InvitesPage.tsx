@@ -6,6 +6,9 @@ import { notifyError, notifySuccess } from '../utils/notify';
 import { useAuthStore } from '../stores/authStore';
 import { reportSystemError } from '../services/api/systemErrors';
 import type { ServerInvitePreview } from '../types/server';
+import { Mail } from 'lucide-react';
+import TabHeader from '../components/servers/tabs/TabHeader';
+import ServerTabCard from '../components/servers/tabs/ServerTabCard';
 
 function InvitesPage() {
   const { token } = useParams();
@@ -28,7 +31,6 @@ function InvitesPage() {
   });
   useEffect(() => {
     if (!invitePreview?.email) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRegisterUsername((current) => current || invitePreview.email.split('@')[0]);
   }, [invitePreview?.email]);
 
@@ -88,81 +90,79 @@ function InvitesPage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="mx-auto max-w-lg space-y-4 rounded-xl border border-border bg-card px-6 py-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-        <h1 className="text-2xl font-semibold text-foreground ">Server Invite</h1>
-        <p className="text-sm text-muted-foreground dark:text-muted-foreground">
-          Create your account to accept the invite. Your email is locked to the invite address.
-        </p>
-        {invitePreview ? (
-          <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 text-xs text-muted-foreground dark:border-border dark:bg-surface-0/60 dark:text-foreground">
-            <div className="text-muted-foreground dark:text-muted-foreground">Server</div>
-            <div className="text-sm font-semibold text-foreground dark:text-foreground">{invitePreview.serverName}</div>
-            <div className="mt-2 text-muted-foreground dark:text-muted-foreground">Permissions</div>
-            <div className="text-xs text-foreground dark:text-foreground">{invitePreview.permissions.join(', ')}</div>
+      <div className="mx-auto max-w-lg space-y-4">
+        <TabHeader icon={Mail} title="Server Invite" description="Create your account to accept the invite. Your email is locked to the invite address." />
+        <ServerTabCard>
+          {invitePreview ? (
+            <div className="rounded-lg border border-border/30 bg-surface-2 px-4 py-3 text-xs text-muted-foreground">
+              <div className="text-muted-foreground">Server</div>
+              <div className="text-sm font-semibold text-foreground">{invitePreview.serverName}</div>
+              <div className="mt-2 text-muted-foreground">Permissions</div>
+              <div className="text-xs text-foreground">{invitePreview.permissions.join(', ')}</div>
+            </div>
+          ) : null}
+          <div className="mt-4 space-y-3 text-sm text-muted-foreground">
+            <label className="block text-xs text-muted-foreground">
+              Email
+              <input
+                className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+                value={invitePreview?.email ?? ''}
+                placeholder="invitee@example.com"
+                disabled
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              Username
+              <input
+                className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+                value={registerUsername}
+                onChange={(event) => setRegisterUsername(event.target.value)}
+                placeholder="yourname"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              Password
+              <input
+                type="password"
+                className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+                value={registerPassword}
+                onChange={(event) => setRegisterPassword(event.target.value)}
+                placeholder="••••••••"
+              />
+            </label>
           </div>
-        ) : null}
-        <div className="space-y-3 text-sm text-muted-foreground dark:text-foreground">
-          <label className="block text-xs text-muted-foreground dark:text-foreground">
-            Email
-            <input
-              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground "
-              value={invitePreview?.email ?? ''}
-              placeholder="invitee@example.com"
-              disabled
-            />
-          </label>
-          <label className="block text-xs text-muted-foreground dark:text-foreground">
-            Username
-            <input
-              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground "
-              value={registerUsername}
-              onChange={(event) => setRegisterUsername(event.target.value)}
-              placeholder="yourname"
-            />
-          </label>
-          <label className="block text-xs text-muted-foreground dark:text-foreground">
-            Password
-            <input
-              type="password"
-              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground "
-              value={registerPassword}
-              onChange={(event) => setRegisterPassword(event.target.value)}
-              placeholder="••••••••"
-            />
-          </label>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
-            onClick={() => registerMutation.mutate()}
-            disabled={!token || !canRegister || registerMutation.isPending}
-          >
-            Create account & accept
-          </button>
-          <button
-            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:text-foreground dark:hover:border-primary/30"
-            onClick={() => navigate('/login', { state: { from: location } })}
-          >
-            Sign in instead
-          </button>
-        </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
+              onClick={() => registerMutation.mutate()}
+              disabled={!token || !canRegister || registerMutation.isPending}
+            >
+              Create account & accept
+            </button>
+            <button
+              className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground"
+              onClick={() => navigate('/login', { state: { from: location } })}
+            >
+              Sign in instead
+            </button>
+          </div>
+        </ServerTabCard>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-lg space-y-4 rounded-xl border border-border bg-card px-6 py-6 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30">
-      <h1 className="text-2xl font-semibold text-foreground ">Server Invite</h1>
-      <p className="text-sm text-muted-foreground dark:text-muted-foreground">
-        Accept the invite to gain access to the server. You must be logged in with the invited email.
-      </p>
-      <button
-        className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
-        onClick={() => acceptMutation.mutate()}
-        disabled={!token || acceptMutation.isPending || accepted}
-      >
-        Accept invite
-      </button>
+    <div className="mx-auto max-w-lg space-y-4">
+      <TabHeader icon={Mail} title="Server Invite" description="Accept the invite to gain access to the server. You must be logged in with the invited email." />
+      <ServerTabCard>
+        <button
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
+          onClick={() => acceptMutation.mutate()}
+          disabled={!token || acceptMutation.isPending || accepted}
+        >
+          Accept invite
+        </button>
+      </ServerTabCard>
     </div>
   );
 }

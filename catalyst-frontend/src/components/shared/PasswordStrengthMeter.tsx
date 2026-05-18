@@ -9,7 +9,7 @@ interface PasswordStrengthMeterProps {
 // Simple password strength calculation without external library
 function calculateStrength(password: string): { score: number; label: string; color: string } {
   if (!password) {
-    return { score: 0, label: '', color: 'bg-surface-3 dark:bg-surface-2' };
+    return { score: 0, label: '', color: 'bg-surface-3' };
   }
 
   let score = 0;
@@ -51,20 +51,20 @@ export function PasswordStrengthMeter({ password, className }: PasswordStrengthM
   return (
     <div className={cn('space-y-1', className)}>
       <div className="flex items-center justify-between text-xs">
-        <span className="text-muted-foreground dark:text-muted-foreground">Password strength</span>
+        <span className="text-muted-foreground">Password strength</span>
         <span
           className={cn(
             'font-medium',
-            strength.score <= 1 && 'text-destructive dark:text-destructive',
-            strength.score === 2 && 'text-orange-600 dark:text-orange-400',
-            strength.score === 3 && 'text-yellow-600 dark:text-yellow-400',
-            strength.score >= 4 && 'text-success dark:text-green-400'
+            strength.score <= 1 && 'text-destructive',
+            strength.score === 2 && 'text-orange-600',
+            strength.score === 3 && 'text-yellow-600',
+            strength.score >= 4 && 'text-success'
           )}
         >
           {strength.label}
         </span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3 dark:bg-surface-2">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
         <div
           className={cn('h-full rounded-full transition-all duration-300', strength.color)}
           style={{ width: `${((strength.score + 1) / 5) * 100}%` }}

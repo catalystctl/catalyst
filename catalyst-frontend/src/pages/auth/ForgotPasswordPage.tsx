@@ -42,32 +42,32 @@ function ForgotPasswordPage() {
 
   return (
     <div className="app-shell relative flex min-h-screen items-center justify-center px-4 font-sans">
-      <div className="w-full max-w-md rounded-xl border border-border bg-card px-6 py-8 shadow-surface-light dark:shadow-surface-dark transition-all duration-300 dark:border-border dark:bg-surface-1">
+      <div className="w-full max-w-md rounded-xl border border-border/30 bg-card px-6 py-8 shadow-surface">
         <div className="flex flex-col items-center text-center">
           <img src={logoUrl} alt={`${panelName} logo`} className="h-12 w-12" onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }} />
-          <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground dark:text-muted-foreground">
+          <span className="mt-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
             {panelName} Panel
           </span>
         </div>
 
-        <h1 className="mt-6 text-2xl font-semibold text-foreground ">
+        <h1 className="mt-6 text-2xl font-semibold text-foreground">
           Forgot password?
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground dark:text-muted-foreground">
+        <p className="mt-2 text-sm text-muted-foreground">
           Enter your email address and we'll send you a link to reset your password.
         </p>
 
         {isSubmitted ? (
           <div className="mt-6 space-y-4">
-            <div className="rounded-lg border border-success/20 bg-success/5 px-4 py-4 dark:border-success/20 dark:bg-success/50/10">
-              <p className="text-sm text-success dark:text-success">
+            <div className="rounded-lg border border-success/20 bg-success/5 px-4 py-4">
+              <p className="text-sm text-success">
                 If an account exists with that email address, we've sent a password reset link.
                 Please check your inbox (and spam folder).
               </p>
             </div>
             <Link
               to="/login"
-              className="block w-full rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
+              className="block w-full rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-colors hover:bg-primary/90"
             >
               Back to login
             </Link>
@@ -75,14 +75,14 @@ function ForgotPasswordPage() {
         ) : (
           <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-2">
-              <label className="block text-sm text-muted-foreground dark:text-foreground" htmlFor="email">
+              <label className="block text-sm text-muted-foreground" htmlFor="email">
                 Email address
               </label>
               <input
                 id="email"
                 type="email"
                 autoComplete="email"
-                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
+                className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none hover:border-primary"
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -91,7 +91,7 @@ function ForgotPasswordPage() {
 
             <button
               type="submit"
-              className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-70"
+              className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-colors hover:bg-primary/90 disabled:opacity-70"
               disabled={isLoading}
             >
               {isLoading ? 'Sending...' : 'Send reset link'}
@@ -100,7 +100,7 @@ function ForgotPasswordPage() {
             <div className="text-center">
               <Link
                 to="/login"
-                className="text-sm font-medium text-primary-600 transition-all duration-300 hover:text-primary dark:text-primary-400 dark:hover:text-primary-300"
+                className="text-sm font-medium text-primary-600 transition-colors hover:text-primary"
               >
                 Back to login
               </Link>

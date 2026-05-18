@@ -19,6 +19,7 @@ import {
   useResourceBalancer,
   type ResourceKey,
 } from '@/hooks/useResourceBalancer';
+import TabHeader from '@/components/servers/tabs/TabHeader';
 
 function StatusDot({ value, gameOver }: { value: number; gameOver: boolean }) {
   const color =
@@ -66,17 +67,6 @@ function NotFoundPage() {
 
   return (
     <main className="app-shell relative flex min-h-screen items-center justify-center px-4 py-12">
-      {/* Background */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,hsl(var(--primary)/0.06),transparent_60%)]" />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle, hsl(var(--foreground)) 1px, transparent 1px)',
-          backgroundSize: '24px 24px',
-        }}
-      />
-
       <Card
         className={cn(
           'relative z-10 w-full max-w-2xl overflow-hidden transition-colors duration-500',
@@ -100,7 +90,7 @@ function NotFoundPage() {
         {/* Game over overlay */}
         {game.gameOver && (
           <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-card/70 backdrop-blur-sm">
-            <h2 className="font-display text-3xl font-bold tracking-tight text-danger">
+            <h2 className="text-xl font-bold text-danger">
               System failure
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -125,32 +115,16 @@ function NotFoundPage() {
         )}
 
         <CardContent className="flex flex-col gap-6 p-6 sm:p-8">
-          {/* Header */}
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge
-                variant="outline"
-                className="w-fit gap-1.5 rounded-full uppercase tracking-wider"
-              >
-                <Radio className="h-3 w-3" />
-                404 &middot; Sector offline
-              </Badge>
-              {game.newHighScore && (
-                <Badge variant="warning" className="gap-1.5">
-                  <Trophy className="h-3 w-3" />
-                  New high score
-                </Badge>
-              )}
-            </div>
-            <h1 className="font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              {game.gameOver ? 'Connection lost' : 'Resource overload'}
-            </h1>
-            <p className="max-w-md text-base text-muted-foreground">
-              {game.gameOver
+          <TabHeader
+            icon={Radio}
+            title={game.gameOver ? 'Connection lost' : 'Resource overload'}
+            description={
+              game.gameOver
                 ? 'The page you are looking for does not exist.'
-                : 'Keep resources below capacity. Click a metric card to flush it before overflow.'}
-            </p>
-          </div>
+                : 'Keep resources below capacity. Click a metric card to flush it before overflow.'
+            }
+            variant={game.gameOver ? 'danger' : 'default'}
+          />
 
           {/* Resource widgets */}
           <div
@@ -171,7 +145,7 @@ function NotFoundPage() {
                   disabled={game.gameOver}
                   onClick={() => flush(res.key as ResourceKey)}
                   className={cn(
-                    'group relative flex flex-col gap-3 rounded-xl border border-border bg-card p-4 text-left',
+                    'group relative flex flex-col gap-3 rounded-xl border border-border/30 bg-card p-4 text-left',
                     'transition-all hover:border-primary/30 hover:shadow-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
                     'disabled:cursor-not-allowed disabled:opacity-50',
                     isCritical &&
@@ -200,7 +174,7 @@ function NotFoundPage() {
 
                   <div
                     className={cn(
-                      'font-display text-3xl font-bold tabular-nums transition-colors',
+                      'text-3xl font-bold tabular-nums transition-colors',
                       isCritical ? 'text-danger' : 'text-foreground',
                     )}
                   >

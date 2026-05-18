@@ -1,46 +1,29 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { motion, AnimatePresence, type Variants } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
-import { queryClient } from '@/lib/queryClient';
 import { Server, MapPin, Search } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
 import NodeList from '../../components/nodes/NodeList';
 import NodeCreateModal from '../../components/nodes/NodeCreateModal';
 import LocationsManagerModal from '../../components/nodes/LocationsManagerModal';
-import EmptyState from '../../components/shared/EmptyState';
+import TabHeader from '../../components/servers/tabs/TabHeader';
+import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
+import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import { useNodes } from '../../hooks/useNodes';
 import { useAuthStore } from '../../stores/authStore';
 import { locationsApi } from '../../services/api/locations';
 import type { Location } from '../../services/api/locations';
 import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 
-// ── Animation Variants ──
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.03, delayChildren: 0.05 },
-  },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { type: 'spring', stiffness: 300, damping: 24 },
-  },
-};
-
 // ── Location Section Header ──
 function LocationSectionHeader({ location, count }: { location: Location | null; count: number }) {
   if (location) {
     return (
-      <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
+      <div className="sticky top-0 z-10 border-b border-border/30 bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
         <div className="flex items-center gap-2">
-          <MapPin className="h-4 w-4 text-success dark:text-success" />
+          <MapPin className="h-4 w-4 text-success" />
           <h3 className="text-sm font-semibold text-foreground">
             {location.name}
           </h3>
@@ -58,7 +41,7 @@ function LocationSectionHeader({ location, count }: { location: Location | null;
   }
 
   return (
-    <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
+    <div className="sticky top-0 z-10 border-b border-border/30 bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
       <div className="flex items-center gap-2">
         <MapPin className="h-4 w-4 text-muted-foreground" />
         <h3 className="text-sm font-semibold text-foreground">Unassigned</h3>
@@ -171,42 +154,15 @@ function NodesPage({ hideHeader }: Props) {
   const showGroupedView = selectedLocationId === null && locations.length > 0;
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial={false}
-      animate="visible"
-      className="relative overflow-hidden"
-    >
-      {/* Ambient background */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-emerald-500/8 to-cyan-500/8 blur-3xl dark:from-emerald-500/15 dark:to-cyan-500/15" />
-        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-sky-500/8 to-violet-500/8 blur-3xl dark:from-sky-500/15 dark:to-violet-500/15" />
-      </div>
-
-      <div className="relative z-10 space-y-5">
-        {!hideHeader && (
-          <>
-            {/* ── Header ── */}
-            <motion.div
-              variants={itemVariants}
-              className="flex flex-wrap items-end justify-between gap-4"
-            >
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 opacity-20 blur-sm" />
-                    <Server className="relative h-7 w-7 text-success dark:text-success" />
-                  </div>
-                  <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
-                    Nodes
-                  </h1>
-                </div>
-                <p className="ml-10 text-sm text-muted-foreground">
-                  Track connected infrastructure nodes.
-                </p>
-              </div>
-
-              {/* Summary stats */}
+    <div className="space-y-4">
+      {!hideHeader && (
+        <>
+          {/* ── Header ── */}
+          <TabHeader
+            icon={Server}
+            title="Nodes"
+            description="Track connected infrastructure nodes."
+            actions={
               <div className="flex flex-wrap items-center gap-2">
                 {isLoading ? (
                   <>
@@ -239,7 +195,7 @@ function NodesPage({ hideHeader }: Props) {
                 )}
                 {canWrite && (
                   <button
-                    className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:text-foreground dark:hover:border-primary/30"
+                    className="rounded-lg border border-border/40 px-3 py-2 text-sm font-semibold text-muted-foreground transition-all hover:border-primary hover:text-foreground"
                     onClick={() => setLocationsModalOpen(true)}
                   >
                     <MapPin className="mr-1.5 inline h-4 w-4" />
@@ -252,192 +208,167 @@ function NodesPage({ hideHeader }: Props) {
                   <span className="text-xs text-muted-foreground">Admin access required</span>
                 )}
               </div>
-            </motion.div>
+            }
+          />
 
-            {/* ── Search Bar ── */}
-            <motion.div variants={itemVariants} className="flex flex-wrap items-center gap-2.5">
-              {/* Search input */}
-              <div className="relative min-w-[200px] flex-1 max-w-sm">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search nodes by name or hostname…"
-                  className="pl-9"
-                />
-              </div>
+          {/* ── Search Bar ── */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Search input */}
+            <div className="relative min-w-[200px] flex-1 max-w-sm">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search nodes by name or hostname…"
+                className="pl-9"
+              />
+            </div>
 
-              {/* Results count */}
-              <span className="text-xs text-muted-foreground">
-                {filteredNodes.length} of {nodes.length}
-              </span>
-            </motion.div>
+            {/* Results count */}
+            <span className="text-xs text-muted-foreground">
+              {filteredNodes.length} of {nodes.length}
+            </span>
+          </div>
 
-            {/* ── Location Selector Tabs ── */}
-            {locations.length > 0 && (
-              <motion.div
-                variants={itemVariants}
-                className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin"
+          {/* ── Location Selector Tabs ── */}
+          {locations.length > 0 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+              <button
+                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                  selectedLocationId === null
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-surface-2 text-muted-foreground hover:text-foreground'
+                }`}
+                onClick={() => setSelectedLocationId(null)}
               >
-                <button
-                  className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
-                    selectedLocationId === null
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'bg-surface-2 text-muted-foreground hover:text-foreground'
-                  }`}
-                  onClick={() => setSelectedLocationId(null)}
+                All
+                <span
+                  className={`text-[10px] ${selectedLocationId === null ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
                 >
-                  All
-                  <span
-                    className={`text-[10px] ${selectedLocationId === null ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
-                  >
-                    {nodes.length}
-                  </span>
-                </button>
-                {locations.map((location) => {
-                  const count = locationCounts.counts.get(location.id) || 0;
-                  if (count === 0) return null;
-                  return (
-                    <button
-                      key={location.id}
-                      className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
-                        selectedLocationId === location.id
-                          ? 'bg-primary text-primary-foreground shadow-sm'
-                          : 'bg-surface-2 text-muted-foreground hover:text-foreground'
-                      }`}
-                      onClick={() => setSelectedLocationId(location.id)}
-                    >
-                      <MapPin className="h-3.5 w-3.5" />
-                      {location.name}
-                      <span
-                        className={`text-[10px] ${selectedLocationId === location.id ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
-                      >
-                        {count}
-                      </span>
-                    </button>
-                  );
-                })}
-                {locationCounts.unassignedCount > 0 && (
+                  {nodes.length}
+                </span>
+              </button>
+              {locations.map((location) => {
+                const count = locationCounts.counts.get(location.id) || 0;
+                if (count === 0) return null;
+                return (
                   <button
+                    key={location.id}
                     className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
-                      selectedLocationId === '__unassigned__'
+                      selectedLocationId === location.id
                         ? 'bg-primary text-primary-foreground shadow-sm'
                         : 'bg-surface-2 text-muted-foreground hover:text-foreground'
                     }`}
-                    onClick={() => setSelectedLocationId('__unassigned__')}
+                    onClick={() => setSelectedLocationId(location.id)}
                   >
                     <MapPin className="h-3.5 w-3.5" />
-                    Unassigned
+                    {location.name}
                     <span
-                      className={`text-[10px] ${selectedLocationId === '__unassigned__' ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
+                      className={`text-[10px] ${selectedLocationId === location.id ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
                     >
-                      {locationCounts.unassignedCount}
+                      {count}
                     </span>
                   </button>
-                )}
-              </motion.div>
-            )}
-          </>
-        )}
-
-        {/* ── Node List ── */}
-        <motion.div variants={itemVariants}>
-          {showGroupedView ? (
-            /* ── Grouped by Location View ── */
-            <div className="space-y-4">
-              {isLoading ? (
-                <div className="rounded-xl border border-border bg-card/80 p-4 shadow-sm backdrop-blur-sm">
-                  <div className="space-y-2">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                      <div key={i} className="flex items-center gap-3 rounded-lg px-4 py-3.5">
-                        <div className="h-9 w-9 animate-pulse rounded-lg bg-surface-3" />
-                        <div className="flex-1 space-y-2">
-                          <div className="h-4 w-36 animate-pulse rounded bg-surface-3" />
-                          <div className="h-3 w-52 animate-pulse rounded bg-surface-2" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : groupedByLocation.length > 0 ? (
-                groupedByLocation.map(([locationId, groupNodes]) => {
-                  const location = locationId ? (locationMap.get(locationId) ?? null) : null;
-                  return (
-                    <div
-                      key={locationId ?? '__unassigned__'}
-                      className="rounded-xl border border-border bg-card/80 shadow-sm backdrop-blur-sm overflow-hidden"
-                    >
-                      <LocationSectionHeader location={location} count={groupNodes.length} />
-                      <div className="p-4">
-                        <NodeList nodes={groupNodes} latestAgentVersion={updateData?.latestVersion} />
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="rounded-xl border border-border bg-card/80 p-6 shadow-sm backdrop-blur-sm">
-                  <EmptyState
-                    title={search.trim() ? 'No nodes found' : 'No nodes detected'}
-                    description={
-                      search.trim()
-                        ? 'Try adjusting your search.'
-                        : 'Install the Catalyst agent and register nodes to begin.'
-                    }
-                    action={canWrite && !search.trim() ? <NodeCreateModal /> : undefined}
-                  />
-                </div>
-              )}
-            </div>
-          ) : (
-            /* ── Flat List View (single location selected or no locations exist) ── */
-            <div className="rounded-xl border border-border bg-card/80 shadow-sm backdrop-blur-sm overflow-hidden">
-              {isLoading ? (
-                <div className="p-4">
-                  <div className="space-y-2">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                      <div key={i} className="flex items-center gap-3 rounded-lg px-4 py-3.5">
-                        <div className="h-9 w-9 animate-pulse rounded-lg bg-surface-3" />
-                        <div className="flex-1 space-y-2">
-                          <div className="h-4 w-36 animate-pulse rounded bg-surface-3" />
-                          <div className="h-3 w-52 animate-pulse rounded bg-surface-2" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : filteredNodes.length > 0 ? (
-                <div className="p-4">
-                  <NodeList nodes={filteredNodes} latestAgentVersion={updateData?.latestVersion} />
-                </div>
-              ) : (
-                <div className="p-6">
-                  <EmptyState
-                    title={
-                      search.trim() || selectedLocationId !== null
-                        ? 'No nodes found'
-                        : 'No nodes detected'
-                    }
-                    description={
-                      search.trim() || selectedLocationId !== null
-                        ? 'Try adjusting your search or location filter.'
-                        : 'Install the Catalyst agent and register nodes to begin.'
-                    }
-                    action={
-                      canWrite && !search.trim() && selectedLocationId === null ? (
-                        <NodeCreateModal />
-                      ) : undefined
-                    }
-                  />
-                </div>
+                );
+              })}
+              {locationCounts.unassignedCount > 0 && (
+                <button
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                    selectedLocationId === '__unassigned__'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'bg-surface-2 text-muted-foreground hover:text-foreground'
+                  }`}
+                  onClick={() => setSelectedLocationId('__unassigned__')}
+                >
+                  <MapPin className="h-3.5 w-3.5" />
+                  Unassigned
+                  <span
+                    className={`text-[10px] ${selectedLocationId === '__unassigned__' ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
+                  >
+                    {locationCounts.unassignedCount}
+                  </span>
+                </button>
               )}
             </div>
           )}
-        </motion.div>
-      </div>
+        </>
+      )}
+
+      {/* ── Node List ── */}
+      {showGroupedView ? (
+        /* ── Grouped by Location View ── */
+        <div className="space-y-4">
+          {isLoading ? (
+            <ServerTabCard>
+              <TabLoadingState rows={3} />
+            </ServerTabCard>
+          ) : groupedByLocation.length > 0 ? (
+            groupedByLocation.map(([locationId, groupNodes]) => {
+              const location = locationId ? (locationMap.get(locationId) ?? null) : null;
+              return (
+                <div
+                  key={locationId ?? '__unassigned__'}
+                  className="rounded-xl border border-border/30 bg-card shadow-sm overflow-hidden"
+                >
+                  <LocationSectionHeader location={location} count={groupNodes.length} />
+                  <div className="p-4">
+                    <NodeList nodes={groupNodes} latestAgentVersion={updateData?.latestVersion} />
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <ServerTabCard>
+              <TabEmptyState
+                title={search.trim() ? 'No nodes found' : 'No nodes detected'}
+                description={
+                  search.trim()
+                    ? 'Try adjusting your search.'
+                    : 'Install the Catalyst agent and register nodes to begin.'
+                }
+                action={canWrite && !search.trim() ? <NodeCreateModal /> : undefined}
+              />
+            </ServerTabCard>
+          )}
+        </div>
+      ) : (
+        /* ── Flat List View (single location selected or no locations exist) ── */
+        <div className="rounded-xl border border-border/30 bg-card shadow-sm overflow-hidden">
+          {isLoading ? (
+            <div className="p-4">
+              <TabLoadingState rows={3} />
+            </div>
+          ) : filteredNodes.length > 0 ? (
+            <div className="p-4">
+              <NodeList nodes={filteredNodes} latestAgentVersion={updateData?.latestVersion} />
+            </div>
+          ) : (
+            <div className="p-6">
+              <TabEmptyState
+                title={
+                  search.trim() || selectedLocationId !== null
+                    ? 'No nodes found'
+                    : 'No nodes detected'
+                }
+                description={
+                  search.trim() || selectedLocationId !== null
+                    ? 'Try adjusting your search or location filter.'
+                    : 'Install the Catalyst agent and register nodes to begin.'
+                }
+                action={
+                  canWrite && !search.trim() && selectedLocationId === null ? (
+                    <NodeCreateModal />
+                  ) : undefined
+                }
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Locations Manager Modal ── */}
       <LocationsManagerModal open={locationsModalOpen} onOpenChange={setLocationsModalOpen} />
-    </motion.div>
+    </div>
   );
 }
 

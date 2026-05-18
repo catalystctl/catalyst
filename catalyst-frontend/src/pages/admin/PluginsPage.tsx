@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
-import { motion, type Variants } from 'framer-motion';
 import {
   Puzzle,
   Power,
@@ -14,6 +13,7 @@ import {
   User,
   Code,
   Shield,
+  Plus,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,19 +22,12 @@ import { fetchPlugins, togglePlugin, reloadPlugin, fetchPluginDetails, updatePlu
 import { toast } from 'sonner';
 import { usePluginContext } from '../../plugins/PluginProvider';
 import type { PluginManifest } from '../../plugins/types';
-import EmptyState from '../../components/shared/EmptyState';
 import { ModalPortal } from '@/components/ui/modal-portal';
-
-// ── Animation Variants ──
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.05 } },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
-};
+import TabHeader from '../../components/servers/tabs/TabHeader';
+import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import SectionHeader from '../../components/servers/tabs/SectionHeader';
+import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
+import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 
 // ── Helpers ──
 interface PluginConfig {
@@ -62,67 +55,61 @@ function PluginCard({
   onToggle,
   onReload,
   onSettings,
-  index,
 }: {
   plugin: PluginManifest;
   isProcessing: boolean;
   onToggle: () => void;
   onReload: () => void;
   onSettings: () => void;
-  index: number;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 24, delay: index * 0.04 }}
-      className="group relative overflow-hidden rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
-    >
+    <ServerTabCard>
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0 flex-1">
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
             plugin.enabled
-              ? 'bg-success/10 dark:bg-success/30'
+              ? 'bg-success/10'
               : plugin.error
-              ? 'bg-destructive/10 dark:bg-destructive/30'
-              : 'bg-surface-3 dark:bg-surface-2'
+              ? 'bg-destructive/10'
+              : 'bg-surface-3'
           }`}>
-            <Puzzle className={`h-5 w-5 ${
+            <Puzzle className={`h-4 w-4 ${
               plugin.enabled
-                ? 'text-success dark:text-success'
+                ? 'text-success'
                 : plugin.error
-                ? 'text-destructive dark:text-destructive'
+                ? 'text-destructive'
                 : 'text-muted-foreground'
             }`} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-foreground dark:text-foreground">{plugin.displayName}</span>
+              <span className="font-semibold text-foreground text-sm">{plugin.displayName}</span>
               <Badge variant={statusBadgeVariant(plugin.status, plugin.error)} className="text-[10px]">
                 {statusText(plugin.status)}
               </Badge>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground font-mono">{plugin.name}@v{plugin.version}</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground font-mono">{plugin.name}@v{plugin.version}</p>
           </div>
         </div>
       </div>
 
       {/* Description */}
       {plugin.description && (
-        <p className="mt-3 text-sm text-muted-foreground line-clamp-2">{plugin.description}</p>
+        <p className="mt-2 text-xs text-muted-foreground line-clamp-2">{plugin.description}</p>
       )}
 
       {/* Error */}
       {plugin.error && (
-        <div className="mt-3 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-2.5 dark:border-destructive/20 dark:bg-destructive/15">
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive dark:text-destructive" />
-          <p className="text-xs text-destructive dark:text-destructive">{plugin.error}</p>
+        <div className="mt-2 flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 p-2">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+          <p className="text-[11px] text-destructive">{plugin.error}</p>
         </div>
       )}
 
       {/* Meta */}
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1">
           <User className="h-3 w-3" />
           {plugin.author}
@@ -134,7 +121,7 @@ function PluginCard({
           {plugin.hasFrontend ? 'Frontend' : null}
         </span>
         {plugin.permissions.length > 0 && (
-          <Badge variant="secondary" className="flex items-center gap-1 text-[10px]">
+          <Badge variant="secondary" className="flex items-center gap-1 text-[9px]">
             <Shield className="h-2.5 w-2.5" />
             {plugin.permissions.length} perm{plugin.permissions.length === 1 ? '' : 's'}
           </Badge>
@@ -182,7 +169,7 @@ function PluginCard({
           <Settings className="h-3.5 w-3.5" />
         </Button>
       </div>
-    </motion.div>
+    </ServerTabCard>
   );
 }
 
@@ -205,11 +192,6 @@ function PluginSettingsModal({
     refetchInterval: 10000,
   });
 
-  // Use pluginDetails config as base, but allow local edits to override.
-  // Config rendering uses two sources:
-  //   1. pluginDetails.configSchema — original schema from plugin.json (type, default, description, label)
-  //   2. pluginDetails.config — current values (may be raw values after user saved)
-  // We use the schema for rendering labels/descriptions/types, overlay with current values.
   const manifestSchema = pluginDetails?.configSchema ?? {};
   const runtimeValues = pluginDetails?.config ?? {};
   const config = localConfig ?? (Object.keys(manifestSchema).length > 0 ? manifestSchema : runtimeValues);
@@ -218,10 +200,8 @@ function PluginSettingsModal({
     setLocalConfig((prev) => ({ ...(prev ?? config), [key]: value }));
   };
 
-  // Reset local edits when modal reopens
   useEffect(() => {
     if (open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting form on modal open
       setLocalConfig(null);
     }
   }, [open]);
@@ -237,13 +217,11 @@ function PluginSettingsModal({
     onError: (error: any) => toast.error(error.message || 'Failed to update configuration'),
   });
 
-  /** Type guard for config schema entries */
   type ConfigSchemaEntry = { type: string; default?: any; description?: string; label?: string; options?: any[] };
   function isConfigSchema(v: any): v is ConfigSchemaEntry {
     return v && typeof v === 'object' && typeof v.type === 'string';
   }
 
-  /** Extract the effective config value for saving (strips schema metadata) */
   const buildSaveConfig = (): PluginConfig => {
     const result: PluginConfig = {};
     for (const [key, value] of Object.entries(config)) {
@@ -260,153 +238,147 @@ function PluginSettingsModal({
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-        className="mx-4 w-full max-w-lg rounded-xl border border-border bg-card shadow-xl"
-      >
-        <div className="border-b border-border/50 px-6 py-4">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/30">
-              <Settings className="h-4 w-4 text-violet-600 dark:text-violet-400" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-foreground ">Plugin Settings</h2>
-              <p className="text-xs text-muted-foreground">
-                Configure <span className="font-medium text-foreground dark:text-foreground">{pluginDetails?.displayName}</span>
-              </p>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm px-4">
+        <div className="mx-4 w-full max-w-lg rounded-xl border border-border bg-card shadow-xl">
+          <div className="border-b border-border/50 px-6 py-4">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                <Settings className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">Plugin Settings</h2>
+                <p className="text-[11px] text-muted-foreground">
+                  Configure <span className="font-medium text-foreground">{pluginDetails?.displayName}</span>
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="max-h-[60vh] overflow-y-auto px-6 py-5">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : Object.keys(config).length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border/50 bg-surface-2/20 px-6 py-8 text-center">
-              <p className="text-sm text-muted-foreground">No configuration options available.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {Object.entries(config).map(([key, value]) => {
-                const schema = isConfigSchema(value) ? value : null;
-                const fieldType = schema ? schema.type : typeof value;
-                const currentValue = schema ? schema.default : value;
-                const description = schema ? (schema.description || '') : '';
-                const label = schema ? (schema.label || key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())) : key;
-                const selectOptions = schema ? (schema.options || []) : [];
+          <div className="max-h-[60vh] overflow-y-auto px-6 py-5">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : Object.keys(config).length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border/50 bg-surface-2/20 px-6 py-8 text-center">
+                <p className="text-sm text-muted-foreground">No configuration options available.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {Object.entries(config).map(([key, value]) => {
+                  const schema = isConfigSchema(value) ? value : null;
+                  const fieldType = schema ? schema.type : typeof value;
+                  const currentValue = schema ? schema.default : value;
+                  const description = schema ? (schema.description || '') : '';
+                  const label = schema ? (schema.label || key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())) : key;
+                  const selectOptions = schema ? (schema.options || []) : [];
 
-                // Use runtime value if set, otherwise fall back to schema default
-                const runtimeOverride = runtimeValues[key];
-                const isRuntimeObject = runtimeOverride !== undefined && !isConfigSchema(runtimeOverride);
-                const effectiveValue = isRuntimeObject ? runtimeOverride : currentValue;
+                  const runtimeOverride = runtimeValues[key];
+                  const isRuntimeObject = runtimeOverride !== undefined && !isConfigSchema(runtimeOverride);
+                  const effectiveValue = isRuntimeObject ? runtimeOverride : currentValue;
 
-                return (
-                  <div key={key} className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">{label}</label>
-                    {description && (
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">{description}</p>
-                    )}
-                    {fieldType === 'boolean' ? (
-                      <label className="flex items-center gap-2 cursor-pointer pt-1">
-                        <input
-                          type="checkbox"
-                          checked={!!effectiveValue}
+                  return (
+                    <div key={key} className="space-y-1.5">
+                      <label className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{label}</label>
+                      {description && (
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">{description}</p>
+                      )}
+                      {fieldType === 'boolean' ? (
+                        <label className="flex items-center gap-2 cursor-pointer pt-1">
+                          <input
+                            type="checkbox"
+                            checked={!!effectiveValue}
+                            onChange={(e) =>
+                              handleConfigChange(key, schema
+                                ? { ...(value as Record<string, any>), default: e.target.checked }
+                                : e.target.checked)
+                            }
+                            className="h-4 w-4 rounded border-border bg-card text-primary"
+                          />
+                          <span className="text-sm text-muted-foreground">
+                            {effectiveValue ? 'Enabled' : 'Disabled'}
+                          </span>
+                        </label>
+                      ) : fieldType === 'number' ? (
+                        <Input
+                          type="number"
+                          value={effectiveValue ?? ''}
                           onChange={(e) =>
                             handleConfigChange(key, schema
-                              ? { ...(value as Record<string, any>), default: e.target.checked }
-                              : e.target.checked)
+                              ? { ...(value as Record<string, any>), default: parseFloat(e.target.value) || 0 }
+                              : parseFloat(e.target.value) || 0)
                           }
-                          className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
                         />
-                        <span className="text-sm text-muted-foreground">
-                          {effectiveValue ? 'Enabled' : 'Disabled'}
-                        </span>
-                      </label>
-                    ) : fieldType === 'number' ? (
-                      <Input
-                        type="number"
-                        value={effectiveValue ?? ''}
-                        onChange={(e) =>
-                          handleConfigChange(key, schema
-                            ? { ...(value as Record<string, any>), default: parseFloat(e.target.value) || 0 }
-                            : parseFloat(e.target.value) || 0)
-                        }
-                      />
-                    ) : fieldType === 'select' && selectOptions.length > 0 ? (
-                      <select
-                        value={String(effectiveValue ?? '')}
-                        onChange={(e) => {
-                          const selected = selectOptions.find((o: any) => String(o.value) === e.target.value);
-                          const newVal = selected ? selected.value : e.target.value;
-                          handleConfigChange(key, schema
-                            ? { ...(value as Record<string, any>), default: newVal }
-                            : newVal);
-                        }}
-                        className="flex h-9 w-full rounded-md border border-border bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {selectOptions.map((opt: any) => (
-                          <option key={String(opt.value)} value={String(opt.value)}>
-                            {opt.label || opt.value}
-                          </option>
-                        ))}
-                      </select>
-                    ) : fieldType === 'password' ? (
-                      <Input
-                        type="password"
-                        value={String(effectiveValue ?? '')}
-                        onChange={(e) =>
-                          handleConfigChange(key, schema
-                            ? { ...(value as Record<string, any>), default: e.target.value }
-                            : e.target.value)
-                        }
-                        placeholder="••••••••"
-                      />
-                    ) : fieldType === 'text' ? (
-                      <textarea
-                        value={String(effectiveValue ?? '')}
-                        rows={3}
-                        onChange={(e) =>
-                          handleConfigChange(key, schema
-                            ? { ...(value as Record<string, any>), default: e.target.value }
-                            : e.target.value)
-                        }
-                        className="flex min-h-[80px] w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
-                      />
-                    ) : (
-                      <Input
-                        value={String(effectiveValue ?? '')}
-                        onChange={(e) =>
-                          handleConfigChange(key, schema
-                            ? { ...(value as Record<string, any>), default: e.target.value }
-                            : e.target.value)
-                        }
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                      ) : fieldType === 'select' && selectOptions.length > 0 ? (
+                        <select
+                          value={String(effectiveValue ?? '')}
+                          onChange={(e) => {
+                            const selected = selectOptions.find((o: any) => String(o.value) === e.target.value);
+                            const newVal = selected ? selected.value : e.target.value;
+                            handleConfigChange(key, schema
+                              ? { ...(value as Record<string, any>), default: newVal }
+                              : newVal);
+                          }}
+                          className="flex h-9 w-full rounded-md border border-border bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {selectOptions.map((opt: any) => (
+                            <option key={String(opt.value)} value={String(opt.value)}>
+                              {opt.label || opt.value}
+                            </option>
+                          ))}
+                        </select>
+                      ) : fieldType === 'password' ? (
+                        <Input
+                          type="password"
+                          value={String(effectiveValue ?? '')}
+                          onChange={(e) =>
+                            handleConfigChange(key, schema
+                              ? { ...(value as Record<string, any>), default: e.target.value }
+                              : e.target.value)
+                          }
+                          placeholder="••••••••"
+                        />
+                      ) : fieldType === 'text' ? (
+                        <textarea
+                          value={String(effectiveValue ?? '')}
+                          rows={3}
+                          onChange={(e) =>
+                            handleConfigChange(key, schema
+                              ? { ...(value as Record<string, any>), default: e.target.value }
+                              : e.target.value)
+                          }
+                          className="flex min-h-[80px] w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                        />
+                      ) : (
+                        <Input
+                          value={String(effectiveValue ?? '')}
+                          onChange={(e) =>
+                            handleConfigChange(key, schema
+                              ? { ...(value as Record<string, any>), default: e.target.value }
+                              : e.target.value)
+                          }
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-border/50 px-6 py-3">
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button
-            size="sm"
-            onClick={() => updateMutation.mutate(buildSaveConfig())}
-            disabled={updateMutation.isPending}
-          >
-            {updateMutation.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-            Save Changes
-          </Button>
+          <div className="flex items-center justify-end gap-2 border-t border-border/50 px-6 py-3">
+            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button
+              size="sm"
+              onClick={() => updateMutation.mutate(buildSaveConfig())}
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Save Changes
+            </Button>
+          </div>
         </div>
-      </motion.div>
-    </div>
+      </div>
     </ModalPortal>
   );
 }
@@ -447,90 +419,68 @@ export default function PluginsPage() {
     onSettled: () => setProcessingPlugin(null),
   });
 
+  const enabledCount = plugins?.filter((p) => p.enabled).length ?? 0;
+  const totalCount = plugins?.length ?? 0;
+
   return (
-    <motion.div
-      variants={containerVariants}
-      initial={false}
-      animate="visible"
-      className="relative overflow-hidden"
-    >
-      {/* Ambient background */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-violet-500/8 to-purple-500/8 blur-3xl dark:from-violet-500/15 dark:to-purple-500/15" />
-        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-cyan-500/8 to-teal-500/8 blur-3xl dark:from-cyan-500/15 dark:to-teal-500/15" />
-      </div>
-
-      <div className="relative z-10 space-y-5">
-        {/* ── Header ── */}
-        <motion.div variants={itemVariants} className="flex flex-wrap items-end justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-violet-500 to-purple-500 opacity-20 blur-sm" />
-                <Puzzle className="relative h-7 w-7 text-violet-600 dark:text-violet-400" />
-              </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
-                Plugins
-              </h1>
-            </div>
-            <p className="ml-10 text-sm text-muted-foreground">
-              Manage and configure installed plugins.
-            </p>
-          </div>
+    <div className="space-y-5">
+      {/* ── Header ── */}
+      <TabHeader
+        icon={Puzzle}
+        title="Plugins"
+        description="Manage and configure installed plugins"
+        actions={
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">
-              {plugins?.length ?? 0} installed
+            <Badge variant="outline" className="text-[11px]">
+              {totalCount} installed
             </Badge>
-            <Badge variant="secondary" className="text-xs">
-              {plugins?.filter((p) => p.enabled).length ?? 0} enabled
+            <Badge variant="secondary" className="text-[11px]">
+              {enabledCount} enabled
             </Badge>
           </div>
-        </motion.div>
+        }
+      />
 
-        {/* ── Plugin Grid ── */}
-        {isLoading ? (
-          <motion.div variants={itemVariants} className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="rounded-xl border border-border bg-card/80 p-5">
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 animate-pulse rounded-lg bg-surface-3" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 w-28 animate-pulse rounded bg-surface-3" />
-                    <div className="h-3 w-40 animate-pulse rounded bg-surface-2 font-mono" />
-                    <div className="h-3 w-full animate-pulse rounded bg-surface-2" />
-                  </div>
-                </div>
-                <div className="mt-4 flex gap-2">
-                  <div className="h-8 w-24 animate-pulse rounded-md bg-surface-2" />
-                  <div className="h-8 w-8 animate-pulse rounded-md bg-surface-2" />
-                  <div className="h-8 w-8 animate-pulse rounded-md bg-surface-2" />
+      {/* ── Plugin Grid ── */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-xl border border-border bg-card p-5">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 animate-pulse rounded-lg bg-surface-3" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-28 animate-pulse rounded bg-surface-3" />
+                  <div className="h-3 w-40 animate-pulse rounded bg-surface-2 font-mono" />
+                  <div className="h-3 w-full animate-pulse rounded bg-surface-2" />
                 </div>
               </div>
-            ))}
-          </motion.div>
-        ) : !plugins || plugins.length === 0 ? (
-          <motion.div variants={itemVariants}>
-            <EmptyState
-              title="No Plugins Installed"
-              description="Place plugins in the catalyst-plugins/ directory to get started."
+              <div className="mt-4 flex gap-2">
+                <div className="h-8 w-24 animate-pulse rounded-md bg-surface-2" />
+                <div className="h-8 w-8 animate-pulse rounded-md bg-surface-2" />
+                <div className="h-8 w-8 animate-pulse rounded-md bg-surface-2" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : !plugins || plugins.length === 0 ? (
+        <TabEmptyState
+          title="No Plugins Installed"
+          description="Place plugins in the catalyst-plugins/ directory to get started."
+        />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {plugins.map((plugin) => (
+            <PluginCard
+              key={plugin.name}
+              plugin={plugin}
+              isProcessing={processingPlugin === plugin.name}
+              onToggle={() => toggleMutation.mutate({ name: plugin.name, enabled: !plugin.enabled })}
+              onReload={() => reloadMutation.mutate(plugin.name)}
+              onSettings={() => setSettingsPlugin(plugin.name)}
             />
-          </motion.div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {plugins.map((plugin, i) => (
-              <PluginCard
-                key={plugin.name}
-                plugin={plugin}
-                index={i}
-                isProcessing={processingPlugin === plugin.name}
-                onToggle={() => toggleMutation.mutate({ name: plugin.name, enabled: !plugin.enabled })}
-                onReload={() => reloadMutation.mutate(plugin.name)}
-                onSettings={() => setSettingsPlugin(plugin.name)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Settings Modal ── */}
       <PluginSettingsModal
@@ -538,6 +488,6 @@ export default function PluginsPage() {
         open={!!settingsPlugin}
         onOpenChange={(open) => !open && setSettingsPlugin(null)}
       />
-    </motion.div>
+    </div>
   );
 }

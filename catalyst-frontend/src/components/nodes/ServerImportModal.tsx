@@ -8,7 +8,6 @@ import { templatesApi } from '../../services/api/templates';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { ModalPortal } from '@/components/ui/modal-portal';
-import { motion } from 'framer-motion';
 import Combobox from '@/components/ui/combobox';
 
 export interface UnregisteredContainer {
@@ -159,12 +158,7 @@ export default function ServerImportModal({
   return (
     <ModalPortal>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-          className="w-full max-w-3xl rounded-xl border border-warning/30 bg-card shadow-xl"
-        >
+        <div className="w-full max-w-3xl rounded-xl border border-warning/30 bg-card shadow-xl">
           <div className="flex items-center justify-between border-b border-warning/30 bg-warning/5 px-6 py-4">
             <div className="flex items-center gap-2">
               <Download className="h-5 w-5 text-warning" />
@@ -173,7 +167,7 @@ export default function ServerImportModal({
               </h2>
             </div>
             <button
-              className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground dark:text-foreground"
+              className="rounded-md border border-border/40 px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
               onClick={onClose}
             >
               Close
@@ -199,7 +193,7 @@ export default function ServerImportModal({
                   return (
                     <div
                       key={container.containerId}
-                      className="rounded-lg border border-border/50 bg-surface-2/30 p-4"
+                      className="rounded-lg border border-border/30 bg-surface-2/30 p-4"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -230,7 +224,7 @@ export default function ServerImportModal({
                               )}
                             </div>
                             {container.startupCommand && (
-                              <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground/70" title={container.startupCommand}>
+                              <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground/60" title={container.startupCommand}>
                                 {container.startupCommand.length > 120 ? container.startupCommand.slice(0, 120) + '…' : container.startupCommand}
                               </div>
                             )}
@@ -276,11 +270,7 @@ export default function ServerImportModal({
                       </div>
 
                       {isExpanded && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          className="mt-4 space-y-3 border-t border-border/50 pt-4"
-                        >
+                        <div className="mt-4 space-y-3 border-t border-border/30 pt-4">
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div>
                               <label className="mb-1 block text-xs font-medium text-muted-foreground">
@@ -293,7 +283,7 @@ export default function ServerImportModal({
                                   updateForm(container.containerId, { name: e.target.value })
                                 }
                                 placeholder="My Server"
-                                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                                className="w-full rounded-md border border-border/40 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
                               />
                             </div>
                             <div>
@@ -352,7 +342,7 @@ export default function ServerImportModal({
                                 onChange={(e) =>
                                   updateForm(container.containerId, { primaryPort: e.target.value })
                                 }
-                                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+                                className="w-full rounded-md border border-border/40 bg-card px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
                               />
                             </div>
                             <div>
@@ -368,7 +358,7 @@ export default function ServerImportModal({
                                   })
                                 }
                                 placeholder="1024"
-                                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                                className="w-full rounded-md border border-border/40 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
                               />
                             </div>
                             <div>
@@ -384,7 +374,7 @@ export default function ServerImportModal({
                                   })
                                 }
                                 placeholder="1"
-                                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                                className="w-full rounded-md border border-border/40 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
                               />
                             </div>
                           </div>
@@ -413,7 +403,7 @@ export default function ServerImportModal({
                               Import Server
                             </Button>
                           </div>
-                        </motion.div>
+                        </div>
                       )}
                     </div>
                   );
@@ -421,7 +411,7 @@ export default function ServerImportModal({
               </div>
             )}
           </div>
-        </motion.div>
+        </div>
       </div>
     </ModalPortal>
   );

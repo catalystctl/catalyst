@@ -151,7 +151,7 @@ function NodeCreateModal(_props: Props) {
   return (
     <div>
       <button
-        className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
+        className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all hover:bg-primary/90"
         onClick={() => {
           setStep(1);
           setOpen(true);
@@ -164,14 +164,14 @@ function NodeCreateModal(_props: Props) {
       {open ? (
         <ModalPortal>
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 py-10 backdrop-blur-sm">
-            <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl transition-all duration-300 dark:border-border dark:bg-surface-1">
+            <div className="flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-xl border border-border/40 bg-card shadow-xl">
               {/* ── Header ── */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5 dark:border-border">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/30 px-6 py-5">
                 <div>
                   <h2 className="text-lg font-semibold text-foreground">
                     {step === 1 ? 'Register Node' : step === 2 ? 'Node details' : 'Deploy agent'}
                   </h2>
-                  <p className="text-xs text-muted-foreground dark:text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     {step === 1
                       ? 'Choose a location for this node.'
                       : step === 2
@@ -180,7 +180,7 @@ function NodeCreateModal(_props: Props) {
                   </p>
                 </div>
                 <button
-                  className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary dark:border-border dark:hover:border-primary/30"
+                  className="rounded-full border border-border/40 px-3 py-1 text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50"
                   onClick={() => {
                     setOpen(false);
                     resetForm();
@@ -191,9 +191,9 @@ function NodeCreateModal(_props: Props) {
               </div>
 
               {/* ── Step indicator ── */}
-              <div className="flex items-center gap-2 border-b border-border px-6 py-2.5 dark:border-border">
+              <div className="flex items-center gap-2 border-b border-border/30 px-6 py-2.5">
                 <div
-                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 1 ? 'bg-primary/10 text-primary-600 dark:text-primary-400' : 'text-muted-foreground'}`}
+                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 1 ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
                 >
                   <span
                     className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 1 ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground'}`}
@@ -202,9 +202,9 @@ function NodeCreateModal(_props: Props) {
                   </span>
                   Location
                 </div>
-                <div className="h-px flex-1 bg-border" />
+                <div className="h-px flex-1 bg-border/30" />
                 <div
-                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 2 ? 'bg-primary/10 text-primary-600 dark:text-primary-400' : step === 3 ? 'bg-primary/10 text-primary-600 dark:text-primary-400' : 'text-muted-foreground'}`}
+                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 2 || step === 3 ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
                 >
                   <span
                     className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 2 || step === 3 ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground'}`}
@@ -213,9 +213,9 @@ function NodeCreateModal(_props: Props) {
                   </span>
                   Details
                 </div>
-                <div className="h-px flex-1 bg-border" />
+                <div className="h-px flex-1 bg-border/30" />
                 <div
-                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 3 ? 'bg-primary/10 text-primary-600 dark:text-primary-400' : 'text-muted-foreground'}`}
+                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${step === 3 ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
                 >
                   <span
                     className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${step === 3 ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground'}`}
@@ -229,8 +229,8 @@ function NodeCreateModal(_props: Props) {
               {/* ── Step 1: Location Selection ── */}
               {step === 1 && (
                 <div className="flex flex-col items-center px-6 py-10 text-center">
-                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 dark:from-emerald-500/20 dark:to-cyan-500/20">
-                    <MapPin className="h-7 w-7 text-success dark:text-success" />
+                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-success/10">
+                    <MapPin className="h-7 w-7 text-success" />
                   </div>
                   <h3 className="text-base font-semibold text-foreground">
                     Assign this node to a location?
@@ -253,7 +253,7 @@ function NodeCreateModal(_props: Props) {
                         value={locationId || '__none__'}
                         onValueChange={(v) => setLocationId(v === '__none__' ? '' : v)}
                       >
-                        <SelectTrigger className="w-full max-w-xs">
+                        <SelectTrigger className="w-full max-w-xs border-border/40">
                           <SelectValue placeholder="Choose a location…" />
                         </SelectTrigger>
                         <SelectContent>
@@ -274,12 +274,12 @@ function NodeCreateModal(_props: Props) {
                       </Select>
                     </label>
                   ) : (
-                    <div className="mt-6 rounded-xl border border-dashed border-border bg-surface-2/50 px-5 py-4 dark:bg-surface-1/40">
+                    <div className="mt-6 rounded-xl border border-dashed border-border/40 bg-surface-2/50 px-5 py-4">
                       <p className="text-sm text-muted-foreground">
                         No locations exist yet.{' '}
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1 font-medium text-primary-600 hover:text-primary dark:text-primary-400 dark:hover:text-primary-300"
+                          className="inline-flex items-center gap-1 font-medium text-primary hover:text-primary/80"
                           onClick={() => {
                             setOpen(false);
                             setStep(1);
@@ -296,7 +296,7 @@ function NodeCreateModal(_props: Props) {
                   <div className="mt-8 flex items-center gap-3">
                     {locations.length > 0 && locationId && (
                       <button
-                        className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
+                        className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all hover:bg-primary/90"
                         onClick={() => setStep(2)}
                       >
                         Continue
@@ -312,64 +312,64 @@ function NodeCreateModal(_props: Props) {
                 <>
                   <div className="space-y-3 overflow-y-auto px-6 py-4 text-sm text-muted-foreground">
                     {locationId && (
-                      <div className="flex items-center gap-2 rounded-lg bg-success/5 px-3 py-2 dark:bg-success/20">
-                        <MapPin className="h-4 w-4 text-success dark:text-success" />
-                        <span className="text-xs font-medium text-success dark:text-success">
+                      <div className="flex items-center gap-2 rounded-lg bg-success/5 px-3 py-2">
+                        <MapPin className="h-4 w-4 text-success" />
+                        <span className="text-xs font-medium text-success">
                           Location: {locations.find((l) => l.id === locationId)?.name || locationId}
                         </span>
                       </div>
                     )}
                     <label className="block space-y-1">
-                      <span className="text-muted-foreground dark:text-muted-foreground">Name</span>
+                      <span className="text-muted-foreground">Name</span>
                       <input
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
+                        className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
                         value={name}
                         onChange={(event) => setName(event.target.value)}
                         placeholder="production-1"
                       />
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-muted-foreground dark:text-muted-foreground">
+                      <span className="text-muted-foreground">
                         Description
                       </span>
                       <input
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
+                        className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
                         value={description}
                         onChange={(event) => setDescription(event.target.value)}
                         placeholder="Primary node"
                       />
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-muted-foreground dark:text-muted-foreground">
+                      <span className="text-muted-foreground">
                         Server data directory
                       </span>
                       <input
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 font-mono text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
+                        className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
                         value={serverDataDir}
                         onChange={(event) => setServerDataDir(event.target.value)}
                         placeholder="/var/lib/catalyst/servers"
                       />
-                      <p className="text-xs text-muted-foreground dark:text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         Directory on the node where server files will be stored
                       </p>
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-muted-foreground dark:text-muted-foreground">
+                      <span className="text-muted-foreground">
                         Hostname
                       </span>
                       <input
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
+                        className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
                         value={hostname}
                         onChange={(event) => setHostname(event.target.value)}
                         placeholder="node1.example.com"
                       />
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-muted-foreground dark:text-muted-foreground">
+                      <span className="text-muted-foreground">
                         Public address
                       </span>
                       <input
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
+                        className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
                         value={publicAddress}
                         onChange={(event) => setPublicAddress(event.target.value)}
                         placeholder="203.0.113.10 or 2001:db8::1"
@@ -377,11 +377,11 @@ function NodeCreateModal(_props: Props) {
                     </label>
                     <div className="grid grid-cols-2 gap-3">
                       <label className="block space-y-1">
-                        <span className="text-muted-foreground dark:text-muted-foreground">
+                        <span className="text-muted-foreground">
                           Memory (MB)
                         </span>
                         <input
-                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
+                          className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
                           value={memory}
                           onChange={(event) => setMemory(event.target.value)}
                           type="number"
@@ -389,11 +389,11 @@ function NodeCreateModal(_props: Props) {
                         />
                       </label>
                       <label className="block space-y-1">
-                        <span className="text-muted-foreground dark:text-muted-foreground">
+                        <span className="text-muted-foreground">
                           CPU cores
                         </span>
                         <input
-                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
+                          className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
                           value={cpu}
                           onChange={(event) => setCpu(event.target.value)}
                           type="number"
@@ -404,46 +404,46 @@ function NodeCreateModal(_props: Props) {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <label className="block space-y-1">
-                        <span className="text-muted-foreground dark:text-muted-foreground">
+                        <span className="text-muted-foreground">
                           Memory Over-allocation (%)
                         </span>
                         <input
-                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
+                          className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
                           value={memoryOverallocate}
                           onChange={(event) => setMemoryOverallocate(event.target.value)}
                           type="number"
                           min={-1}
                         />
-                        <p className="text-xs text-muted-foreground dark:text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           0 = no over-allocation, -1 = unlimited
                         </p>
                       </label>
                       <label className="block space-y-1">
-                        <span className="text-muted-foreground dark:text-muted-foreground">
+                        <span className="text-muted-foreground">
                           CPU Over-allocation (%)
                         </span>
                         <input
-                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
+                          className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
                           value={cpuOverallocate}
                           onChange={(event) => setCpuOverallocate(event.target.value)}
                           type="number"
                           min={-1}
                         />
-                        <p className="text-xs text-muted-foreground dark:text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           0 = no over-allocation, -1 = unlimited
                         </p>
                       </label>
                     </div>
                   </div>
-                  <div className="flex justify-between gap-2 border-t border-border px-6 py-4 text-xs dark:border-border">
+                  <div className="flex justify-between gap-2 border-t border-border/30 px-6 py-4 text-xs">
                     <button
-                      className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:hover:border-primary/30"
+                      className="rounded-full border border-border/40 px-4 py-2 text-sm font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:text-foreground"
                       onClick={() => setStep(1)}
                     >
                       &larr; Back
                     </button>
                     <button
-                      className="rounded-full bg-primary px-6 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
+                      className="rounded-full bg-primary px-6 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all hover:bg-primary/90 disabled:opacity-60"
                       onClick={() => createMutation.mutate()}
                       disabled={disableSubmit}
                     >
@@ -457,8 +457,8 @@ function NodeCreateModal(_props: Props) {
               {step === 3 && (
                 <>
                   <div className="flex flex-col items-center px-6 py-8 text-center">
-                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 dark:from-emerald-500/20 dark:to-cyan-500/20">
-                      <CheckCircle className="h-7 w-7 text-success dark:text-success" />
+                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-success/10">
+                      <CheckCircle className="h-7 w-7 text-success" />
                     </div>
                     <h3 className="text-base font-semibold text-foreground">
                       Node registered successfully
@@ -474,7 +474,7 @@ function NodeCreateModal(_props: Props) {
                       </div>
                     ) : deployInfo ? (
                       <div className="mt-6 w-full space-y-3 text-left">
-                        <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 font-mono text-xs text-foreground dark:border-border dark:bg-surface-0/40">
+                        <div className="rounded-lg border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
                           <code className="whitespace-pre-wrap break-all">
 {`curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`}
                           </code>
@@ -482,7 +482,7 @@ function NodeCreateModal(_props: Props) {
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span>Token expires: {new Date(deployInfo.expiresAt).toLocaleString()}</span>
                           <button
-                            className="inline-flex items-center gap-1 font-medium text-primary-600 hover:text-primary dark:text-primary-400 dark:hover:text-primary-300"
+                            className="inline-flex items-center gap-1 font-medium text-primary hover:text-primary/80"
                             onClick={() => {
                               navigator.clipboard.writeText(
                                 `curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`
@@ -497,11 +497,11 @@ function NodeCreateModal(_props: Props) {
                       </div>
                     ) : deployTokenMutation.isError ? (
                       <div className="mt-6 w-full space-y-3 text-left">
-                        <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning dark:border-warning/30 dark:bg-warning/10">
+                        <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
                           Failed to generate deployment script automatically.
                         </div>
                         <button
-                          className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
+                          className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all hover:bg-primary/90"
                           onClick={() => {
                             if (createdNodeId) {
                               deployTokenMutation.mutate(createdNodeId);
@@ -513,7 +513,7 @@ function NodeCreateModal(_props: Props) {
                         {createdNodeId && (
                           <p className="text-xs text-muted-foreground">
                             Or go to{' '}
-                            <a href={`/admin/nodes/${createdNodeId}`} className="font-medium text-primary-600 hover:text-primary dark:text-primary-400">
+                            <a href={`/admin/nodes/${createdNodeId}`} className="font-medium text-primary hover:text-primary/80">
                               node settings
                             </a>{' '}
                             to generate the deploy script manually.
@@ -522,9 +522,9 @@ function NodeCreateModal(_props: Props) {
                       </div>
                     ) : null}
                   </div>
-                  <div className="flex justify-end border-t border-border px-6 py-4 text-xs dark:border-border">
+                  <div className="flex justify-end border-t border-border/30 px-6 py-4 text-xs">
                     <button
-                      className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
+                      className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all hover:bg-primary/90"
                       onClick={() => {
                         setOpen(false);
                         resetForm();

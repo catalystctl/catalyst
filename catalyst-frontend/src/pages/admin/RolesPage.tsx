@@ -2,7 +2,6 @@ import { useMemo, useRef, useState, useCallback } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
-import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
   Shield,
   Search,
@@ -34,16 +33,21 @@ import { NodeAssignmentsSelector } from '../../components/admin/NodeAssignmentsS
 import type { NodeAssignmentWithExpiration } from '../../components/admin/NodeAssignmentsSelector';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
 import { ModalPortal } from '@/components/ui/modal-portal';
+import TabHeader from '../../components/servers/tabs/TabHeader';
+import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import SectionHeader from '../../components/servers/tabs/SectionHeader';
+import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
+import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 
 // ── Permission categories ──────────────────────────────────────────────
 const PERMISSION_CATEGORIES = [
   {
     label: 'Server',
     icon: Server,
-    color: 'from-blue-500/20 to-cyan-500/20 dark:from-blue-500/30 dark:to-cyan-500/30',
-    accent: 'text-blue-600 dark:text-blue-400',
-    border: 'border-blue-500/20 dark:border-blue-500/30',
-    bg: 'bg-blue-500/5 dark:bg-blue-500/10',
+    color: 'from-blue-500/20 to-cyan-500/20',
+    accent: 'text-blue-600',
+    border: 'border-blue-500/20',
+    bg: 'bg-blue-500/5',
     permissions: [
       'server.read', 'server.create', 'server.start', 'server.stop',
       'server.delete', 'server.suspend', 'server.transfer', 'server.schedule',
@@ -52,10 +56,10 @@ const PERMISSION_CATEGORIES = [
   {
     label: 'Node',
     icon: Zap,
-    color: 'from-amber-500/20 to-yellow-500/20 dark:from-amber-500/30 dark:to-yellow-500/30',
-    accent: 'text-amber-600 dark:text-amber-400',
-    border: 'border-amber-500/20 dark:border-amber-500/30',
-    bg: 'bg-amber-500/5 dark:bg-amber-500/10',
+    color: 'from-amber-500/20 to-yellow-500/20',
+    accent: 'text-amber-600',
+    border: 'border-amber-500/20',
+    bg: 'bg-amber-500/5',
     permissions: [
       'node.read', 'node.create', 'node.update', 'node.delete',
       'node.view_stats', 'node.manage_allocation', 'node.assign',
@@ -64,91 +68,91 @@ const PERMISSION_CATEGORIES = [
   {
     label: 'Location',
     icon: Globe,
-    color: 'from-emerald-500/20 to-teal-500/20 dark:from-emerald-500/30 dark:to-teal-500/30',
-    accent: 'text-emerald-600 dark:text-emerald-400',
-    border: 'border-emerald-500/20 dark:border-emerald-500/30',
-    bg: 'bg-emerald-500/5 dark:bg-emerald-500/10',
+    color: 'from-emerald-500/20 to-teal-500/20',
+    accent: 'text-emerald-600',
+    border: 'border-emerald-500/20',
+    bg: 'bg-emerald-500/5',
     permissions: ['location.read', 'location.create', 'location.update', 'location.delete'],
   },
   {
     label: 'Template',
     icon: Info,
-    color: 'from-violet-500/20 to-purple-500/20 dark:from-violet-500/30 dark:to-purple-500/30',
-    accent: 'text-violet-600 dark:text-violet-400',
-    border: 'border-violet-500/20 dark:border-violet-500/30',
-    bg: 'bg-violet-500/5 dark:bg-violet-500/10',
+    color: 'from-violet-500/20 to-purple-500/20',
+    accent: 'text-violet-600',
+    border: 'border-violet-500/20',
+    bg: 'bg-violet-500/5',
     permissions: ['template.read', 'template.create', 'template.update', 'template.delete'],
   },
   {
     label: 'User Management',
     icon: Users,
-    color: 'from-rose-500/20 to-pink-500/20 dark:from-rose-500/30 dark:to-pink-500/30',
-    accent: 'text-rose-600 dark:text-rose-400',
-    border: 'border-rose-500/20 dark:border-rose-500/30',
-    bg: 'bg-rose-500/5 dark:bg-rose-500/10',
+    color: 'from-rose-500/20 to-pink-500/20',
+    accent: 'text-rose-600',
+    border: 'border-rose-500/20',
+    bg: 'bg-rose-500/5',
     permissions: ['user.read', 'user.create', 'user.update', 'user.delete', 'user.ban', 'user.unban', 'user.set_roles'],
   },
   {
     label: 'Role Management',
     icon: Shield,
-    color: 'from-orange-500/20 to-red-500/20 dark:from-orange-500/30 dark:to-red-500/30',
-    accent: 'text-orange-600 dark:text-orange-400',
-    border: 'border-orange-500/20 dark:border-orange-500/30',
-    bg: 'bg-orange-500/5 dark:bg-orange-500/10',
+    color: 'from-orange-500/20 to-red-500/20',
+    accent: 'text-orange-600',
+    border: 'border-orange-500/20',
+    bg: 'bg-orange-500/5',
     permissions: ['role.read', 'role.create', 'role.update', 'role.delete'],
   },
   {
     label: 'Backup',
     icon: Shield,
-    color: 'from-sky-500/20 to-indigo-500/20 dark:from-sky-500/30 dark:to-indigo-500/30',
-    accent: 'text-sky-600 dark:text-sky-400',
-    border: 'border-sky-500/20 dark:border-sky-500/30',
-    bg: 'bg-sky-500/5 dark:bg-sky-500/10',
+    color: 'from-sky-500/20 to-indigo-500/20',
+    accent: 'text-sky-600',
+    border: 'border-sky-500/20',
+    bg: 'bg-sky-500/5',
     permissions: ['backup.read', 'backup.create', 'backup.delete', 'backup.restore'],
   },
   {
     label: 'File Management',
     icon: Info,
-    color: 'from-lime-500/20 to-green-500/20 dark:from-lime-500/30 dark:to-green-500/30',
-    accent: 'text-lime-600 dark:text-lime-400',
-    border: 'border-lime-500/20 dark:border-lime-500/30',
-    bg: 'bg-lime-500/5 dark:bg-lime-500/10',
+    color: 'from-lime-500/20 to-green-500/20',
+    accent: 'text-lime-600',
+    border: 'border-lime-500/20',
+    bg: 'bg-lime-500/5',
     permissions: ['file.read', 'file.write'],
   },
   {
     label: 'Console',
     icon: Info,
-    color: 'from-fuchsia-500/20 to-pink-500/20 dark:from-fuchsia-500/30 dark:to-pink-500/30',
-    accent: 'text-fuchsia-600 dark:text-fuchsia-400',
-    border: 'border-fuchsia-500/20 dark:border-fuchsia-500/30',
-    bg: 'bg-fuchsia-500/5 dark:bg-fuchsia-500/10',
+    color: 'from-fuchsia-500/20 to-pink-500/20',
+    accent: 'text-fuchsia-600',
+    border: 'border-fuchsia-500/20',
+    bg: 'bg-fuchsia-500/5',
     permissions: ['console.read', 'console.write'],
   },
   {
     label: 'Database',
     icon: Info,
-    color: 'from-teal-500/20 to-cyan-500/20 dark:from-teal-500/30 dark:to-cyan-500/30',
-    accent: 'text-teal-600 dark:text-teal-400',
-    border: 'border-teal-500/20 dark:border-teal-500/30',
-    bg: 'bg-teal-500/5 dark:bg-teal-500/10',
+    color: 'from-teal-500/20 to-cyan-500/20',
+    accent: 'text-teal-600',
+    border: 'border-teal-500/20',
+    bg: 'bg-teal-500/5',
     permissions: ['database.create', 'database.read', 'database.delete', 'database.rotate'],
   },
   {
     label: 'Alerts',
     icon: Info,
-    color: 'from-red-500/20 to-orange-500/20 dark:from-red-500/30 dark:to-orange-500/30',
-    accent: 'text-red-600 dark:text-red-400',
-    border: 'border-red-500/20 dark:border-red-500/30',
-    bg: 'bg-red-500/5 dark:bg-red-500/10',
+    color: 'from-red-500/20 to-orange-500/20',
+    accent: 'text-red-600',
+    border: 'border-red-500/20',
+    bg: 'bg-red-500/5',
     permissions: ['alert.read', 'alert.create', 'alert.update', 'alert.delete'],
   },
   {
     label: 'System Administration',
     icon: Lock,
-    color: 'from-slate-500/20 to-gray-500/20 dark:from-slate-500/30 dark:to-gray-500/30',
-    accent: 'text-slate-600 dark:text-slate-400',
-    border: 'border-slate-500/20 dark:border-slate-500/30',
-    bg: 'bg-slate-500/5 dark:bg-slate-500/10',
+    color: 'from-slate-500/20 to-gray-500/20',
+    accent: 'text-slate-600',
+    border: 'border-slate-500/20',
+    bg: 'bg-slate-500/5',
     permissions: ['admin.read', 'admin.write', 'apikey.manage'],
   },
 ];
@@ -157,12 +161,12 @@ const PERMISSION_CATEGORIES = [
 const PERMISSION_PRESETS = [
   {
     key: 'administrator', label: 'Administrator', description: 'Full unrestricted system access',
-    icon: KeyRound, color: 'from-amber-500/20 to-orange-500/20 dark:from-amber-500/30 dark:to-orange-500/30',
+    icon: KeyRound, color: 'from-amber-500/20 to-orange-500/20',
     permissions: ['*'],
   },
   {
     key: 'moderator', label: 'Moderator', description: 'Manage servers, files, console — not users/roles',
-    icon: Shield, color: 'from-blue-500/20 to-cyan-500/20 dark:from-blue-500/30 dark:to-cyan-500/30',
+    icon: Shield, color: 'from-blue-500/20 to-cyan-500/20',
     permissions: [
       'node.read', 'node.update', 'node.view_stats', 'node.assign',
       'location.read', 'template.read', 'user.read', 'server.read',
@@ -173,12 +177,12 @@ const PERMISSION_PRESETS = [
   },
   {
     key: 'user', label: 'User', description: 'Basic access to own servers',
-    icon: Users, color: 'from-emerald-500/20 to-green-500/20 dark:from-emerald-500/30 dark:to-green-500/30',
+    icon: Users, color: 'from-emerald-500/20 to-green-500/20',
     permissions: ['server.read'],
   },
   {
     key: 'support', label: 'Support', description: 'Read-only access for support staff',
-    icon: Eye, color: 'from-violet-500/20 to-purple-500/20 dark:from-violet-500/30 dark:to-purple-500/30',
+    icon: Eye, color: 'from-violet-500/20 to-purple-500/20',
     permissions: [
       'node.read', 'node.view_stats', 'location.read', 'template.read',
       'server.read', 'file.read', 'console.read', 'alert.read', 'user.read',
@@ -220,7 +224,7 @@ function formatPermission(perm: string): string {
 }
 
 function getPermissionCategories(permissions: string[]) {
-  if (permissions.includes('*')) return [{ category: 'All Permissions', count: 1, icon: KeyRound, color: 'from-amber-500/20 to-orange-500/20', accent: 'text-amber-600 dark:text-amber-400', border: 'border-amber-500/20' }];
+  if (permissions.includes('*')) return [{ category: 'All Permissions', count: 1, icon: KeyRound, color: 'from-amber-500/20 to-orange-500/20', accent: 'text-amber-600', border: 'border-amber-500/20' }];
   const categoryMap = new Map<string, { count: number; icon: typeof Shield; color: string; accent: string; border: string }>();
   for (const perm of permissions) {
     const prefix = perm.split('.')[0];
@@ -242,23 +246,6 @@ function getPermissionCategories(permissions: string[]) {
     .sort((a, b) => b.count - a.count);
 }
 
-// ── Animation Variants ──
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.05 } },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
-};
-
-const stepVariants: Variants = {
-  enter: (direction: number) => ({ x: direction > 0 ? 40 : -40, opacity: 0 }),
-  center: { x: 0, opacity: 1 },
-  exit: (direction: number) => ({ x: direction > 0 ? -40 : 40, opacity: 0 }),
-};
-
 // ── Role Card ──
 function RoleCard({
   role,
@@ -268,7 +255,6 @@ function RoleCard({
   onDelete,
   canDelete,
   isDeleting,
-  index,
 }: {
   role: any;
   isActive: boolean;
@@ -277,20 +263,16 @@ function RoleCard({
   onDelete: () => void;
   canDelete: boolean;
   isDeleting: boolean;
-  index: number;
 }) {
   const isWildcard = role.permissions?.includes('*');
   const permCats = getPermissionCategories(role.permissions || []);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 24, delay: index * 0.03 }}
+    <div
       onClick={onView}
       className={`group relative cursor-pointer overflow-hidden rounded-xl border p-5 transition-all duration-200 hover:shadow-md ${
         isActive
-          ? 'border-primary/40 bg-primary/5 dark:bg-primary/10'
+          ? 'border-primary/40 bg-primary/5'
           : 'border-border bg-card hover:border-primary/20'
       }`}
     >
@@ -300,11 +282,11 @@ function RoleCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2.5">
-            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isWildcard ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-primary/10 text-primary'}`}>
+            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isWildcard ? 'bg-amber-500/10 text-amber-600' : 'bg-primary/10 text-primary'}`}>
               {isWildcard ? <KeyRound className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
             </div>
             <div className="min-w-0">
-              <div className="truncate font-semibold text-foreground dark:text-foreground">
+              <div className="truncate font-semibold text-foreground">
                 {role.name}
               </div>
               {role.description && (
@@ -345,7 +327,7 @@ function RoleCard({
       {/* Permission preview chips */}
       <div className="mt-4 flex flex-wrap gap-1.5">
         {isWildcard ? (
-          <Badge className="gap-1 border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400">
+          <Badge className="gap-1 border-amber-500/30 bg-amber-500/10 text-amber-700">
             <Zap className="h-3 w-3" /> Full Admin
           </Badge>
         ) : (
@@ -374,7 +356,7 @@ function RoleCard({
           </Badge>
         ) : null}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -400,9 +382,9 @@ function StepIndicator({ steps, currentStep, onStepClick, canNavigate }: {
               disabled={!canClick}
               className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
                 isActive
-                  ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20'
+                  ? 'bg-primary text-primary-foreground shadow-[0_0_8px_-1px_hsl(var(--primary)/0.25)]'
                   : isComplete
-                  ? 'bg-primary/10 text-primary dark:bg-primary/20'
+                  ? 'bg-primary/10 text-primary'
                   : canClick
                   ? 'text-muted-foreground hover:text-foreground hover:bg-surface-2'
                   : 'text-muted-foreground/40 cursor-not-allowed'
@@ -442,7 +424,7 @@ function PermissionChip({
         compact ? 'px-1.5 py-0.5 text-[10px]' : ''
       } ${
         selected
-          ? 'border-primary/30 bg-primary/10 text-primary shadow-sm shadow-primary/10 dark:border-primary/40 dark:bg-primary/20 dark:text-primary-300'
+          ? 'border-primary/30 bg-primary/10 text-primary shadow-sm shadow-primary/10'
           : 'border-border bg-card text-muted-foreground hover:border-primary/20 hover:text-foreground'
       }`}
     >
@@ -498,12 +480,11 @@ function PermissionCategoryCard({
           <span className={`text-[11px] tabular-nums ${someSelected ? category.accent : 'text-muted-foreground'}`}>
             {selectedCount}/{category.permissions.length}
           </span>
-          {/* Toggle indicator */}
           <div className={`flex h-5 w-9 items-center rounded-full transition-all duration-200 ${
             allSelected ? 'bg-primary' : someSelected ? 'bg-primary/40' : 'bg-surface-3'
           }`}>
             <div className={`h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-all duration-200 ${
-              allSelected ? 'translate-x-4.5' : someSelected ? 'translate-x-2.5' : 'translate-x-0.5'
+              allSelected ? 'translate-x-[18px]' : someSelected ? 'translate-x-[10px]' : 'translate-x-[2px]'
             }`} />
           </div>
         </div>
@@ -593,7 +574,7 @@ function PresetCard({
       </div>
       <div className="flex flex-wrap gap-1">
         {isWildcard ? (
-          <Badge className="gap-1 border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[9px]">
+          <Badge className="gap-1 border-amber-500/30 bg-amber-500/10 text-amber-700 text-[9px]">
             <Zap className="h-2.5 w-2.5" /> All Permissions
           </Badge>
         ) : (
@@ -624,7 +605,6 @@ function RolesPage() {
 
   // Wizard state
   const [wizardStep, setWizardStep] = useState(0);
-  const [wizardDirection, setWizardDirection] = useState(1);
 
   // Form state
   const [name, setName] = useState('');
@@ -688,7 +668,7 @@ function RolesPage() {
       else newSet.add(permission);
       return newSet;
     });
-    setActivePreset(null); // manual edit clears preset highlight
+    setActivePreset(null);
   }, []);
 
   const toggleCategory = useCallback((perms: string[], select: boolean) => {
@@ -767,17 +747,15 @@ function RolesPage() {
     { label: 'Node Access', icon: Server },
   ];
 
-  // Can navigate to a step if prior steps have valid data
   const canNavigateStep = [
-    true, // can always go to Details
-    name.trim().length > 0, // can go to Permissions if name is set
-    name.trim().length > 0 && selectedPermissions.size > 0, // can go to Node Access if name + perms
+    true,
+    name.trim().length > 0,
+    name.trim().length > 0 && selectedPermissions.size > 0,
   ];
 
   const goToStep = (step: number) => {
     if (step < 0 || step >= wizardSteps.length) return;
     if (!canNavigateStep[step]) return;
-    setWizardDirection(step > wizardStep ? 1 : -1);
     setWizardStep(step);
   };
 
@@ -795,496 +773,417 @@ function RolesPage() {
   };
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial={false}
-      animate="visible"
-      className="relative overflow-hidden"
-    >
-      {/* Ambient background */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-violet-500/8 to-purple-500/8 blur-3xl dark:from-violet-500/15 dark:to-purple-500/15" />
-        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-amber-500/8 to-orange-500/8 blur-3xl dark:from-amber-500/15 dark:to-orange-500/15" />
-      </div>
-
-      <div className="relative z-10 space-y-5">
-        {/* ── Header ── */}
-        <motion.div variants={itemVariants} className="flex flex-wrap items-end justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-violet-500 to-purple-500 opacity-20 blur-sm" />
-                <Shield className="relative h-7 w-7 text-violet-600 dark:text-violet-400" />
-              </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">
-                Roles
-              </h1>
-            </div>
-            <p className="ml-10 text-sm text-muted-foreground">
-              Manage user roles and their permissions.
-            </p>
-          </div>
+    <div className="space-y-5">
+      {/* ── Header ── */}
+      <TabHeader
+        icon={Shield}
+        title="Roles"
+        description="Manage user roles and their permissions"
+        actions={
           <Button size="sm" onClick={() => { resetForm(); setIsCreateOpen(true); setEditingRole(null); setViewingRole(null); }} className="gap-1.5">
             <Plus className="h-3.5 w-3.5" />
             Create role
           </Button>
-        </motion.div>
+        }
+      />
 
-        {/* ── Search Bar ── */}
-        <motion.div variants={itemVariants} className="flex flex-wrap items-center gap-3">
-          <div className="relative min-w-[200px] flex-1 max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search roles…"
-              className="pl-9"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">
-              {roles.length} roles
+      {/* ── Search Bar ── */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-[200px] flex-1 max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search roles…"
+            className="pl-9"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-xs">
+            {roles.length} roles
+          </Badge>
+          {presets.length > 0 && (
+            <Badge variant="secondary" className="text-xs">
+              {presets.length} presets
             </Badge>
-            {presets.length > 0 && (
-              <Badge variant="secondary" className="text-xs">
-                {presets.length} presets
-              </Badge>
-            )}
-          </div>
-        </motion.div>
+          )}
+        </div>
+      </div>
 
-        {/* ── Role Grid ── */}
-        {isLoading ? (
-          <motion.div variants={itemVariants} className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="rounded-xl border border-border bg-card/80 p-5">
-                <div className="flex items-start gap-3">
-                  <div className="h-9 w-9 animate-pulse rounded-lg bg-surface-3" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 w-24 animate-pulse rounded bg-surface-3" />
-                    <div className="h-3 w-36 animate-pulse rounded bg-surface-2" />
-                    <div className="flex gap-1.5">
-                      <div className="h-5 w-14 animate-pulse rounded-full bg-surface-2" />
-                      <div className="h-5 w-16 animate-pulse rounded-full bg-surface-2" />
-                    </div>
+      {/* ── Role Grid ── */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="rounded-xl border border-border bg-card p-5">
+              <div className="flex items-start gap-3">
+                <div className="h-9 w-9 animate-pulse rounded-lg bg-surface-3" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-24 animate-pulse rounded bg-surface-3" />
+                  <div className="h-3 w-36 animate-pulse rounded bg-surface-2" />
+                  <div className="flex gap-1.5">
+                    <div className="h-5 w-14 animate-pulse rounded-full bg-surface-2" />
+                    <div className="h-5 w-16 animate-pulse rounded-full bg-surface-2" />
                   </div>
                 </div>
               </div>
-            ))}
-          </motion.div>
-        ) : filteredRoles.length === 0 ? (
-          <motion.div variants={itemVariants}>
-            <EmptyState
-              title={search.trim() ? 'No roles found' : 'No roles'}
-              description={search.trim() ? 'Try a different role name or description.' : 'Create a role to define permissions for users.'}
-              action={
-                <Button size="sm" onClick={() => { resetForm(); setIsCreateOpen(true); setEditingRole(null); setViewingRole(null); }} className="gap-1.5">
-                  <Plus className="h-3.5 w-3.5" />
-                  Create role
-                </Button>
-              }
+            </div>
+          ))}
+        </div>
+      ) : filteredRoles.length === 0 ? (
+        <TabEmptyState
+          title={search.trim() ? 'No roles found' : 'No roles'}
+          description={search.trim() ? 'Try a different role name or description.' : 'Create a role to define permissions for users.'}
+          action={
+            <Button size="sm" onClick={() => { resetForm(); setIsCreateOpen(true); setEditingRole(null); setViewingRole(null); }} className="gap-1.5">
+              <Plus className="h-3.5 w-3.5" />
+              Create role
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          {filteredRoles.map((role: any) => (
+            <RoleCard
+              key={role.id}
+              role={role}
+              isActive={viewingRole?.id === role.id}
+              onView={() => startView(role)}
+              onEdit={() => startEdit(role)}
+              onDelete={() => setDeletingRole(role)}
+              canDelete={role.userCount === 0}
+              isDeleting={deleteMutation.isPending}
             />
-          </motion.div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
-            {filteredRoles.map((role: any, i: number) => (
-              <RoleCard
-                key={role.id}
-                role={role}
-                index={i}
-                isActive={viewingRole?.id === role.id}
-                onView={() => startView(role)}
-                onEdit={() => startEdit(role)}
-                onDelete={() => setDeletingRole(role)}
-                canDelete={role.userCount === 0}
-                isDeleting={deleteMutation.isPending}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Create/Edit Wizard Modal ── */}
       <ModalPortal>
-        <AnimatePresence>
-          {isModalOpen && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm"
-              onClick={(e) => { if (e.target === e.currentTarget) { resetForm(); setIsCreateOpen(false); setEditingRole(null); } }}
-            >
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                className="flex w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]"
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-border px-4 py-3 md:px-6 md:py-4">
-                  <div>
-                    <h2 className="text-lg font-semibold text-foreground">
-                      {editingRole ? 'Edit role' : 'Create role'}
-                    </h2>
-                    <p className="text-xs text-muted-foreground">
-                      {editingRole ? 'Update role name, description, and permissions.' : 'Define a new role with specific permissions.'}
-                    </p>
-                  </div>
-                  <button
-                    className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-                    onClick={() => { resetForm(); setIsCreateOpen(false); setEditingRole(null); }}
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+        {isModalOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) { resetForm(); setIsCreateOpen(false); setEditingRole(null); } }}
+          >
+            <div className="flex w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-border px-4 py-3 md:px-6 md:py-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">
+                    {editingRole ? 'Edit role' : 'Create role'}
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    {editingRole ? 'Update role name, description, and permissions.' : 'Define a new role with specific permissions.'}
+                  </p>
                 </div>
+                <button
+                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                  onClick={() => { resetForm(); setIsCreateOpen(false); setEditingRole(null); }}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
 
-                {/* Step indicator */}
-                <div className="border-b border-border/50 px-4 py-2.5 md:px-6 md:py-3 overflow-x-auto">
-                  <StepIndicator
-                    steps={wizardSteps}
-                    currentStep={wizardStep}
-                    onStepClick={goToStep}
-                    canNavigate={canNavigateStep}
-                  />
-                </div>
+              {/* Step indicator */}
+              <div className="border-b border-border/50 px-4 py-2.5 md:px-6 md:py-3 overflow-x-auto">
+                <StepIndicator
+                  steps={wizardSteps}
+                  currentStep={wizardStep}
+                  onStepClick={goToStep}
+                  canNavigate={canNavigateStep}
+                />
+              </div>
 
-                {/* Step content */}
-                <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:px-6 md:py-5">
-                  <AnimatePresence mode="wait" custom={wizardDirection}>
-                    {/* Step 0: Details */}
-                    {wizardStep === 0 && (
-                      <motion.div
-                        key="step-details"
-                        custom={wizardDirection}
-                        variants={stepVariants}
-                        initial="enter"
-                        animate="center"
-                        exit="exit"
-                        transition={{ duration: 0.2 }}
-                        className="space-y-6"
-                      >
-                        {/* Presets — only for create */}
-                        {!editingRole && (
-                          <div>
-                            <div className="flex items-center gap-2 mb-3">
-                              <Sparkles className="h-4 w-4 text-amber-500" />
-                              <span className="text-sm font-semibold text-foreground">Quick start from a preset</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                              {PERMISSION_PRESETS.map((preset) => (
-                                <PresetCard
-                                  key={preset.key}
-                                  preset={preset}
-                                  onApply={() => applyPreset(preset)}
-                                  isActive={activePreset === preset.key}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Basic Info */}
-                        <div>
-                          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Role details</div>
-                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                            <label className="block space-y-1.5">
-                              <span className="text-xs font-medium text-muted-foreground">Name <span className="text-destructive">*</span></span>
-                              <Input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Moderator" />
-                            </label>
-                            <label className="block space-y-1.5">
-                              <span className="text-xs font-medium text-muted-foreground">Description</span>
-                              <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what this role can do…" />
-                            </label>
-                          </div>
+              {/* Step content */}
+              <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:px-6 md:py-5">
+                {/* Step 0: Details */}
+                {wizardStep === 0 && (
+                  <div className="space-y-6">
+                    {/* Presets — only for create */}
+                    {!editingRole && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Sparkles className="h-4 w-4 text-amber-500" />
+                          <span className="text-sm font-semibold text-foreground">Quick start from a preset</span>
                         </div>
-                      </motion.div>
-                    )}
-
-                    {/* Step 1: Permissions */}
-                    {wizardStep === 1 && (
-                      <motion.div
-                        key="step-permissions"
-                        custom={wizardDirection}
-                        variants={stepVariants}
-                        initial="enter"
-                        animate="center"
-                        exit="exit"
-                        transition={{ duration: 0.2 }}
-                        className="space-y-4"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-foreground">Permissions</span>
-                            <Badge variant={selectedPermissions.size > 0 ? 'default' : 'outline'} className="tabular-nums text-[10px]">
-                              {selectedPermissions.size} selected
-                            </Badge>
-                          </div>
-                          <div className="relative w-56">
-                            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                            <Input
-                              value={permissionSearch}
-                              onChange={(e) => setPermissionSearch(e.target.value)}
-                              placeholder="Search permissions…"
-                              className="h-8 pl-8 text-xs"
+                        <div className="grid grid-cols-2 gap-3">
+                          {PERMISSION_PRESETS.map((preset) => (
+                            <PresetCard
+                              key={preset.key}
+                              preset={preset}
+                              onApply={() => applyPreset(preset)}
+                              isActive={activePreset === preset.key}
                             />
-                          </div>
+                          ))}
                         </div>
-
-                        {/* Wildcard toggle */}
-                        <button
-                          type="button"
-                          onClick={() => togglePermission('*')}
-                          className={`flex items-center gap-3 rounded-xl border p-4 w-full transition-all duration-200 ${
-                            selectedPermissions.has('*')
-                              ? 'border-amber-500/30 bg-amber-500/5 dark:border-amber-500/40 dark:bg-amber-500/10'
-                              : 'border-border bg-card hover:border-amber-500/20'
-                          }`}
-                        >
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500/20 to-orange-500/20">
-                            <Zap className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                          </div>
-                          <div className="text-left flex-1">
-                            <div className="text-sm font-semibold text-amber-700 dark:text-amber-400">Wildcard — All Permissions</div>
-                            <div className="text-[11px] text-muted-foreground">Grants unrestricted access to every system permission</div>
-                          </div>
-                          <div className={`flex h-6 w-11 items-center rounded-full transition-all duration-200 ${
-                            selectedPermissions.has('*') ? 'bg-amber-500' : 'bg-surface-3'
-                          }`}>
-                            <div className={`h-4 w-4 rounded-full bg-white shadow-sm transition-all duration-200 ${
-                              selectedPermissions.has('*') ? 'translate-x-6' : 'translate-x-1'
-                            }`} />
-                          </div>
-                        </button>
-
-                        {/* Category grid */}
-                        {!selectedPermissions.has('*') && (
-                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                            {PERMISSION_CATEGORIES.map((category) => (
-                              <PermissionCategoryCard
-                                key={category.label}
-                                category={category}
-                                selectedPermissions={selectedPermissions}
-                                onTogglePermission={togglePermission}
-                                onToggleCategory={toggleCategory}
-                                searchQuery={permissionSearch}
-                              />
-                            ))}
-                          </div>
-                        )}
-                      </motion.div>
+                      </div>
                     )}
 
-                    {/* Step 2: Node Access */}
-                    {wizardStep === 2 && (
-                      <motion.div
-                        key="step-nodes"
-                        custom={wizardDirection}
-                        variants={stepVariants}
-                        initial="enter"
-                        animate="center"
-                        exit="exit"
-                        transition={{ duration: 0.2 }}
-                      >
-                        <NodeAssignmentsSelector
-                          roleId={editingRole?.id}
-                          selectedNodes={selectedNodeIds}
-                          onSelectionChange={setSelectedNodeIds}
-                          disabled={createMutation.isPending || updateMutation.isPending}
+                    {/* Basic Info */}
+                    <div>
+                      <SectionHeader icon={Info} title="Role details" />
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <label className="block space-y-1.5">
+                          <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Name <span className="text-destructive">*</span></span>
+                          <Input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Moderator" />
+                        </label>
+                        <label className="block space-y-1.5">
+                          <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Description</span>
+                          <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what this role can do…" />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 1: Permissions */}
+                {wizardStep === 1 && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-foreground">Permissions</span>
+                        <Badge variant={selectedPermissions.size > 0 ? 'default' : 'outline'} className="tabular-nums text-[10px]">
+                          {selectedPermissions.size} selected
+                        </Badge>
+                      </div>
+                      <div className="relative w-56">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          value={permissionSearch}
+                          onChange={(e) => setPermissionSearch(e.target.value)}
+                          placeholder="Search permissions…"
+                          className="h-8 pl-8 text-xs"
                         />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                      </div>
+                    </div>
 
-                {/* Footer with navigation */}
-                <div className="flex items-center justify-between border-t border-border px-4 py-3 md:px-6 md:py-4">
-                  <div className="text-xs text-muted-foreground">
-                    {selectedPermissions.size > 0 && (
-                      <span>{selectedPermissions.size} permission{selectedPermissions.size === 1 ? '' : 's'} selected</span>
+                    {/* Wildcard toggle */}
+                    <button
+                      type="button"
+                      onClick={() => togglePermission('*')}
+                      className={`flex items-center gap-3 rounded-xl border p-4 w-full transition-all duration-200 ${
+                        selectedPermissions.has('*')
+                          ? 'border-amber-500/30 bg-amber-500/5'
+                          : 'border-border bg-card hover:border-amber-500/20'
+                      }`}
+                    >
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500/20 to-orange-500/20">
+                        <Zap className="h-4 w-4 text-amber-600" />
+                      </div>
+                      <div className="text-left flex-1">
+                        <div className="text-sm font-semibold text-amber-700">Wildcard — All Permissions</div>
+                        <div className="text-[11px] text-muted-foreground">Grants unrestricted access to every system permission</div>
+                      </div>
+                      <div className={`flex h-6 w-11 items-center rounded-full transition-all duration-200 ${
+                        selectedPermissions.has('*') ? 'bg-amber-500' : 'bg-surface-3'
+                      }`}>
+                        <div className={`h-4 w-4 rounded-full bg-white shadow-sm transition-all duration-200 ${
+                          selectedPermissions.has('*') ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
+                      </div>
+                    </button>
+
+                    {/* Category grid */}
+                    {!selectedPermissions.has('*') && (
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        {PERMISSION_CATEGORIES.map((category) => (
+                          <PermissionCategoryCard
+                            key={category.label}
+                            category={category}
+                            selectedPermissions={selectedPermissions}
+                            onTogglePermission={togglePermission}
+                            onToggleCategory={toggleCategory}
+                            searchQuery={permissionSearch}
+                          />
+                        ))}
+                      </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    {wizardStep > 0 && (
-                      <Button variant="outline" size="sm" onClick={() => goToStep(wizardStep - 1)} className="gap-1">
-                        <ChevronLeft className="h-3.5 w-3.5" />
-                        Back
-                      </Button>
-                    )}
-                    {wizardStep < wizardSteps.length - 1 && (
-                      <Button
-                        size="sm"
-                        onClick={() => goToStep(wizardStep + 1)}
-                        disabled={!canNavigateStep[wizardStep + 1]}
-                        className="gap-1"
-                      >
-                        Next
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                    {wizardStep === wizardSteps.length - 1 && (
-                      <Button
-                        size="sm"
-                        disabled={!canSubmit || createMutation.isPending || updateMutation.isPending}
-                        onClick={handleSubmit}
-                        className="gap-1"
-                      >
-                        {createMutation.isPending || updateMutation.isPending
-                          ? 'Saving…'
-                          : editingRole
-                          ? 'Save changes'
-                          : 'Create role'}
-                      </Button>
-                    )}
-                    <Button variant="ghost" size="sm" onClick={() => { resetForm(); setIsCreateOpen(false); setEditingRole(null); }}>
-                      Cancel
-                    </Button>
+                )}
+
+                {/* Step 2: Node Access */}
+                {wizardStep === 2 && (
+                  <div>
+                    <NodeAssignmentsSelector
+                      roleId={editingRole?.id}
+                      selectedNodes={selectedNodeIds}
+                      onSelectionChange={setSelectedNodeIds}
+                      disabled={createMutation.isPending || updateMutation.isPending}
+                    />
                   </div>
+                )}
+              </div>
+
+              {/* Footer with navigation */}
+              <div className="flex items-center justify-between border-t border-border px-4 py-3 md:px-6 md:py-4">
+                <div className="text-xs text-muted-foreground">
+                  {selectedPermissions.size > 0 && (
+                    <span>{selectedPermissions.size} permission{selectedPermissions.size === 1 ? '' : 's'} selected</span>
+                  )}
                 </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                <div className="flex items-center gap-2">
+                  {wizardStep > 0 && (
+                    <Button variant="outline" size="sm" onClick={() => goToStep(wizardStep - 1)} className="gap-1">
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                      Back
+                    </Button>
+                  )}
+                  {wizardStep < wizardSteps.length - 1 && (
+                    <Button
+                      size="sm"
+                      onClick={() => goToStep(wizardStep + 1)}
+                      disabled={!canNavigateStep[wizardStep + 1]}
+                      className="gap-1"
+                    >
+                      Next
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {wizardStep === wizardSteps.length - 1 && (
+                    <Button
+                      size="sm"
+                      disabled={!canSubmit || createMutation.isPending || updateMutation.isPending}
+                      onClick={handleSubmit}
+                      className="gap-1"
+                    >
+                      {createMutation.isPending || updateMutation.isPending
+                        ? 'Saving…'
+                        : editingRole
+                        ? 'Save changes'
+                        : 'Create role'}
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => { resetForm(); setIsCreateOpen(false); setEditingRole(null); }}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </ModalPortal>
 
       {/* ── View Detail Modal ── */}
       <ModalPortal>
-        <AnimatePresence>
-          {!!viewingRole && !editingRole && !isCreateOpen && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm"
-              onClick={(e) => { if (e.target === e.currentTarget) setViewingRole(null); }}
-            >
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]"
-              >
-                {/* Header with role identity */}
-                <div className="relative overflow-hidden px-4 py-4 border-b border-border md:px-6 md:py-5">
-                  {/* Decorative gradient */}
-                  <div className={`absolute inset-0 bg-gradient-to-br ${
-                    viewingRole.permissions?.includes('*')
-                      ? 'from-amber-500/5 via-orange-500/5 to-transparent'
-                      : 'from-primary/5 via-primary/3 to-transparent'
-                  }`} />
+        {!!viewingRole && !editingRole && !isCreateOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) setViewingRole(null); }}
+          >
+            <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl m-2 max-h-[95vh] md:m-4 md:max-h-[88vh]">
+              {/* Header with role identity */}
+              <div className={`relative overflow-hidden px-4 py-4 border-b border-border md:px-6 md:py-5 ${
+                viewingRole.permissions?.includes('*')
+                  ? 'bg-amber-500/[0.03]'
+                  : 'bg-primary/[0.02]'
+              }`}>
+                <div className="relative flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+                      viewingRole.permissions?.includes('*')
+                        ? 'bg-amber-500/10 text-amber-600'
+                        : 'bg-primary/10 text-primary'
+                    }`}>
+                      {viewingRole.permissions?.includes('*') ? (
+                        <KeyRound className="h-5 w-5" />
+                      ) : (
+                        <Shield className="h-5 w-5" />
+                      )}
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-foreground">{viewingRole.name}</h2>
+                      {viewingRole.description && (
+                        <p className="text-xs text-muted-foreground">{viewingRole.description}</p>
+                      )}
 
-                  <div className="relative flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
-                        viewingRole.permissions?.includes('*')
-                          ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                          : 'bg-primary/10 text-primary'
-                      }`}>
-                        {viewingRole.permissions?.includes('*') ? (
-                          <KeyRound className="h-5 w-5" />
-                        ) : (
-                          <Shield className="h-5 w-5" />
+                      <div className="mt-3 flex flex-wrap gap-2 md:gap-3">
+                        <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs">
+                          <Shield className="h-3 w-3 text-primary" />
+                          <span className="text-muted-foreground">Permissions</span>
+                          <span className="font-semibold tabular-nums text-foreground">{viewingRole.permissions?.length || 0}</span>
+                        </div>
+                        {(viewingRole.userCount ?? 0) > 0 && (
+                          <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs">
+                            <Users className="h-3 w-3 text-primary" />
+                            <span className="text-muted-foreground">Users</span>
+                            <span className="font-semibold tabular-nums text-foreground">{viewingRole.userCount}</span>
+                          </div>
                         )}
+                        <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs">
+                          <Clock className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-muted-foreground">Created</span>
+                          <span className="font-medium text-foreground">{viewingRole.createdAt ? new Date(viewingRole.createdAt).toLocaleDateString() : '—'}</span>
+                        </div>
                       </div>
-                      <div>
-                        <h2 className="text-lg font-semibold text-foreground">{viewingRole.name}</h2>
-                        {viewingRole.description && (
-                          <p className="text-xs text-muted-foreground">{viewingRole.description}</p>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-                      onClick={() => setViewingRole(null)}
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  {/* Quick stats */}
-                  <div className="relative mt-3 md:mt-4 flex flex-wrap gap-2 md:gap-3">
-                    <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card/80 px-3 py-1.5 text-xs">
-                      <Shield className="h-3 w-3 text-primary" />
-                      <span className="text-muted-foreground">Permissions</span>
-                      <span className="font-semibold tabular-nums text-foreground">{viewingRole.permissions?.length || 0}</span>
-                    </div>
-                    {(viewingRole.userCount ?? 0) > 0 && (
-                      <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card/80 px-3 py-1.5 text-xs">
-                        <Users className="h-3 w-3 text-primary" />
-                        <span className="text-muted-foreground">Users</span>
-                        <span className="font-semibold tabular-nums text-foreground">{viewingRole.userCount}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card/80 px-3 py-1.5 text-xs">
-                      <Clock className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-muted-foreground">Created</span>
-                      <span className="font-medium text-foreground">{viewingRole.createdAt ? new Date(viewingRole.createdAt).toLocaleDateString() : '—'}</span>
                     </div>
                   </div>
+                  <button
+                    className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                    onClick={() => setViewingRole(null)}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
+              </div>
 
-                {/* Permission body */}
-                <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5 space-y-4">
-                  {viewingRole.permissions?.includes('*') ? (
-                    <div className="flex flex-col items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-6 text-center dark:border-amber-500/30 dark:bg-amber-500/10">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/20">
-                        <Zap className="h-6 w-6 text-amber-600 dark:text-amber-400" />
-                      </div>
-                      <div>
-                        <div className="text-base font-semibold text-amber-700 dark:text-amber-400">Full Administrator Access</div>
-                        <div className="text-xs text-amber-600/70 dark:text-amber-400/60">This role has unrestricted access to all system permissions.</div>
-                      </div>
+              {/* Permission body */}
+              <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5 space-y-4">
+                {viewingRole.permissions?.includes('*') ? (
+                  <div className="flex flex-col items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-6 text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/20">
+                      <Zap className="h-6 w-6 text-amber-600" />
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-3">
-                      {getPermissionCategories(viewingRole.permissions || []).map((cat) => {
-                        const catPerms = (viewingRole.permissions || []).filter((p: string) => {
-                          const catData = PERMISSION_CATEGORIES.find((c) => c.label === cat.category);
-                          return catData ? catData.permissions.includes(p) : p.split('.')[0] === cat.category.toLowerCase().split(' ')[0];
-                        });
-                        return (
-                          <PermissionCategoryReadCard
-                            key={cat.category}
-                            category={cat}
-                            permissions={catPerms}
-                          />
-                        );
-                      })}
+                    <div>
+                      <div className="text-base font-semibold text-amber-700">Full Administrator Access</div>
+                      <div className="text-xs text-amber-600/70">This role has unrestricted access to all system permissions.</div>
                     </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3">
+                    {getPermissionCategories(viewingRole.permissions || []).map((cat) => {
+                      const catPerms = (viewingRole.permissions || []).filter((p: string) => {
+                        const catData = PERMISSION_CATEGORIES.find((c) => c.label === cat.category);
+                        return catData ? catData.permissions.includes(p) : p.split('.')[0] === cat.category.toLowerCase().split(' ')[0];
+                      });
+                      return (
+                        <PermissionCategoryReadCard
+                          key={cat.category}
+                          category={cat}
+                          permissions={catPerms}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Metadata */}
+                <div className="space-y-1 border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
+                  <div>Role ID: <span className="font-mono">{viewingRole.id}</span></div>
+                  {viewingRole.updatedAt !== viewingRole.createdAt && (
+                    <div>Updated: {new Date(viewingRole.updatedAt).toLocaleDateString()} at {new Date(viewingRole.updatedAt).toLocaleTimeString()}</div>
                   )}
-
-                  {/* Metadata */}
-                  <div className="space-y-1 border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
-                    <div>Role ID: <span className="font-mono">{viewingRole.id}</span></div>
-                    {viewingRole.updatedAt !== viewingRole.createdAt && (
-                      <div>Updated: {new Date(viewingRole.updatedAt).toLocaleDateString()} at {new Date(viewingRole.updatedAt).toLocaleTimeString()}</div>
-                    )}
-                  </div>
                 </div>
+              </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-2 border-t border-border px-4 py-3 md:px-6 md:py-4">
-                  <Button variant="outline" size="sm" onClick={() => startEdit(viewingRole)} className="gap-1.5">
-                    <Pencil className="h-3.5 w-3.5" />
-                    Edit role
+              {/* Actions */}
+              <div className="flex items-center gap-2 border-t border-border px-4 py-3 md:px-6 md:py-4">
+                <Button variant="outline" size="sm" onClick={() => startEdit(viewingRole)} className="gap-1.5">
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit role
+                </Button>
+                {viewingRole.userCount === 0 && (
+                  <Button variant="destructive" size="sm" onClick={() => setDeletingRole(viewingRole)} disabled={deleteMutation.isPending} className="gap-1.5">
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
                   </Button>
-                  {viewingRole.userCount === 0 && (
-                    <Button variant="destructive" size="sm" onClick={() => setDeletingRole(viewingRole)} disabled={deleteMutation.isPending} className="gap-1.5">
-                      <Trash2 className="h-3.5 w-3.5" />
-                      {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
-                    </Button>
-                  )}
-                  <div className="flex-1" />
-                  <Button variant="ghost" size="sm" onClick={() => setViewingRole(null)}>
-                    Close
-                  </Button>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                )}
+                <div className="flex-1" />
+                <Button variant="ghost" size="sm" onClick={() => setViewingRole(null)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </ModalPortal>
 
       {/* ── Delete Confirmation ── */}
@@ -1305,7 +1204,7 @@ function RolesPage() {
         }}
         onCancel={() => setDeletingRole(null)}
       />
-    </motion.div>
+    </div>
   );
 }
 

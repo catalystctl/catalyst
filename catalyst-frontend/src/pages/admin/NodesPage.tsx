@@ -18,7 +18,6 @@ import {
   AlertTriangle,
   CheckCircle,
 } from 'lucide-react';
-import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import EmptyState from '../../components/shared/EmptyState';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import NodeCreateModal from '../../components/nodes/NodeCreateModal';
@@ -48,33 +47,11 @@ import { nodesApi } from '../../services/api/nodes';
 import { locationsApi } from '../../services/api/locations';
 import type { Location } from '../../services/api/locations';
 import { notifyError, notifySuccess } from '../../utils/notify';
-
-// ── Animation Variants ──
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.03, delayChildren: 0.05 },
-  },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { type: 'spring', stiffness: 300, damping: 24 },
-  },
-};
-
-const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -8 },
-  visible: {
-    opacity: 1,
-    x: 0,
-    transition: { type: 'spring', stiffness: 400, damping: 30 },
-  },
-};
+import TabHeader from '../../components/servers/tabs/TabHeader';
+import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import StatGrid from '../../components/servers/tabs/StatGrid';
+import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
+import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 
 // ── Helpers ──
 const formatMemory = (mb: number) => {
@@ -112,8 +89,8 @@ function LocationSectionHeader({ location, count }: { location: Location | null;
     return (
       <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
         <div className="flex items-center gap-2">
-          <MapPin className="h-4 w-4 text-success dark:text-success" />
-          <h3 className="text-sm font-semibold text-foreground dark:text-foreground">
+          <MapPin className="h-4 w-4 text-success" />
+          <h3 className="text-sm font-semibold text-foreground">
             {location.name}
           </h3>
           <Badge variant="secondary" className="text-[10px]">
@@ -133,7 +110,7 @@ function LocationSectionHeader({ location, count }: { location: Location | null;
     <div className="sticky top-0 z-10 border-b border-border bg-surface-1/80 px-4 py-2 backdrop-blur-sm">
       <div className="flex items-center gap-2">
         <MapPin className="h-4 w-4 text-muted-foreground" />
-        <h3 className="text-sm font-semibold text-foreground dark:text-foreground">Unassigned</h3>
+        <h3 className="text-sm font-semibold text-foreground">Unassigned</h3>
         <Badge variant="secondary" className="text-[10px]">
           {count} node{count !== 1 ? 's' : ''}
         </Badge>
@@ -167,9 +144,8 @@ function NodeRow({
   const lastSeen = node.lastSeenAt ? new Date(node.lastSeenAt).toLocaleString() : 'n/a';
 
   return (
-    <motion.div
+    <div
       key={node.id}
-      variants={rowVariants}
       className={`group relative flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-2/50 ${
         isSelected ? 'bg-primary/5' : ''
       }`}
@@ -184,7 +160,7 @@ function NodeRow({
               prev.includes(node.id) ? prev.filter((id) => id !== node.id) : [...prev, node.id],
             )
           }
-          className="h-4 w-4 flex-shrink-0 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+          className="h-4 w-4 flex-shrink-0 rounded border-border bg-card text-primary"
         />
       )}
 
@@ -192,19 +168,17 @@ function NodeRow({
       <div className="flex items-center gap-2">
         <div
           className={`h-2 w-2 rounded-full transition-colors ${
-            node.isOnline ? 'bg-success/50' : 'bg-surface-3 dark:bg-surface-3'
+            node.isOnline ? 'bg-success' : 'bg-surface-3'
           }`}
         />
         <div
           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${
-            node.isOnline
-              ? 'bg-success/10 dark:bg-success/30'
-              : 'bg-surface-2 dark:bg-surface-2'
+            node.isOnline ? 'bg-success/10' : 'bg-surface-2'
           }`}
         >
           <Server
             className={`h-4 w-4 transition-colors ${
-              node.isOnline ? 'text-success dark:text-success' : 'text-muted-foreground'
+              node.isOnline ? 'text-success' : 'text-muted-foreground'
             }`}
           />
         </div>
@@ -212,10 +186,10 @@ function NodeRow({
 
       {/* Node info — primary column */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <Link
             to={`/admin/nodes/${node.id}`}
-            className="truncate font-semibold text-foreground transition-colors hover:text-primary dark:text-foreground dark:hover:text-primary-400"
+            className="truncate font-semibold text-foreground transition-colors hover:text-primary"
           >
             {node.name}
           </Link>
@@ -229,7 +203,7 @@ function NodeRow({
               )}
               <span
                 className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
-                  node.isOnline ? 'bg-success/50' : 'bg-surface-3'
+                  node.isOnline ? 'bg-success' : 'bg-surface-3'
                 }`}
               />
             </span>
@@ -266,19 +240,19 @@ function NodeRow({
       {/* Resource stats — visible on larger screens */}
       <div className="hidden items-center gap-4 lg:flex">
         <div className="text-right">
-          <div className="text-xs font-medium text-foreground dark:text-foreground">
+          <div className="text-xs font-medium text-foreground">
             {serverCount}
           </div>
           <div className="text-[11px] text-muted-foreground">servers</div>
         </div>
         <div className="text-right">
-          <div className="text-xs font-medium text-foreground dark:text-foreground">
+          <div className="text-xs font-medium text-foreground">
             {node.maxCpuCores ?? 0}
           </div>
           <div className="text-[11px] text-muted-foreground">cores</div>
         </div>
         <div className="text-right">
-          <div className="text-xs font-medium text-foreground dark:text-foreground">
+          <div className="text-xs font-medium text-foreground">
             {memoryGB} GB
           </div>
           <div className="text-[11px] text-muted-foreground">memory</div>
@@ -289,7 +263,7 @@ function NodeRow({
       <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
         <Link
           to={`/admin/nodes/${node.id}`}
-          className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary dark:hover:text-primary-400"
+          className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
         >
           <ExternalLink className="h-3 w-3" />
           <span className="hidden sm:inline">Manage</span>
@@ -316,7 +290,7 @@ function NodeRow({
               <DropdownMenuItem
                 onClick={() => handleBulkDelete([node.id], node.name)}
                 disabled={deleteMutation.isPending}
-                className="gap-2 text-xs text-destructive dark:text-destructive"
+                className="gap-2 text-xs text-destructive"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 Delete
@@ -325,7 +299,7 @@ function NodeRow({
           </DropdownMenu>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -515,7 +489,7 @@ function AdminNodesPage() {
                   return Array.from(new Set([...prev, ...groupIds]));
                 })
               }
-              className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+              className="h-4 w-4 rounded border-border bg-card text-primary"
             />
             <span className="text-xs font-medium text-muted-foreground">Select all in section</span>
           </label>
@@ -539,445 +513,379 @@ function AdminNodesPage() {
     </>
   );
 
+  const summaryStats = [
+    { label: 'Nodes', value: nodes.length },
+    { label: 'Online', value: onlineNodes.length },
+    { label: 'Offline', value: offlineNodes.length },
+    { label: 'Total Servers', value: totalServers },
+    { label: 'CPU Cores', value: totalCpu },
+    { label: 'Memory', value: formatMemory(totalMemory) },
+  ];
+
   return (
-    <motion.div
-      variants={containerVariants}
-      initial={false}
-      animate="visible"
-      className="relative overflow-hidden"
-    >
-      {/* Ambient background */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-emerald-500/8 to-cyan-500/8 blur-3xl dark:from-emerald-500/15 dark:to-cyan-500/15" />
-        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-sky-500/8 to-violet-500/8 blur-3xl dark:from-sky-500/15 dark:to-violet-500/15" />
-      </div>
-
-      <div className="relative z-10 space-y-5">
-        {/* ── Header ── */}
-        <motion.div
-          variants={itemVariants}
-          className="flex flex-wrap items-end justify-between gap-4"
-        >
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 opacity-20 blur-sm" />
-                <Server className="relative h-7 w-7 text-success dark:text-success" />
-              </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
-                Nodes
-              </h1>
-            </div>
-            <p className="ml-10 text-sm text-muted-foreground">
-              Manage infrastructure nodes and monitor availability
-            </p>
-          </div>
-
-          {/* Summary stats */}
-          <div className="flex flex-wrap items-center gap-2">
-            {isLoading ? (
-              <>
-                <div className="h-8 w-24 animate-pulse rounded-lg bg-surface-3" />
-                <div className="h-8 w-24 animate-pulse rounded-lg bg-surface-3" />
-                <div className="h-8 w-24 animate-pulse rounded-lg bg-surface-3" />
-              </>
-            ) : (
-              <>
-                <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
-                  <span className="h-2 w-2 rounded-full bg-surface-3" />
-                  {nodes.length} nodes
-                </Badge>
-                <Badge variant="success" className="h-8 gap-1.5 px-3 text-xs">
-                  <span className="h-2 w-2 rounded-full bg-success" />
-                  {onlineNodes.length} online
-                </Badge>
-                {offlineNodes.length > 0 && (
-                  <Badge variant="destructive" className="h-8 gap-1.5 px-3 text-xs">
-                    <span className="h-2 w-2 rounded-full bg-destructive/60" />
-                    {offlineNodes.length} offline
-                  </Badge>
-                )}
-                <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
-                  <Cpu className="h-2.5 w-2.5" />
-                  {totalCpu} cores
-                </Badge>
-                <Badge variant="outline" className="h-8 gap-1.5 px-3 text-xs">
-                  <HardDrive className="h-2.5 w-2.5" />
-                  {formatMemory(totalMemory)}
-                </Badge>
-              </>
-            )}
+    <div className="space-y-5">
+      {/* ── Header ── */}
+      <TabHeader
+        icon={Server}
+        title="Nodes"
+        description="Manage infrastructure nodes and monitor availability"
+        actions={
+          <div className="flex items-center gap-2">
             {canWrite && <NodeCreateModal />}
             {canWrite && (
               <button
-                className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:text-foreground dark:hover:border-primary/30"
+                className="flex items-center gap-1.5 rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/20 hover:text-foreground"
                 onClick={() => setLocationsModalOpen(true)}
               >
-                <MapPin className="mr-1.5 inline h-4 w-4" />
+                <MapPin className="h-3.5 w-3.5" />
                 Locations
               </button>
             )}
           </div>
-        </motion.div>
+        }
+      />
 
-        {/* ── Search & Controls Bar ── */}
-        <motion.div variants={itemVariants} className="flex flex-wrap items-center gap-2.5">
-          {/* Search input */}
-          <div className="relative min-w-[200px] flex-1 max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search nodes by name or hostname…"
-              className="pl-9"
-            />
-          </div>
+      {/* ── Summary Stats ── */}
+      {isLoading ? (
+        <TabLoadingState rows={1} rowHeight="h-16" />
+      ) : (
+        <StatGrid items={summaryStats} columns={3} />
+      )}
 
-          {/* Filter toggle */}
-          <Button
-            variant={hasActiveFilters ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setShowFilters(!showFilters)}
-            className="gap-2"
+      {/* ── Search & Controls Bar ── */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        {/* Search input */}
+        <div className="relative min-w-[200px] flex-1 max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search nodes by name or hostname…"
+            className="pl-9"
+          />
+        </div>
+
+        {/* Filter toggle */}
+        <Button
+          variant={hasActiveFilters ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setShowFilters(!showFilters)}
+          className="gap-2"
+        >
+          <Filter className="h-3.5 w-3.5" />
+          Filters
+          {hasActiveFilters && (
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
+              {[statusFilter, selectedLocationId].filter(Boolean).length}
+            </span>
+          )}
+        </Button>
+
+        {/* Sort */}
+        <Select value={sort} onValueChange={setSort}>
+          <SelectTrigger className="w-40 gap-2 text-xs">
+            <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="name-asc">Name A→Z</SelectItem>
+            <SelectItem value="name-desc">Name Z→A</SelectItem>
+            <SelectItem value="status">Status</SelectItem>
+            <SelectItem value="servers">Most servers</SelectItem>
+            <SelectItem value="cpu">CPU cores</SelectItem>
+            <SelectItem value="memory">Memory</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Results count */}
+        <span className="text-xs text-muted-foreground">
+          {filteredNodes.length} of {nodes.length}
+        </span>
+      </div>
+
+      {/* ── Location Selector Tabs ── */}
+      {locations.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+          <button
+            className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+              selectedLocationId === null
+                ? 'bg-primary text-primary-foreground shadow-[0_0_8px_-1px_hsl(var(--primary)/0.25)]'
+                : 'bg-surface-2 text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => setSelectedLocationId(null)}
           >
-            <Filter className="h-3.5 w-3.5" />
-            Filters
-            {hasActiveFilters && (
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
-                {[statusFilter, selectedLocationId].filter(Boolean).length}
-              </span>
-            )}
-          </Button>
-
-          {/* Sort */}
-          <Select value={sort} onValueChange={setSort}>
-            <SelectTrigger className="w-40 gap-2 text-xs">
-              <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="name-asc">Name A→Z</SelectItem>
-              <SelectItem value="name-desc">Name Z→A</SelectItem>
-              <SelectItem value="status">Status</SelectItem>
-              <SelectItem value="servers">Most servers</SelectItem>
-              <SelectItem value="cpu">CPU cores</SelectItem>
-              <SelectItem value="memory">Memory</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Results count */}
-          <span className="text-xs text-muted-foreground">
-            {filteredNodes.length} of {nodes.length}
-          </span>
-        </motion.div>
-
-        {/* ── Location Selector Tabs ── */}
-        {locations.length > 0 && (
-          <motion.div
-            variants={itemVariants}
-            className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin"
-          >
-            <button
-              className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
-                selectedLocationId === null
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'bg-surface-2 text-muted-foreground hover:text-foreground'
-              }`}
-              onClick={() => setSelectedLocationId(null)}
+            All
+            <span
+              className={`text-[10px] ${selectedLocationId === null ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
             >
-              All
-              <span
-                className={`text-[10px] ${selectedLocationId === null ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
-              >
-                {nodes.length}
-              </span>
-            </button>
-            {locations.map((location) => {
-              const count = locationCounts.counts.get(location.id) || 0;
-              if (count === 0) return null;
-              return (
-                <button
-                  key={location.id}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
-                    selectedLocationId === location.id
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'bg-surface-2 text-muted-foreground hover:text-foreground'
-                  }`}
-                  onClick={() => setSelectedLocationId(location.id)}
-                >
-                  <MapPin className="h-3.5 w-3.5" />
-                  {location.name}
-                  <span
-                    className={`text-[10px] ${selectedLocationId === location.id ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-            {locationCounts.unassignedCount > 0 && (
+              {nodes.length}
+            </span>
+          </button>
+          {locations.map((location) => {
+            const count = locationCounts.counts.get(location.id) || 0;
+            if (count === 0) return null;
+            return (
               <button
-                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
-                  selectedLocationId === '__unassigned__'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
+                key={location.id}
+                className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                  selectedLocationId === location.id
+                    ? 'bg-primary text-primary-foreground shadow-[0_0_8px_-1px_hsl(var(--primary)/0.25)]'
                     : 'bg-surface-2 text-muted-foreground hover:text-foreground'
                 }`}
-                onClick={() => setSelectedLocationId('__unassigned__')}
+                onClick={() => setSelectedLocationId(location.id)}
               >
                 <MapPin className="h-3.5 w-3.5" />
-                Unassigned
+                {location.name}
                 <span
-                  className={`text-[10px] ${selectedLocationId === '__unassigned__' ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
+                  className={`text-[10px] ${selectedLocationId === location.id ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
                 >
-                  {locationCounts.unassignedCount}
+                  {count}
                 </span>
               </button>
-            )}
-          </motion.div>
-        )}
-
-        {/* ── Expandable Filter Panel ── */}
-        <AnimatePresence>
-          {showFilters && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: 'easeInOut' }}
-              className="overflow-hidden"
+            );
+          })}
+          {locationCounts.unassignedCount > 0 && (
+            <button
+              className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                selectedLocationId === '__unassigned__'
+                  ? 'bg-primary text-primary-foreground shadow-[0_0_8px_-1px_hsl(var(--primary)/0.25)]'
+                  : 'bg-surface-2 text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => setSelectedLocationId('__unassigned__')}
             >
-              <div className="rounded-xl border border-border bg-card/80 p-4 backdrop-blur-sm">
-                <div className="flex flex-wrap items-end gap-4">
-                  <label className="space-y-1.5">
-                    <span className="text-xs font-medium text-muted-foreground">Status</span>
-                    <Select
-                      value={statusFilter || 'all'}
-                      onValueChange={(value) => {
-                        setStatusFilter(value === 'all' ? '' : value);
-                      }}
-                    >
-                      <SelectTrigger className="w-44">
-                        <SelectValue placeholder="All statuses" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All statuses</SelectItem>
-                        <SelectItem value="online">Online ({onlineNodes.length})</SelectItem>
-                        <SelectItem value="offline">Offline ({offlineNodes.length})</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  {locations.length > 0 && (
-                    <label className="space-y-1.5">
-                      <span className="text-xs font-medium text-muted-foreground">Location</span>
-                      <Select
-                        value={selectedLocationId || 'all'}
-                        onValueChange={(value) => {
-                          setSelectedLocationId(value === 'all' ? null : value);
-                        }}
-                      >
-                        <SelectTrigger className="w-44">
-                          <SelectValue placeholder="All locations" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All locations</SelectItem>
-                          {locations.map((loc) => (
-                            <SelectItem key={loc.id} value={loc.id}>
-                              <span className="flex items-center gap-2">
-                                {loc.name}
-                                {locationCounts.counts.get(loc.id)
-                                  ? ` (${locationCounts.counts.get(loc.id)})`
-                                  : ''}
-                              </span>
-                            </SelectItem>
-                          ))}
-                          {locationCounts.unassignedCount > 0 && (
-                            <SelectItem value="__unassigned__">
-                              Unassigned ({locationCounts.unassignedCount})
-                            </SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </label>
-                  )}
-                  {hasActiveFilters && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearFilters}
-                      className="gap-1.5 text-xs"
-                    >
-                      <X className="h-3 w-3" />
-                      Clear all
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </motion.div>
+              <MapPin className="h-3.5 w-3.5" />
+              Unassigned
+              <span
+                className={`text-[10px] ${selectedLocationId === '__unassigned__' ? 'text-primary-foreground/70' : 'text-muted-foreground/60'}`}
+              >
+                {locationCounts.unassignedCount}
+              </span>
+            </button>
           )}
-        </AnimatePresence>
+        </div>
+      )}
 
-        {/* ── Bulk Actions Bar ── */}
-        <AnimatePresence>
-          {selectedIds.length > 0 && canDelete && (
-            <motion.div
-              initial={{ height: 0, opacity: 0, y: -8 }}
-              animate={{ height: 'auto', opacity: 1, y: 0 }}
-              exit={{ height: 0, opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: 'easeInOut' }}
-              className="overflow-hidden"
-            >
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 dark:bg-primary/10">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-foreground">
-                    {selectedIds.length} selected
-                  </span>
-                  <button
-                    onClick={() => setSelectedIds([])}
-                    className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+      {/* ── Expandable Filter Panel ── */}
+      {showFilters && (
+        <div className="overflow-hidden">
+          <ServerTabCard>
+            <div className="flex flex-wrap items-end gap-4">
+              <label className="space-y-1.5">
+                <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Status</span>
+                <Select
+                  value={statusFilter || 'all'}
+                  onValueChange={(value) => {
+                    setStatusFilter(value === 'all' ? '' : value);
+                  }}
+                >
+                  <SelectTrigger className="w-44">
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="online">Online ({onlineNodes.length})</SelectItem>
+                    <SelectItem value="offline">Offline ({offlineNodes.length})</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
+              {locations.length > 0 && (
+                <label className="space-y-1.5">
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Location</span>
+                  <Select
+                    value={selectedLocationId || 'all'}
+                    onValueChange={(value) => {
+                      setSelectedLocationId(value === 'all' ? null : value);
+                    }}
                   >
-                    Clear
-                  </button>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleBulkDelete(selectedIds, `${selectedIds.length} nodes`)}
-                    disabled={deleteMutation.isPending}
-                    className="gap-1.5 text-xs"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* ── Node List ── */}
-        <motion.div variants={itemVariants}>
-          {showGroupedView ? (
-            /* ── Grouped by Location View ── */
-            <div className="space-y-4">
-              {isLoading ? (
-                <div className="rounded-xl border border-border bg-card/80 p-4 shadow-sm backdrop-blur-sm">
-                  <TableSkeleton />
-                </div>
-              ) : groupedByLocation.length > 0 ? (
-                groupedByLocation.map(([locationId, groupNodes]) => {
-                  const location = locationId ? (locationMap.get(locationId) ?? null) : null;
-                  return (
-                    <div
-                      key={locationId ?? '__unassigned__'}
-                      className="rounded-xl border border-border bg-card/80 shadow-sm backdrop-blur-sm overflow-hidden"
-                    >
-                      <LocationSectionHeader location={location} count={groupNodes.length} />
-                      {renderNodeRows(groupNodes, true)}
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="rounded-xl border border-border bg-card/80 p-6 shadow-sm backdrop-blur-sm">
-                  <EmptyState
-                    title={search.trim() || statusFilter ? 'No nodes found' : 'No nodes detected'}
-                    description={
-                      search.trim() || statusFilter
-                        ? 'Try adjusting your search or filters.'
-                        : 'Install the Catalyst agent and register nodes to begin.'
-                    }
-                    action={
-                      hasActiveFilters ? (
-                        <Button variant="outline" size="sm" onClick={clearFilters}>
-                          <X className="mr-1.5 h-3.5 w-3.5" />
-                          Clear filters
-                        </Button>
-                      ) : canWrite && !search.trim() ? (
-                        <NodeCreateModal />
-                      ) : undefined
-                    }
-                  />
-                </div>
+                    <SelectTrigger className="w-44">
+                      <SelectValue placeholder="All locations" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All locations</SelectItem>
+                      {locations.map((loc) => (
+                        <SelectItem key={loc.id} value={loc.id}>
+                          <span className="flex items-center gap-2">
+                            {loc.name}
+                            {locationCounts.counts.get(loc.id)
+                              ? ` (${locationCounts.counts.get(loc.id)})`
+                              : ''}
+                          </span>
+                        </SelectItem>
+                      ))}
+                      {locationCounts.unassignedCount > 0 && (
+                        <SelectItem value="__unassigned__">
+                          Unassigned ({locationCounts.unassignedCount})
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </label>
+              )}
+              {hasActiveFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="gap-1.5 text-xs"
+                >
+                  <X className="h-3 w-3" />
+                  Clear all
+                </Button>
               )}
             </div>
+          </ServerTabCard>
+        </div>
+      )}
+
+      {/* ── Bulk Actions Bar ── */}
+      {selectedIds.length > 0 && canDelete && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-foreground">
+              {selectedIds.length} selected
+            </span>
+            <button
+              onClick={() => setSelectedIds([])}
+              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => handleBulkDelete(selectedIds, `${selectedIds.length} nodes`)}
+              disabled={deleteMutation.isPending}
+              className="gap-1.5 text-xs"
+            >
+              <Trash2 className="h-3 w-3" />
+              Delete
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Node List ── */}
+      {showGroupedView ? (
+        /* ── Grouped by Location View ── */
+        <div className="space-y-4">
+          {isLoading ? (
+            <ServerTabCard>
+              <TableSkeleton />
+            </ServerTabCard>
+          ) : groupedByLocation.length > 0 ? (
+            groupedByLocation.map(([locationId, groupNodes]) => {
+              const location = locationId ? (locationMap.get(locationId) ?? null) : null;
+              return (
+                <div
+                  key={locationId ?? '__unassigned__'}
+                  className="overflow-hidden rounded-xl border border-border bg-card shadow-[inset_0_1px_0_hsl(var(--card)/0.8),0_1px_2px_hsl(var(--border)/0.15)]"
+                >
+                  <LocationSectionHeader location={location} count={groupNodes.length} />
+                  {renderNodeRows(groupNodes, true)}
+                </div>
+              );
+            })
           ) : (
-            /* ── Flat List View (single location selected or no locations exist) ── */
-            <div className="rounded-xl border border-border bg-card/80 shadow-sm backdrop-blur-sm overflow-hidden">
-              {isLoading ? (
-                <div className="p-4">
-                  <TableSkeleton />
-                </div>
-              ) : filteredNodes.length > 0 ? (
-                <>
-                  {/* Select-all header */}
-                  {canDelete && (
-                    <div className="flex items-center gap-3 border-b border-border px-4 py-2">
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={allSelected}
-                          onChange={() =>
-                            setSelectedIds((prev) => {
-                              if (allSelected) {
-                                return prev.filter((id) => !filteredIds.includes(id));
-                              }
-                              return Array.from(new Set([...prev, ...filteredIds]));
-                            })
+            <ServerTabCard>
+              <EmptyState
+                title={search.trim() || statusFilter ? 'No nodes found' : 'No nodes detected'}
+                description={
+                  search.trim() || statusFilter
+                    ? 'Try adjusting your search or filters.'
+                    : 'Install the Catalyst agent and register nodes to begin.'
+                }
+                action={
+                  hasActiveFilters ? (
+                    <Button variant="outline" size="sm" onClick={clearFilters}>
+                      <X className="mr-1.5 h-3.5 w-3.5" />
+                      Clear filters
+                    </Button>
+                  ) : canWrite && !search.trim() ? (
+                    <NodeCreateModal />
+                  ) : undefined
+                }
+              />
+            </ServerTabCard>
+          )}
+        </div>
+      ) : (
+        /* ── Flat List View (single location selected or no locations exist) ── */
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[inset_0_1px_0_hsl(var(--card)/0.8),0_1px_2px_hsl(var(--border)/0.15)]">
+          {isLoading ? (
+            <div className="p-4">
+              <TableSkeleton />
+            </div>
+          ) : filteredNodes.length > 0 ? (
+            <>
+              {/* Select-all header */}
+              {canDelete && (
+                <div className="flex items-center gap-3 border-b border-border px-4 py-2">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={() =>
+                        setSelectedIds((prev) => {
+                          if (allSelected) {
+                            return prev.filter((id) => !filteredIds.includes(id));
                           }
-                          className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
-                        />
-                        <span className="text-xs font-medium text-muted-foreground">
-                          Select all
-                        </span>
-                      </label>
-                    </div>
-                  )}
-
-                  {/* Node rows */}
-                  <div className="divide-y divide-border/50">
-                    {filteredNodes.map((node: NodeInfo) => (
-                      <NodeRow
-                        key={node.id}
-                        node={node}
-                        isSelected={selectedIds.includes(node.id)}
-                        canDelete={canDelete}
-                        selectedIds={selectedIds}
-                        setSelectedIds={setSelectedIds}
-                        handleBulkDelete={handleBulkDelete}
-                        deleteMutation={deleteMutation}
-                        latestAgentVersion={updateData?.latestVersion}
-                      />
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div className="p-6">
-                  <EmptyState
-                    title={
-                      search.trim() || hasActiveFilters ? 'No nodes found' : 'No nodes detected'
-                    }
-                    description={
-                      search.trim() || hasActiveFilters
-                        ? 'Try adjusting your search or filters.'
-                        : 'Install the Catalyst agent and register nodes to begin.'
-                    }
-                    action={
-                      hasActiveFilters ? (
-                        <Button variant="outline" size="sm" onClick={clearFilters}>
-                          <X className="mr-1.5 h-3.5 w-3.5" />
-                          Clear filters
-                        </Button>
-                      ) : canWrite ? (
-                        <NodeCreateModal />
-                      ) : undefined
-                    }
-                  />
+                          return Array.from(new Set([...prev, ...filteredIds]));
+                        })
+                      }
+                      className="h-4 w-4 rounded border-border bg-card text-primary"
+                    />
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Select all
+                    </span>
+                  </label>
                 </div>
               )}
+
+              {/* Node rows */}
+              <div className="divide-y divide-border/50">
+                {filteredNodes.map((node: NodeInfo) => (
+                  <NodeRow
+                    key={node.id}
+                    node={node}
+                    isSelected={selectedIds.includes(node.id)}
+                    canDelete={canDelete}
+                    selectedIds={selectedIds}
+                    setSelectedIds={setSelectedIds}
+                    handleBulkDelete={handleBulkDelete}
+                    deleteMutation={deleteMutation}
+                    latestAgentVersion={updateData?.latestVersion}
+                  />
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="p-6">
+              <EmptyState
+                title={
+                  search.trim() || hasActiveFilters ? 'No nodes found' : 'No nodes detected'
+                }
+                description={
+                  search.trim() || hasActiveFilters
+                    ? 'Try adjusting your search or filters.'
+                    : 'Install the Catalyst agent and register nodes to begin.'
+                }
+                action={
+                  hasActiveFilters ? (
+                    <Button variant="outline" size="sm" onClick={clearFilters}>
+                      <X className="mr-1.5 h-3.5 w-3.5" />
+                      Clear filters
+                    </Button>
+                  ) : canWrite ? (
+                    <NodeCreateModal />
+                  ) : undefined
+                }
+              />
             </div>
           )}
-        </motion.div>
-      </div>
+        </div>
+      )}
 
       {/* ── Delete Confirmation Dialog ── */}
       <LocationsManagerModal open={locationsModalOpen} onOpenChange={setLocationsModalOpen} />
@@ -989,7 +897,7 @@ function AdminNodesPage() {
             <p>
               You are about to delete <span className="font-semibold">{deleteTargets?.label}</span>.
             </p>
-            <p className="text-xs text-muted-foreground dark:text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Nodes with running servers cannot be deleted. Stop all servers on a node before
               deleting it. This cannot be undone.
             </p>
@@ -1002,7 +910,7 @@ function AdminNodesPage() {
         variant="danger"
         loading={deleteMutation.isPending}
       />
-    </motion.div>
+    </div>
   );
 }
 

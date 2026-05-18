@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { motion, type Variants } from 'framer-motion';
+
 import {
   ArrowUpCircle,
   CheckSquare,
@@ -115,28 +115,12 @@ const tabIcons: Record<
   admin: Shield,
 };
 
-// ── Animation Variants ──
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.06, delayChildren: 0.05 },
-  },
-};
 
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { type: 'spring', stiffness: 300, damping: 24 },
-  },
-};
 
 function TabSkeleton() {
   return (
     <div className="flex h-96 items-center justify-center">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
     </div>
   );
 }
@@ -855,7 +839,7 @@ function ServerDetailsPage() {
           <div className="mt-3 flex items-center justify-center gap-2">
             <button
               onClick={() => refetch()}
-              className="rounded-md border border-border px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+              className="rounded-md border border-border/40 px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
             >
               Retry
             </button>
@@ -885,15 +869,10 @@ function ServerDetailsPage() {
   const liveDiskTotalMb = liveMetrics?.diskTotalMb;
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial={false}
-      animate="visible"
-      className=""
-    >
+    <div>
       <div className="space-y-4">
         {/* ── Header ── */}
-        <motion.div variants={itemVariants}>
+        <div>
           <div className={`relative overflow-hidden rounded-2xl border backdrop-blur-sm ${
             isSuspended
               ? 'border-danger/20 bg-gradient-to-br from-danger/5 via-card/90 to-card/80'
@@ -962,10 +941,10 @@ function ServerDetailsPage() {
               )}
             </div>
           </div>
-        </motion.div>
+        </div>
 
         {/* ── Tab navigation ── */}
-        <motion.div variants={itemVariants} className="flex flex-wrap gap-1 rounded-xl border border-border/40 bg-surface-2/40 p-1.5 shadow-[inset_0_1px_0_hsl(var(--card)/0.5)]">
+        <div className="flex flex-wrap gap-1 rounded-xl border border-border/40 bg-surface-2/40 p-1.5 shadow-[inset_0_1px_0_hsl(var(--card)/0.5)]">
           {visibleTabs.map(([key, label]) => {
             const isActive = activeTab === key;
             const Icon = tabIcons[key as keyof typeof tabLabels];
@@ -986,10 +965,10 @@ function ServerDetailsPage() {
               </button>
             );
           })}
-        </motion.div>
+        </div>
 
         {/* ── Tab Content ── */}
-        <motion.div variants={itemVariants}>
+        <div>
           <Suspense fallback={<TabSkeleton />}>
           {activeTab === 'console' && (
             <ServerConsoleTab
@@ -1212,7 +1191,7 @@ function ServerDetailsPage() {
             />
           )}
           </Suspense>
-        </motion.div>
+        </div>
       </div>
 
       {eulaPrompt && (
@@ -1223,7 +1202,7 @@ function ServerDetailsPage() {
           onDecline={() => respondEula(false)}
         />
       )}
-    </motion.div>
+    </div>
   );
 }
 

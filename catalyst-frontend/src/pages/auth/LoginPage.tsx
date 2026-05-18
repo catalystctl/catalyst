@@ -259,7 +259,7 @@ function LoginPage() {
           )}
 
           {ssoError === 'login_required' && !authStep && (
-            <Alert className="mt-4 border-blue-500 bg-info/5 text-blue-900 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-800">
+            <Alert className="mt-4 border-blue-500 bg-info/5 text-blue-900">
               <AlertDescription>
                 Please log in to your {ssoProvider === 'whmcs' ? 'WHMCS' : 'Paymenter'} account first, then click &quot;{ssoProvider === 'whmcs' ? 'Continue with WHMCS' : 'Continue with Paymenter'}&quot; again.
               </AlertDescription>
@@ -284,7 +284,7 @@ function LoginPage() {
                 <Label htmlFor="password">Password</Label>
                 <Link
                   to="/forgot-password"
-                  className="text-xs font-medium text-primary-600 transition-all duration-300 hover:text-primary dark:text-primary-400 dark:hover:text-primary-300"
+                  className="text-xs font-medium text-primary-600 transition-colors hover:text-primary"
                 >
                   Forgot password?
                 </Link>

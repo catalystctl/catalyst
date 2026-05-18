@@ -1,6 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { motion, type Variants } from 'framer-motion';
 import {
   FileCode,
   ArrowLeft,
@@ -14,34 +13,12 @@ import TemplateVariablesList from '../../components/templates/TemplateVariablesL
 import { useAuthStore } from '../../stores/authStore';
 import TemplateEditModal from '../../components/templates/TemplateEditModal';
 import TemplateDeleteDialog from '../../components/templates/TemplateDeleteDialog';
-
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.05, delayChildren: 0.05 },
-  },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { type: 'spring', stiffness: 300, damping: 24 },
-  },
-};
-
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-1.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="truncate text-right text-xs font-medium text-foreground">
-        {value}
-      </span>
-    </div>
-  );
-}
+import TabHeader from '../../components/servers/tabs/TabHeader';
+import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import SectionHeader from '../../components/servers/tabs/SectionHeader';
+import DataField from '../../components/servers/tabs/DataField';
+import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
+import TabErrorState from '../../components/servers/tabs/TabErrorState';
 
 function TemplateDetailsPage() {
   const { templateId } = useParams();
@@ -50,8 +27,6 @@ function TemplateDetailsPage() {
   const user = useAuthStore((s) => s.user);
   const [showEditModal, setShowEditModal] = useState(false);
 
-  // Re-open the edit modal after creating a nest from within it
-  // If a nest was just created, pass its ID so the edit modal can auto-select it
   const [pendingCreatedNestId, setPendingCreatedNestId] = useState<string | null>(null);
   useEffect(() => {
     const handler = (e: Event) => {
@@ -63,6 +38,7 @@ function TemplateDetailsPage() {
     window.addEventListener('catalyst:return-to-template-edit', handler);
     return () => window.removeEventListener('catalyst:return-to-template-edit', handler);
   }, []);
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const canWrite = useMemo(
     () => user?.permissions?.includes('admin.write') || user?.permissions?.includes('*'),
@@ -71,215 +47,156 @@ function TemplateDetailsPage() {
 
   if (isLoading) {
     return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="flex items-center justify-center py-20"
-      >
-        <div className="text-sm text-muted-foreground">Loading template…</div>
-      </motion.div>
+      <div className="space-y-4">
+        <TabHeader icon={FileCode} title="Template" description="Loading template details…" />
+        <ServerTabCard>
+          <TabLoadingState rows={5} />
+        </ServerTabCard>
+      </div>
     );
   }
 
   if (isError || !template) {
     return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="flex items-center justify-center py-20"
-      >
-        <div className="rounded-xl border border-destructive/30 bg-destructive/50/5 px-6 py-4 text-center">
-          <p className="text-sm font-medium text-destructive dark:text-destructive">
-            Unable to load template details.
-          </p>
-          <div className="mt-3 flex items-center justify-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => refetch()}
-              className="gap-1.5 text-xs"
-            >
-              Retry
-            </Button>
-            <Link to="/admin/templates" className="text-xs text-muted-foreground hover:text-foreground">
-              ← Back to templates
-            </Link>
-          </div>
+      <div className="space-y-4">
+        <TabHeader icon={FileCode} title="Template" />
+        <TabErrorState
+          message="Unable to load template details."
+          onRetry={() => refetch()}
+        />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5 text-xs">
+            Retry
+          </Button>
+          <Link
+            to="/admin/templates"
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            ← Back to templates
+          </Link>
         </div>
-      </motion.div>
+      </div>
     );
   }
 
-  const iconUrl = template.features?.iconUrl;
   const portList = template.supportedPorts?.length
     ? template.supportedPorts.join(', ')
     : 'n/a';
   const imageVariants = template.images ?? [];
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial={false}
-      animate="visible"
-      className="relative overflow-hidden"
-    >
-      {/* Ambient background */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-amber-500/8 to-rose-500/8 blur-3xl dark:from-amber-500/15 dark:to-rose-500/15" />
-        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-violet-500/8 to-cyan-500/8 blur-3xl dark:from-violet-500/15 dark:to-cyan-500/15" />
+    <div className="space-y-4">
+      {/* ── Breadcrumb ── */}
+      <Link
+        to="/admin/templates"
+        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="h-3 w-3" />
+        Back to Templates
+      </Link>
+
+      {/* ── Header ── */}
+      <TabHeader
+        icon={FileCode}
+        title={template.name}
+        description={template.description || undefined}
+        actions={
+          canWrite && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowEditModal(true)} className="gap-1.5">
+                <Settings className="h-3.5 w-3.5" />
+                Edit
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDeleteModal(true)}
+                className="gap-1.5 text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </Button>
+            </div>
+          )
+        }
+      />
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Badge variant="secondary" className="text-xs">
+          {template.author}
+        </Badge>
+        <Badge variant="outline" className="text-xs">
+          v{template.version}
+        </Badge>
       </div>
 
-      <div className="relative z-10 space-y-5">
-        {/* ── Breadcrumb ── */}
-        <motion.div variants={itemVariants}>
-          <Link
-            to="/admin/templates"
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-3 w-3" />
-            Back to Templates
-          </Link>
-        </motion.div>
-
-        {/* ── Header ── */}
-        <motion.div variants={itemVariants}>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-3">
-                <div className="h-14 w-14 overflow-hidden rounded-xl border border-border bg-surface-2">
-                  {iconUrl ? (
-                    <img src={iconUrl} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-sm font-bold uppercase text-muted-foreground">
-                      {template.name.slice(0, 2)}
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
-                    {template.name}
-                  </h1>
-                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    <Badge variant="secondary" className="text-xs">
-                      {template.author}
-                    </Badge>
-                    <Badge variant="outline" className="text-xs">
-                      v{template.version}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-              {template.description && (
-                <p className="ml-[4.25rem] text-sm text-muted-foreground">
-                  {template.description}
-                </p>
-              )}
-            </div>
-
-            {canWrite && (
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowEditModal(true)}
-                  className="gap-1.5"
-                >
-                  <Settings className="h-3.5 w-3.5" />
-                  Edit
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowDeleteModal(true)}
-                  className="gap-1.5 text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20 dark:text-destructive dark:hover:bg-destructive/30 dark:hover:border-destructive"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </Button>
-              </div>
-            )}
-          </div>
-        </motion.div>
-
-        {/* ── Info Grid ── */}
-        <motion.div
-          variants={itemVariants}
-          className="grid grid-cols-1 gap-4 lg:grid-cols-2"
-        >
-          {/* Runtime card */}
-          <div className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm">
-            <h2 className="font-display text-sm font-semibold text-foreground ">
-              Runtime
-            </h2>
-            <div className="mt-3 divide-y divide-border/50">
-              <DetailRow label="Image" value={template.defaultImage || template.image} />
-              {imageVariants.length > 0 && (
-                <DetailRow
-                  label="Image variants"
-                  value={imageVariants.map((o) => o.label ?? o.name).join(', ')}
-                />
-              )}
-              {template.defaultImage && (
-                <DetailRow label="Default image" value={template.defaultImage} />
-              )}
-              <DetailRow label="Install image" value={template.installImage ?? 'n/a'} />
-              <DetailRow label="Stop command" value={template.stopCommand} />
-              <DetailRow label="Signal" value={template.sendSignalTo} />
-              <DetailRow label="Ports" value={portList} />
-              <DetailRow
-                label="Resources"
-                value={`${template.allocatedCpuCores} CPU · ${template.allocatedMemoryMb} MB`}
+      {/* ── Info Grid ── */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* Runtime card */}
+        <ServerTabCard>
+          <SectionHeader icon={FileCode} title="Runtime" />
+          <div className="space-y-1.5">
+            <DataField label="Image" value={template.defaultImage || template.image} />
+            {imageVariants.length > 0 && (
+              <DataField
+                label="Image variants"
+                value={imageVariants.map((o) => o.label ?? o.name).join(', ')}
               />
-              <DetailRow
-                label="Config file(s)"
-                value={
-                  template.features?.configFiles?.length
-                    ? template.features.configFiles.join(', ')
-                    : template.features?.configFile ?? 'n/a'
-                }
-              />
-            </div>
-          </div>
-
-          {/* Startup card */}
-          <div className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm">
-            <h2 className="font-display text-sm font-semibold text-foreground ">
-              Startup
-            </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Variables are substituted before container start.
-            </p>
-            <div className="mt-3 rounded-lg border border-border bg-surface-2 px-3 py-2.5 font-mono text-xs text-foreground dark:bg-surface-0/40 dark:text-foreground">
-              {template.startup}
-            </div>
-            {template.installScript && (
-              <>
-                <h3 className="mt-5 font-display text-sm font-semibold text-foreground ">
-                  Install script
-                </h3>
-                <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-border bg-surface-2 px-3 py-2.5 font-mono text-xs text-foreground whitespace-pre-wrap dark:bg-surface-0/40 dark:text-foreground">
-                  {template.installScript}
-                </div>
-              </>
             )}
+            {template.defaultImage && (
+              <DataField label="Default image" value={template.defaultImage} />
+            )}
+            <DataField label="Install image" value={template.installImage ?? 'n/a'} />
+            <DataField label="Stop command" value={template.stopCommand} />
+            <DataField label="Signal" value={template.sendSignalTo} />
+            <DataField label="Ports" value={portList} />
+            <DataField
+              label="Resources"
+              value={`${template.allocatedCpuCores} CPU · ${template.allocatedMemoryMb} MB`}
+            />
+            <DataField
+              label="Config file(s)"
+              value={
+                template.features?.configFiles?.length
+                  ? template.features.configFiles.join(', ')
+                  : template.features?.configFile ?? 'n/a'
+              }
+            />
           </div>
-        </motion.div>
+        </ServerTabCard>
 
-        {/* ── Variables ── */}
-        <motion.div variants={itemVariants}>
-          <div className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm">
-            <h2 className="font-display text-sm font-semibold text-foreground ">
-              Variables
-              <Badge variant="outline" className="ml-2 text-xs">
-                {template.variables?.length ?? 0}
-              </Badge>
-            </h2>
-            <div className="mt-3">
-              <TemplateVariablesList variables={template.variables ?? []} />
-            </div>
+        {/* Startup card */}
+        <ServerTabCard>
+          <SectionHeader icon={FileCode} title="Startup" />
+          <p className="mb-2 text-xs text-muted-foreground">
+            Variables are substituted before container start.
+          </p>
+          <div className="rounded-lg border border-border/30 bg-surface-2 px-3 py-2.5 font-mono text-xs text-foreground">
+            {template.startup}
           </div>
-        </motion.div>
+          {template.installScript && (
+            <>
+              <SectionHeader icon={FileCode} title="Install script" />
+              <div className="max-h-40 overflow-y-auto rounded-lg border border-border/30 bg-surface-2 px-3 py-2.5 font-mono text-xs whitespace-pre-wrap text-foreground">
+                {template.installScript}
+              </div>
+            </>
+          )}
+        </ServerTabCard>
       </div>
+
+      {/* ── Variables ── */}
+      <ServerTabCard>
+        <div className="flex items-center gap-2">
+          <SectionHeader icon={FileCode} title="Variables" />
+          <Badge variant="outline" className="text-xs">
+            {template.variables?.length ?? 0}
+          </Badge>
+        </div>
+        <div className="mt-2">
+          <TemplateVariablesList variables={template.variables ?? []} />
+        </div>
+      </ServerTabCard>
 
       {/* ── Controlled Edit & Delete Modals ── */}
       {showEditModal && template && (
@@ -304,7 +221,7 @@ function TemplateDetailsPage() {
           onOpenChange={(open) => { if (!open) setShowDeleteModal(false); }}
         />
       )}
-    </motion.div>
+    </div>
   );
 }
 

@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { motion, type Variants } from 'framer-motion';
 import {
   Bug,
   Search,
@@ -12,7 +11,9 @@ import {
   Copy,
   Check,
 } from 'lucide-react';
-import EmptyState from '../../components/shared/EmptyState';
+import TabHeader from '../../components/servers/tabs/TabHeader';
+import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
+import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import { Input } from '../../components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,29 +41,18 @@ const buildDefaultRange = () => {
   };
 };
 
-// ── Animation Variants ──
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.05 } },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 10 },
-  visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
-};
-
 // ── Level Color Helpers ──
 function levelColor(level: string) {
-  if (level === 'critical') return 'border-destructive/40 text-destructive dark:border-destructive/30 dark:text-destructive';
-  if (level === 'error') return 'border-orange-400/40 text-orange-700 dark:border-orange-500/30 dark:text-orange-400';
-  if (level === 'warn') return 'border-warning/40 text-warning dark:border-warning/30 dark:text-warning';
+  if (level === 'critical') return 'border-destructive/40 text-destructive';
+  if (level === 'error') return 'border-orange-400/40 text-orange-700';
+  if (level === 'warn') return 'border-warning/40 text-warning';
   return 'border-border text-muted-foreground';
 }
 
 function levelBg(level: string) {
-  if (level === 'critical') return 'bg-destructive/10 dark:bg-destructive/20';
-  if (level === 'error') return 'bg-orange-100 dark:bg-orange-900/20';
-  if (level === 'warn') return 'bg-warning/10 dark:bg-warning/20';
+  if (level === 'critical') return 'bg-destructive/10';
+  if (level === 'error') return 'bg-orange-100';
+  if (level === 'warn') return 'bg-warning/10';
   return 'bg-surface-2/50';
 }
 
@@ -118,7 +108,6 @@ function useCopyToClipboard() {
       setCopiedId(id);
       setTimeout(() => setCopiedId((prev) => (prev === id ? null : prev)), 2000);
     } catch {
-      // fallback
       const textarea = document.createElement('textarea');
       textarea.value = text;
       textarea.style.position = 'fixed';
@@ -173,24 +162,19 @@ function ErrorDetailModal({
   return (
     <ModalPortal>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-          className="mx-4 flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl border border-border bg-card shadow-xl"
-        >
+        <div className="mx-4 flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl border border-border/30 bg-card shadow-xl">
           {/* Header */}
-          <div className="border-b border-border/50 px-6 py-4">
+          <div className="border-b border-border/30 px-6 py-4">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3">
                 <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${levelBg(error.level)}`}>
                   <Bug className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-base font-semibold text-foreground ">
+                  <h2 className="text-base font-semibold text-foreground">
                     {error.component}
                   </h2>
-                  <p className="text-xs text-muted-foreground truncate">{error.id}</p>
+                  <p className="truncate text-xs text-muted-foreground">{error.id}</p>
                 </div>
               </div>
               <button
@@ -214,19 +198,19 @@ function ErrorDetailModal({
               </div>
               <div className="space-y-1">
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status</span>
-                <Badge variant={error.resolved ? 'outline' : 'secondary'} className={`text-[11px] ${error.resolved ? 'border-success/40 text-success dark:border-success/30 dark:text-success' : ''}`}>
+                <Badge variant={error.resolved ? 'outline' : 'secondary'} className={`text-[11px] ${error.resolved ? 'border-success/40 text-success' : ''}`}>
                   {error.resolved ? 'Resolved' : 'Unresolved'}
                 </Badge>
               </div>
               <div className="space-y-1">
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Request ID</span>
-                <span className="block font-mono text-[11px] text-muted-foreground truncate" title={error.requestId ?? 'n/a'}>
+                <span className="block truncate font-mono text-[11px] text-muted-foreground" title={error.requestId ?? 'n/a'}>
                   {error.requestId ?? 'n/a'}
                 </span>
               </div>
               <div className="space-y-1">
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">User ID</span>
-                <span className="block font-mono text-[11px] text-muted-foreground truncate" title={error.userId ?? 'n/a'}>
+                <span className="block truncate font-mono text-[11px] text-muted-foreground" title={error.userId ?? 'n/a'}>
                   {error.userId ?? 'n/a'}
                 </span>
               </div>
@@ -235,7 +219,7 @@ function ErrorDetailModal({
             {/* Timestamp */}
             <div className="space-y-1">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Timestamp</span>
-              <div className="flex items-center gap-2 text-sm text-foreground dark:text-foreground">
+              <div className="flex items-center gap-2 text-sm text-foreground">
                 <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                 {new Date(error.createdAt).toLocaleString()}
               </div>
@@ -244,7 +228,7 @@ function ErrorDetailModal({
             {/* Message */}
             <div className="space-y-1">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Message</span>
-              <div className="rounded-lg border border-border/50 bg-surface-2/40 px-3 py-2 text-sm text-foreground dark:text-foreground">
+              <div className="rounded-lg border border-border/30 bg-surface-2/40 px-3 py-2 text-sm text-foreground">
                 {error.message}
               </div>
             </div>
@@ -253,7 +237,7 @@ function ErrorDetailModal({
             {error.stack && (
               <div className="space-y-1">
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Stack Trace</span>
-                <pre className="max-h-64 overflow-auto rounded-lg border border-border/50 bg-surface-0 p-3 text-[11px] font-mono leading-relaxed text-foreground dark:text-foreground">
+                <pre className="max-h-64 overflow-auto rounded-lg border border-border/30 bg-surface-0 p-3 font-mono text-[11px] leading-relaxed text-foreground">
                   {error.stack}
                 </pre>
               </div>
@@ -265,10 +249,10 @@ function ErrorDetailModal({
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Metadata ({metadataEntries.length} field{metadataEntries.length === 1 ? '' : 's'})
                 </span>
-                <div className="rounded-lg border border-border/50 bg-surface-2/40 overflow-hidden">
+                <div className="overflow-hidden rounded-lg border border-border/30 bg-surface-2/40">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b border-border/50 text-left">
+                      <tr className="border-b border-border/30 text-left">
                         <th className="px-3 py-2 font-semibold text-muted-foreground">Key</th>
                         <th className="px-3 py-2 font-semibold text-muted-foreground">Value</th>
                       </tr>
@@ -276,7 +260,7 @@ function ErrorDetailModal({
                     <tbody className="divide-y divide-border/30">
                       {metadataEntries.map(([key, value]) => (
                         <tr key={key} className="transition-colors hover:bg-surface-2/60">
-                          <td className="px-3 py-2 font-mono text-foreground dark:text-foreground">{key}</td>
+                          <td className="px-3 py-2 font-mono text-foreground">{key}</td>
                           <td className="max-w-xs truncate px-3 py-2 text-muted-foreground" title={JSON.stringify(value)}>
                             {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                           </td>
@@ -289,14 +273,14 @@ function ErrorDetailModal({
             )}
 
             {!hasMetadata && (
-              <div className="rounded-lg border border-dashed border-border/50 bg-surface-2/20 px-4 py-3 text-center text-xs text-muted-foreground">
+              <div className="rounded-lg border border-dashed border-border/30 bg-surface-2/20 px-4 py-3 text-center text-xs text-muted-foreground">
                 No metadata recorded for this error.
               </div>
             )}
           </div>
 
           {/* Footer */}
-          <div className="flex justify-end gap-2 border-t border-border/50 px-6 py-3">
+          <div className="flex justify-end gap-2 border-t border-border/30 px-6 py-3">
             <Button
               variant="outline"
               size="sm"
@@ -310,7 +294,7 @@ function ErrorDetailModal({
               Close
             </Button>
           </div>
-        </motion.div>
+        </div>
       </div>
     </ModalPortal>
   );
@@ -322,23 +306,16 @@ function ErrorRow({
   onView,
   onResolve,
   isResolving,
-  index,
 }: {
   error: SystemError;
   onView: () => void;
   onResolve: () => void;
   isResolving: boolean;
-  index: number;
 }) {
   const { copiedId, copy } = useCopyToClipboard();
   const isCopied = copiedId === error.id;
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: index * 0.015 }}
-      className="group relative px-5 py-3.5 text-sm transition-colors hover:bg-surface-2/30"
-    >
+    <div className="group relative px-5 py-3.5 text-sm transition-colors hover:bg-surface-2/30">
       {/* Desktop: grid */}
       <div className="hidden grid-cols-12 items-center gap-3 md:grid">
         <div className="col-span-2 min-w-0">
@@ -346,7 +323,7 @@ function ErrorRow({
             {levelLabel(error.level)}
           </Badge>
         </div>
-        <div className="col-span-2 truncate font-medium text-foreground dark:text-foreground">
+        <div className="col-span-2 truncate font-medium text-foreground">
           {error.component}
         </div>
         <div className="col-span-4 truncate text-muted-foreground">
@@ -360,7 +337,7 @@ function ErrorRow({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 gap-1 text-[11px] text-success hover:text-success dark:text-success dark:hover:text-success"
+              className="h-7 gap-1 text-[11px] text-success hover:text-success"
               onClick={(e) => {
                 e.stopPropagation();
                 onResolve();
@@ -399,7 +376,7 @@ function ErrorRow({
               <Badge variant="outline" className={`text-[10px] ${levelColor(error.level)}`}>
                 {levelLabel(error.level)}
               </Badge>
-              <span className="truncate font-medium text-foreground dark:text-foreground">
+              <span className="truncate font-medium text-foreground">
                 {error.component}
               </span>
             </div>
@@ -435,7 +412,7 @@ function ErrorRow({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 gap-1 text-[11px] text-success hover:text-success dark:text-success dark:hover:text-success"
+              className="h-7 gap-1 text-[11px] text-success hover:text-success"
               onClick={(e) => {
                 e.stopPropagation();
                 onResolve();
@@ -448,7 +425,7 @@ function ErrorRow({
           </div>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -504,38 +481,15 @@ function SystemErrorsPage() {
   );
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial={false}
-      animate="visible"
-      className="relative overflow-hidden"
-    >
-      {/* Ambient background */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-slate-500/8 to-zinc-500/8 blur-3xl dark:from-slate-500/15 dark:to-zinc-500/15" />
-        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-red-500/8 to-orange-500/8 blur-3xl dark:from-red-500/15 dark:to-orange-500/15" />
-      </div>
-
-      <div className="relative z-10 space-y-5">
-        {/* ── Header ── */}
-        <motion.div variants={itemVariants} className="flex flex-wrap items-end justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-red-500 to-orange-500 opacity-20 blur-sm" />
-                <Bug className="relative h-7 w-7 text-destructive dark:text-destructive" />
-              </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
-                System Errors
-              </h1>
-            </div>
-            <p className="ml-10 text-sm text-muted-foreground">
-              Real-time system error monitoring and resolution.
-            </p>
-          </div>
+    <div className="space-y-5">
+      <TabHeader
+        icon={Bug}
+        title="System Errors"
+        description="Real-time system error monitoring and resolution."
+        actions={
           <div className="flex items-center gap-2">
             {isLive && (
-              <Badge variant="outline" className="gap-1.5 border-success/40 text-success dark:border-success/30 dark:text-success text-xs">
+              <Badge variant="outline" className="gap-1.5 border-success/40 text-success text-xs">
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-success/50" />
@@ -557,193 +511,181 @@ function SystemErrorsPage() {
               Clear
             </Button>
           </div>
-        </motion.div>
+        }
+        variant="danger"
+      />
 
-        {/* ── Filters ── */}
-        <motion.div variants={itemVariants} className="overflow-hidden rounded-xl border border-border/50 bg-card/60 p-4 backdrop-blur-sm">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
-            <Search className="h-3.5 w-3.5" />
-            Filters
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <label className="block space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">Level</span>
-              <Select
-                value={level || 'all'}
-                onValueChange={(next) => {
-                  setLevel(next === 'all' ? '' : next);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All levels" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All levels</SelectItem>
-                  <SelectItem value="error">Error</SelectItem>
-                  <SelectItem value="warn">Warning</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">Component</span>
-              <Input value={component} onChange={(e) => { setComponent(e.target.value); setPage(1); }} placeholder="auth, server..." />
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">Status</span>
-              <Select
-                value={resolved === '' ? 'all' : resolved === 'true' ? 'resolved' : 'unresolved'}
-                onValueChange={(next) => {
-                  if (next === 'all') setResolved('');
-                  else if (next === 'resolved') setResolved('true');
-                  else setResolved('false');
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                  <SelectItem value="unresolved">Unresolved</SelectItem>
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">From</span>
-              <Input
-                type="datetime-local"
-                value={from}
-                onChange={(e) => { setFrom(e.target.value); setRange(''); setPage(1); }}
-              />
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">To</span>
-              <Input
-                type="datetime-local"
-                value={to}
-                onChange={(e) => { setTo(e.target.value); setRange(''); setPage(1); }}
-              />
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">Quick range</span>
-              <Select
-                value={range || 'custom'}
-                onValueChange={(next) => {
-                  const value = next === 'custom' ? '' : next;
-                  setRange(value);
-                  if (!value) return;
-                  const now = new Date();
-                  const nextFrom = new Date(now);
-                  if (value === '1h') nextFrom.setHours(now.getHours() - 1);
-                  if (value === '6h') nextFrom.setHours(now.getHours() - 6);
-                  if (value === '24h') nextFrom.setHours(now.getHours() - 24);
-                  if (value === '7d') nextFrom.setDate(now.getDate() - 7);
-                  setFrom(nextFrom.toISOString().slice(0, 16));
-                  setTo(now.toISOString().slice(0, 16));
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Custom" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="custom">Custom</SelectItem>
-                  <SelectItem value="1h">Last 1h</SelectItem>
-                  <SelectItem value="6h">Last 6h</SelectItem>
-                  <SelectItem value="24h">Last 24h</SelectItem>
-                  <SelectItem value="7d">Last 7d</SelectItem>
-                </SelectContent>
-              </Select>
-            </label>
-          </div>
-
-          {/* Active filter chips */}
-          {hasFilters && (
-            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/50 pt-3">
-              <span className="text-[11px] text-muted-foreground">Active:</span>
-              {level && <Badge variant="outline" className="text-[10px]">level: {level}</Badge>}
-              {component && <Badge variant="outline" className="text-[10px]">component: {component}</Badge>}
-              {resolved && <Badge variant="outline" className="text-[10px]">status: {resolved === 'true' ? 'resolved' : 'unresolved'}</Badge>}
-              {range && <Badge variant="outline" className="text-[10px]">range: {range}</Badge>}
-            </div>
-          )}
-        </motion.div>
-
-        {/* ── Error Table ── */}
-        {isLoading ? (
-          <motion.div variants={itemVariants} className="overflow-hidden rounded-xl border border-border bg-card/80">
-            {/* Desktop header */}
-            <div className="hidden border-b border-border/50 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-12 md:gap-3">
-              <div className="col-span-2">Level</div>
-              <div className="col-span-2">Component</div>
-              <div className="col-span-4">Message</div>
-              <div className="col-span-2">Timestamp</div>
-              <div className="col-span-2 text-right">Actions</div>
-            </div>
-            <div className="divide-y divide-border/30">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                <div key={i} className="px-5 py-3.5">
-                  <div className="hidden grid-cols-12 gap-3 md:grid">
-                    <div className="col-span-2"><div className="h-5 w-16 animate-pulse rounded-full bg-surface-2" /></div>
-                    <div className="col-span-2"><div className="h-3 w-20 animate-pulse rounded bg-surface-3" /></div>
-                    <div className="col-span-4"><div className="h-3 w-full animate-pulse rounded bg-surface-2" /></div>
-                    <div className="col-span-2"><div className="h-3 w-20 animate-pulse rounded bg-surface-2" /></div>
-                    <div className="col-span-2 flex justify-end"><div className="h-7 w-16 animate-pulse rounded bg-surface-2" /></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        ) : errors.length > 0 ? (
-          <motion.div variants={itemVariants} className="overflow-hidden rounded-xl border border-border bg-card/80 backdrop-blur-sm">
-            {/* Desktop header */}
-            <div className="hidden border-b border-border/50 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-12 md:gap-3">
-              <div className="col-span-2">Level</div>
-              <div className="col-span-2">Component</div>
-              <div className="col-span-4">Message</div>
-              <div className="col-span-2">Timestamp</div>
-              <div className="col-span-2 text-right">Actions</div>
-            </div>
-            <div className="divide-y divide-border/30">
-              {errors.map((error, i) => (
-                <ErrorRow
-                  key={error.id}
-                  error={error}
-                  index={i}
-                  onView={() => setSelectedError(error)}
-                  onResolve={() => handleResolve(error.id)}
-                  isResolving={resolveMutation.isPending && resolveMutation.variables === error.id}
-                />
-              ))}
-            </div>
-            {pagination && pagination.totalPages > 1 && (
-              <div className="flex justify-center border-t border-border/50 pt-3">
-                <Pagination
-                  page={pagination.page}
-                  totalPages={pagination.totalPages}
-                  onPageChange={setPage}
-                />
-              </div>
-            )}
-          </motion.div>
-        ) : (
-          <motion.div variants={itemVariants}>
-            <EmptyState
-              title="No system errors"
-              description={hasFilters ? 'Try adjusting your filters.' : 'System errors will appear here when they occur.'}
+      {/* ── Filters ── */}
+      <div className="overflow-hidden rounded-xl border border-border/30 bg-card/60 p-4">
+        <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <Search className="h-3.5 w-3.5" />
+          Filters
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">Level</span>
+            <Select
+              value={level || 'all'}
+              onValueChange={(next) => {
+                setLevel(next === 'all' ? '' : next);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="w-full border-border/40">
+                <SelectValue placeholder="All levels" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All levels</SelectItem>
+                <SelectItem value="error">Error</SelectItem>
+                <SelectItem value="warn">Warning</SelectItem>
+                <SelectItem value="critical">Critical</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">Component</span>
+            <Input value={component} onChange={(e) => { setComponent(e.target.value); setPage(1); }} placeholder="auth, server..." className="border-border/40" />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">Status</span>
+            <Select
+              value={resolved === '' ? 'all' : resolved === 'true' ? 'resolved' : 'unresolved'}
+              onValueChange={(next) => {
+                if (next === 'all') setResolved('');
+                else if (next === 'resolved') setResolved('true');
+                else setResolved('false');
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="w-full border-border/40">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="resolved">Resolved</SelectItem>
+                <SelectItem value="unresolved">Unresolved</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">From</span>
+            <Input
+              type="datetime-local"
+              value={from}
+              onChange={(e) => { setFrom(e.target.value); setRange(''); setPage(1); }}
+              className="border-border/40"
             />
-          </motion.div>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">To</span>
+            <Input
+              type="datetime-local"
+              value={to}
+              onChange={(e) => { setTo(e.target.value); setRange(''); setPage(1); }}
+              className="border-border/40"
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">Quick range</span>
+            <Select
+              value={range || 'custom'}
+              onValueChange={(next) => {
+                const value = next === 'custom' ? '' : next;
+                setRange(value);
+                if (!value) return;
+                const now = new Date();
+                const nextFrom = new Date(now);
+                if (value === '1h') nextFrom.setHours(now.getHours() - 1);
+                if (value === '6h') nextFrom.setHours(now.getHours() - 6);
+                if (value === '24h') nextFrom.setHours(now.getHours() - 24);
+                if (value === '7d') nextFrom.setDate(now.getDate() - 7);
+                setFrom(nextFrom.toISOString().slice(0, 16));
+                setTo(now.toISOString().slice(0, 16));
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="w-full border-border/40">
+                <SelectValue placeholder="Custom" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="custom">Custom</SelectItem>
+                <SelectItem value="1h">Last 1h</SelectItem>
+                <SelectItem value="6h">Last 6h</SelectItem>
+                <SelectItem value="24h">Last 24h</SelectItem>
+                <SelectItem value="7d">Last 7d</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+        </div>
+
+        {/* Active filter chips */}
+        {hasFilters && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/30 pt-3">
+            <span className="text-[11px] text-muted-foreground">Active:</span>
+            {level && <Badge variant="outline" className="text-[10px]">level: {level}</Badge>}
+            {component && <Badge variant="outline" className="text-[10px]">component: {component}</Badge>}
+            {resolved && <Badge variant="outline" className="text-[10px]">status: {resolved === 'true' ? 'resolved' : 'unresolved'}</Badge>}
+            {range && <Badge variant="outline" className="text-[10px]">range: {range}</Badge>}
+          </div>
         )}
       </div>
+
+      {/* ── Error Table ── */}
+      {isLoading ? (
+        <div className="overflow-hidden rounded-xl border border-border/30 bg-card/80 p-4">
+          {/* Desktop header */}
+          <div className="hidden border-b border-border/30 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-12 md:gap-3">
+            <div className="col-span-2">Level</div>
+            <div className="col-span-2">Component</div>
+            <div className="col-span-4">Message</div>
+            <div className="col-span-2">Timestamp</div>
+            <div className="col-span-2 text-right">Actions</div>
+          </div>
+          <TabLoadingState rows={8} />
+        </div>
+      ) : errors.length > 0 ? (
+        <div className="overflow-hidden rounded-xl border border-border/30 bg-card/80">
+          {/* Desktop header */}
+          <div className="hidden border-b border-border/30 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-12 md:gap-3">
+            <div className="col-span-2">Level</div>
+            <div className="col-span-2">Component</div>
+            <div className="col-span-4">Message</div>
+            <div className="col-span-2">Timestamp</div>
+            <div className="col-span-2 text-right">Actions</div>
+          </div>
+          <div className="divide-y divide-border/30">
+            {errors.map((error) => (
+              <ErrorRow
+                key={error.id}
+                error={error}
+                onView={() => setSelectedError(error)}
+                onResolve={() => handleResolve(error.id)}
+                isResolving={resolveMutation.isPending && resolveMutation.variables === error.id}
+              />
+            ))}
+          </div>
+          {pagination && pagination.totalPages > 1 && (
+            <div className="flex justify-center border-t border-border/30 pt-3">
+              <Pagination
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                onPageChange={setPage}
+              />
+            </div>
+          )}
+        </div>
+      ) : (
+        <TabEmptyState
+          title="No system errors"
+          description={hasFilters ? 'Try adjusting your filters.' : 'System errors will appear here when they occur.'}
+        />
+      )}
 
       {/* ── Error Detail Modal ── */}
       {selectedError && (
         <ErrorDetailModal error={selectedError} onClose={() => setSelectedError(null)} />
       )}
-    </motion.div>
+    </div>
   );
 }
 

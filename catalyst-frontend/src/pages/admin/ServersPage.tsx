@@ -17,8 +17,9 @@ import {
   Settings,
   X,
 } from 'lucide-react';
-import { motion, AnimatePresence, type Variants } from 'framer-motion';
-import EmptyState from '../../components/shared/EmptyState';
+import TabHeader from '../../components/servers/tabs/TabHeader';
+import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
+import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import Pagination from '../../components/shared/Pagination';
 import { Input } from '../../components/ui/input';
@@ -47,33 +48,6 @@ import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
 
 const pageSize = 20;
-
-// ── Animation Variants ──
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.03, delayChildren: 0.05 },
-  },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { type: 'spring', stiffness: 300, damping: 24 },
-  },
-};
-
-const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -8 },
-  visible: {
-    opacity: 1,
-    x: 0,
-    transition: { type: 'spring', stiffness: 400, damping: 30 },
-  },
-};
 
 // ── Status Config ──
 function getStatusConfig(serverStatus: string) {
@@ -125,34 +99,6 @@ function StatusBadge({ status }: { status: string }) {
       </span>
       {config.label}
     </Badge>
-  );
-}
-
-// ── Skeleton Loader ──
-function TableSkeleton() {
-  return (
-    <div className="space-y-1">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div
-          key={i}
-          className="flex items-center gap-4 rounded-lg px-4 py-3.5"
-        >
-          <div className="h-4 w-4 animate-pulse rounded bg-surface-3" />
-          <div className="flex-1 space-y-2">
-            <div className="h-4 w-40 animate-pulse rounded bg-surface-3" />
-            <div className="h-3 w-56 animate-pulse rounded bg-surface-2" />
-          </div>
-          <div className="h-5 w-20 animate-pulse rounded-full bg-surface-3" />
-          <div className="hidden h-4 w-24 animate-pulse rounded bg-surface-3 sm:block" />
-          <div className="hidden h-4 w-20 animate-pulse rounded bg-surface-3 md:block" />
-          <div className="hidden h-4 w-24 animate-pulse rounded bg-surface-3 lg:block" />
-          <div className="flex gap-1">
-            <div className="h-7 w-16 animate-pulse rounded-md bg-surface-3" />
-            <div className="h-7 w-16 animate-pulse rounded-md bg-surface-3" />
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -307,37 +253,12 @@ function AdminServersPage() {
   }, [servers]);
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial={false}
-      animate="visible"
-      className="relative overflow-hidden"
-    >
-      {/* Ambient background */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-violet-500/8 to-cyan-500/8 blur-3xl dark:from-violet-500/15 dark:to-cyan-500/15" />
-        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-sky-500/8 to-indigo-500/8 blur-3xl dark:from-sky-500/15 dark:to-indigo-500/15" />
-      </div>
-
-      <div className="relative z-10 space-y-5">
-        {/* ── Header ── */}
-        <motion.div variants={itemVariants} className="flex flex-wrap items-end justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-violet-500 to-cyan-500 opacity-20 blur-sm" />
-                <Server className="relative h-7 w-7 text-violet-600 dark:text-violet-400" />
-              </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
-                All Servers
-              </h1>
-            </div>
-            <p className="ml-10 text-sm text-muted-foreground">
-              Monitor and manage every server across all nodes
-            </p>
-          </div>
-
-          {/* Summary stats */}
+    <div className="space-y-5">
+      <TabHeader
+        icon={Server}
+        title="All Servers"
+        description="Monitor and manage every server across all nodes"
+        actions={
           <div className="flex flex-wrap gap-2">
             {isLoading ? (
               <>
@@ -371,490 +292,469 @@ function AdminServersPage() {
               </>
             )}
           </div>
-        </motion.div>
+        }
+        variant="default"
+      />
 
-        {/* ── Search & Controls Bar ── */}
-        <motion.div
-          variants={itemVariants}
-          className="flex flex-wrap items-center gap-2.5"
+      {/* ── Search & Controls Bar ── */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        {/* Search input */}
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+            placeholder="Search servers by name or ID…"
+            className="border-border/40 pl-9"
+          />
+        </div>
+
+        {/* Filter toggle */}
+        <Button
+          variant={hasActiveFilters ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setShowFilters(!showFilters)}
+          className="gap-2"
         >
-          {/* Search input */}
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
-              }}
-              placeholder="Search servers by name or ID…"
-              className="pl-9"
-            />
+          <Filter className="h-3.5 w-3.5" />
+          Filters
+          {hasActiveFilters && (
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
+              {[status, nodeId, templateId, ownerSearch.trim()].filter(Boolean).length}
+            </span>
+          )}
+        </Button>
+
+        {/* Sort */}
+        <Select value={sort} onValueChange={setSort}>
+          <SelectTrigger className="w-40 gap-2 border-border/40 text-xs">
+            <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="name-asc">Name A→Z</SelectItem>
+            <SelectItem value="name-desc">Name Z→A</SelectItem>
+            <SelectItem value="status">Status</SelectItem>
+            <SelectItem value="node">Node</SelectItem>
+            <SelectItem value="template">Template</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Results count */}
+        <span className="text-xs text-muted-foreground">
+          {filteredServers.length} of {data?.pagination?.total ?? servers.length}
+        </span>
+      </div>
+
+      {/* ── Expandable Filter Panel ── */}
+      {showFilters && (
+        <div className="overflow-hidden">
+          <div className="rounded-xl border border-border/30 bg-card/80 p-4">
+            <div className="flex flex-wrap items-end gap-4">
+              <label className="space-y-1.5">
+                <span className="text-xs font-medium text-muted-foreground">Status</span>
+                <Select
+                  value={status || 'all'}
+                  onValueChange={(value) => {
+                    setStatus(value === 'all' ? '' : value);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-44 border-border/40">
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    {statuses.map((entry) => (
+                      <SelectItem key={entry} value={entry}>
+                        {entry}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-xs font-medium text-muted-foreground">Node</span>
+                <Select
+                  value={nodeId || 'all'}
+                  onValueChange={(value) => {
+                    setNodeId(value === 'all' ? '' : value);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-44 border-border/40">
+                    <SelectValue placeholder="All nodes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All nodes</SelectItem>
+                    {sortedNodes.map((node) => (
+                      <SelectItem key={node.id} value={node.id}>
+                        {node.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-xs font-medium text-muted-foreground">Template</span>
+                <Select
+                  value={templateId || 'all'}
+                  onValueChange={(value) => {
+                    setTemplateId(value === 'all' ? '' : value);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-44 border-border/40">
+                    <SelectValue placeholder="All templates" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All templates</SelectItem>
+                    {sortedTemplates.map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-xs font-medium text-muted-foreground">Owner</span>
+                <Input
+                  value={ownerSearch}
+                  onChange={(event) => {
+                    setOwnerSearch(event.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search owners…"
+                  className="w-44 border-border/40"
+                />
+              </label>
+              {hasActiveFilters && (
+                <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1.5 text-xs">
+                  <X className="h-3 w-3" />
+                  Clear all
+                </Button>
+              )}
+            </div>
           </div>
+        </div>
+      )}
 
-          {/* Filter toggle */}
-          <Button
-            variant={hasActiveFilters ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setShowFilters(!showFilters)}
-            className="gap-2"
-          >
-            <Filter className="h-3.5 w-3.5" />
-            Filters
-            {hasActiveFilters && (
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
-                {[status, nodeId, templateId, ownerSearch.trim()].filter(Boolean).length}
+      {/* ── Bulk Actions Bar ── */}
+      {selectedIds.length > 0 && (
+        <div className="overflow-hidden">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-foreground">
+                {selectedIds.length} selected
               </span>
-            )}
-          </Button>
+              <button
+                onClick={() => setSelectedIds([])}
+                className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Clear
+              </button>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleBulkAction('start', selectedIds, `${selectedIds.length} servers`)}
+                disabled={bulkActionMutation.isPending}
+                className="gap-1.5 text-xs text-success hover:border-success/20 hover:bg-success/5 hover:text-success"
+              >
+                <Play className="h-3 w-3" />
+                Start
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleBulkAction('stop', selectedIds, `${selectedIds.length} servers`)}
+                disabled={bulkActionMutation.isPending}
+                className="gap-1.5 text-xs text-warning hover:border-warning/20 hover:bg-warning/5 hover:text-warning"
+              >
+                <Square className="h-3 w-3" />
+                Stop
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleBulkAction('restart', selectedIds, `${selectedIds.length} servers`)}
+                disabled={bulkActionMutation.isPending}
+                className="gap-1.5 text-xs"
+              >
+                <RotateCw className="h-3 w-3" />
+                Restart
+              </Button>
+              <div className="mx-1 h-4 w-px bg-border" />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleBulkAction('suspend', selectedIds, `${selectedIds.length} servers`)}
+                disabled={bulkActionMutation.isPending}
+                className="gap-1.5 text-xs text-destructive hover:border-destructive/20 hover:bg-destructive/5 hover:text-destructive"
+              >
+                <Ban className="h-3 w-3" />
+                Suspend
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleBulkAction('unsuspend', selectedIds, `${selectedIds.length} servers`)}
+                disabled={bulkActionMutation.isPending}
+                className="gap-1.5 text-xs text-success hover:border-success/20 hover:bg-success/5 hover:text-success"
+              >
+                <CheckCircle className="h-3 w-3" />
+                Unsuspend
+              </Button>
+              <div className="mx-1 h-4 w-px bg-border" />
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => handleBulkAction('delete', selectedIds, `${selectedIds.length} servers`)}
+                disabled={bulkActionMutation.isPending}
+                className="gap-1.5 text-xs"
+              >
+                <Trash2 className="h-3 w-3" />
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
-          {/* Sort */}
-          <Select value={sort} onValueChange={setSort}>
-            <SelectTrigger className="w-40 gap-2 text-xs">
-              <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="name-asc">Name A→Z</SelectItem>
-              <SelectItem value="name-desc">Name Z→A</SelectItem>
-              <SelectItem value="status">Status</SelectItem>
-              <SelectItem value="node">Node</SelectItem>
-              <SelectItem value="template">Template</SelectItem>
-            </SelectContent>
-          </Select>
+      {/* ── Server List ── */}
+      <div className="rounded-xl border border-border/30 bg-card/80 shadow-sm">
+        {isLoading ? (
+          <div className="p-4">
+            <TabLoadingState rows={6} />
+          </div>
+        ) : filteredServers.length > 0 ? (
+          <>
+            {/* Select-all header */}
+            <div className="flex items-center gap-3 border-b border-border/30 px-4 py-2">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={() =>
+                    setSelectedIds((prev) => {
+                      if (allSelected) {
+                        return prev.filter((id) => !filteredIds.includes(id));
+                      }
+                      return Array.from(new Set([...prev, ...filteredIds]));
+                    })
+                  }
+                  className="h-4 w-4 rounded border-border/40 bg-card text-primary"
+                />
+                <span className="text-xs font-medium text-muted-foreground">
+                  Select all
+                </span>
+              </label>
+            </div>
 
-          {/* Results count */}
-          <span className="text-xs text-muted-foreground">
-            {filteredServers.length} of {data?.pagination?.total ?? servers.length}
-          </span>
-        </motion.div>
+            {/* Server rows */}
+            <div className="divide-y divide-border/30">
+              {filteredServers.map((server: AdminServer) => {
+                const isSelected = selectedIds.includes(server.id);
+                const isSuspended = server.status === 'suspended';
+                const isRunning = server.status === 'running';
+                const isStopped = server.status === 'stopped';
+                const isBusy = server.status === 'starting' || server.status === 'stopping';
 
-        {/* ── Expandable Filter Panel ── */}
-        <AnimatePresence>
-          {showFilters && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: 'easeInOut' }}
-              className="overflow-hidden"
-            >
-              <div className="rounded-xl border border-border bg-card/80 p-4 backdrop-blur-sm">
-                <div className="flex flex-wrap items-end gap-4">
-                  <label className="space-y-1.5">
-                    <span className="text-xs font-medium text-muted-foreground">Status</span>
-                    <Select
-                      value={status || 'all'}
-                      onValueChange={(value) => {
-                        setStatus(value === 'all' ? '' : value);
-                        setPage(1);
-                      }}
-                    >
-                      <SelectTrigger className="w-44">
-                        <SelectValue placeholder="All statuses" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All statuses</SelectItem>
-                        {statuses.map((entry) => (
-                          <SelectItem key={entry} value={entry}>
-                            {entry}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label className="space-y-1.5">
-                    <span className="text-xs font-medium text-muted-foreground">Node</span>
-                    <Select
-                      value={nodeId || 'all'}
-                      onValueChange={(value) => {
-                        setNodeId(value === 'all' ? '' : value);
-                        setPage(1);
-                      }}
-                    >
-                      <SelectTrigger className="w-44">
-                        <SelectValue placeholder="All nodes" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All nodes</SelectItem>
-                        {sortedNodes.map((node) => (
-                          <SelectItem key={node.id} value={node.id}>
-                            {node.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label className="space-y-1.5">
-                    <span className="text-xs font-medium text-muted-foreground">Template</span>
-                    <Select
-                      value={templateId || 'all'}
-                      onValueChange={(value) => {
-                        setTemplateId(value === 'all' ? '' : value);
-                        setPage(1);
-                      }}
-                    >
-                      <SelectTrigger className="w-44">
-                        <SelectValue placeholder="All templates" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All templates</SelectItem>
-                        {sortedTemplates.map((template) => (
-                          <SelectItem key={template.id} value={template.id}>
-                            {template.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label className="space-y-1.5">
-                    <span className="text-xs font-medium text-muted-foreground">Owner</span>
-                    <Input
-                      value={ownerSearch}
-                      onChange={(event) => {
-                        setOwnerSearch(event.target.value);
-                        setPage(1);
-                      }}
-                      placeholder="Search owners…"
-                      className="w-44"
-                    />
-                  </label>
-                  {hasActiveFilters && (
-                    <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1.5 text-xs">
-                      <X className="h-3 w-3" />
-                      Clear all
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* ── Bulk Actions Bar ── */}
-        <AnimatePresence>
-          {selectedIds.length > 0 && (
-            <motion.div
-              initial={{ height: 0, opacity: 0, y: -8 }}
-              animate={{ height: 'auto', opacity: 1, y: 0 }}
-              exit={{ height: 0, opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: 'easeInOut' }}
-              className="overflow-hidden"
-            >
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 dark:bg-primary/10">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-foreground">
-                    {selectedIds.length} selected
-                  </span>
-                  <button
-                    onClick={() => setSelectedIds([])}
-                    className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+                return (
+                  <div
+                    key={server.id}
+                    className={`group relative flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-2/50 ${
+                      isSelected ? 'bg-primary/5' : ''
+                    }`}
                   >
-                    Clear
-                  </button>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleBulkAction('start', selectedIds, `${selectedIds.length} servers`)}
-                    disabled={bulkActionMutation.isPending}
-                    className="gap-1.5 text-xs text-success hover:bg-success/5 hover:text-success hover:border-success/20 dark:text-success dark:hover:bg-success/30 dark:hover:border-success"
-                  >
-                    <Play className="h-3 w-3" />
-                    Start
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleBulkAction('stop', selectedIds, `${selectedIds.length} servers`)}
-                    disabled={bulkActionMutation.isPending}
-                    className="gap-1.5 text-xs text-warning hover:bg-warning/5 hover:text-warning hover:border-warning/20 dark:text-warning dark:hover:bg-warning/30 dark:hover:border-warning"
-                  >
-                    <Square className="h-3 w-3" />
-                    Stop
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleBulkAction('restart', selectedIds, `${selectedIds.length} servers`)}
-                    disabled={bulkActionMutation.isPending}
-                    className="gap-1.5 text-xs"
-                  >
-                    <RotateCw className="h-3 w-3" />
-                    Restart
-                  </Button>
-                  <div className="mx-1 h-4 w-px bg-border" />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleBulkAction('suspend', selectedIds, `${selectedIds.length} servers`)}
-                    disabled={bulkActionMutation.isPending}
-                    className="gap-1.5 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20 dark:text-destructive dark:hover:bg-destructive/30 dark:hover:border-destructive"
-                  >
-                    <Ban className="h-3 w-3" />
-                    Suspend
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleBulkAction('unsuspend', selectedIds, `${selectedIds.length} servers`)}
-                    disabled={bulkActionMutation.isPending}
-                    className="gap-1.5 text-xs text-success hover:bg-success/5 hover:text-success hover:border-success/20 dark:text-success dark:hover:bg-success/30 dark:hover:border-success"
-                  >
-                    <CheckCircle className="h-3 w-3" />
-                    Unsuspend
-                  </Button>
-                  <div className="mx-1 h-4 w-px bg-border" />
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleBulkAction('delete', selectedIds, `${selectedIds.length} servers`)}
-                    disabled={bulkActionMutation.isPending}
-                    className="gap-1.5 text-xs"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* ── Server List ── */}
-        <motion.div variants={itemVariants}>
-          <div className="rounded-xl border border-border bg-card/80 shadow-sm backdrop-blur-sm">
-            {isLoading ? (
-              <div className="p-4">
-                <TableSkeleton />
-              </div>
-            ) : filteredServers.length > 0 ? (
-              <>
-                {/* Select-all header */}
-                <div className="flex items-center gap-3 border-b border-border px-4 py-2">
-                  <label className="flex items-center gap-2">
+                    {/* Checkbox */}
                     <input
                       type="checkbox"
-                      checked={allSelected}
+                      checked={isSelected}
                       onChange={() =>
-                        setSelectedIds((prev) => {
-                          if (allSelected) {
-                            return prev.filter((id) => !filteredIds.includes(id));
-                          }
-                          return Array.from(new Set([...prev, ...filteredIds]));
-                        })
+                        setSelectedIds((prev) =>
+                          prev.includes(server.id)
+                            ? prev.filter((id) => id !== server.id)
+                            : [...prev, server.id],
+                        )
                       }
-                      className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
+                      className="h-4 w-4 flex-shrink-0 rounded border-border/40 bg-card text-primary"
                     />
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Select all
-                    </span>
-                  </label>
-                </div>
 
-                {/* Server rows */}
-                <div className="divide-y divide-border/50">
-                  {filteredServers.map((server: AdminServer) => {
-                    const isSelected = selectedIds.includes(server.id);
-                    const isSuspended = server.status === 'suspended';
-                    const isRunning = server.status === 'running';
-                    const isStopped = server.status === 'stopped';
-                    const isBusy = server.status === 'starting' || server.status === 'stopping';
+                    {/* Server info — primary column */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2.5">
+                        <Link
+                          to={`/servers/${server.id}/console`}
+                          className="truncate font-semibold text-foreground transition-colors hover:text-primary"
+                        >
+                          {server.name}
+                        </Link>
+                        <StatusBadge status={server.status} />
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                        <span className="font-mono text-[11px] opacity-60">{server.id}</span>
+                        {server.owner && (
+                          <span>
+                            {server.owner.username || server.owner.email}
+                          </span>
+                        )}
+                        <span className="hidden sm:inline">
+                          {server.node.name}
+                        </span>
+                        <span className="hidden md:inline">
+                          {server.template.name}
+                        </span>
+                      </div>
+                    </div>
 
-                    return (
-                      <motion.div
-                        key={server.id}
-                        variants={rowVariants}
-                        className={`group relative flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-2/50 ${
-                          isSelected ? 'bg-primary/5' : ''
-                        }`}
-                      >
-                        {/* Checkbox */}
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() =>
-                            setSelectedIds((prev) =>
-                              prev.includes(server.id)
-                                ? prev.filter((id) => id !== server.id)
-                                : [...prev, server.id],
-                            )
-                          }
-                          className="h-4 w-4 flex-shrink-0 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400"
-                        />
+                    {/* Quick action buttons — visible on hover or mobile */}
+                    <div className="flex items-center gap-1 opacity-100 transition-opacity group-hover:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+                      {!isSuspended && (
+                        <button
+                          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-success/5 hover:text-success disabled:pointer-events-none disabled:opacity-30"
+                          onClick={() => handleBulkAction('start', [server.id], server.name)}
+                          disabled={bulkActionMutation.isPending || isRunning || isBusy}
+                          title="Start"
+                        >
+                          <Play className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {!isSuspended && (
+                        <button
+                          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-warning/5 hover:text-warning disabled:pointer-events-none disabled:opacity-30"
+                          onClick={() => handleBulkAction('stop', [server.id], server.name)}
+                          disabled={bulkActionMutation.isPending || isStopped || isBusy}
+                          title="Stop"
+                        >
+                          <Square className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {isSuspended ? (
+                        <button
+                          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-success/5 hover:text-success disabled:pointer-events-none disabled:opacity-30"
+                          onClick={() => handleBulkAction('unsuspend', [server.id], server.name)}
+                          disabled={bulkActionMutation.isPending}
+                          title="Unsuspend"
+                        >
+                          <CheckCircle className="h-3.5 w-3.5" />
+                        </button>
+                      ) : (
+                        <button
+                          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
+                          onClick={() => handleBulkAction('suspend', [server.id], server.name)}
+                          disabled={bulkActionMutation.isPending}
+                          title="Suspend"
+                        >
+                          <Ban className="h-3.5 w-3.5" />
+                        </button>
+                      )}
 
-                        {/* Server info — primary column */}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2.5">
-                            <Link
-                              to={`/servers/${server.id}/console`}
-                              className="truncate font-semibold text-foreground transition-colors hover:text-primary dark:text-foreground dark:hover:text-primary-400"
-                            >
-                              {server.name}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                            title="More"
+                          >
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem asChild>
+                            <Link to={`/servers/${server.id}/console`} className="gap-2 text-xs">
+                              Console
                             </Link>
-                            <StatusBadge status={server.status} />
-                          </div>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                            <span className="font-mono text-[11px] opacity-60">{server.id}</span>
-                            {server.owner && (
-                              <span>
-                                {server.owner.username || server.owner.email}
-                              </span>
-                            )}
-                            <span className="hidden sm:inline">
-                              {server.node.name}
-                            </span>
-                            <span className="hidden md:inline">
-                              {server.template.name}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Quick action buttons — visible on hover or mobile */}
-                        <div className="flex items-center gap-1 opacity-100 transition-opacity group-hover:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
-                          {!isSuspended && (
-                            <button
-                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-success/5 hover:text-success disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-success/30 dark:hover:text-success"
-                              onClick={() => handleBulkAction('start', [server.id], server.name)}
-                              disabled={bulkActionMutation.isPending || isRunning || isBusy}
-                              title="Start"
-                            >
-                              <Play className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                          {!isSuspended && (
-                            <button
-                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-warning/5 hover:text-warning disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-warning/30 dark:hover:text-warning"
-                              onClick={() => handleBulkAction('stop', [server.id], server.name)}
-                              disabled={bulkActionMutation.isPending || isStopped || isBusy}
-                              title="Stop"
-                            >
-                              <Square className="h-3.5 w-3.5" />
-                            </button>
-                          )}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => handleBulkAction('restart', [server.id], server.name)}
+                            disabled={bulkActionMutation.isPending || isSuspended}
+                            className="gap-2 text-xs"
+                          >
+                            <RotateCw className="h-3.5 w-3.5" />
+                            Restart
+                          </DropdownMenuItem>
                           {isSuspended ? (
-                            <button
-                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-success/5 hover:text-success disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-success/30 dark:hover:text-success"
+                            <DropdownMenuItem
                               onClick={() => handleBulkAction('unsuspend', [server.id], server.name)}
                               disabled={bulkActionMutation.isPending}
-                              title="Unsuspend"
+                              className="gap-2 text-xs text-success"
                             >
                               <CheckCircle className="h-3.5 w-3.5" />
-                            </button>
+                              Unsuspend
+                            </DropdownMenuItem>
                           ) : (
-                            <button
-                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-destructive/30 dark:hover:text-destructive"
+                            <DropdownMenuItem
                               onClick={() => handleBulkAction('suspend', [server.id], server.name)}
                               disabled={bulkActionMutation.isPending}
-                              title="Suspend"
+                              className="gap-2 text-xs text-destructive"
                             >
                               <Ban className="h-3.5 w-3.5" />
-                            </button>
+                              Suspend
+                            </DropdownMenuItem>
                           )}
-
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-                                title="More"
-                              >
-                                <MoreHorizontal className="h-3.5 w-3.5" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem asChild>
-                                <Link to={`/servers/${server.id}/console`} className="gap-2 text-xs">
-                                  Console
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => handleBulkAction('restart', [server.id], server.name)}
-                                disabled={bulkActionMutation.isPending || isSuspended}
-                                className="gap-2 text-xs"
-                              >
-                                <RotateCw className="h-3.5 w-3.5" />
-                                Restart
-                              </DropdownMenuItem>
-                              {isSuspended ? (
-                                <DropdownMenuItem
-                                  onClick={() => handleBulkAction('unsuspend', [server.id], server.name)}
-                                  disabled={bulkActionMutation.isPending}
-                                  className="gap-2 text-xs text-success dark:text-success"
-                                >
-                                  <CheckCircle className="h-3.5 w-3.5" />
-                                  Unsuspend
-                                </DropdownMenuItem>
-                              ) : (
-                                <DropdownMenuItem
-                                  onClick={() => handleBulkAction('suspend', [server.id], server.name)}
-                                  disabled={bulkActionMutation.isPending}
-                                  className="gap-2 text-xs text-destructive dark:text-destructive"
-                                >
-                                  <Ban className="h-3.5 w-3.5" />
-                                  Suspend
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => setUpdateServerId(server.id)}
-                                disabled={bulkActionMutation.isPending}
-                                className="gap-2 text-xs"
-                              >
-                                <Settings className="h-3.5 w-3.5" />
-                                Update
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => setDeleteServer({ id: server.id, name: server.name })}
-                                disabled={bulkActionMutation.isPending}
-                                className="gap-2 text-xs text-destructive dark:text-destructive"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                </div>
-
-                {/* Pagination */}
-                {pagination && pagination.totalPages > 1 ? (
-                  <div className="border-t border-border px-4 py-3">
-                    <Pagination
-                      page={pagination.page}
-                      totalPages={pagination.totalPages}
-                      onPageChange={setPage}
-                    />
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => setUpdateServerId(server.id)}
+                            disabled={bulkActionMutation.isPending}
+                            className="gap-2 text-xs"
+                          >
+                            <Settings className="h-3.5 w-3.5" />
+                            Update
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => setDeleteServer({ id: server.id, name: server.name })}
+                            disabled={bulkActionMutation.isPending}
+                            className="gap-2 text-xs text-destructive"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
-                ) : null}
-              </>
-            ) : (
-              <div className="p-6">
-                <EmptyState
-                  title={search.trim() || hasActiveFilters ? 'No servers found' : 'No servers yet'}
-                  description={
-                    search.trim() || hasActiveFilters
-                      ? 'Try adjusting your search or filters.'
-                      : 'Servers will appear here once created.'
-                  }
-                  action={
-                    hasActiveFilters ? (
-                      <Button variant="outline" size="sm" onClick={clearFilters}>
-                        <X className="mr-1.5 h-3.5 w-3.5" />
-                        Clear filters
-                      </Button>
-                    ) : undefined
-                  }
+                );
+              })}
+            </div>
+
+            {/* Pagination */}
+            {pagination && pagination.totalPages > 1 ? (
+              <div className="border-t border-border/30 px-4 py-3">
+                <Pagination
+                  page={pagination.page}
+                  totalPages={pagination.totalPages}
+                  onPageChange={setPage}
                 />
               </div>
-            )}
+            ) : null}
+          </>
+        ) : (
+          <div className="p-6">
+            <TabEmptyState
+              title={search.trim() || hasActiveFilters ? 'No servers found' : 'No servers yet'}
+              description={
+                search.trim() || hasActiveFilters
+                  ? 'Try adjusting your search or filters.'
+                  : 'Servers will appear here once created.'
+              }
+              action={
+                hasActiveFilters ? (
+                  <Button variant="outline" size="sm" onClick={clearFilters}>
+                    <X className="mr-1.5 h-3.5 w-3.5" />
+                    Clear filters
+                  </Button>
+                ) : undefined
+              }
+            />
           </div>
-        </motion.div>
+        )}
       </div>
 
       {/* ── Suspend Confirmation Dialog ── */}
@@ -868,11 +768,11 @@ function AdminServersPage() {
               <span className="font-semibold">{suspendTargets?.label}</span>.
             </p>
             <label className="block space-y-1">
-              <span className="text-sm text-muted-foreground dark:text-foreground">
+              <span className="text-sm text-muted-foreground">
                 Reason (optional)
               </span>
               <input
-                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-2 dark:text-foreground"
+                className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
                 value={suspendReason}
                 onChange={(event) => setSuspendReason(event.target.value)}
                 placeholder="e.g., Billing issue"
@@ -909,7 +809,7 @@ function AdminServersPage() {
               You are about to delete{' '}
               <span className="font-semibold">{deleteTargets?.label}</span>.
             </p>
-            <p className="text-xs text-muted-foreground dark:text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Servers must be stopped before deletion. This cannot be undone.
             </p>
           </div>
@@ -946,7 +846,7 @@ function AdminServersPage() {
           onOpenChange={(open) => { if (!open) setDeleteServer(null); }}
         />
       )}
-    </motion.div>
+    </div>
   );
 }
 

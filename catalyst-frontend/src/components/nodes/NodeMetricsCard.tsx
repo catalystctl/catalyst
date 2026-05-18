@@ -1,5 +1,3 @@
-import { motion } from 'framer-motion';
-import { Activity } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import type { NodeStats } from '../../types/node';
 
@@ -40,20 +38,15 @@ function NodeMetricsCard({ stats }: { stats: NodeStats }) {
   );
 
   const metrics = [
-    { label: 'CPU', value: cpuPercent, color: 'bg-primary-500' },
-    { label: 'Memory', value: memoryPercent, color: 'bg-success/50' },
-    { label: 'Disk', value: diskPercent, color: 'bg-warning/50' },
+    { label: 'CPU', value: cpuPercent, color: 'bg-primary' },
+    { label: 'Memory', value: memoryPercent, color: 'bg-success' },
+    { label: 'Disk', value: diskPercent, color: 'bg-warning' },
   ];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 24 }}
-      className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm"
-    >
+    <div className="rounded-xl border border-border/30 bg-card p-5 shadow-[inset_0_1px_0_hsl(var(--card)/0.8),0_1px_2px_hsl(var(--border)/0.15)]">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="font-display text-sm font-semibold text-foreground dark:text-foreground">
+        <h3 className="font-display text-sm font-semibold text-foreground">
           Live usage
         </h3>
         <Badge variant="outline" className="gap-1.5 text-[11px]">
@@ -70,22 +63,20 @@ function NodeMetricsCard({ stats }: { stats: NodeStats }) {
           <div key={metric.label} className="space-y-1.5">
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">{metric.label}</span>
-              <span className="font-semibold tabular-nums text-foreground dark:text-foreground">
+              <span className="font-semibold tabular-nums text-foreground">
                 {metric.value.toFixed(0)}%
               </span>
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-surface-2 dark:bg-surface-2">
-              <motion.div
-                className={`h-full rounded-full ${metric.color}`}
-                initial={{ width: 0 }}
-                animate={{ width: `${metric.value}%` }}
-                transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
+            <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+              <div
+                className={`h-full rounded-full ${metric.color} transition-all duration-500`}
+                style={{ width: `${metric.value}%` }}
               />
             </div>
           </div>
         ))}
       </div>
-    </motion.div>
+    </div>
   );
 }
 

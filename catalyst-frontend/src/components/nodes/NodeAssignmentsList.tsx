@@ -1,12 +1,13 @@
-import { motion } from 'framer-motion';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import { Shield, User, X } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
 import { nodesApi } from '../../services/api/nodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import ServerTabCard from '../servers/tabs/ServerTabCard';
+import SectionHeader from '../servers/tabs/SectionHeader';
+import TabLoadingState from '../servers/tabs/TabLoadingState';
 
 type Props = {
   nodeId: string;
@@ -42,31 +43,20 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 24 }}
-      className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur-sm"
-    >
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-display text-sm font-semibold text-foreground">
-          Node Assignments
-          {assignments.length > 0 && (
-            <Badge variant="default" className="ml-2">
-              {assignments.length}
-            </Badge>
-          )}
-        </h2>
+    <ServerTabCard>
+      <div className="mb-3 flex items-center justify-between">
+        <SectionHeader icon={Shield} title="Node Assignments" />
+        {assignments.length > 0 && (
+          <Badge variant="default" className="text-[10px]">
+            {assignments.length}
+          </Badge>
+        )}
       </div>
 
       {isLoading ? (
-        <div className="space-y-2">
-          {[1, 2].map((i) => (
-            <div key={i} className="h-14 animate-pulse rounded-lg bg-surface-2/50" />
-          ))}
-        </div>
+        <TabLoadingState rows={2} />
       ) : assignments.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border py-8 text-center">
+        <div className="rounded-lg border border-dashed border-border/40 bg-surface-2/30 py-8 text-center">
           <Shield className="mx-auto mb-2 h-6 w-6 text-muted-foreground/50" />
           <p className="text-sm text-muted-foreground">
             No assignments yet. Assign this node to users or roles to grant them access.
@@ -77,7 +67,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
           {assignments.map((assignment) => (
             <div
               key={assignment.id}
-              className="group flex items-center justify-between rounded-lg border border-border/50 bg-surface-2/50 px-3 py-2.5 transition-colors hover:bg-surface-2 dark:bg-surface-2/30"
+              className="group flex items-center justify-between rounded-lg border border-border/30 bg-surface-2/30 px-3 py-2.5 transition-colors hover:bg-surface-2/50"
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 {assignment.source === 'user' ? (
@@ -110,7 +100,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
                     <span
                       className={`ml-2 ${
                         new Date(assignment.expiresAt) < new Date()
-                          ? 'text-destructive dark:text-destructive'
+                          ? 'text-destructive'
                           : ''
                       }`}
                     >
@@ -122,7 +112,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
 
                 {canManage && (
                   <button
-                    className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-destructive/30 dark:hover:text-destructive"
+                    className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/5 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
                     onClick={() => handleRemove(assignment.id)}
                     disabled={removeMutation.isPending}
                     title="Remove assignment"
@@ -135,7 +125,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
           ))}
         </div>
       )}
-    </motion.div>
+    </ServerTabCard>
   );
 }
 

@@ -1,7 +1,7 @@
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { motion, type Variants } from 'framer-motion';
-import { ArrowDown, Check, Copy, Search, Trash2, X } from 'lucide-react';
+import { ArrowDown, Check, Copy, Search, Trash2, X, Terminal } from 'lucide-react';
+import TabHeader from '../../components/servers/tabs/TabHeader';
 import ServerStatusBadge from '../../components/servers/ServerStatusBadge';
 import CustomConsole from '../../components/console/CustomConsole';
 import { useConsole } from '../../hooks/useConsole';
@@ -14,33 +14,23 @@ const STREAM_COLORS: Record<string, { dot: string; active: string; inactive: str
   stdout: {
     dot: 'bg-success',
     active: 'border-success/50 bg-success-muted text-success',
-    inactive: 'border-border text-muted-foreground hover:border-primary/30',
+    inactive: 'border-border/30 text-muted-foreground hover:border-primary/30',
   },
   stderr: {
     dot: 'bg-danger',
     active: 'border-danger/50 bg-danger-muted text-danger',
-    inactive: 'border-border text-muted-foreground hover:border-primary/30',
+    inactive: 'border-border/30 text-muted-foreground hover:border-primary/30',
   },
   system: {
     dot: 'bg-info',
     active: 'border-info/50 bg-info-muted text-info',
-    inactive: 'border-border text-muted-foreground hover:border-primary/30',
+    inactive: 'border-border/30 text-muted-foreground hover:border-primary/30',
   },
   stdin: {
     dot: 'bg-warning',
     active: 'border-warning/50 bg-warning-muted text-warning',
-    inactive: 'border-border text-muted-foreground hover:border-primary/30',
+    inactive: 'border-border/30 text-muted-foreground hover:border-primary/30',
   },
-};
-
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.05 } },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
 };
 
 function ServerConsolePage() {
@@ -148,223 +138,205 @@ function ServerConsolePage() {
   }, [searchOpen]);
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial={false}
-      animate="visible"
-      className="relative flex min-h-[calc(100vh-10rem)] flex-col gap-4 overflow-hidden"
-    >
-      {/* Ambient background */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-primary-500/8 to-primary-300/8 blur-3xl dark:from-primary-500/15 dark:to-primary-300/15" />
-        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-primary-400/8 to-primary-200/8 blur-3xl dark:from-primary-400/15 dark:to-primary-200/15" />
-      </div>
-
-      <div className="relative z-10 flex flex-1 flex-col gap-4">
-        {/* ── Header ── */}
-        <motion.div variants={itemVariants} className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-primary-500 to-primary-400 opacity-20 blur-sm" />
-                <Search className="relative h-7 w-7 text-primary" />
-              </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">Console</h1>
-              <span className="text-lg text-foreground">—</span>
-              <span className="text-lg font-medium text-muted-foreground">{title}</span>
-              {server?.status ? <ServerStatusBadge status={server.status} /> : null}
-            </div>
-            <p className="ml-10 text-sm text-muted-foreground">
-              Real-time output and command input
-            </p>
-            {isSuspended ? (
-              <div className="ml-10 mt-2 rounded-md border border-danger/30 bg-danger-muted px-3 py-2 text-xs text-danger">
-                Server suspended — console input disabled.
-              </div>
-            ) : null}
+    <div className="flex min-h-[calc(100vh-10rem)] flex-col gap-4">
+      <TabHeader
+        icon={Terminal}
+        title="Console"
+        description="Real-time output and command input"
+        variant={isSuspended ? 'danger' : server?.status === 'running' ? 'success' : 'default'}
+        actions={
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">{title}</span>
+            {server?.status ? <ServerStatusBadge status={server.status} /> : null}
           </div>
-        </motion.div>
+        }
+      />
 
-        {/* ── Console Container ── */}
-        <motion.div variants={itemVariants} className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border">
-          {/* Toolbar */}
-          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-2">
-            {/* Connection Status */}
+      {isSuspended ? (
+        <div className="rounded-md border border-danger/30 bg-danger-muted px-3 py-2 text-xs text-danger">
+          Server suspended — console input disabled.
+        </div>
+      ) : null}
+
+      {/* Console Container */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/40">
+        {/* Toolbar */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/40 bg-card px-3 py-2">
+          {/* Connection Status */}
+          <span
+            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+              streamStatus === 'connected'
+                ? 'border-success/50 text-success'
+                : streamStatus === 'reconnecting'
+                  ? 'border-warning/30 text-warning'
+                  : 'border-border/30 text-muted-foreground'
+            }`}
+          >
             <span
-              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+              className={`h-1.5 w-1.5 rounded-full ${
                 streamStatus === 'connected'
-                  ? 'border-success/50 text-success'
+                  ? 'animate-pulse bg-success'
                   : streamStatus === 'reconnecting'
-                    ? 'border-warning/30 text-warning'
-                    : 'border-muted/30 text-muted-foreground'
+                    ? 'animate-pulse bg-warning'
+                    : 'bg-muted'
               }`}
-            >
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  streamStatus === 'connected'
-                    ? 'animate-pulse bg-success'
-                    : streamStatus === 'reconnecting'
-                      ? 'animate-pulse bg-warning'
-                      : 'bg-muted'
-                }`}
-              />
-              {streamStatus === 'connected' ? 'Live' : streamStatus === 'reconnecting' ? 'Reconnecting' : streamStatus === 'closed' ? 'Disconnected' : 'Connecting'}
-            </span>
+            />
+            {streamStatus === 'connected' ? 'Live' : streamStatus === 'reconnecting' ? 'Reconnecting' : streamStatus === 'closed' ? 'Disconnected' : 'Connecting'}
+          </span>
 
-            <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
+          <div className="h-4 w-px bg-surface-3" />
 
-            {/* Stream Filters */}
-            <div className="flex items-center gap-1">
-              {ALL_STREAMS.map((stream) => {
-                const colors = STREAM_COLORS[stream];
-                const isActive = activeStreams.has(stream);
-                return (
-                  <button
-                    key={stream}
-                    type="button"
-                    onClick={() => toggleStream(stream)}
-                    className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-all ${
-                      isActive ? colors.active : colors.inactive
-                    }`}
-                  >
-                    <span className={`h-1.5 w-1.5 rounded-full ${isActive ? colors.dot : 'bg-muted-foreground'}`} />
-                    {stream}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
-
-            {/* Search */}
-            {searchOpen ? (
-              <div className="flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1">
-                <Search className="h-3 w-3 text-muted-foreground" />
-                <input
-                  ref={searchRef}
-                  className="w-40 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Filter output…"
-                />
-                {searchQuery ? (
-                  <span className="text-[10px] tabular-nums text-muted-foreground">
-                    {entries.filter((e) => activeStreams.has(e.stream) && e.data.toLowerCase().includes(searchQuery.toLowerCase())).length}
-                  </span>
-                ) : null}
+          {/* Stream Filters */}
+          <div className="flex items-center gap-1">
+            {ALL_STREAMS.map((stream) => {
+              const colors = STREAM_COLORS[stream];
+              const isActive = activeStreams.has(stream);
+              return (
                 <button
+                  key={stream}
                   type="button"
-                  onClick={() => {
-                    setSearchOpen(false);
-                    setSearchQuery('');
-                  }}
-                  className="text-muted-foreground hover:text-foreground"
+                  onClick={() => toggleStream(stream)}
+                  className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-all ${
+                    isActive ? colors.active : colors.inactive
+                  }`}
                 >
-                  <X className="h-3 w-3" />
+                  <span className={`h-1.5 w-1.5 rounded-full ${isActive ? colors.dot : 'bg-muted-foreground'}`} />
+                  {stream}
                 </button>
-              </div>
-            ) : (
+              );
+            })}
+          </div>
+
+          <div className="h-4 w-px bg-surface-3" />
+
+          {/* Search */}
+          {searchOpen ? (
+            <div className="flex items-center gap-1.5 rounded-md border border-border/40 bg-card px-2 py-1">
+              <Search className="h-3 w-3 text-muted-foreground" />
+              <input
+                ref={searchRef}
+                className="w-40 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Filter output…"
+              />
+              {searchQuery ? (
+                <span className="text-[10px] tabular-nums text-muted-foreground">
+                  {entries.filter((e) => activeStreams.has(e.stream) && e.data.toLowerCase().includes(searchQuery.toLowerCase())).length}
+                </span>
+              ) : null}
               <button
                 type="button"
                 onClick={() => {
-                  setSearchOpen(true);
-                  setTimeout(() => searchRef.current?.focus(), 50);
+                  setSearchOpen(false);
+                  setSearchQuery('');
                 }}
-                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-primary/30"
+                className="text-muted-foreground hover:text-foreground"
               >
-                <Search className="h-3 w-3" />
-                Search
+                <X className="h-3 w-3" />
               </button>
-            )}
-
-            <div className="flex-1" />
-
-            {/* Right-side actions */}
-            <span className="text-[11px] tabular-nums text-muted-foreground">
-              {entries.length} lines
-            </span>
-
-            <div className="h-4 w-px bg-surface-3 dark:bg-surface-2" />
-
+            </div>
+          ) : (
             <button
               type="button"
-              onClick={() => setAutoScroll(!autoScroll)}
-              className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-all ${
-                autoScroll
-                  ? 'border-primary/30 bg-primary-muted text-primary'
-                  : 'border-border text-muted-foreground hover:border-primary/30'
-              }`}
-            >
-              <ArrowDown className="h-3 w-3" />
-              Auto-scroll
-            </button>
-
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-primary/30"
-            >
-              {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleClear}
-              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-danger/30 hover:text-danger"
-            >
-              <Trash2 className="h-3 w-3" />
-              Clear
-            </button>
-          </div>
-
-          {/* Console Output */}
-          <CustomConsole
-            entries={entries}
-            autoScroll={autoScroll}
-            searchQuery={searchQuery}
-            streamFilter={activeStreams}
-            isLoading={isLoading}
-            isError={isError}
-            onRetry={refetch}
-            onUserScroll={() => setAutoScroll(false)}
-            onAutoScrollResume={() => setAutoScroll(true)}
-            className="min-h-0 flex-1"
-          />
-
-          {/* Command Input */}
-          <form
-            onSubmit={handleSubmit}
-            className="flex items-center gap-3 border-t border-border bg-card px-4 py-2.5"
-          >
-            <span className="select-none text-sm font-bold text-primary">$</span>
-            <input
-              ref={inputRef}
-              className="w-full bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              value={command}
-              onChange={(e) => {
-                setCommand(e.target.value);
-                setHistoryIndex(-1);
+              onClick={() => {
+                setSearchOpen(true);
+                setTimeout(() => searchRef.current?.focus(), 50);
               }}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                isSuspended
-                  ? 'Server suspended'
-                  : canSend
-                    ? 'Type a command… (↑↓ for history)'
-                    : 'Connect to send commands'
-              }
-              disabled={!canSend}
-            />
-            <button
-              type="submit"
-              className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!canSend || !command.trim()}
+              className="flex items-center gap-1.5 rounded-md border border-border/30 px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-primary/30"
             >
-              Send
+              <Search className="h-3 w-3" />
+              Search
             </button>
-          </form>
-        </motion.div>
+          )}
+
+          <div className="flex-1" />
+
+          {/* Right-side actions */}
+          <span className="text-[11px] tabular-nums text-muted-foreground">
+            {entries.length} lines
+          </span>
+
+          <div className="h-4 w-px bg-surface-3" />
+
+          <button
+            type="button"
+            onClick={() => setAutoScroll(!autoScroll)}
+            className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-all ${
+              autoScroll
+                ? 'border-primary/30 bg-primary-muted text-primary'
+                : 'border-border/30 text-muted-foreground hover:border-primary/30'
+            }`}
+          >
+            <ArrowDown className="h-3 w-3" />
+            Auto-scroll
+          </button>
+
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="flex items-center gap-1.5 rounded-md border border-border/30 px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-primary/30"
+          >
+            {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleClear}
+            className="flex items-center gap-1.5 rounded-md border border-border/30 px-2 py-1 text-[11px] text-muted-foreground transition-all hover:border-danger/30 hover:text-danger"
+          >
+            <Trash2 className="h-3 w-3" />
+            Clear
+          </button>
+        </div>
+
+        {/* Console Output */}
+        <CustomConsole
+          entries={entries}
+          autoScroll={autoScroll}
+          searchQuery={searchQuery}
+          streamFilter={activeStreams}
+          isLoading={isLoading}
+          isError={isError}
+          onRetry={refetch}
+          onUserScroll={() => setAutoScroll(false)}
+          onAutoScrollResume={() => setAutoScroll(true)}
+          className="min-h-0 flex-1"
+        />
+
+        {/* Command Input */}
+        <form
+          onSubmit={handleSubmit}
+          className="flex items-center gap-3 border-t border-border/40 bg-card px-4 py-2.5"
+        >
+          <span className="select-none text-sm font-bold text-primary">$</span>
+          <input
+            ref={inputRef}
+            className="w-full bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            value={command}
+            onChange={(e) => {
+              setCommand(e.target.value);
+              setHistoryIndex(-1);
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              isSuspended
+                ? 'Server suspended'
+                : canSend
+                  ? 'Type a command… (↑↓ for history)'
+                  : 'Connect to send commands'
+            }
+            disabled={!canSend}
+          />
+          <button
+            type="submit"
+            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow-[0_0_8px_-2px_hsl(var(--primary)/0.25)] transition-all hover:bg-primary disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!canSend || !command.trim()}
+          >
+            Send
+          </button>
+        </form>
       </div>
 
       {/* EULA Modal */}
@@ -376,7 +348,7 @@ function ServerConsolePage() {
           isLoading={eulaLoading}
         />
       )}
-    </motion.div>
+    </div>
   );
 }
 

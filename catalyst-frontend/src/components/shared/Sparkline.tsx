@@ -42,7 +42,7 @@ function Sparkline({ data, height = 36, strokeClassName = 'stroke-primary-500', 
           y="0"
           width="100"
           height="100"
-          className="fill-border/40 stroke-border dark:fill-border/40 dark:stroke-border"
+          className="fill-border/40 stroke-border"
         />
       ) : null}
     </svg>

@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect, createElement } from 'react';
-import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
   ScrollText,
   Search,
@@ -21,7 +20,10 @@ import {
   RefreshCw,
   ExternalLink,
 } from 'lucide-react';
-import EmptyState from '../../components/shared/EmptyState';
+import TabHeader from '../../components/servers/tabs/TabHeader';
+import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
+import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import { Input } from '../../components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -49,17 +51,6 @@ const buildDefaultRange = () => {
     from: initialFrom.toISOString().slice(0, 16),
     to: now.toISOString().slice(0, 16),
   };
-};
-
-// ── Animation Variants ──
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.05 } },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 10 },
-  visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
 };
 
 // ── Helpers ──
@@ -138,9 +129,9 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
   const tone = getActionTone(log.action);
 
   const toneStyles: Record<string, { bg: string; border: string; text: string; dot: string }> = {
-    success: { bg: 'bg-success/5 dark:bg-success/10', border: 'border-success/20 dark:border-success/30', text: 'text-success dark:text-success', dot: 'bg-success' },
-    danger:  { bg: 'bg-destructive/5 dark:bg-destructive/10', border: 'border-destructive/20 dark:border-destructive/30', text: 'text-destructive dark:text-destructive', dot: 'bg-destructive' },
-    warning: { bg: 'bg-warning/5 dark:bg-warning/10', border: 'border-warning/20 dark:border-warning/30', text: 'text-warning dark:text-warning', dot: 'bg-warning' },
+    success: { bg: 'bg-success/5', border: 'border-success/20', text: 'text-success', dot: 'bg-success' },
+    danger:  { bg: 'bg-destructive/5', border: 'border-destructive/20', text: 'text-destructive', dot: 'bg-destructive' },
+    warning: { bg: 'bg-warning/5', border: 'border-warning/20', text: 'text-warning', dot: 'bg-warning' },
     neutral: { bg: 'bg-muted/30', border: 'border-border', text: 'text-muted-foreground', dot: 'bg-muted-foreground/30' },
   };
 
@@ -198,140 +189,136 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm" onClick={onClose}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-        onClick={(e) => e.stopPropagation()}
-        className="mx-4 w-full max-w-2xl rounded-xl border border-border bg-card shadow-xl max-h-[85vh] flex flex-col"
-      >
-        {/* ── Header ── */}
-        <div className={`relative overflow-hidden border-b border-border px-6 py-4 ${ts.bg}`}>
-          {/* Decorative gradient */}
-          <div className={`absolute inset-0 bg-gradient-to-r ${tone === 'danger' ? 'from-destructive/5 to-transparent' : tone === 'warning' ? 'from-warning/5 to-transparent' : tone === 'success' ? 'from-success/5 to-transparent' : 'from-primary/5 to-transparent'}`} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm" onClick={onClose}>
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="mx-4 w-full max-w-2xl rounded-xl border border-border bg-card shadow-xl max-h-[85vh] flex flex-col"
+        >
+          {/* ── Header ── */}
+          <div className={`relative overflow-hidden border-b border-border px-6 py-4 ${ts.bg}`}>
+            <div className="absolute inset-0 bg-gradient-to-r ${tone === 'danger' ? 'from-destructive/5 to-transparent' : tone === 'warning' ? 'from-warning/5 to-transparent' : tone === 'success' ? 'from-success/5 to-transparent' : 'from-primary/5 to-transparent'}" />
 
-          <div className="relative flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${ts.bg} ${ts.text}`}>
-                <Icon className="h-5 w-5" />
+            <div className="relative flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${ts.bg} ${ts.text}`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <h2 className="text-base font-semibold text-foreground">
+                      {formatAction(log.action)}
+                    </h2>
+                    <span className={`h-2 w-2 rounded-full ${ts.dot}`} />
+                    <Badge variant="outline" className={`text-[10px] ${ts.border} ${ts.text}`}>
+                      {log.action}
+                    </Badge>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                    <Badge variant="secondary" className="gap-1 text-[10px]">
+                      <Icon className="h-2.5 w-2.5" />
+                      {log.resource}
+                    </Badge>
+                    {log.resourceId && (
+                      resourceLink ? (
+                        <Link to={resourceLink} className="inline-flex items-center gap-1 font-mono text-primary transition-colors hover:underline">
+                          {log.resourceId.slice(0, 12)}…
+                          <ExternalLink className="h-2.5 w-2.5" />
+                        </Link>
+                      ) : (
+                        <code className="text-[11px] text-muted-foreground">{log.resourceId.slice(0, 12)}…</code>
+                      )
+                    )}
+                  </div>
+                </div>
               </div>
-              <div>
+              <button className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" onClick={onClose}>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* ── Body (scrollable) ── */}
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+            {/* Who & When */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Actor</span>
                 <div className="flex items-center gap-2.5">
-                  <h2 className="text-base font-semibold text-foreground">
-                    {formatAction(log.action)}
-                  </h2>
-                  <span className={`h-2 w-2 rounded-full ${ts.dot}`} />
-                  <Badge variant="outline" className={`text-[10px] ${ts.border} ${ts.text}`}>
-                    {log.action}
-                  </Badge>
-                </div>
-                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                  <Badge variant="secondary" className="gap-1 text-[10px]">
-                    <Icon className="h-2.5 w-2.5" />
-                    {log.resource}
-                  </Badge>
-                  {log.resourceId && (
-                    resourceLink ? (
-                      <Link to={resourceLink} className="inline-flex items-center gap-1 font-mono text-primary transition-colors hover:underline">
-                        {log.resourceId.slice(0, 12)}…
-                        <ExternalLink className="h-2.5 w-2.5" />
-                      </Link>
-                    ) : (
-                      <code className="text-[11px] text-muted-foreground">{log.resourceId.slice(0, 12)}…</code>
-                    )
-                  )}
-                </div>
-              </div>
-            </div>
-            <button className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* ── Body (scrollable) ── */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-          {/* Who & When */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Actor</span>
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                  <User className="h-4 w-4 text-primary" />
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-foreground">{actorUsername ?? 'System'}</div>
-                  <div className="text-[11px] text-muted-foreground">{actorEmail ?? log.userId ?? 'n/a'}</div>
-                </div>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">When</span>
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <div className="text-sm font-medium text-foreground tabular-nums">
-                    {new Date(log.timestamp).toLocaleString()}
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                    <User className="h-4 w-4 text-primary" />
                   </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {formatTimeAgo(log.timestamp)} ago
+                  <div>
+                    <div className="text-sm font-medium text-foreground">{actorUsername ?? 'System'}</div>
+                    <div className="text-[11px] text-muted-foreground">{actorEmail ?? log.userId ?? 'n/a'}</div>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Quick facts */}
-          <div className="flex flex-wrap items-center gap-2">
-            {log.ipAddress && (
-              <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
-                <Globe className="h-3 w-3" />
-                <span className="font-mono">{log.ipAddress}</span>
-              </div>
-            )}
-            {log.userId && (
-              <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
-                <Hash className="h-3 w-3" />
-                <code>{log.userId.slice(0, 12)}…</code>
-              </div>
-            )}
-          </div>
-
-          {/* Details / Metadata */}
-          {hasDetails ? (
-            <div className="space-y-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Details ({publicEntries.length})
-              </span>
-              <div className="space-y-2">
-                {publicEntries.map(([key, value]) => (
-                  <div key={key} className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5">
-                    <div className="flex items-start gap-3">
-                      <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground pt-0.5 min-w-[80px]">
-                        {key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim()}
-                      </span>
-                      <div className="flex-1 text-xs min-w-0">
-                        {renderValue(value)}
-                      </div>
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">When</span>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <div className="text-sm font-medium text-foreground tabular-nums">
+                      {new Date(log.timestamp).toLocaleString()}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {formatTimeAgo(log.timestamp)} ago
                     </div>
                   </div>
-                ))}
+                </div>
               </div>
             </div>
-          ) : (
-            <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-4 text-center text-xs text-muted-foreground">
-              No details recorded for this event.
-            </div>
-          )}
-        </div>
 
-        {/* ── Footer ── */}
-        <div className="flex justify-end border-t border-border px-6 py-3">
-          <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+            {/* Quick facts */}
+            <div className="flex flex-wrap items-center gap-2">
+              {log.ipAddress && (
+                <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
+                  <Globe className="h-3 w-3" />
+                  <span className="font-mono">{log.ipAddress}</span>
+                </div>
+              )}
+              {log.userId && (
+                <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
+                  <Hash className="h-3 w-3" />
+                  <code>{log.userId.slice(0, 12)}…</code>
+                </div>
+              )}
+            </div>
+
+            {/* Details / Metadata */}
+            {hasDetails ? (
+              <div className="space-y-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Details ({publicEntries.length})
+                </span>
+                <div className="space-y-2">
+                  {publicEntries.map(([key, value]) => (
+                    <div key={key} className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5">
+                      <div className="flex items-start gap-3">
+                        <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground pt-0.5 min-w-[80px]">
+                          {key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim()}
+                        </span>
+                        <div className="flex-1 text-xs min-w-0">
+                          {renderValue(value)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-4 text-center text-xs text-muted-foreground">
+                No details recorded for this event.
+              </div>
+            )}
+          </div>
+
+          {/* ── Footer ── */}
+          <div className="flex justify-end border-t border-border px-6 py-3">
+            <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+          </div>
         </div>
-      </motion.div>
-    </div>
+      </div>
     </ModalPortal>
   );
 }
@@ -426,35 +413,13 @@ function AuditLogsPage() {
   };
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial={false}
-      animate="visible"
-      className="relative overflow-hidden"
-    >
-      {/* Ambient background */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-violet-500/8 to-cyan-500/8 blur-3xl dark:from-violet-500/15 dark:to-cyan-500/15" />
-        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-sky-500/8 to-indigo-500/8 blur-3xl dark:from-sky-500/15 dark:to-indigo-500/15" />
-      </div>
-
-      <div className="relative z-10 space-y-5">
-        {/* ── Header ── */}
-        <motion.div variants={itemVariants} className="flex flex-wrap items-end justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-violet-500 to-cyan-500 opacity-20 blur-sm" />
-                <Activity className="relative h-7 w-7 text-violet-600 dark:text-violet-400" />
-              </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
-                Audit Logs
-              </h1>
-            </div>
-            <p className="ml-10 text-sm text-muted-foreground">
-              Track admin and user actions across the platform.
-            </p>
-          </div>
+    <div className="space-y-5">
+      {/* ── Header ── */}
+      <TabHeader
+        icon={Activity}
+        title="Audit Logs"
+        description="Track admin and user actions across the platform."
+        actions={
           <div className="flex items-center gap-2">
             {livePoll && (
               <Badge variant="outline" className="gap-1.5 border-success/30 text-success text-xs">
@@ -481,184 +446,191 @@ function AuditLogsPage() {
               Export CSV
             </Button>
           </div>
-        </motion.div>
+        }
+      />
 
-        {/* ── Filters ── */}
-        <motion.div variants={itemVariants} className="overflow-hidden rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
-            <Search className="h-3.5 w-3.5" />
-            Filters
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search actions, users, IP…"
-                className="pl-9"
-              />
-            </div>
-            <Input value={action} onChange={(e) => { setAction(e.target.value); setPage(1); }} placeholder="Action contains…" />
-            <Input value={resource} onChange={(e) => { setResource(e.target.value); setPage(1); }} placeholder="Resource type…" />
-            <Input value={userId} onChange={(e) => { setUserId(e.target.value); setPage(1); }} placeholder="User ID…" />
-          </div>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Input type="datetime-local" value={from} onChange={(e) => { setFrom(e.target.value); setRange(''); setPage(1); }} />
-            <Input type="datetime-local" value={to} onChange={(e) => { setTo(e.target.value); setRange(''); setPage(1); }} />
-            <Select
-              value={range || 'custom'}
-              onValueChange={(next) => {
-                const value = next === 'custom' ? '' : next;
-                setRange(value);
-                if (!value) return;
-                const now = new Date();
-                const nextFrom = new Date(now);
-                if (value === '1h') nextFrom.setHours(now.getHours() - 1);
-                if (value === '6h') nextFrom.setHours(now.getHours() - 6);
-                if (value === '24h') nextFrom.setHours(now.getHours() - 24);
-                if (value === '7d') nextFrom.setDate(now.getDate() - 7);
-                setFrom(nextFrom.toISOString().slice(0, 16));
-                setTo(now.toISOString().slice(0, 16));
-                setPage(1);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Quick range" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="custom">Custom</SelectItem>
-                <SelectItem value="1h">Last 1 hour</SelectItem>
-                <SelectItem value="6h">Last 6 hours</SelectItem>
-                <SelectItem value="24h">Last 24 hours</SelectItem>
-                <SelectItem value="7d">Last 7 days</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {hasFilters && (
-            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
-              <span className="text-[11px] text-muted-foreground">Active:</span>
-              {action && <Badge variant="outline" className="text-[10px]">action: {action}</Badge>}
-              {resource && <Badge variant="outline" className="text-[10px]">resource: {resource}</Badge>}
-              {userId && <Badge variant="outline" className="text-[10px]">user: {userId}</Badge>}
-              {range && <Badge variant="outline" className="text-[10px]">range: {range}</Badge>}
-            </div>
-          )}
-        </motion.div>
-
-        {/* ── Log Feed ── */}
-        {isLoading ? (
-          <motion.div variants={itemVariants} className="space-y-2">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-              <div key={i} className="flex gap-3 rounded-xl border border-border bg-card p-4">
-                <div className="h-8 w-8 animate-pulse rounded-lg bg-muted" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 w-48 animate-pulse rounded bg-muted" />
-                  <div className="h-3 w-32 animate-pulse rounded bg-muted" />
-                </div>
-                <div className="h-3 w-12 animate-pulse rounded bg-muted" />
-              </div>
-            ))}
-          </motion.div>
-        ) : filteredLogs.length > 0 ? (
-          <div className="space-y-6">
-            {Array.from(grouped.entries()).map(([dateLabel, entries]) => (
-              <div key={dateLabel}>
-                <div className="mb-3 flex items-center gap-3">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{dateLabel}</h3>
-                  <div className="h-px flex-1 bg-border" />
-                  <Badge variant="outline" className="text-[10px]">{entries.length}</Badge>
-                </div>
-
-                <div className="space-y-2">
-                  <AnimatePresence mode="popLayout">
-                    {entries.map((log, i) => {
-                      const Icon = getResourceIcon(log.resource);
-                      const tone = getActionTone(log.action);
-                      const resourceLink = log.resource === 'server' && log.resourceId ? `/servers/${log.resourceId}` :
-                        log.resource === 'node' && log.resourceId ? `/admin/nodes/${log.resourceId}` : null;
-
-                      return (
-                        <motion.div
-                          key={log.id}
-                          variants={itemVariants}
-                          initial="hidden"
-                          animate="visible"
-                          layout
-                          className="group flex items-start gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:border-primary/20"
-                        >
-                          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                            <Icon className="h-4 w-4" />
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-foreground">
-                                {formatAction(log.action)}
-                              </span>
-                              <span className={`h-1.5 w-1.5 rounded-full ${toneDot(tone)}`} />
-                              <Badge variant="secondary" className="text-[10px]">{log.resource}</Badge>
-                            </div>
-
-                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                              {log.user?.username && (
-                                <span className="font-medium text-foreground/70">{log.user.username}</span>
-                              )}
-                              {resourceLink ? (
-                                <Link to={resourceLink} className="inline-flex items-center gap-1 text-primary transition-colors hover:underline">
-                                  {log.resource}:{log.resourceId?.slice(0, 8)}
-                                  <ExternalLink className="h-2.5 w-2.5" />
-                                </Link>
-                              ) : log.resourceId ? (
-                                <span>{log.resource}:{log.resourceId.slice(0, 8)}</span>
-                              ) : null}
-                              {log.ipAddress && <span className="opacity-60">{log.ipAddress}</span>}
-                            </div>
-                          </div>
-
-                          <div className="flex shrink-0 flex-col items-end gap-1">
-                            <span className="text-[11px] text-muted-foreground" title={new Date(log.timestamp).toLocaleString()}>
-                              {formatTimeAgo(log.timestamp)}
-                            </span>
-                            <button
-                              className="rounded-md p-1 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-primary/10 hover:text-primary"
-                              onClick={() => setSelectedLog(log)}
-                              title="View details"
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </AnimatePresence>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <motion.div variants={itemVariants}>
-            <EmptyState
-              title="No audit logs"
-              description={hasFilters || searchQuery ? 'Try adjusting your filters.' : 'Audit events will appear once user actions are recorded.'}
+      {/* ── Filters ── */}
+      <ServerTabCard>
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+          <Search className="h-3.5 w-3.5" />
+          Filters
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search actions, users, IP…"
+              className="border-border/40 bg-card pl-9"
             />
-          </motion.div>
-        )}
+          </div>
+          <Input
+            value={action}
+            onChange={(e) => { setAction(e.target.value); setPage(1); }}
+            placeholder="Action contains…"
+            className="border-border/40 bg-card"
+          />
+          <Input
+            value={resource}
+            onChange={(e) => { setResource(e.target.value); setPage(1); }}
+            placeholder="Resource type…"
+            className="border-border/40 bg-card"
+          />
+          <Input
+            value={userId}
+            onChange={(e) => { setUserId(e.target.value); setPage(1); }}
+            placeholder="User ID…"
+            className="border-border/40 bg-card"
+          />
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Input
+            type="datetime-local"
+            value={from}
+            onChange={(e) => { setFrom(e.target.value); setRange(''); setPage(1); }}
+            className="border-border/40 bg-card"
+          />
+          <Input
+            type="datetime-local"
+            value={to}
+            onChange={(e) => { setTo(e.target.value); setRange(''); setPage(1); }}
+            className="border-border/40 bg-card"
+          />
+          <Select
+            value={range || 'custom'}
+            onValueChange={(next) => {
+              const value = next === 'custom' ? '' : next;
+              setRange(value);
+              if (!value) return;
+              const now = new Date();
+              const nextFrom = new Date(now);
+              if (value === '1h') nextFrom.setHours(now.getHours() - 1);
+              if (value === '6h') nextFrom.setHours(now.getHours() - 6);
+              if (value === '24h') nextFrom.setHours(now.getHours() - 24);
+              if (value === '7d') nextFrom.setDate(now.getDate() - 7);
+              setFrom(nextFrom.toISOString().slice(0, 16));
+              setTo(now.toISOString().slice(0, 16));
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="border-border/40 bg-card">
+              <SelectValue placeholder="Quick range" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="custom">Custom</SelectItem>
+              <SelectItem value="1h">Last 1 hour</SelectItem>
+              <SelectItem value="6h">Last 6 hours</SelectItem>
+              <SelectItem value="24h">Last 24 hours</SelectItem>
+              <SelectItem value="7d">Last 7 days</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-        {/* ── Pagination ── */}
-        {pagination && pagination.totalPages > 1 && (
-          <motion.div variants={itemVariants} className="flex justify-center">
-            <Pagination page={page} totalPages={pagination.totalPages} onPageChange={setPage} />
-          </motion.div>
+        {hasFilters && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+            <span className="text-[11px] text-muted-foreground">Active:</span>
+            {action && <Badge variant="outline" className="text-[10px]">action: {action}</Badge>}
+            {resource && <Badge variant="outline" className="text-[10px]">resource: {resource}</Badge>}
+            {userId && <Badge variant="outline" className="text-[10px]">user: {userId}</Badge>}
+            {range && <Badge variant="outline" className="text-[10px]">range: {range}</Badge>}
+          </div>
         )}
-      </div>
+      </ServerTabCard>
+
+      {/* ── Log Feed ── */}
+      {isLoading ? (
+        <TabLoadingState rows={6} rowHeight="h-16" />
+      ) : filteredLogs.length > 0 ? (
+        <div className="space-y-6">
+          {Array.from(grouped.entries()).map(([dateLabel, entries]) => (
+            <div key={dateLabel}>
+              <div className="mb-3 flex items-center gap-3">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{dateLabel}</h3>
+                <div className="h-px flex-1 bg-border" />
+                <Badge variant="outline" className="text-[10px]">{entries.length}</Badge>
+              </div>
+
+              <div className="space-y-2">
+                {entries.map((log) => {
+                  const Icon = getResourceIcon(log.resource);
+                  const tone = getActionTone(log.action);
+                  const resourceLink = log.resource === 'server' && log.resourceId ? `/servers/${log.resourceId}` :
+                    log.resource === 'node' && log.resourceId ? `/admin/nodes/${log.resourceId}` : null;
+
+                  return (
+                    <div
+                      key={log.id}
+                      className="group relative flex items-start gap-3 rounded-lg border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
+                    >
+                      <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
+                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <Icon className="h-4 w-4" />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-foreground">
+                            {formatAction(log.action)}
+                          </span>
+                          <span className={`h-1.5 w-1.5 rounded-full ${toneDot(tone)}`} />
+                          <Badge variant="secondary" className="text-[10px]">{log.resource}</Badge>
+                        </div>
+
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                          {log.user?.username && (
+                            <span className="font-medium text-foreground/70">{log.user.username}</span>
+                          )}
+                          {resourceLink ? (
+                            <Link to={resourceLink} className="inline-flex items-center gap-1 text-primary transition-colors hover:underline">
+                              {log.resource}:{log.resourceId?.slice(0, 8)}
+                              <ExternalLink className="h-2.5 w-2.5" />
+                            </Link>
+                          ) : log.resourceId ? (
+                            <span>{log.resource}:{log.resourceId.slice(0, 8)}</span>
+                          ) : null}
+                          {log.ipAddress && <span className="opacity-60">{log.ipAddress}</span>}
+                        </div>
+                      </div>
+
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span className="text-[11px] text-muted-foreground" title={new Date(log.timestamp).toLocaleString()}>
+                          {formatTimeAgo(log.timestamp)}
+                        </span>
+                        <button
+                          className="rounded-md p-1 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-primary/10 hover:text-primary"
+                          onClick={() => setSelectedLog(log)}
+                          title="View details"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <TabEmptyState
+          title="No audit logs"
+          description={hasFilters || searchQuery ? 'Try adjusting your filters.' : 'Audit events will appear once user actions are recorded.'}
+        />
+      )}
+
+      {/* ── Pagination ── */}
+      {pagination && pagination.totalPages > 1 && (
+        <div className="flex justify-center">
+          <Pagination page={page} totalPages={pagination.totalPages} onPageChange={setPage} />
+        </div>
+      )}
 
       {/* ── Log Detail Modal ── */}
       {selectedLog && (
         <LogDetailModal log={selectedLog} onClose={() => setSelectedLog(null)} />
       )}
-    </motion.div>
+    </div>
   );
 }
 

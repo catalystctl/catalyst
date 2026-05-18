@@ -7,6 +7,7 @@ import { locationsApi, type Location } from '../../services/api/locations';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import ConfirmDialog from '../shared/ConfirmDialog';
 import { ModalPortal } from '@/components/ui/modal-portal';
+import SectionHeader from '../servers/tabs/SectionHeader';
 
 /**
  * Maps a `returnTo` identifier (sent by the opening modal) to the
@@ -41,7 +42,7 @@ function LocationForm({
           Name <span className="text-destructive">*</span>
         </span>
         <input
-          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
+          className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="US-East"
@@ -51,7 +52,7 @@ function LocationForm({
       <label className="block space-y-1">
         <span className="text-xs font-medium text-muted-foreground">Description (optional)</span>
         <textarea
-          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:hover:border-primary/30"
+          className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
           rows={2}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -60,13 +61,13 @@ function LocationForm({
       </label>
       <div className="flex justify-end gap-2 pt-1">
         <button
-          className="rounded-full border border-border px-4 py-1.5 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:hover:border-primary/30"
+          className="rounded-full border border-border/40 px-4 py-1.5 text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:text-foreground"
           onClick={onCancel}
         >
           Cancel
         </button>
         <button
-          className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
+          className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all hover:bg-primary/90 disabled:opacity-60"
           onClick={() =>
             onSave({
               name: name.trim(),
@@ -191,13 +192,12 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
     <>
       <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 py-10 backdrop-blur-sm">
-          <div className="flex w-full max-w-2xl max-h-[85vh] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl transition-all duration-300 dark:border-border dark:bg-surface-1">
+          <div className="flex w-full max-w-2xl max-h-[85vh] flex-col overflow-hidden rounded-xl border border-border/40 bg-card shadow-xl">
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-border px-6 py-4 dark:border-border">
+            <div className="flex items-center justify-between border-b border-border/30 px-6 py-4">
               <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 opacity-20 blur-sm" />
-                  <MapPin className="relative h-5 w-5 text-success dark:text-success" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-success/20 bg-success/10 text-success">
+                  <MapPin className="h-5 w-5" />
                 </div>
                 <div>
                   <h2 className="text-base font-semibold text-foreground">
@@ -209,7 +209,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
                 </div>
               </div>
               <button
-                className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-all duration-300 hover:border-primary dark:border-border dark:hover:border-primary/30"
+                className="rounded-full border border-border/40 px-3 py-1 text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:text-foreground"
                 onClick={() => onOpenChange(false)}
               >
                 Close
@@ -220,7 +220,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
             <div className="flex-1 overflow-y-auto px-6 py-4">
               {/* Inline form */}
               {isFormActive && (
-                <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 p-4 dark:bg-primary/10">
+                <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <span className="text-sm font-semibold text-foreground">
                       {editingLocation ? 'Edit location' : 'New location'}
@@ -254,7 +254,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
                   {Array.from({ length: 3 }).map((_, i) => (
                     <div
                       key={i}
-                      className="flex items-center gap-3 rounded-lg border border-border px-4 py-3"
+                      className="flex items-center gap-3 rounded-lg border border-border/30 px-4 py-3"
                     >
                       <div className="h-8 w-8 animate-pulse rounded-lg bg-surface-3" />
                       <div className="flex-1 space-y-1.5">
@@ -277,11 +277,11 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
                   {locations.map((location) => (
                     <div
                       key={location.id}
-                      className="group flex items-center gap-3 rounded-xl border border-border px-4 py-3 transition-colors hover:bg-surface-2/50 dark:border-border"
+                      className="group flex items-center gap-3 rounded-xl border border-border/30 px-4 py-3 transition-colors hover:bg-surface-2/30"
                     >
                       {/* Icon */}
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/10 dark:bg-success/30">
-                        <MapPin className="h-4 w-4 text-success dark:text-success" />
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/10">
+                        <MapPin className="h-4 w-4 text-success" />
                       </div>
 
                       {/* Info */}
@@ -313,7 +313,7 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
                         <button
-                          className="rounded-md p-1.5 text-destructive transition-colors hover:bg-destructive/5 hover:text-destructive dark:hover:bg-destructive/50/10"
+                          className="rounded-md p-1.5 text-destructive transition-colors hover:bg-destructive/5 hover:text-destructive"
                           onClick={() => setDeleteTarget(location)}
                           title="Delete"
                         >
@@ -328,12 +328,12 @@ export default function LocationsManagerModal({ open, onOpenChange }: Props) {
 
             {/* Footer */}
             {!isFormActive && (
-              <div className="flex items-center justify-between border-t border-border px-6 py-3 dark:border-border">
+              <div className="flex items-center justify-between border-t border-border/30 px-6 py-3">
                 <span className="text-xs text-muted-foreground">
                   {locations.length} location{locations.length !== 1 ? 's' : ''}
                 </span>
                 <button
-                  className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
+                  className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all hover:bg-primary/90"
                   onClick={() => {
                     setEditingLocation(null);
                     setIsCreating(true);

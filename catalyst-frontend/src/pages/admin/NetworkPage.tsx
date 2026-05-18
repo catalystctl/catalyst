@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react';
-import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
   Activity,
   Server,
@@ -14,10 +13,14 @@ import {
   ExternalLink,
   Zap,
 } from 'lucide-react';
+import TabHeader from '../../components/servers/tabs/TabHeader';
+import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
+import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
+import TabErrorState from '../../components/servers/tabs/TabErrorState';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Skeleton } from '../../components/ui/skeleton';
-import EmptyState from '../../components/shared/EmptyState';
 import Pagination from '../../components/shared/Pagination';
 import { useAuditLogs } from '../../hooks/useAdmin';
 import type { AuditLogEntry } from '../../types/admin';
@@ -41,24 +44,6 @@ const RESOURCE_FILTERS = [
   { value: 'smtp', label: 'Email' },
   { value: 'security', label: 'Security' },
 ];
-
-// ── Animation ──
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.03, delayChildren: 0.08 },
-  },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 8 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { type: 'spring', stiffness: 400, damping: 28 },
-  },
-};
 
 // ── Helpers ──
 function formatAction(action: string): string {
@@ -144,20 +129,20 @@ function getResourceIcon(resource: string) {
 
 function getResourceColor(resource: string) {
   const colors: Record<string, string> = {
-    server: 'text-primary dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800/50',
-    node: 'text-success dark:text-success bg-success/5 dark:bg-success/40 border-success/20 dark:border-success/50',
-    user: 'text-sky-500 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 border-sky-200 dark:border-sky-800/50',
-    role: 'text-violet-500 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-800/50',
-    api_key: 'text-warning dark:text-warning bg-warning/5 dark:bg-warning/40 border-warning/20 dark:border-warning/50',
-    auth: 'text-destructive dark:text-destructive bg-destructive/5 dark:bg-destructive/40 border-destructive/20 dark:border-destructive/50',
-    alert: 'text-orange-500 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-800/50',
-    backup: 'text-cyan-500 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800/50',
-    template: 'text-fuchsia-500 dark:text-fuchsia-400 bg-fuchsia-50 dark:bg-fuchsia-950/40 border-fuchsia-200 dark:border-fuchsia-800/50',
-    smtp: 'text-pink-500 dark:text-pink-400 bg-pink-50 dark:bg-pink-950/40 border-pink-200 dark:border-pink-800/50',
-    security: 'text-destructive dark:text-destructive bg-destructive/5 dark:bg-red-950/40 border-red-200 dark:border-red-800/50',
-    database: 'text-teal-500 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800/50',
+    server: 'text-primary bg-primary/10 border-primary/20',
+    node: 'text-success bg-success/5 border-success/20',
+    user: 'text-sky-500 bg-sky-50 border-sky-200',
+    role: 'text-violet-500 bg-violet-50 border-violet-200',
+    api_key: 'text-warning bg-warning/5 border-warning/20',
+    auth: 'text-destructive bg-destructive/5 border-destructive/20',
+    alert: 'text-orange-500 bg-orange-50 border-orange-200',
+    backup: 'text-cyan-500 bg-cyan-50 border-cyan-200',
+    template: 'text-fuchsia-500 bg-fuchsia-50 border-fuchsia-200',
+    smtp: 'text-pink-500 bg-pink-50 border-pink-200',
+    security: 'text-destructive bg-red-50 border-red-200',
+    database: 'text-teal-500 bg-teal-50 border-teal-200',
   };
-  return colors[resource] || 'text-muted-foreground dark:text-muted-foreground bg-surface-0 dark:bg-surface-0/40 border-border dark:border-border/50';
+  return colors[resource] || 'text-muted-foreground bg-surface-0 border-border';
 }
 
 function getActionTone(action: string): 'success' | 'warning' | 'danger' | 'neutral' {
@@ -172,7 +157,7 @@ function getDotColor(tone: 'success' | 'warning' | 'danger' | 'neutral') {
     case 'success': return 'bg-success/50';
     case 'warning': return 'bg-warning/50';
     case 'danger': return 'bg-destructive/50';
-    case 'neutral': return 'bg-surface-3 dark:bg-surface-3';
+    case 'neutral': return 'bg-surface-3';
   }
 }
 
@@ -262,55 +247,37 @@ function ActivityPage() {
   }, [logs]);
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="space-y-5"
-    >
+    <div className="space-y-5">
       {/* ── Header ── */}
-      <motion.div variants={itemVariants}>
-        <div className="rounded-xl border border-border bg-card/80 px-6 py-4 shadow-sm backdrop-blur-sm">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="absolute -inset-1 rounded-lg bg-gradient-to-br from-indigo-500/20 to-violet-500/20 blur-sm" />
-                <Activity className="relative h-6 w-6 text-primary dark:text-indigo-400" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-foreground ">
-                  Activity
-                </h1>
-                <p className="text-sm text-muted-foreground dark:text-muted-foreground">
-                  Live event stream across your entire cluster
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {livePoll && (
-                <Badge variant="outline" className="gap-1.5 border-success/30 text-success dark:border-success dark:text-success">
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
-                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success/50" />
-                  </span>
-                  Live
-                </Badge>
-              )}
-              <Badge variant="secondary" className="text-xs">
-                {totalLogs.toLocaleString()} events
+      <TabHeader
+        icon={Activity}
+        title="Activity"
+        description="Live event stream across your entire cluster"
+        actions={
+          <div className="flex items-center gap-2">
+            {livePoll && (
+              <Badge variant="outline" className="gap-1.5 border-success/30 text-success">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success/50" />
+                </span>
+                Live
               </Badge>
-            </div>
+            )}
+            <Badge variant="secondary" className="text-xs">
+              {totalLogs.toLocaleString()} events
+            </Badge>
           </div>
-        </div>
-      </motion.div>
+        }
+      />
 
       {/* ── Filters ── */}
-      <motion.div variants={itemVariants}>
+      <ServerTabCard>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 dark:border-border dark:bg-surface-1">
+          <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-card px-3 py-1.5">
             <Filter className="h-3.5 w-3.5 text-muted-foreground" />
             <select
-              className="appearance-none bg-transparent text-sm font-medium text-foreground outline-none dark:text-foreground"
+              className="appearance-none bg-transparent text-sm font-medium text-foreground outline-none"
               value={resourceFilter}
               onChange={(e) => { setResourceFilter(e.target.value); setPage(1); }}
             >
@@ -324,7 +291,7 @@ function ActivityPage() {
             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
-              className="w-full rounded-lg border border-border bg-card py-1.5 pl-9 pr-3 text-sm text-foreground transition-colors focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground"
+              className="w-full rounded-lg border border-border/40 bg-card py-1.5 pl-9 pr-3 text-sm text-foreground transition-colors focus:border-primary focus:outline-none"
               placeholder="Search actions, users, resources…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -336,7 +303,7 @@ function ActivityPage() {
               variant="outline"
               size="sm"
               onClick={() => setLivePoll(!livePoll)}
-              className={`gap-1.5 text-xs ${livePoll ? 'border-success/30 text-success dark:border-success dark:text-success' : ''}`}
+              className={`gap-1.5 text-xs ${livePoll ? 'border-success/30 text-success' : ''}`}
             >
               <RefreshCw className={`h-3 w-3 ${livePoll && isFetching ? 'animate-spin' : ''}`} />
               {livePoll ? 'Auto-refresh' : 'Paused'}
@@ -352,32 +319,19 @@ function ActivityPage() {
             </Button>
           </div>
         </div>
-      </motion.div>
+      </ServerTabCard>
 
       {/* ── Feed ── */}
-      <motion.div variants={itemVariants}>
+      <div>
         {isLoading ? (
-          <div className="space-y-3">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex gap-3 rounded-xl border border-border bg-card p-4 dark:border-border dark:bg-surface-1">
-                <Skeleton className="h-8 w-8 rounded-lg" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-64" />
-                  <Skeleton className="h-3 w-40" />
-                </div>
-                <Skeleton className="h-4 w-16" />
-              </div>
-            ))}
-          </div>
+          <TabLoadingState rows={8} rowHeight="h-16" />
         ) : isError ? (
-          <div className="rounded-xl border border-destructive/30 bg-destructive/50/5 p-8 text-center">
-            <p className="text-sm text-destructive dark:text-destructive">Failed to load activity feed.</p>
-            <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-3 text-xs">
-              Retry
-            </Button>
-          </div>
+          <TabErrorState
+            message="Failed to load activity feed."
+            onRetry={() => refetch()}
+          />
         ) : logs.length === 0 ? (
-          <EmptyState
+          <TabEmptyState
             title="No activity yet"
             description="Events will appear here as actions are performed across the cluster."
           />
@@ -387,10 +341,10 @@ function ActivityPage() {
               <div key={dateLabel}>
                 {/* Date divider */}
                 <div className="mb-3 flex items-center gap-3">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground dark:text-muted-foreground">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                     {dateLabel}
                   </h3>
-                  <div className="h-px flex-1 bg-border dark:bg-surface-2" />
+                  <div className="h-px flex-1 bg-border" />
                   <Badge variant="outline" className="text-[10px]">
                     {entries.length}
                   </Badge>
@@ -398,123 +352,118 @@ function ActivityPage() {
 
                 {/* Entries */}
                 <div className="space-y-2">
-                  <AnimatePresence mode="popLayout">
-                    {entries
-                      .filter((log) => {
-                        if (!searchQuery.trim()) return true;
-                        const q = searchQuery.toLowerCase();
-                        return (
-                          log.action.toLowerCase().includes(q) ||
-                          log.resource.toLowerCase().includes(q) ||
-                          log.user?.username?.toLowerCase().includes(q) ||
-                          log.resourceId?.toLowerCase().includes(q) ||
-                          formatDetails(log.details)?.toLowerCase().includes(q)
-                        );
-                      })
-                      .map((log) => {
-                        const Icon = getResourceIcon(log.resource);
-                        const colorClass = getResourceColor(log.resource);
-                        const tone = getActionTone(log.action);
-                        const actionLabel = formatAction(log.action);
-                        const details = log.details ? formatDetails(log.details) : null;
-                        const resourceId = log.resourceId;
-                        const resourceType = log.resource;
+                  {entries
+                    .filter((log) => {
+                      if (!searchQuery.trim()) return true;
+                      const q = searchQuery.toLowerCase();
+                      return (
+                        log.action.toLowerCase().includes(q) ||
+                        log.resource.toLowerCase().includes(q) ||
+                        log.user?.username?.toLowerCase().includes(q) ||
+                        log.resourceId?.toLowerCase().includes(q) ||
+                        formatDetails(log.details)?.toLowerCase().includes(q)
+                      );
+                    })
+                    .map((log) => {
+                      const Icon = getResourceIcon(log.resource);
+                      const colorClass = getResourceColor(log.resource);
+                      const tone = getActionTone(log.action);
+                      const actionLabel = formatAction(log.action);
+                      const details = log.details ? formatDetails(log.details) : null;
+                      const resourceId = log.resourceId;
+                      const resourceType = log.resource;
 
-                        // Determine if we can link to the resource
-                        let resourceLink: string | null = null;
-                        if (resourceType === 'server' && resourceId) resourceLink = `/servers/${resourceId}`;
-                        if (resourceType === 'node' && resourceId) resourceLink = `/admin/nodes/${resourceId}`;
+                      // Determine if we can link to the resource
+                      let resourceLink: string | null = null;
+                      if (resourceType === 'server' && resourceId) resourceLink = `/servers/${resourceId}`;
+                      if (resourceType === 'node' && resourceId) resourceLink = `/admin/nodes/${resourceId}`;
 
-                        return (
-                          <motion.div
-                            key={log.id}
-                            variants={itemVariants}
-                            initial="hidden"
-                            animate="visible"
-                            layout
-                            className={`group flex items-start gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 transition-all hover:border-border hover:shadow-sm dark:border-border/60 dark:bg-surface-1/80 dark:hover:border-border`}
-                          >
-                            {/* Icon */}
-                            <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${colorClass}`}>
-                              <Icon className="h-4 w-4" />
-                            </div>
+                      return (
+                        <div
+                          key={log.id}
+                          className="group relative flex items-start gap-3 rounded-lg border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
+                        >
+                          <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
+                          {/* Icon */}
+                          <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${colorClass}`}>
+                            <Icon className="h-4 w-4" />
+                          </div>
 
-                            {/* Content */}
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-foreground dark:text-foreground">
-                                  {actionLabel}
-                                </span>
-                                <span className={`h-1.5 w-1.5 rounded-full ${getDotColor(tone)}`} />
-                              </div>
-
-                              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground dark:text-muted-foreground">
-                                {/* User */}
-                                {log.user?.username && (
-                                  <span className="font-medium text-foreground/70 dark:text-foreground">
-                                    {log.user.username}
-                                  </span>
-                                )}
-
-                                {/* Resource link */}
-                                {resourceLink && resourceId ? (
-                                  <Link
-                                    to={resourceLink}
-                                    className="inline-flex items-center gap-1 font-mono text-primary-600 transition-colors hover:text-primary dark:text-primary-400 dark:hover:text-primary-300"
-                                  >
-                                    {resourceType}:{resourceId.slice(0, 8)}
-                                    <ExternalLink className="h-2.5 w-2.5" />
-                                  </Link>
-                                ) : resourceId ? (
-                                  <span className="font-mono">
-                                    {resourceType}:{resourceId.slice(0, 8)}
-                                  </span>
-                                ) : (
-                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                                    {log.resource}
-                                  </Badge>
-                                )}
-
-                                {/* Details */}
-                                {details && details !== '{}' && (
-                                  <span className="truncate max-w-xs font-mono text-[11px] opacity-60">
-                                    {details}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Time */}
-                            <div className="flex shrink-0 flex-col items-end gap-0.5">
-                              <span
-                                className="text-[11px] text-muted-foreground dark:text-muted-foreground"
-                                title={formatFullTime(log.timestamp)}
-                              >
-                                {formatTimeAgo(log.timestamp)}
+                          {/* Content */}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-foreground">
+                                {actionLabel}
                               </span>
+                              <span className={`h-1.5 w-1.5 rounded-full ${getDotColor(tone)}`} />
                             </div>
-                          </motion.div>
-                        );
-                      })}
-                  </AnimatePresence>
+
+                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                              {/* User */}
+                              {log.user?.username && (
+                                <span className="font-medium text-foreground/70">
+                                  {log.user.username}
+                                </span>
+                              )}
+
+                              {/* Resource link */}
+                              {resourceLink && resourceId ? (
+                                <Link
+                                  to={resourceLink}
+                                  className="inline-flex items-center gap-1 font-mono text-primary transition-colors hover:text-primary/80"
+                                >
+                                  {resourceType}:{resourceId.slice(0, 8)}
+                                  <ExternalLink className="h-2.5 w-2.5" />
+                                </Link>
+                              ) : resourceId ? (
+                                <span className="font-mono">
+                                  {resourceType}:{resourceId.slice(0, 8)}
+                                </span>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                  {log.resource}
+                                </Badge>
+                              )}
+
+                              {/* Details */}
+                              {details && details !== '{}' && (
+                                <span className="truncate max-w-xs font-mono text-[11px] opacity-60">
+                                  {details}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Time */}
+                          <div className="flex shrink-0 flex-col items-end gap-0.5">
+                            <span
+                              className="text-[11px] text-muted-foreground"
+                              title={formatFullTime(log.timestamp)}
+                            >
+                              {formatTimeAgo(log.timestamp)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             ))}
           </div>
         )}
-      </motion.div>
+      </div>
 
       {/* ── Pagination ── */}
       {pagination && pagination.totalPages > 1 && (
-        <motion.div variants={itemVariants}>
+        <div>
           <Pagination
             page={page}
             totalPages={pagination.totalPages}
             onPageChange={setPage}
           />
-        </motion.div>
+        </div>
       )}
-    </motion.div>
+    </div>
   );
 }
 

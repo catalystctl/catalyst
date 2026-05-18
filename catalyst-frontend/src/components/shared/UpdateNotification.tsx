@@ -138,7 +138,7 @@ export default function UpdateNotification() {
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
             className="fixed left-0 right-0 top-0 z-[60] flex justify-center px-4 pt-3"
           >
-            <Card className="flex w-full max-w-3xl items-center gap-3 border border-primary/20 bg-card/95 px-4 py-3 shadow-lg shadow-primary/10 backdrop-blur-md dark:bg-surface-1/95">
+            <Card className="flex w-full max-w-3xl items-center gap-3 border border-primary/20 bg-card px-4 py-3 shadow-lg shadow-primary/10 backdrop-blur-md">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
                 <ArrowUpCircle className="h-4 w-4 text-primary" />
               </div>

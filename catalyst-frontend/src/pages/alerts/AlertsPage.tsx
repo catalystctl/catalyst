@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
-import { motion } from 'framer-motion';
+
 import {
   Bell,
   Plus,
@@ -75,7 +75,7 @@ function RuleRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="font-medium text-sm text-foreground">{rule.name}</span>
-          <Badge variant={rule.enabled ? 'outline' : 'secondary'} className="text-[10px] border-success/40 text-success dark:border-success/30 dark:text-success">
+          <Badge variant={rule.enabled ? 'outline' : 'secondary'} className="text-[10px] border-success/40 text-success">
             {rule.enabled ? 'Enabled' : 'Disabled'}
           </Badge>
           {showAdminTargets && (
@@ -540,12 +540,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
       {showRuleModal && (
         <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-            className="mx-4 w-full max-w-2xl rounded-xl border border-border/40 bg-card shadow-xl"
-          >
+          <div className="mx-4 w-full max-w-2xl rounded-xl border border-border/40 bg-card shadow-xl">
             <div className="border-b border-border px-6 py-4">
               <h2 className="text-lg font-semibold text-foreground ">
                 {editingRule ? 'Edit alert rule' : 'Create alert rule'}
@@ -672,7 +667,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-medium text-muted-foreground">Webhook URLs</span>
-                        <button type="button" className="text-[11px] text-primary-600 hover:underline" onClick={() => setWebhookTargets((c) => [...c, ''])}>+ Add</button>
+                        <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => setWebhookTargets((c) => [...c, ''])}>+ Add</button>
                       </div>
                       {webhookTargets.map((value, i) => (
                         <div key={`w-${i}`} className="flex items-center gap-2">
@@ -688,7 +683,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-medium text-muted-foreground">Email recipients</span>
-                        <button type="button" className="text-[11px] text-primary-600 hover:underline" onClick={() => setEmailTargets((c) => [...c, ''])}>+ Add</button>
+                        <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => setEmailTargets((c) => [...c, ''])}>+ Add</button>
                       </div>
                       {emailTargets.map((value, i) => (
                         <div key={`e-${i}`} className="flex items-center gap-2">
@@ -704,7 +699,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-                      <input type="checkbox" checked={notifyOwner} onChange={(e) => setNotifyOwner(e.target.checked)} className="h-4 w-4 rounded border-border bg-card text-primary-600 dark:border-border dark:bg-surface-1 dark:text-primary-400" />
+                      <input type="checkbox" checked={notifyOwner} onChange={(e) => setNotifyOwner(e.target.checked)} className="h-4 w-4 rounded border-border bg-card text-primary" />
                       Notify server owner
                     </label>
                     <label className="block space-y-1 sm:col-span-2">
@@ -754,7 +749,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                 )}
               </div>
             </div>
-          </motion.div>
+          </div>
         </div>
         </ModalPortal>
       )}

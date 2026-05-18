@@ -20,7 +20,7 @@ export function Skeleton({ className, width, height, rounded = 'md' }: SkeletonP
   return (
     <div
       className={cn(
-        'animate-pulse bg-surface-3 dark:bg-surface-2',
+        'animate-pulse bg-surface-3',
         roundedClasses[rounded],
         className
       )}

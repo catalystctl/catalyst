@@ -8,6 +8,8 @@ import { generatePalette, hexToHSL, type HarmonyMode } from '../../utils/generat
 import { adminApi } from '../../services/api/admin';
 import { useThemeStore, defaultThemeColors } from '../../stores/themeStore';
 import type { ThemeColors } from '../../services/api/theme';
+import TabHeader from '../../components/servers/tabs/TabHeader';
+import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 import {
   Sun,
   Moon,
@@ -77,7 +79,7 @@ function ColorPicker({
       <div className="flex items-center gap-2">
         <div className="relative flex-shrink-0">
           <div
-            className="h-8 w-8 cursor-pointer rounded-md ring-1 ring-black/10 dark:ring-white/10"
+            className="h-8 w-8 cursor-pointer rounded-md ring-1 ring-black/10"
             style={{ backgroundColor: isValid ? value : '#71717a' }}
           />
           <input
@@ -96,9 +98,9 @@ function ColorPicker({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="#000"
-          className={`w-[72px] rounded-md border bg-transparent px-2 py-1 font-mono text-[11px] transition-colors focus:outline-none focus:ring-1 ${
+          className={`w-[72px] rounded-md border px-2 py-1 font-mono text-[11px] transition-colors focus:outline-none focus:ring-1 ${
             isValid
-              ? 'border-border text-foreground focus:border-primary focus:ring-primary/20'
+              ? 'border-border/40 text-foreground focus:border-primary focus:ring-primary/20'
               : 'border-danger/40 text-danger focus:border-danger focus:ring-danger/20'
           }`}
         />
@@ -118,7 +120,7 @@ function ColorPicker({
       <div className="flex items-center gap-2">
         <div className="relative flex-shrink-0">
           <div
-            className="h-10 w-10 cursor-pointer rounded-lg ring-1 ring-black/10 transition-transform hover:scale-105 dark:ring-white/10"
+            className="h-10 w-10 cursor-pointer rounded-lg ring-1 ring-black/10 transition-transform hover:scale-105"
             style={{ backgroundColor: isValid ? value : '#71717a' }}
           />
           <input
@@ -135,7 +137,7 @@ function ColorPicker({
           placeholder="#000000"
           className={`flex-1 rounded-lg border bg-card px-3 py-2 font-mono text-xs transition-colors focus:outline-none focus:ring-2 ${
             isValid
-              ? 'border-border text-foreground focus:border-primary focus:ring-primary/20'
+              ? 'border-border/40 text-foreground focus:border-primary focus:ring-primary/20'
               : 'border-danger/40 text-danger focus:border-danger focus:ring-danger/20'
           }`}
         />
@@ -150,7 +152,7 @@ function Swatch({ color, label, mono }: { color: string; label?: string; mono?: 
   return (
     <div className="group/swatch flex flex-col items-center gap-1">
       <div
-        className="h-10 w-full rounded-md ring-1 ring-black/5 transition-transform hover:scale-105 dark:ring-white/5"
+        className="h-10 w-full rounded-md ring-1 ring-black/5 transition-transform hover:scale-105"
         style={{ backgroundColor: color }}
       />
       {label && (
@@ -319,15 +321,15 @@ function InputField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+        className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
       />
     </div>
   );
 }
 
-// ─── Section header ───
+// ─── Panel Section header ───
 
-function SectionHeader({
+function PanelSectionHeader({
   title,
   description,
   onReset,
@@ -346,7 +348,7 @@ function SectionHeader({
         <button
           type="button"
           onClick={onReset}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground hover:bg-surface-2"
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
         >
           <RotateCcw className="h-3 w-3" />
           Reset
@@ -363,13 +365,11 @@ function ElevationPreview({
   s1,
   s2,
   s3,
-  isDark,
 }: {
   bg: string;
   s1: string;
   s2: string;
   s3: string;
-  isDark: boolean;
 }) {
   const levels = [
     { color: bg, label: 'BG' },
@@ -383,9 +383,7 @@ function ElevationPreview({
       {levels.map(({ color, label }) => (
         <div key={label} className="flex-1 text-center">
           <div
-            className={`mx-auto h-12 rounded-lg ring-1 transition-transform hover:scale-105 ${
-              isDark ? 'ring-white/5' : 'ring-black/5'
-            }`}
+            className="mx-auto h-12 rounded-lg ring-1 ring-black/5 transition-transform hover:scale-105"
             style={{ backgroundColor: color }}
           />
           <span className="mt-1 block text-[9px] font-medium text-muted-foreground">
@@ -698,7 +696,7 @@ function ThemeSettingsPage() {
   // ── Branding panel ──
   const BrandPanel = () => (
     <div className="space-y-6">
-      <SectionHeader
+      <PanelSectionHeader
         title="Panel Identity"
         description="Customize your panel name and branding assets"
       />
@@ -710,7 +708,7 @@ function ThemeSettingsPage() {
             value={panelName}
             onChange={(e) => setPanelName(e.target.value)}
             placeholder="Catalyst"
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
         </div>
         <div />
@@ -721,7 +719,7 @@ function ThemeSettingsPage() {
             value={logoUrl}
             onChange={(e) => setLogoUrl(e.target.value)}
             placeholder="https://example.com/logo.png"
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
           <p className="mt-1 text-[10px] text-muted-foreground">
             Leave empty for default. Recommended: 24×24px, SVG or PNG.
@@ -734,7 +732,7 @@ function ThemeSettingsPage() {
             value={faviconUrl}
             onChange={(e) => setFaviconUrl(e.target.value)}
             placeholder="https://example.com/favicon.ico"
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
           <p className="mt-1 text-[10px] text-muted-foreground">
             Leave empty for default favicon.
@@ -742,16 +740,16 @@ function ThemeSettingsPage() {
         </div>
       </div>
 
-      <hr className="border-border" />
+      <hr className="border-border/30" />
 
-      <SectionHeader title="Theme Mode" description="Default theme and which modes are available" />
+      <PanelSectionHeader title="Theme Mode" description="Default theme and which modes are available" />
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="mb-1.5 block text-xs font-medium text-foreground">Default Theme</label>
           <select
             value={defaultTheme}
             onChange={(e) => setDefaultTheme(e.target.value)}
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
           >
             <option value="light">Light</option>
             <option value="dark">Dark</option>
@@ -772,7 +770,7 @@ function ThemeSettingsPage() {
                 className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all ${
                   enabledThemes.includes(id)
                     ? 'border-primary bg-primary/5 text-foreground'
-                    : 'border-border text-muted-foreground hover:border-primary/30'
+                    : 'border-border/30 text-muted-foreground hover:border-primary/30'
                 }`}
               >
                 <input
@@ -796,7 +794,7 @@ function ThemeSettingsPage() {
     const hsl = isSeedValid ? hexToHSL(seedColor) : null;
     return (
       <div className="space-y-6">
-        <SectionHeader
+        <PanelSectionHeader
           title="Palette Studio"
           description="Pick one color and we'll generate a complete theme"
         />
@@ -805,7 +803,7 @@ function ThemeSettingsPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           <div className="group relative flex-shrink-0">
             <div
-              className="h-24 w-24 cursor-pointer rounded-2xl ring-1 ring-black/5 transition-all duration-300 group-hover:scale-105 dark:ring-white/10"
+              className="h-24 w-24 cursor-pointer rounded-2xl ring-1 ring-black/5 transition-all duration-300 group-hover:scale-105"
               style={{
                 backgroundColor: isSeedValid ? seedColor : '#71717a',
                 boxShadow: isSeedValid
@@ -831,7 +829,7 @@ function ThemeSettingsPage() {
                   placeholder="#0d9488"
                   className={`w-36 rounded-lg border bg-card px-3 py-2 font-mono text-sm transition-colors focus:outline-none focus:ring-2 ${
                     isSeedValid
-                      ? 'border-border text-foreground focus:border-primary focus:ring-primary/20'
+                      ? 'border-border/40 text-foreground focus:border-primary focus:ring-primary/20'
                       : 'border-danger/40 text-danger focus:border-danger focus:ring-danger/20'
                   }`}
                 />
@@ -845,7 +843,7 @@ function ThemeSettingsPage() {
                           .padStart(6, '0'),
                     )
                   }
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/30 bg-card text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
                   title="Random color"
                 >
                   <Shuffle className="h-4 w-4" />
@@ -898,7 +896,7 @@ function ThemeSettingsPage() {
 
         {/* Generated palette preview */}
         {generatedPalette && (
-          <div className="space-y-5 rounded-xl border border-border bg-surface-1/50 p-5">
+          <div className="space-y-5 rounded-xl border border-border/30 bg-surface-1/50 p-5">
             {/* Brand */}
             <div>
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -985,7 +983,7 @@ function ThemeSettingsPage() {
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Light Surfaces
               </p>
-              <div className="rounded-lg border border-border p-3">
+              <div className="rounded-lg border border-border/30 p-3">
                 <div className="flex gap-1">
                   {[
                     { label: 'BG', key: 'lightBackground' as const },
@@ -1023,7 +1021,7 @@ function ThemeSettingsPage() {
   const ColorsPanel = () => (
     <div className="space-y-8">
       <div>
-        <SectionHeader
+        <PanelSectionHeader
           title="Brand Colors"
           description="Primary, secondary, and accent palette"
           onReset={() => handleResetSection('brand')}
@@ -1048,11 +1046,11 @@ function ThemeSettingsPage() {
             onChange={handleAccentColorChange}
           />
         </div>
-        <div className="mt-4 flex gap-2 rounded-lg border border-border p-3">
+        <div className="mt-4 flex gap-2 rounded-lg border border-border/30 p-3">
           {[primaryColor, secondaryColor, accentColor].map((color, i) => (
             <div
               key={i}
-              className="h-10 flex-1 rounded-md ring-1 ring-black/5 dark:ring-white/5"
+              className="h-10 flex-1 rounded-md ring-1 ring-black/5"
               style={{ backgroundColor: color }}
               title={['Primary', 'Secondary', 'Accent'][i]}
             />
@@ -1060,10 +1058,10 @@ function ThemeSettingsPage() {
         </div>
       </div>
 
-      <hr className="border-border" />
+      <hr className="border-border/30" />
 
       <div>
-        <SectionHeader
+        <PanelSectionHeader
           title="Semantic Colors"
           description="Status indicators, alerts, and feedback"
           onReset={() => handleResetSection('semantic')}
@@ -1098,7 +1096,7 @@ function ThemeSettingsPage() {
             icon={Info}
           />
         </div>
-        <div className="mt-4 flex flex-wrap gap-2 rounded-lg border border-border p-3">
+        <div className="mt-4 flex flex-wrap gap-2 rounded-lg border border-border/30 p-3">
           {[
             { color: themeColors.successColor, label: 'Success' },
             { color: themeColors.warningColor, label: 'Warning' },
@@ -1123,7 +1121,7 @@ function ThemeSettingsPage() {
   const SurfacesPanel = () => (
     <div className="space-y-8">
       <div>
-        <SectionHeader
+        <PanelSectionHeader
           title="Dark Mode Surfaces"
           description="Background, elevation, and text colors for dark theme"
           onReset={() => handleResetSection('dark')}
@@ -1134,7 +1132,6 @@ function ThemeSettingsPage() {
             s1={themeColors.darkSurface1 || ''}
             s2={themeColors.darkSurface2 || ''}
             s3={themeColors.darkSurface3 || ''}
-            isDark
           />
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -1151,10 +1148,10 @@ function ThemeSettingsPage() {
         </div>
       </div>
 
-      <hr className="border-border" />
+      <hr className="border-border/30" />
 
       <div>
-        <SectionHeader
+        <PanelSectionHeader
           title="Light Mode Surfaces"
           description="Background, elevation, and text colors for light theme"
           onReset={() => handleResetSection('light')}
@@ -1165,7 +1162,6 @@ function ThemeSettingsPage() {
             s1={themeColors.lightSurface1 || ''}
             s2={themeColors.lightSurface2 || ''}
             s3={themeColors.lightSurface3 || ''}
-            isDark={false}
           />
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -1187,7 +1183,7 @@ function ThemeSettingsPage() {
   // ── Layout panel ──
   const LayoutPanel = () => (
     <div className="space-y-6">
-      <SectionHeader
+      <PanelSectionHeader
         title="Border Radius"
         description="Control the roundness of cards, buttons, and inputs"
         onReset={() => handleResetSection('layout')}
@@ -1203,7 +1199,7 @@ function ThemeSettingsPage() {
             onChange={(e) => updateThemeColor('borderRadius', `${e.target.value}rem`)}
             className="flex-1 accent-primary"
           />
-          <span className="w-[72px] rounded-lg border border-border bg-card px-2 py-1.5 text-center font-mono text-xs text-foreground">
+          <span className="w-[72px] rounded-lg border border-border/30 bg-card px-2 py-1.5 text-center font-mono text-xs text-foreground">
             {themeColors.borderRadius || '0.5rem'}
           </span>
         </div>
@@ -1238,7 +1234,7 @@ function ThemeSettingsPage() {
   const AdvancedPanel = () => (
     <div className="space-y-8">
       <div>
-        <SectionHeader
+        <PanelSectionHeader
           title="Custom CSS"
           description="Advanced styling injected into every page (max 100 KB)"
         />
@@ -1249,13 +1245,13 @@ function ThemeSettingsPage() {
             placeholder="/* Your custom CSS here */&#10;.my-custom-class {&#10;  color: red;&#10;}"
             rows={14}
             spellCheck={false}
-            className="w-full rounded-lg border border-border bg-card px-3 py-2.5 font-mono text-xs text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            className="w-full rounded-lg border border-border/40 bg-card px-3 py-2.5 font-mono text-xs text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handlePreviewCustomCss}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
             >
               <Eye className="h-3.5 w-3.5" />
               Preview
@@ -1263,7 +1259,7 @@ function ThemeSettingsPage() {
             <button
               type="button"
               onClick={handleResetCustomCss}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Reset to Saved
@@ -1272,10 +1268,10 @@ function ThemeSettingsPage() {
         </div>
       </div>
 
-      <hr className="border-border" />
+      <hr className="border-border/30" />
 
       <div>
-        <SectionHeader
+        <PanelSectionHeader
           title="OAuth Providers"
           description="Configure OIDC/SSO login for WHMCS and Paymenter"
         />
@@ -1286,7 +1282,7 @@ function ThemeSettingsPage() {
 
   // ── Live Preview Strip ──
   const LivePreviewStrip = () => (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className="rounded-xl border border-border/30 bg-card p-4">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           Live Preview
@@ -1355,9 +1351,9 @@ function ThemeSettingsPage() {
             ).map((c, i) => (
               <div
                 key={i}
-                className="h-5 flex-1 rounded-sm ring-1 ring-black/10 dark:ring-white/5"
+                className="h-5 flex-1 rounded-sm ring-1 ring-black/10"
                 style={{ backgroundColor: c || '#888' }}
-                title={`Surface ${i}`}
+                title={`Level ${i}`}
               />
             ))}
           </div>
@@ -1379,50 +1375,48 @@ function ThemeSettingsPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       {/* ── Page Header ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight text-foreground">
-            Theme Settings
-          </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Customize the look and feel of your panel
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleResetAll}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            Reset All
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={updateMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-          >
-            {updateMutation.isPending ? (
-              <>
-                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                Saving…
-              </>
-            ) : (
-              <>
-                <Save className="h-3.5 w-3.5" />
-                Save Changes
-              </>
-            )}
-          </button>
-        </div>
-      </div>
+      <TabHeader
+        icon={Palette}
+        title="Theme Settings"
+        description="Customize the look and feel of your panel"
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleResetAll}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset All
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={updateMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            >
+              {updateMutation.isPending ? (
+                <>
+                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Saving…
+                </>
+              ) : (
+                <>
+                  <Save className="h-3.5 w-3.5" />
+                  Save Changes
+                </>
+              )}
+            </button>
+          </div>
+        }
+        variant="default"
+      />
 
       {/* ── Live Preview Strip ── */}
       <LivePreviewStrip />
 
       {/* ── Tab Navigation ── */}
-      <div className="flex gap-1 rounded-xl border border-border bg-surface-1 p-1">
+      <div className="flex gap-1 rounded-xl border border-border/30 bg-surface-1 p-1">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -1433,8 +1427,8 @@ function ThemeSettingsPage() {
               onClick={() => setActiveTab(tab.id)}
               className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium transition-all ${
                 isActive
-                  ? 'bg-card text-foreground shadow-sm ring-1 ring-black/5 dark:ring-white/5'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-surface-2/50'
+                  ? 'bg-card text-foreground shadow-sm ring-1 ring-black/5'
+                  : 'text-muted-foreground hover:bg-surface-2/50 hover:text-foreground'
               }`}
             >
               <Icon className="h-3.5 w-3.5" />
@@ -1445,9 +1439,9 @@ function ThemeSettingsPage() {
       </div>
 
       {/* ── Active Tab Content ── */}
-      <div className="rounded-xl border border-border bg-card p-6">
+      <ServerTabCard>
         {activeTabContent[activeTab]}
-      </div>
+      </ServerTabCard>
     </div>
   );
 }

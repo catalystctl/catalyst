@@ -3,11 +3,29 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import { useParams, Link } from 'react-router-dom';
+import {
+  Network,
+  Plug,
+  Globe,
+  Search,
+  Trash2,
+  Plus,
+  ArrowLeft,
+  Copy,
+  Info,
+} from 'lucide-react';
 import apiClient from '../../services/api/client';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { useNodes } from '../../hooks/useNodes';
 import { adminApi } from '../../services/api/admin';
 import { ModalPortal } from '@/components/ui/modal-portal';
+import TabHeader from '../../components/servers/tabs/TabHeader';
+import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import StatGrid from '../../components/servers/tabs/StatGrid';
+import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
+import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
+import SectionHeader from '../../components/servers/tabs/SectionHeader';
+import DataField from '../../components/servers/tabs/DataField';
 
 interface NodeAllocation {
   id: string;
@@ -228,568 +246,523 @@ function NodeAllocationsPage() {
     setEndIp(`${base}.250`);
   };
 
+  const allPortStatItems = [
+    { label: 'Total Ports', value: portStats.total },
+    { label: 'Available', value: portStats.available },
+    { label: 'Assigned', value: portStats.assigned },
+    { label: 'Unique IPs', value: portStats.uniqueIps },
+  ];
+
+  const allIpStatItems = [
+    { label: 'Total IPs', value: ipPoolStats.total },
+    { label: 'Available', value: ipPoolStats.available },
+    { label: 'Used', value: ipPoolStats.used },
+    { label: 'Reserved', value: ipPoolStats.reserved },
+  ];
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-3 text-sm text-muted-foreground dark:text-muted-foreground">
-        <Link to="/admin/nodes" className="hover:text-primary-600 dark:hover:text-primary-400">
+      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+        <Link to="/admin/nodes" className="flex items-center gap-1 hover:text-foreground transition-colors">
+          <ArrowLeft className="h-3 w-3" />
           Nodes
         </Link>
-        <span>/</span>
-        <span className="text-foreground ">{node?.name || 'Loading...'}</span>
-        <span>/</span>
-        <span className="text-foreground ">Network Allocations</span>
+        <span className="text-muted-foreground/30">/</span>
+        <span className="text-foreground font-medium">{node?.name || 'Loading...'}</span>
+        <span className="text-muted-foreground/30">/</span>
+        <span className="text-foreground">Network Allocations</span>
       </div>
 
       {/* Header */}
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-surface-light transition-all duration-300 hover:border-primary dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground ">
-              Network Allocations
-            </h1>
-            <p className="text-sm text-muted-foreground dark:text-muted-foreground">
-              Manage port bindings and IP pools for <span className="font-semibold">{node?.name}</span>
-            </p>
+      <TabHeader
+        icon={Network}
+        title="Network Allocations"
+        description={`Manage port bindings and IP pools for ${node?.name || 'this node'}`}
+        actions={
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-1.5 rounded-md border border-border/30 bg-surface-2/30 px-2.5 py-1 text-[11px] text-muted-foreground">
+              <Plug className="h-3 w-3" />
+              {portStats.total} ports
+            </div>
+            <div className="hidden sm:flex items-center gap-1.5 rounded-md border border-border/30 bg-surface-2/30 px-2.5 py-1 text-[11px] text-muted-foreground">
+              <Globe className="h-3 w-3" />
+              {ipPoolStats.pools} pools
+            </div>
+          </div>
+        }
+      />
+
+      {/* Info note */}
+      <ServerTabCard className="!border-info/15 !bg-info/[0.02]">
+        <div className="flex items-start gap-2.5">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-info" />
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-foreground">Two allocation types:</p>
+            <ul className="ml-3 list-disc space-y-0.5 text-[11px] text-muted-foreground">
+              <li><strong>Port Allocations</strong> — Track IP:Port combinations for proxy/NAT setups (like Pterodactyl)</li>
+              <li><strong>IP Pools</strong> — Automatic MACVLAN networking with dedicated IPs per server (advanced)</li>
+            </ul>
           </div>
         </div>
-        
-        {/* Help text */}
-        <div className="mt-4 rounded-lg border border-blue-200 bg-info/5 px-4 py-3 text-sm text-blue-900 dark:border-blue-900/30 dark:bg-blue-950/20 dark:text-blue-300">
-          <strong>💡 Two allocation types:</strong>
-          <ul className="ml-4 mt-1 list-disc space-y-1">
-            <li><strong>Port Allocations</strong> - Track IP:Port combinations for proxy/NAT setups (like Pterodactyl)</li>
-            <li><strong>IP Pools</strong> - Automatic MACVLAN networking with dedicated IPs per server (advanced)</li>
-          </ul>
-        </div>
-      </div>
+      </ServerTabCard>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-border dark:border-border">
+      <div className="flex gap-1 rounded-xl border border-border/40 bg-surface-2/40 p-1.5 shadow-[inset_0_1px_0_hsl(var(--card)/0.5)]">
         <button
           onClick={() => setActiveTab('ports')}
-          className={`px-4 py-2 text-sm font-semibold transition-all ${
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
             activeTab === 'ports'
-              ? 'border-b-2 border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
-              : 'text-muted-foreground hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground'
+              ? 'bg-primary text-primary-foreground shadow-[0_0_8px_-1px_hsl(var(--primary)/0.25)]'
+              : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          Port Allocations ({portStats.total})
+          <Plug className="h-3.5 w-3.5" />
+          Port Allocations
+          <span className={`text-[10px] tabular-nums ${activeTab === 'ports' ? 'text-primary-foreground/70' : 'text-muted-foreground/50'}`}>
+            {portStats.total}
+          </span>
         </button>
         <button
           onClick={() => setActiveTab('ips')}
-          className={`px-4 py-2 text-sm font-semibold transition-all ${
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
             activeTab === 'ips'
-              ? 'border-b-2 border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
-              : 'text-muted-foreground hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground'
+              ? 'bg-primary text-primary-foreground shadow-[0_0_8px_-1px_hsl(var(--primary)/0.25)]'
+              : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          IP Pools ({ipPoolStats.pools})
+          <Globe className="h-3.5 w-3.5" />
+          IP Pools
+          <span className={`text-[10px] tabular-nums ${activeTab === 'ips' ? 'text-primary-foreground/70' : 'text-muted-foreground/50'}`}>
+            {ipPoolStats.pools}
+          </span>
         </button>
       </div>
 
       {/* Port Allocations Tab */}
       {activeTab === 'ports' && (
-        <>
-          {/* Stats */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-primary dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                Total Ports
-              </div>
-              <div className="mt-2 text-2xl font-semibold text-foreground ">
-                {portStats.total}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-success dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-success/40">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                Available
-              </div>
-              <div className="mt-2 text-2xl font-semibold text-foreground ">
-                {portStats.available}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-indigo-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-indigo-500/40">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                Assigned
-              </div>
-              <div className="mt-2 text-2xl font-semibold text-foreground ">
-                {portStats.assigned}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-warning dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-warning/40">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                Unique IPs
-              </div>
-              <div className="mt-2 text-2xl font-semibold text-foreground ">
-                {portStats.uniqueIps}
-              </div>
-            </div>
-          </div>
+        <div className="space-y-4">
+          <StatGrid items={allPortStatItems} columns={4} />
 
           {/* Search and Create */}
-          <div className="flex items-center justify-between gap-3">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by IP, port, alias..."
-              className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/50" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by IP, port, alias..."
+                className="h-8 w-full rounded-lg border border-border/40 bg-card px-8 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
+              />
+            </div>
             <button
               onClick={() => setShowCreatePortModal(true)}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
+              className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-colors hover:bg-primary/90"
             >
+              <Plus className="h-3.5 w-3.5" />
               Create Allocations
             </button>
           </div>
 
-          {/* Port Allocations Table */}
+          {/* Port Allocations List */}
           {allocationsLoading ? (
-            <div className="rounded-xl border border-border bg-card px-4 py-6 text-muted-foreground dark:border-border dark:bg-surface-1 dark:text-foreground">
-              Loading port allocations...
-            </div>
+            <TabLoadingState rows={5} />
           ) : filteredAllocations.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border bg-surface-2 px-6 py-12 text-center dark:border-border dark:bg-surface-1/40">
-              <p className="text-muted-foreground dark:text-muted-foreground">
-                {search.trim() ? 'No port allocations match your search' : 'No port allocations yet'}
-              </p>
-              {!search.trim() && (
-                <button
-                  onClick={() => setShowCreatePortModal(true)}
-                  className="mt-3 text-sm text-primary-600 hover:text-primary dark:text-primary-400"
-                >
-                  Create your first port allocations
-                </button>
-              )}
-            </div>
+            <TabEmptyState
+              title={search.trim() ? 'No port allocations match your search' : 'No port allocations yet'}
+              description={search.trim() ? undefined : 'Create allocations to assign IP:Port combinations to servers.'}
+              action={
+                !search.trim() ? (
+                  <button
+                    onClick={() => setShowCreatePortModal(true)}
+                    className="rounded-md border border-border/40 bg-card px-3 py-1.5 text-[11px] font-medium text-primary transition-colors hover:border-primary/20"
+                  >
+                    Create your first allocations
+                  </button>
+                ) : undefined
+              }
+            />
           ) : (
-            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-surface-light dark:border-border dark:bg-surface-1 dark:shadow-surface-dark">
-              <table className="w-full text-sm">
-                <thead className="border-b border-border bg-surface-2 dark:border-border dark:bg-surface-0/60">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-semibold text-foreground ">
-                      IP Address
-                    </th>
-                    <th className="px-4 py-3 text-left font-semibold text-foreground ">
-                      Port
-                    </th>
-                    <th className="px-4 py-3 text-left font-semibold text-foreground ">
-                      Alias
-                    </th>
-                    <th className="px-4 py-3 text-left font-semibold text-foreground ">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-right font-semibold text-foreground ">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border dark:divide-border">
-                  {filteredAllocations.map((allocation) => (
-                    <tr
-                      key={allocation.id}
-                      className="transition-colors hover:bg-surface-2 dark:hover:bg-surface-0/40"
-                    >
-                      <td className="px-4 py-3 font-mono text-foreground ">
-                        {allocation.ip}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-foreground ">
-                        {allocation.port}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground dark:text-muted-foreground">
-                        {allocation.alias || '-'}
-                      </td>
-                      <td className="px-4 py-3">
-                        {allocation.serverId ? (
-                          <span className="inline-flex items-center rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300">
-                            Assigned
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-semibold text-success dark:bg-success/40 dark:text-success">
-                            Available
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {!allocation.serverId && (
-                          <button
-                            onClick={() => deletePortMutation.mutate(allocation.id)}
-                            disabled={deletePortMutation.isPending}
-                            className="text-xs text-destructive hover:text-destructive dark:text-destructive dark:hover:text-destructive"
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-2">
+              {filteredAllocations.map((allocation) => (
+                <div
+                  key={allocation.id}
+                  className="group relative rounded-lg border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
+                >
+                  <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-4 min-w-0 flex-1">
+                      <DataField
+                        label="IP"
+                        value={allocation.ip}
+                        copyable
+                        mono
+                      />
+                      <DataField
+                        label="Port"
+                        value={String(allocation.port)}
+                        copyable
+                        mono
+                      />
+                      {allocation.alias && (
+                        <span className="hidden sm:inline text-xs text-muted-foreground truncate">
+                          {allocation.alias}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {allocation.serverId ? (
+                        <span className="inline-flex items-center rounded-full border border-border/30 bg-surface-2/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          Assigned
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full border border-success/20 bg-success/5 px-2 py-0.5 text-[10px] font-medium text-success">
+                          Available
+                        </span>
+                      )}
+                      {!allocation.serverId && (
+                        <button
+                          onClick={() => deletePortMutation.mutate(allocation.id)}
+                          disabled={deletePortMutation.isPending}
+                          className="rounded p-1 text-muted-foreground/40 transition-colors hover:text-destructive hover:bg-destructive/5"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
-        </>
+        </div>
       )}
 
       {/* IP Pools Tab */}
       {activeTab === 'ips' && (
-        <>
-          {/* Stats */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-primary dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                Total IPs
-              </div>
-              <div className="mt-2 text-2xl font-semibold text-foreground ">
-                {ipPoolStats.total}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-success dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-success/40">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                Available
-              </div>
-              <div className="mt-2 text-2xl font-semibold text-foreground ">
-                {ipPoolStats.available}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-indigo-500 dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-indigo-500/40">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                Used
-              </div>
-              <div className="mt-2 text-2xl font-semibold text-foreground ">
-                {ipPoolStats.used}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:border-warning dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-warning/40">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                Reserved
-              </div>
-              <div className="mt-2 text-2xl font-semibold text-foreground ">
-                {ipPoolStats.reserved}
-              </div>
-            </div>
-          </div>
+        <div className="space-y-4">
+          <StatGrid items={allIpStatItems} columns={4} />
 
           {/* Create Pool Button */}
           <div className="flex justify-end">
             <button
               onClick={() => setShowCreatePoolModal(true)}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90"
+              className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-colors hover:bg-primary/90"
             >
+              <Plus className="h-3.5 w-3.5" />
               Create IP Pool
             </button>
           </div>
 
           {/* IP Pools List */}
           {poolsLoading ? (
-            <div className="rounded-xl border border-border bg-card px-4 py-6 text-muted-foreground dark:border-border dark:bg-surface-1 dark:text-foreground">
-              Loading IP pools...
-            </div>
+            <TabLoadingState rows={4} />
           ) : nodePools.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border bg-surface-2 px-6 py-12 text-center dark:border-border dark:bg-surface-1/40">
-              <p className="text-muted-foreground dark:text-muted-foreground">No IP pools for this node yet</p>
-              <button
-                onClick={() => setShowCreatePoolModal(true)}
-                className="mt-3 text-sm text-primary-600 hover:text-primary dark:text-primary-400"
-              >
-                Create your first IP pool
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {nodePools.map((pool: IpPool) => (
-                <div
-                  key={pool.id}
-                  className="rounded-2xl border border-border bg-card px-5 py-4 shadow-surface-light transition-all duration-300 hover:-translate-y-1 hover:border-primary dark:border-border dark:bg-surface-1 dark:shadow-surface-dark dark:hover:border-primary/30"
+            <TabEmptyState
+              title="No IP pools for this node"
+              description="Create an IP pool to enable MACVLAN networking with automatic IPAM."
+              action={
+                <button
+                  onClick={() => setShowCreatePoolModal(true)}
+                  className="rounded-md border border-border/40 bg-card px-3 py-1.5 text-[11px] font-medium text-primary transition-colors hover:border-primary/20"
                 >
+                  Create your first IP pool
+                </button>
+              }
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              {nodePools.map((pool: IpPool) => (
+                <ServerTabCard key={pool.id} className="relative">
+                  <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold text-foreground dark:text-foreground">
-                        {pool.networkName}
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
-                        {pool.cidr}
-                      </div>
-                      <div className="mt-2 text-xs text-muted-foreground dark:text-muted-foreground">
-                        Range: {pool.rangeStart} → {pool.rangeEnd}
+                    <div className="min-w-0">
+                      <SectionHeader
+                        icon={Globe}
+                        title={pool.networkName}
+                      />
+                      <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <code className="rounded bg-surface-2/50 px-1.5 py-0.5 font-mono">{pool.cidr}</code>
+                        <span>·</span>
+                        <span>{pool.rangeStart} → {pool.rangeEnd}</span>
                       </div>
                     </div>
                     <button
-                      className="rounded-full border border-destructive/20 px-3 py-1 text-xs font-semibold text-destructive transition-all duration-300 hover:border-destructive dark:border-destructive/30 dark:text-destructive"
                       onClick={() => deletePoolMutation.mutate(pool.id)}
                       disabled={deletePoolMutation.isPending}
+                      className="rounded p-1.5 text-muted-foreground/40 transition-colors hover:text-destructive hover:bg-destructive/5"
+                      title="Delete"
                     >
-                      Delete
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <div className="mt-4 grid grid-cols-3 gap-2 text-xs text-muted-foreground dark:text-foreground">
-                    <div className="rounded-xl border border-border bg-surface-2 px-3 py-2 dark:border-border dark:bg-surface-1">
-                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                        Available
-                      </div>
-                      <div className="text-sm font-semibold text-foreground dark:text-foreground">
-                        {pool.availableCount}
-                      </div>
+
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
+                      <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Available</div>
+                      <div className="mt-0.5 text-sm font-semibold font-mono tabular-nums text-foreground">{pool.availableCount}</div>
                     </div>
-                    <div className="rounded-xl border border-border bg-surface-2 px-3 py-2 dark:border-border dark:bg-surface-1">
-                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                        Used
-                      </div>
-                      <div className="text-sm font-semibold text-foreground dark:text-foreground">
-                        {pool.usedCount}
-                      </div>
+                    <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
+                      <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Used</div>
+                      <div className="mt-0.5 text-sm font-semibold font-mono tabular-nums text-foreground">{pool.usedCount}</div>
                     </div>
-                    <div className="rounded-xl border border-border bg-surface-2 px-3 py-2 dark:border-border dark:bg-surface-1">
-                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
-                        Reserved
-                      </div>
-                      <div className="text-sm font-semibold text-foreground dark:text-foreground">
-                        {pool.reservedCount}
-                      </div>
+                    <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
+                      <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Reserved</div>
+                      <div className="mt-0.5 text-sm font-semibold font-mono tabular-nums text-foreground">{pool.reservedCount}</div>
                     </div>
                   </div>
-                  <div className="mt-3 text-xs text-muted-foreground dark:text-muted-foreground">
+
+                  <div className="mt-2 text-[11px] text-muted-foreground">
                     Total: {pool.total} · Gateway: {pool.gateway ?? 'n/a'}
                   </div>
+
                   {pool.allocations && pool.allocations.length > 0 && (
-                    <div className="mt-4 border-t border-border pt-3 dark:border-border">
-                      <div className="mb-2 text-xs font-semibold text-foreground ">
+                    <div className="mt-3 border-t border-border/30 pt-3">
+                      <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50 mb-2">
                         Assigned IPs ({pool.allocations.length})
                       </div>
                       <div className="max-h-32 space-y-1 overflow-y-auto">
-                        {pool.allocations?.map((alloc: any) => (
-                          <div key={alloc.id} className="flex items-center justify-between text-xs">
-                            <span className="font-mono text-muted-foreground dark:text-muted-foreground">
-                              {alloc.ip}
-                            </span>
-                            <span className="text-muted-foreground dark:text-muted-foreground">→</span>
-                            <span className="text-foreground dark:text-foreground">
-                              {alloc.serverName}
-                            </span>
+                        {pool.allocations.map((alloc: any) => (
+                          <div key={alloc.id} className="flex items-center justify-between text-[11px]">
+                            <code className="font-mono text-muted-foreground text-[10px]">{alloc.ip}</code>
+                            <span className="text-muted-foreground/30">→</span>
+                            <span className="text-foreground truncate max-w-[120px]">{alloc.serverName}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
-                </div>
+                </ServerTabCard>
               ))}
             </div>
           )}
-        </>
+        </div>
       )}
 
       {/* Create Port Allocations Modal */}
       {showCreatePortModal && (
         <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-border bg-card p-6 shadow-xl dark:border-border dark:bg-surface-1">
-            <h2 className="text-xl font-semibold text-foreground ">
-              Create Port Allocations
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground dark:text-muted-foreground">
-              Bulk create IP:Port allocations for this node (Pterodactyl-style)
-            </p>
-
-            <div className="mt-6 space-y-4">
-              <div className="rounded-xl border border-border bg-surface-2 px-4 py-3 dark:border-border dark:bg-surface-1/60">
-                <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-                  <strong>IP format:</strong> Single IP (192.168.1.100 or 2001:db8::1), multiple IPs
-                  (192.168.1.100, 192.168.1.101), or CIDR (192.168.1.0/24, 2001:db8::/64)
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
-                  <strong>Port format:</strong> Single port (25565), range (25565-25664), or
-                  multiple (25565, 25566, 25567)
-                </p>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 p-4">
+            <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">Create Port Allocations</h2>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    Bulk create IP:Port allocations for this node
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowCreatePortModal(false)}
+                  className="rounded p-1 text-muted-foreground/40 hover:text-foreground transition-colors"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
               </div>
 
-              <label className="block text-sm text-foreground dark:text-foreground">
-                IP Address(es)
-                <input
-                  type="text"
-                  value={ipInput}
-                  onChange={(e) => setIpInput(e.target.value)}
-                  placeholder="192.168.1.100, 2001:db8::1, or 192.168.1.0/24"
-                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
-                />
-              </label>
+              <div className="mt-5 space-y-4">
+                <ServerTabCard className="!bg-surface-2/20 !border-border/20">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <strong>IP format:</strong> Single IP (192.168.1.100), multiple IPs (192.168.1.100, 192.168.1.101), or CIDR (192.168.1.0/24)
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+                    <strong>Port format:</strong> Single port (25565), range (25565-25664), or multiple (25565, 25566, 25567)
+                  </p>
+                </ServerTabCard>
 
-              <label className="block text-sm text-foreground dark:text-foreground">
-                Port(s)
-                <input
-                  type="text"
-                  value={portsInput}
-                  onChange={(e) => setPortsInput(e.target.value)}
-                  placeholder="25565-25664 or 25565, 25566"
-                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
-                />
-              </label>
+                <label className="block space-y-1.5">
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">IP Address(es)</span>
+                  <input
+                    type="text"
+                    value={ipInput}
+                    onChange={(e) => setIpInput(e.target.value)}
+                    placeholder="192.168.1.100, 2001:db8::1, or 192.168.1.0/24"
+                    className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
+                  />
+                </label>
 
-              <label className="block text-sm text-foreground dark:text-foreground">
-                Alias (optional)
-                <input
-                  type="text"
-                  value={aliasInput}
-                  onChange={(e) => setAliasInput(e.target.value)}
-                  placeholder="e.g., Main network"
-                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
-                />
-              </label>
+                <label className="block space-y-1.5">
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Port(s)</span>
+                  <input
+                    type="text"
+                    value={portsInput}
+                    onChange={(e) => setPortsInput(e.target.value)}
+                    placeholder="25565-25664 or 25565, 25566"
+                    className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
+                  />
+                </label>
 
-              <button
-                onClick={handleQuickFillPorts}
-                className="text-sm text-primary-600 hover:text-primary dark:text-primary-400"
-              >
-                Quick fill: Use node IP + ports 25565-25664
-              </button>
-            </div>
+                <label className="block space-y-1.5">
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Alias (optional)</span>
+                  <input
+                    type="text"
+                    value={aliasInput}
+                    onChange={(e) => setAliasInput(e.target.value)}
+                    placeholder="e.g., Main network"
+                    className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
+                  />
+                </label>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => setShowCreatePortModal(false)}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-border dark:border-border dark:text-foreground dark:hover:border-border"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => createPortMutation.mutate()}
-                disabled={!ipInput.trim() || !portsInput.trim() || createPortMutation.isPending}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
-              >
-                {createPortMutation.isPending ? 'Creating...' : 'Create Allocations'}
-              </button>
+                <button
+                  onClick={handleQuickFillPorts}
+                  className="text-[11px] font-medium text-primary hover:text-primary/80 transition-colors"
+                >
+                  Quick fill: Use node IP + ports 25565-25664
+                </button>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-2">
+                <button
+                  onClick={() => setShowCreatePortModal(false)}
+                  className="rounded-lg border border-border/40 bg-card px-4 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/20 hover:text-foreground"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => createPortMutation.mutate()}
+                  disabled={!ipInput.trim() || !portsInput.trim() || createPortMutation.isPending}
+                  className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-colors hover:bg-primary/90 disabled:opacity-60"
+                >
+                  {createPortMutation.isPending ? 'Creating...' : 'Create Allocations'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
         </ModalPortal>
       )}
 
       {/* Create IP Pool Modal */}
       {showCreatePoolModal && (
         <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-border bg-card p-6 shadow-xl dark:border-border dark:bg-surface-1">
-            <h2 className="text-xl font-semibold text-foreground ">
-              Create IP Pool
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground dark:text-muted-foreground">
-              Configure MACVLAN network with automatic IPAM (advanced)
-            </p>
-
-            <div className="mt-6 space-y-4">
-              <div className="rounded-xl border border-border bg-surface-2 px-4 py-3 dark:border-border dark:bg-surface-1/60">
-                <p className="text-xs text-muted-foreground dark:text-muted-foreground">
-                  IP pools enable servers to get dedicated IP addresses on the network via MACVLAN.
-                  Each server automatically receives one IP from the pool.
-                </p>
-              </div>
-
-              <label className="block text-sm text-foreground dark:text-foreground">
-                Network Name
-                <input
-                  type="text"
-                  value={networkName}
-                  onChange={(e) => setNetworkName(e.target.value)}
-                  placeholder="mc-lan"
-                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
-                />
-              </label>
-
-              <label className="block text-sm text-foreground dark:text-foreground">
-                CIDR
-                <input
-                  type="text"
-                  value={cidr}
-                  onChange={(e) => setCidr(e.target.value)}
-                  placeholder="192.168.50.0/24 or 2001:db8::/64"
-                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
-                />
-              </label>
-
-              <div className="grid grid-cols-2 gap-4">
-                <label className="block text-sm text-foreground dark:text-foreground">
-                  Gateway
-                  <input
-                    type="text"
-                    value={gateway}
-                    onChange={(e) => setGateway(e.target.value)}
-                    placeholder="192.168.50.1 or 2001:db8::1"
-                    className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
-                  />
-                </label>
-
-                <label className="block text-sm text-foreground dark:text-foreground">
-                  Start IP (optional)
-                  <input
-                    type="text"
-                    value={startIp}
-                    onChange={(e) => setStartIp(e.target.value)}
-                    placeholder="192.168.50.10 or 2001:db8::10"
-                    className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
-                  />
-                </label>
-
-                <label className="block text-sm text-foreground dark:text-foreground">
-                  End IP (optional)
-                  <input
-                    type="text"
-                    value={endIp}
-                    onChange={(e) => setEndIp(e.target.value)}
-                    placeholder="192.168.50.200 or 2001:db8::200"
-                    className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
-                  />
-                </label>
-
-                <div className="flex items-end">
-                  <button
-                    onClick={handleAutoFillPool}
-                    disabled={!autoFillIp.trim()}
-                    className="w-full rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-primary disabled:opacity-60 dark:border-border dark:text-foreground"
-                  >
-                    Autofill /24
-                  </button>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 p-4">
+            <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">Create IP Pool</h2>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    Configure MACVLAN network with automatic IPAM
+                  </p>
                 </div>
+                <button
+                  onClick={() => setShowCreatePoolModal(false)}
+                  className="rounded p-1 text-muted-foreground/40 hover:text-foreground transition-colors"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
               </div>
 
-              <label className="block text-sm text-foreground dark:text-foreground">
-                Quick Setup IP
-                <input
-                  type="text"
-                  value={autoFillIp}
-                  onChange={(e) => setAutoFillIp(e.target.value)}
-                  placeholder={node?.publicAddress || '0.0.0.0 or ::'}
-                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
-                />
-              </label>
+              <div className="mt-5 space-y-4">
+                <ServerTabCard className="!bg-surface-2/20 !border-border/20">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    IP pools enable servers to get dedicated IP addresses on the network via MACVLAN. Each server automatically receives one IP from the pool.
+                  </p>
+                </ServerTabCard>
 
-              <label className="block text-sm text-foreground dark:text-foreground">
-                Reserved IPs (optional, comma-separated)
-                <textarea
-                  value={reserved}
-                  onChange={(e) => setReserved(e.target.value)}
-                  rows={2}
-                  placeholder="192.168.50.20, 192.168.50.21"
-                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-all duration-300 focus:border-primary focus:outline-none hover:border-primary dark:border-border dark:bg-surface-1 dark:text-foreground dark:hover:border-primary/30"
-                />
-              </label>
-            </div>
+                <label className="block space-y-1.5">
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Network Name</span>
+                  <input
+                    type="text"
+                    value={networkName}
+                    onChange={(e) => setNetworkName(e.target.value)}
+                    placeholder="mc-lan"
+                    className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
+                  />
+                </label>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => setShowCreatePoolModal(false)}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground transition-all duration-300 hover:border-border dark:border-border dark:text-foreground dark:hover:border-border"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => createPoolMutation.mutate()}
-                disabled={!networkName || !cidr || createPoolMutation.isPending}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
-              >
-                {createPoolMutation.isPending ? 'Creating...' : 'Create Pool'}
-              </button>
+                <label className="block space-y-1.5">
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">CIDR</span>
+                  <input
+                    type="text"
+                    value={cidr}
+                    onChange={(e) => setCidr(e.target.value)}
+                    placeholder="192.168.50.0/24 or 2001:db8::/64"
+                    className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
+                  />
+                </label>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <label className="block space-y-1.5">
+                    <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Gateway</span>
+                    <input
+                      type="text"
+                      value={gateway}
+                      onChange={(e) => setGateway(e.target.value)}
+                      placeholder="192.168.50.1"
+                      className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
+                    />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Start IP (optional)</span>
+                    <input
+                      type="text"
+                      value={startIp}
+                      onChange={(e) => setStartIp(e.target.value)}
+                      placeholder="192.168.50.10"
+                      className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
+                    />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">End IP (optional)</span>
+                    <input
+                      type="text"
+                      value={endIp}
+                      onChange={(e) => setEndIp(e.target.value)}
+                      placeholder="192.168.50.200"
+                      className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
+                    />
+                  </label>
+                  <div className="flex items-end">
+                    <button
+                      onClick={handleAutoFillPool}
+                      disabled={!autoFillIp.trim()}
+                      className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/20 disabled:opacity-50"
+                    >
+                      Autofill /24
+                    </button>
+                  </div>
+                </div>
+
+                <label className="block space-y-1.5">
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Quick Setup IP</span>
+                  <input
+                    type="text"
+                    value={autoFillIp}
+                    onChange={(e) => setAutoFillIp(e.target.value)}
+                    placeholder={node?.publicAddress || '0.0.0.0'}
+                    className="h-8 w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none"
+                  />
+                </label>
+
+                <label className="block space-y-1.5">
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">Reserved IPs (optional, comma-separated)</span>
+                  <textarea
+                    value={reserved}
+                    onChange={(e) => setReserved(e.target.value)}
+                    rows={2}
+                    placeholder="192.168.50.20, 192.168.50.21"
+                    className="w-full rounded-lg border border-border/40 bg-card px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 transition-colors focus:border-primary/40 focus:outline-none resize-none"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-2">
+                <button
+                  onClick={() => setShowCreatePoolModal(false)}
+                  className="rounded-lg border border-border/40 bg-card px-4 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/20 hover:text-foreground"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => createPoolMutation.mutate()}
+                  disabled={!networkName || !cidr || createPoolMutation.isPending}
+                  className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-colors hover:bg-primary/90 disabled:opacity-60"
+                >
+                  {createPoolMutation.isPending ? 'Creating...' : 'Create Pool'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
         </ModalPortal>
       )}
     </div>
