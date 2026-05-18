@@ -1032,6 +1032,10 @@ export async function nodeRoutes(app: FastifyInstance) {
 					where: { id: { in: agentKeys.map((k) => k.id) } },
 				});
 				deletedKeys = result.count;
+
+				// Invalidate agent-auth cache so deleted keys are immediately rejected
+				const { invalidateAgentApiKeyCache } = await import("../lib/agent-auth");
+				invalidateAgentApiKeyCache(nodeId);
 			}
 
 			await prisma.node.delete({ where: { id: nodeId } });

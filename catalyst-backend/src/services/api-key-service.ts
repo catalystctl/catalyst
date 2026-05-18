@@ -13,6 +13,7 @@
 
 import { prisma } from "../db";
 import { createHash, createHmac, randomBytes } from "crypto";
+import { invalidateAgentApiKeyCache } from "../lib/agent-auth";
 
 const DEFAULT_PREFIX = "catalyst";
 const KEY_LENGTH = 32; // bytes of randomness
@@ -272,10 +273,79 @@ export async function deleteApiKey(keyId: string, userId?: string): Promise<bool
   if (userId) {
     where.userId = userId;
   }
+
   try {
     await prisma.apikey.delete({ where });
+    // Invalidate agent-auth cache so revoked keys are immediately rejected
+    invalidateAgentApiKeyCache();
     return true;
   } catch {
     return false;
   }
 }
+
+export interface UpdateApiKeyParams {
+  name?: string;
+  enabled?: boolean;
+  rateLimitMax?: number;
+  rateLimitTimeWindow?: number;
+}
+
+/**
+ * Update an API key by ID. Invalidates the agent-auth cache on success
+ * so that changes (e.g. disabling a key) take effect immediately.
+ */
+export async function updateApiKey(
+  keyId: string,
+  params: UpdateApiKeyParams,
+) {
+  const updateData: any = { updatedAt: new Date() };
+  if (params.name !== undefined) updateData.name = params.name;
+  if (params.enabled !== undefined) updateData.enabled = params.enabled;
+  if (params.rateLimitMax !== undefined) {
+    updateData.rateLimitMax = params.rateLimitMax;
+    updateData.refillAmount = params.rateLimitMax;
+  }
+  if (params.rateLimitTimeWindow !== undefined) {
+    updateData.rateLimitTimeWindow = params.rateLimitTimeWindow;
+    updateData.refillInterval = params.rateLimitTimeWindow;
+  }
+
+  try {
+    const record = await prisma.apikey.update({
+      where: { id: keyId },
+      data: updateData,
+      select: {
+        id: true,
+        name: true,
+        prefix: true,
+        start: true,
+        enabled: true,
+        expiresAt: true,
+        lastRequest: true,
+        requestCount: true,
+        remaining: true,
+        rateLimitMax: true,
+        rateLimitTimeWindow: true,
+        allPermissions: true,
+        permissions: true,
+        metadata: true,
+        createdAt: true,
+        updatedAt: true,
+        userId: true,
+        user: {
+          select: { id: true, username: true, email: true },
+        },
+      },
+    });
+
+    // Invalidate agent-auth cache so changes take effect immediately
+    invalidateAgentApiKeyCache();
+
+    return record;
+  } catch {
+    return null;
+  }
+}
+
+
