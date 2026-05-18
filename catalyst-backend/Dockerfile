@@ -1,5 +1,5 @@
 # Catalyst Backend - Multi-stage Dockerfile
-# Stage 1: Builder - installs build dependencies and compiles native modules
+# Stage 1: Builder - installs all deps, generates Prisma client, compiles native modules
 FROM oven/bun:1.3-alpine AS builder
 
 WORKDIR /app
@@ -17,13 +17,23 @@ COPY catalyst-backend/prisma ./prisma
 RUN mkdir -p ../catalyst-shared
 COPY catalyst-shared/types.ts ../catalyst-shared/types.ts
 
-# Install dependencies (including native modules)
+# Install all dependencies (including devDeps needed for prisma generate)
 RUN bun install
 
 # Generate Prisma Client
 RUN bunx prisma generate --config prisma/prisma.config.ts
 
-# Stage 2: Runtime - clean image without build tools
+# Back up generated Prisma client before pruning (bun install --production may clear node_modules)
+RUN cp -r node_modules/.prisma /tmp/.prisma-backup
+
+# Prune dev dependencies in-place (removes typescript, eslint, vitest, prisma CLI, @electric-sql, etc.)
+# This drops node_modules from ~424 MB to ~200 MB
+RUN bun install --production
+
+# Restore Prisma client if it was removed during prune
+RUN if [ ! -d node_modules/.prisma ]; then cp -r /tmp/.prisma-backup node_modules/.prisma; fi
+
+# Stage 2: Runtime - clean image without build tools or dev dependencies
 FROM oven/bun:1.3-alpine
 
 # Install curl for Docker healthcheck
@@ -31,7 +41,7 @@ RUN apk add --no-cache curl
 
 WORKDIR /app
 
-# Copy installed dependencies from builder (includes compiled native modules)
+# Copy production-only node_modules from builder
 COPY --from=builder /app/node_modules ./node_modules
 
 # Copy source and generated Prisma client
