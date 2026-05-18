@@ -1,6 +1,6 @@
 {
 	"name": "@catalyst/plugin-sdk",
-	"version": "1.9.2",
+	"version": "1.10.0",
 	"description": "SDK for building Catalyst plugins",
 	"type": "module",
 	"main": "dist/index.js",
