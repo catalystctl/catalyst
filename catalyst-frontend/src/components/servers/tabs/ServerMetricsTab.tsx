@@ -4,6 +4,9 @@ import MetricsTimeRangeSelector from '../MetricsTimeRangeSelector';
 import type { MetricsTimeRange } from '../../../hooks/useServerMetricsHistory';
 import ServerTabCard from './ServerTabCard';
 import StatGrid from './StatGrid';
+import TabHeader from './TabHeader';
+import SectionHeader from './SectionHeader';
+import { BarChart3, Activity, TrendingUp } from 'lucide-react';
 
 interface LiveMetrics {
   cpuPercent?: number;
@@ -54,34 +57,39 @@ export default function ServerMetricsTab({
   const liveDiskIoMb = liveMetrics?.diskIoMb;
   const diskPercent =
     liveDiskUsageMb != null && (liveDiskTotalMb || allocatedDiskMb)
-      ? Math.min(
-          100,
-          (liveDiskUsageMb / (liveDiskTotalMb || allocatedDiskMb)) * 100,
-        )
+      ? Math.min(100, (liveDiskUsageMb / (liveDiskTotalMb || allocatedDiskMb)) * 100)
       : null;
 
   return (
     <div className="space-y-4">
+      {/* ── Header with live indicator ── */}
+      <TabHeader
+        icon={BarChart3}
+        title="Metrics"
+        description="Real-time and historical resource usage."
+        actions={
+          <div className="flex items-center gap-2">
+            <span
+              className={`relative flex h-2 w-2 ${isConnected ? '' : 'opacity-40'}`}
+            >
+              {isConnected && (
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/40" />
+              )}
+              <span className={`relative inline-flex h-2 w-2 rounded-full ${isConnected ? 'bg-success' : 'bg-muted-foreground'}`} />
+            </span>
+            <span className={`text-[10px] font-semibold uppercase tracking-wide ${isConnected ? 'text-success' : 'text-muted-foreground/50'}`}>
+              {isConnected ? 'Live' : 'Offline'}
+            </span>
+          </div>
+        }
+        variant={isConnected ? 'success' : 'default'}
+      />
+
+      {/* ── Live metrics grid ── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <ServerMetrics cpu={cpu} memory={memory} />
         <ServerTabCard className="lg:col-span-2">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="text-sm font-semibold text-foreground">
-              Live snapshot
-            </div>
-            <div
-              className={`flex items-center gap-2 text-xs ${
-                isConnected ? 'text-success' : 'text-muted-foreground'
-              }`}
-            >
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  isConnected ? 'bg-success' : 'bg-muted-foreground'
-                }`}
-              />
-              {isConnected ? 'Live' : 'Offline'}
-            </div>
-          </div>
+          <SectionHeader icon={Activity} title="Live snapshot" />
           <StatGrid
             columns={2}
             items={[
@@ -101,11 +109,11 @@ export default function ServerMetricsTab({
                     : 'n/a',
               },
               {
-                label: 'Disk IO (last tick)',
+                label: 'Disk I/O',
                 value: liveDiskIoMb != null ? `${liveDiskIoMb} MB` : 'n/a',
               },
               {
-                label: 'Network RX',
+                label: 'Net RX',
                 value: (() => {
                   const rate = liveMetrics?.networkRxBytes;
                   if (rate != null && typeof rate === 'number') return `${rate.toFixed(2)} MB/s`;
@@ -113,7 +121,7 @@ export default function ServerMetricsTab({
                 })(),
               },
               {
-                label: 'Network TX',
+                label: 'Net TX',
                 value: (() => {
                   const rate = liveMetrics?.networkTxBytes;
                   if (rate != null && typeof rate === 'number') return `${rate.toFixed(2)} MB/s`;
@@ -124,15 +132,17 @@ export default function ServerMetricsTab({
           />
         </ServerTabCard>
       </div>
-      <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 transition-all duration-300 hover:border-primary/30">
-        <div className="text-sm font-semibold text-foreground">
-          Historical metrics
+
+      {/* ── Historical metrics ── */}
+      <ServerTabCard>
+        <div className="flex items-center justify-between">
+          <SectionHeader icon={TrendingUp} title="Historical" />
+          <MetricsTimeRangeSelector
+            selectedRange={metricsTimeRange}
+            onRangeChange={onMetricsTimeRangeChange}
+          />
         </div>
-        <MetricsTimeRangeSelector
-          selectedRange={metricsTimeRange}
-          onRangeChange={onMetricsTimeRangeChange}
-        />
-      </div>
+      </ServerTabCard>
       <ServerMetricsTrends
         history={metricsHistory?.history ?? []}
         latest={metricsHistory?.latest ?? null}

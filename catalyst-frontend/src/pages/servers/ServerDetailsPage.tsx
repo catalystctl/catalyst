@@ -965,7 +965,7 @@ function ServerDetailsPage() {
         </motion.div>
 
         {/* ── Tab navigation ── */}
-        <motion.div variants={itemVariants} className="flex flex-wrap gap-0.5 rounded-lg border border-border bg-surface-2/50 p-1">
+        <motion.div variants={itemVariants} className="flex flex-wrap gap-1 rounded-xl border border-border/40 bg-surface-2/40 p-1.5 shadow-[inset_0_1px_0_hsl(var(--card)/0.5)]">
           {visibleTabs.map(([key, label]) => {
             const isActive = activeTab === key;
             const Icon = tabIcons[key as keyof typeof tabLabels];
@@ -974,10 +974,10 @@ function ServerDetailsPage() {
                 key={key}
                 type="button"
                 title={label}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
                   isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'
+                    ? 'bg-primary text-primary-foreground shadow-[0_0_8px_-1px_hsl(var(--primary)/0.25),0_1px_2px_hsl(var(--primary)/0.15)]'
+                    : 'text-muted-foreground hover:bg-surface-2/60 hover:text-foreground'
                 }`}
                 onClick={() => server && navigate(`/servers/${server.id}/${key}`)}
               >

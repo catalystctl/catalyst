@@ -27,7 +27,7 @@ function CreateBackupModal({ serverId, disabled = false }: { serverId: string; d
     <div>
       <button
         type="button"
-        className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
+        className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
         onClick={() => {
           if (!disabled) setOpen(true);
         }}
@@ -38,11 +38,11 @@ function CreateBackupModal({ serverId, disabled = false }: { serverId: string; d
       {open ? (
         <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4">
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl dark:border-border dark:bg-surface-0">
+          <div className="w-full max-w-md rounded-xl border border-border/40 bg-card p-6 shadow-xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-foreground">Create backup</h2>
               <button
-                className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:hover:border-primary/30"
+                className="rounded-md border border-border/40 px-2 py-1 text-xs text-muted-foreground transition-all duration-200 hover:border-primary/30 hover:text-foreground"
                 onClick={() => setOpen(false)}
               >
                 Close
@@ -52,25 +52,25 @@ function CreateBackupModal({ serverId, disabled = false }: { serverId: string; d
               <label className="block space-y-1">
                 <span className="text-muted-foreground">Backup name (optional)</span>
                 <input
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground transition-all duration-300 focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1"
+                  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-colors focus:border-primary focus:outline-none"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="nightly-backup"
                 />
               </label>
-              <p className="text-xs text-muted-foreground dark:text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Leave blank to auto-generate a name with the current timestamp.
               </p>
             </div>
             <div className="mt-5 flex justify-end gap-2 text-xs">
               <button
-                className="rounded-md border border-border px-3 py-1 font-semibold text-muted-foreground transition-all duration-300 hover:border-primary hover:text-foreground dark:border-border dark:hover:border-primary/30"
+                className="rounded-md border border-border/40 px-3 py-1 font-semibold text-muted-foreground transition-all duration-200 hover:border-primary/30 hover:text-foreground"
                 onClick={() => setOpen(false)}
               >
                 Cancel
               </button>
               <button
-                className="rounded-md bg-primary px-4 py-2 font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
+                className="rounded-md bg-primary px-4 py-2 font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
                 onClick={() => mutation.mutate()}
                 disabled={mutation.isPending || disabled}
               >

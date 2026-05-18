@@ -1,5 +1,7 @@
 import SftpConnectionInfo from '../../files/SftpConnectionInfo';
 import ServerTabCard from './ServerTabCard';
+import TabHeader from './TabHeader';
+import { FolderSync } from 'lucide-react';
 
 interface Props {
   serverId: string;
@@ -9,17 +11,18 @@ interface Props {
 
 export default function ServerSftpTab({ serverId, ownerId, currentUserId }: Props) {
   return (
-    <ServerTabCard className="border-border bg-card px-6 py-5">
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold text-foreground">SFTP Access</h2>
-        <p className="text-xs text-muted-foreground">
-          Connect to your server files via SFTP using the credentials below.
-        </p>
-      </div>
-      <SftpConnectionInfo
-        serverId={serverId}
-        isOwner={ownerId === currentUserId}
+    <div className="space-y-4">
+      <TabHeader
+        icon={FolderSync}
+        title="SFTP Access"
+        description="Connect to your server files via SFTP using the credentials below."
       />
-    </ServerTabCard>
+      <ServerTabCard>
+        <SftpConnectionInfo
+          serverId={serverId}
+          isOwner={ownerId === currentUserId}
+        />
+      </ServerTabCard>
+    </div>
   );
 }

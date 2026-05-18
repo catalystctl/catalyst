@@ -7,7 +7,7 @@ interface ServerTabCardProps {
 
 /**
  * Standardized card wrapper used across all server detail tabs.
- * Provides consistent border, background, blur, and hover effects.
+ * Subtle inner depth + lift-on-hover effect.
  */
 export default function ServerTabCard({
   children,
@@ -15,7 +15,7 @@ export default function ServerTabCard({
 }: ServerTabCardProps) {
   return (
     <div
-      className={`rounded-xl border border-border/50 bg-card/80 px-4 py-4 backdrop-blur-sm transition-all duration-300 hover:shadow-md hover:border-primary/30 ${className}`}
+      className={`group/card rounded-xl border border-border/40 bg-card px-5 py-4 shadow-[inset_0_1px_0_hsl(var(--card)/0.8),0_1px_2px_hsl(var(--border)/0.15)] transition-all duration-200 hover:border-primary/15 hover:shadow-[inset_0_1px_0_hsl(var(--card)/0.8),0_2px_8px_-2px_hsl(var(--primary)/0.06)] ${className}`}
     >
       {children}
     </div>

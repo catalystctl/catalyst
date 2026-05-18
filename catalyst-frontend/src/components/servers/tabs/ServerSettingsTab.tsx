@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import ServerTabCard from './ServerTabCard';
+import TabHeader from './TabHeader';
+import SectionHeader from './SectionHeader';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { qk } from '../../../lib/queryKeys';
 import { serversApi } from '../../../services/api/servers';
@@ -7,6 +9,7 @@ import { notifySuccess, notifyError } from '../../../utils/notify';
 import { reportSystemError } from '../../../services/api/systemErrors';
 import CloneServerDialog from '../CloneServerDialog';
 import type { Server } from '../../../types/server';
+import { Settings, PenLine, Globe, Wrench } from 'lucide-react';
 
 interface Props {
   serverId: string;
@@ -65,33 +68,32 @@ export default function ServerSettingsTab({
         stack: error instanceof Error ? error.stack : undefined,
         metadata: { context: 'reinstall server' },
       });
-      notifyError(
-        error instanceof Error ? error.message : 'Failed to reinstall server',
-      );
+      notifyError(error instanceof Error ? error.message : 'Failed to reinstall server');
     }
   };
 
   return (
     <div className="space-y-4">
+      <TabHeader
+        icon={Settings}
+        title="Settings"
+        description="Manage server name, subdomain, and maintenance options."
+      />
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ServerTabCard>
-          <div className="text-sm font-semibold text-foreground">
-            Rename server
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Update how this server appears in your list.
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <SectionHeader icon={PenLine} title="Rename server" />
+          <div className="flex flex-wrap items-center gap-2">
             <input
-              className="min-w-[220px] flex-1 rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none"
+              className="min-w-[180px] flex-1 rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
               value={serverName}
-              onChange={(event) => onServerNameChange(event.target.value)}
+              onChange={(e) => onServerNameChange(e.target.value)}
               placeholder="Server name"
               disabled={isSuspended}
             />
             <button
               type="button"
-              className="rounded-md bg-primary px-3 py-2 font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
+              className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-all hover:bg-primary/90 disabled:opacity-50"
               onClick={onRename}
               disabled={renamePending || isSuspended || !serverName.trim()}
             >
@@ -99,24 +101,20 @@ export default function ServerSettingsTab({
             </button>
           </div>
         </ServerTabCard>
+
         <ServerTabCard>
-          <div className="text-sm font-semibold text-foreground">
-            Subdomain
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Assign a subdomain for easy server access (e.g., my-server).
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <SectionHeader icon={Globe} title="Subdomain" />
+          <div className="flex flex-wrap items-center gap-2">
             <input
-              className="min-w-[220px] flex-1 rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none disabled:opacity-60"
+              className="min-w-[180px] flex-1 rounded-md border border-border/40 bg-card px-3 py-2 font-mono text-xs text-foreground transition-colors focus:border-primary focus:outline-none disabled:opacity-50"
               value={subdomainInput}
-              onChange={(event) => setSubdomainInput(event.target.value)}
+              onChange={(e) => setSubdomainInput(e.target.value)}
               placeholder="my-server"
               disabled={isSuspended || updateSubdomainMutation.isPending}
             />
             <button
               type="button"
-              className="rounded-md bg-primary px-3 py-2 font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
+              className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-all hover:bg-primary/90 disabled:opacity-50"
               onClick={() => updateSubdomainMutation.mutate(subdomainInput.trim() || null)}
               disabled={
                 updateSubdomainMutation.isPending ||
@@ -128,23 +126,18 @@ export default function ServerSettingsTab({
             </button>
           </div>
           {subdomainInput && !isValidSubdomain(subdomainInput.trim()) && (
-            <p className="mt-1 text-[11px] text-destructive">
-              Invalid subdomain format. Use lowercase letters, numbers, and hyphens only.
+            <p className="mt-2 text-[10px] text-danger">
+              Lowercase letters, numbers, and hyphens only.
             </p>
           )}
         </ServerTabCard>
+
         <ServerTabCard>
-          <div className="text-sm font-semibold text-foreground">
-            Maintenance
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Reinstalling will re-run the template install script and may overwrite
-            files.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          <SectionHeader icon={Wrench} title="Maintenance" />
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className="rounded-md bg-warning px-3 py-1 font-semibold text-foreground shadow-lg shadow-warning/20 transition-all duration-300 hover:bg-warning disabled:opacity-60"
+              className="rounded-md border border-warning/25 bg-warning/10 px-3 py-1.5 text-xs font-semibold text-warning transition-all hover:border-warning/40 hover:bg-warning/15 disabled:opacity-50"
               disabled={serverStatus !== 'stopped' || isSuspended}
               onClick={handleReinstall}
             >

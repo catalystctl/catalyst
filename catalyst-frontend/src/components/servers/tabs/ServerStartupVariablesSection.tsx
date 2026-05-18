@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, RotateCcw, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Save, RotateCcw, AlertCircle, CheckCircle2, Cog } from 'lucide-react';
 import { qk } from '../../../lib/queryKeys';
 import { serversApi } from '../../../services/api/servers';
 import { notifyError, notifySuccess } from '../../../utils/notify';
 import type { ServerStartupVariable } from '../../../types/server';
+import SectionHeader from './SectionHeader';
 
 interface Props {
   serverId: string;
@@ -156,8 +157,8 @@ export default function ServerStartupVariablesSection({
     const inputClasses =
       'w-full rounded-md border bg-card px-2.5 py-1.5 text-xs text-foreground transition-all duration-300 focus:outline-none ' +
       (error
-        ? 'border-danger focus:border-danger'
-        : 'border-border focus:border-primary');
+        ? 'border-danger/40 focus:border-danger'
+        : 'border-border/40 focus:border-primary');
 
     if (variable.input === 'checkbox') {
       const checked = value === 'true' || value === '1' || value === 'on';
@@ -203,21 +204,15 @@ export default function ServerStartupVariablesSection({
   };
 
   return (
-    <div className="rounded-xl border border-border/50 bg-card/80 p-5 shadow-sm backdrop-blur-sm hover:shadow-md">
+    <div className="rounded-xl border border-border/30 bg-card/80 p-5 shadow-[inset_0_1px_0_hsl(var(--card)/0.8)] backdrop-blur-sm">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="text-sm font-semibold text-foreground">Startup variables</div>
-          <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
-            Variables defined by the template. These are substituted into the startup command and
-            available as environment variables inside the container.
-          </p>
-        </div>
+        <SectionHeader icon={Cog} title="Startup variables" description="Variables defined by the template. These are substituted into the startup command and available as environment variables inside the container." />
         {canEdit && !isSuspended && (
           <div className="flex items-center gap-2">
             {hasChanges && (
               <button
                 type="button"
-                className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-surface-2"
+                className="flex items-center gap-1 rounded-md border border-border/40 px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-surface-2"
                 onClick={handleReset}
                 disabled={updateMutation.isPending}
               >
@@ -227,7 +222,7 @@ export default function ServerStartupVariablesSection({
             )}
             <button
               type="button"
-              className="flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
+              className="flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-colors hover:bg-primary/90 disabled:opacity-50"
               onClick={handleSave}
               disabled={!hasChanges || isSuspended || updateMutation.isPending}
             >

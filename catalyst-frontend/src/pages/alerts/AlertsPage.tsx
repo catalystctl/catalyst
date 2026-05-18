@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
-import { motion, type Variants } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Bell,
   Plus,
@@ -11,11 +11,11 @@ import {
   CheckCircle,
   AlertTriangle,
   AlertCircle,
-  CircleDot,
   X,
   ChevronRight,
+  BarChart3,
+  Activity,
 } from 'lucide-react';
-import EmptyState from '../../components/shared/EmptyState';
 import { Input } from '../../components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,17 +28,12 @@ import type { AlertRule, AlertSeverity, AlertType } from '../../types/alert';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
 import { ModalPortal } from '@/components/ui/modal-portal';
-
-// ── Animation Variants ──
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.05 } },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
-};
+import TabHeader from '../../components/servers/tabs/TabHeader';
+import SectionHeader from '../../components/servers/tabs/SectionHeader';
+import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
+import StatGrid from '../../components/servers/tabs/StatGrid';
+import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
+import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 
 // ── Severity Helpers ──
 function severityIcon(severity: AlertSeverity) {
@@ -51,27 +46,6 @@ function severityBadgeVariant(severity: AlertSeverity): 'destructive' | 'outline
   if (severity === 'critical') return 'destructive';
   if (severity === 'warning') return 'outline';
   return 'secondary';
-}
-
-// ── Stat Card ──
-function StatCard({ label, value, icon, iconColor, accent }: {
-  label: string; value: number; icon: React.ReactNode;
-  iconColor: string; accent?: string;
-}) {
-  return (
-    <motion.div
-      variants={itemVariants}
-      className="overflow-hidden rounded-xl border border-border bg-card/80 p-4 backdrop-blur-sm transition-all duration-300 hover:shadow-md"
-    >
-      <div className="flex items-center gap-2 mb-2">
-        <div className={`flex h-7 w-7 items-center justify-center rounded-md ${iconColor}`}>
-          {icon}
-        </div>
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
-      </div>
-      <div className={`text-2xl font-bold tabular-nums ${accent || 'text-foreground'}`}>{value}</div>
-    </motion.div>
-  );
 }
 
 // ── Alert Rule Row ──
@@ -96,12 +70,8 @@ function RuleRow({
 }) {
   const isOwner = !rule.userId || !user?.id || rule.userId === user.id;
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.03 }}
-      className="group flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/50 bg-surface-2/40 px-4 py-3 transition-colors hover:bg-surface-2/70"
-    >
+    <div className="group relative flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]">
+      <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="font-medium text-sm text-foreground">{rule.name}</span>
@@ -148,7 +118,7 @@ function RuleRow({
           <span className="text-[10px] text-muted-foreground">Read only</span>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -156,13 +126,15 @@ function RuleRow({
 function AlertRow({ alert, showAdminTargets, onResolve, isPending, index }: {
   alert: any; showAdminTargets: boolean; onResolve: () => void; isPending: boolean; index: number;
 }) {
+  const severityAccent = alert.severity === 'critical'
+    ? 'group-hover:bg-danger/50'
+    : alert.severity === 'warning'
+      ? 'group-hover:bg-warning/50'
+      : 'group-hover:bg-primary/50';
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.03 }}
-      className="group rounded-xl border border-border bg-card/80 p-4 backdrop-blur-sm transition-all duration-300 hover:shadow-md"
-    >
+    <div className="group relative rounded-lg border border-border/30 px-4 py-3 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]">
+      <div className={`absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 ${severityAccent}`} />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -205,7 +177,7 @@ function AlertRow({ alert, showAdminTargets, onResolve, isPending, index }: {
       {alert.deliveries?.length > 0 && (
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {alert.deliveries.map((delivery: any) => (
-            <div key={delivery.id} className="rounded-lg border border-border/50 bg-surface-2/40 px-3 py-2">
+            <div key={delivery.id} className="rounded-md border border-border/20 bg-surface-2/20 px-3 py-2">
               <div className="flex items-center justify-between text-[11px]">
                 <span className="text-muted-foreground">{delivery.channel}</span>
                 <span className={
@@ -223,7 +195,7 @@ function AlertRow({ alert, showAdminTargets, onResolve, isPending, index }: {
           ))}
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }
 
@@ -443,7 +415,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
   };
 
   const emptyState = (
-    <EmptyState
+    <TabEmptyState
       title="All clear"
       description={showAdminTargets
         ? 'No active alerts. Create rules to get notified when something breaks.'
@@ -458,177 +430,111 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
   );
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial={false}
-      animate="visible"
-      className="relative overflow-hidden"
-    >
-      {/* Ambient background */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-amber-500/8 to-orange-500/8 blur-3xl dark:from-amber-500/15 dark:to-orange-500/15" />
-        <div className="absolute bottom-0 -left-32 h-80 w-80 rounded-full bg-gradient-to-tr from-rose-500/8 to-pink-500/8 blur-3xl dark:from-rose-500/15 dark:to-pink-500/15" />
-      </div>
-
-      <div className="relative z-10 space-y-5">
-        {/* ── Header ── */}
-        <motion.div variants={itemVariants} className="flex flex-wrap items-end justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 opacity-20 blur-sm" />
-                <Bell className="relative h-7 w-7 text-warning dark:text-warning" />
-              </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground ">
-                {showAdminTargets ? 'Alerts' : 'Server alerts'}
-              </h1>
-            </div>
-            <p className="ml-10 text-sm text-muted-foreground">
-              {showAdminTargets
-                ? 'Monitor incidents and resolve alerts in real time.'
-                : 'Manage alert rules and incidents for this server.'}
-            </p>
-          </div>
+    <div className="space-y-4">
+      <TabHeader
+        icon={Bell}
+        title={showAdminTargets ? 'Alerts' : 'Server Alerts'}
+        description={showAdminTargets
+          ? 'Monitor incidents and resolve alerts in real time.'
+          : 'Manage alert rules and incidents for this server.'}
+        actions={
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">
-              {alerts.filter((a) => !a.resolved).length} active
-            </Badge>
-            <Badge variant="secondary" className="text-xs">
-              {alerts.length} total
-            </Badge>
+            <Badge variant="outline" className="text-xs">{alerts.filter((a) => !a.resolved).length} active</Badge>
+            <Badge variant="secondary" className="text-xs">{alerts.length} total</Badge>
             <Button size="sm" onClick={() => setShowRuleModal(true)} className="gap-1.5">
               <Plus className="h-3.5 w-3.5" />
               Create Rule
             </Button>
           </div>
-        </motion.div>
+        }
+      />
 
-        {/* ── Filter Bar ── */}
-        <motion.div variants={itemVariants} className="flex flex-wrap items-center gap-2">
-          <select
-            value={filterResolved}
-            onChange={(e) => setFilterResolved(e.target.value as 'false' | 'true' | 'all')}
-            className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground"
-          >
-            <option value="false">Unresolved</option>
-            <option value="true">Resolved</option>
-            <option value="all">All</option>
-          </select>
-          <Button variant="outline" size="sm" disabled={!canBulkResolve} onClick={() => bulkResolveMutation.mutate(unresolvedAlertIds)}>
-            Resolve all
-          </Button>
-        </motion.div>
+      {/* ── Filter Bar ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={filterResolved}
+          onChange={(e) => setFilterResolved(e.target.value as 'false' | 'true' | 'all')}
+          className="rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+        >
+          <option value="false">Unresolved</option>
+          <option value="true">Resolved</option>
+          <option value="all">All</option>
+        </select>
+        <Button variant="outline" size="sm" disabled={!canBulkResolve} onClick={() => bulkResolveMutation.mutate(unresolvedAlertIds)}>
+          Resolve all
+        </Button>
+      </div>
 
-        {/* ── Stats ── */}
-        {alertStats && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard
-              label="Active alerts"
-              value={alertStats?.unresolved ?? 0}
-              icon={<AlertCircle className="h-4 w-4 text-warning dark:text-warning" />}
-              iconColor="bg-warning/10 dark:bg-warning/30"
-            />
-            <StatCard
-              label="Total alerts"
-              value={alertStats?.total ?? 0}
-              icon={<Bell className="h-4 w-4 text-info dark:text-info" />}
-              iconColor="bg-info/10 dark:bg-blue-900/30"
-            />
-            <StatCard
-              label="Critical"
-              value={alertStats?.bySeverity?.critical ?? 0}
-              icon={<AlertTriangle className="h-4 w-4 text-destructive dark:text-destructive" />}
-              iconColor="bg-destructive/10 dark:bg-destructive/30"
-              accent="text-destructive dark:text-destructive"
-            />
-          </div>
-        )}
+      {/* ── Stats ── */}
+      {alertStats && (
+        <ServerTabCard>
+          <SectionHeader icon={BarChart3} title="Overview" />
+          <StatGrid
+            columns={3}
+            items={[
+              { label: 'Active alerts', value: alertStats?.unresolved ?? 0 },
+              { label: 'Total alerts', value: alertStats?.total ?? 0 },
+              { label: 'Critical', value: alertStats?.bySeverity?.critical ?? 0 },
+            ]}
+          />
+        </ServerTabCard>
+      )}
 
-        {/* ── Alert Rules ── */}
-        <motion.div variants={itemVariants} className="overflow-hidden rounded-xl border border-border bg-card/80 backdrop-blur-sm">
-          <div className="border-b border-border/50 px-5 py-4">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/30">
-                <Settings className="h-4 w-4 text-violet-600 dark:text-violet-400" />
-              </div>
-              <div>
-                <h2 className="text-sm font-semibold text-foreground ">Alert rules</h2>
-                <p className="text-xs text-muted-foreground">Manage thresholds and notification targets.</p>
-              </div>
-            </div>
-          </div>
-          <div className="space-y-2 p-4">
-            {alertRules.length > 0 ? (
-              alertRules.map((rule, i) => (
-                <RuleRow
-                  key={rule.id}
-                  rule={rule}
-                  index={i}
-                  showAdminTargets={showAdminTargets}
-                  user={user}
-                  onToggle={() => updateRuleMutation.mutate({ rule, updates: { enabled: !rule.enabled } })}
-                  onEdit={() => openEditRule(rule)}
-                  onDelete={() => setDeletingRule(rule)}
-                  isPending={updateRuleMutation.isPending || deleteRuleMutation.isPending}
-                />
-              ))
-            ) : (
-              <div className="rounded-lg border border-dashed border-border/50 bg-surface-2/20 px-6 py-8 text-center">
-                <p className="text-sm text-muted-foreground">No alert rules created yet.</p>
+      {/* ── Alert Rules ── */}
+      <ServerTabCard>
+        <SectionHeader icon={Settings} title="Alert rules" description="Manage thresholds and notification targets." />
+        <div className="space-y-2">
+          {alertRules.length > 0 ? (
+            alertRules.map((rule, i) => (
+              <RuleRow
+                key={rule.id}
+                rule={rule}
+                index={i}
+                showAdminTargets={showAdminTargets}
+                user={user}
+                onToggle={() => updateRuleMutation.mutate({ rule, updates: { enabled: !rule.enabled } })}
+                onEdit={() => openEditRule(rule)}
+                onDelete={() => setDeletingRule(rule)}
+                isPending={updateRuleMutation.isPending || deleteRuleMutation.isPending}
+              />
+            ))
+          ) : (
+            <TabEmptyState
+              title="No alert rules"
+              description="Create a rule to get notified when something breaks."
+              action={
                 <Button variant="outline" size="sm" className="mt-3 gap-1.5" onClick={() => setShowRuleModal(true)}>
                   <Plus className="h-3.5 w-3.5" />
                   Create rule
                 </Button>
-              </div>
-            )}
-          </div>
-        </motion.div>
+              }
+            />
+          )}
+        </div>
+      </ServerTabCard>
 
-        {/* ── Alert History ── */}
-        <motion.div variants={itemVariants} className="overflow-hidden rounded-xl border border-border bg-card/80 backdrop-blur-sm">
-          <div className="border-b border-border/50 px-5 py-4">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-warning/10 dark:bg-warning/30">
-                <CircleDot className="h-4 w-4 text-warning dark:text-warning" />
-              </div>
-              <div>
-                <h2 className="text-sm font-semibold text-foreground ">Alert history</h2>
-                <p className="text-xs text-muted-foreground">Latest triggered alerts and delivery status.</p>
-              </div>
-            </div>
-          </div>
-          <div className="space-y-3 p-4">
-            {alertsLoading ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="rounded-xl border border-border bg-card/60 p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="h-7 w-7 animate-pulse rounded bg-surface-3" />
-                      <div className="flex-1 space-y-2">
-                        <div className="h-3.5 w-32 animate-pulse rounded bg-surface-3" />
-                        <div className="h-3 w-64 animate-pulse rounded bg-surface-2" />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : hasAlerts ? (
-              alerts.map((alert, i) => (
-                <AlertRow
-                  key={alert.id}
-                  alert={alert}
-                  index={i}
-                  showAdminTargets={showAdminTargets}
-                  onResolve={() => resolveAlertMutation.mutate(alert.id)}
-                  isPending={resolveAlertMutation.isPending}
-                />
-              ))
-            ) : (
-              emptyState
-            )}
-          </div>
-        </motion.div>
-      </div>
+      {/* ── Alert History ── */}
+      <ServerTabCard>
+        <SectionHeader icon={Activity} title="Alert history" description="Latest triggered alerts and delivery status." />
+        <div className="space-y-2">
+          {alertsLoading ? (
+            <TabLoadingState rows={3} />
+          ) : hasAlerts ? (
+            alerts.map((alert, i) => (
+              <AlertRow
+                key={alert.id}
+                alert={alert}
+                index={i}
+                showAdminTargets={showAdminTargets}
+                onResolve={() => resolveAlertMutation.mutate(alert.id)}
+                isPending={resolveAlertMutation.isPending}
+              />
+            ))
+          ) : (
+            emptyState
+          )}
+        </div>
+      </ServerTabCard>
 
       {/* ── Rule Create/Edit Modal ── */}
       {showRuleModal && (
@@ -638,7 +544,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-            className="mx-4 w-full max-w-2xl rounded-xl border border-border bg-card shadow-xl"
+            className="mx-4 w-full max-w-2xl rounded-xl border border-border/40 bg-card shadow-xl"
           >
             <div className="border-b border-border px-6 py-4">
               <h2 className="text-lg font-semibold text-foreground ">
@@ -649,7 +555,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
 
             <div className="px-6 py-5">
               {/* Step navigation */}
-              <div className="mb-5 flex gap-1 rounded-lg border border-border/50 bg-surface-2/30 p-1">
+              <div className="mb-5 flex gap-1 rounded-lg border border-border/30 bg-surface-2/20 p-1">
                 {ruleStepOrder.map((key, index) => {
                   const isActive = ruleStep === key;
                   const canNav = canNavigateRuleStep(index);
@@ -662,7 +568,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                       onClick={() => canNav && setRuleStep(key)}
                       className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${
                         isActive
-                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          ? 'bg-primary text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)]'
                           : 'text-muted-foreground hover:text-foreground disabled:opacity-40'
                       }`}
                     >
@@ -694,7 +600,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                       <select
                         value={ruleType}
                         onChange={(e) => setRuleType(e.target.value as AlertType)}
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground"
+                        className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none"
                       >
                         {ruleTypeOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                       </select>
@@ -705,7 +611,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                         value={ruleTarget}
                         onChange={(e) => setRuleTarget(e.target.value as 'global' | 'server' | 'node')}
                         disabled={!showAdminTargets}
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground disabled:opacity-60"
+                        className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none disabled:opacity-60"
                       >
                         <option value="global">Global</option>
                         <option value="server">Server</option>
@@ -718,7 +624,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
                         value={ruleTargetId}
                         onChange={(e) => setRuleTargetId(e.target.value)}
                         disabled={!showAdminTargets || ruleTarget === 'global'}
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none dark:border-border dark:bg-surface-1 dark:text-foreground disabled:opacity-60"
+                        className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none disabled:opacity-60"
                       >
                         <option value="">{ruleTarget === 'global' ? 'Not required' : selectedTargetLabel || 'Select target'}</option>
                         {targetOptions.map((opt) => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
@@ -869,7 +775,7 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
         }}
         onCancel={() => setDeletingRule(null)}
       />
-    </motion.div>
+    </div>
   );
 }
 

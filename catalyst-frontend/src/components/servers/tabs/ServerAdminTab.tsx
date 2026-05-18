@@ -4,27 +4,21 @@ import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { qk } from '../../../lib/queryKeys';
 import {
   AlertTriangle,
-  ArrowRightLeft,
   BarChart3,
   Container,
   Copy,
   Database,
-  HardDrive,
   Info,
-  KeyRound,
   Loader2,
-  Star,
   Network,
-  Play,
   RefreshCw,
   RotateCcw,
   Server,
   Shield,
   Skull,
-  Trash2,
+  Star,
   UserRoundCog,
   Zap,
-  Clock,
   ChevronDown,
 } from 'lucide-react';
 import { serversApi } from '../../../services/api/servers';
@@ -34,6 +28,10 @@ import UpdateServerModal from '../UpdateServerModal';
 import TransferServerModal from '../TransferServerModal';
 import DeleteServerDialog from '../DeleteServerDialog';
 import ServerTabCard from './ServerTabCard';
+import TabHeader from './TabHeader';
+import TabEmptyState from './TabEmptyState';
+import SectionHeader from './SectionHeader';
+import DataField from './DataField';
 
 // ── Types ──
 
@@ -146,63 +144,6 @@ interface Props {
   canDelete: boolean;
 }
 
-// ── Helpers ──
-
-function CopyableValue({ label, value }: { label: string; value: string }) {
-  const copy = useCallback(() => {
-    navigator.clipboard.writeText(value).then(
-      () => notifySuccess('Copied to clipboard'),
-      () => notifyError('Failed to copy'),
-    );
-  }, [value]);
-
-  return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-surface-2/50 px-3 py-2 dark:bg-surface-2/30">
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
-      <button
-        type="button"
-        onClick={copy}
-        className="group flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs font-mono text-foreground transition-colors hover:bg-primary/10"
-        title="Click to copy"
-      >
-        <span className="max-w-[240px] truncate">{value || '—'}</span>
-        <Copy className="h-2.5 w-2.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-      </button>
-    </div>
-  );
-}
-
-// ── Section Header ──
-
-function SectionHeader({
-  icon: Icon,
-  title,
-  description,
-  accent = 'primary',
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  description?: string;
-  accent?: 'primary' | 'warning' | 'danger';
-}) {
-  const iconColor = accent === 'danger'
-    ? 'text-danger'
-    : accent === 'warning'
-      ? 'text-warning'
-      : 'text-primary';
-  return (
-    <div className="mb-3">
-      <div className="flex items-center gap-2">
-        <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-      </div>
-      {description && (
-        <p className="mt-0.5 pl-5.5 text-[11px] text-muted-foreground">{description}</p>
-      )}
-    </div>
-  );
-}
-
 // ── Confirm Dialog ──
 
 function ConfirmAction({
@@ -228,10 +169,10 @@ function ConfirmAction({
 
   const btnClass =
     variant === 'danger'
-      ? 'bg-danger hover:bg-danger text-foreground shadow-lg shadow-danger/20'
+      ? 'bg-danger hover:bg-danger text-foreground shadow-[0_0_6px_-1px_hsl(var(--danger)/0.2)]'
       : variant === 'warning'
-        ? 'bg-warning hover:bg-warning text-foreground shadow-lg shadow-warning/20'
-        : 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20';
+        ? 'bg-warning hover:bg-warning text-foreground shadow-[0_0_6px_-1px_hsl(var(--warning)/0.2)]'
+        : 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)]';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -239,7 +180,7 @@ function ConfirmAction({
         className="absolute inset-0 bg-background/60 backdrop-blur-sm"
         onClick={onCancel}
       />
-      <div className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
+      <div className="relative w-full max-w-md rounded-xl border border-border/40 bg-card p-6 shadow-2xl">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
           {description}
@@ -274,9 +215,9 @@ function ConfirmAction({
 
 function StatChip({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="rounded-lg border border-border/50 bg-surface-2/50 px-3 py-2 dark:bg-surface-2/30">
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className={`text-sm font-semibold text-foreground ${mono ? 'font-mono' : ''}`}>{value}</div>
+    <div className="rounded-md border border-border/30 bg-surface-2/30 px-3 py-2">
+      <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/50">{label}</div>
+      <div className={`text-sm font-semibold font-mono tabular-nums text-foreground ${mono ? 'font-mono' : ''}`}>{value}</div>
     </div>
   );
 }
@@ -332,7 +273,6 @@ export default function ServerAdminTab({
   const [transferOwnerPending, setTransferOwnerPending] = useState(false);
   const [transferOwnerConfirm, setTransferOwnerConfirm] = useState(false);
   const [envExpanded, setEnvExpanded] = useState(false);
-  // Allocation remove confirmation for running servers
   const [removeAllocationConfirm, setRemoveAllocationConfirm] = useState<{ open: boolean; containerPort: number | null }>({ open: false, containerPort: null });
   const [removeAllocationHotPending, setRemoveAllocationHotPending] = useState(false);
   const queryClient = useQueryClient();
@@ -392,27 +332,9 @@ export default function ServerAdminTab({
   const canEdit = !isSuspended && server.status !== 'archived';
   const canEditWhenStopped =
     canEdit && (server.status === 'stopped' || server.status === 'crashed' || server.status === 'error');
-  // Allocation management is allowed on stopped AND running servers (hot-add / hot-remove)
   const canEditAllocations =
     canEdit && (server.status === 'stopped' || server.status === 'running' || server.status === 'crashed' || server.status === 'error');
   const isRunning = server.status === 'running';
-
-  const statusBadgeColor = (() => {
-    switch (server.status) {
-      case 'running':
-        return 'bg-success/10 text-success border-success/20';
-      case 'stopped':
-        return 'bg-surface-2 text-muted-foreground border-border';
-      case 'crashed':
-        return 'bg-danger/10 text-danger border-danger/20';
-      case 'suspended':
-        return 'bg-warning/10 text-warning border-warning/20';
-      case 'archived':
-        return 'bg-surface-2 text-muted-foreground border-border';
-      default:
-        return 'bg-primary-500/10 text-primary border-primary/20';
-    }
-  })();
 
   // ── Handlers ──
   const handleRebuild = useCallback(async () => {
@@ -508,7 +430,6 @@ export default function ServerAdminTab({
   // ── Hot-remove allocation handler ──
   const handleRemoveAllocation = useCallback((containerPort: number) => {
     if (isRunning) {
-      // Show confirmation dialog for running servers
       setRemoveAllocationConfirm({ open: true, containerPort });
     } else {
       onRemoveAllocation(containerPort);
@@ -536,30 +457,39 @@ export default function ServerAdminTab({
 
   return (
     <div className="space-y-4">
-      {/* ── Overview Card ── */}
+      {/* ── Tab Header ── */}
+      <TabHeader
+        icon={Shield}
+        title="Administration"
+        description="Server info, container management, resources, and danger zone actions."
+      />
+
+      {/* ── Server Information ── */}
       <ServerTabCard>
         <SectionHeader icon={Server} title="Server Information" />
 
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <CopyableValue label="Server ID" value={server.id} />
-          <CopyableValue
+          <DataField label="Server ID" value={server.id} copyable />
+          <DataField
             label="Node"
             value={server.node?.name ?? server.nodeName ?? server.nodeId}
+            copyable
           />
-          <CopyableValue
+          <DataField
             label="Template"
             value={server.template?.name ?? server.templateId ?? '—'}
+            copyable
           />
-          <CopyableValue label="Primary Port" value={String(server.primaryPort ?? '—')} />
-          <CopyableValue label="Connection" value={`${server.connection?.host ?? '—'}:${server.connection?.port ?? '—'}`} />
-          <CopyableValue label="Network Mode" value={server.networkMode ?? 'bridge'} />
+          <DataField label="Primary Port" value={String(server.primaryPort ?? '—')} copyable />
+          <DataField label="Connection" value={`${server.connection?.host ?? '—'}:${server.connection?.port ?? '—'}`} copyable />
+          <DataField label="Network Mode" value={server.networkMode ?? 'bridge'} copyable />
         </div>
 
         {/* Environment Variables — collapsible */}
         <div className="mt-4">
           <button
             type="button"
-            className="flex w-full items-center justify-between rounded-lg border border-border/50 bg-surface-2/50 px-3 py-2 text-xs transition-colors hover:border-primary/30 dark:bg-surface-2/30"
+            className="flex w-full items-center justify-between rounded-lg border border-border/30 bg-surface-2/20 px-3 py-2 text-xs transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02]"
             onClick={() => setEnvExpanded(!envExpanded)}
           >
             <span className="flex items-center gap-2 text-muted-foreground">
@@ -582,7 +512,7 @@ export default function ServerAdminTab({
                   {envVars.map((row, idx) => (
                     <div key={idx} className="group flex items-center gap-2">
                       <input
-                        className="w-[130px] shrink-0 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] uppercase text-foreground transition-colors focus:border-primary focus:bg-card focus:outline-none"
+                        className="w-[130px] shrink-0 rounded-md border border-border/40 bg-card px-2.5 py-1.5 font-mono text-[11px] uppercase text-foreground transition-colors focus:border-primary focus:outline-none"
                         value={row.key}
                         onChange={(e) => {
                           const next = [...envVars];
@@ -595,7 +525,7 @@ export default function ServerAdminTab({
                       />
                       <span className="text-[10px] text-foreground">=</span>
                       <input
-                        className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] text-foreground transition-colors focus:border-primary focus:bg-card focus:outline-none"
+                        className="min-w-0 flex-1 rounded-md border border-border/40 bg-card px-2.5 py-1.5 font-mono text-[11px] text-foreground transition-colors focus:border-primary focus:outline-none"
                         value={row.value}
                         onChange={(e) => {
                           const next = [...envVars];
@@ -625,7 +555,7 @@ export default function ServerAdminTab({
                   <div className="flex items-center gap-2 pt-1">
                     <button
                       type="button"
-                      className="rounded-md bg-surface-2 px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/10 dark:hover:text-primary-400"
+                      className="rounded-md bg-surface-2/40 px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/10 dark:hover:text-primary-400"
                       onClick={() => {
                         setEnvVars([...envVars, { key: '', value: '' }]);
                         setEnvDirty(true);
@@ -637,7 +567,7 @@ export default function ServerAdminTab({
                     {envDirty && (
                       <button
                         type="button"
-                        className="rounded-lg bg-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
+                        className="rounded-lg bg-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-colors hover:bg-primary/90 disabled:opacity-50"
                         onClick={() => envMutation.mutate()}
                         disabled={isSuspended || envMutation.isPending}
                       >
@@ -672,7 +602,7 @@ export default function ServerAdminTab({
           <SectionHeader icon={Container} title="Container Image" description="Docker image used to run this server container." />
 
           <div className="space-y-3">
-            <div className="rounded-lg border border-border/50 bg-surface-2/50 p-3 dark:bg-surface-2/30">
+            <div className="rounded-lg border border-border/30 bg-surface-2/20 p-3">
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Current Image</div>
               <div className="mt-1 flex items-center gap-2">
                 <code className="flex-1 truncate rounded bg-card px-2 py-1 font-mono text-[11px] text-foreground">
@@ -705,8 +635,8 @@ export default function ServerAdminTab({
                       key={img.name}
                       className={`flex items-center justify-between rounded-lg border px-3 py-2 transition-colors ${
                         img.name === currentImageVariant
-                          ? 'border-primary/30 bg-primary-500/5'
-                          : 'border-border/50 bg-surface-2/50 dark:bg-surface-2/30'
+                          ? 'border-primary/30 bg-primary/5'
+                          : 'border-border/30 bg-surface-2/20'
                       }`}
                     >
                       <div className="min-w-0 flex-1">
@@ -714,7 +644,7 @@ export default function ServerAdminTab({
                         <div className="truncate font-mono text-[10px] text-muted-foreground">{img.image}</div>
                       </div>
                       {img.name === currentImageVariant && (
-                        <span className="ml-2 rounded-full bg-primary-500/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Active</span>
+                        <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Active</span>
                       )}
                     </div>
                   ))}
@@ -734,7 +664,7 @@ export default function ServerAdminTab({
 
           <div className="space-y-2">
             {/* Rebuild */}
-            <div className="flex items-center justify-between rounded-lg border border-border/50 bg-surface-2/50 p-3 dark:bg-surface-2/30">
+            <div className="flex items-center justify-between rounded-lg border border-border/30 bg-surface-2/20 p-3">
               <div className="min-w-0">
                 <div className="text-xs font-medium text-foreground">Rebuild Container</div>
                 <div className="text-[10px] text-muted-foreground">Recreates from current image. Preserves all data.</div>
@@ -743,7 +673,7 @@ export default function ServerAdminTab({
                 type="button"
                 onClick={() => setRebuildConfirm(true)}
                 disabled={!canEdit}
-                className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 disabled:opacity-50"
+                className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-all hover:bg-primary/90 disabled:opacity-50"
               >
                 Rebuild
               </button>
@@ -759,7 +689,7 @@ export default function ServerAdminTab({
                 type="button"
                 onClick={() => setReinstallConfirm(true)}
                 disabled={!canEditWhenStopped}
-                className="shrink-0 rounded-md bg-warning px-3 py-1.5 text-[10px] font-semibold text-foreground shadow-sm transition-all hover:bg-warning disabled:opacity-50"
+                className="shrink-0 rounded-md bg-warning px-3 py-1.5 text-[10px] font-semibold text-foreground shadow-[0_0_6px_-1px_hsl(var(--warning)/0.2)] transition-all hover:bg-warning disabled:opacity-50"
               >
                 Reinstall
               </button>
@@ -775,7 +705,7 @@ export default function ServerAdminTab({
                 type="button"
                 onClick={() => setKillConfirm(true)}
                 disabled={server.status !== 'running' && server.status !== 'starting' && server.status !== 'stopping'}
-                className="shrink-0 rounded-md border border-danger/30 bg-danger px-3 py-1.5 text-[10px] font-semibold text-foreground shadow-sm transition-all hover:border-danger/50 disabled:opacity-50"
+                className="shrink-0 rounded-md border border-danger/30 bg-danger px-3 py-1.5 text-[10px] font-semibold text-foreground shadow-[0_0_6px_-1px_hsl(var(--danger)/0.2)] transition-all hover:border-danger/50 disabled:opacity-50"
               >
                 Kill
               </button>
@@ -808,7 +738,7 @@ export default function ServerAdminTab({
           <SectionHeader icon={Network} title="Port Allocations" description="Host-to-container port bindings." />
 
           {allocationsError && (
-            <div className="mb-3 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">
+            <div className="mb-3 rounded-lg border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
               {allocationsError}
             </div>
           )}
@@ -816,7 +746,7 @@ export default function ServerAdminTab({
           {/* Add form */}
           <div className="grid grid-cols-2 gap-2 text-xs">
             <input
-              className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
+              className="rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
               value={newContainerPort}
               onChange={(e) => onNewContainerPortChange(e.target.value)}
               placeholder="Container port"
@@ -826,7 +756,7 @@ export default function ServerAdminTab({
               disabled={!canEditAllocations}
             />
             <input
-              className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
+              className="rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
               value={newHostPort}
               onChange={(e) => onNewHostPortChange(e.target.value)}
               placeholder="Host port (optional)"
@@ -838,7 +768,7 @@ export default function ServerAdminTab({
           </div>
           <button
             type="button"
-            className="mt-2 w-full rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 disabled:opacity-50"
+            className="mt-2 w-full rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-all hover:bg-primary/90 disabled:opacity-50"
             onClick={onAddAllocation}
             disabled={!canEditAllocations || addAllocationPending}
           >
@@ -848,19 +778,21 @@ export default function ServerAdminTab({
           {/* List */}
           <div className="mt-3 space-y-1.5">
             {allocations.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border/50 bg-surface-2/30 px-4 py-4 text-center text-[10px] text-muted-foreground">
-                No allocations configured
-              </div>
+              <TabEmptyState
+                title="No allocations configured"
+                description="Add a port binding to make the server reachable."
+              />
             ) : (
               allocations.map((alloc) => (
                 <div
                   key={`${alloc.containerPort}-${alloc.hostPort}`}
-                  className={`flex items-center justify-between rounded-lg border px-3 py-2 transition-colors hover:border-primary/20 dark:bg-surface-2/30 ${
+                  className={`group relative flex items-center justify-between rounded-lg border px-3 py-2 transition-all duration-150 hover:border-primary/20 hover:bg-primary/[0.02] ${
                     alloc.isPrimary
-                      ? 'border-primary/30 bg-primary-500/5 dark:bg-primary-500/10'
-                      : 'border-border/50 bg-surface-2/50'
+                      ? 'border-primary/30 bg-primary/5'
+                      : 'border-border/30 bg-surface-2/20'
                   }`}
                 >
+                  <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
                   <div className="flex items-center gap-2">
                     {alloc.isPrimary ? (
                       <Star className="h-3 w-3 shrink-0 fill-primary text-primary" />
@@ -871,7 +803,7 @@ export default function ServerAdminTab({
                     <span className="text-muted-foreground">→</span>
                     <code className="text-xs font-mono text-foreground">{alloc.hostPort}</code>
                     {alloc.isPrimary && (
-                      <span className="rounded-full bg-primary-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">Primary</span>
+                      <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">Primary</span>
                     )}
                     {!alloc.isPrimary && (
                       <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">Secondary</span>
@@ -904,7 +836,7 @@ export default function ServerAdminTab({
         </ServerTabCard>
       </div>
 
-      {/* ── Crash Recovery — single card ── */}
+      {/* ── Crash Recovery ── */}
       <ServerTabCard>
         <SectionHeader icon={RotateCcw} title="Crash Recovery" description="Automatic restart behavior when the server process exits unexpectedly." />
 
@@ -919,7 +851,7 @@ export default function ServerAdminTab({
           <div className="flex-1 min-w-[160px]">
             <label className="text-[10px] uppercase tracking-wide text-muted-foreground">Restart Policy</label>
             <select
-              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
               value={restartPolicy}
               onChange={(e) => onRestartPolicyChange(e.target.value as 'always' | 'on-failure' | 'never')}
               disabled={isSuspended}
@@ -932,7 +864,7 @@ export default function ServerAdminTab({
           <div className="min-w-[120px]">
             <label className="text-[10px] uppercase tracking-wide text-muted-foreground">Max Crash Count</label>
             <input
-              className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
               type="number"
               min={0}
               max={100}
@@ -944,7 +876,7 @@ export default function ServerAdminTab({
           <div className="flex gap-2">
             <button
               type="button"
-              className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 disabled:opacity-50"
+              className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-all hover:bg-primary/90 disabled:opacity-50"
               onClick={onSaveRestartPolicy}
               disabled={isSuspended || restartPolicyPending}
             >
@@ -972,7 +904,7 @@ export default function ServerAdminTab({
             <div className="flex-1 min-w-[200px]">
               <label className="text-[10px] uppercase tracking-wide text-muted-foreground">New Owner User ID</label>
               <input
-                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 font-mono text-xs text-foreground transition-all focus:border-primary focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-xs text-foreground transition-all focus:border-primary focus:outline-none"
                 value={newOwnerId}
                 onChange={(e) => setNewOwnerId(e.target.value)}
                 placeholder="Enter user ID"
@@ -983,14 +915,14 @@ export default function ServerAdminTab({
               type="button"
               onClick={() => setTransferOwnerConfirm(true)}
               disabled={!newOwnerId.trim() || isSuspended}
-              className="rounded-md border border-warning/30 bg-warning px-3 py-2 text-xs font-semibold text-foreground shadow-sm transition-all hover:bg-warning disabled:opacity-50"
+              className="rounded-md border border-warning/30 bg-warning px-3 py-2 text-xs font-semibold text-foreground shadow-[0_0_6px_-1px_hsl(var(--warning)/0.2)] transition-all hover:bg-warning disabled:opacity-50"
             >
               Transfer
             </button>
           </div>
 
           {server.ownerId && (
-            <div className="mt-3 rounded-lg border border-border/50 bg-surface-2/50 px-3 py-2 dark:bg-surface-2/30">
+            <div className="mt-3 rounded-lg border border-border/30 bg-surface-2/20 px-3 py-2">
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Current Owner</div>
               <div className="mt-0.5 font-mono text-xs text-foreground">{server.ownerId}</div>
             </div>
@@ -1013,7 +945,7 @@ export default function ServerAdminTab({
                 type="button"
                 onClick={() => onUnsuspend()}
                 disabled={unsuspendPending}
-                className="shrink-0 rounded-md border border-success/30 bg-success px-3 py-1.5 text-[10px] font-semibold text-foreground shadow-sm transition-all hover:bg-success disabled:opacity-50"
+                className="shrink-0 rounded-md border border-success/30 bg-success px-3 py-1.5 text-[10px] font-semibold text-foreground shadow-[0_0_6px_-1px_hsl(var(--success)/0.2)] transition-all hover:bg-success disabled:opacity-50"
               >
                 Unsuspend
               </button>
@@ -1023,7 +955,7 @@ export default function ServerAdminTab({
               <div className="flex-1 min-w-[200px]">
                 <label className="text-[10px] uppercase tracking-wide text-muted-foreground">Suspension reason (optional)</label>
                 <input
-                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
+                  className="mt-1 w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-all focus:border-primary focus:outline-none"
                   value={suspendReason}
                   onChange={(e) => onSuspendReasonChange(e.target.value)}
                   placeholder="Billing, abuse, or admin notes"
@@ -1033,7 +965,7 @@ export default function ServerAdminTab({
                 type="button"
                 onClick={() => onSuspend(suspendReason.trim() || undefined)}
                 disabled={suspendPending}
-                className="rounded-md bg-danger px-3 py-2 text-xs font-semibold text-foreground shadow-lg shadow-danger/20 transition-all hover:bg-danger disabled:opacity-50"
+                className="rounded-md bg-danger px-3 py-2 text-xs font-semibold text-foreground shadow-[0_0_6px_-1px_hsl(var(--danger)/0.2)] transition-all hover:bg-danger disabled:opacity-50"
               >
                 Suspend
               </button>
@@ -1095,7 +1027,6 @@ export default function ServerAdminTab({
         onConfirm={handleTransferOwnership}
         onCancel={() => setTransferOwnerConfirm(false)}
       />
-      {/* Hot-remove allocation confirmation for running servers */}
       <ConfirmAction
         open={removeAllocationConfirm.open}
         title="Remove Allocation from Running Server"

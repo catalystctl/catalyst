@@ -12,8 +12,12 @@ import { getErrorMessage } from '../../../utils/errors';
 import { notifyError, notifySuccess } from '../../../utils/notify';
 import { reportSystemError } from '../../../services/api/systemErrors';
 import SectionDivider from './SectionDivider';
+import SectionHeader from './SectionHeader';
 import StatGrid from './StatGrid';
 import ServerStartupVariablesSection from './ServerStartupVariablesSection';
+import ServerTabCard from './ServerTabCard';
+import TabHeader from './TabHeader';
+import { Wrench, Terminal } from 'lucide-react';
 
 type ConfigEntry = {
   key: string;
@@ -483,7 +487,7 @@ export default function ServerConfigurationTab({
     return (
       <input
         type={entry.type === 'number' ? 'number' : 'text'}
-        className={`${className} rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none`}
+        className={`${className} rounded-md border border-border/40 bg-card px-2 py-1 text-xs text-foreground transition-all duration-300 focus:border-primary focus:outline-none`}
         value={entry.value}
         onChange={(event) => onValueChange(event.target.value)}
         placeholder="Value"
@@ -493,82 +497,73 @@ export default function ServerConfigurationTab({
 
   // ── JSX ──
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* ── Tab Header ── */}
+      <TabHeader
+        icon={Wrench}
+        title="Configuration"
+        description="Manage startup command, environment variables, and config files."
+      />
+
       {/* ── Startup & Environment ── */}
       {isAdmin && (
-        <section>
-          <SectionDivider title="Startup" />
-          <div className="rounded-xl border border-border/50 bg-card/80 p-5 shadow-sm backdrop-blur-sm hover:shadow-md">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-sm font-semibold text-foreground">
-                  Startup command
-                </div>
-                <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
-                  Executed when the server starts.{' '}
-                  <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[10px] dark:bg-surface-2">
-                    {'{{MEMORY}}'}
-                  </code>
-                  ,{' '}
-                  <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[10px] dark:bg-surface-2">
-                    {'{{PORT}}'}
-                  </code>{' '}
-                  and other variables are substituted from the environment below.
-                </p>
-              </div>
-              {server.startupCommand && (
-                <button
-                  type="button"
-                  className="shrink-0 rounded-md border border-border px-2.5 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary"
-                  onClick={onResetStartupCommand}
-                  disabled={isSuspended}
-                >
-                  Reset to default
-                </button>
-              )}
+        <ServerTabCard>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <SectionHeader icon={Terminal} title="Startup command" description="Executed when the server starts. {{MEMORY}}, {{PORT}} and other variables are substituted from the environment below." />
             </div>
-            <div className="mt-3 flex items-center gap-2">
-              <input
-                className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3 py-2 font-mono text-xs text-foreground transition-colors focus:border-primary focus:bg-card focus:outline-none"
-                value={startupCommand}
-                onChange={(event) =>
-                  onStartupCommandChange(event.target.value)
-                }
-                placeholder="e.g. java -Xms128M -Xmx{{MEMORY}}M -jar server.jar --port {{PORT}}"
-                disabled={isSuspended}
-              />
+            {server.startupCommand && (
               <button
                 type="button"
-                className="shrink-0 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
-                onClick={onSaveStartupCommand}
-                disabled={
-                  isSuspended ||
-                  startupCommandPending ||
-                  !startupCommand.trim() ||
-                  startupCommand.trim() ===
-                    (server.startupCommand ?? server.template?.startup ?? '')
-                }
+                className="shrink-0 rounded-md border border-border/30 px-2.5 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary"
+                onClick={onResetStartupCommand}
+                disabled={isSuspended}
               >
-                Save
+                Reset to default
               </button>
-            </div>
-            {server.template?.startup &&
-              startupCommand.trim() !== server.template.startup && (
-                <p className="mt-1.5 text-[10px] text-muted-foreground">
-                  Template default:{' '}
-                  <button
-                    type="button"
-                    className="font-mono underline decoration-dotted hover:text-primary"
-                    onClick={() =>
-                      onStartupCommandChange(server.template?.startup ?? '')
-                    }
-                  >
-                    {server.template.startup}
-                  </button>
-                </p>
-              )}
+            )}
           </div>
-        </section>
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              className="min-w-0 flex-1 rounded-md border border-border/40 bg-surface-2/30 px-3 py-2 font-mono text-xs text-foreground transition-colors focus:border-primary focus:bg-card focus:outline-none"
+              value={startupCommand}
+              onChange={(event) =>
+                onStartupCommandChange(event.target.value)
+              }
+              placeholder="e.g. java -Xms128M -Xmx{{MEMORY}}M -jar server.jar --port {{PORT}}"
+              disabled={isSuspended}
+            />
+            <button
+              type="button"
+              className="shrink-0 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-all hover:bg-primary/90 disabled:opacity-50"
+              onClick={onSaveStartupCommand}
+              disabled={
+                isSuspended ||
+                startupCommandPending ||
+                !startupCommand.trim() ||
+                startupCommand.trim() ===
+                  (server.startupCommand ?? server.template?.startup ?? '')
+              }
+            >
+              Save
+            </button>
+          </div>
+          {server.template?.startup &&
+            startupCommand.trim() !== server.template.startup && (
+              <p className="mt-1.5 text-[10px] text-muted-foreground">
+                Template default:{' '}
+                <button
+                  type="button"
+                  className="font-mono underline decoration-dotted hover:text-primary"
+                  onClick={() =>
+                    onStartupCommandChange(server.template?.startup ?? '')
+                  }
+                >
+                  {server.template.startup}
+                </button>
+              </p>
+            )}
+        </ServerTabCard>
       )}
 
       {/* ── Startup Variables ── */}
@@ -586,7 +581,7 @@ export default function ServerConfigurationTab({
       {/* ── Config Files ── */}
       <section>
         <SectionDivider title="Config files" />
-        <div className="rounded-xl border border-border/50 bg-card/80 p-5 shadow-sm backdrop-blur-sm hover:shadow-md">
+        <ServerTabCard>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-muted-foreground">
               {combinedConfigPaths.length
@@ -596,7 +591,7 @@ export default function ServerConfigurationTab({
           </div>
           <div className="mt-3">
             <input
-              className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:bg-card focus:outline-none"
+              className="w-full rounded-md border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:bg-card focus:outline-none"
               placeholder="Search config keys or values…"
               value={configSearch}
               onChange={(event) => setConfigSearch(event.target.value)}
@@ -620,7 +615,7 @@ export default function ServerConfigurationTab({
                 ) : (
                   filteredConfigFiles.map((configFile) => (
                     <div
-                      className="overflow-hidden rounded-lg border border-border bg-surface-2/50 transition-colors dark:bg-surface-2/40"
+                      className="overflow-hidden rounded-lg border border-border/30 bg-surface-2/50 transition-colors dark:bg-surface-2/40"
                       key={configFile.path}
                     >
                       <button
@@ -669,7 +664,7 @@ export default function ServerConfigurationTab({
                             </div>
                           ) : (
                             <div className="space-y-3 text-xs text-muted-foreground">
-                              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground dark:bg-surface-2">
+                              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/30 bg-card px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground dark:bg-surface-2">
                                 <div className="flex items-center gap-2">
                                   <span className="font-semibold">View</span>
                                   {configSearch ? (
@@ -678,7 +673,7 @@ export default function ServerConfigurationTab({
                                     </span>
                                   ) : null}
                                 </div>
-                                <div className="flex items-center overflow-hidden rounded-full border border-border">
+                                <div className="flex items-center overflow-hidden rounded-full border border-border/30">
                                   <button
                                     type="button"
                                     className={`px-3 py-1 text-[10px] font-semibold tracking-wide transition-colors ${
@@ -721,7 +716,7 @@ export default function ServerConfigurationTab({
                               </div>
                               {configFile.viewMode === 'raw' ? (
                                 <textarea
-                                  className="min-h-[240px] w-full rounded-lg border border-border bg-surface-2 px-3 py-2 font-mono text-xs text-foreground transition-colors focus:border-primary focus:bg-card focus:outline-none"
+                                  className="min-h-[240px] w-full rounded-lg border border-border/40 bg-card px-3 py-2 font-mono text-xs text-foreground transition-colors focus:border-primary focus:bg-card focus:outline-none"
                                   value={configFile.rawContent}
                                   onChange={(event) =>
                                     setConfigFiles((current) =>
@@ -742,7 +737,7 @@ export default function ServerConfigurationTab({
                                     (section, sectionIndex) => (
                                       <div
                                         key={`${configFile.path}-${section.title}`}
-                                        className="rounded-xl border border-border bg-card p-4 dark:bg-surface-2/60"
+                                        className="rounded-xl border border-border/30 bg-card p-4 dark:bg-surface-2/60"
                                       >
                                         <button
                                           type="button"
@@ -915,7 +910,7 @@ export default function ServerConfigurationTab({
                                             <div className="flex flex-wrap items-center gap-2">
                                               <button
                                                 type="button"
-                                                className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary/30 hover:text-foreground"
+                                                className="rounded-md border border-border/30 px-3 py-1 text-xs text-muted-foreground transition-all duration-300 hover:border-primary/30 hover:text-foreground"
                                                 onClick={() =>
                                                   addConfigEntry(
                                                     fileIndexByPath.get(
@@ -938,7 +933,7 @@ export default function ServerConfigurationTab({
                               <div className="flex flex-wrap items-center gap-2">
                                 <button
                                   type="button"
-                                  className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow-lg shadow-primary-500/20 transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
+                                  className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow-[0_0_6px_-1px_hsl(var(--primary)/0.2)] transition-all duration-300 hover:bg-primary/90 disabled:opacity-60"
                                   onClick={() =>
                                     configMutation.mutate(
                                       fileIndexByPath.get(configFile.path) ??
@@ -960,7 +955,7 @@ export default function ServerConfigurationTab({
               </div>
             )}
           </div>
-        </div>
+        </ServerTabCard>
       </section>
     </div>
   );
