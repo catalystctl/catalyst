@@ -1120,12 +1120,20 @@ impl WebSocketHandler {
                 }
             }
             Some("update_agent") => {
-                info!("Received update_agent command from backend");
+                let target_version = msg
+                    .get("targetVersion")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                info!(
+                    "Received update_agent command from backend (target={})",
+                    target_version.as_deref().unwrap_or("latest")
+                );
                 let config = self.config.clone();
                 let write = Arc::clone(write);
                 tokio::spawn(async move {
                     let updater = crate::updater::AgentUpdater::new(&config);
-                    match updater.update().await {
+                    let options = crate::updater::UpdateOptions { target_version };
+                    match updater.update(&options).await {
                         Ok(_) => {
                             info!("Agent update initiated successfully");
                         }

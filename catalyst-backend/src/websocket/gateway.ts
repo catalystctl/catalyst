@@ -148,6 +148,9 @@ export class WebSocketGateway {
   private readonly agentConsoleBytesLimit = { maxBytes: resolveConsoleOutputByteLimit() };
   private readonly pendingAgentRequestLimit = 2000;
   private readonly autoRestartingServers = new Set<string>();
+  // Track the last agent update version requested per node to avoid spamming.
+  // Maps nodeId → target version string that was already sent.
+  private readonly agentUpdateSent = new Map<string, string>();
   private heartbeatInterval?: ReturnType<typeof setInterval>;
   private subscriberSweepInterval?: ReturnType<typeof setInterval>;
 
@@ -319,6 +322,7 @@ export class WebSocketGateway {
           return;
         }
         this.agents.delete(nodeId);
+        this.agentUpdateSent.delete(nodeId);
         this.discoveredContainers.delete(nodeId);
         this.prisma.node.update({
           where: { id: nodeId },
@@ -420,6 +424,7 @@ export class WebSocketGateway {
           if (pending && pending.socket === socket && !pending.authenticated) {
             pending.socket.close();
             this.agents.delete(nodeId);
+        this.agentUpdateSent.delete(nodeId);
             this.logger.warn({ nodeId }, "Agent handshake timeout");
           }
         }, 10000);
@@ -749,6 +754,7 @@ export class WebSocketGateway {
           } catch { /* socket may already be closing */ }
           agent.socket.close();
           this.agents.delete(nodeId);
+        this.agentUpdateSent.delete(nodeId);
           return;
         }
         this.clearAgentAuthFailures(nodeId);
@@ -959,6 +965,12 @@ export class WebSocketGateway {
           }).catch(() => {});
           this.logger.error({ err, nodeId }, 'WebSocket handler error: failed to persist health report');
         }
+
+        // --- Agent auto-update check ---
+        // Compare the agent's version against the panel version.
+        // If the agent is behind, send an update_agent command with the target version.
+        // Track which version was last requested to avoid sending duplicate commands.
+        this.checkAgentUpdate(nodeId, message.agentVersion).catch(() => {});
       } else if (message.type === "resource_stats") {
         if (!this.allowAgentMetrics(nodeId)) {
           if (this.shouldWarnRateLimit(nodeId, this.agentMetricsLimit.windowMs)) {
@@ -2657,6 +2669,7 @@ export class WebSocketGateway {
           this.logger.warn(`Agent heartbeat timeout: ${nodeId}`);
           agent.socket.close();
           this.agents.delete(nodeId);
+        this.agentUpdateSent.delete(nodeId);
           this.prisma.node.update({
             where: { id: nodeId },
             data: { isOnline: false },
@@ -3134,6 +3147,7 @@ export class WebSocketGateway {
         // ignore
       }
       this.agents.delete(nodeId);
+        this.agentUpdateSent.delete(nodeId);
     }
     for (const [clientId, client] of this.clients) {
       try {
@@ -3151,6 +3165,54 @@ export class WebSocketGateway {
     this.pluginWsHandlers.clear();
     this.discoveredContainers.clear();
     this.logger.info('WebSocket gateway destroyed');
+  }
+
+  /**
+   * Check if an agent needs to be updated to match the panel version.
+   * Sends update_agent command with targetVersion if the agent is behind.
+   * Tracks the last-sent version per node to avoid spamming on every health_report.
+   */
+  private async checkAgentUpdate(nodeId: string, agentVersion: unknown): Promise<void> {
+    if (!agentVersion || typeof agentVersion !== 'string') return;
+
+    const panelVersion = (await import('../services/auto-updater')).getCurrentVersion();
+    if (!panelVersion || panelVersion === 'unknown') return;
+
+    const agentParts = agentVersion.replace(/^v/, '').split('.').map(Number);
+    const panelParts = panelVersion.replace(/^v/, '').split('.').map(Number);
+    const maxLen = Math.max(agentParts.length, panelParts.length);
+
+    let agentBehind = false;
+    for (let i = 0; i < maxLen; i++) {
+      const cur = agentParts[i] || 0;
+      const lat = panelParts[i] || 0;
+      if (lat > cur) { agentBehind = true; break; }
+      if (lat < cur) { break; }
+    }
+
+    if (!agentBehind) {
+      // Agent is up to date — clear any stale tracking entry.
+      this.agentUpdateSent.delete(nodeId);
+      return;
+    }
+
+    // Only send update if we haven't already requested this exact target version.
+    const lastSent = this.agentUpdateSent.get(nodeId);
+    if (lastSent === panelVersion) return;
+
+    this.logger.info(
+      { nodeId, agentVersion, panelVersion },
+      'Agent version behind panel — sending update_agent command',
+    );
+
+    const sent = await this.sendToAgent(nodeId, {
+      type: 'update_agent',
+      targetVersion: panelVersion,
+    });
+
+    if (sent) {
+      this.agentUpdateSent.set(nodeId, panelVersion);
+    }
   }
 }
 

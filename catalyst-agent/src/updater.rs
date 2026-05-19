@@ -4,12 +4,21 @@ use tracing::{error, info, warn};
 
 use crate::{AgentConfig, AgentError, AgentResult};
 
+const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// GitHub repository that hosts agent release binaries.
 /// Set from config.agent.release_repo (default: "catalystctl/catalyst").
 pub struct AgentUpdater {
     backend_url: String,
     current_binary_path: PathBuf,
     release_repo: String,
+}
+
+/// Options for controlling the update behavior.
+#[derive(Debug, Clone, Default)]
+pub struct UpdateOptions {
+    /// Specific version to download (e.g. "1.12.2"). If None, downloads latest.
+    pub target_version: Option<String>,
 }
 
 impl AgentUpdater {
@@ -41,16 +50,28 @@ impl AgentUpdater {
         }
     }
 
-    /// Try downloading the latest agent binary from GitHub Releases.
-    async fn download_from_github(&self, temp_path: &PathBuf) -> AgentResult<()> {
+    /// Try downloading the agent binary from GitHub Releases.
+    /// If target_version is set, downloads that specific tag; otherwise downloads latest.
+    async fn download_from_github(
+        &self,
+        temp_path: &PathBuf,
+        target_version: Option<&str>,
+    ) -> AgentResult<()> {
         let asset_name = Self::asset_name();
-        let download_url = format!(
-            "https://github.com/{}/releases/latest/download/{}",
-            self.release_repo, asset_name
-        );
+        let download_url = match target_version {
+            Some(ver) => format!(
+                "https://github.com/{}/releases/download/v{}/{}",
+                self.release_repo, ver, asset_name
+            ),
+            None => format!(
+                "https://github.com/{}/releases/latest/download/{}",
+                self.release_repo, asset_name
+            ),
+        };
 
         info!(
-            "Downloading agent update from GitHub Releases: {}",
+            "Downloading agent update from GitHub Releases (version={}): {}",
+            target_version.unwrap_or("latest"),
             download_url
         );
 
@@ -94,11 +115,19 @@ impl AgentUpdater {
     }
 
     /// Try downloading the agent binary from the Catalyst backend (fallback).
-    async fn download_from_backend(&self, temp_path: &PathBuf) -> AgentResult<()> {
-        let download_url = format!("{}/api/agent/download", self.backend_url);
+    async fn download_from_backend(
+        &self,
+        temp_path: &PathBuf,
+        target_version: Option<&str>,
+    ) -> AgentResult<()> {
+        let mut download_url = format!("{}/api/agent/download", self.backend_url);
+        if let Some(ver) = target_version {
+            download_url = format!("{}?version={}", download_url, ver);
+        }
 
         info!(
-            "Downloading agent update from backend fallback: {}",
+            "Downloading agent update from backend fallback (version={}): {}",
+            target_version.unwrap_or("latest"),
             download_url
         );
 
@@ -148,14 +177,17 @@ impl AgentUpdater {
         Ok(())
     }
 
-    /// Download the latest agent binary, trying GitHub Releases first, then the backend.
-    pub async fn download_update(&self) -> AgentResult<PathBuf> {
+    /// Download the agent binary, trying GitHub Releases first, then the backend.
+    pub async fn download_update(&self, options: &UpdateOptions) -> AgentResult<PathBuf> {
         // Place the temporary file next to the current binary so that
         // `rename` is guaranteed to be atomic (same filesystem).
         let temp_path = self.current_binary_path.with_extension("update");
 
         // Priority 1: GitHub Releases (pre-built, versioned binaries)
-        match self.download_from_github(&temp_path).await {
+        match self
+            .download_from_github(&temp_path, options.target_version.as_deref())
+            .await
+        {
             Ok(()) => return Ok(temp_path),
             Err(e) => {
                 warn!(
@@ -166,7 +198,10 @@ impl AgentUpdater {
         }
 
         // Priority 2: Backend download (for self-hosted / air-gapped deployments)
-        match self.download_from_backend(&temp_path).await {
+        match self
+            .download_from_backend(&temp_path, options.target_version.as_deref())
+            .await
+        {
             Ok(()) => Ok(temp_path),
             Err(e) => {
                 error!("Backend download also failed: {}", e);
@@ -237,9 +272,25 @@ impl AgentUpdater {
         }
     }
 
-    /// Full update flow: download and apply.
-    pub async fn update(&self) -> AgentResult<()> {
-        let new_binary = self.download_update().await?;
+    /// Full update flow: download and apply. Uses target version if specified.
+    pub async fn update(&self, options: &UpdateOptions) -> AgentResult<()> {
+        // Skip update if we're already at the target version.
+        if let Some(ref target) = options.target_version {
+            if CURRENT_VERSION == target {
+                info!(
+                    "Agent is already at target version {}, skipping update",
+                    target
+                );
+                return Ok(());
+            }
+        }
+        let new_binary = self.download_update(options).await?;
         self.apply_update(new_binary).await
+    }
+
+    /// Returns the current agent version.
+    #[allow(dead_code)]
+    pub fn current_version() -> &'static str {
+        CURRENT_VERSION
     }
 }

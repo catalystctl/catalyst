@@ -837,6 +837,7 @@ async function bootstrap() {
 			},
 			async (request, reply) => {
 			const arch = (request.query as { arch?: string }).arch || "x86_64";
+			const version = (request.query as { version?: string }).version;
 			const normalizedArch =
 				arch === "aarch64" || arch === "arm64" ? "aarch64" : "x86_64";
 			const assetName = `catalyst-agent-${normalizedArch}-linux-musl`;
@@ -883,7 +884,9 @@ async function bootstrap() {
 			// ── Priority 2: Proxy from GitHub Releases ──
 			const releaseRepo =
 				process.env.AGENT_RELEASE_REPO || "catalystctl/catalyst";
-			const githubUrl = `https://github.com/${releaseRepo}/releases/latest/download/${assetName}`;
+			const githubUrl = version
+				? `https://github.com/${releaseRepo}/releases/download/v${version}/${assetName}`
+				: `https://github.com/${releaseRepo}/releases/latest/download/${assetName}`;
 
 			app.log.info(
 				`No local binary found — proxying from GitHub Releases: ${githubUrl}`,
