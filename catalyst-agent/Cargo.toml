@@ -10,7 +10,7 @@ tokio = { version = "1.52", features = [
 ] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml = "1.1"
+toml = "0.8"
 tokio-tungstenite = { version = "0.29", features = ["rustls-tls-native-roots"] }
 rustls = { version = "0.23", features = ["ring", "std", "tls12"], default-features = false }
 futures = "0.3"
@@ -28,10 +28,14 @@ sysinfo = "0.39"
 nix = { version = "0.31", features = ["fs"] }
 num_cpus = "1"
 libc = "0.2"
+zeroize = { version = "1.8", features = ["derive"] }
 reqwest = { version = "0.13", features = ["json", "stream", "rustls-native-certs"], default-features = false }
 containerd-client = "0.9"
 tonic = "0.14"
 prost-types = "0.14"
+
+[dev-dependencies]
+tempfile = "3"
 
 [profile.release]
 opt-level = 3
@@ -39,6 +43,7 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+overflow-checks = true
 
 [profile.release.build-override]
 opt-level = 0

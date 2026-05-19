@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentConfig {
@@ -192,14 +192,22 @@ impl AgentConfig {
             let metadata = std::fs::metadata(path)
                 .map_err(|e| format!("Failed to read config metadata: {}", e))?;
             let mode = metadata.permissions().mode();
-            if mode & 0o004 != 0 {
+            if mode & 0o077 != 0 {
                 warn!(
-                    "Config file {} is world-readable ({:o}). \
-                    Run: chmod o-r {}",
+                    "Config file {} has overly broad permissions ({:o}). Fixing permissions...",
                     path,
-                    mode & 0o777,
-                    path
+                    mode & 0o777
                 );
+                // Strip ALL non-owner bits (not just "other") to match the
+                // deploy script's chmod 0600. This prevents group read/write
+                // as well as world access to the config containing the API key.
+                let fixed_mode = mode & 0o600; // owner read+write only
+                let perms = std::fs::Permissions::from_mode(fixed_mode);
+                if let Err(e) = std::fs::set_permissions(path, perms) {
+                    error!("Failed to fix config permissions: {}", e);
+                } else {
+                    info!("Config permissions fixed to {:o}", fixed_mode & 0o777);
+                }
             }
         }
         let content =
@@ -238,15 +246,24 @@ impl AgentConfig {
 
         let config = Self {
             server: ServerConfig {
+                // Default to wss:// (encrypted). ws:// is only allowed for
+                // loopback addresses unless CATALYST_ALLOW_INSECURE_WS=1 is set.
                 backend_url: std::env::var("BACKEND_URL")
-                    .unwrap_or_else(|_| "ws://localhost:3000/ws".to_string()),
+                    .unwrap_or_else(|_| "wss://localhost:3000/ws".to_string()),
                 node_id: std::env::var("NODE_ID").map_err(|_| "NODE_ID not set".to_string())?,
                 api_key: std::env::var("NODE_API_KEY")
                     .map_err(|_| "NODE_API_KEY not set".to_string())?,
                 hostname: hostname().map_err(|e| format!("Failed to get hostname: {}", e))?,
                 data_dir: data_dir.clone(),
                 console_log_dir,
-                max_connections: 100,
+                // Cap at 1000 to prevent resource exhaustion from absurd values
+                max_connections: std::cmp::min(
+                    std::env::var("MAX_CONNECTIONS")
+                        .ok()
+                        .and_then(|v| v.parse::<usize>().ok())
+                        .unwrap_or(100),
+                    1000
+                ),
             },
             containerd: ContainerdConfig {
                 socket_path: PathBuf::from(
@@ -295,6 +312,17 @@ impl AgentConfig {
         if config.server.api_key.trim().is_empty() {
             return Err("NODE_API_KEY must not be empty".to_string());
         }
+        // UF-25: API key is passed as an env var, which is readable by any
+        // local user via /proc/<pid>/environ. Recommend deploying with
+        // hidepid=2 on /proc or reading the key from a file instead.
+        // For now, we log a warning if the key comes from the environment.
+        if std::env::var("NODE_API_KEY").is_ok() {
+            tracing::warn!(
+                "NODE_API_KEY is set via environment variable. This key is readable \
+                by any local user via /proc/<pid>/environ. Consider using a \
+                config file with 0600 permissions instead, or set hidepid=2 on /proc."
+            );
+        }
         Ok(config)
     }
 
@@ -307,7 +335,22 @@ impl AgentConfig {
 }
 
 fn hostname() -> Result<String, std::io::Error> {
-    std::process::Command::new("hostname")
+    let raw = std::process::Command::new("hostname")
         .output()
-        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())?;
+    // Sanitize hostname: allow only alphanumeric, hyphens, and dots.
+    // This prevents any shell metacharacters from the hostname command
+    // from propagating into config values, even though JSON serialization
+    // already prevents injection into structured output.
+    let sanitized: String = raw
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '.')
+        .collect();
+    if sanitized != raw {
+        tracing::warn!(
+            "Hostname '{}' contained disallowed characters; sanitized to '{}'",
+            raw, sanitized
+        );
+    }
+    Ok(sanitized)
 }

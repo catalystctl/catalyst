@@ -16,7 +16,16 @@ use crate::{AgentConfig, AgentError};
 // commands that need elevated privileges.
 // ---------------------------------------------------------------------------
 
-static SUDO_PASSWORD: Mutex<Option<String>> = Mutex::new(None);
+static SUDO_PASSWORD: Mutex<Option<zeroize::Zeroizing<String>>> = Mutex::new(None);
+
+/// Recover from a poisoned mutex by taking the inner value.
+/// With `panic = "abort"`, a poisoned mutex would kill the entire process.
+/// This pattern (from `firewall_manager.rs`) recovers the data and continues.
+fn lock_sudo_password() -> std::sync::MutexGuard<'static, Option<zeroize::Zeroizing<String>>> {
+    SUDO_PASSWORD
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 /// Check whether the current process is running as root (effective UID 0).
 fn is_root() -> bool {
@@ -34,7 +43,7 @@ fn ensure_sudo_password() -> Result<(), AgentError> {
 
     // Fast path – already cached.
     {
-        let guard = SUDO_PASSWORD.lock().unwrap();
+        let guard = lock_sudo_password();
         if guard.is_some() {
             return Ok(());
         }
@@ -58,8 +67,8 @@ fn ensure_sudo_password() -> Result<(), AgentError> {
     if let Ok(status) = probe {
         if status.success() {
             // Passwordless sudo works – cache an empty marker.
-            let mut guard = SUDO_PASSWORD.lock().unwrap();
-            *guard = Some(String::new());
+            let mut guard = lock_sudo_password();
+            *guard = Some(zeroize::Zeroizing::new(String::new()));
             return Ok(());
         }
     }
@@ -93,8 +102,10 @@ fn ensure_sudo_password() -> Result<(), AgentError> {
     }
     match verify.wait() {
         Ok(status) if status.success() => {
-            let mut guard = SUDO_PASSWORD.lock().unwrap();
-            *guard = Some(password);
+            let mut guard = lock_sudo_password();
+            // Zeroizing<String> clears the password from memory on drop,
+            // preventing it from persisting in memory/swap/core dumps.
+            *guard = Some(zeroize::Zeroizing::new(password));
             Ok(())
         }
         _ => Err(AgentError::PermissionDenied(
@@ -105,13 +116,17 @@ fn ensure_sudo_password() -> Result<(), AgentError> {
 
 /// Return the cached sudo password, calling `ensure_sudo_password` first if
 /// needed.  Returns `None` when running as root (no sudo required).
+/// Note: the returned String is a clone that is NOT wrapped in Zeroizing;
+/// the clone passed to `run_command` will persist in memory until GC. This
+/// is a known limitation documented as defense-in-depth — the original copy
+/// held by the global mutex IS zeroized on drop.
 fn get_sudo_password() -> Result<Option<String>, AgentError> {
     if is_root() {
         return Ok(None);
     }
     ensure_sudo_password()?;
-    let guard = SUDO_PASSWORD.lock().unwrap();
-    Ok(guard.clone())
+    let guard = lock_sudo_password();
+    Ok(guard.as_ref().map(|z| (**z).clone()))
 }
 
 pub struct SystemSetup;
@@ -404,8 +419,12 @@ impl SystemSetup {
         }
 
         // 2. Add the current user to the group.
-        if let Err(e) = Self::run_command("usermod", &["-aG", "containerd", &username], None).await
-        {
+        // Validate username: must be alphanumeric + underscore/hyphen, no shell metacharacters.
+        // Command::new prevents shell injection, but invalid usernames could cause
+        // logical errors or pass as arguments to other programs.
+        if !username.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+            warn!("Invalid username '{}' for usermod — skipping group add", username);
+        } else if let Err(e) = Self::run_command("usermod", &["-aG", "containerd", &username], None).await {
             warn!("Could not add user to containerd group (non-fatal): {}", e);
         }
 

@@ -528,6 +528,21 @@ install_agent_binary() {
 
     if curl -fsSL --progress-bar "$release_url" -o "$tmp_binary" 2>/dev/null; then
         if file "$tmp_binary" | grep -qE 'ELF|script'; then
+            # Verify SHA-256 checksum from GitHub .sha256 sidecar file.
+            # The release pipeline already generates these files alongside the binary.
+            if curl -sfL "${release_url}.sha256" -o "${tmp_binary}.sha256" 2>/dev/null; then
+                EXPECTED_HASH=$(awk '{print $1}' "${tmp_binary}.sha256")
+                ACTUAL_HASH=$(sha256sum "$tmp_binary" | awk '{print $1}')
+                if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
+                    echo "FATAL: Binary checksum mismatch! Expected $EXPECTED_HASH, got $ACTUAL_HASH" >&2
+                    rm -f "$tmp_binary" "${tmp_binary}.sha256"
+                    exit 1
+                fi
+                log "✓ Binary checksum verified"
+                rm -f "${tmp_binary}.sha256"
+            else
+                warn "Could not download checksum file — skipping verification"
+            fi
             mv -f "$tmp_binary" /opt/catalyst-agent/catalyst-agent
             chmod 0755 /opt/catalyst-agent/catalyst-agent
             log "Agent binary installed from GitHub Releases."
@@ -549,6 +564,20 @@ install_agent_binary() {
 
     if curl -fsSL --progress-bar "$download_url" -o "$tmp_binary" 2>/dev/null; then
         if file "$tmp_binary" | grep -qE 'ELF|script'; then
+            # Verify SHA-256 checksum from backend .sha256 sidecar file.
+            if curl -sfL "${download_url}.sha256" -o "${tmp_binary}.sha256" 2>/dev/null; then
+                EXPECTED_HASH=$(awk '{print $1}' "${tmp_binary}.sha256")
+                ACTUAL_HASH=$(sha256sum "$tmp_binary" | awk '{print $1}')
+                if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
+                    echo "FATAL: Binary checksum mismatch! Expected $EXPECTED_HASH, got $ACTUAL_HASH" >&2
+                    rm -f "$tmp_binary" "${tmp_binary}.sha256"
+                    exit 1
+                fi
+                log "✓ Binary checksum verified"
+                rm -f "${tmp_binary}.sha256"
+            else
+                warn "Could not download checksum file — skipping verification"
+            fi
             mv -f "$tmp_binary" /opt/catalyst-agent/catalyst-agent
             chmod 0755 /opt/catalyst-agent/catalyst-agent
             log "Agent binary installed from backend."
@@ -663,10 +692,21 @@ LimitNOFILE=65536
 # - /var/lib/catalyst (server data, backups)
 # - /var/lib/cni and /etc/cni/net.d (container networking)
 # - /tmp/catalyst-console (console I/O pipes)
-NoNewPrivileges=false
-ProtectSystem=false
-ProtectHome=false
-PrivateTmp=false
+#
+# Sandbox directives that ARE safe to enable (tested compatible):
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+#
+# Sandbox directives that MUST remain disabled (agent requires them):
+# PrivateDevices=false     (needs loop devices for disk images)
+# PrivateNetwork=false     (needs network for WebSocket + CNI)
+# RestrictNamespaces=false (agent may need nsenter for container namespace ops)
+# CapabilityBoundingSet=... (needs CAP_NET_BIND_SERVICE, CAP_SYS_ADMIN for mount)
 
 # Ensure access to required paths
 ReadWritePaths=/var/lib/catalyst /tmp/catalyst-console /etc/cni/net.d /var/lib/cni /mnt /run/containerd

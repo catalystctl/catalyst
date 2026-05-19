@@ -32,5 +32,12 @@ COPY --from=builder /app/target/release/catalyst-agent /usr/local/bin/catalyst-a
 
 USER catalyst
 
+# NOTE: The agent requires root at runtime for: mount/umount, CNI config,
+# containerd socket access, fallocate, firewall rules, and sudo password caching.
+# The `catalyst` user above is for development/testing only.
+# Production deployments use the systemd service (deploy-agent.sh) which runs as root.
+# Running as non-root in Docker gives a false sense of security since the agent
+# cannot perform its core functions without elevated privileges.
+
 ENTRYPOINT ["/usr/local/bin/catalyst-agent"]
 CMD ["--config", "/opt/catalyst-agent/config.toml"]

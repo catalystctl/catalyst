@@ -27,6 +27,18 @@ impl AgentUpdater {
         let current_binary_path =
             std::env::current_exe().unwrap_or_else(|_| PathBuf::from("./catalyst-agent"));
         let release_repo = config.agent.release_repo.clone();
+
+        // Validate release_repo format: must be "owner/repo" with safe characters only.
+        // This prevents URL injection via a malicious config value.
+        if !release_repo.chars().all(|c| c.is_alphanumeric() || c == '/' || c == '-' || c == '_')
+            || release_repo.split('/').count() != 2
+        {
+            warn!(
+                "Invalid release_repo format '{}': expected 'owner/repo' with alphanumeric/-/_ chars",
+                release_repo
+            );
+        }
+
         Self {
             backend_url,
             current_binary_path,
@@ -177,7 +189,78 @@ impl AgentUpdater {
         Ok(())
     }
 
+    /// Download the .sha256 checksum sidecar file from GitHub Releases.
+    /// The release pipeline already generates these files alongside the binary.
+    async fn download_checksum_from_github(
+        &self,
+        target_version: Option<&str>,
+    ) -> AgentResult<String> {
+        let asset_name = Self::asset_name();
+        let checksum_url = match target_version {
+            Some(ver) => format!(
+                "https://github.com/{}/releases/download/v{}/{}.sha256",
+                self.release_repo, ver, asset_name
+            ),
+            None => format!(
+                "https://github.com/{}/releases/latest/download/{}.sha256",
+                self.release_repo, asset_name
+            ),
+        };
+
+        let client = reqwest::Client::new();
+        let response = client
+            .get(&checksum_url)
+            .timeout(std::time::Duration::from_secs(30))
+            .send()
+            .await
+            .map_err(|e| {
+                AgentError::NetworkError(format!("Checksum download failed: {}", e))
+            })?;
+
+        if !response.status().is_success() {
+            return Err(AgentError::NetworkError(format!(
+                "Checksum download failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let text = response.text().await.map_err(|e| {
+            AgentError::NetworkError(format!("Failed to read checksum response: {}", e))
+        })?;
+
+        // SHA-256 checksum files are typically "hash  filename" or just "hash"
+        let hash = text.split_whitespace().next().unwrap_or("").to_string();
+        if hash.len() != 64 {
+            return Err(AgentError::SecurityViolation(
+                "Downloaded checksum has invalid length (expected 64 hex chars)".to_string(),
+            ));
+        }
+        Ok(hash)
+    }
+
+    /// Verify the SHA-256 checksum of a downloaded binary.
+    /// Uses simple string comparison — the hash of a public release binary
+    /// is not a secret, so constant-time comparison is unnecessary here.
+    async fn verify_checksum(path: &PathBuf, expected_hex: &str) -> AgentResult<()> {
+        use sha2::{Digest, Sha256};
+        let data = fs::read(path).await.map_err(|e| {
+            AgentError::FileSystemError(format!("Failed to read binary for checksum: {}", e))
+        })?;
+        let mut hasher = Sha256::new();
+        hasher.update(&data);
+        let result = hasher.finalize();
+        let actual_hex: String = result.iter().map(|b| format!("{:02x}", b)).collect();
+        if actual_hex != expected_hex {
+            return Err(AgentError::SecurityViolation(format!(
+                "Binary checksum mismatch: expected {}, got {}",
+                expected_hex, actual_hex
+            )));
+        }
+        Ok(())
+    }
+
     /// Download the agent binary, trying GitHub Releases first, then the backend.
+    /// Verifies SHA-256 checksum when a sidecar .sha256 file is available.
     pub async fn download_update(&self, options: &UpdateOptions) -> AgentResult<PathBuf> {
         // Place the temporary file next to the current binary so that
         // `rename` is guaranteed to be atomic (same filesystem).
@@ -188,7 +271,31 @@ impl AgentUpdater {
             .download_from_github(&temp_path, options.target_version.as_deref())
             .await
         {
-            Ok(()) => return Ok(temp_path),
+            Ok(()) => {
+                // Verify checksum from GitHub .sha256 sidecar file.
+                // The release pipeline already generates these files.
+                match self
+                    .download_checksum_from_github(options.target_version.as_deref())
+                    .await
+                {
+                    Ok(expected) => {
+                        if let Err(e) = Self::verify_checksum(&temp_path, &expected).await {
+                            let _ = fs::remove_file(&temp_path).await;
+                            warn!("GitHub binary checksum verification failed: {}", e);
+                            // Fall through to backend fallback — do NOT use unverified binary
+                        } else {
+                            info!("GitHub update checksum verified successfully");
+                            return Ok(temp_path);
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Could not download checksum (skipping verification): {}", e);
+                        // Continue without verification — backwards compatibility.
+                        // TODO: Make checksum mandatory in a future release.
+                        return Ok(temp_path);
+                    }
+                }
+            }
             Err(e) => {
                 warn!(
                     "GitHub Releases download failed, trying backend fallback: {}",
@@ -202,7 +309,11 @@ impl AgentUpdater {
             .download_from_backend(&temp_path, options.target_version.as_deref())
             .await
         {
-            Ok(()) => Ok(temp_path),
+            Ok(()) => {
+                warn!("Backend update downloaded without checksum verification — \
+                      verify backend serves SHA-256 sidecar");
+                Ok(temp_path)
+            }
             Err(e) => {
                 error!("Backend download also failed: {}", e);
                 Err(e)

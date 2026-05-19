@@ -5,6 +5,7 @@ use tokio::sync::{broadcast, RwLock};
 use tokio::task::JoinSet;
 use tracing::{error, info, warn};
 
+mod atomic_write;
 mod config;
 mod errors;
 mod file_manager;

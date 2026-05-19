@@ -690,20 +690,33 @@ impl ContainerdRuntime {
 
             // CNI plugins may overwrite /etc/resolv.conf in the container's namespace.
             // Write our configured DNS directly into the container's /etc/resolv.conf.
-            let mut resolv_content = String::new();
+            //
+            // Security: Validate each DNS entry as a valid IP address before
+            // interpolation to prevent shell injection via malicious DNS values.
+            // Then use a heredoc with single-quoted delimiter to prevent ALL shell
+            // interpretation even if validation is somehow bypassed.
+            let mut validated_lines = Vec::new();
             for dns in &self.dns_servers {
-                resolv_content.push_str(&format!("nameserver {}\n", dns));
+                if dns.parse::<std::net::IpAddr>().is_err() {
+                    warn!("Skipping invalid DNS server (not a valid IP): {}", dns);
+                    continue;
+                }
+                validated_lines.push(format!("nameserver {}", dns));
             }
-            resolv_content.push_str("options attempts:3 timeout:2\n");
+            validated_lines.push("options attempts:3 timeout:2".to_string());
+            let resolv_content = validated_lines.join("\n");
 
-            // Use nsenter to write into the container's mount namespace
+            // Use heredoc with single-quoted delimiter to prevent shell interpretation.
+            // The single quotes around CATALYST_RESOLV_EOF tell the shell to treat
+            // the heredoc body as literal text — no variable expansion, command
+            // substitution, or escape processing.
             let resolv_dest = "/etc/resolv.conf";
             let nsenter_output = Command::new("nsenter")
                 .args(["-t", &pid.to_string(), "-m", "--", "sh", "-c"])
                 .arg(format!(
-                    "echo '{}' > {}",
-                    resolv_content.trim(),
-                    resolv_dest
+                    "cat > {} << 'CATALYST_RESOLV_EOF'\n{}\nCATALYST_RESOLV_EOF",
+                    resolv_dest,
+                    resolv_content
                 ))
                 .output()
                 .await;
@@ -834,8 +847,10 @@ impl ContainerdRuntime {
         ];
 
         // Build mounts including DNS resolv.conf and a writable /tmp tmpfs.
-        // Many install scripts download and execute binaries in /tmp; a dedicated
-        // tmpfs without noexec ensures extracted executables can run.
+        // NOTE: noexec is intentionally NOT added here. Many Pterodactyl install
+        // scripts download and execute binaries from /tmp. Adding noexec would
+        // break these scripts. If future hardening requires noexec, an alternative
+        // executable tmpfs mount at /opt/install-tmp must be provided.
         let mut mounts = base_mounts(data_dir);
         mounts.push(serde_json::json!({
             "destination": "/etc/resolv.conf",
@@ -890,7 +905,10 @@ impl ContainerdRuntime {
         );
 
         // Debug: log the wrapped script for install troubleshooting
-        info!(
+        // Using debug! (not info!) because the wrapped script body contains
+        // substituted secrets (passwords, API keys) that should never appear
+        // in logs at the default info level.
+        debug!(
             "[DEBUG] Installer {} wrapped script (first 2000 chars):\n---BEGIN SCRIPT---\n{}---END SCRIPT---",
             container_id,
             if wrapped_script.len() > 2000 {
@@ -2573,7 +2591,13 @@ impl ContainerdRuntime {
         // Swap: memory + swap (0 means no swap limit). OCI spec uses
         // memory.swap as the total (memory + swap), not swap alone.
         let mem_swap = if config.swap_mb > 0 {
-            Some(((config.memory_mb + config.swap_mb) as i64) * 1024 * 1024)
+            // Use saturating_add to prevent overflow; memory values are u64 from config.
+            // Cap at 1 TiB to prevent negative i64 cast which would create an
+            // unlimited cgroup memory limit.
+            let total_mb = config.memory_mb.saturating_add(config.swap_mb);
+            let total_bytes = total_mb.saturating_mul(1024 * 1024);
+            let capped = std::cmp::min(total_bytes, 1024u64 * 1024 * 1024 * 1024);
+            Some(capped as i64)
         } else {
             None
         };

@@ -118,6 +118,14 @@ impl StorageManager {
     }
 
     async fn create_image(&self, image_path: &Path, size_mb: u64) -> AgentResult<()> {
+        // Cap at 100 GB to prevent unreasonable allocations that could
+        // exhaust host disk space via a malicious allocatedDiskMb value.
+        const MAX_DISK_MB: u64 = 100 * 1024; // 100 GB in MB
+        if size_mb > MAX_DISK_MB {
+            return Err(AgentError::InvalidRequest(
+                format!("Requested disk size {} MB exceeds maximum {} MB", size_mb, MAX_DISK_MB)
+            ));
+        }
         let image = image_path.to_path_buf();
         let size = size_mb;
         spawn_blocking(move || -> AgentResult<()> {

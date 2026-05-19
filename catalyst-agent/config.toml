@@ -4,7 +4,7 @@
 
 [server]
 # Backend WebSocket URL (ws:// for development, wss:// for production)
-backend_url = "ws://192.168.1.78:3000/ws"
+backend_url = "wss://backend.catalystctl.com/ws"
 
 # Unique node identifier (UUID from database)
 node_id = "cmp0j2dkw000bw4pdvr4l0doh"

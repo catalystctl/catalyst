@@ -4,6 +4,7 @@ use tokio::fs;
 use tokio::process::Command;
 use tracing::{info, warn};
 
+use crate::atomic_write;
 use crate::config::CniNetworkConfig;
 use crate::AgentError;
 use serde_json::json;
@@ -148,10 +149,10 @@ impl NetworkManager {
             &gateway,
         );
 
-        // Write CNI config file
-        fs::write(&cni_config_path, cni_config)
-            .await
-            .map_err(|e| AgentError::IoError(format!("Failed to write CNI config: {}", e)))?;
+        // Write CNI config file atomically (temp + rename) to prevent
+        // corruption if the agent crashes mid-write.
+        atomic_write::atomic_write(&cni_config_path, &cni_config)
+            .await?;
 
         info!(
             "✓ Created CNI network '{}' at {}",
@@ -247,10 +248,10 @@ impl NetworkManager {
             &gateway,
         );
 
-        // Write CNI config file
-        fs::write(&cni_config_path, cni_config)
-            .await
-            .map_err(|e| AgentError::IoError(format!("Failed to write CNI config: {}", e)))?;
+        // Write CNI config file atomically (temp + rename) to prevent
+        // corruption if the agent crashes mid-write.
+        atomic_write::atomic_write(&cni_config_path, &cni_config)
+            .await?;
 
         info!(
             "✓ Updated CNI network '{}' at {}",
@@ -498,9 +499,9 @@ impl NetworkManager {
     async fn store_agent_config_toml(&self, value: &TomlValue) -> Result<(), AgentError> {
         let raw = toml::to_string_pretty(value)
             .map_err(|e| AgentError::IoError(format!("Failed to serialize config TOML: {}", e)))?;
-        fs::write(&self.config_path, raw)
-            .await
-            .map_err(|e| AgentError::IoError(format!("Failed to write config: {}", e)))
+        // Use atomic write (temp + rename) to prevent config corruption
+        // if the agent crashes or loses power mid-write.
+        atomic_write::atomic_write(&self.config_path, &raw).await
     }
 
     fn networks_array_mut(value: &mut TomlValue) -> Result<&mut Vec<TomlValue>, AgentError> {

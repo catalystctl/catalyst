@@ -398,17 +398,32 @@ impl FileManager {
     }
 
     /// Set file permissions (chmod).
+    /// Masks out setuid (0o4000), setgid (0o2000), and sticky (0o1000) bits
+    /// to prevent privilege escalation via file permissions on server data.
     pub async fn set_permissions(&self, server_id: &str, path: &str, mode: u32) -> AgentResult<()> {
         let full_path = self.resolve_path(server_id, path)?;
-        debug!("Setting permissions on {:?} to {:o}", full_path, mode);
+
+        // Strip dangerous permission bits that could allow privilege escalation.
+        // setuid allows executing as the file owner (potentially root),
+        // setgid allows executing as the file group, and sticky bit on
+        // regular files has no useful purpose for game servers.
+        let safe_mode = mode & !0o7000;
+        if safe_mode != mode {
+            warn!(
+                "Stripped dangerous permission bits from {:o} -> {:o}",
+                mode, safe_mode
+            );
+        }
+
+        debug!("Setting permissions on {:?} to {:o}", full_path, safe_mode);
 
         use std::os::unix::fs::PermissionsExt;
-        let permissions = std::fs::Permissions::from_mode(mode);
+        let permissions = std::fs::Permissions::from_mode(safe_mode);
         fs::set_permissions(&full_path, permissions)
             .await
             .map_err(|e| AgentError::FileSystemError(format!("Failed to chmod: {}", e)))?;
 
-        info!("Permissions set: {:?} -> {:o}", full_path, mode);
+        info!("Permissions set: {:?} -> {:o}", full_path, safe_mode);
         Ok(())
     }
 

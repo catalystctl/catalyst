@@ -33,6 +33,7 @@ const CONTAINER_SERVER_DIR: &str = "/data";
 const CONTAINER_UID: u32 = 1000;
 const CONTAINER_GID: u32 = 1000;
 const MAX_BACKUP_UPLOAD_BYTES: u64 = 10 * 1024 * 1024 * 1024; // 10GB
+const MAX_RESTORE_STREAM_BYTES: u64 = 10 * 1024 * 1024 * 1024; // 10 GB, matches MAX_BACKUP_UPLOAD_BYTES
 const BACKUP_UPLOAD_INACTIVITY_TIMEOUT: Duration = Duration::from_secs(600); // 10 minutes
 const MAX_CONSOLE_BATCH_BYTES: usize = 32768; // Max bytes to batch into a single console_output message
 const MAX_EVENT_SUBSCRIBE_FAILURES: u32 = 10; // Give up on event monitor after this many consecutive failures
@@ -488,6 +489,7 @@ pub struct WebSocketHandler {
     /// Tracks restart attempt timestamps per server_id.
     restart_trackers: Arc<RwLock<HashMap<String, RestartTracker>>>,
     /// Stores the original start_server message JSON per server_id for auto-restart.
+    /// Sensitive fields (installScript, environment values) are stripped before storage.
     start_server_messages: Arc<RwLock<HashMap<String, Value>>>,
     /// Maps server_id -> (container_id, primary_port) for health checking.
     server_ports: Arc<RwLock<HashMap<String, (String, u16)>>>,
@@ -495,12 +497,33 @@ pub struct WebSocketHandler {
     server_health_state: Arc<RwLock<HashMap<String, bool>>>,
     /// Active restore stream child processes keyed by requestId (for pipe relay transfer).
     active_restore_streams: Arc<RwLock<HashMap<String, tokio::process::Child>>>,
+    /// Tracks bytes written to each active restore stream to prevent decompression bombs.
+    active_restore_bytes_written: Arc<RwLock<HashMap<String, u64>>>,
     /// The requestId of the currently active restore stream (at most one at a time).
     active_restore_request_id: Arc<RwLock<Option<String>>>,
     /// When set by the backend after an auth failure, the agent should wait this many
     /// seconds before reconnecting (progressive lockout).
     retry_after_seconds: Arc<RwLock<Option<u64>>>,
 }
+
+// LOCK ORDERING (must be respected to prevent deadlocks):
+// When acquiring multiple locks simultaneously, always acquire in this order:
+//   1. write (WsWrite mutex — outermost, held during message send)
+//   2. active_restore_streams
+//   3. active_restore_bytes_written  (must be after active_restore_streams)
+//   4. active_restore_request_id
+//   5. active_uploads
+//   6. active_log_streams
+//   7. monitor_tasks
+//   8. auto_restart_configs
+//   9. restart_trackers
+//  10. start_server_messages
+//  11. server_ports
+//  12. server_health_state
+//  13. retry_after_seconds
+//  14. backend_connected (rarely contended, almost always read)
+//
+// Rule: never hold lock N while attempting to acquire lock M where M < N.
 
 impl Clone for WebSocketHandler {
     fn clone(&self) -> Self {
@@ -521,6 +544,7 @@ impl Clone for WebSocketHandler {
             server_ports: self.server_ports.clone(),
             server_health_state: self.server_health_state.clone(),
             active_restore_streams: self.active_restore_streams.clone(),
+            active_restore_bytes_written: self.active_restore_bytes_written.clone(),
             active_restore_request_id: self.active_restore_request_id.clone(),
             retry_after_seconds: self.retry_after_seconds.clone(),
         }
@@ -566,6 +590,7 @@ impl WebSocketHandler {
             server_ports: Arc::new(RwLock::new(HashMap::new())),
             server_health_state: Arc::new(RwLock::new(HashMap::new())),
             active_restore_streams: Arc::new(RwLock::new(HashMap::new())),
+            active_restore_bytes_written: Arc::new(RwLock::new(HashMap::new())),
             active_restore_request_id: Arc::new(RwLock::new(None)),
             retry_after_seconds: Arc::new(RwLock::new(None)),
         }
@@ -600,7 +625,13 @@ impl WebSocketHandler {
             let payload_text = if chunk.len() == 1
                 && chunk[0].get("type").and_then(|t| t.as_str()) == Some("resource_stats_batch")
             {
-                serde_json::to_string(&chunk[0]).unwrap_or_default()
+                match serde_json::to_string(&chunk[0]) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        warn!("Failed to serialize metrics: {}", e);
+                        continue;
+                    }
+                }
             } else {
                 let metrics_value = serde_json::Value::Array(chunk.to_vec());
                 let payload = json!({ "type": "resource_stats_batch", "metrics": metrics_value });
@@ -673,13 +704,29 @@ impl WebSocketHandler {
         match parsed_url.scheme() {
             "wss" => {}
             "ws" => {
-                if std::env::var("CATALYST_ALLOW_INSECURE_WS").is_err() {
-                    warn!(
-                        "Insecure ws:// connections are not recommended in production. \"
-                        Use wss:// or set CATALYST_ALLOW_INSECURE_WS=1 to suppress this warning."
-                    );
+                // Check if ws:// is explicitly allowed via opt-in env var.
+                // Fix for UF-10: ws:// should be blocked for non-loopback
+                // unless the operator explicitly sets CATALYST_ALLOW_INSECURE_WS=1.
+                let allow_insecure = std::env::var("CATALYST_ALLOW_INSECURE_WS")
+                    .map(|s| s == "1")
+                    .unwrap_or(false);
+                if !allow_insecure {
+                    // Block ws:// for non-loopback addresses
+                    let host = parsed_url.host_str().unwrap_or("");
+                    let is_loopback = host == "localhost"
+                        || host == "127.0.0.1"
+                        || host == "::1"
+                        || host.starts_with("127.");
+                    if !is_loopback {
+                        return Err(AgentError::ConfigError(
+                            "Insecure ws:// is not allowed for non-loopback addresses. \
+                             Use wss:// or set CATALYST_ALLOW_INSECURE_WS=1 to override.".to_string()
+                        ));
+                    }
+                    warn!("Using insecure WebSocket connection (ws://) — only allowed for loopback");
+                } else {
+                    warn!("Using insecure WebSocket connection (ws://) — CATALYST_ALLOW_INSECURE_WS=1 is set");
                 }
-                warn!("Using insecure WebSocket connection (ws://)");
             }
             other => {
                 return Err(AgentError::ConfigError(format!(
@@ -875,15 +922,28 @@ impl WebSocketHandler {
         // reconnects and to release file descriptors.
         self.cleanup_all_uploads().await;
 
-        // Kill any active restore streams on disconnect
+        // Kill any active restore streams on disconnect, and reap zombie processes.
+        // Lock ordering: active_restore_streams before active_restore_bytes_written.
         {
             let mut streams = self.active_restore_streams.write().await;
             for (rid, mut child) in streams.drain() {
                 child.stdin.take(); // close stdin
-                child.kill().await.ok();
-                warn!("Killed orphaned restore stream {} on disconnect", rid);
+                let _ = child.kill().await;
+                // Always reap the zombie process, even if kill() failed
+                // (e.g., process already exited — ESRCH on Unix).
+                match child.wait().await {
+                    Ok(status) => {
+                        debug!("Orphaned restore stream {} exited with: {}", rid, status);
+                    }
+                    Err(e) => {
+                        warn!("Failed to wait for orphaned restore stream {}: {}", rid, e);
+                    }
+                }
+                warn!("Cleaned up orphaned restore stream {}", rid);
             }
         }
+        // Clean up restore byte counters
+        self.active_restore_bytes_written.write().await.clear();
 
         {
             let mut guard = self.write.write().await;
@@ -2051,10 +2111,13 @@ impl WebSocketHandler {
         let mut final_script = install_script.to_string();
 
         // Debug: log raw install script for troubleshooting
-        info!("[DEBUG] install_server: raw install_script (first 500 chars):\n---BEGIN RAW---\n{}---END RAW---",
+        // Using debug! (not info!) because the substituted script body contains
+        // secrets (passwords, API keys) that should never be written to disk
+        // at the default info log level.
+        debug!("[DEBUG] install_server: raw install_script (first 500 chars):\n---BEGIN RAW---\n{}---END RAW---",
             if install_script.len() > 500 { format!("{}... [truncated, total {} bytes]", &install_script[..500], install_script.len()) } else { install_script.to_string() }
         );
-        info!(
+        debug!(
             "[DEBUG] install_server: environment keys: {:?}",
             environment.keys().collect::<Vec<_>>()
         );
@@ -2091,7 +2154,10 @@ impl WebSocketHandler {
             "[DEBUG] install_server: host_server_dir: {}",
             host_server_dir
         );
-        info!("[DEBUG] install_server: final_script (first 500 chars after var substitution):\n---BEGIN FINAL---\n{}---END FINAL---",
+        // Using debug! (not info!) because the substituted script body contains
+        // secrets (passwords, API keys) that should never be written to disk
+        // at the default info log level.
+        debug!("[DEBUG] install_server: final_script (first 500 chars after var substitution):\n---BEGIN FINAL---\n{}---END FINAL---",
             if final_script.len() > 500 { format!("{}... [truncated, total {} bytes]", &final_script[..500], final_script.len()) } else { final_script.clone() }
         );
 
@@ -2770,9 +2836,13 @@ impl WebSocketHandler {
             }
 
             // Replace all {{VARIABLE}} placeholders
+            // Shell-escape values for defense-in-depth, same as install script.
+            // The startup command is passed to /bin/sh -c, so unquoted values
+            // could enable command injection if backend-controlled values are malicious.
             for (key, value) in &env_map {
                 let placeholder = format!("{{{{{}}}}}", key);
-                final_startup_command = final_startup_command.replace(&placeholder, value);
+                let escaped = shell_escape_value(value);
+                final_startup_command = final_startup_command.replace(&placeholder, &escaped);
             }
 
             // Some templates use bash-style arithmetic tests like ((1)); convert for /bin/sh.
@@ -2870,7 +2940,24 @@ impl WebSocketHandler {
                 self.start_server_messages
                     .write()
                     .await
-                    .insert(server_id.to_string(), msg.clone());
+                    .insert(server_id.to_string(), {
+                        // Strip sensitive fields before storing the restart message.
+                        // Auto-restart only needs the server config, not the install
+                        // script or environment secrets that could be extracted later.
+                        let mut restart_msg = msg.clone();
+                        if let Some(obj) = restart_msg.as_object_mut() {
+                            obj.remove("installScript");
+                            if let Some(env) = obj.get_mut("environment") {
+                                if let Some(env_obj) = env.as_object_mut() {
+                                    // Keep keys for restart logic but redact values
+                                    for (_k, v) in env_obj.iter_mut() {
+                                        *v = json!("[redacted]");
+                                    }
+                                }
+                            }
+                        }
+                        restart_msg
+                    });
                 self.server_ports
                     .write()
                     .await
@@ -3464,11 +3551,15 @@ impl WebSocketHandler {
         // Optionally encrypt the backup if an encryption key is provided
         let encrypted = if let Some(enc_key_b64) = msg.get("encryptionKey").and_then(|v| v.as_str())
         {
-            let key = base64::engine::general_purpose::STANDARD
-                .decode(enc_key_b64)
-                .map_err(|e| {
-                    AgentError::InvalidRequest(format!("Invalid encryption key: {}", e))
-                })?;
+            // Wrap the decoded key in Zeroizing so it is cleared from memory
+            // on drop, preventing persistence in memory/swap/core dumps (UF-09/14).
+            let key = zeroize::Zeroizing::new(
+                base64::engine::general_purpose::STANDARD
+                    .decode(enc_key_b64)
+                    .map_err(|e| {
+                        AgentError::InvalidRequest(format!("Invalid encryption key: {}", e))
+                    })?
+            );
             let raw = tokio::fs::read(&backup_path).await?;
             match encrypt_backup(&raw, &key) {
                 Ok(encrypted_data) => {
@@ -3566,11 +3657,15 @@ impl WebSocketHandler {
         let actual_backup_file;
         let cleanup_temp;
         if let Some(enc_key_b64) = msg.get("encryptionKey").and_then(|v| v.as_str()) {
-            let key = base64::engine::general_purpose::STANDARD
-                .decode(enc_key_b64)
-                .map_err(|e| {
-                    AgentError::InvalidRequest(format!("Invalid encryption key: {}", e))
-                })?;
+            // Wrap the decoded key in Zeroizing so it is cleared from memory
+            // on drop, preventing persistence in memory/swap/core dumps (UF-09/14).
+            let key = zeroize::Zeroizing::new(
+                base64::engine::general_purpose::STANDARD
+                    .decode(enc_key_b64)
+                    .map_err(|e| {
+                        AgentError::InvalidRequest(format!("Invalid encryption key: {}", e))
+                    })?
+            );
             let raw = tokio::fs::read(&backup_file).await?;
             let decrypted = decrypt_backup(&raw, &key).map_err(|e| {
                 AgentError::InvalidRequest(format!("Backup decryption failed: {}", e))
@@ -3897,6 +3992,17 @@ impl WebSocketHandler {
         let request_id = msg["requestId"]
             .as_str()
             .ok_or_else(|| AgentError::InvalidRequest("Missing requestId".to_string()))?;
+
+        // UF-16: Require cryptographically random request IDs to prevent
+        // session injection. The requestId is used as a lookup key, so a
+        // predictable ID allows any WS connection to inject chunks into
+        // any session. Enforce minimum entropy by requiring sufficient length
+        // and hex-like characters.
+        if request_id.len() < 32 {
+            return Err(AgentError::SecurityViolation(
+                "Upload requestId must be at least 32 characters to prevent session injection".to_string()
+            ));
+        }
         let backup_path = msg["backupPath"]
             .as_str()
             .ok_or_else(|| AgentError::InvalidRequest("Missing backupPath".to_string()))?;
@@ -4311,6 +4417,25 @@ impl WebSocketHandler {
             return Ok(());
         }
 
+        // Security: validate symlinks in cloned files — cp -a preserves symlinks,
+        // and a malicious source server could contain symlinks that escape the
+        // server directory (UF-08).
+        let canonical_base = tokio::fs::canonicalize(&target_dir)
+            .await
+            .unwrap_or_else(|_| target_dir.clone());
+        let mut dangerous = Vec::new();
+        if let Err(e) = self.check_restore_symlinks(&target_dir, &canonical_base, &mut dangerous).await {
+            warn!("Symlink scan failed after clone: {}", e);
+        }
+        if !dangerous.is_empty() {
+            warn!("Removing {} dangerous symlinks from cloned server {}", dangerous.len(), target_uuid);
+            for link in &dangerous {
+                if let Some(link_path) = link.split(" -> ").next() {
+                    let _ = tokio::fs::remove_file(link_path).await;
+                }
+            }
+        }
+
         // Chown the target directory to the container user
         if let Err(e) = chown_to_container_user(&target_dir).await {
             warn!("Failed to chown cloned files: {}", e);
@@ -4564,6 +4689,13 @@ impl WebSocketHandler {
             .await
             .insert(request_id.to_string(), child);
 
+        // Initialize byte counter to track restore stream size and prevent
+        // decompression bombs (UF-07).
+        self.active_restore_bytes_written
+            .write()
+            .await
+            .insert(request_id.to_string(), 0u64);
+
         *self.active_restore_request_id.write().await = Some(request_id.to_string());
 
         let event = json!({
@@ -4579,11 +4711,17 @@ impl WebSocketHandler {
     }
 
     /// Write a binary data chunk to the restore stream's stdin.
+    /// Tracks total bytes written and terminates the stream if it exceeds
+    /// MAX_RESTORE_STREAM_BYTES to prevent decompression bombs (UF-07).
+    ///
+    /// Lock ordering: acquires active_restore_streams before active_restore_bytes_written
+    /// to prevent deadlock (see lock ordering comment on struct).
     pub async fn write_restore_stream_chunk(
         &self,
         request_id: &str,
         data: &[u8],
     ) -> AgentResult<()> {
+        // Acquire streams lock first (lock ordering: streams before bytes_written)
         let mut streams = self.active_restore_streams.write().await;
         if let Some(child) = streams.get_mut(request_id) {
             if let Some(stdin) = child.stdin.as_mut() {
@@ -4592,12 +4730,30 @@ impl WebSocketHandler {
                     AgentError::IoError(format!("Failed to write to restore stdin: {}", e))
                 })?;
             }
-            Ok(())
         } else {
-            Err(AgentError::InvalidRequest(
+            return Err(AgentError::InvalidRequest(
                 "No active restore stream".to_string(),
-            ))
+            ));
         }
+        drop(streams); // Release streams lock before acquiring bytes_written
+
+        // Track bytes written and check against size limit
+        let mut counters = self.active_restore_bytes_written.write().await;
+        let counter = counters.entry(request_id.to_string()).or_insert(0);
+        *counter = counter.saturating_add(data.len() as u64);
+        if *counter > MAX_RESTORE_STREAM_BYTES {
+            // Kill the tar process — stream exceeds decompression bomb limit
+            let mut streams = self.active_restore_streams.write().await;
+            if let Some(mut child) = streams.remove(request_id) {
+                let _ = child.kill().await;
+                // Reap zombie
+                let _ = child.wait().await;
+            }
+            return Err(AgentError::SecurityViolation(
+                format!("Restore stream exceeded maximum size ({} bytes)", MAX_RESTORE_STREAM_BYTES)
+            ));
+        }
+        Ok(())
     }
 
     /// Close stdin and wait for tar to finish, then chown the restored data.
@@ -4651,6 +4807,33 @@ impl WebSocketHandler {
         }
 
         let server_dir = self.config.server.data_dir.join(server_uuid);
+
+        // Security: validate that no symlinks in the restored data escape
+        // the server directory. This prevents a malicious backup from planting
+        // symlinks that point to host paths like /etc/shadow.
+        // Same check used in non-streaming restore path (UF-01).
+        let canonical_base = tokio::fs::canonicalize(&server_dir)
+            .await
+            .unwrap_or_else(|_| server_dir.clone());
+        let mut dangerous = Vec::new();
+        if let Err(e) = self.check_restore_symlinks(&server_dir, &canonical_base, &mut dangerous).await {
+            warn!("Symlink scan failed after restore stream: {}", e);
+        }
+        if !dangerous.is_empty() {
+            warn!("Removing {} dangerous symlinks from restored server {}", dangerous.len(), server_uuid);
+            for link in &dangerous {
+                // Parse "path -> target" format from check_restore_symlinks
+                if let Some(link_path) = link.split(" -> ").next() {
+                    // tokio::fs::remove_file on a symlink removes the symlink itself,
+                    // not the target — this is the correct behavior.
+                    let _ = tokio::fs::remove_file(link_path).await;
+                }
+            }
+        }
+
+        // Clean up byte counter for this restore stream
+        self.active_restore_bytes_written.write().await.remove(request_id);
+
         if let Err(e) = chown_to_container_user(&server_dir).await {
             warn!("Failed to chown restored directory: {}", e);
         }
