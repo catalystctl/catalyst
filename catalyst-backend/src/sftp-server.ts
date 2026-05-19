@@ -120,6 +120,14 @@ async function validateTokenAndGetServer(
 			return null;
 		}
 
+		// Look up the user to check admin role
+		const user = await prisma.user.findUnique({
+			where: { id: userId },
+			select: { email: true, username: true, role: true },
+		});
+
+		const isAdmin = user?.role === 'administrator';
+
 		// Check if user has access to this server via ServerAccess
 		const serverAccess = await prisma.serverAccess.findFirst({
 			where: {
@@ -135,12 +143,27 @@ async function validateTokenAndGetServer(
 			},
 		});
 
-		if (!serverAccess) {
+		// Admins can access any server, even without an explicit ServerAccess record
+		if (!serverAccess && !isAdmin) {
 			return null;
 		}
 
-		const permissions = serverAccess.permissions;
-		const serverUuid = serverAccess.server.uuid;
+		// Admins get wildcard permissions; others use their assigned permissions
+		const permissions = isAdmin ? ['*'] : serverAccess!.permissions;
+
+		// If admin has no ServerAccess record, look up the server directly
+		let serverRecord = serverAccess?.server;
+		if (!serverRecord) {
+			serverRecord = await prisma.server.findUnique({
+				where: { id: serverId },
+				include: { node: true },
+			});
+			if (!serverRecord) {
+				return null;
+			}
+		}
+
+		const serverUuid = serverRecord.uuid;
 
 		const serverPath = join(SERVER_FILES_ROOT, serverUuid);
 
@@ -161,11 +184,6 @@ async function validateTokenAndGetServer(
 			// This is safe since we just created it above
 			realServerPath = serverPath;
 		}
-
-		const user = await prisma.user.findUnique({
-			where: { id: userId },
-			select: { email: true, username: true },
-		});
 
 		return {
 			userId,
@@ -316,6 +334,16 @@ function startSFTPServer(logger: Logger) {
 							);
 							const sftpStream = accept();
 
+							// Handle SFTP stream end — close the SSH channel when the
+							// SFTP stream closes, otherwise the client (scp/sftp) will
+							// hang waiting for the channel to close.
+							sftpStream.on("close", () => {
+								logger.debug("SFTP stream closed, ending session");
+								if (sshSession._channel) {
+									sshSession._channel.close();
+								}
+							});
+
 							if (!session) {
 								captureSystemError({
 									level: 'warn',
@@ -455,10 +483,12 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
 					let handle: Buffer;
 
 					if (flags & utils.sftp.OPEN_MODE.WRITE) {
-						const stream = createWriteStream(fullPath, {
-							flags: flags & utils.sftp.OPEN_MODE.APPEND ? "a" : "w",
-						});
-						handle = createHandle({ type: "file", path: fullPath, stream });
+						// Ensure the file exists — WRITE handler uses fs.open() directly,
+						// so we only need to create the file here and track the path.
+						const writeFlags = flags & utils.sftp.OPEN_MODE.APPEND ? "a" : "w";
+						const fd = await fs.open(fullPath, writeFlags);
+						await fd.close();
+						handle = createHandle({ type: "file", path: fullPath });
 					} else {
 						const stream = createReadStream(fullPath);
 						handle = createHandle({ type: "file", path: fullPath, stream });
@@ -576,6 +606,12 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
 						deleteHandle(handle);
 					}
 					sftpStream.status(reqid, utils.sftp.STATUS_CODE.OK);
+					// If no handles remain open, signal end of SFTP session
+					// by ending the stream. This allows the SSH channel to close,
+					// which scp/sftp clients expect after all operations complete.
+					if (handles.size === 0) {
+						sftpStream.end();
+					}
 				} catch (err: any) {
 					captureSystemError({
 						level: 'warn',
@@ -977,6 +1013,115 @@ function handleSFTPSession(sftpStream: SFTPStream, session: SFTPSession) {
 						metadata: { operation: 'RENAME', oldPath, newPath, serverId: session?.serverId },
 					}).catch(() => {});
 					console.error("SFTP RENAME error:", err);
+					sftpStream.status(reqid, utils.sftp.STATUS_CODE.FAILURE);
+				}
+			});
+		})
+		// SETSTAT — change file attributes (permissions, timestamps) by path.
+		// Used by scp/WinSCP to set permissions and mtime after upload.
+		.on("SETSTAT", (reqid, filepath, attrs) => {
+			enqueue(async () => {
+				try {
+					const fullPath = normalizePath(
+						session.serverPath,
+						session.realServerPath,
+						filepath,
+					);
+
+					if (!hasPermission(session, "file.write")) {
+						return sftpStream.status(
+							reqid,
+							utils.sftp.STATUS_CODE.PERMISSION_DENIED,
+						);
+					}
+
+					if (attrs.mode !== undefined) {
+						await fs.chmod(fullPath, attrs.mode);
+					}
+					if (attrs.atime !== undefined || attrs.mtime !== undefined) {
+						const stat = await fs.stat(fullPath);
+						await fs.utimes(
+							fullPath,
+							attrs.atime !== undefined ? new Date(attrs.atime * 1000) : stat.atime,
+							attrs.mtime !== undefined ? new Date(attrs.mtime * 1000) : stat.mtime,
+						);
+					}
+					sftpStream.status(reqid, utils.sftp.STATUS_CODE.OK);
+				} catch (err: any) {
+					sftpStream.status(reqid, utils.sftp.STATUS_CODE.FAILURE);
+				}
+			});
+		})
+		// FSETSTAT — change file attributes by open file handle.
+		// Used by modern scp (OpenSSH 9+) after writing a file.
+		.on("FSETSTAT", (reqid, handle, attrs) => {
+			enqueue(async () => {
+				try {
+					const handleData = getHandle(handle);
+					if (!handleData) {
+						return sftpStream.status(
+							reqid,
+							utils.sftp.STATUS_CODE.NO_SUCH_FILE,
+						);
+					}
+
+					if (!hasPermission(session, "file.write")) {
+						return sftpStream.status(
+							reqid,
+							utils.sftp.STATUS_CODE.PERMISSION_DENIED,
+						);
+					}
+
+					const fullPath = normalizePath(
+						session.serverPath,
+						session.realServerPath,
+						handleData.path,
+					);
+
+					if (attrs.mode !== undefined) {
+						await fs.chmod(fullPath, attrs.mode);
+					}
+					if (attrs.atime !== undefined || attrs.mtime !== undefined) {
+						const stat = await fs.stat(fullPath);
+						await fs.utimes(
+							fullPath,
+							attrs.atime !== undefined ? new Date(attrs.atime * 1000) : stat.atime,
+							attrs.mtime !== undefined ? new Date(attrs.mtime * 1000) : stat.mtime,
+						);
+					}
+					sftpStream.status(reqid, utils.sftp.STATUS_CODE.OK);
+				} catch (err: any) {
+					sftpStream.status(reqid, utils.sftp.STATUS_CODE.FAILURE);
+				}
+			});
+		})
+		// FSTAT — get file attributes by open file handle.
+		// Used by some SFTP clients for file metadata queries.
+		.on("FSTAT", (reqid, handle) => {
+			enqueue(async () => {
+				try {
+					const handleData = getHandle(handle);
+					if (!handleData) {
+						return sftpStream.status(
+							reqid,
+							utils.sftp.STATUS_CODE.NO_SUCH_FILE,
+						);
+					}
+
+					const fullPath = normalizePath(
+						session.serverPath,
+						session.realServerPath,
+						handleData.path,
+					);
+
+					const stats = await fs.stat(fullPath);
+					sftpStream.attrs(reqid, {
+						mode: stats.mode,
+						size: stats.size,
+						atime: Math.floor(stats.atimeMs / 1000),
+						mtime: Math.floor(stats.mtimeMs / 1000),
+					});
+				} catch (err: any) {
 					sftpStream.status(reqid, utils.sftp.STATUS_CODE.FAILURE);
 				}
 			});
