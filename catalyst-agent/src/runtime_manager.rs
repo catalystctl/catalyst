@@ -492,6 +492,7 @@ pub struct ContainerdRuntime {
 
 impl ContainerdRuntime {
     /// Connect to containerd socket and create runtime
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         socket_path: PathBuf,
         namespace: String,

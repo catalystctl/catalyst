@@ -396,6 +396,7 @@ impl NetworkManager {
     }
 
     /// Update network configuration in config.toml
+    #[allow(clippy::too_many_arguments)]
     async fn update_config(
         &self,
         old_name: &str,

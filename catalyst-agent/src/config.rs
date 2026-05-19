@@ -212,7 +212,9 @@ impl AgentConfig {
 
         // When console_log_dir is the default sentinel, derive it from data_dir
         // so that logs follow the data directory when the user overrides it.
-        if config.server.console_log_dir == PathBuf::from("/var/log/catalyst/console") {
+        if config.server.console_log_dir.as_path()
+            == std::path::Path::new("/var/log/catalyst/console")
+        {
             config.server.console_log_dir = config.server.data_dir.join("console");
             info!(
                 "Console log dir derived from data_dir: {}",

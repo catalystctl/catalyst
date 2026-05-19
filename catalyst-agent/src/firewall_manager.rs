@@ -121,7 +121,7 @@ fn save_tracked_rules() {
     }
     if let Err(e) = std::fs::rename(&temp, state_file) {
         warn!("Could not atomically replace firewall rule state: {}", e);
-        let _ = std::fs::remove_file(&state_file.with_extension("jsonl.tmp"));
+        let _ = std::fs::remove_file(state_file.with_extension("jsonl.tmp"));
     }
 }
 
