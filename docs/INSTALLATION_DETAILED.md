@@ -654,6 +654,18 @@ Traefik offers Docker-native service discovery and a web dashboard.
 
 ### Option C: Existing Reverse Proxy
 
+If you already run Nginx, Apache, HAProxy, or another proxy, the recommended
+approach is to **proxy everything to the bundled frontend nginx container**
+and let its internal routing handle `/ws`, `/api/`, `/auth/`, `/docs`, and
+static assets.
+
+> **Do NOT add a separate `/ws` block in your external proxy.** The bundled
+> nginx (`frontend` container) already has optimized `/ws`, `/api/`, `/auth/`,
+> `/docs`, and static asset routing with correct buffering, timeouts, and
+> WebSocket upgrade headers. Adding a separate `/ws` location in your external
+> proxy bypasses these settings and can cause console streaming failures,
+> truncated responses, and agent disconnections.
+
 If you already run Nginx, Apache, HAProxy, or another proxy:
 
 1. **Bind Catalyst to localhost only:**
@@ -689,21 +701,6 @@ If you already run Nginx, Apache, HAProxy, or another proxy:
 
        client_max_body_size 100m;
 
-       # WebSocket support — critical for console streaming
-       location /ws {
-           proxy_pass http://catalyst;
-           proxy_http_version 1.1;
-           proxy_set_header Upgrade $http_upgrade;
-           proxy_set_header Connection "upgrade";
-           proxy_set_header Host $host;
-           proxy_set_header X-Real-IP $remote_addr;
-           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-           proxy_set_header X-Forwarded-Proto $scheme;
-           proxy_read_timeout 86400s;
-           proxy_send_timeout 86400s;
-       }
-
-       # All other requests
        location / {
            proxy_pass http://catalyst;
            proxy_set_header Host $host;

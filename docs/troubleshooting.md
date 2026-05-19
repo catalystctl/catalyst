@@ -396,6 +396,13 @@ ping -c 10 panel.example.com
 # - No proxy timeout shorter than agent heartbeat (15s)
 ```
 
+> **External reverse proxy users:** If you are using an external reverse proxy
+> (nginx, Caddy, etc.) in front of the bundled `frontend` container,
+> **do not proxy `/ws` directly to the backend** (port 3000). Proxy everything
+> to the `frontend` container (port 80/8080) and let the bundled nginx handle
+> `/ws` routing. The examples below are for debugging a **direct backend
+> connection only**.
+
 **Proxy configuration fixes:**
 
 **NGINX:**

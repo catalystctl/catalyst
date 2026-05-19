@@ -400,19 +400,14 @@ curl -X POST http://localhost:3000/api/servers/srv_abc/console/command \
   -d '{"command": "say Hello from API"}'
 ```
 
-**Nginx configuration for SSE:**
+**Nginx configuration for SSE (development / direct backend only):**
+
+> **Production deployments:** In production, proxy everything to the bundled
+> `frontend` nginx container (port 80/8080) and let its internal routing handle
+> `/ws`, `/api/`, `/auth/`, and `/docs`. Do not add a separate `/ws` block in
+> your external proxy.
 
 ```nginx
-location /ws {
-    proxy_pass http://backend:3000;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-    proxy_read_timeout 86400s;
-    proxy_send_timeout 86400s;
-}
-
 # SSE streams should NOT be buffered
 location ~ ^/api/servers/.*/console/stream {
     proxy_pass http://backend:3000;

@@ -316,6 +316,17 @@ Traefik dashboard: `http://127.0.0.1:8080` (localhost only).
 
 ### Manual Reverse Proxy
 
+The recommended approach is to **proxy everything to the bundled frontend
+nginx container** and let its internal routing handle `/ws`, `/api/`,
+`/auth/`, `/docs`, and static assets.
+
+> **Do NOT add a separate `/ws` block in your external proxy.** The bundled
+> nginx (`frontend` container) already has optimized `/ws`, `/api/`, `/auth/`,
+> `/docs`, and static asset routing with correct buffering, timeouts, and
+> WebSocket upgrade headers. Adding a separate `/ws` location in your external
+> proxy bypasses these settings and can cause console streaming failures,
+> truncated responses, and agent disconnections.
+
 Use your own reverse proxy (nginx, Caddy standalone, etc.).
 
 ```env
@@ -335,14 +346,6 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/panel.example.com/privkey.pem;
 
     client_max_body_size 100m;
-
-    location /ws {
-        proxy_pass http://127.0.0.1:80;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_read_timeout 86400s;
-    }
 
     location / {
         proxy_pass http://127.0.0.1:80;
