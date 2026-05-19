@@ -22,9 +22,8 @@ use tracing::{debug, error, info, warn};
 
 use crate::config::CniNetworkConfig;
 use crate::{
-    runtime_manager::rotate_logs,
-    AgentConfig, AgentError, AgentResult, ContainerdRuntime, FileManager, FirewallManager,
-    NetworkManager, StorageManager,
+    runtime_manager::rotate_logs, AgentConfig, AgentError, AgentResult, ContainerdRuntime,
+    FileManager, FirewallManager, NetworkManager, StorageManager,
 };
 
 type WsStream =
@@ -4244,9 +4243,7 @@ impl WebSocketHandler {
         let target_uuid = msg["targetServerUuid"]
             .as_str()
             .ok_or_else(|| AgentError::InvalidRequest("Missing targetServerUuid".to_string()))?;
-        let server_id = msg["serverId"]
-            .as_str()
-            .unwrap_or(target_uuid);
+        let server_id = msg["serverId"].as_str().unwrap_or(target_uuid);
 
         validate_safe_path_segment(source_uuid, "sourceServerUuid")?;
         validate_safe_path_segment(target_uuid, "targetServerUuid")?;
@@ -4262,18 +4259,24 @@ impl WebSocketHandler {
                 "error": format!("Source server directory not found: {}", source_dir.display()),
             });
             let mut w = write.lock().await;
-            w.send(Message::Text(event.to_string().into())).await.map_err(|e| AgentError::NetworkError(e.to_string()))?;
+            w.send(Message::Text(event.to_string().into()))
+                .await
+                .map_err(|e| AgentError::NetworkError(e.to_string()))?;
             return Ok(());
         }
 
         // Create target directory if it doesn't exist
         if !target_dir.exists() {
-            tokio::fs::create_dir_all(&target_dir)
-                .await
-                .map_err(|e| AgentError::IoError(format!("Failed to create target directory: {}", e)))?;
+            tokio::fs::create_dir_all(&target_dir).await.map_err(|e| {
+                AgentError::IoError(format!("Failed to create target directory: {}", e))
+            })?;
         }
 
-        info!("Cloning files from {} to {}", source_dir.display(), target_dir.display());
+        info!(
+            "Cloning files from {} to {}",
+            source_dir.display(),
+            target_dir.display()
+        );
 
         // Use cp -a to copy all files preserving permissions, ownership, symlinks
         let status = tokio::process::Command::new("cp")
@@ -4294,7 +4297,9 @@ impl WebSocketHandler {
                 "error": format!("cp -a exited with code {}", status.code().unwrap_or(-1)),
             });
             let mut w = write.lock().await;
-            w.send(Message::Text(event.to_string().into())).await.map_err(|e| AgentError::NetworkError(e.to_string()))?;
+            w.send(Message::Text(event.to_string().into()))
+                .await
+                .map_err(|e| AgentError::NetworkError(e.to_string()))?;
             return Ok(());
         }
 
@@ -4311,7 +4316,9 @@ impl WebSocketHandler {
             "success": true,
         });
         let mut w = write.lock().await;
-        w.send(Message::Text(event.to_string().into())).await.map_err(|e| AgentError::NetworkError(e.to_string()))?;
+        w.send(Message::Text(event.to_string().into()))
+            .await
+            .map_err(|e| AgentError::NetworkError(e.to_string()))?;
 
         Ok(())
     }
@@ -4700,7 +4707,10 @@ impl WebSocketHandler {
 
         let network = self.parse_network_config(msg)?;
 
-        let result = self.network_manager.update_network(old_name, &network).await;
+        let result = self
+            .network_manager
+            .update_network(old_name, &network)
+            .await;
 
         let event = match &result {
             Ok(_) => json!({

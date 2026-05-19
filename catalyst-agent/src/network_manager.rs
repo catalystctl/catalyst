@@ -36,7 +36,10 @@ impl NetworkManager {
             cni_dir.display(),
             config_path.display()
         );
-        Self { cni_dir, config_path }
+        Self {
+            cni_dir,
+            config_path,
+        }
     }
 
     fn validate_label(name: &str, max_len: usize, context: &str) -> Result<(), AgentError> {
@@ -152,19 +155,21 @@ impl NetworkManager {
 
         info!(
             "✓ Created CNI network '{}' at {}",
-            network.name, cni_config_path.display()
+            network.name,
+            cni_config_path.display()
         );
 
         // Update config.toml to persist the network
-        if let Err(e) = self.persist_to_config(
-            network,
-            &interface,
-            &cidr,
-            &gateway,
-            &range_start,
-            &range_end,
-        )
-        .await
+        if let Err(e) = self
+            .persist_to_config(
+                network,
+                &interface,
+                &cidr,
+                &gateway,
+                &range_start,
+                &range_end,
+            )
+            .await
         {
             let _ = fs::remove_file(&cni_config_path).await;
             return Err(e);
@@ -174,7 +179,8 @@ impl NetworkManager {
     }
 
     /// Update an existing CNI network configuration
-    pub async fn update_network(&self, 
+    pub async fn update_network(
+        &self,
         old_name: &str,
         network: &CniNetworkConfig,
     ) -> Result<(), AgentError> {
@@ -248,20 +254,22 @@ impl NetworkManager {
 
         info!(
             "✓ Updated CNI network '{}' at {}",
-            network.name, cni_config_path.display()
+            network.name,
+            cni_config_path.display()
         );
 
         // Update config.toml
-        if let Err(e) = self.update_config(
-            old_name,
-            network,
-            &interface,
-            &cidr,
-            &gateway,
-            &range_start,
-            &range_end,
-        )
-        .await
+        if let Err(e) = self
+            .update_config(
+                old_name,
+                network,
+                &interface,
+                &cidr,
+                &gateway,
+                &range_start,
+                &range_end,
+            )
+            .await
         {
             let _ = fs::remove_file(&cni_config_path).await;
             return Err(e);
@@ -341,7 +349,8 @@ impl NetworkManager {
     }
 
     /// Persist network configuration to config.toml
-    async fn persist_to_config(&self, 
+    async fn persist_to_config(
+        &self,
         network: &CniNetworkConfig,
         interface: &str,
         cidr: &str,
@@ -362,7 +371,8 @@ impl NetworkManager {
         }) {
             info!(
                 "✓ Network '{}' already present in {}",
-                network.name, self.config_path.display()
+                network.name,
+                self.config_path.display()
             );
             return Ok(());
         }
@@ -377,12 +387,17 @@ impl NetworkManager {
         ));
 
         self.store_agent_config_toml(&config).await?;
-        info!("✓ Persisted network '{}' to {}", network.name, self.config_path.display());
+        info!(
+            "✓ Persisted network '{}' to {}",
+            network.name,
+            self.config_path.display()
+        );
         Ok(())
     }
 
     /// Update network configuration in config.toml
-    async fn update_config(&self, 
+    async fn update_config(
+        &self,
         old_name: &str,
         network: &CniNetworkConfig,
         interface: &str,
@@ -432,7 +447,11 @@ impl NetworkManager {
         }
 
         self.store_agent_config_toml(&config).await?;
-        info!("✓ Updated network '{}' in {}", network.name, self.config_path.display());
+        info!(
+            "✓ Updated network '{}' in {}",
+            network.name,
+            self.config_path.display()
+        );
         Ok(())
     }
 
@@ -456,7 +475,11 @@ impl NetworkManager {
         });
 
         self.store_agent_config_toml(&config).await?;
-        info!("✓ Removed network '{}' from {}", network_name, self.config_path.display());
+        info!(
+            "✓ Removed network '{}' from {}",
+            network_name,
+            self.config_path.display()
+        );
         Ok(())
     }
 

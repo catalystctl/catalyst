@@ -65,7 +65,9 @@ fn lock_rules() -> std::sync::MutexGuard<'static, Vec<FirewallRule>> {
 
 /// Return the rule state file path, panicking if init() was never called.
 fn rule_state_file() -> &'static std::path::PathBuf {
-    RULE_STATE_FILE.get().expect("FirewallManager::init() was not called before using rule state")
+    RULE_STATE_FILE
+        .get()
+        .expect("FirewallManager::init() was not called before using rule state")
 }
 
 /// Load tracked rules from the persistent state file, merging with any
@@ -92,7 +94,8 @@ fn load_tracked_rules() {
             if count > 0 {
                 info!(
                     "Loaded {} tracked firewall rules from {}",
-                    count, state_file.display()
+                    count,
+                    state_file.display()
                 );
             }
         }
@@ -307,10 +310,7 @@ impl FirewallManager {
     pub fn init(data_dir: &std::path::Path) {
         let state_file = data_dir.join("firewall-rules.jsonl");
         let _ = RULE_STATE_FILE.set(state_file);
-        info!(
-            "Firewall rule state file: {}",
-            rule_state_file().display()
-        );
+        info!("Firewall rule state file: {}", rule_state_file().display());
         load_tracked_rules();
     }
 
@@ -1044,6 +1044,11 @@ mod tests {
 
     #[test]
     fn test_track_and_untrack() {
+        // Initialize the rule state file path so save_tracked_rules() doesn't panic.
+        let tmp = std::env::temp_dir().join("catalyst-test-fw-track");
+        let _ = std::fs::create_dir_all(&tmp);
+        FirewallManager::init(&tmp);
+
         // Clear any existing rules in test.
         lock_rules().clear();
 

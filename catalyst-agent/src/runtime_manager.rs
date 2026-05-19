@@ -1738,7 +1738,9 @@ impl ContainerdRuntime {
 
     pub async fn get_container_ip(&self, container_id: &str) -> AgentResult<String> {
         // Check CNI result file
-        let cni_state = self.cni_results_dir.join(format!("catalyst-{}", container_id));
+        let cni_state = self
+            .cni_results_dir
+            .join(format!("catalyst-{}", container_id));
         if let Ok(content) = tokio::fs::read_to_string(&cni_state).await {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
                 if let Some(ips) = v.get("ips").and_then(|v| v.as_array()) {
@@ -2656,24 +2658,50 @@ impl ContainerdRuntime {
     fn derive_bridge_range(subnet: &str) -> (String, String, String) {
         let (addr_str, prefix_str) = match subnet.split_once('/') {
             Some(pair) => pair,
-            None => return ("10.42.0.10".into(), "10.42.255.250".into(), "10.42.0.1".into()),
+            None => {
+                return (
+                    "10.42.0.10".into(),
+                    "10.42.255.250".into(),
+                    "10.42.0.1".into(),
+                )
+            }
         };
         let prefix: u32 = match prefix_str.parse() {
             Ok(p) if p <= 32 => p,
-            _ => return ("10.42.0.10".into(), "10.42.255.250".into(), "10.42.0.1".into()),
+            _ => {
+                return (
+                    "10.42.0.10".into(),
+                    "10.42.255.250".into(),
+                    "10.42.0.1".into(),
+                )
+            }
         };
         let addr: std::net::Ipv4Addr = match addr_str.parse() {
             Ok(a) => a,
-            Err(_) => return ("10.42.0.10".into(), "10.42.255.250".into(), "10.42.0.1".into()),
+            Err(_) => {
+                return (
+                    "10.42.0.10".into(),
+                    "10.42.255.250".into(),
+                    "10.42.0.1".into(),
+                )
+            }
         };
         let addr_u32 = u32::from(addr);
-        let mask = if prefix == 0 { 0 } else { u32::MAX << (32 - prefix) };
+        let mask = if prefix == 0 {
+            0
+        } else {
+            u32::MAX << (32 - prefix)
+        };
         let network = addr_u32 & mask;
         let broadcast = network | (!mask);
         let gateway = std::net::Ipv4Addr::from(network + 1);
         let range_start = std::net::Ipv4Addr::from(network + 10);
         let range_end = std::net::Ipv4Addr::from(broadcast - 5);
-        (range_start.to_string(), range_end.to_string(), gateway.to_string())
+        (
+            range_start.to_string(),
+            range_end.to_string(),
+            gateway.to_string(),
+        )
     }
 
     async fn setup_cni_network(
@@ -2802,14 +2830,18 @@ impl ContainerdRuntime {
             }
         }
         // Store CNI config for proper teardown
-        let cfg_path = self.cni_results_dir.join(format!("catalyst-{}-config", container_id));
+        let cfg_path = self
+            .cni_results_dir
+            .join(format!("catalyst-{}-config", container_id));
         if let Ok(j) = serde_json::to_string(&cfg) {
             let _ = fs::write(&cfg_path, &j);
         }
         let result = self
             .exec_cni_plugin(&cfg, "ADD", container_id, &netns, "eth0")
             .await?;
-        let rp = self.cni_results_dir.join(format!("catalyst-{}", container_id));
+        let rp = self
+            .cni_results_dir
+            .join(format!("catalyst-{}", container_id));
         if let Ok(j) = serde_json::to_string_pretty(&result) {
             let _ = fs::write(&rp, &j);
         }
@@ -3148,7 +3180,11 @@ impl ContainerdRuntime {
         let raw = match fs::read_to_string(&state_path) {
             Ok(v) => v,
             Err(e) => {
-                warn!("Failed to read port-forward state {}: {}", state_path.display(), e);
+                warn!(
+                    "Failed to read port-forward state {}: {}",
+                    state_path.display(),
+                    e
+                );
                 let _ = fs::remove_file(&state_path);
                 return Ok(());
             }
@@ -3156,7 +3192,11 @@ impl ContainerdRuntime {
         let state: PortForwardState = match serde_json::from_str(&raw) {
             Ok(v) => v,
             Err(e) => {
-                warn!("Failed to parse port-forward state {}: {}", state_path.display(), e);
+                warn!(
+                    "Failed to parse port-forward state {}: {}",
+                    state_path.display(),
+                    e
+                );
                 let _ = fs::remove_file(&state_path);
                 return Ok(());
             }
@@ -3265,12 +3305,16 @@ impl ContainerdRuntime {
 
     async fn teardown_cni_network(&self, container_id: &str) -> AgentResult<()> {
         let _ = self.teardown_port_forward(container_id).await;
-        let rp = self.cni_results_dir.join(format!("catalyst-{}", container_id));
+        let rp = self
+            .cni_results_dir
+            .join(format!("catalyst-{}", container_id));
         if !rp.exists() {
             return Ok(());
         }
         // Load stored CNI config for proper teardown (bridge vs macvlan)
-        let cfg_path = self.cni_results_dir.join(format!("catalyst-{}-config", container_id));
+        let cfg_path = self
+            .cni_results_dir
+            .join(format!("catalyst-{}-config", container_id));
         let cfg = fs::read_to_string(&cfg_path).ok()
             .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
             .unwrap_or_else(|| serde_json::json!({"cniVersion":"1.0.0","name":"catalyst","type":"bridge","bridge":self.cni_bridge_name,"ipam":{"type":"host-local","dataDir":self.cni_data_dir.to_string_lossy()}}));
@@ -3369,7 +3413,9 @@ impl ContainerdRuntime {
                             container_id, e
                         );
                     }
-                    let cfg_path = self.cni_results_dir.join(format!("catalyst-{}-config", container_id));
+                    let cfg_path = self
+                        .cni_results_dir
+                        .join(format!("catalyst-{}-config", container_id));
                     let _ = tokio::fs::remove_file(result_path).await;
                     let _ = tokio::fs::remove_file(&cfg_path).await;
                 }
@@ -3438,7 +3484,9 @@ fn load_named_cni_plugin_config(cni_dir: &Path, network: &str) -> Option<serde_j
             Err(e) => {
                 warn!(
                     "Invalid CNI config JSON at {} for network {}: {}",
-                    path.display(), network, e
+                    path.display(),
+                    network,
+                    e
                 );
                 continue;
             }

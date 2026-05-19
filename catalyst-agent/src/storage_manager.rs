@@ -158,19 +158,24 @@ impl StorageManager {
             if std::path::PathBuf::from("/usr/bin/rsync").exists()
                 || std::path::PathBuf::from("/usr/local/bin/rsync").exists()
             {
-                run_with_timeout("rsync", &["-a", mount_dir_str.as_str(), migrate_dir_str.as_str()], 3600)
+                run_with_timeout(
+                    "rsync",
+                    &["-a", mount_dir_str.as_str(), migrate_dir_str.as_str()],
+                    3600,
+                )
             } else {
                 // cp -a with src/. copies directory contents (not the dir itself)
-                run_with_timeout("cp", &["-a", mount_dir_dot.as_str(), migrate_dir_str.as_str()], 3600)
+                run_with_timeout(
+                    "cp",
+                    &["-a", mount_dir_dot.as_str(), migrate_dir_str.as_str()],
+                    3600,
+                )
             }
         })
         .await
         .map_err(|e| AgentError::FileSystemError(format!("data migration task failed: {}", e)))?;
         if let Err(e) = result {
-            warn!(
-                "Migration failed for {}, cleaning up: {}",
-                server_uuid, e
-            );
+            warn!("Migration failed for {}, cleaning up: {}", server_uuid, e);
             let _ = self.unmount(&migrate_dir).await;
             let _ = fs::remove_dir_all(&migrate_dir).await;
             return Err(e);

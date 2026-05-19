@@ -365,7 +365,10 @@ impl SystemSetup {
     /// Returns `Ok(())` on success, logs warnings on failure but does not
     /// hard-fail so that the chmod fallback in `ensure_containerd_running`
     /// can still run.
-    async fn configure_containerd_socket_access(has_systemctl: bool, config: &AgentConfig) -> Result<(), AgentError> {
+    async fn configure_containerd_socket_access(
+        has_systemctl: bool,
+        config: &AgentConfig,
+    ) -> Result<(), AgentError> {
         if is_root() {
             return Ok(());
         }
@@ -410,7 +413,11 @@ impl SystemSetup {
         //    group "containerd" and mode 0660.
         //    Skip entirely on non-systemd systems (e.g. Alpine with OpenRC).
         if has_systemctl && std::path::Path::new("/run/systemd/system").exists() {
-            let override_dir = config.containerd.systemd_override_dir.to_string_lossy().to_string();
+            let override_dir = config
+                .containerd
+                .systemd_override_dir
+                .to_string_lossy()
+                .to_string();
             let override_file = format!("{}/override.conf", override_dir);
 
             // Only write if the override doesn't already exist.
@@ -425,13 +432,19 @@ impl SystemSetup {
                     return Ok(());
                 }
 
-                let socket_dir = config.containerd.socket_path.parent()
+                let socket_dir = config
+                    .containerd
+                    .socket_path
+                    .parent()
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_else(|| "/run/containerd".to_string());
                 let socket_file = config.containerd.socket_path.to_string_lossy().to_string();
-                let content = format!("[Service]\n\
+                let content = format!(
+                    "[Service]\n\
                     ExecStartPre=-/bin/chown root:containerd {}\n\
-                    ExecStartPost=-/bin/chmod 660 {}\n", socket_dir, socket_file);
+                    ExecStartPost=-/bin/chmod 660 {}\n",
+                    socket_dir, socket_file
+                );
 
                 // Write to a user-writable temp location, then sudo-copy to
                 // the protected systemd directory.
@@ -820,9 +833,7 @@ impl SystemSetup {
         const REQUIRED: [&str; 4] = ["bridge", "host-local", "portmap", "macvlan"];
 
         for dir in dirs {
-            let has_all = REQUIRED
-                .iter()
-                .all(|name| dir.join(name).exists());
+            let has_all = REQUIRED.iter().all(|name| dir.join(name).exists());
             if has_all {
                 return true;
             }
