@@ -441,6 +441,11 @@ export async function bulkServerRoutes(app: FastifyInstance) {
 
           // Tell agent to clean up
           if (gateway && server.nodeId) {
+            // Proactively remove from discovered containers cache so the deleted
+            // server doesn't temporarily re-appear in the node discovery section.
+            if (gateway.removeDiscoveredContainer) {
+              gateway.removeDiscoveredContainer(server.nodeId, server.id);
+            }
             const sent = await gateway.sendToAgent(server.nodeId, {
               type: 'delete_server',
               serverId: server.id,

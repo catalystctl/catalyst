@@ -1494,6 +1494,11 @@ export class WebSocketGateway {
 
         if (!server) {
           this.logger.warn(`State sync for unknown server ID: ${message.serverUuid}`);
+          // Only track running unknown containers for auto-import. Stopped/crashed
+          // containers are usually deleted servers or ones that don't exist anymore.
+          if (message.state !== 'running') {
+            return;
+          }
           // Track as unregistered container for auto-import
           const existing = this.discoveredContainers.get(nodeId) ?? [];
           if (!existing.some(c => c.containerId === message.serverUuid)) {
@@ -1629,6 +1634,16 @@ export class WebSocketGateway {
               timestamp: Date.now(),
             });
           }
+        }
+
+        // Prune discovered containers cache to only include containers
+        // that the agent actually found during reconciliation. This removes
+        // stale entries from deleted servers or outdated event-driven syncs.
+        const discovered = this.discoveredContainers.get(nodeId) ?? [];
+        const stillPresent = discovered.filter((c) => foundContainers.has(c.containerId));
+        if (stillPresent.length !== discovered.length) {
+          this.discoveredContainers.set(nodeId, stillPresent);
+          this.logger.debug({ nodeId, pruned: discovered.length - stillPresent.length }, 'Pruned stale discovered containers');
         }
       } else if (message.type === "backup_complete") {
         const server = await this.prisma.server.findUnique({
@@ -3131,6 +3146,16 @@ export class WebSocketGateway {
 
   clearDiscoveredContainers(nodeId: string) {
     this.discoveredContainers.delete(nodeId);
+  }
+
+  removeDiscoveredContainer(nodeId: string, containerId: string): boolean {
+    const discovered = this.discoveredContainers.get(nodeId) ?? [];
+    const filtered = discovered.filter((c) => c.containerId !== containerId);
+    if (filtered.length !== discovered.length) {
+      this.discoveredContainers.set(nodeId, filtered);
+      return true;
+    }
+    return false;
   }
 
   /**

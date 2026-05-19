@@ -1756,6 +1756,12 @@ export async function adminRoutes(app: FastifyInstance) {
                 await releaseIpForServer(tx, server.id);
                 await tx.server.delete({ where: { id: server.id } });
               });
+              // Proactively remove from discovered containers cache so the deleted
+              // server doesn't temporarily re-appear in the node discovery section.
+              const wsGatewayDel = (app as any).wsGateway;
+              if (wsGatewayDel?.removeDiscoveredContainer && server.nodeId) {
+                wsGatewayDel.removeDiscoveredContainer(server.nodeId, server.id);
+              }
               await prisma.auditLog.create({
                 data: {
                   userId: user.userId,

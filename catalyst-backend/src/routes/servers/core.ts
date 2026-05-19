@@ -1966,6 +1966,11 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             serverId: server.id,
             serverUuid: server.uuid,
           });
+          // Proactively remove from discovered containers cache so the deleted
+          // server doesn't temporarily re-appear in the node discovery section.
+          if (gateway.removeDiscoveredContainer) {
+            gateway.removeDiscoveredContainer(server.nodeId, server.id);
+          }
           if (!sent) {
             captureSystemError({
               level: 'warn',
