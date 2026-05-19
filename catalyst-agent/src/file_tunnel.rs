@@ -76,12 +76,20 @@ impl FileTunnelClient {
 
         // Derive HTTP base URL from the WebSocket backend_url
         let ws_url = &config.server.backend_url;
-        let base_url = ws_url
+        let mut base_url = ws_url
             .replace("wss://", "https://")
-            .replace("ws://", "http://")
-            .trim_end_matches("/ws")
-            .trim_end_matches('/')
-            .to_string();
+            .replace("ws://", "http://");
+        // Strip the trailing "/ws" path segment that the WebSocket handler uses.
+        // Using strip_suffix (substring match) instead of trim_end_matches
+        // (character-set match) to avoid accidentally stripping characters
+        // from hostnames like "news.example.com".
+        if base_url.ends_with("/ws") {
+            base_url = base_url[..base_url.len() - 3].to_string();
+        }
+        // Remove any trailing slash.
+        if base_url.ends_with('/') {
+            base_url = base_url[..base_url.len() - 1].to_string();
+        }
 
         // Semaphore to limit concurrent file operations
         let request_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
@@ -216,7 +224,7 @@ async fn poll_worker(
             }
             Err(e) => {
                 if !e.is_timeout() {
-                    warn!(worker_id, "Poll request failed: {}", e);
+                    warn!(worker_id, "Poll request failed: {:#}", e);
                     tokio::time::sleep(retry_delay).await;
                     retry_delay = (retry_delay * 2).min(MAX_RETRY_DELAY);
                 }

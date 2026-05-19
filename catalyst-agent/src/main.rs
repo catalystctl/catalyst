@@ -221,6 +221,14 @@ impl CatalystAgent {
 
 #[tokio::main]
 async fn main() -> AgentResult<()> {
+    // Install the rustls crypto provider before any TLS connection is made.
+    // Both tokio-tungstenite and reqwest pull in rustls, and with multiple
+    // backends available (ring + aws-lc-rs), rustls cannot auto-select one.
+    // We choose ring for consistency with the WebSocket handler.
+    if let Err(e) = rustls::crypto::ring::default_provider().install_default() {
+        warn!("rustls crypto provider already installed: {:?}", e);
+    }
+
     let mut config_path: Option<String> = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
