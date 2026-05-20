@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# Mock "docker not found" binary — always exits 127
+# Used to test install.sh's "no container runtime" code path.
+echo "mock-no-docker: command not found" >&2
+exit 127
