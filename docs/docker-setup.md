@@ -578,7 +578,7 @@ docker compose up -d
 Migrations run automatically, but you can verify:
 
 ```bash
-docker compose exec backend bunx prisma migrate status --schema prisma/schema.prisma
+docker compose exec backend npx prisma migrate status --schema prisma/schema.prisma
 ```
 
 If migrations are pending but the backend is running, they were likely applied on startup. If you see failures:
@@ -588,7 +588,7 @@ If migrations are pending but the backend is running, they were likely applied o
 docker compose logs backend | grep -i "migrat"
 
 # Run manually (only if auto-migration failed)
-docker compose exec backend bun run db:migrate
+docker compose exec backend pnpm run db:migrate
 ```
 
 ---
@@ -774,8 +774,8 @@ All other commands are identical — just replace `docker` with `podman`.
 | `docker compose logs -f` | Tail all logs |
 | `docker compose logs -f backend` | Tail backend logs |
 | `docker compose logs -f --tail=100 backend` | Last 100 lines of backend logs |
-| `docker compose exec backend bun run db:seed` | Seed database with sample data |
-| `docker compose exec backend bun run db:studio` | Open Prisma Studio |
+| `docker compose exec backend pnpm run db:seed` | Seed database with sample data |
+| `docker compose exec backend pnpm run db:studio` | Open Prisma Studio |
 | `docker compose exec backend sh` | Shell into backend container |
 | `docker compose exec postgres psql -U catalyst -d catalyst_db` | PostgreSQL CLI |
 | `docker compose down` | Stop services |
@@ -795,14 +795,14 @@ To build images locally instead of using pre-built ones:
 
 ```dockerfile
 # catalyst-backend/Dockerfile
-FROM oven/bun:latest
+FROM node:22-alpine
 WORKDIR /app
-COPY package.json bun.lock ./
-RUN bun install
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && corepack prepare pnpm@latest --activate && pnpm install
 COPY . .
-RUN bun run build
+RUN pnpm run build
 EXPOSE 3000 2022
-CMD ["bun", "dist/index.js"]
+CMD ["node", "dist/index.js"]
 ```
 
 ```bash
@@ -815,12 +815,12 @@ docker build -t catalyst-backend:local .
 
 ```dockerfile
 # catalyst-frontend/Dockerfile
-FROM oven/bun:latest AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
-COPY package.json bun.lock ./
-RUN bun install
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && corepack prepare pnpm@latest --activate && pnpm install
 COPY . .
-RUN bun run build
+RUN pnpm run build
 
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html

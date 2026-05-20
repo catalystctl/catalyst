@@ -145,7 +145,7 @@ The **first user to register becomes the administrator** automatically.
 
 > **Optional:** If you want pre-seeded demo data, run:
 > ```bash
-> docker compose exec backend bun run db:seed
+> docker compose exec backend pnpm run db:seed
 > ```
 > Default credentials: `admin@example.com` / `admin123` — **change immediately**.
 
@@ -434,7 +434,7 @@ grep POSTGRES_PASSWORD .env
 docker compose exec postgres psql -U catalyst -d catalyst_db -c "SELECT 1;"
 
 # For a fresh database, seed it:
-docker compose exec backend bun run db:seed
+docker compose exec backend pnpm run db:seed
 ```
 
 ### `podman compose up -d` hangs
@@ -521,8 +521,8 @@ docker compose logs --tail=100 backend
 | `docker compose up -d --build` | Build and start (if building from source) |
 | `docker compose logs -f` | Tail all logs |
 | `docker compose logs -f backend` | Tail backend logs |
-| `docker compose exec backend bun run db:seed` | Seed database with sample data |
-| `docker compose exec backend bun run db:studio` | Open Prisma Studio GUI |
+| `docker compose exec backend pnpm run db:seed` | Seed database with sample data |
+| `docker compose exec backend pnpm run db:studio` | Open Prisma Studio GUI |
 | `docker compose exec backend sh` | Shell into backend container |
 | `docker compose down` | Stop services (keep volumes) |
 | `docker compose down -v` | Stop and delete all data volumes |

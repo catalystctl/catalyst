@@ -1,3 +1,6 @@
+// Load .env before anything else — Bun did this automatically, Node.js does not
+import "dotenv/config";
+
 import Fastify from "fastify";
 import fastifyCompress from "@fastify/compress";
 import fs from "fs";

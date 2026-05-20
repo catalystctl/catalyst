@@ -22,8 +22,7 @@ tests/lib/node_modules/
 *.tar.gz
 node_modules/
 
-# Bun
-bun.lockb
+# pnpm (lockfile is committed — do NOT ignore it)
 
 # Root environment (docker compose config)
 .env

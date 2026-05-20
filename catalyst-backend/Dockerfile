@@ -1,40 +1,55 @@
 # Catalyst Backend - Multi-stage Dockerfile
-# Stage 1: Builder - installs all deps, generates Prisma client, compiles native modules
-FROM oven/bun:1.3-alpine AS builder
+# Stage 1: Builder - installs all deps, generates Prisma client, compiles TypeScript
+FROM node:22-alpine AS builder
+
+# Enable pnpm via corepack
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
 # Install build dependencies (needed for native modules like ssh2)
 RUN apk add --no-cache python3 make g++
 
-# Copy backend source
-COPY catalyst-backend/package.json catalyst-backend/bun.lock ./
-COPY catalyst-backend/tsconfig.json ./
-COPY catalyst-backend/src ./src
-COPY catalyst-backend/prisma ./prisma
+# Create a minimal monorepo root so pnpm can resolve workspace dependencies.
+# The root pnpm-lock.yaml + .npmrc + pnpm-workspace.yaml drive the install,
+# but only the backend workspace is materialised in the image.
+COPY pnpm-lock.yaml .npmrc ./
+COPY pnpm-workspace.yaml ./
+RUN printf '%s\n' '{"name":"catalyst","private":true}' > package.json
+
+# Copy backend manifest first for dependency-layer caching
+COPY catalyst-backend/package.json ./catalyst-backend/
+COPY catalyst-backend/tsconfig.json ./catalyst-backend/
 
 # Copy shared types (resolved by tsconfig paths)
-RUN mkdir -p ../catalyst-shared
-COPY catalyst-shared/types.ts ../catalyst-shared/types.ts
+COPY catalyst-shared/types.ts ./catalyst-shared/types.ts
 
-# Install all dependencies (including devDeps needed for prisma generate)
-RUN bun install
+# Install all dependencies (including devDeps needed for prisma generate and tsc)
+RUN pnpm install --frozen-lockfile
+
+# Copy backend source & Prisma schema
+COPY catalyst-backend/src ./catalyst-backend/src
+COPY catalyst-backend/prisma ./catalyst-backend/prisma
 
 # Generate Prisma Client
-RUN bunx prisma generate --config prisma/prisma.config.ts
+WORKDIR /app/catalyst-backend
+RUN npx prisma generate --config prisma/prisma.config.ts
 
-# Back up generated Prisma client before pruning (bun install --production may clear node_modules)
+# Compile TypeScript to JavaScript
+RUN pnpm run build
+
+# Back up generated Prisma client before pruning (pnpm install --prod may clear node_modules)
 RUN cp -r node_modules/.prisma /tmp/.prisma-backup
 
-# Prune dev dependencies in-place (removes typescript, eslint, vitest, prisma CLI, @electric-sql, etc.)
+# Prune dev dependencies in-place (removes typescript, eslint, vitest, prisma CLI, etc.)
 # This drops node_modules from ~424 MB to ~200 MB
-RUN bun install --production
+RUN pnpm install --prod --frozen-lockfile
 
 # Restore Prisma client if it was removed during prune
 RUN if [ ! -d node_modules/.prisma ]; then cp -r /tmp/.prisma-backup node_modules/.prisma; fi
 
 # Stage 2: Runtime - clean image without build tools or dev dependencies
-FROM oven/bun:1.3-alpine
+FROM node:22-alpine
 
 # Install curl for Docker healthcheck
 RUN apk add --no-cache curl
@@ -42,18 +57,17 @@ RUN apk add --no-cache curl
 WORKDIR /app
 
 # Copy production-only node_modules from builder
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/catalyst-backend/node_modules ./node_modules
 
-# Copy source and generated Prisma client
-COPY --from=builder /app/src ./src
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/bun.lock ./bun.lock
-COPY --from=builder /app/tsconfig.json ./tsconfig.json
+# Copy compiled JavaScript and source maps
+COPY --from=builder /app/catalyst-backend/dist ./dist
+COPY --from=builder /app/catalyst-backend/prisma ./prisma
+COPY --from=builder /app/catalyst-backend/package.json ./package.json
+COPY --from=builder /app/catalyst-backend/tsconfig.json ./tsconfig.json
 
-# Copy shared types
+# Copy shared types (resolved by tsconfig paths at runtime for source maps)
 RUN mkdir -p ../catalyst-shared
-COPY --from=builder /app/../catalyst-shared/types.ts ../catalyst-shared/types.ts
+COPY --from=builder /app/catalyst-shared/types.ts ../catalyst-shared/types.ts
 
 # Copy deploy script
 COPY scripts/deploy-agent.sh /scripts/deploy-agent.sh
@@ -82,4 +96,4 @@ EXPOSE 3000 2022
 ENV NODE_ENV=production
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["bun", "src/index.ts"]
+CMD ["node", "dist/index.js"]

@@ -215,7 +215,7 @@ cat /tmp/catalyst-docker-tests/build-frontend.log
 ```
 
 Common issues:
-- Missing `bun.lock` or `package.json` changes not committed
+- Missing `pnpm-lock.yaml` or `package.json` changes not committed
 - Docker daemon not running
 - Insufficient disk space (`docker system df`)
 

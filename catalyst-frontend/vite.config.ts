@@ -11,7 +11,7 @@ export default defineConfig(async ({ mode }) => {
   const plugins: Plugin[] = [
     react(),
     // Resolve npm packages imported by catalyst-plugins files using the
-    // frontend's node_modules (where Bun creates symlinks).
+    // frontend's node_modules (where pnpm creates symlinks).
     {
       name: 'plugin-module-resolver',
       enforce: 'pre',

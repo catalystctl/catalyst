@@ -1,8 +1,10 @@
 version: 2
 updates:
-  # Backend - TypeScript/Node.js dependencies
+  # Backend + Frontend — pnpm monorepo workspace
+  # Both share a single root pnpm-lock.yaml, so Dependabot must scan
+  # the root directory with ecosystem "npm" (which covers pnpm too).
   - package-ecosystem: "npm"
-    directory: "/catalyst-backend"
+    directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -13,35 +15,9 @@ updates:
     labels:
       - "dependencies"
       - "backend"
-    commit-message:
-      prefix: "chore(backend)"
-      include: "scope"
-    groups:
-      development-dependencies:
-        dependency-type: "development"
-        update-types:
-          - "minor"
-          - "patch"
-      production-dependencies:
-        dependency-type: "production"
-        update-types:
-          - "patch"
-
-  # Frontend - React/TypeScript dependencies
-  - package-ecosystem: "npm"
-    directory: "/catalyst-frontend"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 10
-    reviewers:
-      - "catalystctl/maintainers"
-    labels:
-      - "dependencies"
       - "frontend"
     commit-message:
-      prefix: "chore(frontend)"
+      prefix: "chore(deps)"
       include: "scope"
     groups:
       development-dependencies:

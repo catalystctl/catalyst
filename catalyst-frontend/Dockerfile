@@ -1,19 +1,23 @@
 # Build stage
-FROM oven/bun:1.3-alpine AS build
+FROM node:22-alpine AS build
+
+# Enable pnpm via corepack
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
 # Use the root workspace lockfile for reproducible installs.
 # We create a minimal workspace root containing only the frontend so
-# bun doesn't fail when other monorepo packages aren't copied into the image.
-RUN printf '%s\n' '{"name":"catalyst","private":true,"workspaces":["catalyst-frontend"]}' > package.json
-COPY bun.lock ./
+# pnpm doesn't fail when other monorepo packages aren't copied into the image.
+COPY pnpm-lock.yaml .npmrc ./
+COPY pnpm-workspace.yaml ./
+RUN printf '%s\n' '{"name":"catalyst","private":true}' > package.json
 
 # Copy frontend manifest first for dependency-layer caching
 COPY catalyst-frontend/package.json ./catalyst-frontend/
 
-# Install dependencies (bun will trim lockfile entries for missing workspaces)
-RUN bun install
+# Install dependencies (pnpm will trim lockfile entries for missing workspaces)
+RUN pnpm install --frozen-lockfile
 
 # Copy frontend source
 COPY catalyst-frontend/tsconfig.json catalyst-frontend/tsconfig.node.json ./catalyst-frontend/
@@ -26,7 +30,7 @@ COPY catalyst-frontend/src ./catalyst-frontend/src
 
 # Build
 WORKDIR /app/catalyst-frontend
-RUN bun run build
+RUN pnpm run build
 
 # Production stage — serve with nginx
 FROM nginx:alpine

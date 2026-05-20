@@ -1,9 +1,9 @@
-#!/usr/bin/env bun
+#!/usr/bin/env npx tsx
 /**
  * API Quick Reference Generator
  * 
  * Generates a quick reference markdown document from route definitions.
- * Run: bun scripts/generate-api-docs.ts
+ * Run: npx tsx scripts/generate-api-docs.ts
  */
 
 import { readdirSync, readFileSync, writeFileSync } from 'fs';

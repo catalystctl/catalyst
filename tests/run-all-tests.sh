@@ -126,7 +126,7 @@ if [ "${DOCKER_E2E_MODE:-}" = "true" ]; then
     log_info "Docker E2E mode — skipping local DB check (migrations already ran)"
 else
     cd /root/catalyst3/catalyst-backend
-    if ! bun run db:push > /dev/null 2>&1; then
+    if ! pnpm run db:push > /dev/null 2>&1; then
         log_error "Database connection failed"
         exit 1
     fi

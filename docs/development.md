@@ -34,9 +34,9 @@
 
 ### Installing Prerequisites
 
-**Bun:**
+**pnpm:**
 ```bash
-curl -fsSL https://bun.sh/install | bash
+npm install -g pnpm
 ```
 
 **Rust:**
@@ -103,14 +103,14 @@ git clone https://github.com/catalystctl/catalyst.git
 cd catalyst
 
 # 2. Start PostgreSQL and Redis
-bun run dev:infra
+pnpm run dev:infra
 
 # 3. Seed the database
-bun run db:seed
-bun run db:seed:admin   # Creates admin@example.com / password123
+pnpm run db:seed
+pnpm run db:seed:admin   # Creates admin@example.com / password123
 
 # 4. Start both dev servers in parallel
-bun run dev
+pnpm run dev
 
 # Navigate to http://localhost:5173
 # Login: admin@example.com / password123
@@ -124,11 +124,11 @@ cd catalyst-docker && podman-compose up -d postgres redis
 
 # Backend (port 3000)
 cd catalyst-backend
-bun run dev
+pnpm run dev
 
 # Frontend (port 5173)
 cd catalyst-frontend
-bun run dev
+pnpm run dev
 ```
 
 ---
@@ -141,36 +141,36 @@ bun run dev
 cd catalyst-backend
 
 # Install dependencies
-bun install
+pnpm install
 
 # Generate Prisma client
-bun run db:generate
+pnpm run db:generate
 
 # Push schema to database
-bun run db:push
+pnpm run db:push
 
 # Seed development data
-bun run db:seed
+pnpm run db:seed
 ```
 
 ### Development Commands
 
 | Command | Description |
 |---------|-------------|
-| `bun run dev` | Start Fastify server with hot reload (`--watch`) |
-| `bun run build` | Compile TypeScript to `dist/` |
-| `bun run start` | Run compiled server from `dist/index.js` |
-| `bun run lint` | Run ESLint on `src/` |
-| `bun run lint -- --fix` | Auto-fix linting issues |
-| `bun run test` | Run Vitest unit tests |
-| `bun run test:ui` | Run Vitest with UI (interactive) |
-| `bun run test:coverage` | Run tests with coverage report |
-| `bun run db:generate` | Regenerate Prisma client |
-| `bun run db:push` | Push schema changes to database |
-| `bun run db:migrate` | Create versioned migration |
-| `bun run db:studio` | Open Prisma Studio GUI |
-| `bun run db:seed` | Populate with test data |
-| `bun run db:seed:admin` | Create admin user only |
+| `pnpm run dev` | Start Fastify server with hot reload (`--watch`) |
+| `pnpm run build` | Compile TypeScript to `dist/` |
+| `pnpm run start` | Run compiled server from `dist/index.js` |
+| `pnpm run lint` | Run ESLint on `src/` |
+| `pnpm run lint -- --fix` | Auto-fix linting issues |
+| `pnpm run test` | Run Vitest unit tests |
+| `pnpm run test:ui` | Run Vitest with UI (interactive) |
+| `pnpm run test:coverage` | Run tests with coverage report |
+| `pnpm run db:generate` | Regenerate Prisma client |
+| `pnpm run db:push` | Push schema changes to database |
+| `pnpm run db:migrate` | Create versioned migration |
+| `pnpm run db:studio` | Open Prisma Studio GUI |
+| `pnpm run db:seed` | Populate with test data |
+| `pnpm run db:seed:admin` | Create admin user only |
 
 ### Project Structure
 
@@ -232,33 +232,33 @@ app.post('/api/servers/:id/start',
 cd catalyst-frontend
 
 # Install dependencies
-bun install
+pnpm install
 
 # Start development server (port 5173)
-bun run dev
+pnpm run dev
 
 # Run unit tests
-bun run test
+pnpm run test
 
 # Run E2E tests (requires backend running)
-bun run test:e2e
+pnpm run test:e2e
 ```
 
 ### Development Commands
 
 | Command | Description |
 |---------|-------------|
-| `bun run dev` | Start Vite dev server with hot module replacement |
-| `bun run build` | Build production bundle |
-| `bun run preview` | Preview production build locally |
-| `bun run lint` | Run ESLint on `.ts`/`.tsx` files |
-| `bun run lint -- --fix` | Auto-fix linting issues |
-| `bun run format` | Format code with Prettier |
-| `bun run test` | Run Vitest unit tests |
-| `bun run test:e2e` | Run Playwright E2E tests |
-| `bun run test:screenshots` | Run Playwright screenshot crawl tests |
-| `bun run test:screenshots:headed` | Run screenshot crawl with visible browser |
-| `bun run build:analyze` | Analyze bundle size with visualizer |
+| `pnpm run dev` | Start Vite dev server with hot module replacement |
+| `pnpm run build` | Build production bundle |
+| `pnpm run preview` | Preview production build locally |
+| `pnpm run lint` | Run ESLint on `.ts`/`.tsx` files |
+| `pnpm run lint -- --fix` | Auto-fix linting issues |
+| `pnpm run format` | Format code with Prettier |
+| `pnpm run test` | Run Vitest unit tests |
+| `pnpm run test:e2e` | Run Playwright E2E tests |
+| `pnpm run test:screenshots` | Run Playwright screenshot crawl tests |
+| `pnpm run test:screenshots:headed` | Run screenshot crawl with visible browser |
+| `pnpm run build:analyze` | Analyze bundle size with visualizer |
 
 ### Project Structure
 
@@ -818,13 +818,13 @@ Catalyst uses a multi-layer testing strategy.
 
 ```bash
 # Run all backend tests
-bun run test                  # or: cd catalyst-backend && bun run test
+pnpm run test                  # or: cd catalyst-backend && pnpm run test
 
 # Run with UI (interactive watch mode)
-bun run test:ui
+pnpm run test:ui
 
 # Generate coverage report
-bun run test:coverage
+pnpm run test:coverage
 ```
 
 Test files live alongside source in `src/**/__tests__/**/*.test.ts`.
@@ -833,7 +833,7 @@ Test files live alongside source in `src/**/__tests__/**/*.test.ts`.
 
 ```bash
 # Run unit tests
-bun run test                  # or: cd catalyst-frontend && bun run test
+pnpm run test                  # or: cd catalyst-frontend && pnpm run test
 ```
 
 Test files follow the pattern `src/**/__tests__/**/*.{test,spec}.{ts,tsx}`.
@@ -842,16 +842,16 @@ Test files follow the pattern `src/**/__tests__/**/*.{test,spec}.{ts,tsx}`.
 
 ```bash
 # Run all E2E tests (headless)
-bun run test:e2e
+pnpm run test:e2e
 
 # Screenshot crawl — captures every page, tab, and modal
-bun run test:screenshots
+pnpm run test:screenshots
 
 # Watch the browser live
-bun run test:screenshots:headed
+pnpm run test:screenshots:headed
 
 # Against an already-running dev server
-SKIP_WEB_SERVER=1 bun run test:screenshots
+SKIP_WEB_SERVER=1 pnpm run test:screenshots
 ```
 
 The screenshot crawl dynamically discovers routes from `src/App.tsx`, navigation links from the sidebar, and modals from DOM triggers — requiring zero test maintenance when adding pages.
@@ -944,7 +944,7 @@ vi.mock('@/services/api/servers', () => ({
 
 ```bash
 # From monorepo root — runs tests in all packages
-bun run test
+pnpm run test
 ```
 
 ---
@@ -978,8 +978,8 @@ Backend and frontend share similar TypeScript ESLint rules but with different ta
 
 **Auto-fix all linting:**
 ```bash
-bun run lint -- --fix
-bun run format    # Frontend only
+pnpm run lint -- --fix
+pnpm run format    # Frontend only
 ```
 
 ### Rust (Agent)
@@ -1006,26 +1006,26 @@ The Prisma schema lives in `catalyst-backend/prisma/schema.prisma`. Key entities
 # catalyst-backend/prisma/schema.prisma
 
 # 2. Generate migration
-bun run db:migrate
+pnpm run db:migrate
 
 # 3. Apply schema changes to database
-bun run db:push
+pnpm run db:push
 
 # 4. Regenerate Prisma client (usually automatic)
-bun run db:generate
+pnpm run db:generate
 
 # 5. Inspect database visually
-bun run db:studio
+pnpm run db:studio
 ```
 
 ### Seeding
 
 ```bash
 # Full seed (admin user + sample servers, nodes, templates)
-bun run db:seed
+pnpm run db:seed
 
 # Admin user only
-bun run db:seed:admin
+pnpm run db:seed:admin
 ```
 
 Default seeded credentials: `admin@example.com` / `password123`
@@ -1047,7 +1047,7 @@ Each PR runs automated checks:
 
 | Job | Scope | Checks |
 |-----|-------|--------|
-| **Backend CI** | `catalyst-backend/**`, `catalyst-shared/**` | Lint, build, Prisma generate, security audit (bun pm scan) |
+| **Backend CI** | `catalyst-backend/**`, `catalyst-shared/**` | Lint, build, Prisma generate, security audit (pnpm audit) |
 | **Agent CI** | `catalyst-agent/**` | `cargo fmt --check`, `cargo check`, `cargo clippy -- -D warnings`, unit tests |
 | **Docker Publish** | Changes in backend or frontend | Conditional Docker image build & push to GHCR |
 
@@ -1055,10 +1055,10 @@ Each PR runs automated checks:
 
 Before submitting a PR:
 
-1. **Run local tests** — `bun run test` (all packages)
-2. **Run linters** — `bun run lint -- --fix` (backend + frontend)
+1. **Run local tests** — `pnpm run test` (all packages)
+2. **Run linters** — `pnpm run lint -- --fix` (backend + frontend)
 3. **Format agent code** — `cargo fmt` (if touching the agent)
-4. **Run E2E tests** — `bun run test:e2e` (if touching UI or API)
+4. **Run E2E tests** — `pnpm run test:e2e` (if touching UI or API)
 5. **Self-review** — Check your diff for lint warnings, dead code, TODOs
 6. **Link related issues** — Reference issue numbers in the PR description
 7. **Update tests** — Add or update tests for new functionality
@@ -1095,10 +1095,10 @@ chore: update dependencies
 
 ```bash
 # See runtime logs (console output from Fastify)
-bun run dev
+pnpm run dev
 
 # Inspect database state
-bun run db:studio
+pnpm run db:studio
 
 # Check for SQL query issues
 # Set LOG_LEVEL=debug in .env for verbose Pino logs

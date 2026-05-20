@@ -7,7 +7,7 @@
 # ┌──────────────────────────────────────────────────────────────────────────────┐
 # │  USAGE                                                                       │
 # │                                                                              │
-# │  Basic (native — uses host bun/cargo):                                       │
+# │  Basic (native — uses host pnpm/cargo):                                       │
 # │    EVENT=push ./run-workflow.sh                                              │
 # │    EVENT=pull_request ./run-workflow.sh                                      │
 # │    EVENT=push DRY_RUN=1 ./run-workflow.sh           # dry-run, no side fx   │
@@ -49,14 +49,15 @@
 # │  PREREQUISITES                                                               │
 # │                                                                              │
 # │  Native mode:                                                                │
-# │    - bun >= 1.0   (https://bun.sh)                                           │
+# │    - pnpm >= 8       (https://pnpm.io)
+# │    - Node.js >= 22   (https://nodejs.org)                                           │
 # │    - cargo >= 1.70 (https://rustup.rs) — only if TARGET includes agent       │
 # │    - Node.js >= 20 (for some eslint configs that need it)                    │
 # │    - Docker or Podman — only for docker publish step or USE_DOCKER=1         │
 # │                                                                              │
 # │  Docker mode:                                                                │
 # │    - Docker (docker) OR Podman (podman)                                      │
-# │    - Internet access on first run to pull oven/bun:1.3-debian               │
+# │    - Internet access on first run to pull node:22-alpine               │
 # │      and rust:1.93-bookworm images                                           │
 # │                                                                              │
 # │  Both modes:                                                                 │
@@ -235,12 +236,12 @@ should_run_step() {
 }
 
 # Detect which package managers are present
-# Maps to: the container: image selection in GHA (oven/bun vs rust)
+# Maps to: the container: image selection in GHA (node vs rust)
 detect_tools() {
-  HAS_BUN=0
+  HAS_PNPM=0
   HAS_CARGO=0
   HAS_PROTOC=0
-  command -v bun &>/dev/null && HAS_BUN=1
+  command -v pnpm &>/dev/null && HAS_PNPM=1
   command -v cargo &>/dev/null && HAS_CARGO=1
   command -v protoc &>/dev/null && HAS_PROTOC=1
 
@@ -248,7 +249,7 @@ detect_tools() {
     # Narrow detection to requested target
     case "$TARGET" in
       backend|frontend) HAS_CARGO=0; HAS_PROTOC=0 ;;
-      agent) HAS_BUN=0 ;;
+      agent) HAS_PNPM=0 ;;
     esac
   fi
 
@@ -361,10 +362,10 @@ step_checkout_env() {
   echo ""
   echo -e "  ${C_BOLD}Detected tools:${C_RESET}"
 
-  if [[ "$HAS_BUN" -eq 1 ]]; then
-    echo -e "    bun:      $(bun --version)"
+  if [[ "$HAS_PNPM" -eq 1 ]]; then
+    echo -e "    pnpm:     $(pnpm --version)"
   else
-    echo -e "    bun:      ${C_RED}NOT FOUND${C_RESET}"
+    echo -e "    pnpm:     ${C_RED}NOT FOUND${C_RESET}"
     [[ "$TARGET" != "agent" ]] && env_ok=0
   fi
 
@@ -430,7 +431,7 @@ step_checkout_env() {
 
 # ── Step 2: Dependency Install ────────────────────────────────────────────────
 # Maps to:
-#   - bun install --frozen-lockfile         (ci.yml lint/test/build jobs)
+#   - pnpm install --frozen-lockfile         (ci.yml lint/test/build jobs)
 #   - cargo fetch                           (ci.yml lint/test/build jobs)
 #   - Cache: actions/cache@v5 for node_modules and cargo registry
 step_install_deps() {
@@ -449,28 +450,28 @@ step_install_deps() {
   local overall_exit=0
 
   # --- Bun workspace install ---
-  # Maps to: bun install --frozen-lockfile in ci.yml
-  if [[ "$HAS_BUN" -eq 1 ]]; then
-    echo -e "  ${C_BOLD}[bun] Installing workspace dependencies...${C_RESET}"
-    local bun_cmd="${INSTALL_CMD:-bun install --frozen-lockfile}"
-    if ! run_step "${step_name}_bun" bash -c "$bun_cmd"; then
+  # Maps to: pnpm install --frozen-lockfile in ci.yml
+  if [[ "$HAS_PNPM" -eq 1 ]]; then
+    echo -e "  ${C_BOLD}[pnpm] Installing workspace dependencies...${C_RESET}"
+    local pnpm_cmd="${INSTALL_CMD:-pnpm install --frozen-lockfile}"
+    if ! run_step "${step_name}_pnpm" bash -c "$pnpm_cmd"; then
       overall_exit=1
     fi
 
     # Generate Prisma client (backend only)
-    # Maps to: bunx prisma generate in ci.yml
+    # Maps to: npx prisma generate in ci.yml
     if [[ "$overall_exit" -eq 0 && ("$TARGET" == "backend" || "$TARGET" == "all") ]]; then
       echo -e "  ${C_BOLD}[prisma] Generating client...${C_RESET}"
-      if ! run_step "${step_name}_prisma" bash -c "cd catalyst-backend && bunx prisma generate"; then
+      if ! run_step "${step_name}_prisma" bash -c "cd catalyst-backend && npx prisma generate"; then
         overall_exit=1
       fi
     fi
 
     # Push database schema so DB-dependent tests can run
-    # Maps to: bun run db:push in ci.yml test: job
+    # Maps to: pnpm run db:push in ci.yml test: job
     if [[ "$overall_exit" -eq 0 && "$EVENT" != "pull_request" && ("$TARGET" == "backend" || "$TARGET" == "all") ]]; then
       echo -e "  ${C_BOLD}[prisma] Pushing database schema...${C_RESET}"
-      if ! run_step "${step_name}_db_push" bash -c "cd catalyst-backend && bun run db:push"; then
+      if ! run_step "${step_name}_db_push" bash -c "cd catalyst-backend && pnpm run db:push"; then
         overall_exit=1
       fi
     fi
@@ -505,9 +506,9 @@ step_install_deps() {
 
 # ── Step 3: Lint & Static Analysis ────────────────────────────────────────────
 # Maps to:
-#   - bun run --filter=catalyst-backend lint   (ci.yml lint: job)
+#   - pnpm --filter catalyst-backend run lint   (ci.yml lint: job)
 #   - cargo fmt --check + cargo clippy      (ci.yml lint: job)
-#   - bun pm scan (security audit)           (ci.yml lint: job)
+#   - pnpm audit (security audit)           (ci.yml lint: job)
 step_lint() {
   step_header "Lint & Static Analysis"
   local step_name="lint"
@@ -524,19 +525,19 @@ step_lint() {
   local overall_exit=0
 
   # --- Bun lint (eslint) ---
-  # Maps to: bun run --filter=catalyst-backend lint in ci.yml lint: job
+  # Maps to: pnpm --filter catalyst-backend run lint in ci.yml lint: job
   # Runs across all workspace packages that have a lint script
-  if [[ "$HAS_BUN" -eq 1 ]]; then
-    echo -e "  ${C_BOLD}[bun] Running ESLint...${C_RESET}"
-    local lint_cmd="${LINT_CMD:-bun run --filter=catalyst-backend lint}"
+  if [[ "$HAS_PNPM" -eq 1 ]]; then
+    echo -e "  ${C_BOLD}[pnpm] Running ESLint...${C_RESET}"
+    local lint_cmd="${LINT_CMD:-pnpm --filter catalyst-backend run lint}"
     if ! run_step "${step_name}_eslint" bash -c "$lint_cmd"; then
       overall_exit=1
     fi
 
     # Security audit (non-blocking — maps to: continue-on-error: true in ci.yml)
     if [[ "$overall_exit" -eq 0 ]]; then
-      echo -e "  ${C_BOLD}[bun] Security audit...${C_RESET}"
-      if ! run_step "${step_name}_audit" bash -c "bun pm scan 2>/dev/null || true"; then
+      echo -e "  ${C_BOLD}[pnpm] Security audit...${C_RESET}"
+      if ! run_step "${step_name}_audit" bash -c "pnpm audit 2>/dev/null || true"; then
         # Non-blocking — continue even on audit findings
         echo -e "  ${C_YELLOW}  (security audit warnings — non-blocking)${C_RESET}"
       fi
@@ -579,7 +580,7 @@ step_lint() {
 
 # ── Step 4: Unit & Integration Tests ──────────────────────────────────────────
 # Maps to:
-#   - bun run --filter=catalyst-backend test  (ci.yml test: job)
+#   - pnpm --filter catalyst-backend run test  (ci.yml test: job)
 #   - cargo test                            (ci.yml test: job)
 step_test() {
   step_header "Unit & Integration Tests"
@@ -597,10 +598,10 @@ step_test() {
   local overall_exit=0
 
   # --- Bun tests (vitest) ---
-  # Maps to: bun run --filter=catalyst-backend test in ci.yml test: job
-  if [[ "$HAS_BUN" -eq 1 ]]; then
-    echo -e "  ${C_BOLD}[bun] Running Vitest across workspace...${C_RESET}"
-    local test_cmd="${TEST_CMD:-bun run --filter=catalyst-backend test}"
+  # Maps to: pnpm --filter catalyst-backend run test in ci.yml test: job
+  if [[ "$HAS_PNPM" -eq 1 ]]; then
+    echo -e "  ${C_BOLD}[pnpm] Running Vitest across workspace...${C_RESET}"
+    local test_cmd="${TEST_CMD:-pnpm --filter catalyst-backend run test}"
     if ! run_step "${step_name}_vitest" bash -c "$test_cmd"; then
       overall_exit=1
     fi
@@ -635,7 +636,7 @@ step_test() {
 
 # ── Step 5: Build Verification (push only) ────────────────────────────────────
 # Maps to:
-#   - bun run build (backend + frontend)    (ci.yml build: job)
+#   - pnpm run build (backend + frontend)    (ci.yml build: job)
 #   - cargo build                           (ci.yml build: job)
 step_build_verify() {
   step_header "Build Verification"
@@ -663,10 +664,10 @@ step_build_verify() {
   local overall_exit=0
 
   # --- Bun build ---
-  # Maps to: bun run build:backend + build:frontend in ci.yml build: job
-  if [[ "$HAS_BUN" -eq 1 ]]; then
-    echo -e "  ${C_BOLD}[bun] Building workspace...${C_RESET}"
-    if ! run_step "${step_name}_bun" bash -c "bun run build:shared && bun run build:backend && bun run build:frontend"; then
+  # Maps to: pnpm run build:backend + build:frontend in ci.yml build: job
+  if [[ "$HAS_PNPM" -eq 1 ]]; then
+    echo -e "  ${C_BOLD}[pnpm] Building workspace...${C_RESET}"
+    if ! run_step "${step_name}_pnpm" bash -c "pnpm run build:shared && pnpm run build:backend && pnpm run build:frontend"; then
       overall_exit=1
     fi
   fi
@@ -850,10 +851,10 @@ step_docker_publish() {
   local backend_changed=1
   local frontend_changed=1
 
-  if git diff --quiet HEAD~1 -- catalyst-backend/ catalyst-shared/ bun.lock bun.lockb package.json 2>/dev/null; then
+  if git diff --quiet HEAD~1 -- catalyst-backend/ catalyst-shared/ pnpm-lock.yaml package.json 2>/dev/null; then
     backend_changed=0
   fi
-  if git diff --quiet HEAD~1 -- catalyst-frontend/ catalyst-shared/ bun.lock bun.lockb package.json 2>/dev/null; then
+  if git diff --quiet HEAD~1 -- catalyst-frontend/ catalyst-shared/ pnpm-lock.yaml package.json 2>/dev/null; then
     frontend_changed=0
   fi
 
@@ -954,7 +955,7 @@ step_docker_publish() {
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 # Run the entire pipeline inside a Docker container that approximates ubuntu-latest
-# Maps to: runs-on: ubuntu-latest + container: oven/bun:1.3-debian in GHA
+# Maps to: runs-on: ubuntu-latest + container: node:22-alpine in GHA
 
 run_in_docker() {
   # Choose container runtime — prefer docker, fall back to podman
@@ -968,20 +969,22 @@ run_in_docker() {
     exit 1
   fi
 
-  # Build a Dockerfile that approximates ubuntu-latest with bun + cargo
+  # Build a Dockerfile that approximates ubuntu-latest with pnpm + cargo
   # Maps to: the container: and runs-on: directives in GHA
   local dockerfile_dir; dockerfile_dir=$(mktemp -d)
   cat > "${dockerfile_dir}/Dockerfile" <<'DOCKERFILE'
-# Emulates ubuntu-latest runner with Bun + Cargo
+# Emulates ubuntu-latest runner with Node + Cargo
 # Maps to: runs-on: ubuntu-latest + container: in GHA
-FROM oven/bun:1.3-debian
+FROM node:22-alpine
+
+# Enable pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # Install build essentials and Rust (approximates ubuntu-latest + rust toolchain)
 # Maps to: dtolnay/rust-toolchain@stable action
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential pkg-config libssl-dev curl git ca-certificates \
+RUN apk add --no-cache build-base pkg-config openssl-dev curl git ca-certificates \
     && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/cache/apk/*
 
 ENV PATH="/root/.cargo/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
 

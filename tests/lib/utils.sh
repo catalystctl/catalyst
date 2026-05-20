@@ -381,8 +381,8 @@ print_test_summary() {
 reset_test_database() {
     log_info "Resetting test database..."
     cd /root/catalyst3/catalyst-backend
-    bun run db:push --force-reset > /dev/null 2>&1
-    bun run db:seed > /dev/null 2>&1
+    pnpm run db:push --force-reset > /dev/null 2>&1
+    pnpm run db:seed > /dev/null 2>&1
     log_success "Database reset complete"
 }
 
@@ -390,7 +390,7 @@ reset_test_database() {
 start_backend_test_mode() {
     log_info "Starting backend in test mode..."
     cd /root/catalyst3/catalyst-backend
-    NODE_ENV=test bun run dev > /tmp/catalyst-backend-test.log 2>&1 &
+    NODE_ENV=test pnpm run dev > /tmp/catalyst-backend-test.log 2>&1 &
     local pid=$!
     echo $pid > /tmp/catalyst-backend-test.pid
     

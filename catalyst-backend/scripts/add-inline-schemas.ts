@@ -1,9 +1,9 @@
-#!/usr/bin/env bun
+#!/usr/bin/env npx tsx
 /**
  * Route Schema Generator
  * 
  * Generates inline JSON Schema documentation for all API routes.
- * Run: bun scripts/add-inline-schemas.ts
+ * Run: npx tsx scripts/add-inline-schemas.ts
  */
 
 import { readdirSync, readFileSync, writeFileSync } from 'fs';

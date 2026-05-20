@@ -144,24 +144,24 @@ cd catalyst
 cd catalyst-backend
 cp .env.example .env
 nano .env  # Set DATABASE_URL and BETTER_AUTH_SECRET
-bun install
-bun run db:generate
-bun run db:push
-bun run db:seed   # dev only
+pnpm install
+pnpm run db:generate
+pnpm run db:push
+pnpm run db:seed   # dev only
 ```
 
 **Frontend:**
 
 ```bash
 cd ../catalyst-frontend
-bun install
+pnpm install
 ```
 
 **Start everything:**
 
 ```bash
 cd ..         # back to repo root
-bun run dev   # backend + frontend with hot reload
+pnpm run dev   # backend + frontend with hot reload
 ```
 
 > **See also:** [Development Guide](./development.md) for the complete developer guide including testing, plugin development, and PR process.
@@ -178,7 +178,7 @@ When you first visit your Catalyst URL:
 2. Register your first account — it becomes the **admin** automatically
 3. Optionally configure SMTP, panel branding, and OAuth from the admin panel
 
-> **Seed alternative:** Run `docker exec -e NODE_ENV=development catalyst-backend bun run db:seed` to create a default admin (`admin@example.com` / `admin123`). **Change this password immediately.**
+> **Seed alternative:** Run `docker exec -e NODE_ENV=development catalyst-backend pnpm run db:seed` to create a default admin (`admin@example.com` / `admin123`). **Change this password immediately.**
 
 ### Verify the Stack
 
@@ -401,28 +401,28 @@ No protocol, no port — bare hostname or IP only.
 
 Catalyst uses a Bun workspace monorepo. Requirements:
 
-- [Bun](https://bun.sh/) >= 1.0.0
+- [Node.js](https://nodejs.org/) >= 22 + [pnpm](https://pnpm.io/) >= 8
 - Docker or Podman (for PostgreSQL, Redis)
 - Rust toolchain (for the agent)
 
 **Quick start:**
 
 ```bash
-bun install              # install all workspace deps
-bun run dev:infra        # start PostgreSQL + Redis
-bun run dev              # backend + frontend with hot reload
-bun run dev:agent        # Rust agent locally (needs root)
+pnpm install              # install all workspace deps
+pnpm run dev:infra        # start PostgreSQL + Redis
+pnpm run dev              # backend + frontend with hot reload
+pnpm run dev:agent        # Rust agent locally (needs root)
 ```
 
 | Command | Description |
 |---|---|
-| `bun run dev` | Start backend + frontend (hot reload) |
-| `bun run dev:agent` | Run Rust agent locally |
-| `bun run build` | Build all packages |
-| `bun run db:seed` | Seed database with sample data |
-| `bun run db:studio` | Open Prisma Studio GUI |
-| `bun run test` | Run Vitest test suite |
-| `bun run lint` | Run ESLint on all packages |
+| `pnpm run dev` | Start backend + frontend (hot reload) |
+| `pnpm run dev:agent` | Run Rust agent locally |
+| `pnpm run build` | Build all packages |
+| `pnpm run db:seed` | Seed database with sample data |
+| `pnpm run db:studio` | Open Prisma Studio GUI |
+| `pnpm run test` | Run Vitest test suite |
+| `pnpm run lint` | Run ESLint on all packages |
 
 > **See also:** [Development Guide](./development.md) for the complete developer guide.
 

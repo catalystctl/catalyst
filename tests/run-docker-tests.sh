@@ -306,7 +306,7 @@ run_db_migrations() {
 
     # Run db:push with force-reset for clean test state
     docker exec "$backend_container" sh -c \
-        "cd /app && bun run db:push --force-reset" 2>&1 | tee "$LOGS_DIR/db-migration.log"
+        "cd /app && pnpm run db:push --force-reset" 2>&1 | tee "$LOGS_DIR/db-migration.log"
 
     local exit_code=${PIPESTATUS[0]}
     if [ $exit_code -ne 0 ]; then
@@ -317,7 +317,7 @@ run_db_migrations() {
     # Seed the database
     log_info "Seeding database..."
     docker exec "$backend_container" sh -c \
-        "cd /app && bun run db:seed" 2>&1 | tee "$LOGS_DIR/db-seed.log"
+        "cd /app && pnpm run db:seed" 2>&1 | tee "$LOGS_DIR/db-seed.log"
 
     exit_code=${PIPESTATUS[0]}
     if [ $exit_code -ne 0 ]; then

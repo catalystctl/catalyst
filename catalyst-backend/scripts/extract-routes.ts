@@ -1,9 +1,9 @@
-#!/usr/bin/env bun
+#!/usr/bin/env npx tsx
 /**
  * Route Schema Annotator
  * 
  * Scans all route files and extracts routes with metadata.
- * Run: bun scripts/extract-routes.ts
+ * Run: npx tsx scripts/extract-routes.ts
  */
 
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';

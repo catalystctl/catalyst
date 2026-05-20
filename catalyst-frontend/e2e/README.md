@@ -39,13 +39,13 @@ After screenshotting each page, the crawler collects all internal `<a href="/...
 
 ```bash
 # Headless (default — for CI / automation)
-bun run test:screenshots
+pnpm run test:screenshots
 
 # Watch the browser live
-bun run test:screenshots:headed
+pnpm run test:screenshots:headed
 
 # Against an already-running dev server (skip Playwright's built-in server)
-SKIP_WEB_SERVER=1 bun run test:screenshots
+SKIP_WEB_SERVER=1 pnpm run test:screenshots
 ```
 
 ## Output
@@ -87,9 +87,9 @@ Three Playwright workers run in parallel:
 
 ## Prerequisites
 
-- **Stack running**: `docker compose up -d` (or `bun run dev` for backend + frontend)
-- **DB seeded**: `docker compose exec backend bun run db:seed`
-- **Playwright browsers**: `bunx playwright install`
+- **Stack running**: `docker compose up -d` (or `pnpm run dev` for backend + frontend)
+- **DB seeded**: `docker compose exec backend pnpm run db:seed`
+- **Playwright browsers**: `npx playwright install`
 
 ## Troubleshooting
 

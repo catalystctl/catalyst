@@ -66,7 +66,7 @@ You'll also need:
 
 You'll be taken to the dashboard where you can see an overview of your system.
 
-> **Did you seed the database?** If you ran `docker compose exec backend bun run db:seed`, the default admin account is `admin@example.com` / `admin123`. **Change this password immediately** after your first login.
+> **Did you seed the database?** If you ran `docker compose exec backend pnpm run db:seed`, the default admin account is `admin@example.com` / `admin123`. **Change this password immediately** after your first login.
 
 ### Registration
 
