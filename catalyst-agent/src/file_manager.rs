@@ -18,7 +18,7 @@ impl FileManager {
     }
 
     /// Validate and resolve a path within the container's data directory
-    fn resolve_path(&self, server_id: &str, requested_path: &str) -> AgentResult<PathBuf> {
+    pub fn resolve_path(&self, server_id: &str, requested_path: &str) -> AgentResult<PathBuf> {
         if server_id.contains('/') || server_id.contains('\\') {
             return Err(AgentError::InvalidRequest("Invalid server id".to_string()));
         }

@@ -50,6 +50,8 @@ function NodeCreateModal(_props: Props) {
  const [systemdOverrideDir, setSystemdOverrideDir] = useState('');
  const [agentConfigPath, setAgentConfigPath] = useState('');
  const [agentReleaseRepo, setAgentReleaseRepo] = useState('');
+ const [sftpPort, setSftpPort] = useState('2022');
+ const [sftpEnabled, setSftpEnabled] = useState(true);
  const [showAdvanced, setShowAdvanced] = useState(false);
  const [deployInfo, setDeployInfo] = useState<{
  deployUrl: string;
@@ -106,6 +108,8 @@ function NodeCreateModal(_props: Props) {
  systemdOverrideDir: systemdOverrideDir || undefined,
  agentConfigPath: agentConfigPath || undefined,
  agentReleaseRepo: agentReleaseRepo || undefined,
+ sftpPort: Number(sftpPort) || undefined,
+ sftpEnabled: sftpEnabled || undefined,
  });
  return created;
  },
@@ -166,6 +170,8 @@ function NodeCreateModal(_props: Props) {
  setSystemdOverrideDir('');
  setAgentConfigPath('');
  setAgentReleaseRepo('');
+ setSftpPort('2022');
+ setSftpEnabled(true);
  setShowAdvanced(false);
  setDeployInfo(null);
  setCreatedNodeId(null);
@@ -467,6 +473,41 @@ function NodeCreateModal(_props: Props) {
  0 = no over-allocation, -1 = unlimited
  </p>
  </label>
+ </div>
+
+ {/* SFTP Configuration */}
+ <div className="rounded-lg border border-border/30 bg-surface-2/30 px-3 py-3">
+ <div className="flex items-center justify-between">
+ <span className="text-sm font-medium text-foreground">SFTP Access</span>
+ <label className="flex items-center gap-2 text-xs text-muted-foreground">
+ <input
+ type="checkbox"
+ checked={sftpEnabled}
+ onChange={(e) => setSftpEnabled(e.target.checked)}
+ className="rounded border-border/40 text-primary focus:ring-primary"
+ />
+ Enabled
+ </label>
+ </div>
+ {sftpEnabled && (
+ <div className="mt-2">
+ <label className="block space-y-1">
+ <span className="text-muted-foreground">SFTP port</span>
+ <input
+ className="w-full rounded-lg border border-border/40 bg-card px-3 py-2 text-foreground transition-all focus:border-primary focus:outline-none hover:border-border/60"
+ value={sftpPort}
+ onChange={(e) => setSftpPort(e.target.value)}
+ type="number"
+ min={1}
+ max={65535}
+ placeholder="2022"
+ />
+ <p className="text-xs text-muted-foreground">
+ Port the SFTP server will listen on (on this node). Default: 2022
+ </p>
+ </label>
+ </div>
+ )}
  </div>
 
  {/* Advanced Agent Paths — collapsed by default */}

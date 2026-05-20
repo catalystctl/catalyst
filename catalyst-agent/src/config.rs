@@ -11,6 +11,35 @@ pub struct AgentConfig {
     pub logging: LoggingConfig,
     #[serde(default)]
     pub agent: AgentPathsConfig,
+    #[serde(default)]
+    pub sftp: SftpConfigSection,
+}
+
+/// SFTP server configuration section in config.toml.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SftpConfigSection {
+    /// Port the SFTP server listens on. Default: 2022.
+    #[serde(default = "default_sftp_port")]
+    pub port: u16,
+    /// Path to the SSH host key file.
+    #[serde(default = "default_sftp_host_key_path")]
+    pub host_key_path: PathBuf,
+}
+
+fn default_sftp_port() -> u16 {
+    2022
+}
+fn default_sftp_host_key_path() -> PathBuf {
+    PathBuf::from("/opt/catalyst-agent/sftp_host_key")
+}
+
+impl Default for SftpConfigSection {
+    fn default() -> Self {
+        Self {
+            port: default_sftp_port(),
+            host_key_path: default_sftp_host_key_path(),
+        }
+    }
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -307,6 +336,16 @@ impl AgentConfig {
                 ),
                 release_repo: std::env::var("AGENT_RELEASE_REPO")
                     .unwrap_or_else(|_| "catalystctl/catalyst".to_string()),
+            },
+            sftp: SftpConfigSection {
+                port: std::env::var("SFTP_PORT")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(2022),
+                host_key_path: std::env::var("SFTP_HOST_KEY")
+                    .ok()
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| PathBuf::from("/opt/catalyst-agent/sftp_host_key")),
             },
         };
         if config.server.api_key.trim().is_empty() {

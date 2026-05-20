@@ -49,6 +49,7 @@ import { AlertService } from "./services/alert-service";
 import { getSecuritySettings } from "./services/mailer";
 import {
 	generateSftpToken,
+	validateSftpToken,
 	rotateSftpToken,
 	getSftpTokenInfo,
 	listSftpTokensForServer,
@@ -1022,24 +1023,107 @@ async function bootstrap() {
 			reply.type("text/plain").send(script);
 		});
 
+		// ── Agent SFTP token validation (internal — agent-authenticated) ──
+		// The SFTP server now runs on each node. When an SFTP client connects,
+		// the node calls this endpoint to validate the token and get the
+		// associated userId + permissions without exposing the token manager
+		// internals to the agent.
+		app.post(
+			"/api/agent/sftp/validate-token",
+			async (request, reply) => {
+				// Agent auth: verify x-catalyst-node-id + x-catalyst-node-token
+				const headerNodeId =
+					typeof (
+						request.headers["x-catalyst-node-id"] ??
+						request.headers["x-catalyst-nodeid"]
+					) === "string"
+						? (request.headers["x-catalyst-node-id"] ??
+							request.headers["x-catalyst-nodeid"]) as string
+						: null;
+				const headerToken =
+					typeof request.headers["x-catalyst-node-token"] === "string"
+						? request.headers["x-catalyst-node-token"] as string
+						: typeof request.headers["x-node-api-key"] === "string"
+							? request.headers["x-node-api-key"] as string
+							: null;
+
+				if (!headerNodeId || !headerToken) {
+					return reply
+						.status(401)
+						.send({ error: "Missing agent credentials" });
+				}
+
+				const apiKeyValid = await verifyAgentApiKey(
+					prisma,
+					headerNodeId,
+					headerToken,
+				);
+				if (!apiKeyValid) {
+					return reply.status(401).send({ error: "Invalid agent credentials" });
+				}
+
+				const { token, serverId } = request.body as {
+					token: string;
+					serverId: string;
+				};
+
+				if (!token || !serverId) {
+					return reply
+						.status(400)
+						.send({ error: "token and serverId are required" });
+				}
+
+				const result = validateSftpToken(token, serverId);
+				if (!result) {
+					return reply.send({ success: true, data: { valid: false } });
+				}
+
+				// Look up the user's permissions for this server
+				const serverAccess = await prisma.serverAccess.findFirst({
+					where: { serverId: result.serverId, userId: result.userId },
+					select: { permissions: true },
+				});
+
+				// Check admin status — admins get wildcard permissions
+				const user = await prisma.user.findUnique({
+					where: { id: result.userId },
+					select: { role: true },
+				});
+
+				const isAdmin = user?.role === "administrator";
+				const permissions = isAdmin
+					? ["*"]
+					: serverAccess?.permissions ?? [];
+
+				// Look up the server UUID — the agent's FileManager uses
+				// the UUID as the data directory name (e.g. /var/lib/catalyst/<uuid>).
+				const server = await prisma.server.findUnique({
+					where: { id: result.serverId },
+					select: { uuid: true },
+				});
+
+				return reply.send({
+					success: true,
+					data: {
+						valid: true,
+						userId: result.userId,
+						serverId: result.serverId,
+						serverUuid: server?.uuid ?? result.serverId,
+						permissions,
+					},
+				});
+			},
+		);
+
 		// SFTP connection info endpoint (authenticated)
 		// Uses a dedicated SFTP token manager with per-user configurable expiry.
-
-		function getSftpHost(request: any): string {
-			return process.env.BACKEND_URL
-				? new URL(process.env.BACKEND_URL).hostname
-				: process.env.BACKEND_EXTERNAL_ADDRESS
-					? new URL(process.env.BACKEND_EXTERNAL_ADDRESS).hostname
-					: request.hostname.split(":")[0];
-		}
+		// SFTP now runs on the node (not the backend), so we look up the
+		// server's assigned node and return the node's hostname + SFTP port.
 
 		app.get(
 			"/api/sftp/connection-info",
 			{ preHandler: [authenticate] },
 			async (request, reply) => {
-				const enabled = process.env.SFTP_ENABLED !== "false";
-				const port = parseInt(process.env.SFTP_PORT || "2022");
-				const host = getSftpHost(request);
 				const userId = request.user?.userId;
 				const serverId = (request.query as { serverId?: string }).serverId;
 
@@ -1047,6 +1131,32 @@ async function bootstrap() {
 					return reply
 						.status(400)
 						.send({ error: "serverId query parameter is required" });
+				}
+
+				// Look up the server's node for SFTP host/port
+				const server = await prisma.server.findUnique({
+					where: { id: serverId },
+					select: {
+						node: {
+							select: {
+								hostname: true,
+								publicAddress: true,
+								sftpPort: true,
+								sftpEnabled: true,
+							},
+						},
+					},
+				});
+
+				let enabled = true;
+				let host = "unknown";
+				let port = 2022;
+
+				if (server?.node) {
+					enabled = server.node.sftpEnabled;
+					// Prefer publicAddress (IP) for SFTP, fallback to hostname
+					host = server.node.publicAddress || server.node.hostname;
+					port = server.node.sftpPort;
 				}
 
 				const ttlMs =
@@ -1414,10 +1524,10 @@ async function bootstrap() {
 			`Catalyst Backend running on http://0.0.0.0:${process.env.PORT || 3000}`,
 		);
 
-		// Start SFTP server
-		if (process.env.SFTP_ENABLED !== "false") {
-			startSFTPServer(logger);
-		}
+		// SFTP server has been moved to the node agent.
+		// The backend no longer runs its own SFTP server.
+		// Token generation and validation remain in the backend;
+		// the agent validates tokens via /api/agent/sftp/validate-token.
 
 		// Start task scheduler
 		await taskScheduler.start();
@@ -1508,6 +1618,7 @@ function generateDeploymentScript(
 	if (node.systemdOverrideDir) pathEnvLines.push(`SYSTEMD_OVERRIDE_DIR=${shellEscape(node.systemdOverrideDir)}`);
 	if (node.agentConfigPath) pathEnvLines.push(`CATALYST_CONFIG_PATH=${shellEscape(node.agentConfigPath)}`);
 	if (node.agentReleaseRepo) pathEnvLines.push(`AGENT_RELEASE_REPO=${shellEscape(node.agentReleaseRepo)}`);
+	if (node.sftpPort && node.sftpPort !== 2022) pathEnvLines.push(`SFTP_PORT=${shellEscape(String(node.sftpPort))}`);
 	const pathExports = pathEnvLines.length > 0
 		? `\n# --- Custom agent paths (from node configuration) ---\n${pathEnvLines.join("\n")}\n`
 		: "";

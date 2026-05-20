@@ -90,6 +90,8 @@ export interface AdminNode {
   locationId: string;
   hostname: string;
   publicAddress: string;
+  sftpPort?: number;
+  sftpEnabled?: boolean;
   isOnline: boolean;
   lastSeenAt?: string | null;
   maxMemoryMb: number;

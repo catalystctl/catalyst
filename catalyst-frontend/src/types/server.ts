@@ -50,6 +50,8 @@ export interface Server {
     name?: string;
     hostname?: string;
     publicAddress?: string;
+    sftpPort?: number;
+    sftpEnabled?: boolean;
   };
   template?: {
     name?: string;

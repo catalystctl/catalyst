@@ -360,6 +360,8 @@ model Node {
   secret        String    @unique
   maxMemoryMb   Int
   maxCpuCores   Int
+  sftpPort      Int       @default(2022)
+  sftpEnabled   Boolean   @default(true)
   memoryOverallocatePercent Int @default(0)
   cpuOverallocatePercent    Int @default(0)
   agentVersion  String?

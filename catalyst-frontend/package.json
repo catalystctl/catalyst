@@ -10,6 +10,7 @@
 	"scripts": {
 		"dev": "vite --host",
 		"build": "vite build",
+		"start": "vite preview --host --port 5173",
 		"preview": "vite preview",
 		"lint": "eslint . --ext .ts,.tsx",
 		"format": "prettier --write .",

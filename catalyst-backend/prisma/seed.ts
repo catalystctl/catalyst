@@ -60,6 +60,13 @@ data_dir = "/var/lib/catalyst"
 # Maximum concurrent WebSocket connections
 max_connections = 100
 
+[sftp]
+# Port the SFTP server listens on (default: 2022)
+# port = 2022
+
+# Path to the SSH host key file
+# host_key_path = "/opt/catalyst-agent/sftp_host_key"
+
 [containerd]
 # Path to containerd socket
 socket_path = "/run/containerd/containerd.sock"

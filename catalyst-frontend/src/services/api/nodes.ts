@@ -62,6 +62,8 @@ export const nodesApi = {
     systemdOverrideDir?: string;
     agentConfigPath?: string;
     agentReleaseRepo?: string;
+    sftpPort?: number;
+    sftpEnabled?: boolean;
   }) => {
     const data = await apiClient.post<ApiResponse<NodeInfo>>('/api/nodes', payload);
     return data.data;
@@ -89,6 +91,8 @@ export const nodesApi = {
       systemdOverrideDir?: string;
       agentConfigPath?: string;
       agentReleaseRepo?: string;
+      sftpPort?: number;
+      sftpEnabled?: boolean;
     },
   ) => {
     const data = await apiClient.put<ApiResponse<NodeInfo>>(`/api/nodes/${nodeId}`, payload);

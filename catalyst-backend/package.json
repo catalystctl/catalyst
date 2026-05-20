@@ -14,7 +14,7 @@
 	"scripts": {
 		"dev": "bun --watch src/index.ts -- --host",
 		"build": "tsc",
-		"start": "bun dist/index.js",
+		"start": "bun dist/index.js --host",
 		"db:push": "prisma db push --config prisma/prisma.config.ts",
 		"db:migrate": "prisma migrate dev --config prisma/prisma.config.ts",
 		"db:studio": "prisma studio --config prisma/prisma.config.ts",

@@ -154,10 +154,10 @@ async function validateTokenAndGetServer(
 		// If admin has no ServerAccess record, look up the server directly
 		let serverRecord = serverAccess?.server;
 		if (!serverRecord) {
-			serverRecord = await prisma.server.findUnique({
+			serverRecord = (await prisma.server.findUnique({
 				where: { id: serverId },
 				include: { node: true },
-			});
+			})) ?? undefined;
 			if (!serverRecord) {
 				return null;
 			}

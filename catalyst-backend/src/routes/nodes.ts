@@ -174,6 +174,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 				agentReleaseRepo,
 				memoryOverallocatePercent,
 				cpuOverallocatePercent,
+				sftpPort,
+				sftpEnabled,
 			} = request.body as {
 				name: string;
 				description?: string;
@@ -195,6 +197,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 				agentReleaseRepo?: string;
 				memoryOverallocatePercent?: number;
 				cpuOverallocatePercent?: number;
+				sftpPort?: number;
+				sftpEnabled?: boolean;
 			};
 
 			// Validate required fields
@@ -269,6 +273,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 					secret,
 					maxMemoryMb,
 					maxCpuCores,
+					sftpPort: sftpPort ?? 2022,
+					sftpEnabled: sftpEnabled ?? true,
 					serverDataDir: serverDataDir || undefined,
 					consoleLogDir: consoleLogDir || undefined,
 					cniDir: cniDir || undefined,
@@ -709,6 +715,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 				agentReleaseRepo,
 				memoryOverallocatePercent,
 				cpuOverallocatePercent,
+				sftpPort,
+				sftpEnabled,
 			} = request.body as {
 				name?: string;
 				description?: string;
@@ -729,6 +737,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 				agentReleaseRepo?: string;
 				memoryOverallocatePercent?: number;
 				cpuOverallocatePercent?: number;
+				sftpPort?: number;
+				sftpEnabled?: boolean;
 			};
 
 			const node = await prisma.node.findUnique({
@@ -797,6 +807,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 					agentReleaseRepo,
 					memoryOverallocatePercent,
 					cpuOverallocatePercent,
+					sftpPort,
+					sftpEnabled,
 				},
 			});
 

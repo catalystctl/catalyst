@@ -13,6 +13,7 @@ mod file_tunnel;
 mod firewall_manager;
 mod network_manager;
 mod runtime_manager;
+mod sftp_server;
 mod storage_manager;
 mod system_setup;
 mod updater;
@@ -140,6 +141,28 @@ impl CatalystAgent {
                 _ = tunnel_shutdown.recv() => {
                     info!("File tunnel task shutting down");
                 }
+            }
+        });
+
+        // Start SFTP server (SSH-based file access on this node)
+        let sftp_config = sftp_server::SftpConfig::from_agent_config(&self.config);
+        let sftp_file_manager = self.file_manager.clone();
+        let mut sftp_shutdown = shutdown_rx.resubscribe();
+        join_set.spawn(async move {
+            let sftp_port = sftp_config.port;
+            let sftp_enabled = sftp_config.enabled;
+            tokio::select! {
+                result = sftp_server::start_sftp_server(sftp_config, sftp_file_manager) => {
+                    if let Err(e) = result {
+                        error!("SFTP server error: {}", e);
+                    }
+                },
+                _ = sftp_shutdown.recv() => {
+                    info!("SFTP server task shutting down");
+                }
+            }
+            if sftp_enabled {
+                info!("SFTP server stopped (port {})", sftp_port);
             }
         });
 
@@ -277,7 +300,8 @@ async fn main() -> AgentResult<()> {
         }
     };
 
-    let filter = format!("catalyst_agent={},tokio=info", config.logging.level);
+    let filter = format!("catalyst_agent={},russh_sftp=debug,russh=debug,tokio=info", config.logging.level);
+
     if config.logging.format == "json" {
         tracing_subscriber::fmt()
             .json()

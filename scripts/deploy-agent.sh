@@ -640,6 +640,10 @@ data_dir = "${DATA_DIR:-/var/lib/catalyst}"
 ${CONSOLE_LOG_DIR:+console_log_dir = "$CONSOLE_LOG_DIR"}
 max_connections = 100
 
+[sftp]
+${SFTP_PORT:+port = "$SFTP_PORT"}
+${SFTP_HOST_KEY:+host_key_path = "$SFTP_HOST_KEY"}
+
 [containerd]
 socket_path = "/run/containerd/containerd.sock"
 namespace = "catalyst"

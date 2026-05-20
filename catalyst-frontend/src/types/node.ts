@@ -19,6 +19,8 @@ export interface NodeInfo {
   systemdOverrideDir?: string | null;
   agentConfigPath?: string | null;
   agentReleaseRepo?: string | null;
+  sftpPort?: number;
+  sftpEnabled?: boolean;
   maxMemoryMb?: number;
   maxCpuCores?: number;
   memoryOverallocatePercent?: number;
