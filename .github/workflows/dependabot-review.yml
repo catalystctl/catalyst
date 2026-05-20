@@ -58,7 +58,7 @@ jobs:
           mode: firewall-free
 
       - name: Install & scan dependencies
-        run: sfw pnpm install
+        run: sfw pnpm install --config.minimumReleaseAge=0
 
   # ──────────────────────────────────────────────────────────────────────────────
   # Gate 2: Vulnerability audit (pnpm audit)
@@ -85,7 +85,7 @@ jobs:
 
       # NOT using --frozen-lockfile because Dependabot PRs change the lockfile
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --config.minimumReleaseAge=0
 
       # ── Audit the PR's branch ──
       - name: Audit backend dependencies (PR branch)
@@ -101,7 +101,7 @@ jobs:
         run: |
           git stash
           git checkout origin/${{ github.base_ref }} 2>/dev/null || true
-          pnpm install 2>/dev/null || true
+          pnpm install --config.minimumReleaseAge=0 2>/dev/null || true
           (cd catalyst-backend && pnpm audit 2>&1 | tee /tmp/base-backend-audit.txt || true)
           (cd catalyst-frontend && pnpm audit 2>&1 | tee /tmp/base-frontend-audit.txt || true)
 
@@ -184,7 +184,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Checking for install scripts in new packages..." >> $GITHUB_STEP_SUMMARY
 
-          pnpm install 2>/dev/null || true
+          pnpm install --config.minimumReleaseAge=0 2>/dev/null || true
 
           SUSPICIOUS=""
           for pkg in $(echo "$NEW_PKGS" | grep -oP '@?[^@]+@[^"]+' | sed 's/@[^@]*$//' | sort -u); do

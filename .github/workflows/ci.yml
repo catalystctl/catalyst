@@ -121,7 +121,7 @@ jobs:
           key: prisma-client-${{ hashFiles('catalyst-backend/prisma/schema.prisma') }}
 
       - name: Install pnpm dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
 
       - name: Generate Prisma Client
         working-directory: catalyst-backend
@@ -259,7 +259,7 @@ jobs:
           key: prisma-client-${{ hashFiles('catalyst-backend/prisma/schema.prisma') }}
 
       - name: Install pnpm dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
 
       - name: Generate Prisma Client
         working-directory: catalyst-backend
@@ -374,7 +374,7 @@ jobs:
           key: prisma-client-${{ hashFiles('catalyst-backend/prisma/schema.prisma') }}
 
       - name: Install pnpm dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
 
       - name: Generate Prisma Client
         working-directory: catalyst-backend
