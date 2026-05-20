@@ -4,3 +4,9 @@ packages:
   - catalyst-shared
   - catalyst-plugins/*
   - packages/*
+allowBuilds:
+  '@prisma/engines': true
+  cpu-features: true
+  esbuild: true
+  prisma: true
+  ssh2: true
