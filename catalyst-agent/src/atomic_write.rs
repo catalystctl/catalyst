@@ -8,9 +8,9 @@
 //! this module provides a single shared implementation to avoid duplication
 //! and ensure consistency across all config writes.
 
+use crate::{AgentError, AgentResult};
 use std::path::Path;
 use tokio::fs;
-use crate::{AgentError, AgentResult};
 
 /// Atomically write `data` to `path` by writing to a temp file and renaming.
 ///

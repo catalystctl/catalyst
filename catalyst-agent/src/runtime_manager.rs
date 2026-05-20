@@ -715,8 +715,7 @@ impl ContainerdRuntime {
                 .args(["-t", &pid.to_string(), "-m", "--", "sh", "-c"])
                 .arg(format!(
                     "cat > {} << 'CATALYST_RESOLV_EOF'\n{}\nCATALYST_RESOLV_EOF",
-                    resolv_dest,
-                    resolv_content
+                    resolv_dest, resolv_content
                 ))
                 .output()
                 .await;

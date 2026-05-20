@@ -69,16 +69,17 @@ impl SftpConfig {
     pub fn from_agent_config(config: &AgentConfig) -> Self {
         let backend_http = {
             let url = config.server.backend_url.clone();
-            if url.starts_with("wss://") {
-                format!("https://{}", &url[6..])
-            } else if url.starts_with("ws://") {
-                format!("http://{}", &url[5..])
+            let stripped = if let Some(rest) = url.strip_prefix("wss://") {
+                format!("https://{}", rest)
+            } else if let Some(rest) = url.strip_prefix("ws://") {
+                format!("http://{}", rest)
             } else {
                 url
-            }
-            .trim_end_matches("/ws")
-            .trim_end_matches('/')
-            .to_string()
+            };
+            stripped
+                .trim_end_matches("/ws")
+                .trim_end_matches('/')
+                .to_string()
         };
 
         Self {
@@ -192,14 +193,14 @@ struct CatalystSftpHandler {
 #[derive(Debug, Clone)]
 struct SftpError(String);
 
-impl Into<StatusCode> for SftpError {
-    fn into(self) -> StatusCode {
+impl From<SftpError> for StatusCode {
+    fn from(err: SftpError) -> StatusCode {
         // Map common error messages to appropriate SFTP status codes
-        if self.0 == "EOF" {
+        if err.0 == "EOF" {
             StatusCode::Eof
-        } else if self.0.starts_with("Permission denied") {
+        } else if err.0.starts_with("Permission denied") {
             StatusCode::PermissionDenied
-        } else if self.0.starts_with("No such file") {
+        } else if err.0.starts_with("No such file") {
             StatusCode::NoSuchFile
         } else {
             StatusCode::Failure
@@ -265,15 +266,13 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
         SftpError("Not implemented".to_string())
     }
 
-    fn init(
+    async fn init(
         &mut self,
         _version: u32,
         _extensions: HashMap<String, String>,
-    ) -> impl Future<Output = Result<Version, Self::Error>> + Send {
-        async {
-            tracing::info!("SFTP init received");
-            Ok(Version::new())
-        }
+    ) -> Result<Version, Self::Error> {
+        tracing::info!("SFTP init received");
+        Ok(Version::new())
     }
 
     fn open(
@@ -323,19 +322,13 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
         }
     }
 
-    fn close(
-        &mut self,
-        id: u32,
-        handle: String,
-    ) -> impl Future<Output = Result<Status, Self::Error>> + Send {
-        async move {
-            // Clean up directory read state
-            {
-                let mut state = DIR_READ_STATE.lock().unwrap();
-                state.remove(&handle);
-            }
-            Ok(Self::status_ok(id))
+    async fn close(&mut self, id: u32, handle: String) -> Result<Status, Self::Error> {
+        // Clean up directory read state
+        {
+            let mut state = DIR_READ_STATE.lock().unwrap();
+            state.remove(&handle);
         }
+        Ok(Self::status_ok(id))
     }
 
     fn read(
@@ -588,15 +581,17 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
                         format!("-rw-r--r--\t{}\t{}", e.size, e.name)
                     };
 
-                    let mut attrs = FileAttributes::default();
-                    attrs.size = Some(e.size);
-                    attrs.permissions = Some(if e.is_dir {
-                        0o40000 | 0o755
-                    } else {
-                        e.mode & 0o777
-                    });
-                    attrs.mtime = Some(e.modified as u32);
-                    attrs.atime = Some(e.modified as u32);
+                    let attrs = FileAttributes {
+                        size: Some(e.size),
+                        permissions: Some(if e.is_dir {
+                            0o40000 | 0o755
+                        } else {
+                            e.mode & 0o777
+                        }),
+                        mtime: Some(e.modified as u32),
+                        atime: Some(e.modified as u32),
+                        ..Default::default()
+                    };
 
                     File {
                         filename: e.name.clone(),
@@ -714,12 +709,10 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
                 }
             };
 
-            let metadata = tokio::fs::metadata(&full_path)
-                .await
-                .map_err(|e| {
-                    tracing::error!("SFTP stat: metadata failed for {:?}: {}", full_path, e);
-                    SftpError(format!("stat failed: {}", e))
-                })?;
+            let metadata = tokio::fs::metadata(&full_path).await.map_err(|e| {
+                tracing::error!("SFTP stat: metadata failed for {:?}: {}", full_path, e);
+                SftpError(format!("stat failed: {}", e))
+            })?;
 
             Ok(russh_sftp::protocol::Attrs {
                 id,
@@ -728,37 +721,30 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
         }
     }
 
-    fn rename(
+    async fn rename(
         &mut self,
         id: u32,
         oldpath: String,
         newpath: String,
-    ) -> impl Future<Output = Result<Status, Self::Error>> + Send {
-        let fm = self.file_manager.clone();
-        let server_id = self.server_id.clone();
-        async move {
-            fm.rename_file(&server_id, &oldpath, &newpath)
-                .await
-                .map_err(|e| SftpError(format!("{}", e)))?;
-            Ok(Self::status_ok(id))
-        }
+    ) -> Result<Status, Self::Error> {
+        self.file_manager
+            .rename_file(&self.server_id, &oldpath, &newpath)
+            .await
+            .map_err(|e| SftpError(format!("{}", e)))?;
+        Ok(Self::status_ok(id))
     }
 
-    fn readlink(
-        &mut self,
-        _id: u32,
-        _path: String,
-    ) -> impl Future<Output = Result<Name, Self::Error>> + Send {
-        async { Err(SftpError("Not implemented".into())) }
+    async fn readlink(&mut self, _id: u32, _path: String) -> Result<Name, Self::Error> {
+        Err(SftpError("Not implemented".into()))
     }
 
-    fn symlink(
+    async fn symlink(
         &mut self,
         _id: u32,
         _linkpath: String,
         _targetpath: String,
-    ) -> impl Future<Output = Result<Status, Self::Error>> + Send {
-        async { Err(SftpError("Not implemented".into())) }
+    ) -> Result<Status, Self::Error> {
+        Err(SftpError("Not implemented".into()))
     }
 
     fn extended(
@@ -857,7 +843,10 @@ impl russh::server::Handler for SshSession {
         let server_id = user;
 
         if !password.starts_with("sftp_") {
-            tracing::warn!("SFTP auth rejected: non-sftp token for server {}", server_id);
+            tracing::warn!(
+                "SFTP auth rejected: non-sftp token for server {}",
+                server_id
+            );
             return Ok(Auth::Reject {
                 proceed_with_methods: Some(MethodSet::PASSWORD),
             });
@@ -929,7 +918,10 @@ impl russh::server::Handler for SshSession {
         let channel = match channel {
             Some(ch) => ch,
             None => {
-                tracing::error!("SFTP subsystem requested for unknown channel {}", channel_id);
+                tracing::error!(
+                    "SFTP subsystem requested for unknown channel {}",
+                    channel_id
+                );
                 let _ = session.channel_failure(channel_id);
                 return Ok(());
             }
@@ -948,11 +940,18 @@ impl russh::server::Handler for SshSession {
         // Convert the SSH channel into an AsyncRead+AsyncWrite stream,
         // then hand it off to the russh-sftp server loop.
         let stream = channel.into_stream();
-        let handler = CatalystSftpHandler::new(file_manager, server_id.clone(), permissions, max_file_size);
+        let handler =
+            CatalystSftpHandler::new(file_manager, server_id.clone(), permissions, max_file_size);
 
-        tracing::info!("SFTP: calling russh_sftp::server::run for server {}", server_id);
+        tracing::info!(
+            "SFTP: calling russh_sftp::server::run for server {}",
+            server_id
+        );
         russh_sftp::server::run(stream, handler).await;
-        tracing::info!("SFTP: russh_sftp::server::run returned for server {}", server_id);
+        tracing::info!(
+            "SFTP: russh_sftp::server::run returned for server {}",
+            server_id
+        );
 
         Ok(())
     }
@@ -999,8 +998,7 @@ fn load_or_generate_host_key(path: &PathBuf) -> Result<ssh_key::PrivateKey, Stri
     let pem = key
         .to_openssh(ssh_key::LineEnding::LF)
         .map_err(|e| format!("Failed to encode host key: {}", e))?;
-    std::fs::write(path, pem.to_string())
-        .map_err(|e| format!("Failed to write host key: {}", e))?;
+    std::fs::write(path, &pem).map_err(|e| format!("Failed to write host key: {}", e))?;
 
     #[cfg(unix)]
     {
@@ -1035,15 +1033,15 @@ pub async fn start_sftp_server(
     crate::firewall_manager::FirewallManager::remove_server_ports("__sftp__").await;
 
     // Now add the current SFTP port.
-    if let Err(e) = crate::firewall_manager::FirewallManager::allow_port(
-        port,
-        "tcp",
-        "0.0.0.0",
-        "__sftp__",
-    )
-    .await
+    if let Err(e) =
+        crate::firewall_manager::FirewallManager::allow_port(port, "tcp", "0.0.0.0", "__sftp__")
+            .await
     {
-        tracing::warn!("Failed to open SFTP port {} in firewall (non-fatal): {}", port, e);
+        tracing::warn!(
+            "Failed to open SFTP port {} in firewall (non-fatal): {}",
+            port,
+            e
+        );
     }
 
     let clients: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));

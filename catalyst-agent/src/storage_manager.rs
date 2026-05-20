@@ -122,9 +122,10 @@ impl StorageManager {
         // exhaust host disk space via a malicious allocatedDiskMb value.
         const MAX_DISK_MB: u64 = 100 * 1024; // 100 GB in MB
         if size_mb > MAX_DISK_MB {
-            return Err(AgentError::InvalidRequest(
-                format!("Requested disk size {} MB exceeds maximum {} MB", size_mb, MAX_DISK_MB)
-            ));
+            return Err(AgentError::InvalidRequest(format!(
+                "Requested disk size {} MB exceeds maximum {} MB",
+                size_mb, MAX_DISK_MB
+            )));
         }
         let image = image_path.to_path_buf();
         let size = size_mb;

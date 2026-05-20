@@ -300,7 +300,10 @@ async fn main() -> AgentResult<()> {
         }
     };
 
-    let filter = format!("catalyst_agent={},russh_sftp=debug,russh=debug,tokio=info", config.logging.level);
+    let filter = format!(
+        "catalyst_agent={},russh_sftp=debug,russh=debug,tokio=info",
+        config.logging.level
+    );
 
     if config.logging.format == "json" {
         tracing_subscriber::fmt()

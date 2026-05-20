@@ -422,9 +422,17 @@ impl SystemSetup {
         // Validate username: must be alphanumeric + underscore/hyphen, no shell metacharacters.
         // Command::new prevents shell injection, but invalid usernames could cause
         // logical errors or pass as arguments to other programs.
-        if !username.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
-            warn!("Invalid username '{}' for usermod — skipping group add", username);
-        } else if let Err(e) = Self::run_command("usermod", &["-aG", "containerd", &username], None).await {
+        if !username
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+        {
+            warn!(
+                "Invalid username '{}' for usermod — skipping group add",
+                username
+            );
+        } else if let Err(e) =
+            Self::run_command("usermod", &["-aG", "containerd", &username], None).await
+        {
             warn!("Could not add user to containerd group (non-fatal): {}", e);
         }
 

@@ -720,10 +720,13 @@ impl WebSocketHandler {
                     if !is_loopback {
                         return Err(AgentError::ConfigError(
                             "Insecure ws:// is not allowed for non-loopback addresses. \
-                             Use wss:// or set CATALYST_ALLOW_INSECURE_WS=1 to override.".to_string()
+                             Use wss:// or set CATALYST_ALLOW_INSECURE_WS=1 to override."
+                                .to_string(),
                         ));
                     }
-                    warn!("Using insecure WebSocket connection (ws://) — only allowed for loopback");
+                    warn!(
+                        "Using insecure WebSocket connection (ws://) — only allowed for loopback"
+                    );
                 } else {
                     warn!("Using insecure WebSocket connection (ws://) — CATALYST_ALLOW_INSECURE_WS=1 is set");
                 }
@@ -3558,7 +3561,7 @@ impl WebSocketHandler {
                     .decode(enc_key_b64)
                     .map_err(|e| {
                         AgentError::InvalidRequest(format!("Invalid encryption key: {}", e))
-                    })?
+                    })?,
             );
             let raw = tokio::fs::read(&backup_path).await?;
             match encrypt_backup(&raw, &key) {
@@ -3664,7 +3667,7 @@ impl WebSocketHandler {
                     .decode(enc_key_b64)
                     .map_err(|e| {
                         AgentError::InvalidRequest(format!("Invalid encryption key: {}", e))
-                    })?
+                    })?,
             );
             let raw = tokio::fs::read(&backup_file).await?;
             let decrypted = decrypt_backup(&raw, &key).map_err(|e| {
@@ -4000,7 +4003,8 @@ impl WebSocketHandler {
         // and hex-like characters.
         if request_id.len() < 32 {
             return Err(AgentError::SecurityViolation(
-                "Upload requestId must be at least 32 characters to prevent session injection".to_string()
+                "Upload requestId must be at least 32 characters to prevent session injection"
+                    .to_string(),
             ));
         }
         let backup_path = msg["backupPath"]
@@ -4424,11 +4428,18 @@ impl WebSocketHandler {
             .await
             .unwrap_or_else(|_| target_dir.clone());
         let mut dangerous = Vec::new();
-        if let Err(e) = self.check_restore_symlinks(&target_dir, &canonical_base, &mut dangerous).await {
+        if let Err(e) = self
+            .check_restore_symlinks(&target_dir, &canonical_base, &mut dangerous)
+            .await
+        {
             warn!("Symlink scan failed after clone: {}", e);
         }
         if !dangerous.is_empty() {
-            warn!("Removing {} dangerous symlinks from cloned server {}", dangerous.len(), target_uuid);
+            warn!(
+                "Removing {} dangerous symlinks from cloned server {}",
+                dangerous.len(),
+                target_uuid
+            );
             for link in &dangerous {
                 if let Some(link_path) = link.split(" -> ").next() {
                     let _ = tokio::fs::remove_file(link_path).await;
@@ -4749,9 +4760,10 @@ impl WebSocketHandler {
                 // Reap zombie
                 let _ = child.wait().await;
             }
-            return Err(AgentError::SecurityViolation(
-                format!("Restore stream exceeded maximum size ({} bytes)", MAX_RESTORE_STREAM_BYTES)
-            ));
+            return Err(AgentError::SecurityViolation(format!(
+                "Restore stream exceeded maximum size ({} bytes)",
+                MAX_RESTORE_STREAM_BYTES
+            )));
         }
         Ok(())
     }
@@ -4816,11 +4828,18 @@ impl WebSocketHandler {
             .await
             .unwrap_or_else(|_| server_dir.clone());
         let mut dangerous = Vec::new();
-        if let Err(e) = self.check_restore_symlinks(&server_dir, &canonical_base, &mut dangerous).await {
+        if let Err(e) = self
+            .check_restore_symlinks(&server_dir, &canonical_base, &mut dangerous)
+            .await
+        {
             warn!("Symlink scan failed after restore stream: {}", e);
         }
         if !dangerous.is_empty() {
-            warn!("Removing {} dangerous symlinks from restored server {}", dangerous.len(), server_uuid);
+            warn!(
+                "Removing {} dangerous symlinks from restored server {}",
+                dangerous.len(),
+                server_uuid
+            );
             for link in &dangerous {
                 // Parse "path -> target" format from check_restore_symlinks
                 if let Some(link_path) = link.split(" -> ").next() {
@@ -4832,7 +4851,10 @@ impl WebSocketHandler {
         }
 
         // Clean up byte counter for this restore stream
-        self.active_restore_bytes_written.write().await.remove(request_id);
+        self.active_restore_bytes_written
+            .write()
+            .await
+            .remove(request_id);
 
         if let Err(e) = chown_to_container_user(&server_dir).await {
             warn!("Failed to chown restored directory: {}", e);

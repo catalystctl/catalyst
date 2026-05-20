@@ -151,8 +151,7 @@ impl NetworkManager {
 
         // Write CNI config file atomically (temp + rename) to prevent
         // corruption if the agent crashes mid-write.
-        atomic_write::atomic_write(&cni_config_path, &cni_config)
-            .await?;
+        atomic_write::atomic_write(&cni_config_path, &cni_config).await?;
 
         info!(
             "✓ Created CNI network '{}' at {}",
@@ -250,8 +249,7 @@ impl NetworkManager {
 
         // Write CNI config file atomically (temp + rename) to prevent
         // corruption if the agent crashes mid-write.
-        atomic_write::atomic_write(&cni_config_path, &cni_config)
-            .await?;
+        atomic_write::atomic_write(&cni_config_path, &cni_config).await?;
 
         info!(
             "✓ Updated CNI network '{}' at {}",

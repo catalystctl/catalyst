@@ -291,7 +291,7 @@ impl AgentConfig {
                         .ok()
                         .and_then(|v| v.parse::<usize>().ok())
                         .unwrap_or(100),
-                    1000
+                    1000,
                 ),
             },
             containerd: ContainerdConfig {
@@ -388,7 +388,8 @@ fn hostname() -> Result<String, std::io::Error> {
     if sanitized != raw {
         tracing::warn!(
             "Hostname '{}' contained disallowed characters; sanitized to '{}'",
-            raw, sanitized
+            raw,
+            sanitized
         );
     }
     Ok(sanitized)

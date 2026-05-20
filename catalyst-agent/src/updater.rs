@@ -47,7 +47,9 @@ impl AgentUpdater {
 
         // Validate release_repo format: must be "owner/repo" with safe characters only.
         // This prevents URL injection via a malicious config value.
-        if !release_repo.chars().all(|c| c.is_alphanumeric() || c == '/' || c == '-' || c == '_')
+        if !release_repo
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '/' || c == '-' || c == '_')
             || release_repo.split('/').count() != 2
         {
             warn!(
@@ -149,7 +151,10 @@ impl AgentUpdater {
         temp_path: &PathBuf,
         target_version: Option<&str>,
     ) -> AgentResult<()> {
-        let mut download_url = format!("{}/api/agent/download", ws_url_to_http_base(&self.backend_url));
+        let mut download_url = format!(
+            "{}/api/agent/download",
+            ws_url_to_http_base(&self.backend_url)
+        );
         if let Some(ver) = target_version {
             download_url = format!("{}?version={}", download_url, ver);
         }
@@ -230,9 +235,7 @@ impl AgentUpdater {
             .timeout(std::time::Duration::from_secs(30))
             .send()
             .await
-            .map_err(|e| {
-                AgentError::NetworkError(format!("Checksum download failed: {}", e))
-            })?;
+            .map_err(|e| AgentError::NetworkError(format!("Checksum download failed: {}", e)))?;
 
         if !response.status().is_success() {
             return Err(AgentError::NetworkError(format!(
@@ -327,8 +330,10 @@ impl AgentUpdater {
             .await
         {
             Ok(()) => {
-                warn!("Backend update downloaded without checksum verification — \
-                      verify backend serves SHA-256 sidecar");
+                warn!(
+                    "Backend update downloaded without checksum verification — \
+                      verify backend serves SHA-256 sidecar"
+                );
                 Ok(temp_path)
             }
             Err(e) => {
