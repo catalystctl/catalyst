@@ -15,6 +15,7 @@ export interface CaptureOpts {
   metadata?: any
   requestId?: string
   userId?: string
+  nodeId?: string
 }
 
 const logger = pino(
@@ -40,6 +41,7 @@ export async function captureSystemError(opts: CaptureOpts) {
         metadata: opts.metadata || null,
         requestId: opts.requestId || null,
         userId: opts.userId || null,
+        nodeId: opts.nodeId || null,
       },
     })
 

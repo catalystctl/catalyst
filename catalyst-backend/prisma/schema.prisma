@@ -744,12 +744,14 @@ model SystemError {
   metadata  Json?
   requestId String?  // optional trace ID
   userId    String?  // if error happened in authenticated context
+  nodeId    String?  // which node the error originated from (agent errors)
   resolved  Boolean  @default(false)
   createdAt DateTime @default(now())
 
   @@index([level, createdAt])
   @@index([component, createdAt])
   @@index([resolved, createdAt])
+  @@index([nodeId, createdAt])
   @@index([createdAt(sort: Desc)])
 }
 

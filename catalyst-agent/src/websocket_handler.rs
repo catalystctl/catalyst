@@ -25,6 +25,7 @@ use crate::{
     runtime_manager::rotate_logs, AgentConfig, AgentError, AgentResult, ContainerdRuntime,
     FileManager, FirewallManager, NetworkManager, StorageManager,
 };
+use crate::error_reporter::{ErrorLevel, DEDUP_WINDOW_SECS};
 
 type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
@@ -504,6 +505,8 @@ pub struct WebSocketHandler {
     /// When set by the backend after an auth failure, the agent should wait this many
     /// seconds before reconnecting (progressive lockout).
     retry_after_seconds: Arc<RwLock<Option<u64>>>,
+    /// Deduplication map for error reporting: (component|message_prefix) -> last_sent.
+    error_dedup: Arc<tokio::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>>,
 }
 
 // LOCK ORDERING (must be respected to prevent deadlocks):
@@ -547,6 +550,7 @@ impl Clone for WebSocketHandler {
             active_restore_bytes_written: self.active_restore_bytes_written.clone(),
             active_restore_request_id: self.active_restore_request_id.clone(),
             retry_after_seconds: self.retry_after_seconds.clone(),
+            error_dedup: self.error_dedup.clone(),
         }
     }
 }
@@ -593,12 +597,73 @@ impl WebSocketHandler {
             active_restore_bytes_written: Arc::new(RwLock::new(HashMap::new())),
             active_restore_request_id: Arc::new(RwLock::new(None)),
             retry_after_seconds: Arc::new(RwLock::new(None)),
+            error_dedup: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
         }
     }
 
     async fn set_backend_connected(&self, connected: bool) {
         let mut status = self.backend_connected.write().await;
         *status = connected;
+    }
+
+    /// Report an error from this agent to the backend panel's system errors system.
+    /// This sends an `agent_error_report` WebSocket message that the backend stores
+    /// in its `SystemError` database, viewable by admins on the System Errors page.
+    ///
+    /// Includes automatic deduplication (same component+message prefix within 30s is
+    /// suppressed), and is fire-and-forget — failures to send are logged but never
+    /// bubble up to avoid infinite error loops.
+    pub async fn report_error(
+        &self,
+        level: ErrorLevel,
+        component: &str,
+        message: &str,
+        stack: Option<&str>,
+        metadata: Option<serde_json::Value>,
+    ) {
+        // Dedup: suppress duplicate reports within the window
+        {
+            let mut dedup = self.error_dedup.lock().await;
+            let key = format!(
+                "{}|{}",
+                component,
+                &message[..message.len().min(200)]
+            );
+            let now = std::time::Instant::now();
+            if let Some(last) = dedup.get(&key) {
+                if now.duration_since(*last)
+                    < std::time::Duration::from_secs(DEDUP_WINDOW_SECS)
+                {
+                    return; // Duplicate suppressed
+                }
+            }
+            dedup.insert(key, now);
+        }
+
+        // Build the message payload
+        let payload = serde_json::json!({
+            "type": "agent_error_report",
+            "nodeId": self.config.server.node_id,
+            "level": level.as_str(),
+            "component": component,
+            "message": message,
+            "stack": stack,
+            "metadata": metadata,
+            "timestamp": chrono::Utc::now().timestamp_millis(),
+        });
+
+        // Send via WebSocket (best effort)
+        let guard = self.write.read().await;
+        if let Some(write_arc) = guard.as_ref() {
+            let mut w = write_arc.lock().await;
+            let msg = payload.to_string();
+            if let Err(e) = w
+                .send(tokio_tungstenite::tungstenite::Message::Text(msg.into()))
+                .await
+            {
+                warn!("Failed to send error report via WS: {}", e);
+            }
+        }
     }
 
     async fn flush_buffered_metrics(
@@ -678,6 +743,14 @@ impl WebSocketHandler {
                 }
                 Err(e) => {
                     error!("Connection error: {}", e);
+                    // Report connection errors to the backend (best effort, will send when reconnected)
+                    self.report_error(
+                        ErrorLevel::Error,
+                        "agent:connection",
+                        &format!("{}", e),
+                        None,
+                        None,
+                    ).await;
                 }
             }
 
@@ -846,6 +919,13 @@ impl WebSocketHandler {
         connection_tasks.push(tokio::spawn(async move {
             if let Err(e) = handler_clone.monitor_global_events().await {
                 error!("Global event monitor failed: {}", e);
+                handler_clone.report_error(
+                    ErrorLevel::Error,
+                    "agent:event_monitor",
+                    &format!("{}", e),
+                    None,
+                    None,
+                ).await;
             }
         }));
 
@@ -871,6 +951,13 @@ impl WebSocketHandler {
                 Ok(Message::Text(text)) => {
                     if let Err(e) = self.handle_message(&text, &write).await {
                         error!("Error handling message: {}", e);
+                        self.report_error(
+                            ErrorLevel::Error,
+                            "agent:message_handler",
+                            &format!("{}", e),
+                            None,
+                            None,
+                        ).await;
                     }
                 }
                 Ok(Message::Binary(data)) => {
@@ -889,6 +976,13 @@ impl WebSocketHandler {
                             }
                             Err(e) => {
                                 error!("Error writing restore stream chunk: {}", e);
+                                self.report_error(
+                                    ErrorLevel::Error,
+                                    "agent:restore_stream",
+                                    &format!("{}", e),
+                                    None,
+                                    None,
+                                ).await;
                                 routed = true;
                             }
                         }
@@ -902,6 +996,13 @@ impl WebSocketHandler {
                             .await
                         {
                             error!("Error handling binary backup chunk: {}", e);
+                            self.report_error(
+                                ErrorLevel::Error,
+                                "agent:backup_upload",
+                                &format!("{}", e),
+                                None,
+                                None,
+                            ).await;
                         }
                     }
                 }
@@ -911,6 +1012,13 @@ impl WebSocketHandler {
                 }
                 Err(e) => {
                     error!("WebSocket error: {}", e);
+                    self.report_error(
+                        ErrorLevel::Error,
+                        "agent:websocket",
+                        &format!("{}", e),
+                        None,
+                        None,
+                    ).await;
                     break;
                 }
                 _ => {}
@@ -1009,6 +1117,14 @@ impl WebSocketHandler {
                 tokio::spawn(async move {
                     if let Err(e) = handler.install_server(&msg).await {
                         error!("Error in install_server handler: {}", e);
+                        let server_id = msg["serverId"].as_str().unwrap_or("unknown");
+                        handler.report_error(
+                            ErrorLevel::Error,
+                            &format!("agent:install_server:{}", server_id),
+                            &format!("{}", e),
+                            None,
+                            None,
+                        ).await;
                     }
                 });
             }
@@ -1018,6 +1134,13 @@ impl WebSocketHandler {
                 tokio::spawn(async move {
                     if let Err(e) = handler.reinstall_server(&msg).await {
                         error!("Error in reinstall_server handler: {}", e);
+                        handler.report_error(
+                            ErrorLevel::Error,
+                            "agent:reinstall_server",
+                            &format!("{}", e),
+                            None,
+                            None,
+                        ).await;
                     }
                 });
             }
@@ -1027,6 +1150,13 @@ impl WebSocketHandler {
                 tokio::spawn(async move {
                     if let Err(e) = handler.rebuild_server(&msg).await {
                         error!("Error in rebuild_server handler: {}", e);
+                        handler.report_error(
+                            ErrorLevel::Error,
+                            "agent:rebuild_server",
+                            &format!("{}", e),
+                            None,
+                            None,
+                        ).await;
                     }
                 });
             }
@@ -1036,6 +1166,13 @@ impl WebSocketHandler {
                 tokio::spawn(async move {
                     if let Err(e) = handler.start_server_with_details(&msg).await {
                         error!("Error in start_server handler: {}", e);
+                        handler.report_error(
+                            ErrorLevel::Error,
+                            "agent:start_server",
+                            &format!("{}", e),
+                            None,
+                            None,
+                        ).await;
                     }
                 });
             }
@@ -1099,6 +1236,13 @@ impl WebSocketHandler {
                                     .await
                                 {
                                     error!("Force kill failed during restart: {}", e);
+                                    handler.report_error(
+                                        ErrorLevel::Error,
+                                        "agent:restart_server:force_kill",
+                                        &format!("{}", e),
+                                        None,
+                                        None,
+                                    ).await;
                                 }
                                 break;
                             }
@@ -1108,6 +1252,13 @@ impl WebSocketHandler {
                     }
                     if let Err(e) = handler.start_server_with_details(&msg).await {
                         error!("Error in restart_server (start) handler: {}", e);
+                        handler.report_error(
+                            ErrorLevel::Error,
+                            "agent:restart_server:start",
+                            &format!("{}", e),
+                            None,
+                            None,
+                        ).await;
                     }
                 });
             }
@@ -1125,6 +1276,13 @@ impl WebSocketHandler {
                 tokio::spawn(async move {
                     if let Err(e) = handler.handle_create_backup(&msg, &write).await {
                         error!("Error in handle_create_backup handler: {}", e);
+                        handler.report_error(
+                            ErrorLevel::Error,
+                            "agent:create_backup",
+                            &format!("{}", e),
+                            None,
+                            None,
+                        ).await;
                     }
                 });
             }
@@ -1135,6 +1293,13 @@ impl WebSocketHandler {
                 tokio::spawn(async move {
                     if let Err(e) = handler.handle_restore_backup(&msg, &write).await {
                         error!("Error in handle_restore_backup handler: {}", e);
+                        handler.report_error(
+                            ErrorLevel::Error,
+                            "agent:restore_backup",
+                            &format!("{}", e),
+                            None,
+                            None,
+                        ).await;
                     }
                 });
             }
@@ -1153,6 +1318,13 @@ impl WebSocketHandler {
                 tokio::spawn(async move {
                     if let Err(e) = handler.handle_start_backup_stream(&msg, &write).await {
                         error!("Error in handle_start_backup_stream handler: {}", e);
+                        handler.report_error(
+                            ErrorLevel::Error,
+                            "agent:backup_stream",
+                            &format!("{}", e),
+                            None,
+                            None,
+                        ).await;
                     }
                 });
             }
@@ -1167,6 +1339,13 @@ impl WebSocketHandler {
                 tokio::spawn(async move {
                     if let Err(e) = handler.handle_clone_server_files(&msg, &write).await {
                         error!("Error in handle_clone_server_files handler: {}", e);
+                        handler.report_error(
+                            ErrorLevel::Error,
+                            "agent:clone_server_files",
+                            &format!("{}", e),
+                            None,
+                            None,
+                        ).await;
                     }
                 });
             }
@@ -1191,10 +1370,10 @@ impl WebSocketHandler {
                     "Received update_agent command from backend (target={})",
                     target_version.as_deref().unwrap_or("latest")
                 );
-                let config = self.config.clone();
+                let handler = self.clone();
                 let write = Arc::clone(write);
                 tokio::spawn(async move {
-                    let updater = crate::updater::AgentUpdater::new(&config);
+                    let updater = crate::updater::AgentUpdater::new(&handler.config);
                     let options = crate::updater::UpdateOptions { target_version };
                     match updater.update(&options).await {
                         Ok(_) => {
@@ -1202,6 +1381,13 @@ impl WebSocketHandler {
                         }
                         Err(e) => {
                             error!("Agent update failed: {}", e);
+                            handler.report_error(
+                                ErrorLevel::Error,
+                                "agent:update",
+                                &format!("{}", e),
+                                None,
+                                None,
+                            ).await;
                             let payload = json!({
                                 "type": "agent_update_failed",
                                 "error": e.to_string(),
@@ -1457,6 +1643,13 @@ impl WebSocketHandler {
                 if self.runtime.container_exists(container_name).await {
                     if let Err(e) = self.runtime.remove_container(container_name).await {
                         warn!("Failed to remove container {}: {}", container_name, e);
+                        self.report_error(
+                            ErrorLevel::Warn,
+                            "agent:delete_server",
+                            &format!("Failed to remove container {}: {}", container_name, e),
+                            None,
+                            None,
+                        ).await;
                     } else {
                         cleaned += 1;
                     }
@@ -1754,6 +1947,13 @@ impl WebSocketHandler {
                 );
                 if let Err(e) = self.start_server_with_details(&msg).await {
                     warn!("Auto-restart failed for {}: {}", server_id, e);
+                    self.report_error(
+                        ErrorLevel::Error,
+                        "agent:auto_restart",
+                        &format!("Auto-restart failed for {}: {}", server_id, e),
+                        None,
+                        None,
+                    ).await;
                     let _ = self
                         .emit_console_output(
                             server_id,
@@ -2905,6 +3105,13 @@ impl WebSocketHandler {
                 Ok(value) => value,
                 Err(err) => {
                     error!("Failed to check container state for {}: {}", server_id, err);
+                    self.report_error(
+                        ErrorLevel::Error,
+                        "agent:container_health",
+                        &format!("Failed to check container state for {}: {}", server_id, err),
+                        None,
+                        None,
+                    ).await;
                     false
                 }
             };
@@ -3573,6 +3780,13 @@ impl WebSocketHandler {
                 Err(e) => {
                     // Encryption failure should not destroy the unencrypted backup
                     warn!("Backup encryption failed for {}: {}", backup_name, e);
+                    self.report_error(
+                        ErrorLevel::Error,
+                        "agent:backup_encrypt",
+                        &format!("Backup encryption failed for {}: {}", backup_name, e),
+                        None,
+                        None,
+                    ).await;
                     false
                 }
             }
@@ -5560,6 +5774,13 @@ impl WebSocketHandler {
                      Run `ctr events` on the node to verify containerd's events service.",
                     consecutive_failures
                 );
+                self.report_error(
+                    ErrorLevel::Critical,
+                    "agent:event_monitor_disabled",
+                    &format!("Event monitor permanently disabled after {} consecutive failures — falling back to periodic reconciliation", consecutive_failures),
+                    None,
+                    None,
+                ).await;
                 return Ok(());
             }
 

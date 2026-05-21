@@ -8,6 +8,7 @@ use tracing::{error, info, warn};
 mod atomic_write;
 mod config;
 mod errors;
+mod error_reporter;
 mod file_manager;
 mod file_tunnel;
 mod firewall_manager;
@@ -117,6 +118,13 @@ impl CatalystAgent {
                 result = agent.ws_handler.connect_and_listen() => {
                     if let Err(e) = result {
                         error!("WebSocket error: {}", e);
+                        agent.ws_handler.report_error(
+                            crate::error_reporter::ErrorLevel::Critical,
+                            "agent:bootstrap",
+                            &format!("WebSocket connection failed: {}", e),
+                            None,
+                            None,
+                        ).await;
                     }
                 }
                 _ = ws_shutdown.recv() => {
@@ -147,6 +155,7 @@ impl CatalystAgent {
         // Start SFTP server (SSH-based file access on this node)
         let sftp_config = sftp_server::SftpConfig::from_agent_config(&self.config);
         let sftp_file_manager = self.file_manager.clone();
+        let sftp_ws_handler = self.ws_handler.clone();
         let mut sftp_shutdown = shutdown_rx.resubscribe();
         join_set.spawn(async move {
             let sftp_port = sftp_config.port;
@@ -155,6 +164,13 @@ impl CatalystAgent {
                 result = sftp_server::start_sftp_server(sftp_config, sftp_file_manager) => {
                     if let Err(e) = result {
                         error!("SFTP server error: {}", e);
+                        sftp_ws_handler.report_error(
+                            crate::error_reporter::ErrorLevel::Error,
+                            "agent:sftp_server",
+                            &format!("{}", e),
+                            None,
+                            None,
+                        ).await;
                     }
                 },
                 _ = sftp_shutdown.recv() => {
@@ -167,6 +183,7 @@ impl CatalystAgent {
         });
 
         // Wait for either a shutdown signal or any task to exit
+        let error_reporter_agent = self.clone_refs();
         tokio::select! {
             _ = shutdown_rx.recv() => {
                 info!("Shutdown signal received");
@@ -180,6 +197,14 @@ impl CatalystAgent {
                         } else {
                             error!("A task was cancelled: {}", e);
                         }
+                        // Best-effort: try to report to backend before shutdown
+                        error_reporter_agent.ws_handler.report_error(
+                            crate::error_reporter::ErrorLevel::Error,
+                            "agent:task_panic",
+                            &format!("{}", e),
+                            None,
+                            None,
+                        ).await;
                     }
                     None => info!("All tasks exited"),
                 }
@@ -322,6 +347,7 @@ async fn main() -> AgentResult<()> {
     if let Err(e) = SystemSetup::initialize(&config).await {
         warn!("System setup encountered issues: {}", e);
         warn!("Continuing with existing configuration...");
+        // Report via global tracing; actual WS reporting will happen once connected
     }
 
     // Create and run agent

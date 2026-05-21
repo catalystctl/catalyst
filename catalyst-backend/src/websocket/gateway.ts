@@ -1856,6 +1856,33 @@ export class WebSocketGateway {
         await this.routeToClients(message.serverId, message);
       } else if (message.type === "storage_resize_complete") {
         await this.routeToClients(message.serverId, message);
+      } else if (message.type === "agent_error_report") {
+        // Agent (node) is reporting an error — store it as a system error with nodeId
+        const level = (typeof message.level === "string" && ["error", "warn", "critical"].includes(message.level))
+          ? message.level as "error" | "warn" | "critical"
+          : "error";
+        const component = typeof message.component === "string" ? message.component : `agent:${nodeId}`;
+        const errorMessage = typeof message.message === "string" ? message.message : "Unknown agent error";
+        const stack = typeof message.stack === "string" ? message.stack : undefined;
+        const metadata = typeof message.metadata === "object" && message.metadata !== null
+          ? message.metadata
+          : undefined;
+        const requestId = typeof message.requestId === "string" ? message.requestId : undefined;
+
+        captureSystemError({
+          level,
+          component,
+          message: errorMessage,
+          stack,
+          metadata,
+          requestId,
+          nodeId,
+        }).catch(() => {});
+
+        this.logger.info(
+          { nodeId, level, component, message: errorMessage.slice(0, 200) },
+          "Agent error reported"
+        );
       } else if (message.type === "discovered_servers") {
         if (!message.nodeId || message.nodeId !== nodeId) {
           this.logger.warn({ nodeId, messageNodeId: message.nodeId }, "discovered_servers node mismatch");

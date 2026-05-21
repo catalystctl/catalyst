@@ -347,6 +347,7 @@ export interface SystemError {
   metadata?: Record<string, any> | null;
   requestId?: string | null;
   userId?: string | null;
+  nodeId?: string | null;
   resolved: boolean;
   createdAt: string;
 }

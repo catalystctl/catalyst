@@ -1995,6 +1995,7 @@ export async function adminRoutes(app: FastifyInstance) {
         limit = 50,
         level,
         component,
+        nodeId,
         resolved,
         from,
         to,
@@ -2003,6 +2004,7 @@ export async function adminRoutes(app: FastifyInstance) {
         limit?: number;
         level?: string;
         component?: string;
+        nodeId?: string;
         resolved?: string;
         from?: string;
         to?: string;
@@ -2013,6 +2015,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const where: any = {};
       if (level) where.level = level;
       if (component) where.component = { contains: component };
+      if (nodeId) where.nodeId = { contains: nodeId };
       if (resolved !== undefined) where.resolved = resolved === 'true';
       if (from || to) {
         const parsedFrom = from ? new Date(from) : undefined;

@@ -352,6 +352,7 @@ export const adminApi = {
     limit?: number;
     level?: string;
     component?: string;
+    nodeId?: string;
     resolved?: boolean;
     from?: string;
     to?: string;

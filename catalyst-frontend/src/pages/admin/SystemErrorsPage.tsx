@@ -74,6 +74,7 @@ function formatErrorForCopy(error: SystemError): string {
  lines.push(`**Timestamp:** ${new Date(error.createdAt).toLocaleString()}`);
  if (error.requestId) lines.push(`**Request ID:** ${error.requestId}`);
  if (error.userId) lines.push(`**User ID:** ${error.userId}`);
+ if (error.nodeId) lines.push(`**Node ID:** ${error.nodeId}`);
  lines.push('');
  lines.push(`### Message`);
  lines.push('```');
@@ -203,6 +204,19 @@ function ErrorDetailModal({
  </Badge>
  </div>
  <div className="space-y-1">
+ <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Node ID</span>
+ <span className="block truncate font-mono text-[11px]" title={error.nodeId ?? 'n/a'}>
+ {error.nodeId ? (
+ <span className="flex items-center gap-1 text-primary">
+ <Server className="h-3 w-3" />
+ {error.nodeId}
+ </span>
+ ) : (
+ <span className="text-muted-foreground">n/a</span>
+ )}
+ </span>
+ </div>
+ <div className="space-y-1">
  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Request ID</span>
  <span className="block truncate font-mono text-[11px] text-muted-foreground" title={error.requestId ?? 'n/a'}>
  {error.requestId ?? 'n/a'}
@@ -326,7 +340,17 @@ function ErrorRow({
  <div className="col-span-2 truncate font-medium text-foreground">
  {error.component}
  </div>
- <div className="col-span-4 truncate text-muted-foreground">
+ <div className="col-span-1 truncate font-mono text-[10px] text-muted-foreground">
+ {error.nodeId ? (
+ <span className="inline-flex items-center gap-1" title={`Node: ${error.nodeId}`}>
+ <Server className="h-3 w-3 shrink-0" />
+ <span className="truncate">{error.nodeId}</span>
+ </span>
+ ) : (
+ <span className="text-muted-foreground/40">—</span>
+ )}
+ </div>
+ <div className="col-span-3 truncate text-muted-foreground">
  {error.message}
  </div>
  <div className="col-span-2 truncate font-mono text-xs text-muted-foreground">
@@ -434,6 +458,7 @@ function SystemErrorsPage() {
  const [page, setPage] = useState(1);
  const [level, setLevel] = useState('');
  const [component, setComponent] = useState('');
+ const [nodeId, setNodeId] = useState('');
  const [resolved, setResolved] = useState('');
  const [defaultRange] = useState(buildDefaultRange);
  const [from, setFrom] = useState(defaultRange.from);
@@ -451,6 +476,7 @@ function SystemErrorsPage() {
  limit: pageSize,
  level: level || undefined,
  component: component || undefined,
+ nodeId: nodeId || undefined,
  resolved: resolvedBool,
  from: from ? new Date(from).toISOString() : undefined,
  to: to ? new Date(to).toISOString() : undefined,
@@ -460,11 +486,12 @@ function SystemErrorsPage() {
 
  const errors = data?.errors ?? [];
  const pagination = data?.pagination;
- const hasFilters = level || component || resolved || from || to;
+ const hasFilters = level || component || nodeId || resolved || from || to;
 
  const clearFilters = () => {
  setLevel('');
  setComponent('');
+ setNodeId('');
  setResolved('');
  const fresh = buildDefaultRange();
  setFrom(fresh.from);
@@ -547,6 +574,10 @@ function SystemErrorsPage() {
  <Input value={component} onChange={(e) => { setComponent(e.target.value); setPage(1); }} placeholder="auth, server..." className="border-border/40" />
  </label>
  <label className="block space-y-1">
+ <span className="text-xs font-medium text-muted-foreground">Node</span>
+ <Input value={nodeId} onChange={(e) => { setNodeId(e.target.value); setPage(1); }} placeholder="node_..." className="border-border/40" />
+ </label>
+ <label className="block space-y-1">
  <span className="text-xs font-medium text-muted-foreground">Status</span>
  <Select
  value={resolved === '' ? 'all' : resolved === 'true' ? 'resolved' : 'unresolved'}
@@ -624,6 +655,7 @@ function SystemErrorsPage() {
  <span className="text-[11px] text-muted-foreground">Active:</span>
  {level && <Badge variant="outline" className="text-[10px]">level: {level}</Badge>}
  {component && <Badge variant="outline" className="text-[10px]">component: {component}</Badge>}
+ {nodeId && <Badge variant="outline" className="text-[10px]">node: {nodeId}</Badge>}
  {resolved && <Badge variant="outline" className="text-[10px]">status: {resolved === 'true' ? 'resolved' : 'unresolved'}</Badge>}
  {range && <Badge variant="outline" className="text-[10px]">range: {range}</Badge>}
  </div>
@@ -637,7 +669,8 @@ function SystemErrorsPage() {
  <div className="hidden border-b border-border/30 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-12 md:gap-3">
  <div className="col-span-2">Level</div>
  <div className="col-span-2">Component</div>
- <div className="col-span-4">Message</div>
+ <div className="col-span-1">Node</div>
+ <div className="col-span-3">Message</div>
  <div className="col-span-2">Timestamp</div>
  <div className="col-span-2 text-right">Actions</div>
  </div>
@@ -649,7 +682,8 @@ function SystemErrorsPage() {
  <div className="hidden border-b border-border/30 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-12 md:gap-3">
  <div className="col-span-2">Level</div>
  <div className="col-span-2">Component</div>
- <div className="col-span-4">Message</div>
+ <div className="col-span-1">Node</div>
+ <div className="col-span-3">Message</div>
  <div className="col-span-2">Timestamp</div>
  <div className="col-span-2 text-right">Actions</div>
  </div>

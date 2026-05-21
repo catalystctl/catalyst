@@ -180,6 +180,7 @@ export function useSystemErrors(params?: {
   limit?: number;
   level?: string;
   component?: string;
+  nodeId?: string;
   resolved?: boolean;
   from?: string;
   to?: string;
