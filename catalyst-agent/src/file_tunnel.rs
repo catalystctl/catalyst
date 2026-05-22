@@ -1,4 +1,3 @@
-use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
@@ -14,6 +13,7 @@ use tracing::{error, info, warn};
 
 use crate::config::AgentConfig;
 use crate::file_manager::FileManager;
+use crate::net_utils;
 
 const POLL_CONCURRENCY: usize = 4;
 const MAX_CONCURRENT_REQUESTS: usize = 50; // Max concurrent file operations
@@ -75,21 +75,7 @@ impl FileTunnelClient {
             .expect("Failed to create HTTP client");
 
         // Derive HTTP base URL from the WebSocket backend_url
-        let ws_url = &config.server.backend_url;
-        let mut base_url = ws_url
-            .replace("wss://", "https://")
-            .replace("ws://", "http://");
-        // Strip the trailing "/ws" path segment that the WebSocket handler uses.
-        // Using strip_suffix (substring match) instead of trim_end_matches
-        // (character-set match) to avoid accidentally stripping characters
-        // from hostnames like "news.example.com".
-        if base_url.ends_with("/ws") {
-            base_url = base_url[..base_url.len() - 3].to_string();
-        }
-        // Remove any trailing slash.
-        if base_url.ends_with('/') {
-            base_url = base_url[..base_url.len() - 1].to_string();
-        }
+        let base_url = crate::command_utils::ws_url_to_http_base(&config.server.backend_url);
 
         // Semaphore to limit concurrent file operations
         let request_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
@@ -547,84 +533,6 @@ async fn handle_archive_contents(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &Tu
     }
 }
 
-fn is_ipv6_site_local(v6: &std::net::Ipv6Addr) -> bool {
-    // Deprecated site-local unicast: fec0::/10
-    // Mask the top 10 bits of the first 16-bit segment.
-    let seg0 = v6.segments()[0];
-    (seg0 & 0xffc0) == 0xfec0
-}
-
-fn is_forbidden_install_ip(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => {
-            if v4.is_private()
-                || v4.is_loopback()
-                || v4.is_link_local()
-                || v4.is_multicast()
-                || v4.is_unspecified()
-                || v4.is_broadcast()
-            {
-                return true;
-            }
-            // CGNAT 100.64.0.0/10
-            let [a, b, ..] = v4.octets();
-            a == 100 && (64..=127).contains(&b)
-        }
-        IpAddr::V6(v6) => {
-            if let Some(v4) = v6.to_ipv4() {
-                return is_forbidden_install_ip(IpAddr::V4(v4));
-            }
-            v6.is_loopback()
-                || v6.is_unspecified()
-                || v6.is_multicast()
-                || v6.is_unicast_link_local()
-                || v6.is_unique_local()
-                || is_ipv6_site_local(&v6)
-        }
-    }
-}
-
-async fn validate_install_url(url: &Url) -> Result<(), String> {
-    match url.scheme() {
-        "http" | "https" => {}
-        other => return Err(format!("Unsupported URL scheme '{}'", other)),
-    }
-
-    if url.username() != "" || url.password().is_some() {
-        return Err("install-url cannot include embedded credentials".to_string());
-    }
-
-    let host = url
-        .host_str()
-        .ok_or_else(|| "URL is missing a host".to_string())?;
-    let port = url
-        .port_or_known_default()
-        .ok_or_else(|| "URL is missing a port".to_string())?;
-
-    // If the host is already an IP literal, validate directly.
-    if let Ok(ip) = host.parse::<IpAddr>() {
-        if is_forbidden_install_ip(ip) {
-            return Err("Refusing to download from a private/link-local/loopback IP".to_string());
-        }
-        return Ok(());
-    }
-
-    // Resolve host to IPs and block any private/link-local/loopback ranges.
-    let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host, port))
-        .await
-        .map_err(|e| format!("DNS lookup failed for '{}': {}", host, e))?
-        .collect();
-    if addrs.is_empty() {
-        return Err(format!("DNS lookup returned no addresses for '{}'", host));
-    }
-    for addr in addrs {
-        if is_forbidden_install_ip(addr.ip()) {
-            return Err("Refusing to download from a private/link-local/loopback IP".to_string());
-        }
-    }
-    Ok(())
-}
-
 async fn handle_install_url(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest) {
     let url = match req
         .data
@@ -685,7 +593,7 @@ async fn handle_install_url(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelR
     };
 
     for _ in 0..=MAX_INSTALL_URL_REDIRECTS {
-        if let Err(err) = validate_install_url(&current_url).await {
+        if let Err(err) = net_utils::validate_install_url(&current_url).await {
             send_json_response(ctx, false, None, Some(err)).await;
             return;
         }

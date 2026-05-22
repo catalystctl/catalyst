@@ -10,6 +10,7 @@ use sha2::{Digest, Sha256};
 
 use crate::config::CniNetworkConfig;
 use crate::{AgentConfig, AgentError};
+use crate::net_utils;
 
 // ---------------------------------------------------------------------------
 // Sudo helper – prompts for password once, then reuses it for all install
@@ -907,21 +908,21 @@ impl SystemSetup {
             let interface = if let Some(value) = network.interface {
                 value
             } else {
-                let detected = Self::detect_network_interface()?;
+                let detected = net_utils::detect_network_interface_sync()?;
                 info!("Detected network interface: {}", detected);
                 detected
             };
 
             let cidr = match network.cidr.as_ref() {
-                Some(value) => Self::normalize_cidr(value)?,
-                None => Self::detect_interface_cidr(&interface)?,
+                Some(value) => net_utils::normalize_cidr_ipv4(value)?,
+                None => net_utils::detect_interface_cidr_sync(&interface)?,
             };
-            let (default_start, default_end) = Self::cidr_usable_range(&cidr)?;
+            let (default_start, default_end) = net_utils::cidr_usable_range_ipv4(&cidr)?;
             let range_start = network.range_start.clone().unwrap_or(default_start);
             let range_end = network.range_end.clone().unwrap_or(default_end);
             let gateway = match network.gateway.as_ref() {
                 Some(value) => value.clone(),
-                None => Self::detect_default_gateway()?,
+                None => net_utils::detect_default_gateway_sync()?,
             };
 
             // Build the new config JSON.
@@ -999,184 +1000,10 @@ impl SystemSetup {
         Ok(())
     }
 
-    /// Detect the primary network interface
-    fn detect_network_interface() -> Result<String, AgentError> {
-        // Try to get default route interface
-        let output = Command::new("ip")
-            .args(["route", "show", "default"])
-            .output()
-            .map_err(|e| AgentError::IoError(format!("Failed to detect default route: {}", e)))?;
 
-        if output.status.success() {
-            let interface = String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .find_map(|line| {
-                    let mut parts = line.split_whitespace();
-                    while let Some(part) = parts.next() {
-                        if part == "dev" {
-                            return parts.next().map(|name| name.to_string());
-                        }
-                    }
-                    None
-                })
-                .unwrap_or_default();
-            if !interface.is_empty() {
-                return Ok(interface);
-            }
-        }
 
-        // Fallback: find first non-loopback interface
-        let output = Command::new("ip")
-            .args(["-o", "link", "show"])
-            .output()
-            .map_err(|e| AgentError::IoError(format!("Failed to detect interfaces: {}", e)))?;
 
-        if output.status.success() {
-            let interface = String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .find_map(|line| {
-                    let mut parts = line.split(':');
-                    let _idx = parts.next()?;
-                    let name = parts.next()?.trim().to_string();
-                    if name == "lo" {
-                        None
-                    } else {
-                        Some(name)
-                    }
-                })
-                .unwrap_or_default();
-            if !interface.is_empty() {
-                return Ok(interface);
-            }
-        }
 
-        Err(AgentError::InternalError(
-            "Could not detect network interface".to_string(),
-        ))
-    }
-
-    fn detect_default_gateway() -> Result<String, AgentError> {
-        let output = Command::new("ip")
-            .args(["route", "show", "default"])
-            .output()
-            .map_err(|e| AgentError::IoError(format!("Failed to detect default gateway: {}", e)))?;
-
-        if output.status.success() {
-            let gateway = String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .find_map(|line| {
-                    let mut parts = line.split_whitespace();
-                    while let Some(part) = parts.next() {
-                        if part == "via" {
-                            return parts.next().map(|value| value.to_string());
-                        }
-                    }
-                    None
-                })
-                .unwrap_or_default();
-            if !gateway.is_empty() {
-                return Ok(gateway);
-            }
-        }
-
-        Err(AgentError::InternalError(
-            "Could not detect default gateway".to_string(),
-        ))
-    }
-
-    fn detect_interface_cidr(interface: &str) -> Result<String, AgentError> {
-        let output = Command::new("ip")
-            .args(["-4", "addr", "show", "dev", interface])
-            .output()
-            .map_err(|e| AgentError::IoError(format!("Failed to detect interface CIDR: {}", e)))?;
-
-        if output.status.success() {
-            let cidr = String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .find_map(|line| {
-                    let mut parts = line.split_whitespace();
-                    while let Some(part) = parts.next() {
-                        if part == "inet" {
-                            return parts.next().map(|value| value.to_string());
-                        }
-                    }
-                    None
-                })
-                .unwrap_or_default();
-            if !cidr.is_empty() {
-                return Self::normalize_cidr(&cidr);
-            }
-        }
-
-        Err(AgentError::InternalError(
-            "Could not detect interface CIDR".to_string(),
-        ))
-    }
-
-    fn normalize_cidr(cidr: &str) -> Result<String, AgentError> {
-        let (addr_str, prefix_str) = cidr
-            .split_once('/')
-            .ok_or_else(|| AgentError::InvalidRequest("Invalid CIDR format".to_string()))?;
-        let prefix: u32 = prefix_str
-            .parse()
-            .map_err(|_| AgentError::InvalidRequest("Invalid CIDR prefix".to_string()))?;
-        if prefix > 32 {
-            return Err(AgentError::InvalidRequest(
-                "Invalid CIDR prefix".to_string(),
-            ));
-        }
-
-        let addr: std::net::Ipv4Addr = addr_str
-            .parse()
-            .map_err(|_| AgentError::InvalidRequest("Invalid CIDR address".to_string()))?;
-        let addr_u32 = u32::from(addr);
-        let mask = if prefix == 0 {
-            0
-        } else {
-            u32::MAX << (32 - prefix)
-        };
-        let network = addr_u32 & mask;
-        Ok(format!("{}/{}", std::net::Ipv4Addr::from(network), prefix))
-    }
-
-    fn cidr_usable_range(cidr: &str) -> Result<(String, String), AgentError> {
-        let (addr_str, prefix_str) = cidr
-            .split_once('/')
-            .ok_or_else(|| AgentError::InvalidRequest("Invalid CIDR format".to_string()))?;
-        let prefix: u32 = prefix_str
-            .parse()
-            .map_err(|_| AgentError::InvalidRequest("Invalid CIDR prefix".to_string()))?;
-        if prefix > 32 {
-            return Err(AgentError::InvalidRequest(
-                "Invalid CIDR prefix".to_string(),
-            ));
-        }
-
-        let addr: std::net::Ipv4Addr = addr_str
-            .parse()
-            .map_err(|_| AgentError::InvalidRequest("Invalid CIDR address".to_string()))?;
-        let addr_u32 = u32::from(addr);
-        let mask = if prefix == 0 {
-            0
-        } else {
-            u32::MAX << (32 - prefix)
-        };
-        let network = addr_u32 & mask;
-        let broadcast = network | (!mask);
-
-        if broadcast <= network + 1 {
-            return Err(AgentError::InvalidRequest(
-                "CIDR has no usable addresses".to_string(),
-            ));
-        }
-
-        let start = network + 1;
-        let end = broadcast - 1;
-        Ok((
-            std::net::Ipv4Addr::from(start).to_string(),
-            std::net::Ipv4Addr::from(end).to_string(),
-        ))
-    }
 
     /// Helper to run a command and check for errors
     /// Run a command that may need elevated privileges.

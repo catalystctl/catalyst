@@ -7,6 +7,7 @@ use tracing::{error, info, warn};
 const MAX_METRICS_BUFFER_BYTES: u64 = 100 * 1024 * 1024;
 
 use crate::{AgentError, AgentResult};
+use crate::command_utils;
 use serde_json::Value;
 
 pub struct StorageManager {
@@ -134,8 +135,8 @@ impl StorageManager {
             let image_str = image
                 .to_str()
                 .ok_or_else(|| AgentError::FileSystemError("Invalid image path".to_string()))?;
-            run("fallocate", &["-l", &format!("{}M", size), image_str])?;
-            run("mkfs.ext4", &["-F", image_str])?;
+            command_utils::run_command_sync("fallocate", &["-l", &format!("{}M", size), image_str])?;
+            command_utils::run_command_sync("mkfs.ext4", &["-F", image_str])?;
             Ok(())
         })
         .await
@@ -167,14 +168,14 @@ impl StorageManager {
             if std::path::PathBuf::from("/usr/bin/rsync").exists()
                 || std::path::PathBuf::from("/usr/local/bin/rsync").exists()
             {
-                run_with_timeout(
+                command_utils::run_command_sync_with_timeout(
                     "rsync",
                     &["-a", mount_dir_str.as_str(), migrate_dir_str.as_str()],
                     3600,
                 )
             } else {
                 // cp -a with src/. copies directory contents (not the dir itself)
-                run_with_timeout(
+                command_utils::run_command_sync_with_timeout(
                     "cp",
                     &["-a", mount_dir_dot.as_str(), migrate_dir_str.as_str()],
                     3600,
@@ -227,8 +228,8 @@ impl StorageManager {
                 .to_string();
             let size_arg = format!("{}M", size_mb);
             spawn_blocking(move || {
-                run("fallocate", &["-l", &size_arg, &image])?;
-                run("resize2fs", &[&mount])?;
+                command_utils::run_command_sync("fallocate", &["-l", &size_arg, &image])?;
+                command_utils::run_command_sync("resize2fs", &[&mount])?;
                 Ok::<(), AgentError>(())
             })
             .await
@@ -244,8 +245,8 @@ impl StorageManager {
             .to_string();
         let size_arg = format!("{}M", size_mb);
         spawn_blocking(move || {
-            run("fallocate", &["-l", &size_arg, &image])?;
-            run("resize2fs", &[&image])?;
+            command_utils::run_command_sync("fallocate", &["-l", &size_arg, &image])?;
+            command_utils::run_command_sync("resize2fs", &[&image])?;
             Ok::<(), AgentError>(())
         })
         .await
@@ -260,9 +261,9 @@ impl StorageManager {
             .to_string();
         let size_arg = format!("{}M", size_mb);
         spawn_blocking(move || {
-            run("e2fsck", &["-f", &image])?;
-            run("resize2fs", &[&image, &size_arg])?;
-            run("fallocate", &["-l", &size_arg, &image])?;
+            command_utils::run_command_sync("e2fsck", &["-f", &image])?;
+            command_utils::run_command_sync("resize2fs", &[&image, &size_arg])?;
+            command_utils::run_command_sync("fallocate", &["-l", &size_arg, &image])?;
             Ok::<(), AgentError>(())
         })
         .await
@@ -280,7 +281,7 @@ impl StorageManager {
             .ok_or_else(|| AgentError::FileSystemError("Invalid mount path".to_string()))?
             .to_string();
         spawn_blocking(move || {
-            run("mount", &["-o", "loop,exec,nodev,nosuid", &image, &mount])?;
+            command_utils::run_command_sync("mount", &["-o", "loop,exec,nodev,nosuid", &image, &mount])?;
             Ok::<(), AgentError>(())
         })
         .await
@@ -294,7 +295,7 @@ impl StorageManager {
             .ok_or_else(|| AgentError::FileSystemError("Invalid mount path".to_string()))?
             .to_string();
         spawn_blocking(move || {
-            run("umount", &[&mount])?;
+            command_utils::run_command_sync("umount", &[&mount])?;
             Ok::<(), AgentError>(())
         })
         .await
@@ -333,7 +334,7 @@ impl StorageManager {
             .ok_or_else(|| AgentError::FileSystemError("Invalid mount path".to_string()))?
             .to_string();
         spawn_blocking(move || {
-            run("mount", &["-o", "remount,exec", &mount])?;
+            command_utils::run_command_sync("mount", &["-o", "remount,exec", &mount])?;
             Ok::<(), AgentError>(())
         })
         .await
@@ -404,48 +405,3 @@ impl StorageManager {
     }
 }
 
-fn run(command: &str, args: &[&str]) -> AgentResult<()> {
-    run_with_timeout(command, args, 600)
-}
-
-fn run_with_timeout(command: &str, args: &[&str], timeout_secs: u64) -> AgentResult<()> {
-    let mut child = std::process::Command::new(command)
-        .args(args)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| AgentError::FileSystemError(format!("Failed to run {}: {}", command, e)))?;
-
-    let start = std::time::Instant::now();
-    let timeout = std::time::Duration::from_secs(timeout_secs);
-
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                if status.success() {
-                    return Ok(());
-                }
-                return Err(AgentError::FileSystemError(format!(
-                    "{} failed with status {}",
-                    command, status
-                )));
-            }
-            Ok(None) => {
-                if start.elapsed() > timeout {
-                    let _ = child.kill();
-                    return Err(AgentError::FileSystemError(format!(
-                        "{} timed out after {}s",
-                        command, timeout_secs
-                    )));
-                }
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-            Err(e) => {
-                return Err(AgentError::FileSystemError(format!(
-                    "Failed to wait for {}: {}",
-                    command, e
-                )));
-            }
-        }
-    }
-}

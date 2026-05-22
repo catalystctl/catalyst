@@ -3,6 +3,7 @@ use tokio::fs;
 use tracing::{error, info, warn};
 
 use crate::{AgentConfig, AgentError, AgentResult};
+use crate::command_utils;
 
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -14,22 +15,6 @@ pub struct AgentUpdater {
     release_repo: String,
 }
 
-/// Derive an HTTP(S) base URL from a WebSocket backend_url.
-/// Converts wss://host/ws -> https://host and ws://host/ws -> http://host.
-/// This is the same logic used by FileTunnelClient.
-fn ws_url_to_http_base(ws_url: &str) -> String {
-    let mut base = ws_url
-        .replace("wss://", "https://")
-        .replace("ws://", "http://");
-    // Strip the trailing "/ws" path segment (substring match, not character-set).
-    if base.ends_with("/ws") {
-        base = base[..base.len() - 3].to_string();
-    }
-    if base.ends_with('/') {
-        base = base[..base.len() - 1].to_string();
-    }
-    base
-}
 
 /// Options for controlling the update behavior.
 #[derive(Debug, Clone, Default)]
@@ -153,7 +138,7 @@ impl AgentUpdater {
     ) -> AgentResult<()> {
         let mut download_url = format!(
             "{}/api/agent/download",
-            ws_url_to_http_base(&self.backend_url)
+            command_utils::ws_url_to_http_base(&self.backend_url)
         );
         if let Some(ver) = target_version {
             download_url = format!("{}?version={}", download_url, ver);
