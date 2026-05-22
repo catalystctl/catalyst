@@ -4,6 +4,8 @@ use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::{broadcast, RwLock};
 use tokio::task::JoinSet;
 use tracing::{error, info, warn};
+use nix::sys::signal::{kill, Signal};
+use nix::unistd::Pid;
 
 mod atomic_write;
 mod config;
@@ -221,6 +223,12 @@ impl CatalystAgent {
                     error!("Task panicked during shutdown: {}", e);
                 }
             }
+        }
+
+        // Kill ctr events subprocess if still running.
+        if let Some(ctr_pid) = *self.ws_handler.ctr_event_pid.lock().await {
+            info!("Killing ctr events subprocess (PID {})", ctr_pid);
+            let _ = kill(Pid::from_raw(ctr_pid as i32), Signal::SIGKILL);
         }
 
         // Clean up firewall rules on shutdown.

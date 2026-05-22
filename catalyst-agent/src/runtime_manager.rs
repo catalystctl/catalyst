@@ -32,6 +32,7 @@ use containerd_client::services::v1::{
 use containerd_client::with_namespace;
 use prost_types::Any;
 use tokio::process::Command;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::spawn_blocking;
 use tonic::Request;
@@ -41,6 +42,44 @@ use nix::errno::Errno;
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use nix::sys::stat::Mode;
 use nix::unistd::mkfifo;
+use nix::sys::signal::{kill, Signal};
+use nix::unistd::Pid;
+
+/// Guard that reliably kills a `ctr events` child process on Drop.
+/// Uses raw SIGKILL via libc so cleanup works even when the tokio
+/// reactor is already shut down (e.g. during agent termination).
+pub struct CtrChildGuard {
+    child: tokio::process::Child,
+}
+
+impl CtrChildGuard {
+    pub fn pid(&self) -> Option<u32> {
+        self.child.id()
+    }
+
+    pub fn into_lines(mut self) -> (Self, tokio::io::Lines<BufReader<tokio::process::ChildStdout>>) {
+        let stdout = self.child.stdout.take()
+            .expect("ctr events stdout should be available at guard creation");
+        let reader = BufReader::new(stdout);
+        (self, reader.lines())
+    }
+
+    /// Explicitly kill the child and wait for it to exit.
+    pub async fn kill_and_wait(&mut self) {
+        if let Some(pid) = self.child.id() {
+            let _ = kill(Pid::from_raw(pid as i32), Signal::SIGKILL);
+        }
+        let _ = self.child.wait().await;
+    }
+}
+
+impl Drop for CtrChildGuard {
+    fn drop(&mut self) {
+        if let Some(pid) = self.child.id() {
+            let _ = kill(Pid::from_raw(pid as i32), Signal::SIGKILL);
+        }
+    }
+}
 
 use crate::errors::{AgentError, AgentResult};
 use crate::firewall_manager::FirewallManager;
@@ -1935,37 +1974,17 @@ impl ContainerdRuntime {
         container_id: &str,
     ) -> AgentResult<EventStream> {
         debug!(
-            "subscribe_to_container_events: creating dedicated channel to {} for container {}",
-            self.socket_path, container_id
+            "subscribe_to_container_events: using main channel for container {}",
+            container_id
         );
-        let channel = tokio::time::timeout(
-            Duration::from_secs(5),
-            containerd_client::connect(&self.socket_path),
-        )
-        .await
-        .map_err(|_| {
-            error!("subscribe_to_container_events: channel creation timed out after 5s");
-            AgentError::ContainerError(
-                "subscribe_to_container_events: channel creation timed out".to_string(),
-            )
-        })?
-        .map_err(|e| {
-            error!(
-                "subscribe_to_container_events: channel creation failed: {}",
-                e
-            );
-            AgentError::ContainerError(format!(
-                "subscribe_to_container_events: failed to connect to containerd at {}: {}",
-                self.socket_path, e
-            ))
-        })?;
-        debug!("subscribe_to_container_events: dedicated channel created OK");
 
-        let mut client = EventsClient::new(channel);
-        // NOTE: Do NOT use with_namespace! for the events Subscribe RPC.
-        // The events service is global and ignores namespace metadata.
-        // See: containerd.services.events.v1.Events/subscribe docs.
-        // We filter client-side in spawn_exit_monitor instead.
+        // Reuse the main gRPC channel instead of creating a new connection.
+        // containerd 1.7+ can exhibit a race condition where a fresh Subscribe
+        // on a newly-created channel hangs indefinitely, while the existing
+        // channel that already carries other RPCs works fine.  gRPC multiplexes
+        // concurrent streams over a single HTTP/2 connection, so sharing the
+        // channel is both safe and the intended usage pattern.
+        let mut client = EventsClient::new(self.channel.clone());
         let req = SubscribeRequest { filters: vec![] };
         debug!(
             "subscribe_to_container_events: calling subscribe with empty filters for container {}",
@@ -2012,10 +2031,10 @@ impl ContainerdRuntime {
         );
 
         debug!("diagnose_events_service: testing Subscribe with official-example pattern");
-        let test_channel = containerd_client::connect(&self.socket_path)
-            .await
-            .map_err(|e| AgentError::ContainerError(format!("test connect failed: {}", e)))?;
-        let mut test_client = EventsClient::new(test_channel);
+        // Use the main channel for the diagnostic Subscribe test as well,
+        // for the same reason as subscribe_to_all_events / subscribe_to_container_events:
+        // containerd 1.7+ may hang a fresh Subscribe on a brand-new connection.
+        let mut test_client = EventsClient::new(self.channel.clone());
         let test_req = SubscribeRequest::default();
         let test_result =
             tokio::time::timeout(Duration::from_secs(10), test_client.subscribe(test_req)).await;
@@ -2052,34 +2071,10 @@ impl ContainerdRuntime {
 
     pub async fn subscribe_to_all_events(&self) -> AgentResult<EventStream> {
         debug!(
-            "subscribe_to_all_events: creating dedicated channel to {}",
-            self.socket_path
+            "subscribe_to_all_events: using main channel"
         );
-        let channel = tokio::time::timeout(
-            Duration::from_secs(5),
-            containerd_client::connect(&self.socket_path),
-        )
-        .await
-        .map_err(|_| {
-            error!("subscribe_to_all_events: channel creation timed out after 5s");
-            AgentError::ContainerError(
-                "subscribe_to_all_events: channel creation timed out".to_string(),
-            )
-        })?
-        .map_err(|e| {
-            error!("subscribe_to_all_events: channel creation failed: {}", e);
-            AgentError::ContainerError(format!(
-                "subscribe_to_all_events: failed to connect to containerd at {}: {}",
-                self.socket_path, e
-            ))
-        })?;
-        debug!("subscribe_to_all_events: dedicated channel created OK");
 
-        let mut client = EventsClient::new(channel);
-        // NOTE: Do NOT use with_namespace! for the events Subscribe RPC.
-        // The events service is global and ignores namespace metadata.
-        // See: containerd.services.events.v1.Events/subscribe docs.
-        // We filter client-side in monitor_global_events instead.
+        let mut client = EventsClient::new(self.channel.clone());
         let req = SubscribeRequest { filters: vec![] };
         debug!("subscribe_to_all_events: calling subscribe RPC with empty filters");
 
@@ -3486,11 +3481,76 @@ impl ContainerdRuntime {
             }
         }
     }
+
+    pub async fn start_ctr_events(
+        &self,
+    ) -> AgentResult<(
+        CtrChildGuard,
+        tokio::io::Lines<BufReader<tokio::process::ChildStdout>>,
+    )> {
+        let mut child = Command::new("ctr")
+            .args(["-n", &self.namespace, "events"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .kill_on_drop(false) // CtrChildGuard handles cleanup
+            .spawn()
+            .map_err(|e| AgentError::ContainerError(format!(
+                "ctr events spawn failed: {}", e
+            )))?;
+
+        let _ = child.stdout.as_ref().ok_or_else(|| {
+            AgentError::ContainerError("ctr events: stdout pipe not available".into())
+        })?;
+
+        let guard = CtrChildGuard { child };
+        let (guard, lines) = CtrChildGuard::into_lines(guard);
+        Ok((guard, lines))
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// Parsed container event from one line of `ctr events` output.
+#[derive(Debug, Clone)]
+pub struct CtrEvent {
+    pub topic: String,
+    pub container_id: String,
+}
+
+/// Parse one line of `ctr events` stdout.
+/// Format:  "YYYY-MM-DD HH:MM:SS.nnn +0000 UTC <ns> <topic> {<json>}"
+pub fn parse_ctr_event_line(line: &str) -> Option<CtrEvent> {
+    // 7 space-delimited fields; the last one is the JSON payload.
+    let mut parts = line.splitn(7, ' ');
+    let _date = parts.next()?;   // "2026-05-21"
+    let _time = parts.next()?;   // "20:34:35.416197115"
+    let _off  = parts.next()?;   // "+0000"
+    let _zone = parts.next()?;   // "UTC"
+    let _ns   = parts.next()?;   // "catalyst"
+    let topic = parts.next()?.to_string();
+    let json  = parts.next()?;
+
+    // Extract container ID from the JSON payload's "id" field.
+    let container_id = json
+        .find("\"id\":\"")
+        .and_then(|start| {
+            let after = &json[start + 6..];            // skip "id":"
+            after.find('"').map(|end| after[..end].to_string())
+        })
+        .or_else(|| {
+            // Fallback: "id":<value> (no quotes, unlikely)
+            json.find("\"id\":").and_then(|start| {
+                let after = &json[start + 5..];
+                let end = after.find(|c: char| c == ',' || c == '}')
+                    .unwrap_or(after.len());
+                Some(after[..end].trim_matches('"').to_string())
+            })
+        })?;
+
+    Some(CtrEvent { topic, container_id })
+}
 
 fn load_named_cni_plugin_config(cni_dir: &Path, network: &str) -> Option<serde_json::Value> {
     let candidates = [

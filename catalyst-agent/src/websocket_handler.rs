@@ -15,6 +15,8 @@ use std::time::{Duration, Instant};
 use sysinfo::{Disks, Networks, System};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{RwLock, Semaphore};
+use nix::sys::signal::{kill, Signal};
+use nix::unistd::Pid;
 use tokio_tungstenite::connect_async_with_config;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::tungstenite::Message;
@@ -22,7 +24,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::config::CniNetworkConfig;
 use crate::{
-    runtime_manager::rotate_logs, AgentConfig, AgentError, AgentResult, ContainerdRuntime,
+    runtime_manager::{rotate_logs, parse_ctr_event_line}, AgentConfig, AgentError, AgentResult, ContainerdRuntime,
     FileManager, FirewallManager, NetworkManager, StorageManager,
 };
 use crate::error_reporter::{ErrorLevel, DEDUP_WINDOW_SECS};
@@ -507,6 +509,8 @@ pub struct WebSocketHandler {
     retry_after_seconds: Arc<RwLock<Option<u64>>>,
     /// Deduplication map for error reporting: (component|message_prefix) -> last_sent.
     error_dedup: Arc<tokio::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>>,
+    /// PID of the ctr events subprocess, for explicit cleanup during shutdown.
+    pub(crate) ctr_event_pid: Arc<tokio::sync::Mutex<Option<u32>>>,
 }
 
 // LOCK ORDERING (must be respected to prevent deadlocks):
@@ -551,6 +555,7 @@ impl Clone for WebSocketHandler {
             active_restore_request_id: self.active_restore_request_id.clone(),
             retry_after_seconds: self.retry_after_seconds.clone(),
             error_dedup: self.error_dedup.clone(),
+            ctr_event_pid: self.ctr_event_pid.clone(),
         }
     }
 }
@@ -598,6 +603,7 @@ impl WebSocketHandler {
             active_restore_request_id: Arc::new(RwLock::new(None)),
             retry_after_seconds: Arc::new(RwLock::new(None)),
             error_dedup: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            ctr_event_pid: Arc::new(tokio::sync::Mutex::new(None)),
         }
     }
 
@@ -1027,6 +1033,13 @@ impl WebSocketHandler {
 
         for task in connection_tasks {
             task.abort();
+        }
+
+        // Kill ctr events subprocess explicitly — task abort may not drop
+        // the CtrChildGuard before the process exits.
+        if let Some(ctr_pid) = *self.ctr_event_pid.lock().await {
+            let _ = kill(Pid::from_raw(ctr_pid as i32), Signal::SIGKILL);
+            *self.ctr_event_pid.lock().await = None;
         }
 
         // Drop any in-progress uploads on disconnect to avoid stale sessions accumulating across
@@ -5760,6 +5773,9 @@ impl WebSocketHandler {
         let mut attempt = 0u32;
         let mut consecutive_failures = 0u32;
         let mut diagnosed = false;
+        let mut events_service_broken = false;
+        let mut ctr_fallback_active = false;
+        let mut ctr_fallback_failures = 0u32;
         loop {
             attempt += 1;
             debug!(
@@ -5767,21 +5783,99 @@ impl WebSocketHandler {
                 attempt, retry_delay
             );
 
-            if consecutive_failures >= MAX_EVENT_SUBSCRIBE_FAILURES {
+            if events_service_broken {
                 warn!(
-                    "Event monitor PERMANENTLY DISABLED after {} consecutive failures. \
-                     Falling back to periodic reconciliation (30-sec interval). \
-                     Run `ctr events` on the node to verify containerd's events service.",
-                    consecutive_failures
+                    "Event monitor DISABLED: all event sources exhausted. \
+                     Falling back to periodic reconciliation (30-sec interval)."
                 );
                 self.report_error(
                     ErrorLevel::Critical,
                     "agent:event_monitor_disabled",
-                    &format!("Event monitor permanently disabled after {} consecutive failures — falling back to periodic reconciliation", consecutive_failures),
+                    "Event monitor disabled — all event sources exhausted. \
+                     Check that ctr is installed and containerd is healthy.",
                     None,
                     None,
                 ).await;
                 return Ok(());
+            }
+
+            // ── ctr subprocess monitor ──
+            // Once activated, skip gRPC entirely; stay in the ctr path.
+            if ctr_fallback_active {
+                debug!("monitor_global_events: using ctr events subprocess");
+                match self.runtime.start_ctr_events().await {
+                    Ok((mut ctr_guard, ctr_lines)) => {
+                        ctr_fallback_failures = 0;
+                        // Store PID for explicit cleanup on agent shutdown.
+                        *self.ctr_event_pid.lock().await = ctr_guard.pid();
+                        info!("ctr events subprocess started — real-time event monitoring");
+                        let mut lines = ctr_lines;
+                        loop {
+                            match lines.next_line().await {
+                                Ok(Some(line)) => {
+                                    if let Some(ce) = parse_ctr_event_line(&line) {
+                                        if !ce.container_id.starts_with("cm")
+                                            && !ce.container_id.starts_with("catalyst-")
+                                        {
+                                            continue;
+                                        }
+                                        match ce.topic.as_str() {
+                                            "/tasks/start" | "/tasks/exit" | "/tasks/paused" => {
+                                                tokio::time::sleep(Duration::from_millis(100)).await;
+                                                if let Err(e) = self.sync_container_state(&ce.container_id).await {
+                                                    warn!("ctr events: sync for {} failed: {}", ce.container_id, e);
+                                                }
+                                            }
+                                            "/containers/delete" => {
+                                                if let Err(e) = self.sync_removed_container_state(&ce.container_id).await {
+                                                    warn!("ctr events: sync-removed for {} failed: {}", ce.container_id, e);
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                                Ok(None) => break,
+                                Err(e) => {
+                                    warn!("ctr events: line read error: {}", e);
+                                    break;
+                                }
+                            }
+                        }
+                        // ctr exited — drop the guard (fires SIGKILL if still alive),
+                        // then restart immediately.
+                        drop(ctr_guard);
+                        warn!("ctr events subprocess exited, restarting in 5s...");
+                        tokio::time::sleep(Duration::from_secs(5)).await;
+                        continue;
+                    }
+                    Err(ctr_err) => {
+                        ctr_fallback_failures += 1;
+                        error!(
+                            "ctr events: spawn failed (failure {}/{}): {}. \
+                             Retrying in {:?}...",
+                            ctr_fallback_failures, MAX_EVENT_SUBSCRIBE_FAILURES,
+                            ctr_err, retry_delay
+                        );
+                        if ctr_fallback_failures >= MAX_EVENT_SUBSCRIBE_FAILURES {
+                            events_service_broken = true;
+                            continue;
+                        }
+                        tokio::time::sleep(retry_delay).await;
+                        retry_delay = (retry_delay * 2).min(Duration::from_secs(60));
+                        continue;
+                    }
+                }
+            }
+
+            if consecutive_failures >= MAX_EVENT_SUBSCRIBE_FAILURES {
+                warn!(
+                    "gRPC Subscribe failed {} consecutive times — switching to ctr events fallback.",
+                    consecutive_failures
+                );
+                ctr_fallback_active = true;
+                consecutive_failures = 0;
+                continue;
             }
 
             // Pre-subscription health check: verify containerd is responsive
@@ -5837,9 +5931,22 @@ impl WebSocketHandler {
                     // Run diagnostic once on first failure to capture containerd version & events status
                     if !diagnosed {
                         diagnosed = true;
-                        match self.runtime.diagnose_events_service().await {
-                            Ok(report) => warn!("Event monitor diagnostic: {}", report),
-                            Err(diag_err) => warn!("Event monitor diagnostic failed: {}", diag_err),
+                        let diag_result = self.runtime.diagnose_events_service().await;
+                        let report = match &diag_result {
+                            Ok(r) => {
+                                warn!("Event monitor diagnostic: {}", r);
+                                r.clone()
+                            }
+                            Err(e) => {
+                                warn!("Event monitor diagnostic failed: {}", e);
+                                e.to_string()
+                            }
+                        };
+                        if report.contains("UNRESPONSIVE") {
+                            info!("gRPC events unresponsive — switching to ctr events subprocess fallback");
+                            ctr_fallback_active = true;
+                            consecutive_failures = 0; // reset so we don't trip the >= MAX guard
+                            continue; // short-circuit: next iteration jumps into ctr path
                         }
                     }
                     tokio::time::sleep(retry_delay).await;
