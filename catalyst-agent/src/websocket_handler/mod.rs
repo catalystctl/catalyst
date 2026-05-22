@@ -701,6 +701,7 @@ impl WebSocketHandler {
             "type": "node_handshake",
             "token": auth_token,
             "nodeId": self.config.server.node_id,
+            "agentVersion": env!("CARGO_PKG_VERSION"),
             "tokenType": token_type,
             "protocolVersion": "1.0",
         });
@@ -1191,9 +1192,10 @@ impl WebSocketHandler {
                     .get("targetVersion")
                     .and_then(|v| v.as_str())
                     .map(String::from);
+                let target_version_display = target_version.as_deref().unwrap_or("latest").to_string();
                 info!(
                     "Received update_agent command from backend (target={})",
-                    target_version.as_deref().unwrap_or("latest")
+                    target_version_display
                 );
                 let handler = self.clone();
                 let write = Arc::clone(write);
@@ -1202,7 +1204,19 @@ impl WebSocketHandler {
                     let options = crate::updater::UpdateOptions { target_version };
                     match updater.update(&options).await {
                         Ok(_) => {
-                            info!("Agent update initiated successfully");
+                            info!("Agent update succeeded, restarting via exec()");
+                            // Notify backend that update is being applied (before exec replaces us).
+                            // After exec() the new process will reconnect with
+                            // the updated version, but this message lets the
+                            // panel know the update is in progress.
+                            let payload = json!({
+                                "type": "agent_update_started",
+                                "targetVersion": options.target_version,
+                            });
+                            let mut w = write.lock().await;
+                            let _ = w.send(Message::Text(payload.to_string().into())).await;
+                            // drop the write lock before exec replaces this process
+                            drop(w);
                         }
                         Err(e) => {
                             error!("Agent update failed: {}", e);

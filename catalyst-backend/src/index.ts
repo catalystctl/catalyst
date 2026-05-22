@@ -842,6 +842,14 @@ async function bootstrap() {
 			async (request, reply) => {
 			const arch = (request.query as { arch?: string }).arch || "x86_64";
 			const version = (request.query as { version?: string }).version;
+
+			// Validate version format to prevent URL injection into GitHub URL.
+			if (version && !/^\d+\.\d+(\.\d+)?$/.test(version)) {
+				return reply.status(400).send({
+					error: "Invalid version format — expected semver (e.g. 1.12.2)",
+				});
+			}
+
 			const normalizedArch =
 				arch === "aarch64" || arch === "arm64" ? "aarch64" : "x86_64";
 			const assetName = `catalyst-agent-${normalizedArch}-linux-musl`;
@@ -939,6 +947,60 @@ async function bootstrap() {
 				);
 				return reply.status(502).send({
 					error: "Failed to download agent binary",
+					details: err instanceof Error ? err.message : String(err),
+				});
+			}
+		});
+
+		// Agent binary checksum endpoint — mirrors /api/agent/download
+		// but serves the .sha256 sidecar file for integrity verification.
+		app.get(
+			"/api/agent/download-checksum",
+			{
+				config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+			},
+			async (request, reply) => {
+			const arch = (request.query as { arch?: string }).arch || "x86_64";
+			const version = (request.query as { version?: string }).version;
+
+			if (version && !/^\d+\.\d+(\.\d+)?$/.test(version)) {
+				return reply.status(400).send({ error: "Invalid version format" });
+			}
+
+			const normalizedArch =
+				arch === "aarch64" || arch === "arm64" ? "aarch64" : "x86_64";
+			const assetName = `catalyst-agent-${normalizedArch}-linux-musl`;
+
+			// Priority 1: local checksum file next to the binary
+			const agentBinaryDir =
+				process.env.AGENT_BINARY_DIR ||
+				process.env.AGENT_TARGET_DIR ||
+				path.resolve(process.cwd(), "..", "catalyst-agent", "target");
+			const localChecksum = path.resolve(agentBinaryDir, `${assetName}.sha256`);
+			if (fs.existsSync(localChecksum)) {
+				return reply.type("text/plain").send(fs.createReadStream(localChecksum));
+			}
+
+			// Priority 2: proxy from GitHub Releases
+			const releaseRepo =
+				process.env.AGENT_RELEASE_REPO || "catalystctl/catalyst";
+			const githubUrl = version
+				? `https://github.com/${releaseRepo}/releases/download/v${version}/${assetName}.sha256`
+				: `https://github.com/${releaseRepo}/releases/latest/download/${assetName}.sha256`;
+
+			try {
+				const response = await fetch(githubUrl, {
+					redirect: "follow",
+					signal: AbortSignal.timeout(30_000),
+				});
+				if (!response.ok) {
+					return reply.status(502).send({ error: `GitHub returned ${response.status}` });
+				}
+				const text = await response.text();
+				return reply.type("text/plain").send(text);
+			} catch (err) {
+				return reply.status(502).send({
+					error: "Failed to fetch agent checksum",
 					details: err instanceof Error ? err.message : String(err),
 				});
 			}

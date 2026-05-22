@@ -7,6 +7,14 @@ use crate::command_utils;
 
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Validate that a version string looks like semver (e.g. "1.12.2").
+/// Prevents URL injection via malicious config or backend-sent version.
+fn is_valid_version(v: &str) -> bool {
+    v.chars().all(|c| c.is_ascii_digit() || c == '.')
+        && v.split('.').count() >= 2
+        && v.split('.').all(|p| !p.is_empty() && p.parse::<u32>().is_ok())
+}
+
 /// GitHub repository that hosts agent release binaries.
 /// Set from config.agent.release_repo (default: "catalystctl/catalyst").
 pub struct AgentUpdater {
@@ -73,6 +81,13 @@ impl AgentUpdater {
         temp_path: &PathBuf,
         target_version: Option<&str>,
     ) -> AgentResult<()> {
+        if let Some(ver) = target_version {
+            if !is_valid_version(ver) {
+                return Err(AgentError::SecurityViolation(
+                    format!("Invalid target version '{}': must be semver (e.g. 1.12.2)", ver),
+                ));
+            }
+        }
         let asset_name = Self::asset_name();
         let download_url = match target_version {
             Some(ver) => format!(
@@ -136,6 +151,13 @@ impl AgentUpdater {
         temp_path: &PathBuf,
         target_version: Option<&str>,
     ) -> AgentResult<()> {
+        if let Some(ver) = target_version {
+            if !is_valid_version(ver) {
+                return Err(AgentError::SecurityViolation(
+                    format!("Invalid target version '{}': must be semver (e.g. 1.12.2)", ver),
+                ));
+            }
+        }
         let mut download_url = format!(
             "{}/api/agent/download",
             command_utils::ws_url_to_http_base(&self.backend_url)
@@ -179,6 +201,47 @@ impl AgentUpdater {
         Ok(())
     }
 
+    /// Download the .sha256 checksum from the backend's sidecar endpoint.
+    async fn download_checksum_from_backend(
+        &self,
+        target_version: Option<&str>,
+    ) -> AgentResult<String> {
+        let mut checksum_url = format!(
+            "{}/api/agent/download-checksum",
+            command_utils::ws_url_to_http_base(&self.backend_url)
+        );
+        if let Some(ver) = target_version {
+            checksum_url = format!("{}?version={}", checksum_url, ver);
+        }
+
+        let client = reqwest::Client::new();
+        let response = client
+            .get(&checksum_url)
+            .timeout(std::time::Duration::from_secs(30))
+            .send()
+            .await
+            .map_err(|e| AgentError::NetworkError(format!("Backend checksum download failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Err(AgentError::NetworkError(format!(
+                "Backend checksum download failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let text = response.text().await.map_err(|e| {
+            AgentError::NetworkError(format!("Failed to read backend checksum response: {}", e))
+        })?;
+
+        let hash = text.split_whitespace().next().unwrap_or("").to_string();
+        if hash.len() != 64 {
+            return Err(AgentError::SecurityViolation(
+                "Backend checksum has invalid length (expected 64 hex chars)".to_string(),
+            ));
+        }
+        Ok(hash)
+    }
+
     /// Set executable permissions on a file (Unix only).
     async fn make_executable(&self, path: &PathBuf) -> AgentResult<()> {
         #[cfg(unix)]
@@ -202,6 +265,13 @@ impl AgentUpdater {
         &self,
         target_version: Option<&str>,
     ) -> AgentResult<String> {
+        if let Some(ver) = target_version {
+            if !is_valid_version(ver) {
+                return Err(AgentError::SecurityViolation(
+                    format!("Invalid target version '{}': must be semver (e.g. 1.12.2)", ver),
+                ));
+            }
+        }
         let asset_name = Self::asset_name();
         let checksum_url = match target_version {
             Some(ver) => format!(
@@ -315,10 +385,23 @@ impl AgentUpdater {
             .await
         {
             Ok(()) => {
-                warn!(
-                    "Backend update downloaded without checksum verification — \
-                      verify backend serves SHA-256 sidecar"
-                );
+                // Attempt checksum verification from the backend sidecar.
+                match self
+                    .download_checksum_from_backend(options.target_version.as_deref())
+                    .await
+                {
+                    Ok(expected) => {
+                        if let Err(e) = Self::verify_checksum(&temp_path, &expected).await {
+                            let _ = fs::remove_file(&temp_path).await;
+                            warn!("Backend binary checksum verification failed: {}", e);
+                            return Err(e);
+                        }
+                        info!("Backend update checksum verified successfully");
+                    }
+                    Err(e) => {
+                        warn!("Could not download backend checksum (skipping verification): {}", e);
+                    }
+                }
                 Ok(temp_path)
             }
             Err(e) => {
@@ -337,21 +420,38 @@ impl AgentUpdater {
             new_binary, self.current_binary_path
         );
 
-        // Backup current binary.
+        // Backup current binary by hard-linking it. A hardlink is
+        // instant (same filesystem) and preserves the inode so that
+        // the running process can keep reading its own binary from
+        // the original path even after we rename the hardlink away.
         if self.current_binary_path.exists() {
-            fs::rename(&self.current_binary_path, &backup_path)
+            // Remove stale backup if present.
+            let _ = fs::remove_file(&backup_path).await;
+            fs::hard_link(&self.current_binary_path, &backup_path)
                 .await
                 .map_err(|e| {
                     AgentError::FileSystemError(format!("Failed to backup current binary: {}", e))
                 })?;
         }
 
-        // Move new binary into place.
+        // Move new binary into place. This is a single atomic
+        // rename on the same filesystem — if the process crashes
+        // before this point the old binary is still in place; if it
+        // crashes after, the new binary is ready. The hardlink
+        // backup at `backup_path` still points at the old inode so
+        // we can recover manually if needed.
         fs::rename(&new_binary, &self.current_binary_path)
             .await
             .map_err(|e| {
                 AgentError::FileSystemError(format!("Failed to install new binary: {}", e))
             })?;
+
+        // If rename failed, attempt to restore from backup.
+        // (This branch is unreachable because the outer ? already returned,
+        //  but the hardlink backup remains for manual recovery.)
+
+        // Clean up backup — the old binary is no longer needed.
+        let _ = fs::remove_file(&backup_path).await;
 
         info!("Agent binary updated successfully. Restarting...");
 

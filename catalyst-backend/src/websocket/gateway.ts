@@ -761,6 +761,17 @@ export class WebSocketGateway {
         // Set authenticated flag IMMEDIATELY to prevent timeout from disconnecting during async operations
         agent.authenticated = true;
         await this.finalizeAgentConnection(authResult.node, agent);
+
+        // Check if agent needs update immediately on handshake,
+        // rather than waiting for the first health_report.
+        // Also persist the version to the database.
+        if (message.agentVersion && typeof message.agentVersion === 'string') {
+          await this.prisma.node.update({
+            where: { id: nodeId },
+            data: { agentVersion: String(message.agentVersion) },
+          }).catch(() => {});
+          this.checkAgentUpdate(nodeId, message.agentVersion).catch(() => {});
+        }
         return;
       }
       // Treat any authenticated agent message as liveness to avoid false disconnects
@@ -971,6 +982,22 @@ export class WebSocketGateway {
         // If the agent is behind, send an update_agent command with the target version.
         // Track which version was last requested to avoid sending duplicate commands.
         this.checkAgentUpdate(nodeId, message.agentVersion).catch(() => {});
+      } else if (message.type === "agent_update_started") {
+        this.logger.info(
+          { nodeId, targetVersion: message.targetVersion },
+          'Agent confirmed update is being applied',
+        );
+        // The agent will exec() the new binary and reconnect.
+        // No further update commands needed for this node until reconnect.
+      } else if (message.type === "agent_update_failed") {
+        this.logger.warn(
+          { nodeId, error: message.error },
+          'Agent reported update failure — clearing tracking so next health_report retries',
+        );
+        // Clear the tracking entry so the next health_report will
+        // re-trigger the update_agent command instead of silently
+        // skipping it because "we already sent that version".
+        this.agentUpdateSent.delete(nodeId);
       } else if (message.type === "resource_stats") {
         if (!this.allowAgentMetrics(nodeId)) {
           if (this.shouldWarnRateLimit(nodeId, this.agentMetricsLimit.windowMs)) {
