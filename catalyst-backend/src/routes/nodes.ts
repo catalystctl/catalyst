@@ -2335,13 +2335,13 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 						if (agentData) {
 							// Merge agent-provided fields over the DB defaults
-							if (agentData.uptime != null) data.uptime = agentData.uptime;
+							if (agentData.uptime !== null && agentData.uptime !== undefined) data.uptime = agentData.uptime;
 							if (agentData.osInfo) data.osInfo = agentData.osInfo;
 							if (agentData.kernelVersion) data.kernelVersion = agentData.kernelVersion;
 							if (agentData.containerRuntime) data.containerRuntime = agentData.containerRuntime;
 							if (agentData.configPath) data.configPath = agentData.configPath;
-							if (agentData.sftpEnabled != null) data.sftpEnabled = agentData.sftpEnabled;
-							if (agentData.sftpPort != null) data.sftpPort = agentData.sftpPort;
+							if (agentData.sftpEnabled !== null && agentData.sftpEnabled !== undefined) data.sftpEnabled = agentData.sftpEnabled;
+							if (agentData.sftpPort !== null && agentData.sftpPort !== undefined) data.sftpPort = agentData.sftpPort;
 						}
 					} catch {
 						// Agent may not support this request type yet — fall through with DB-only data
