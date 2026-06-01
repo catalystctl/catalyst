@@ -94,6 +94,13 @@ export const qk = {
   apiKeyDetail: (id: string) => ['api-keys', id] as const,
   apiKeyUsage: (id: string) => ['api-keys', id, 'usage'] as const,
 
+  // ── Agent Control ──────────────────────────────────────────────────────
+  agentStatus: (nodeId: string) => ['nodes', nodeId, 'agent-status'] as const,
+  agentLogs: (nodeId: string, params?: { lines?: number; level?: string }) =>
+    params ? ['nodes', nodeId, 'agent-logs', params] as const : ['nodes', nodeId, 'agent-logs'] as const,
+  agentUpdateStatus: (nodeId: string) => ['nodes', nodeId, 'agent-update-status'] as const,
+  agentConfig: (nodeId: string) => ['nodes', nodeId, 'agent-config'] as const,
+
   // ── Permissions ──────────────────────────────────────────────────────
   permissionsCatalog: () => ['permissions-catalog'] as const,
   myPermissions: () => ['my-permissions'] as const,

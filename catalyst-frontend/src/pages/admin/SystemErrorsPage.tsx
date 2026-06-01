@@ -10,6 +10,7 @@ import {
  Radio,
  Copy,
  Check,
+ Server,
 } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import TabLoadingState from '../../components/servers/tabs/TabLoadingState';

@@ -12,7 +12,7 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use sysinfo::{Disks, Networks, System};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::{RwLock, Semaphore};
+use tokio::sync::{RwLock, Semaphore, broadcast};
 use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
 use tokio_tungstenite::connect_async_with_config;
@@ -362,6 +362,9 @@ pub struct WebSocketHandler {
     pub(crate) error_dedup: Arc<tokio::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>>,
     /// PID of the ctr events subprocess, for explicit cleanup during shutdown.
     pub(crate) ctr_event_pid: Arc<tokio::sync::Mutex<Option<u32>>>,
+    /// Shutdown signal sender — used by restart_agent command to trigger graceful shutdown.
+    /// Set after construction via set_shutdown_tx(). Uses RwLock for interior mutability.
+    pub(crate) shutdown_tx: Arc<RwLock<Option<broadcast::Sender<()>>>>,
 }
 
 // LOCK ORDERING (must be respected to prevent deadlocks):
@@ -380,6 +383,7 @@ pub struct WebSocketHandler {
 //  12. server_health_state
 //  13. retry_after_seconds
 //  14. backend_connected (rarely contended, almost always read)
+//  15. shutdown_tx (read-only in restart_agent, never held with other locks)
 //
 // Rule: never hold lock N while attempting to acquire lock M where M < N.
 
@@ -407,6 +411,7 @@ impl Clone for WebSocketHandler {
             retry_after_seconds: self.retry_after_seconds.clone(),
             error_dedup: self.error_dedup.clone(),
             ctr_event_pid: self.ctr_event_pid.clone(),
+            shutdown_tx: self.shutdown_tx.clone(),
         }
     }
 }
@@ -461,7 +466,16 @@ impl WebSocketHandler {
             retry_after_seconds: Arc::new(RwLock::new(None)),
             error_dedup: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
             ctr_event_pid: Arc::new(tokio::sync::Mutex::new(None)),
+            shutdown_tx: Arc::new(RwLock::new(None)),
         }
+    }
+
+    /// Inject the shutdown signal sender from the main agent runtime.
+    /// Called after construction so the handler can trigger a graceful
+    /// restart via the restart_agent WS command.
+    pub async fn set_shutdown_tx(&self, tx: broadcast::Sender<()>) {
+        let mut guard = self.shutdown_tx.write().await;
+        *guard = Some(tx);
     }
 
     pub(crate) async fn set_backend_connected(&self, connected: bool) {
@@ -1197,6 +1211,7 @@ impl WebSocketHandler {
                     "Received update_agent command from backend (target={})",
                     target_version_display
                 );
+                let msg_clone = msg.clone();
                 let handler = self.clone();
                 let write = Arc::clone(write);
                 tokio::spawn(async move {
@@ -1211,6 +1226,7 @@ impl WebSocketHandler {
                             // panel know the update is in progress.
                             let payload = json!({
                                 "type": "agent_update_started",
+                                "requestId": msg_clone.get("requestId"),
                                 "targetVersion": options.target_version,
                             });
                             let mut w = write.lock().await;
@@ -1229,6 +1245,7 @@ impl WebSocketHandler {
                             ).await;
                             let payload = json!({
                                 "type": "agent_update_failed",
+                                "requestId": msg_clone.get("requestId"),
                                 "error": e.to_string(),
                             });
                             let mut w = write.lock().await;
@@ -1237,7 +1254,260 @@ impl WebSocketHandler {
                     }
                 });
             }
+            Some("agent_status") => {
+                let config_path = self.config.agent.config_path.clone();
+                let sftp_port = self.config.sftp.port;
+                // SFTP is enabled unless SFTP_ENABLED=0/false explicitly
+                let sftp_enabled = std::env::var("SFTP_ENABLED")
+                    .map(|v| v != "false" && v != "0")
+                    .unwrap_or(true);
+                let msg_clone = msg.clone();
+                let write = Arc::clone(write);
+                tokio::spawn(async move {
+                    // OS, kernel, and containerd version never change at runtime —
+                    // cache them on first call to avoid repeated syscalls and subprocess spawns.
+                    static CACHED_SYSINFO: OnceLock<(String, String, String)> = OnceLock::new();
+                    let (os_info, kernel_version, containerd_version) = CACHED_SYSINFO.get_or_init(|| {
+                        let os_info = System::long_os_version().unwrap_or_default();
+                        let kernel_version = System::kernel_version().unwrap_or_default();
+                        // containerd version is queried synchronously here because
+                        // OnceLock::get_or_init is sync; it runs once and is fast enough.
+                        let containerd_version = std::process::Command::new("ctr")
+                            .arg("version")
+                            .output()
+                            .ok()
+                            .and_then(|o| {
+                                if o.status.success() {
+                                    String::from_utf8_lossy(&o.stdout)
+                                        .lines()
+                                        .find(|l| l.contains("Version:"))
+                                        .map(|l| l.split(':').nth(1).unwrap_or("").trim().to_string())
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or_default();
+                        (os_info, kernel_version, containerd_version)
+                    }).clone();
+
+                    let uptime = crate::websocket_handler::get_uptime().await;
+
+                    let response = json!({
+                        "type": "agent_status_response",
+                        "requestId": msg_clone.get("requestId"),
+                        "uptime": uptime,
+                        "osInfo": os_info,
+                        "kernelVersion": kernel_version,
+                        "containerRuntime": if containerd_version.is_empty() { Value::Null } else { Value::String(format!("containerd {}", containerd_version)) },
+                        "configPath": if config_path.as_os_str().is_empty() { Value::Null } else { Value::String(config_path.display().to_string()) },
+                        "sftpEnabled": sftp_enabled,
+                        "sftpPort": sftp_port,
+                    });
+                    let mut w = write.lock().await;
+                    let _ = w.send(Message::Text(response.to_string().into())).await;
+                });
+            }
             Some("create_network") => self.handle_create_network(&msg, write).await?,
+            Some("restart_agent") => {
+                info!("Received restart_agent command from backend");
+                let msg_clone = msg.clone();
+                let handler = self.clone();
+                let write = Arc::clone(write);
+                tokio::spawn(async move {
+                    // Acknowledge the restart command
+                    let ack = json!({
+                        "type": "agent_restart_ack",
+                        "requestId": msg_clone.get("requestId"),
+                    });
+                    {
+                        let mut w = write.lock().await;
+                        let _ = w.send(Message::Text(ack.to_string().into())).await;
+                    }
+                    // Give the ack time to be sent before we shut down
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    // Trigger graceful shutdown
+                    let tx = handler.shutdown_tx.read().await.clone();
+                    if let Some(tx) = tx {
+                        let _ = tx.send(());
+                    } else {
+                        std::process::exit(0);
+                    }
+                });
+            }
+            Some("ping") => {
+                let write = Arc::clone(write);
+                let msg_clone = msg.clone();
+                tokio::spawn(async move {
+                    let pong = json!({
+                        "type": "pong",
+                        "requestId": msg_clone.get("requestId"),
+                        "timestamp": chrono::Utc::now().to_rfc3339(),
+                    });
+                    let mut w = write.lock().await;
+                    let _ = w.send(Message::Text(pong.to_string().into())).await;
+                });
+            }
+            Some("agent_logs") => {
+                let lines = msg.get("lines").and_then(|v| v.as_u64()).unwrap_or(200) as usize;
+                let msg_clone = msg.clone();
+                let write = Arc::clone(write);
+                tokio::spawn(async move {
+                    // Try journalctl first (systemd-managed agents)
+                    let journal_output = tokio::process::Command::new("journalctl")
+                        .args(&[
+                            "-u", "catalyst-agent",
+                            "-n", &lines.to_string(),
+                            "--no-pager",
+                            "--output=json",
+                        ])
+                        .output()
+                        .await;
+
+                    let logs: Vec<Value> = match &journal_output {
+                        Ok(out) if out.status.success() && !out.stdout.is_empty() => {
+                            // Parse journalctl JSON output
+                            String::from_utf8_lossy(&out.stdout)
+                                .lines()
+                                .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+                                .map(|entry| {
+                                    // __REALTIME_TIMESTAMP is microseconds since epoch — convert to ISO 8601
+                                    let ts_iso = entry["__REALTIME_TIMESTAMP"]
+                                        .as_str()
+                                        .and_then(|v| v.parse::<u64>().ok())
+                                        .map(|us| chrono::DateTime::from_timestamp_micros(us as i64)
+                                            .map(|dt| dt.to_rfc3339())
+                                            .unwrap_or_default())
+                                        .unwrap_or_default();
+                                    json!({
+                                        "timestamp": ts_iso,
+                                        "level": match entry["PRIORITY"].as_str().unwrap_or("6") {
+                                            "0" | "1" | "2" => "error",
+                                            "3" => "warn",
+                                            "4" => "info",
+                                            "5" => "debug",
+                                            _ => "trace",
+                                        },
+                                        "target": entry["CODE_FUNC"].as_str().unwrap_or("agent"),
+                                        "message": entry["MESSAGE"].as_str().unwrap_or(""),
+                                    })
+                                })
+                                .collect()
+                        }
+                        _ => {
+                            // Fallback: try reading from /var/log/catalyst-agent/ or agent data dir
+                            // Use tail-style reading to avoid loading huge files into memory.
+                            let log_paths = vec![
+                                "/var/log/catalyst-agent/agent.log",
+                                "/opt/catalyst-agent/agent.log",
+                            ];
+                            let mut parsed = vec![];
+                            for path in &log_paths {
+                                if let Ok(content) = read_tail(path, lines).await {
+                                    // Parse plain-text log lines
+                                    // Expected format: YYYY-MM-DDTHH:MM:SS [LEVEL] module::path: message
+                                    for line in content.lines() {
+                                        let (level, target, message) = parse_log_line(line);
+                                        let ts = extract_timestamp(line);
+                                        parsed.push(json!({
+                                            "timestamp": ts,
+                                            "level": level,
+                                            "target": target,
+                                            "message": message,
+                                        }));
+                                    }
+                                    break;
+                                }
+                            }
+                            parsed
+                        }
+                    };
+
+                    let response = json!({
+                        "type": "agent_logs_response",
+                        "requestId": msg_clone.get("requestId"),
+                        "logs": logs,
+                    });
+                    let mut w = write.lock().await;
+                    let _ = w.send(Message::Text(response.to_string().into())).await;
+                });
+            }
+            Some("agent_config") => {
+                let config_path = self.config.agent.config_path.clone();
+                let write = Arc::clone(write);
+                let msg_clone = msg.clone();
+                tokio::spawn(async move {
+                    let path = if config_path.as_os_str().is_empty() {
+                        PathBuf::from("/opt/catalyst-agent/config.toml")
+                    } else {
+                        config_path
+                    };
+                    let path_str = path.display().to_string();
+                    let content = tokio::fs::read_to_string(&path).await.unwrap_or_default();
+                    let metadata = tokio::fs::metadata(&path).await.ok();
+                    let response = json!({
+                        "type": "agent_config_response",
+                        "requestId": msg_clone.get("requestId"),
+                        "path": path_str,
+                        "content": content,
+                        "lastModified": metadata.and_then(|m| m.modified().ok())
+                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                            .and_then(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0))
+                            .map(|dt| dt.to_rfc3339()),
+                    });
+                    let mut w = write.lock().await;
+                    let _ = w.send(Message::Text(response.to_string().into())).await;
+                });
+            }
+            Some("agent_config_update") => {
+                let config_path = self.config.agent.config_path.clone();
+                let content = msg.get("content").and_then(|v| v.as_str()).map(String::from);
+                let write = Arc::clone(write);
+                let msg_clone = msg.clone();
+                tokio::spawn(async move {
+                    let path = if config_path.as_os_str().is_empty() {
+                        PathBuf::from("/opt/catalyst-agent/config.toml")
+                    } else {
+                        config_path
+                    };
+                    let response = match content {
+                        Some(c) => {
+                            // Validate that the content is parseable TOML before writing.
+                            // A malformed config will crash the agent on restart.
+                            match c.parse::<toml::Value>() {
+                                Ok(_) => {
+                                    match tokio::fs::write(&path, &c).await {
+                                        Ok(_) => json!({
+                                            "type": "agent_config_update_response",
+                                            "requestId": msg_clone.get("requestId"),
+                                            "saved": true,
+                                        }),
+                                        Err(e) => json!({
+                                            "type": "agent_config_update_response",
+                                            "requestId": msg_clone.get("requestId"),
+                                            "saved": false,
+                                            "error": e.to_string(),
+                                        }),
+                                    }
+                                }
+                                Err(e) => json!({
+                                    "type": "agent_config_update_response",
+                                    "requestId": msg_clone.get("requestId"),
+                                    "saved": false,
+                                    "error": format!("Invalid TOML: {}", e),
+                                }),
+                            }
+                        }
+                        None => json!({
+                            "type": "agent_config_update_response",
+                            "requestId": msg_clone.get("requestId"),
+                            "saved": false,
+                            "error": "No content provided",
+                        }),
+                    };
+                    let mut w = write.lock().await;
+                    let _ = w.send(Message::Text(response.to_string().into())).await;
+                });
+            }
             Some("update_network") => self.handle_update_network(&msg, write).await?,
             Some("delete_network") => self.handle_delete_network(&msg, write).await?,
             Some("allocation_added") => self.handle_allocation_added(&msg).await?,
@@ -2029,6 +2299,102 @@ impl WebSocketHandler {
 
 }
 
+
+/// Parse a plain-text log line into (level, target, message).
+/// Handles tracing-style output: `YYYY-MM-DDTHH:MM:SS.ZZZZ [LEVEL] module::path: message`
+fn parse_log_line(line: &str) -> (&'static str, &str, &str) {
+    // Extract level from brackets like [ERROR], [WARN], [INFO], [DEBUG], [TRACE]
+    let level = if line.contains("[ERROR]") || line.contains("[error]") {
+        "error"
+    } else if line.contains("[WARN]") || line.contains("[warn]") {
+        "warn"
+    } else if line.contains("[INFO]") || line.contains("[info]") {
+        "info"
+    } else if line.contains("[DEBUG]") || line.contains("[debug]") {
+        "debug"
+    } else if line.contains("[TRACE]") || line.contains("[trace]") {
+        "trace"
+    } else {
+        "info"
+    };
+
+    // Try to extract target and message after the level bracket
+    let after_level = line.find(']').map(|i| i + 1).unwrap_or(0);
+    let rest = line.get(after_level..).unwrap_or("").trim();
+
+    // tracing format: module::path: message
+    let (target, message) = if let Some(colon_pos) = rest.find(": ") {
+        (rest.get(..colon_pos).unwrap_or("agent"), rest.get(colon_pos + 2..).unwrap_or(rest))
+    } else {
+        ("agent", rest)
+    };
+
+    (level, target, message)
+}
+
+/// Extract ISO timestamp from the start of a log line.
+fn extract_timestamp(line: &str) -> String {
+    // tracing format starts with e.g. "2024-01-15T10:30:00.123456Z"
+    let end = line.find(' ').unwrap_or(line.len().min(25));
+    line.get(..end).unwrap_or("").to_string()
+}
+
+/// Read the last `max_lines` lines from a file without loading the entire
+/// file into memory. Seeks backwards from the end in 4 KB chunks to find
+/// line boundaries. Returns up to `max_lines` lines as a single String.
+async fn read_tail(path: &str, max_lines: usize) -> Result<String, std::io::Error> {
+    use tokio::io::{AsyncSeekExt, AsyncReadExt};
+
+    let mut file = tokio::fs::File::open(path).await?;
+    let file_size = file.metadata().await?.len();
+
+    if file_size == 0 {
+        return Ok(String::new());
+    }
+
+    // For small files (< 64 KB), just read the whole thing.
+    if file_size < 65_536 {
+        let content = tokio::fs::read_to_string(path).await?;
+        let lines: Vec<&str> = content.lines().collect();
+        let start = lines.len().saturating_sub(max_lines);
+        return Ok(lines[start..].join("\n"));
+    }
+
+    // For large files, seek backwards in chunks to find enough newlines.
+    const CHUNK: u64 = 4096;
+    let mut buf = Vec::new();
+    let mut pos = file_size;
+    let mut newline_count: usize = 0;
+
+    while pos > 0 && newline_count < max_lines + 1 {
+        let read_start = pos.saturating_sub(CHUNK);
+        let read_len = pos - read_start;
+
+        file.seek(std::io::SeekFrom::Start(read_start)).await?;
+        let mut chunk = vec![0u8; read_len as usize];
+        file.read_exact(&mut chunk).await?;
+
+        // Count newlines in this chunk
+        for &byte in chunk.iter().rev() {
+            if byte == b'\n' {
+                newline_count += 1;
+                if newline_count > max_lines {
+                    break;
+                }
+            }
+        }
+
+        buf.extend_from_slice(&chunk);
+        pos = read_start;
+    }
+
+    // Reverse the collected bytes and split into lines
+    buf.reverse();
+    let content = String::from_utf8_lossy(&buf);
+    let lines: Vec<&str> = content.lines().collect();
+    let start = lines.len().saturating_sub(max_lines);
+    Ok(lines[start..].join("\n"))
+}
 
 async fn get_uptime() -> u64 {
     tokio::fs::read_to_string("/proc/uptime")

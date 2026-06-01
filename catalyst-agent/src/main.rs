@@ -367,6 +367,10 @@ async fn main() -> AgentResult<()> {
 
     let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
 
+    // Inject the shutdown sender into the WS handler so the restart_agent
+    // command can trigger a graceful shutdown.
+    agent.ws_handler.set_shutdown_tx(shutdown_tx.clone()).await;
+
     // Spawn SIGTERM handler
     let shutdown_tx_sigterm = shutdown_tx.clone();
     tokio::spawn(async move {

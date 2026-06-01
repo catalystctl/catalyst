@@ -2260,4 +2260,412 @@ export async function nodeRoutes(app: FastifyInstance) {
 			}
 		},
 	);
+
+	// ── Agent Control Endpoints ────────────────────────────────────────────
+
+	// Get detailed agent status
+	app.get(
+		"/:nodeId/agent/status",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "node.read")) return;
+			const { nodeId } = request.params as { nodeId: string };
+
+			const node = await prisma.node.findUnique({
+				where: { id: nodeId },
+				select: {
+					id: true,
+					isOnline: true,
+					agentVersion: true,
+					lastSeenAt: true,
+					hostname: true,
+					sftpEnabled: true,
+					sftpPort: true,
+					agentConfigPath: true,
+					_count: { select: { servers: true } },
+					servers: { select: { status: true } },
+				},
+			});
+
+			if (!node) {
+				return reply.status(404).send({ error: "Node not found" });
+			}
+
+			const panelVersion = getUpdateStatus().currentVersion || null;
+			const runningContainers = node.servers.filter((s: any) => s.status === "running").length;
+
+			// Base data from DB
+			const data: any = {
+				nodeId: node.id,
+				connected: node.isOnline,
+				agentVersion: node.agentVersion,
+				panelVersion,
+				updateAvailable: panelVersion && node.agentVersion
+					? (() => {
+						const ap = node.agentVersion.replace(/^v/, '').split('.').map(Number);
+						const pp = panelVersion.replace(/^v/, '').split('.').map(Number);
+						for (let i = 0; i < Math.max(ap.length, pp.length); i++) {
+							if ((pp[i] || 0) > (ap[i] || 0)) return true;
+							if ((pp[i] || 0) < (ap[i] || 0)) break;
+						}
+						return false;
+					})()
+					: false,
+				latestVersion: panelVersion,
+				uptime: null,
+				lastSeenAt: node.lastSeenAt,
+				osInfo: null,
+				kernelVersion: null,
+				containerRuntime: null,
+				runningContainers,
+				totalContainers: node._count.servers,
+				configPath: node.agentConfigPath,
+				sftpPort: node.sftpPort,
+				sftpEnabled: node.sftpEnabled,
+			};
+
+			// If agent is online, query it for rich system info
+			if (node.isOnline) {
+				const gateway = (app as any).wsGateway;
+				if (gateway) {
+					try {
+						const agentData = await gateway.requestFromAgent(nodeId, {
+							type: "agent_status",
+						});
+
+						if (agentData) {
+							// Merge agent-provided fields over the DB defaults
+							if (agentData.uptime != null) data.uptime = agentData.uptime;
+							if (agentData.osInfo) data.osInfo = agentData.osInfo;
+							if (agentData.kernelVersion) data.kernelVersion = agentData.kernelVersion;
+							if (agentData.containerRuntime) data.containerRuntime = agentData.containerRuntime;
+							if (agentData.configPath) data.configPath = agentData.configPath;
+							if (agentData.sftpEnabled != null) data.sftpEnabled = agentData.sftpEnabled;
+							if (agentData.sftpPort != null) data.sftpPort = agentData.sftpPort;
+						}
+					} catch {
+						// Agent may not support this request type yet — fall through with DB-only data
+					}
+				}
+			}
+
+			reply.send({ success: true, data });
+		},
+	);
+
+	// Get agent logs (initial batch)
+	app.get(
+		"/:nodeId/agent/logs",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "node.read")) return;
+			const { nodeId } = request.params as { nodeId: string };
+			const { lines } = request.query as { lines?: string };
+
+			const node = await prisma.node.findUnique({ where: { id: nodeId } });
+			if (!node) {
+				return reply.status(404).send({ error: "Node not found" });
+			}
+
+			if (!node.isOnline) {
+				return reply.send({ success: true, data: [] });
+			}
+
+			const gateway = (app as any).wsGateway;
+			if (!gateway) {
+				return reply.status(503).send({ error: "WebSocket gateway unavailable" });
+			}
+
+			try {
+				const response = await gateway.requestFromAgent(nodeId, {
+					type: "agent_logs",
+					lines: Number(lines) || 200,
+				});
+
+				if (response?.logs) {
+					return reply.send({ success: true, data: response.logs });
+				}
+				return reply.send({ success: true, data: [] });
+			} catch {
+				return reply.status(503).send({ error: "Failed to request logs from agent" });
+			}
+		},
+	);
+
+	// Restart agent
+	app.post(
+		"/:nodeId/agent/restart",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "node.update")) return;
+			const { nodeId } = request.params as { nodeId: string };
+
+			const node = await prisma.node.findUnique({ where: { id: nodeId } });
+			if (!node) {
+				return reply.status(404).send({ error: "Node not found" });
+			}
+
+			if (!node.isOnline) {
+				return reply.status(409).send({ error: "Agent is offline" });
+			}
+
+			const gateway = (app as any).wsGateway;
+			if (!gateway) {
+				return reply.status(503).send({ error: "WebSocket gateway unavailable" });
+			}
+
+			const sent = await gateway.sendToAgent(nodeId, {
+				type: "restart_agent",
+			});
+
+			if (!sent) {
+				return reply.status(503).send({ error: "Failed to send restart command to agent" });
+			}
+
+			await prisma.auditLog.create({
+				data: {
+					userId: request.user.userId,
+					action: "agent.restart",
+					resource: "node",
+					resourceId: nodeId,
+					details: { nodeName: node.name },
+				},
+			});
+
+			reply.send({ success: true, data: { sent: true } });
+		},
+	);
+
+	// Trigger agent update
+	app.post(
+		"/:nodeId/agent/update",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "node.update")) return;
+			const { nodeId } = request.params as { nodeId: string };
+			const { targetVersion } = request.body as { targetVersion?: string };
+
+			const node = await prisma.node.findUnique({ where: { id: nodeId } });
+			if (!node) {
+				return reply.status(404).send({ error: "Node not found" });
+			}
+
+			if (!node.isOnline) {
+				return reply.status(409).send({ error: "Agent is offline" });
+			}
+
+			const gateway = (app as any).wsGateway;
+			if (!gateway) {
+				return reply.status(503).send({ error: "WebSocket gateway unavailable" });
+			}
+
+			const version = targetVersion || getUpdateStatus().currentVersion || undefined;
+			const sent = await gateway.sendToAgent(nodeId, {
+				type: "update_agent",
+				targetVersion: version,
+			});
+
+			if (!sent) {
+				return reply.status(503).send({ error: "Failed to send update command to agent" });
+			}
+
+			await prisma.auditLog.create({
+				data: {
+					userId: request.user.userId,
+					action: "agent.update",
+					resource: "node",
+					resourceId: nodeId,
+					details: { nodeName: node.name, targetVersion: version },
+				},
+			});
+
+			reply.send({ success: true, data: { sent: true } });
+		},
+	);
+
+	// Get agent update status
+	app.get(
+		"/:nodeId/agent/update-status",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "node.read")) return;
+			const { nodeId } = request.params as { nodeId: string };
+
+			const node = await prisma.node.findUnique({ where: { id: nodeId } });
+			if (!node) {
+				return reply.status(404).send({ error: "Node not found" });
+			}
+
+			const gateway = (app as any).wsGateway;
+			if (!gateway || !node.isOnline) {
+				return reply.send({
+					success: true,
+					data: {
+						currentVersion: node.agentVersion,
+						targetVersion: null,
+						status: "idle",
+						progress: 0,
+						error: null,
+						startedAt: null,
+					},
+				});
+			}
+
+			try {
+				const response = await gateway.requestFromAgent(nodeId, {
+					type: "agent_update_status",
+				});
+
+				if (response) {
+					return reply.send({ success: true, data: response });
+				}
+			} catch {
+				// Agent might not support this request type yet
+			}
+
+			return reply.send({
+				success: true,
+				data: {
+					currentVersion: node.agentVersion,
+					targetVersion: null,
+					status: "idle",
+					progress: 0,
+					error: null,
+					startedAt: null,
+				},
+			});
+		},
+	);
+
+	// Ping agent
+	app.post(
+		"/:nodeId/agent/ping",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "node.read")) return;
+			const { nodeId } = request.params as { nodeId: string };
+
+			const node = await prisma.node.findUnique({ where: { id: nodeId } });
+			if (!node) {
+				return reply.status(404).send({ error: "Node not found" });
+			}
+
+			if (!node.isOnline) {
+				return reply.status(409).send({ error: "Agent is offline" });
+			}
+
+			const gateway = (app as any).wsGateway;
+			if (!gateway) {
+				return reply.status(503).send({ error: "WebSocket gateway unavailable" });
+			}
+
+			const start = Date.now();
+			try {
+				const response = await gateway.requestFromAgent(nodeId, {
+					type: "ping",
+				});
+				const latencyMs = Date.now() - start;
+
+				if (response) {
+					return reply.send({ success: true, data: { latencyMs } });
+				}
+			} catch {
+				// fall through
+			}
+
+			reply.status(504).send({ error: "Agent did not respond to ping" });
+		},
+	);
+
+	// Get agent config
+	app.get(
+		"/:nodeId/agent/config",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "node.read")) return;
+			const { nodeId } = request.params as { nodeId: string };
+
+			const node = await prisma.node.findUnique({ where: { id: nodeId } });
+			if (!node) {
+				return reply.status(404).send({ error: "Node not found" });
+			}
+
+			if (!node.isOnline) {
+				return reply.status(409).send({ error: "Agent is offline" });
+			}
+
+			const gateway = (app as any).wsGateway;
+			if (!gateway) {
+				return reply.status(503).send({ error: "WebSocket gateway unavailable" });
+			}
+
+			try {
+				const response = await gateway.requestFromAgent(nodeId, {
+					type: "agent_config",
+				});
+
+				if (response) {
+					return reply.send({ success: true, data: response });
+				}
+			} catch {
+				// Agent might not support this yet
+			}
+
+			reply.status(503).send({ error: "Failed to retrieve agent config" });
+		},
+	);
+
+	// Update agent config
+	app.put(
+		"/:nodeId/agent/config",
+		{ onRequest: [app.authenticate] },
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "node.update")) return;
+			const { nodeId } = request.params as { nodeId: string };
+			const { content } = request.body as { content: string };
+
+			if (!content || typeof content !== 'string') {
+				return reply.status(400).send({ error: "Config content is required" });
+			}
+
+			const node = await prisma.node.findUnique({ where: { id: nodeId } });
+			if (!node) {
+				return reply.status(404).send({ error: "Node not found" });
+			}
+
+			if (!node.isOnline) {
+				return reply.status(409).send({ error: "Agent is offline" });
+			}
+
+			const gateway = (app as any).wsGateway;
+			if (!gateway) {
+				return reply.status(503).send({ error: "WebSocket gateway unavailable" });
+			}
+
+			try {
+				const response = await gateway.requestFromAgent(nodeId, {
+					type: "agent_config_update",
+					content,
+				});
+
+				if (response?.saved) {
+					await prisma.auditLog.create({
+						data: {
+							userId: request.user.userId,
+							action: "agent.config_update",
+							resource: "node",
+							resourceId: nodeId,
+							details: { nodeName: node.name },
+						},
+					});
+
+					return reply.send({ success: true, data: { saved: true } });
+				}
+			} catch {
+				// fall through
+			}
+
+			reply.status(503).send({ error: "Failed to update agent config" });
+		},
+	);
 }
