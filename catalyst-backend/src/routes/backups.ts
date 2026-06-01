@@ -1,7 +1,7 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { PrismaClient } from "@prisma/client";
-import { createReadStream, createWriteStream } from "fs";
+import { createReadStream } from "fs";
 import * as fs from "fs/promises";
 import { PassThrough } from "stream";
 import * as path from "path";
@@ -10,6 +10,7 @@ import {
   buildBackupPaths,
   openStorageStream,
   deleteBackupFromStorage,
+  uploadStreamToAgent,
 } from "../services/backup-storage";
 import { randomUUID } from "crypto";
 import { serialize } from '../utils/serialize';
@@ -433,29 +434,22 @@ export async function backupRoutes(app: FastifyInstance) {
       }
        let restorePath = backup.path;
        if (backup.storageMode === "s3" || backup.storageMode === "sftp") {
-         const { storageKey } = backup.metadata as { storageKey?: string };
+         const { storageKey, agentPath } = backup.metadata as { storageKey?: string; agentPath?: string };
          if (!storageKey) {
            await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
            return reply
              .status(500)
              .send({ error: `Missing ${backup.storageMode?.toUpperCase() || "remote"} storage key` });
          }
-          const tmpPath = `${BACKUP_DIR}/${server.uuid}/${backup.name}.tar.gz`;
-          try {
-            await fs.mkdir(`${BACKUP_DIR}/${server.uuid}`, { recursive: true });
-            const { stream } = await openStorageStream(backup, server);
-            await new Promise<void>((resolve, reject) => {
-              const writeStream = createWriteStream(tmpPath);
-              stream.pipe(writeStream);
-              stream.on("error", reject);
-              writeStream.on("finish", () => resolve());
-              writeStream.on("error", reject);
-            });
-            restorePath = tmpPath;
-          } catch (dlError: any) {
-            await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
-            return reply.status(500).send({ error: dlError?.message || "Failed to download backup from remote storage" });
-          }
+         try {
+           const { stream } = await openStorageStream(backup, server);
+           const targetPath = agentPath || `backups/${server.uuid}/${backup.name}.tar.gz`;
+           await uploadStreamToAgent(gateway, server.nodeId, server.id, server.uuid, targetPath, stream);
+           restorePath = targetPath;
+         } catch (dlError: any) {
+           await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
+           return reply.status(500).send({ error: dlError?.message || "Failed to stream backup to agent" });
+         }
        }
 
       // Send restore request to agent

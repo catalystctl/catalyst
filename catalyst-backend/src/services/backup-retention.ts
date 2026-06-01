@@ -10,6 +10,8 @@
 
 import type { PrismaClient } from "@prisma/client";
 import type pino from "pino";
+import type { WebSocketGateway } from "../websocket/gateway";
+import { deleteBackupFromStorage } from "./backup-storage";
 import { captureSystemError } from "./error-logger";
 
 const DEFAULT_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
@@ -17,11 +19,12 @@ const DEFAULT_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 export function startBackupRetention(
   prisma: PrismaClient,
   logger: pino.Logger,
+  gateway?: WebSocketGateway,
   intervalMs = DEFAULT_INTERVAL_MS,
 ): ReturnType<typeof setInterval> {
   const run = async () => {
     try {
-      await enforceRetention(prisma, logger);
+      await enforceRetention(prisma, logger, gateway);
     } catch (err: any) {
       captureSystemError({ level: 'error', component: 'BackupRetention', message: 'Backup retention job failed', stack: err?.stack }).catch(() => {});
       logger.error({ err }, "Backup retention job failed");
@@ -33,7 +36,7 @@ export function startBackupRetention(
   return setInterval(run, intervalMs);
 }
 
-async function enforceRetention(prisma: PrismaClient, logger: pino.Logger) {
+async function enforceRetention(prisma: PrismaClient, logger: pino.Logger, gateway?: WebSocketGateway) {
   const servers = await prisma.server.findMany({
     where: {
       OR: [
@@ -48,6 +51,8 @@ async function enforceRetention(prisma: PrismaClient, logger: pino.Logger) {
       backupRetentionCount: true,
       backupRetentionDays: true,
       node: { select: { isOnline: true } },
+      backupS3Config: true,
+      backupSftpConfig: true,
     },
   });
 
@@ -116,12 +121,20 @@ async function enforceRetention(prisma: PrismaClient, logger: pino.Logger) {
 
     for (const backup of toDelete) {
       try {
-        // Delete from storage first
-        if (backup.path) {
-          const { default: fs } = await import("fs/promises");
-          await fs.unlink(backup.path).catch(() => {
-            // File may not exist locally (S3/stream mode)
+        if (gateway) {
+          await deleteBackupFromStorage(gateway, backup, {
+            id: server.id,
+            uuid: server.uuid,
+            nodeId: server.nodeId,
+            node: server.node,
+            backupS3Config: (server as any).backupS3Config,
+            backupSftpConfig: (server as any).backupSftpConfig,
           });
+        } else {
+          logger.warn(
+            { backupId: backup.id, serverId: server.id },
+            "Gateway not available — skipping storage cleanup for backup retention",
+          );
         }
 
         // Delete from database

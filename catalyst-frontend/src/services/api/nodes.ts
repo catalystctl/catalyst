@@ -217,8 +217,11 @@ export const nodesApi = {
   },
 
   getAccessibleNodes: async () => {
-    const data = await apiClient.get<ApiResponse<NodeInfo[]>>('/api/nodes/accessible');
-    return Array.isArray(data.data) ? data.data : [];
+    const data = await apiClient.get<ApiResponse<NodeInfo[]> & { hasWildcard?: boolean }>('/api/nodes/accessible');
+    return {
+      nodes: Array.isArray(data.data) ? data.data : [],
+      hasWildcard: data.hasWildcard || false,
+    };
   },
 
   // Wildcard assignment - assign all nodes (current and future)

@@ -433,7 +433,9 @@ export const withConnectionInfo = (server: any, fallbackNode?: { publicAddress?:
 export const __filename = fileURLToPath(import.meta.url);
 export const __dirname = path.dirname(path.dirname(__filename));
 // Using shared prisma instance from db.ts
+/** @deprecated Server file operations must be delegated to the agent. Do not use execFile on the backend for server data. */
 export const execFileAsync = promisify(execFile);
+/** @deprecated Server data lives on the agent, not the backend. Do not use this for server file operations. */
 export const serverDataRoot = process.env.SERVER_DATA_DIR || "/var/lib/catalyst/servers";
 export let fileRateLimitMax = 60;
 export let fileRateLimitWindowMs: string | number = "1 minute";
@@ -1098,7 +1100,9 @@ export const fetchDownload = async (
   return fetch(downloadUrl, { headers: dlHeaders, redirect: "follow" });
 };
 
+/** @deprecated Server file operations must be delegated to the agent. Do not create server directories on the backend. */
 export const resolveServerPath = async (serverUuid: string, requestedPath: string, nodeServerDataDir?: string) => {
+  console.warn("[DEPRECATED] resolveServerPath called on backend. Server file operations must be delegated to the agent.");
   const baseDir = path.resolve(nodeServerDataDir || serverDataRoot, serverUuid);
   await fs.mkdir(baseDir, { recursive: true });
   const safePath = path.resolve(baseDir, requestedPath.replace(/\\/g, "/").replace(/^\/+/, ""));
@@ -1108,7 +1112,9 @@ export const resolveServerPath = async (serverUuid: string, requestedPath: strin
   }
   return { baseDir, targetPath: safePath };
 };
+/** @deprecated Server file operations must be delegated to the agent. Do not run archive commands on the backend. */
 export const validateArchiveEntries = async (archivePath: string, isZip: boolean) => {
+  console.warn("[DEPRECATED] validateArchiveEntries called on backend. Server file operations must be delegated to the agent.");
   const { stdout } = isZip
     ? await execFileAsync("unzip", ["-Z", "-1", archivePath], { maxBuffer: maxBufferBytes })
     : await execFileAsync("tar", ["-tzf", archivePath], { maxBuffer: maxBufferBytes });

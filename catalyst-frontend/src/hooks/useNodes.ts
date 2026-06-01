@@ -14,16 +14,7 @@ export function useNodes() {
 export function useAccessibleNodes() {
   return useQuery({
     queryKey: qk.accessibleNodes(),
-    queryFn: async () => {
-      const response = await fetch('/api/nodes/accessible', {
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const data = await response.json();
-      return {
-        nodes: data.data || [],
-        hasWildcard: data.hasWildcard || false,
-      };
-    },
+    queryFn: nodesApi.getAccessibleNodes,
     staleTime: 5 * 60 * 1000,
   });
 }

@@ -30,7 +30,7 @@ import { adminEventsRoutes } from "./routes/admin-events";
 import { metricsStreamRoutes } from "./routes/metrics-stream";
 import { backupRoutes } from "./routes/backups";
 import { RbacMiddleware } from "./middleware/rbac";
-import { startSFTPServer } from "./sftp-server";
+
 import { adminRoutes } from "./routes/admin";
 import { roleRoutes } from "./routes/roles";
 import { taskRoutes } from "./routes/tasks";
@@ -1626,7 +1626,7 @@ async function bootstrap() {
 		}, retentionJitter());
 
 		setTimeout(() => {
-			backupRetentionInterval = startBackupRetention(prisma, logger);
+			backupRetentionInterval = startBackupRetention(prisma, logger, wsGateway);
 			logger.info("Backup retention job scheduled");
 		}, retentionJitter());
 
