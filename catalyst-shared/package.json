@@ -1,6 +1,6 @@
 {
 	"name": "catalyst-shared",
-	"version": "1.15.1",
+	"version": "1.15.2",
 	"private": true,
 	"type": "module",
 	"main": "./types.ts",
