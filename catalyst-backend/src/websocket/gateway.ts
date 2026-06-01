@@ -337,6 +337,43 @@ export class WebSocketGateway {
             metadata: { nodeId },
           }).catch(() => {});
         });
+
+        // Revert stuck backup/restore states for servers on this node
+        this.prisma.server.findMany({
+          where: {
+            nodeId,
+            status: { in: [ServerState.CREATING_BACKUP, ServerState.RESTORING] },
+          },
+          select: { id: true, status: true },
+        }).then(async (stuckServers) => {
+          for (const server of stuckServers) {
+            await this.prisma.server.update({
+              where: { id: server.id },
+              data: { status: ServerState.STOPPED },
+            });
+            await this.prisma.serverLog.create({
+              data: {
+                serverId: server.id,
+                stream: "system",
+                data: `[Node Disconnect] Node ${nodeId} went offline while server was in ${server.status}. Transitioned to STOPPED.`,
+              },
+            });
+            await this.routeToClients(server.id, {
+              type: "server_state_update",
+              serverId: server.id,
+              state: ServerState.STOPPED,
+              reason: `Node ${nodeId} disconnected during ${server.status}`,
+              timestamp: Date.now(),
+            });
+            this.logger.info(
+              { serverId: server.id, nodeId, fromStatus: server.status },
+              "Reverted stuck state to STOPPED on node disconnect"
+            );
+          }
+        }).catch(err => {
+          this.logger.error({ err, nodeId }, "Failed to revert stuck states on node disconnect");
+        });
+
         this.pushToAdminSubscribers('node_updated', {
           type: 'node_updated',
           nodeId,
@@ -1719,11 +1756,20 @@ export class WebSocketGateway {
             ? message.checksum
             : backupRecord.checksum;
 
+        const resolvedEncrypted =
+          typeof message.encrypted === "boolean"
+            ? message.encrypted
+            : (backupRecord.metadata as any)?.encrypted ?? false;
+
         const updated = await this.prisma.backup.update({
           where: { id: backupRecord.id },
           data: {
             sizeMb: resolvedSizeMb,
             checksum: resolvedChecksum,
+            metadata: {
+              ...(backupRecord.metadata as any),
+              encrypted: resolvedEncrypted,
+            },
           },
         });
         this.logger.info(
@@ -1775,6 +1821,13 @@ export class WebSocketGateway {
                 },
               },
             });
+            // Clean up agent-local copy so the failed upload doesn't leak disk
+            this.sendToAgent(server.nodeId, {
+              type: "delete_backup",
+              serverId: server.id,
+              serverUuid: server.uuid,
+              backupPath: agentPath,
+            }).catch(() => {});
           }
         } else if (mode === "sftp") {
           try {
@@ -1814,6 +1867,13 @@ export class WebSocketGateway {
                 },
               },
             });
+            // Clean up agent-local copy so the failed upload doesn't leak disk
+            this.sendToAgent(server.nodeId, {
+              type: "delete_backup",
+              serverId: server.id,
+              serverUuid: server.uuid,
+              backupPath: agentPath,
+            }).catch(() => {});
           }
         } else if (mode === "stream") {
           try {
@@ -1863,8 +1923,12 @@ export class WebSocketGateway {
                   uuid: server.uuid,
                   nodeId: server.nodeId,
                   node: { isOnline: server.node?.isOnline ?? false },
+                  backupS3Config: (server as any).backupS3Config,
+                  backupSftpConfig: (server as any).backupSftpConfig,
                 });
-                await this.prisma.backup.delete({ where: { id: backup.id } });
+                // Use deleteMany to avoid P2025 (RecordNotFound) when periodic
+                // retention already deleted this backup between our findMany and here.
+                await this.prisma.backup.deleteMany({ where: { id: backup.id } });
               } catch (error) {
                 this.logger.warn({ err: error, backupId: backup.id }, "Failed to enforce retention");
               }
@@ -1878,6 +1942,15 @@ export class WebSocketGateway {
           where: { id: message.serverId, status: ServerState.RESTORING },
           data: { status: ServerState.STOPPED },
         });
+
+        // Update backup record with restore timestamp only after agent confirms success
+        if (message.backupId) {
+          await this.prisma.backup.update({
+            where: { id: message.backupId },
+            data: { restoredAt: new Date() },
+          }).catch(() => {}); // Best effort — don't fail the SSE event
+        }
+
         await this.routeToClients(message.serverId, message);
       } else if (message.type === "backup_delete_complete") {
         await this.routeToClients(message.serverId, message);
@@ -1910,6 +1983,45 @@ export class WebSocketGateway {
           { nodeId, level, component, message: errorMessage.slice(0, 200) },
           "Agent error reported"
         );
+
+        // Revert stuck backup/restore states on agent error
+        const errorServerId = metadata?.serverId;
+        if (errorServerId && typeof errorServerId === "string") {
+          const isBackupError =
+            component.includes("backup") ||
+            (typeof message.backupId === "string" && message.backupId) ||
+            (typeof message.backupPath === "string" && message.backupPath);
+          if (isBackupError) {
+            const server = await this.prisma.server.findUnique({
+              where: { id: errorServerId },
+              select: { id: true, status: true },
+            });
+            if (server && (server.status === ServerState.CREATING_BACKUP || server.status === ServerState.RESTORING)) {
+              await this.prisma.server.update({
+                where: { id: server.id },
+                data: { status: ServerState.ERROR },
+              });
+              await this.prisma.serverLog.create({
+                data: {
+                  serverId: server.id,
+                  stream: "system",
+                  data: `[Agent Error] Backup/restore failed: ${errorMessage}. Transitioned from ${server.status} to ERROR.`,
+                },
+              });
+              await this.routeToClients(server.id, {
+                type: "server_state_update",
+                serverId: server.id,
+                state: ServerState.ERROR,
+                reason: `Agent error during ${server.status}: ${errorMessage.slice(0, 200)}`,
+                timestamp: Date.now(),
+              });
+              this.logger.info(
+                { serverId: server.id, fromStatus: server.status },
+                "Reverted stuck state to ERROR after agent error"
+              );
+            }
+          }
+        }
       } else if (message.type === "discovered_servers") {
         if (!message.nodeId || message.nodeId !== nodeId) {
           this.logger.warn({ nodeId, messageNodeId: message.nodeId }, "discovered_servers node mismatch");

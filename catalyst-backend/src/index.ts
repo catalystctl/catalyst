@@ -62,7 +62,7 @@ import {
 } from "./services/sftp-token-manager";
 import { startAuditRetention } from "./services/audit-retention";
 import { startStatRetention } from "./services/stat-retention";
-import { startBackupRetention } from "./services/backup-retention";
+import { startBackupRetention, startStuckBackupStateWatchdog } from "./services/backup-retention";
 import { startLogRetention } from "./services/log-retention";
 import { startMetricsRetention } from "./services/metrics-retention";
 import { startAuthRetention } from "./services/auth-retention";
@@ -154,6 +154,7 @@ const pluginLoader = new PluginLoader(
 let auditRetentionInterval: ReturnType<typeof setInterval> | null = null;
 let statRetentionInterval: ReturnType<typeof setInterval> | null = null;
 let backupRetentionInterval: ReturnType<typeof setInterval> | null = null;
+let stuckBackupStateInterval: ReturnType<typeof setInterval> | null = null;
 let logRetentionInterval: ReturnType<typeof setInterval> | null = null;
 let metricsRetentionInterval: ReturnType<typeof setInterval> | null = null;
 let authRetentionInterval: ReturnType<typeof setInterval> | null = null;
@@ -1631,6 +1632,11 @@ async function bootstrap() {
 		}, retentionJitter());
 
 		setTimeout(() => {
+			stuckBackupStateInterval = startStuckBackupStateWatchdog(prisma, logger, wsGateway);
+			logger.info("Stuck backup state watchdog scheduled");
+		}, retentionJitter());
+
+		setTimeout(() => {
 			logRetentionInterval = startLogRetention(prisma, logger);
 			logger.info("Log retention job scheduled");
 		}, retentionJitter());
@@ -1744,6 +1750,7 @@ async function shutdown(signal: string) {
 	if (auditRetentionInterval) clearInterval(auditRetentionInterval);
 	if (statRetentionInterval) clearInterval(statRetentionInterval);
 	if (backupRetentionInterval) clearInterval(backupRetentionInterval);
+	if (stuckBackupStateInterval) clearInterval(stuckBackupStateInterval);
 	if (logRetentionInterval) clearInterval(logRetentionInterval);
 	if (metricsRetentionInterval) clearInterval(metricsRetentionInterval);
 	if (authRetentionInterval) clearInterval(authRetentionInterval);

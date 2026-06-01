@@ -69,7 +69,7 @@ function BackupSection({
  const { data, isLoading, isError } = useBackups(serverId, { page, limit: 10 });
  const progressKeyPrefix = useMemo(() => `server:${serverId}:backup:`, [serverId]);
  const backupAllocationMb = server?.backupAllocationMb ?? 0;
- const backupBlocked = backupAllocationMb <= 0 && storageMode === 'local';
+ const backupBlocked = backupAllocationMb <= 0 && (storageMode === 'local' || storageMode === 'stream');
  const localDisabled = backupAllocationMb <= 0;
  const canWrite =
  user?.permissions?.includes('*') ||
@@ -157,7 +157,7 @@ function BackupSection({
  />
  {backupAllocationMb <= 0 ? (
  <div className="rounded-md border border-warning/20 bg-warning/5 px-3 py-2 text-xs text-warning">
- Provider backup allocation is not available for this server. Configure your own S3 or SFTP
+ Provider backup allocation is not available for this server. Local and Stream storage modes require an allocation. Configure your own S3 or SFTP
  storage to enable backups.
  </div>
  ) : null}
@@ -178,7 +178,7 @@ function BackupSection({
  {!localDisabled ? <option value="local">Local</option> : null}
  <option value="s3">S3</option>
  <option value="sftp">SFTP</option>
- {!localDisabled ? <option value="stream">Stream</option> : null}
+ {!localDisabled ? <option value="stream">Stream (backend-local)</option> : null}
  </select>
  </div>
  <div>

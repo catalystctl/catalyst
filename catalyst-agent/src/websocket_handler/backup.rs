@@ -116,27 +116,6 @@ impl WebSocketHandler {
             )));
         }
 
-        let metadata = tokio::fs::metadata(&backup_path)
-            .await
-            .map_err(|e| AgentError::IoError(format!("Failed to read backup metadata: {}", e)))?;
-        let _size_mb = metadata.len() as f64 / (1024.0 * 1024.0);
-
-        let mut file = tokio::fs::File::open(&backup_path).await?;
-        let mut hasher = Sha256::new();
-        let mut buffer = [0u8; 8192];
-        loop {
-            let read = file.read(&mut buffer).await?;
-            if read == 0 {
-                break;
-            }
-            hasher.update(&buffer[..read]);
-        }
-        let checksum = hasher
-            .finalize()
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<String>();
-
         // Optionally encrypt the backup if an encryption key is provided
         let encrypted = if let Some(enc_key_b64) = msg.get("encryptionKey").and_then(|v| v.as_str())
         {
@@ -173,7 +152,23 @@ impl WebSocketHandler {
             false
         };
 
-        // Re-read metadata after possible encryption
+        // Compute checksum on the FINAL on-disk file (after encryption if applicable)
+        let mut file = tokio::fs::File::open(&backup_path).await?;
+        let mut hasher = Sha256::new();
+        let mut buffer = [0u8; 8192];
+        loop {
+            let read = file.read(&mut buffer).await?;
+            if read == 0 {
+                break;
+            }
+            hasher.update(&buffer[..read]);
+        }
+        let checksum = hasher
+            .finalize()
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>();
+
         let final_metadata = tokio::fs::metadata(&backup_path).await?;
         let final_size_mb = final_metadata.len() as f64 / (1024.0 * 1024.0);
 
@@ -235,20 +230,6 @@ impl WebSocketHandler {
             )));
         }
 
-        tokio::fs::create_dir_all(&server_dir).await?;
-
-        // Ensure restored data is owned by container user
-        if let Err(e) = chown_to_container_user(&server_dir).await {
-            warn!("Failed to chown restored server directory: {}", e);
-        }
-
-        info!(
-            "Restoring backup {} for server {} into {}",
-            backup_file.display(),
-            server_id,
-            server_dir.display()
-        );
-
         // Determine the actual file to extract from (may be decrypted to a temp file)
         let actual_backup_file;
         let cleanup_temp;
@@ -276,19 +257,45 @@ impl WebSocketHandler {
             cleanup_temp = None;
         }
 
+        // Decompression bomb protection: reject oversized backup files
+        const MAX_LOCAL_BACKUP_BYTES: u64 = 10 * 1024 * 1024 * 1024; // 10 GB
+        let backup_metadata = tokio::fs::metadata(&actual_backup_file).await
+            .map_err(|e| AgentError::IoError(format!("Failed to read backup metadata: {}", e)))?;
+        if backup_metadata.len() > MAX_LOCAL_BACKUP_BYTES {
+            if let Some(ref tmp) = cleanup_temp {
+                let _ = tokio::fs::remove_file(tmp).await;
+            }
+            return Err(AgentError::InvalidRequest(format!(
+                "Backup file too large ({} bytes, max {} bytes)",
+                backup_metadata.len(), MAX_LOCAL_BACKUP_BYTES
+            )));
+        }
+
+        // Extract to a temporary directory first so symlink validation happens
+        // BEFORE any data touches the live server directory.
+        let tmp_dir = server_dir.with_extension("tmp_restore");
+        tokio::fs::create_dir_all(&tmp_dir).await?;
+
+        info!(
+            "Restoring backup {} for server {} into temp dir {}",
+            backup_file.display(),
+            server_id,
+            tmp_dir.display()
+        );
+
         let restore_result = tokio::process::Command::new("tar")
             .arg("-xzf")
             .arg(&actual_backup_file)
             .arg("-C")
-            .arg(&server_dir)
+            .arg(&tmp_dir)
             .output()
             .await
             .map_err(|e| AgentError::IoError(format!("Failed to run tar: {}", e)))?;
 
         if !restore_result.status.success() {
             let stderr = String::from_utf8_lossy(&restore_result.stderr);
-            // Clean up partial extraction on failure
-            let _ = tokio::fs::remove_dir_all(&server_dir).await;
+            // Clean up temp extraction dir on failure (server_dir is untouched)
+            let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
             // Clean up temp decrypted file
             if let Some(ref tmp) = cleanup_temp {
                 let _ = tokio::fs::remove_file(tmp).await;
@@ -307,29 +314,51 @@ impl WebSocketHandler {
         // Security: validate that no symlinks in the restored archive escape the
         // server directory.  This prevents a malicious backup from planting symlinks
         // that point to host paths like /etc/shadow or /var/lib/catalyst.
-        let canonical_base = std::fs::canonicalize(&server_dir).map_err(|e| {
-            AgentError::FileSystemError(format!("Cannot resolve server dir: {}", e))
-        })?;
+        let canonical_tmp = tokio::fs::canonicalize(&tmp_dir)
+            .await
+            .map_err(|e| AgentError::FileSystemError(format!("Cannot resolve temp dir: {}", e)))?;
         let mut dangerous_symlinks = Vec::new();
-        self.check_restore_symlinks(&server_dir, &canonical_base, &mut dangerous_symlinks)
+        self.check_restore_symlinks(&tmp_dir, &canonical_tmp, &mut dangerous_symlinks)
             .await?;
         if !dangerous_symlinks.is_empty() {
             for symlink in &dangerous_symlinks {
                 warn!("Dangerous symlink in restored backup: {}", symlink);
             }
-            let _ = tokio::fs::remove_dir_all(&server_dir).await;
+            let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
             return Err(AgentError::SecurityViolation(format!(
                 "Backup contains {} symlink(s) that escape the server directory. \
-                 Restore aborted and directory cleaned up for security.",
+                 Restore aborted and temp directory cleaned up for security.",
                 dangerous_symlinks.len()
             )));
         }
 
-        let event = json!({
-            "type": "backup_restore_complete",
-            "serverId": server_id,
-            "backupPath": backup_path,
-        });
+        // Validation passed — atomically replace server_dir with restored data.
+        // server_dir may not exist yet, so we ignore remove_dir_all errors.
+        let _ = tokio::fs::remove_dir_all(&server_dir).await;
+        tokio::fs::rename(&tmp_dir, &server_dir).await.map_err(|e| {
+            AgentError::FileSystemError(format!("Failed to move restored directory into place: {}", e))
+        })?;
+
+        // Ensure restored data is owned by container user
+        if let Err(e) = chown_to_container_user(&server_dir).await {
+            warn!("Failed to chown restored server directory: {}", e);
+        }
+
+        let backup_id = msg["backupId"].as_str();
+        let event = if let Some(id) = backup_id {
+            json!({
+                "type": "backup_restore_complete",
+                "serverId": server_id,
+                "backupPath": backup_path,
+                "backupId": id,
+            })
+        } else {
+            json!({
+                "type": "backup_restore_complete",
+                "serverId": server_id,
+                "backupPath": backup_path,
+            })
+        };
 
         let mut w = write.lock().await;
         w.send(Message::Text(event.to_string().into()))
@@ -672,36 +701,61 @@ impl WebSocketHandler {
             .decode(data)
             .map_err(|_| AgentError::InvalidRequest("Invalid chunk data".to_string()))?;
 
-        let mut session = {
+        // Check size limit and write the chunk in-place using get_mut.
+        // This avoids the remove/insert race where a concurrent chunk finds
+        // the session temporarily missing from the map.
+        let chunk_len = chunk.len() as u64;
+        enum ChunkError {
+            TooLarge(String),
+            WriteFailed(String),
+            UnknownRequest,
+        }
+        let write_result: Result<(), ChunkError> = {
             let mut uploads = self.active_uploads.write().await;
-            match uploads.remove(request_id) {
-                Some(s) => s,
-                None => {
-                    let event = json!({
-                        "type": "backup_upload_chunk_response",
-                        "requestId": request_id,
-                        "success": false,
-                        "error": "Unknown upload request",
-                    });
-                    let mut w = write.lock().await;
-                    w.send(Message::Text(event.to_string().into()))
-                        .await
-                        .map_err(|e| AgentError::NetworkError(e.to_string()))?;
-                    return Ok(());
+            match uploads.get_mut(request_id) {
+                Some(session) => {
+                    let next_total = session.bytes_written.saturating_add(chunk_len);
+                    if next_total > MAX_BACKUP_UPLOAD_BYTES {
+                        Err(ChunkError::TooLarge(format!(
+                            "Upload too large (max {} bytes)",
+                            MAX_BACKUP_UPLOAD_BYTES
+                        )))
+                    } else if let Err(e) = session.file.write_all(&chunk).await {
+                        Err(ChunkError::WriteFailed(format!("Write failed: {}", e)))
+                    } else {
+                        session.bytes_written = next_total;
+                        session.last_activity = tokio::time::Instant::now();
+                        Ok(())
+                    }
                 }
+                None => Err(ChunkError::UnknownRequest),
             }
         };
 
-        let next_total = session.bytes_written.saturating_add(chunk.len() as u64);
-        if next_total > MAX_BACKUP_UPLOAD_BYTES {
-            let path = session.path.clone();
-            drop(session.file);
-            let _ = tokio::fs::remove_file(&path).await;
+        // On fatal errors, remove the session and clean up the file on disk.
+        if let Err(ref err) = write_result {
+            let path_to_clean = match err {
+                ChunkError::TooLarge(_) | ChunkError::WriteFailed(_) => {
+                    let mut uploads = self.active_uploads.write().await;
+                    uploads.remove(request_id).map(|s| s.path)
+                }
+                ChunkError::UnknownRequest => None,
+            };
+            if let Some(path) = path_to_clean {
+                let _ = tokio::fs::remove_file(&path).await;
+            }
+        }
+
+        if let Err(err) = write_result {
+            let error_msg = match &err {
+                ChunkError::TooLarge(msg) | ChunkError::WriteFailed(msg) => msg.as_str(),
+                ChunkError::UnknownRequest => "Unknown upload request",
+            };
             let event = json!({
                 "type": "backup_upload_chunk_response",
                 "requestId": request_id,
                 "success": false,
-                "error": format!("Upload too large (max {} bytes)", MAX_BACKUP_UPLOAD_BYTES),
+                "error": error_msg,
             });
             let mut w = write.lock().await;
             w.send(Message::Text(event.to_string().into()))
@@ -709,32 +763,6 @@ impl WebSocketHandler {
                 .map_err(|e| AgentError::NetworkError(e.to_string()))?;
             return Ok(());
         }
-
-        if let Err(e) = session.file.write_all(&chunk).await {
-            let path = session.path.clone();
-            drop(session.file);
-            let _ = tokio::fs::remove_file(&path).await;
-            let event = json!({
-                "type": "backup_upload_chunk_response",
-                "requestId": request_id,
-                "success": false,
-                "error": format!("Write failed: {}", e),
-            });
-            let mut w = write.lock().await;
-            w.send(Message::Text(event.to_string().into()))
-                .await
-                .map_err(|e| AgentError::NetworkError(e.to_string()))?;
-            return Ok(());
-        }
-
-        session.bytes_written = next_total;
-        session.last_activity = tokio::time::Instant::now();
-
-        // Reinsert the session now that the write has completed.
-        self.active_uploads
-            .write()
-            .await
-            .insert(request_id.to_string(), session);
 
         let event = json!({
             "type": "backup_upload_chunk_response",
@@ -757,45 +785,51 @@ impl WebSocketHandler {
             return Ok(());
         }
 
-        // Take the session out of the map, write, then put it back.
-        // This avoids holding the write lock across the async I/O.
-        let mut session = {
+        // Check size limit and write the chunk in-place using get_mut.
+        // This avoids the remove/insert race where a concurrent chunk finds
+        // the session temporarily missing from the map.
+        let data_len = data.len() as u64;
+        let write_result: Result<(), AgentError> = {
             let mut uploads = self.active_uploads.write().await;
-            match uploads.remove(request_id) {
-                Some(mut s) => {
-                    let next_total = s.bytes_written.saturating_add(data.len() as u64);
+            match uploads.get_mut(request_id) {
+                Some(session) => {
+                    let next_total = session.bytes_written.saturating_add(data_len);
                     if next_total > MAX_BACKUP_UPLOAD_BYTES {
-                        let path = s.path.clone();
-                        let _ = tokio::fs::remove_file(&path).await;
-                        return Err(AgentError::InvalidRequest(format!(
+                        Err(AgentError::InvalidRequest(format!(
                             "Upload too large (max {} bytes)",
                             MAX_BACKUP_UPLOAD_BYTES
-                        )));
+                        )))
+                    } else if let Err(e) = session.file.write_all(data).await {
+                        Err(AgentError::IoError(format!("Failed to write backup chunk: {}", e)))
+                    } else {
+                        session.bytes_written = next_total;
+                        session.last_activity = tokio::time::Instant::now();
+                        Ok(())
                     }
-                    s.bytes_written = next_total;
-                    s.last_activity = tokio::time::Instant::now();
-                    s
                 }
-                None => {
-                    return Err(AgentError::InvalidRequest(
-                        "Unknown upload request".to_string(),
-                    ));
-                }
+                None => Err(AgentError::InvalidRequest(
+                    "Unknown upload request".to_string(),
+                )),
             }
         };
 
-        session
-            .file
-            .write_all(data)
-            .await
-            .map_err(|e| AgentError::IoError(format!("Failed to write backup chunk: {}", e)))?;
+        // On fatal errors, remove the session and clean up the file on disk.
+        if let Err(ref err) = write_result {
+            let path_to_clean = {
+                let mut uploads = self.active_uploads.write().await;
+                uploads.remove(request_id).map(|s| s.path)
+            };
+            if let Some(path) = path_to_clean {
+                let _ = tokio::fs::remove_file(&path).await;
+            }
+            return Err(match err {
+                AgentError::InvalidRequest(msg) => AgentError::InvalidRequest(msg.clone()),
+                AgentError::IoError(msg) => AgentError::IoError(msg.clone()),
+                other => AgentError::InvalidRequest(other.to_string()),
+            });
+        }
 
-        self.active_uploads
-            .write()
-            .await
-            .insert(request_id.to_string(), session);
-
-        Ok(())
+        write_result
     }
 
     pub(crate) async fn handle_upload_backup_complete(
@@ -811,7 +845,9 @@ impl WebSocketHandler {
             uploads.remove(request_id)
         };
 
+        let bytes_received: u64;
         if let Some(mut s) = session {
+            bytes_received = s.bytes_written;
             if let Err(e) = s.file.flush().await {
                 let path = s.path.clone();
                 drop(s);
@@ -821,6 +857,7 @@ impl WebSocketHandler {
                     "requestId": request_id,
                     "success": false,
                     "error": format!("Flush failed: {}", e),
+                    "bytesReceived": bytes_received,
                 });
                 let mut w = write.lock().await;
                 w.send(Message::Text(event.to_string().into()))
@@ -834,6 +871,7 @@ impl WebSocketHandler {
                 "requestId": request_id,
                 "success": false,
                 "error": "Unknown upload request",
+                "bytesReceived": 0u64,
             });
             let mut w = write.lock().await;
             w.send(Message::Text(event.to_string().into()))
@@ -846,6 +884,7 @@ impl WebSocketHandler {
             "type": "backup_upload_response",
             "requestId": request_id,
             "success": true,
+            "bytesReceived": bytes_received,
         });
         let mut w = write.lock().await;
         w.send(Message::Text(event.to_string().into()))
@@ -1207,6 +1246,8 @@ impl WebSocketHandler {
             }
         });
 
+        let server_dir = self.config.server.data_dir.join(server_uuid);
+
         let status = child
             .wait()
             .await
@@ -1214,13 +1255,13 @@ impl WebSocketHandler {
 
         if !status.success() {
             let stderr_output = stderr_task.await.unwrap_or_default();
+            // Clean up partial extraction on failure, matching non-streaming behaviour
+            let _ = tokio::fs::remove_dir_all(&server_dir).await;
             return Err(AgentError::IoError(format!(
                 "Restore tar failed: {}",
                 stderr_output
             )));
         }
-
-        let server_dir = self.config.server.data_dir.join(server_uuid);
 
         // Security: validate that no symlinks in the restored data escape
         // the server directory. This prevents a malicious backup from planting
@@ -1250,6 +1291,14 @@ impl WebSocketHandler {
                     let _ = tokio::fs::remove_file(link_path).await;
                 }
             }
+            // Inconsistent data remains after removing individual symlinks.
+            // Clean up the entire directory to match non-streaming behaviour.
+            let _ = tokio::fs::remove_dir_all(&server_dir).await;
+            return Err(AgentError::SecurityViolation(format!(
+                "Backup contains {} symlink(s) that escape the server directory. \
+                 Restore aborted and directory cleaned up for security.",
+                dangerous.len()
+            )));
         }
 
         // Clean up byte counter for this restore stream

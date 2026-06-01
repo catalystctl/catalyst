@@ -154,12 +154,14 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         storageMode,
         retentionCount,
         retentionDays,
+        backupAllocationMb,
         s3Config,
         sftpConfig,
       } = request.body as {
         storageMode?: string;
         retentionCount?: number;
         retentionDays?: number;
+        backupAllocationMb?: number;
         s3Config?: {
           bucket?: string | null;
           region?: string | null;
@@ -200,6 +202,13 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "retentionDays must be between 0 and 3650" });
       }
 
+      if (
+        backupAllocationMb !== undefined &&
+        (!Number.isFinite(backupAllocationMb) || backupAllocationMb < 0 || backupAllocationMb > 1048576)
+      ) {
+        return reply.status(400).send({ error: "backupAllocationMb must be between 0 and 1048576" });
+      }
+
       const server = await prisma.server.findUnique({
         where: { id },
       });
@@ -230,6 +239,8 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
             retentionCount !== undefined ? retentionCount : server.backupRetentionCount,
           backupRetentionDays:
             retentionDays !== undefined ? retentionDays : server.backupRetentionDays,
+          backupAllocationMb:
+            backupAllocationMb !== undefined ? backupAllocationMb : server.backupAllocationMb,
           backupS3Config: (encryptedS3Config ?? server.backupS3Config) as any,
           backupSftpConfig: (encryptedSftpConfig ?? server.backupSftpConfig) as any,
         },

@@ -151,6 +151,21 @@ export async function backupRoutes(app: FastifyInstance) {
          });
        }
 
+       // Enforce backup allocation quota for local mode (pre-check)
+       if (allocationMb > 0 && mode === 'local') {
+         const existingBackups = await prisma.backup.findMany({
+           where: { serverId, sizeMb: { gt: 0 } },
+           select: { sizeMb: true },
+         });
+         const totalUsedMb = existingBackups.reduce((sum, b) => sum + b.sizeMb, 0);
+         if (totalUsedMb >= allocationMb) {
+           await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
+           return reply.status(403).send({
+             error: `Backup allocation exceeded (${totalUsedMb.toFixed(1)} MB used of ${allocationMb} MB). Delete existing backups to create a new one.`,
+           });
+         }
+       }
+
        // Generate backup name
        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
        const cleanedName = sanitizeBackupName(name);
@@ -172,6 +187,9 @@ export async function backupRoutes(app: FastifyInstance) {
          return reply.status(500).send({ error: "Missing SFTP storage key" });
        }
 
+      // Resolve optional backup encryption key
+      const encryptionKey = process.env.BACKUP_ENCRYPTION_KEY;
+
       const backupRecord = await prisma.backup.create({
         data: {
           serverId: server.id,
@@ -182,6 +200,7 @@ export async function backupRoutes(app: FastifyInstance) {
           metadata: {
             agentPath,
             storageKey,
+            encrypted: !!encryptionKey,
           },
         },
       });
@@ -201,6 +220,7 @@ export async function backupRoutes(app: FastifyInstance) {
         backupName,
         backupPath: agentPath,
         backupId: backupRecord.id,
+        ...(encryptionKey ? { encryptionKey } : {}),
       });
 
       if (!success) {
@@ -277,6 +297,8 @@ export async function backupRoutes(app: FastifyInstance) {
       const normalizedBackups = await Promise.all(
         backups.map(async (backup) => {
           if (backup.sizeMb > 0) return backup;
+          // Local mode backups live on the agent — skip stat attempt on backend FS
+          if (backup.storageMode === "local") return backup;
           try {
             if (!isAllowedLocalBackupPath(backup.path)) {
               return backup;
@@ -452,6 +474,18 @@ export async function backupRoutes(app: FastifyInstance) {
          }
        }
 
+      // Resolve encryption key for encrypted backups
+      const isEncrypted = (backup.metadata as any)?.encrypted === true;
+      let encryptionKey: string | undefined;
+      if (isEncrypted) {
+        const rawKey = process.env.BACKUP_ENCRYPTION_KEY;
+        if (!rawKey) {
+          await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
+          return reply.status(400).send({ error: "Backup is encrypted but no encryption key is configured" });
+        }
+        encryptionKey = rawKey;
+      }
+
       // Send restore request to agent
       const success = await gateway.sendToAgent(server.nodeId, {
         type: "restore_backup",
@@ -460,6 +494,7 @@ export async function backupRoutes(app: FastifyInstance) {
         backupPath: restorePath,
         backupId: backup.id,
         serverDir,
+        ...(encryptionKey ? { encryptionKey } : {}),
       });
 
       if (!success) {
@@ -467,11 +502,8 @@ export async function backupRoutes(app: FastifyInstance) {
         return reply.status(503).send({ error: "Failed to send restore request to agent" });
       }
 
-      // Update backup record
-      await prisma.backup.update({
-        where: { id: backupId },
-        data: { restoredAt: new Date() },
-      });
+      // Note: restoredAt is updated in the gateway's backup_restore_complete handler,
+      // not here, so it only gets set after the agent actually finishes restoring.
 
       reply.send(serialize({
         success: true,
@@ -619,101 +651,103 @@ export async function backupRoutes(app: FastifyInstance) {
         }
       }
 
-      // Check if backup file exists locally; otherwise request from agent.
-       try {
-         if (!isAllowedLocalBackupPath(backup.path)) {
-           throw new Error("Invalid backup path");
-         }
-         await fs.access(backup.path);
-         const stats = await fs.stat(backup.path);
-         const stream = createReadStream(backup.path);
-
-        reply.header("Content-Type", "application/gzip");
-        reply.header("Content-Length", stats.size.toString());
-        reply.header(
-          "Content-Disposition",
-          `attachment; filename="${backup.name}.tar.gz"`
-        );
-
-        return reply.send(stream);
-      } catch {
-        const server = await prisma.server.findUnique({
-          where: { id: serverId },
-          include: { node: true },
-        });
-
-        if (!server || !server.node.isOnline) {
-          return reply.status(404).send({ error: "Backup file not found on disk" });
-        }
-
-         const gateway = app.wsGateway;
-         if (!gateway) {
-           return reply.status(500).send({ error: "Gateway not available" });
-         }
-         const stream = new PassThrough();
-        let bytesWritten = 0;
-        const finalize = (error?: Error) => {
-          if (error) {
-            request.log.error({ err: error, serverId, backupId }, "Backup download failed");
-            captureSystemError({
-              level: 'error',
-              component: 'BackupService',
-              message: `Backup download failed: ${backupId}`,
-              stack: error.stack,
-              metadata: { serverId, backupId },
-            }).catch(() => {});
-          }
-          if (!reply.raw.writableEnded) {
-            stream.end();
-          }
-        };
-        request.raw.on("close", () => finalize());
-
-        reply.header("Content-Type", "application/gzip");
-        reply.header(
-          "Content-Disposition",
-          `attachment; filename="${backup.name}.tar.gz"`
-        );
-        reply.send(stream);
-
+      // For local mode backups, the file lives on the agent — skip the
+      // local filesystem check and stream directly from the agent.
+      if (backup.storageMode !== "local") {
+        // stream mode: check if the file exists on the backend filesystem
         try {
-          const agentPath =
-            (backup.metadata as { agentPath?: string })?.agentPath || backup.path;
-          const response = await gateway.requestFromAgent(server.nodeId, {
-            type: "download_backup_start",
+          if (!isAllowedLocalBackupPath(backup.path)) {
+            throw new Error("Invalid backup path");
+          }
+          await fs.access(backup.path);
+          const stats = await fs.stat(backup.path);
+          const stream = createReadStream(backup.path);
+
+          reply.header("Content-Type", "application/gzip");
+          reply.header("Content-Length", stats.size.toString());
+          reply.header(
+            "Content-Disposition",
+            `attachment; filename="${backup.name}.tar.gz"`
+          );
+
+          return reply.send(stream);
+        } catch {
+          // fall through to agent streaming below
+        }
+      }
+
+      // Stream from agent (used for local mode and when backend file is missing)
+      if (!server || !server.node.isOnline) {
+        return reply.status(404).send({ error: "Backup file not found on disk" });
+      }
+
+      const gateway = app.wsGateway;
+      if (!gateway) {
+        return reply.status(500).send({ error: "Gateway not available" });
+      }
+      const stream = new PassThrough();
+      let bytesWritten = 0;
+      const finalize = (error?: Error) => {
+        if (error) {
+          request.log.error({ err: error, serverId, backupId }, "Backup download failed");
+          captureSystemError({
+            level: 'error',
+            component: 'BackupService',
+            message: `Backup download failed: ${backupId}`,
+            stack: error.stack,
+            metadata: { serverId, backupId },
+          }).catch(() => {});
+        }
+        if (!reply.raw.writableEnded) {
+          stream.end();
+        }
+      };
+      request.raw.on("close", () => finalize());
+
+      reply.header("Content-Type", "application/gzip");
+      reply.header(
+        "Content-Disposition",
+        `attachment; filename="${backup.name}.tar.gz"`
+      );
+      reply.send(stream);
+
+      try {
+        const agentPath =
+          (backup.metadata as { agentPath?: string })?.agentPath || backup.path;
+        const response = await gateway.requestFromAgent(server.nodeId, {
+          type: "download_backup_start",
+          serverId: server.id,
+          serverUuid: server.uuid,
+          backupPath: agentPath,
+        });
+        const requestId = response?.requestId as string | undefined;
+        if (!requestId) {
+          throw new Error("Missing download requestId");
+        }
+        await gateway.streamBinaryFromAgent(
+          server.nodeId,
+          {
+            type: "download_backup",
             serverId: server.id,
             serverUuid: server.uuid,
             backupPath: agentPath,
-          });
-          const requestId = response?.requestId as string | undefined;
-          if (!requestId) {
-            throw new Error("Missing download requestId");
-          }
-          await gateway.streamBinaryFromAgent(
-            server.nodeId,
-            {
-              type: "download_backup",
-              serverId: server.id,
-              serverUuid: server.uuid,
-              backupPath: agentPath,
-              requestId,
-            },
-            (chunk: Buffer) => {
-              bytesWritten += chunk.length;
-              stream.write(chunk);
-            },
-          );
-          if (bytesWritten === 0) {
-            stream.end();
-            return;
-          }
+            requestId,
+          },
+          (chunk: Buffer) => {
+            bytesWritten += chunk.length;
+            stream.write(chunk);
+          },
+        );
+        if (bytesWritten === 0) {
           stream.end();
           return;
-        } catch (error: any) {
-          finalize(error);
-          if (bytesWritten === 0 && !reply.raw.headersSent) {
-            return reply.status(500).send({ error: error?.message || "Failed to download backup" });
-          }
+        }
+        stream.end();
+        return;
+      } catch (error: any) {
+        finalize(error);
+        if (bytesWritten === 0 && !reply.raw.headersSent) {
+          return reply.status(500).send({ error: error?.message || "Failed to download backup" });
         }
       }
     }

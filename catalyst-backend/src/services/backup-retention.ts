@@ -11,10 +11,13 @@
 import type { PrismaClient } from "@prisma/client";
 import type pino from "pino";
 import type { WebSocketGateway } from "../websocket/gateway";
+import { ServerState } from "../shared-types";
 import { deleteBackupFromStorage } from "./backup-storage";
 import { captureSystemError } from "./error-logger";
 
 const DEFAULT_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const STUCK_BACKUP_STATE_INTERVAL_MS = parseInt(process.env.STUCK_BACKUP_STATE_INTERVAL_MS ?? "", 10) || 120_000;
+const STUCK_BACKUP_STATE_TIMEOUT_MS = parseInt(process.env.STUCK_BACKUP_STATE_TIMEOUT_MS ?? "", 10) || 900_000;
 
 export function startBackupRetention(
   prisma: PrismaClient,
@@ -39,9 +42,18 @@ export function startBackupRetention(
 async function enforceRetention(prisma: PrismaClient, logger: pino.Logger, gateway?: WebSocketGateway) {
   const servers = await prisma.server.findMany({
     where: {
-      OR: [
-        { backupRetentionCount: { gt: 0 } },
-        { backupRetentionDays: { gt: 0 } },
+      AND: [
+        {
+          OR: [
+            { backupRetentionCount: { gt: 0 } },
+            { backupRetentionDays: { gt: 0 } },
+          ],
+        },
+        {
+          // Skip servers currently creating a backup — their in-progress backup
+          // has no size yet and could be incorrectly targeted for deletion.
+          status: { not: ServerState.CREATING_BACKUP },
+        },
       ],
     },
     select: {
@@ -131,19 +143,25 @@ async function enforceRetention(prisma: PrismaClient, logger: pino.Logger, gatew
             backupSftpConfig: (server as any).backupSftpConfig,
           });
         } else {
+          // Gateway unavailable — cannot reliably clean up agent-local copies.
+          // Defer this backup to the next retention cycle.
           logger.warn(
             { backupId: backup.id, serverId: server.id },
-            "Gateway not available — skipping storage cleanup for backup retention",
+            "Gateway not available — deferring backup retention cleanup",
           );
+          continue;
         }
 
-        // Delete from database
-        await prisma.backup.delete({ where: { id: backup.id } });
-        totalDeleted++;
+        // Only delete DB record if storage cleanup succeeded.
+        // Use deleteMany to avoid P2025 (RecordNotFound) when gateway inline
+        // retention already deleted this backup between our findMany and here.
+        const deleted = await prisma.backup.deleteMany({ where: { id: backup.id } });
+        if (deleted.count > 0) totalDeleted++;
       } catch (err: any) {
+        // Storage cleanup failed — keep DB record so we can retry next cycle
         logger.warn(
           { backupId: backup.id, serverId: server.id, err: err.message },
-          "Failed to delete backup during retention cleanup",
+          "Failed to delete backup storage during retention — deferring",
         );
       }
     }
@@ -151,5 +169,96 @@ async function enforceRetention(prisma: PrismaClient, logger: pino.Logger, gatew
 
   if (totalDeleted > 0) {
     logger.info({ totalDeleted, serversProcessed: servers.length }, "Backup retention cleanup complete");
+  }
+}
+
+export function startStuckBackupStateWatchdog(
+  prisma: PrismaClient,
+  logger: pino.Logger,
+  gateway?: WebSocketGateway,
+  intervalMs = STUCK_BACKUP_STATE_INTERVAL_MS,
+): ReturnType<typeof setInterval> {
+  const run = async () => {
+    try {
+      await cleanupStuckBackupStates(prisma, logger, gateway);
+    } catch (err: any) {
+      captureSystemError({ level: 'error', component: 'StuckBackupStateWatchdog', message: 'Stuck backup state cleanup failed', stack: err?.stack }).catch(() => {});
+      logger.error({ err }, "Stuck backup state cleanup failed");
+    }
+  };
+
+  // Run once shortly after start, then on interval
+  setTimeout(run, 10_000).unref();
+  return setInterval(run, intervalMs);
+}
+
+async function cleanupStuckBackupStates(prisma: PrismaClient, logger: pino.Logger, gateway?: WebSocketGateway) {
+  const timeoutMs = STUCK_BACKUP_STATE_TIMEOUT_MS;
+  const cutoff = new Date(Date.now() - timeoutMs);
+
+  const stuckServers = await prisma.server.findMany({
+    where: {
+      OR: [
+        { status: ServerState.CREATING_BACKUP, updatedAt: { lt: cutoff } },
+        { status: ServerState.RESTORING, updatedAt: { lt: cutoff } },
+      ],
+    },
+    select: {
+      id: true,
+      uuid: true,
+      status: true,
+      updatedAt: true,
+    },
+  });
+
+  if (stuckServers.length === 0) return;
+
+  logger.info({ count: stuckServers.length, cutoff }, "Found stuck backup/restore states");
+
+  for (const server of stuckServers) {
+    try {
+      await prisma.server.update({
+        where: { id: server.id },
+        data: { status: ServerState.ERROR },
+      });
+
+      await prisma.serverLog.create({
+        data: {
+          serverId: server.id,
+          stream: "system",
+          data: `[State Watchdog] Server was stuck in ${server.status} state for >${Math.round(timeoutMs / 60000)} minutes. Transitioned to ERROR.`,
+        },
+      });
+
+      if (gateway?.routeToClients) {
+        gateway.routeToClients(server.id, {
+          type: "server_state_update",
+          serverId: server.id,
+          state: ServerState.ERROR,
+          reason: `Stuck in ${server.status} state for >${Math.round(timeoutMs / 60000)} minutes`,
+          timestamp: Date.now(),
+        }).catch(() => {});
+      }
+
+      // Clean up orphaned in-progress backup records
+      if (server.status === ServerState.CREATING_BACKUP) {
+        const orphaned = await prisma.backup.findMany({
+          where: {
+            serverId: server.id,
+            sizeMb: 0,
+            createdAt: { gte: server.updatedAt },
+          },
+          select: { id: true },
+        });
+        for (const backup of orphaned) {
+          await prisma.backup.delete({ where: { id: backup.id } }).catch(() => {});
+        }
+        if (orphaned.length > 0) {
+          logger.info({ serverId: server.id, orphaned: orphaned.length }, "Deleted orphaned in-progress backup records");
+        }
+      }
+    } catch (err: any) {
+      logger.warn({ serverId: server.id, err: err.message }, "Failed to clean up stuck backup state");
+    }
   }
 }

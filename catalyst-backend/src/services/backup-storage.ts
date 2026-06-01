@@ -63,6 +63,23 @@ const ensureS3Config = (): S3Config => {
   return { client: cachedS3Client, bucket };
 };
 
+// Per-server S3 client cache to avoid creating a new S3Client on every call.
+// Each entry is keyed by a hash of the config and includes lastAccess for LRU eviction.
+const perServerS3Clients = new Map<string, S3Config & { lastAccess: number }>();
+const MAX_S3_CLIENT_CACHE = 50;
+
+const evictStaleS3Clients = () => {
+  if (perServerS3Clients.size <= MAX_S3_CLIENT_CACHE) return;
+  const entries = [...perServerS3Clients.entries()].sort(
+    (a, b) => a[1].lastAccess - b[1].lastAccess
+  );
+  const toEvict = entries.slice(0, entries.length - MAX_S3_CLIENT_CACHE);
+  for (const [key, value] of toEvict) {
+    value.client.destroy();
+    perServerS3Clients.delete(key);
+  }
+};
+
 const resolveS3Config = (server?: { backupS3Config?: any }) => {
   const decrypted = decryptBackupConfig(server?.backupS3Config as any);
   const config = decrypted as {
@@ -73,8 +90,22 @@ const resolveS3Config = (server?: { backupS3Config?: any }) => {
     secretAccessKey?: string | null;
     pathStyle?: boolean | null;
   } | null;
-  if (config?.bucket || config?.region || config?.accessKeyId || config?.secretAccessKey || config?.endpoint) {
-    return buildS3Client({
+  if (
+    config?.bucket ||
+    config?.region ||
+    config?.accessKeyId ||
+    config?.secretAccessKey ||
+    config?.endpoint
+  ) {
+    const cacheKey = `${config.bucket ?? ""}:${config.region ?? ""}:${
+      config.accessKeyId ?? ""
+    }:${config.endpoint ?? "default"}:${config.pathStyle ?? ""}`;
+    const cached = perServerS3Clients.get(cacheKey);
+    if (cached) {
+      cached.lastAccess = Date.now();
+      return { client: cached.client, bucket: cached.bucket };
+    }
+    const result = buildS3Client({
       bucket: config.bucket,
       region: config.region,
       endpoint: config.endpoint,
@@ -82,6 +113,9 @@ const resolveS3Config = (server?: { backupS3Config?: any }) => {
       secretAccessKey: config.secretAccessKey,
       pathStyle: config.pathStyle,
     });
+    perServerS3Clients.set(cacheKey, { ...result, lastAccess: Date.now() });
+    evictStaleS3Clients();
+    return result;
   }
   return ensureS3Config();
 };
@@ -237,18 +271,24 @@ export const streamAgentBackupToLocal = async (
     throw new Error("Missing download requestId");
   }
   const writeStream = createWriteStream(destinationPath);
-  await gateway.streamBinaryFromAgent(
-    nodeId,
-    { type: "download_backup", serverId, serverUuid, backupPath: agentPath, requestId },
-    (chunk) => {
-      writeStream.write(chunk);
-    },
-  );
-  writeStream.end();
-  await new Promise<void>((resolve, reject) => {
-    writeStream.on("finish", () => resolve());
-    writeStream.on("error", reject);
-  });
+  try {
+    await gateway.streamBinaryFromAgent(
+      nodeId,
+      { type: "download_backup", serverId, serverUuid, backupPath: agentPath, requestId },
+      (chunk) => {
+        writeStream.write(chunk);
+      },
+    );
+    writeStream.end();
+    await new Promise<void>((resolve, reject) => {
+      writeStream.on("finish", () => resolve());
+      writeStream.on("error", reject);
+    });
+  } catch (err) {
+    writeStream.destroy();
+    try { await fs.unlink(destinationPath); } catch { /* clean up partial file */ }
+    throw err;
+  }
 };
 
 export const streamAgentBackupToS3 = async (
@@ -279,18 +319,26 @@ export const streamAgentBackupToS3 = async (
   });
   const requestId = response?.requestId as string | undefined;
   if (!requestId) {
+    passThrough.destroy();
+    await upload.catch(() => {});
     throw new Error("Missing download requestId");
   }
 
-  await gateway.streamBinaryFromAgent(
-    nodeId,
-    { type: "download_backup", serverId, serverUuid, backupPath: agentPath, requestId },
-    (chunk) => {
-      passThrough.write(chunk);
-    },
-  );
-  passThrough.end();
-  await upload;
+  try {
+    await gateway.streamBinaryFromAgent(
+      nodeId,
+      { type: "download_backup", serverId, serverUuid, backupPath: agentPath, requestId },
+      (chunk) => {
+        passThrough.write(chunk);
+      },
+    );
+    passThrough.end();
+    await upload;
+  } catch (err) {
+    passThrough.destroy(err instanceof Error ? err : new Error(String(err)));
+    await upload.catch(() => {}); // drain the promise to avoid unhandled rejection
+    throw err;
+  }
 };
 
 export const streamAgentBackupToSftp = async (
@@ -357,8 +405,10 @@ export const streamAgentBackupToSftp = async (
       writeStream.on("finish", () => resolve());
       writeStream.on("error", reject);
     });
-  } finally {
+  } catch (err) {
     writeStream.destroy();
+    throw err;
+  } finally {
     sftp.client.end();
   }
 };
@@ -397,6 +447,9 @@ export const openStorageStream = async (
     stream.on("close", () => {
       sftp.client.end();
     });
+    stream.on("error", () => {
+      sftp.client.end();
+    });
     return {
       stream,
       contentLength: undefined,
@@ -422,6 +475,8 @@ export const deleteBackupFromStorage = async (
   } | null,
 ) => {
   const mode = (backup.storageMode || "local") as BackupStorageMode;
+
+  // Step 1: Delete from remote/local storage
   if (mode === "s3") {
     if (!server) throw new Error("Server required for S3 storage operations");
     const { client, bucket } = resolveS3Config(server);
@@ -434,38 +489,45 @@ export const deleteBackupFromStorage = async (
         }),
       );
     }
-    return;
-  }
-
-  if (mode === "sftp") {
+  } else if (mode === "sftp") {
     if (!server) throw new Error("Server required for SFTP storage operations");
     const config = resolveSftpConfig(server);
     const storageKey = backup.metadata?.storageKey as string | undefined;
     if (storageKey) {
       const sftp = await connectSftp(config);
-      await new Promise<void>((resolve) => {
-        sftp.sftp.unlink(storageKey, () => resolve());
-      });
-      sftp.client.end();
+      try {
+        await new Promise<void>((resolve, reject) => {
+          sftp.sftp.unlink(storageKey, (err: any) => {
+            if (err) return reject(err);
+            resolve();
+          });
+        });
+      } finally {
+        sftp.client.end();
+      }
     }
-    return;
+  } else {
+    // Local mode: try backend FS first
+    try {
+      await fs.unlink(backup.path);
+    } catch {
+      // ignore if local path doesn't exist
+    }
   }
 
-  try {
-    await fs.unlink(backup.path);
-    return;
-  } catch {
-    // ignore if local path doesn't exist
-  }
-
+  // Step 2: ALWAYS attempt to delete agent-local copy ( Bugs #3, #4, #7 )
   const agentPath = backup.metadata?.agentPath as string | undefined;
   if (server?.node?.isOnline && agentPath) {
-    await gateway.sendToAgent(server.nodeId, {
-      type: "delete_backup",
-      serverId: server.id,
-      serverUuid: server.uuid,
-      backupPath: agentPath,
-    });
+    try {
+      await gateway.sendToAgent(server.nodeId, {
+        type: "delete_backup",
+        serverId: server.id,
+        serverUuid: server.uuid,
+        backupPath: agentPath,
+      });
+    } catch {
+      // Agent delete is best-effort — don't block the overall operation
+    }
   }
 };
 
@@ -509,7 +571,10 @@ export const uploadStreamToAgent = async (
     while (offset < buf.length) {
       const slice = buf.subarray(offset, offset + BACKUP_CHUNK_SIZE);
       const frame = Buffer.concat([header, slice]);
-      gateway.sendBinaryToAgent(nodeId, frame);
+      const sent = gateway.sendBinaryToAgent(nodeId, frame);
+      if (!sent) {
+        throw new Error("Failed to send binary data to agent — connection may be closed");
+      }
       offset += slice.length;
     }
   }
