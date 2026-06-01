@@ -1,6 +1,6 @@
 {
 	"name": "example-plugin",
-	"version": "1.14.3",
+	"version": "1.15.0",
 	"type": "module",
 	"scripts": {
 		"build": "tsc"
