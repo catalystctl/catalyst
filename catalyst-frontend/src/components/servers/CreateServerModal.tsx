@@ -117,7 +117,7 @@ function CreateServerModal() {
  // Load macvlan interfaces (IP pools) for the selected node
  const [prevMacvlanDeps, setPrevMacvlanDeps] = useState({ nodeId, networkMode });
  if (prevMacvlanDeps.nodeId !== nodeId || prevMacvlanDeps.networkMode !== networkMode) {
- prevMacvlanDeps = { nodeId, networkMode };
+ setPrevMacvlanDeps({ nodeId, networkMode });
  setMacvlanInterface('');
  setNodeIpPools([]);
  }

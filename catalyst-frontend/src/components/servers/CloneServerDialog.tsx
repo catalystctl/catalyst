@@ -97,7 +97,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
     prevAllocDeps.networkMode !== networkMode ||
     prevAllocDeps.open !== open
   ) {
-    prevAllocDeps = { nodeId, networkMode, open };
+    setPrevAllocDeps({ nodeId, networkMode, open });
     setAllocationId('');
     if (!nodeId || networkMode !== 'host') {
       setAvailableAllocations([]);

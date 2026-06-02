@@ -240,7 +240,7 @@ export default function ServerConfigurationTab({
  prevConfigDeps.serverId !== serverId ||
  prevConfigDeps.configPathsKey !== configPathsKey
  ) {
- prevConfigDeps = { serverId, configPathsKey };
+ setPrevConfigDeps({ serverId, configPathsKey });
  if (!serverId || !server?.template || combinedConfigPaths.length === 0) {
  setConfigFiles([]);
  setOpenConfigIndex(-1);

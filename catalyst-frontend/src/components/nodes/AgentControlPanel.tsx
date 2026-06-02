@@ -347,7 +347,7 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
   // Load initial logs once
   const [prevInitialLogs, setPrevInitialLogs] = useState(initialLogs);
   if (initialLogs && initialLogs.length > 0 && logs.length === 0 && initialLogs !== prevInitialLogs) {
-    prevInitialLogs = initialLogs;
+    setPrevInitialLogs(initialLogs);
     setLogs(initialLogs.map((l) => ({
       timestamp: l.timestamp,
       level: l.level,
@@ -708,7 +708,7 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
 
   const [prevConfig, setPrevConfig] = useState(config);
   if (config !== prevConfig) {
-    prevConfig = config;
+    setPrevConfig(config);
     if (config && editContent === null) {
       setEditContent(config.content);
     }
