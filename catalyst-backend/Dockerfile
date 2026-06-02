@@ -58,7 +58,8 @@ RUN PRISMA_CLIENT_DIR=$(find /app/node_modules -path '*/@prisma/client/package.j
 
 # Prune dev dependencies in-place (removes typescript, eslint, vitest, prisma CLI, etc.)
 # This drops node_modules from ~424 MB to ~200 MB
-RUN pnpm install --prod --frozen-lockfile
+# CI=true bypasses pnpm's interactive "remove modules dir" confirmation prompt.
+RUN CI=true pnpm install --prod --frozen-lockfile
 
 # Materialise the Prisma client under catalyst-backend/node_modules so the
 # runtime stage's `COPY --from=builder /app/catalyst-backend/node_modules`
