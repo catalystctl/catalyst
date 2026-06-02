@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
  ArrowLeftRight,
@@ -193,12 +193,20 @@ export default function ServerPluginManagerTab({
  const pluginManagerProviders = pluginManagerConfig?.providers ?? [];
  const [pluginProvider, setPluginProvider] = useState('modrinth');
 
- useEffect(() => {
- if (!pluginManagerProviders.length) return;
- if (!pluginManagerProviders.includes(pluginProvider)) {
+ // ── Sync (set state during render, React 19 pattern) ──
+ // Track each input via useState; when an input changes between renders,
+ // update the dependent state and advance the tracker during render. This
+ // replaces the setState-in-useEffect anti-pattern flagged by react-hooks.
+ const [prevPluginProviders, setPrevPluginProviders] = useState(pluginManagerProviders);
+ if (pluginManagerProviders !== prevPluginProviders) {
+ setPrevPluginProviders(pluginManagerProviders);
+ if (
+ pluginManagerProviders.length > 0 &&
+ !pluginManagerProviders.includes(pluginProvider)
+ ) {
  setPluginProvider(pluginManagerProviders[0]);
  }
- }, [pluginManagerProviders, pluginProvider]);
+ }
 
  // ── Browse state ──
  const [pluginQuery, setPluginQuery] = useState('');
@@ -230,28 +238,36 @@ export default function ServerPluginManagerTab({
  const [isUpdatingPlugins, setIsUpdatingPlugins] = useState(false);
 
  // ── Sync game version ──
- useEffect(() => {
+ const [prevPluginServerId, setPrevPluginServerId] = useState(serverId);
+ if (serverId !== prevPluginServerId) {
+ setPrevPluginServerId(serverId);
  setPluginGameVersion('');
- }, [serverId]);
+ }
 
- useEffect(() => {
+ const [prevPluginServerGameVersion, setPrevPluginServerGameVersion] = useState(serverGameVersion);
+ if (serverGameVersion !== prevPluginServerGameVersion) {
+ setPrevPluginServerGameVersion(serverGameVersion);
  const detectedVersion = serverGameVersion?.trim();
- if (!detectedVersion) return;
- setPluginGameVersion((current) =>
- current ? current : detectedVersion,
- );
- }, [serverGameVersion]);
+ if (detectedVersion) {
+ setPluginGameVersion((current) => (current ? current : detectedVersion));
+ }
+ }
 
  // Reset page and selection on filter change
- useEffect(() => {
+ const pluginFilterKey = `${pluginProvider}|${pluginQuery}|${pluginGameVersion}`;
+ const [prevPluginFilterKey, setPrevPluginFilterKey] = useState(pluginFilterKey);
+ if (pluginFilterKey !== prevPluginFilterKey) {
+ setPrevPluginFilterKey(pluginFilterKey);
  setSelectedPlugin(null);
  setSelectedPluginVersion('');
  setSearchPage(1);
- }, [pluginProvider, pluginQuery, pluginGameVersion]);
+ }
 
- useEffect(() => {
+ const [prevSelectedPlugin, setPrevSelectedPlugin] = useState<string | null>(selectedPlugin);
+ if (selectedPlugin !== prevSelectedPlugin) {
+ setPrevSelectedPlugin(selectedPlugin);
  setSelectedPluginVersion('');
- }, [selectedPlugin]);
+ }
 
  // ── Queries ──
  const { data: pluginGameVersionTags } = useQuery({
@@ -412,20 +428,32 @@ export default function ServerPluginManagerTab({
  );
 
  // Auto-select stable version
- useEffect(() => {
- if (!selectedPlugin) return;
- if (!pluginVersionOptions.length) {
- if (selectedPluginVersion) setSelectedPluginVersion('');
- return;
- }
+ const [prevPluginAuto, setPrevPluginAuto] = useState({
+ options: pluginVersionOptions,
+ project: selectedPlugin,
+ version: selectedPluginVersion,
+ });
  if (
+ pluginVersionOptions !== prevPluginAuto.options ||
+ selectedPlugin !== prevPluginAuto.project ||
+ selectedPluginVersion !== prevPluginAuto.version
+ ) {
+ setPrevPluginAuto({
+ options: pluginVersionOptions,
+ project: selectedPlugin,
+ version: selectedPluginVersion,
+ });
+ if (selectedPlugin) {
+ if (pluginVersionOptions.length === 0) {
+ if (selectedPluginVersion) setSelectedPluginVersion('');
+ } else if (
+ !(
  selectedPluginVersion &&
  pluginVersionOptions.some(
  (entry: any) => normalizeVersionId(entry) === selectedPluginVersion,
  )
+ )
  ) {
- return;
- }
  const preferred =
  pluginVersionOptions.find((entry: any) =>
  isStableRelease(entry),
@@ -434,7 +462,9 @@ export default function ServerPluginManagerTab({
  if (preferredId && preferredId !== selectedPluginVersion) {
  setSelectedPluginVersion(preferredId);
  }
- }, [pluginVersionOptions, selectedPlugin, selectedPluginVersion]);
+ }
+ }
+ }
 
  // ── Handlers ──
  const handleSearch = useCallback(() => {

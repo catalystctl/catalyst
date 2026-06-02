@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useNavigate } from 'react-router-dom';
@@ -12,12 +13,13 @@ function RegisterPage() {
  const registerUser = useAuthStore((s) => s.register);
  const isLoading = useAuthStore((s) => s.isLoading);
  const error = useAuthStore((s) => s.error);
+ const resolver = useMemo(() => zodResolver(registerSchema), []);
  const {
  register,
  handleSubmit,
  watch,
  formState: { errors },
- } = useForm<RegisterSchema>({ resolver: zodResolver(registerSchema) });
+ } = useForm<RegisterSchema>({ resolver });
 
  const passwordValue = watch('password', '');
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -37,13 +37,11 @@ export function NodeAssignmentsSelector({
  const [search, setSearch] = useState('');
  const [expirationNodeId, setExpirationNodeId] = useState<string | null>(null);
  const [expirationDate, setExpirationDate] = useState('');
- const [hasWildcard, setHasWildcard] = useState(false);
 
- // Check for wildcard assignment
- useEffect(() => {
- const wildcard = selectedNodes.some(n => n.isWildcard || n.nodeId === null);
- setHasWildcard(wildcard);
- }, [selectedNodes]);
+ // hasWildcard is derived from the current selection. Computing it during
+ // render avoids a setState-in-effect and keeps the UI source-of-truth
+ // consistent with the parent's selectedNodes prop.
+ const hasWildcard = selectedNodes.some(n => n.isWildcard || n.nodeId === null);
 
  // Fetch available nodes
  const { data: nodes = [], isLoading: nodesLoading } = useQuery({
@@ -86,28 +84,29 @@ export function NodeAssignmentsSelector({
  const assignmentsData = userId ? userAssignmentsData : roleAssignmentsData;
  const hasWildcardFromApi = assignmentsData?.hasWildcard || false;
 
- // Update wildcard state when API data changes
- useEffect(() => {
- if (hasWildcardFromApi && !hasWildcard) {
- // Add wildcard to selected nodes if API says it exists but we don't have it
+ // Sync wildcard from API data into the parent's selection. The
+ // setState-in-effect anti-pattern is avoided by performing the
+ // comparison and propagation in the render phase itself: when the
+ // derived API state disagrees with the current selection, we
+ // invoke onSelectionChange during render, which causes React to
+ // restart the render with the new selection. hasWildcard is now
+ // derived from selectedNodes rather than stored.
+ const [prevWildcardFromApi, setPrevWildcardFromApi] = useState<boolean | null>(null);
+ if (hasWildcardFromApi && !hasWildcard && prevWildcardFromApi !== hasWildcardFromApi) {
+ setPrevWildcardFromApi(hasWildcardFromApi);
  const wildcardNode: NodeAssignmentWithExpiration = {
  nodeId: null,
  nodeName: 'All Nodes (*)',
  isWildcard: true,
  source: userId ? 'user' : undefined,
  };
- if (!selectedNodes.some(n => n.isWildcard)) {
  onSelectionChange([wildcardNode]);
+ } else if (!hasWildcardFromApi && hasWildcard && prevWildcardFromApi !== hasWildcardFromApi) {
+ setPrevWildcardFromApi(hasWildcardFromApi);
+ onSelectionChange(selectedNodes.filter(n => !n.isWildcard && n.nodeId !== null));
+ } else if (prevWildcardFromApi !== hasWildcardFromApi) {
+ setPrevWildcardFromApi(hasWildcardFromApi);
  }
- setHasWildcard(true);
- } else if (!hasWildcardFromApi && hasWildcard) {
- // Remove wildcard from selected nodes if API says it doesn't exist
- const newSelection = selectedNodes.filter(n => !n.isWildcard && n.nodeId !== null);
- onSelectionChange(newSelection);
- setHasWildcard(false);
- }
- // eslint-disable-next-line react-hooks/exhaustive-deps
- }, [hasWildcardFromApi]);
 
  // Whether the component is in "create" mode (no target ID yet — selections are local-only)
  const isCreateMode = !userId && !roleId;
@@ -121,7 +120,6 @@ export function NodeAssignmentsSelector({
  // Remove wildcard from local state immediately
  const newSelection = selectedNodes.filter(n => !n.isWildcard && n.nodeId !== null);
  onSelectionChange(newSelection);
- setHasWildcard(false);
  } else {
  // Clear all specific nodes and add wildcard immediately
  const wildcardNode: NodeAssignmentWithExpiration = {
@@ -131,7 +129,6 @@ export function NodeAssignmentsSelector({
  source: userId ? 'user' : undefined,
  };
  onSelectionChange([wildcardNode]);
- setHasWildcard(true);
  }
 
  if (isCreateMode) return; // No API call in create mode
@@ -178,7 +175,6 @@ export function NodeAssignmentsSelector({
  source: userId ? 'user' : undefined,
  };
  onSelectionChange([...selectedNodes, wildcardNode]);
- setHasWildcard(true);
  } else {
  // We tried to add but failed - restore previous selection
  queryClient.invalidateQueries({ queryKey: qk.roleNodes(roleId!) });

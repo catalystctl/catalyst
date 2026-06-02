@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { qk } from '../../lib/queryKeys';
 import { useBackups } from '../../hooks/useBackups';
@@ -85,8 +85,10 @@ function BackupSection({
  user?.permissions?.includes('file.read') ||
  Boolean(server && user?.id && server.ownerId === user.id);
 
- useEffect(() => {
- if (!server) return;
+ const [prevServer, setPrevServer] = useState(server);
+ if (server !== prevServer) {
+ setPrevServer(server);
+ if (server) {
  setStorageMode(server.backupStorageMode ?? 'local');
  setRetentionCount(
  server.backupRetentionCount !== undefined && server.backupRetentionCount !== null
@@ -113,7 +115,8 @@ function BackupSection({
  setSftpPrivateKey(server.backupSftpConfig?.privateKey ?? '');
  setSftpPrivateKeyPassphrase(server.backupSftpConfig?.privateKeyPassphrase ?? '');
  setSftpBasePath(server.backupSftpConfig?.basePath ?? '');
- }, [server?.id, server?.backupStorageMode, server?.backupRetentionCount, server?.backupRetentionDays]);
+ }
+ }
 
  const handleDownload = async (backupId: string, name: string) => {
  try {

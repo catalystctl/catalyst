@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -174,11 +174,13 @@ function OidcProviderSection() {
  Record<string, { clientId: string; clientSecret: string; discoveryUrl: string; source: string }>
  >({});
 
- useEffect(() => {
+ const [prevServerConfigs, setPrevServerConfigs] = useState(serverConfigs);
+ if (serverConfigs !== prevServerConfigs) {
+ setPrevServerConfigs(serverConfigs);
  if (Object.keys(serverConfigs).length > 0) {
  setConfigs(serverConfigs);
  }
- }, [serverConfigs]);
+ }
 
  const updateField = (provider: string, field: string, value: string) => {
  setConfigs((prev) => ({
@@ -468,8 +470,10 @@ function ThemeSettingsPage() {
  };
 
  // ── Initialize form from server ──
- useEffect(() => {
- if (!settings) return;
+ const [prevSettings, setPrevSettings] = useState(settings);
+ if (settings !== prevSettings) {
+ setPrevSettings(settings);
+ if (settings) {
  const savedColors = (settings.metadata as any)?.themeColors as ThemeColors | undefined;
 
  setPanelName(settings.panelName || 'Catalyst');
@@ -485,7 +489,8 @@ function ThemeSettingsPage() {
  setThemeColors(
  savedColors ? { ...DEFAULTS.themeColors, ...savedColors } : { ...DEFAULTS.themeColors },
  );
- }, [settings]);
+ }
+ }
 
  // ── Update a ThemeColor key + live preview ──
  const updateThemeColor = (key: keyof ThemeColors, value: string) => {
@@ -698,7 +703,7 @@ function ThemeSettingsPage() {
  }
 
  // ── Branding panel ──
- const BrandPanel = () => (
+ const renderBrandPanel = () => (
  <div className="space-y-6">
  <PanelSectionHeader
  title="Panel Identity"
@@ -794,7 +799,7 @@ function ThemeSettingsPage() {
  );
 
  // ── Palette panel ──
- const PalettePanel = () => {
+ const renderPalettePanel = () => {
  const hsl = isSeedValid ? hexToHSL(seedColor) : null;
  return (
  <div className="space-y-6">
@@ -1022,7 +1027,7 @@ function ThemeSettingsPage() {
  };
 
  // ── Colors panel ──
- const ColorsPanel = () => (
+ const renderColorsPanel = () => (
  <div className="space-y-8">
  <div>
  <PanelSectionHeader
@@ -1122,7 +1127,7 @@ function ThemeSettingsPage() {
  );
 
  // ── Surfaces panel ──
- const SurfacesPanel = () => (
+ const renderSurfacesPanel = () => (
  <div className="space-y-8">
  <div>
  <PanelSectionHeader
@@ -1185,7 +1190,7 @@ function ThemeSettingsPage() {
  );
 
  // ── Layout panel ──
- const LayoutPanel = () => (
+ const renderLayoutPanel = () => (
  <div className="space-y-6">
  <PanelSectionHeader
  title="Border Radius"
@@ -1235,7 +1240,7 @@ function ThemeSettingsPage() {
  );
 
  // ── Advanced panel ──
- const AdvancedPanel = () => (
+ const renderAdvancedPanel = () => (
  <div className="space-y-8">
  <div>
  <PanelSectionHeader
@@ -1285,7 +1290,7 @@ function ThemeSettingsPage() {
  );
 
  // ── Live Preview Strip ──
- const LivePreviewStrip = () => (
+ const renderLivePreviewStrip = () => (
  <div className="rounded-xl border border-border/30 bg-card p-4">
  <div className="mb-3 flex items-center justify-between">
  <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -1368,12 +1373,12 @@ function ThemeSettingsPage() {
 
  // ─── Render ───
  const activeTabContent = {
- brand: <BrandPanel />,
- palette: <PalettePanel />,
- colors: <ColorsPanel />,
- surfaces: <SurfacesPanel />,
- layout: <LayoutPanel />,
- advanced: <AdvancedPanel />,
+ brand: renderBrandPanel(),
+ palette: renderPalettePanel(),
+ colors: renderColorsPanel(),
+ surfaces: renderSurfacesPanel(),
+ layout: renderLayoutPanel(),
+ advanced: renderAdvancedPanel(),
  };
 
  return (
@@ -1417,7 +1422,7 @@ function ThemeSettingsPage() {
  />
 
  {/* ── Live Preview Strip ── */}
- <LivePreviewStrip />
+ {renderLivePreviewStrip()}
 
  {/* ── Tab Navigation ── */}
  <div className="flex gap-1 rounded-xl border border-border/30 bg-surface-1 p-1">

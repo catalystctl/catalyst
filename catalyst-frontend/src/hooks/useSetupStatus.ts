@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../services/api/client';
-import { reportSystemError } from '../services/api/systemErrors';
 
 interface SetupStatus {
   setupRequired: boolean;
@@ -10,48 +10,50 @@ interface SetupStatus {
 }
 
 export function useSetupStatus(): SetupStatus {
-  const [setupRequired, setSetupRequired] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const recheck = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const data = await apiClient.get<{ setupRequired: boolean }>('/api/setup/status');
-      setSetupRequired(data.setupRequired ?? false);
-    } catch (err: any) {
-      reportSystemError({
-        level: 'error',
-        component: 'useSetupStatus',
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-        metadata: { context: 'checkSetup' },
-      });
-      // If endpoint doesn't exist (old backend), assume setup not needed
-      if (err.response?.status === 404) {
-        setSetupRequired(false);
-      } else {
-        setError(err.message || 'Failed to check setup status');
+  const {
+    data: setupRequired = false,
+    isLoading,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: ['setup', 'status'],
+    queryFn: async () => {
+      try {
+        const data = await apiClient.get<{ setupRequired: boolean }>('/api/setup/status');
+        return data.setupRequired ?? false;
+      } catch (err: any) {
+        // If endpoint doesn't exist (old backend), assume setup not needed
+        if (err.response?.status === 404) {
+          return false;
+        }
+        throw err;
       }
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    },
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
 
-  useEffect(() => {
-    recheck();
-  }, []);
+  const recheck = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
   useEffect(() => {
     const handleSetupComplete = () => {
-      recheck();
+      queryClient.invalidateQueries({ queryKey: ['setup', 'status'] });
     };
     window.addEventListener('catalyst:setup-complete', handleSetupComplete);
     return () => {
       window.removeEventListener('catalyst:setup-complete', handleSetupComplete);
     };
-  }, [recheck]);
+  }, [queryClient]);
+
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : 'Failed to check setup status'
+    : null;
 
   return { setupRequired, isLoading, error, recheck };
 }

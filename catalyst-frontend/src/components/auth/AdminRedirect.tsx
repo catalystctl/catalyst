@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 
 // Map of routes to their required permissions
@@ -20,36 +19,27 @@ const ADMIN_ROUTES: Array<{ path: string; permissions: string[] }> = [
 ];
 
 function AdminRedirect() {
- const navigate = useNavigate();
  const user = useAuthStore((s) => s.user);
  const userPermissions = user?.permissions || [];
 
- useEffect(() => {
- // If user has admin.read or admin.write, go to admin dashboard
- if (userPermissions.includes('*') || userPermissions.includes('admin.write') || userPermissions.includes('admin.read')) {
- navigate('/admin', { replace: true });
- return;
+ // Compute the target route during render — using <Navigate> is the
+ // declarative React Router pattern and avoids the set-state-in-effect
+ // anti-pattern flagged by react-hooks.
+ let target = '/dashboard';
+ if (
+ userPermissions.includes('*') ||
+ userPermissions.includes('admin.write') ||
+ userPermissions.includes('admin.read')
+ ) {
+ target = '/admin';
+ } else {
+ const match = ADMIN_ROUTES.find((route) =>
+ route.permissions.some((perm) => userPermissions.includes(perm)),
+ );
+ if (match) target = match.path;
  }
 
- // Otherwise, find the first accessible admin route
- for (const route of ADMIN_ROUTES) {
- if (userPermissions.includes('*')) {
- navigate(route.path, { replace: true });
- return;
- }
- for (const perm of route.permissions) {
- if (userPermissions.includes(perm)) {
- navigate(route.path, { replace: true });
- return;
- }
- }
- }
-
- // If no admin permissions, go to dashboard
- navigate('/dashboard', { replace: true });
- }, [navigate, userPermissions]);
-
- return null; // This component doesn't render anything
+ return <Navigate to={target} replace />;
 }
 
 export default AdminRedirect;

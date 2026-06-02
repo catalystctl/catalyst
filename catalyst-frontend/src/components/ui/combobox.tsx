@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode, KeyboardEvent } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -72,12 +72,12 @@ function Combobox({ value, onChange, options, placeholder = 'Select...', searchP
  };
 
  // Scroll focused item into view
- const itemRef = (idx: number) => {
- if (idx === focusIdx && listRef.current) {
+ useLayoutEffect(() => {
+ if (listRef.current) {
  const el = listRef.current.children[focusIdx] as HTMLElement | undefined;
  el?.scrollIntoView({ block: 'nearest' });
  }
- };
+ }, [focusIdx]);
 
  return (
  <Popover open={open} onOpenChange={handleOpenChange}>
@@ -123,9 +123,7 @@ function Combobox({ value, onChange, options, placeholder = 'Select...', searchP
  No matches found.
  </div>
  ) : (
- filtered.map((option, idx) => {
- itemRef(idx);
- return (
+ filtered.map((option, idx) => (
  <button
  key={option.value}
  type="button"
@@ -140,9 +138,7 @@ function Combobox({ value, onChange, options, placeholder = 'Select...', searchP
  >
  {option.label}
  </button>
- );
- })
- )}
+ )))}
  </div>
  </div>
  </PopoverContent>

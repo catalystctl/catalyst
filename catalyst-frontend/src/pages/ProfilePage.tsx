@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qk } from '../lib/queryKeys';
 import { Link } from 'react-router-dom';
 import {
@@ -130,7 +130,13 @@ export default function ProfilePage() {
  const [tfaSetup, setTfaSetup] = useState<{ qrCode?: string; secret?: string; otpAuthUrl?: string; backupCodes?: string[] } | null>(null);
 
  const [pkName, setPkName] = useState('');
- const [passkeys, setPasskeys] = useState<Passkey[]>([]);
+ const { data: passkeys = [], refetch: refetchPasskeys } = useQuery({
+ queryKey: ['profile', 'passkeys'],
+ queryFn: async () => {
+ try { return await profileApi.listPasskeys(); } catch { return []; }
+ },
+ enabled: Boolean(profile?.id),
+ });
  const [editPkId, setEditPkId] = useState<string | null>(null);
  const [editPkName, setEditPkName] = useState('');
 
@@ -143,9 +149,6 @@ export default function ProfilePage() {
  });
 
  const qrValue = tfaSetup?.qrCode || (tfaSetup?.otpAuthUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(tfaSetup.otpAuthUrl)}` : undefined);
-
- const refreshPasskeys = useCallback(async () => { try { setPasskeys(await profileApi.listPasskeys()); } catch { setPasskeys([]); } }, []);
- useEffect(() => { refreshPasskeys().catch(() => {}); }, [profile?.id, refreshPasskeys]);
 
  const updateProfileMutation = useMutation({
  mutationFn: () => profileApi.updateProfile({ username: editUsername, firstName: editFirstName, lastName: editLastName }),
@@ -189,19 +192,19 @@ export default function ProfilePage() {
  });
  const addPkMutation = useMutation({
  mutationFn: () => profileApi.createPasskey({ name: pkName || undefined }),
- onSuccess: async () => { notifySuccess('Passkey added'); setPkName(''); await refreshPasskeys(); },
+ onSuccess: async () => { notifySuccess('Passkey added'); setPkName(''); await refetchPasskeys(); },
  onSettled: () => { queryClient.invalidateQueries({ queryKey: qk.profileAuditLog() }); },
  onError: (e: any) => notifyError(e?.message || 'Failed'),
  });
  const delPkMutation = useMutation({
  mutationFn: (id: string) => profileApi.deletePasskey(id),
- onSuccess: async () => { notifySuccess('Passkey removed'); await refreshPasskeys(); },
+ onSuccess: async () => { notifySuccess('Passkey removed'); await refetchPasskeys(); },
  onSettled: () => { queryClient.invalidateQueries({ queryKey: qk.profileAuditLog() }); },
  onError: (e: any) => notifyError(e?.message || 'Failed'),
  });
  const updPkMutation = useMutation({
  mutationFn: async () => { if (!editPkId) return; return profileApi.updatePasskey(editPkId, editPkName); },
- onSuccess: async () => { notifySuccess('Passkey updated'); setEditPkId(null); setEditPkName(''); await refreshPasskeys(); },
+ onSuccess: async () => { notifySuccess('Passkey updated'); setEditPkId(null); setEditPkName(''); await refetchPasskeys(); },
  onSettled: () => { queryClient.invalidateQueries({ queryKey: qk.profileAuditLog() }); },
  onError: (e: any) => notifyError(e?.message || 'Failed'),
  });

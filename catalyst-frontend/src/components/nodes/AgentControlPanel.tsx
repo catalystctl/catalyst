@@ -345,16 +345,16 @@ function AgentLogsTab({ nodeId }: { nodeId: string }) {
   });
 
   // Load initial logs once
-  useEffect(() => {
-    if (initialLogs && initialLogs.length > 0 && logs.length === 0) {
-      setLogs(initialLogs.map((l) => ({
-        timestamp: l.timestamp,
-        level: l.level,
-        target: l.target,
-        message: l.message,
-      })));
-    }
-  }, [initialLogs]);
+  const [prevInitialLogs, setPrevInitialLogs] = useState(initialLogs);
+  if (initialLogs && initialLogs.length > 0 && logs.length === 0 && initialLogs !== prevInitialLogs) {
+    prevInitialLogs = initialLogs;
+    setLogs(initialLogs.map((l) => ({
+      timestamp: l.timestamp,
+      level: l.level,
+      target: l.target,
+      message: l.message,
+    })));
+  }
 
   // Polling for streaming mode — merge new entries instead of replacing to avoid
   // losing entries between polls and preserve scroll position.
@@ -706,11 +706,13 @@ function AgentConfigTab({ nodeId }: { nodeId: string }) {
     staleTime: 30_000,
   });
 
-  useEffect(() => {
+  const [prevConfig, setPrevConfig] = useState(config);
+  if (config !== prevConfig) {
+    prevConfig = config;
     if (config && editContent === null) {
       setEditContent(config.content);
     }
-  }, [config]);
+  }
 
   const saveMutation = useMutation({
     mutationFn: () => agentApi.updateConfig(nodeId, editContent!),

@@ -37,7 +37,7 @@ function StatusDot({ value, gameOver }: { value: number; gameOver: boolean }) {
 }
 
 function NotFoundPage() {
- const { game, highScore, flush, reset, reducedMotion, resources } =
+ const { game, flush, reset, reducedMotion, resources } =
  useResourceBalancer();
  const [waveNotice, setWaveNotice] = useState(false);
  const lastWaveRef = useRef(1);
@@ -277,7 +277,7 @@ function NotFoundPage() {
  <Trophy className="h-3.5 w-3.5 text-warning" />
  Best
  <span className="font-semibold tabular-nums text-foreground">
- {Math.max(highScore, game.score)}
+ {Math.max(game.highScore, game.score)}
  </span>
  </div>
  </div>

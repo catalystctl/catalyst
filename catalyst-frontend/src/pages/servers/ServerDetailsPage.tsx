@@ -292,49 +292,43 @@ function ServerDetailsPage() {
  const [databaseHostId, setDatabaseHostId] = useState('');
  const [databaseName, setDatabaseName] = useState('');
 
- // ── Sync server data to local state ──
- useEffect(() => {
- if (!server?.name) return;
- // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing form from server data
- setServerName(server.name);
- }, [server?.name]);
-
- useEffect(() => {
- if (!server) return;
- // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing form from server data
+ // ── Sync server data to local state via render-time state adjustment ──
+ const [prevServer, setPrevServer] = useState(server);
+ if (server !== prevServer) {
+ setPrevServer(server);
+ if (server?.name) setServerName(server.name);
+ if (server) {
  setRestartPolicy(server.restartPolicy ?? 'on-failure');
  setMaxCrashCount(
  server.maxCrashCount !== undefined && server.maxCrashCount !== null
  ? String(server.maxCrashCount)
  : '5',
  );
- }, [server?.id, server?.restartPolicy, server?.maxCrashCount]);
+ setStartupCommand(server.startupCommand ?? server.template?.startup ?? '');
+ }
+ }
 
- useEffect(() => {
- if (!server) return;
- // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing form from server data
- setStartupCommand(
- server.startupCommand ?? server.template?.startup ?? '',
- );
- }, [server?.id, server?.startupCommand, server?.template?.startup]);
-
- useEffect(() => {
- if (!permissionsData?.data) return;
+ const [prevPermissionsData, setPrevPermissionsData] = useState(permissionsData?.data);
+ if (permissionsData?.data !== prevPermissionsData) {
+ setPrevPermissionsData(permissionsData.data);
+ if (permissionsData?.data) {
  const nextPermissions: Record<string, string[]> = {};
  permissionsData.data.forEach((entry) => {
  nextPermissions[entry.userId] = entry.permissions;
  });
- // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing permissions from API
  setAccessPermissions(nextPermissions);
- }, [permissionsData?.data]);
+ }
+ }
 
- useEffect(() => {
- if (!permissionsData?.presets) return;
- if (invitePreset !== 'custom') {
- // eslint-disable-next-line react-hooks/set-state-in-effect -- applying preset from API
+ const [prevPresets, setPrevPresets] = useState(permissionsData?.presets);
+ const [prevInvitePreset, setPrevInvitePreset] = useState(invitePreset);
+ if (permissionsData?.presets !== prevPresets || invitePreset !== prevInvitePreset) {
+ setPrevPresets(permissionsData?.presets);
+ setPrevInvitePreset(invitePreset);
+ if (permissionsData?.presets && invitePreset !== 'custom') {
  setInvitePermissions(permissionsData.presets[invitePreset]);
  }
- }, [invitePreset, permissionsData?.presets]);
+ }
 
  // ── Permission options ──
  const permissionOptions = useMemo(() => {

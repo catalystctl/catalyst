@@ -259,7 +259,7 @@ function convertStartupCommand(startup: string): string {
 function convertInstallScript(script: string): string {
   // Clean up JSON escape sequences from Pterodactyl export format
   // (Pterodactyl JSON-escapes forward slashes as \/)
-  let cleaned = script.replace(/\\\//g, '/');
+  const cleaned = script.replace(/\\\//g, '/');
 
   return cleaned;
 }

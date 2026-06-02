@@ -91,15 +91,30 @@ function CloneServerDialog({ server, disabled = false }: Props) {
   >([]);
   const [allocLoadError, setAllocLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const [prevAllocDeps, setPrevAllocDeps] = useState({ nodeId, networkMode, open });
+  if (
+    prevAllocDeps.nodeId !== nodeId ||
+    prevAllocDeps.networkMode !== networkMode ||
+    prevAllocDeps.open !== open
+  ) {
+    prevAllocDeps = { nodeId, networkMode, open };
     setAllocationId('');
     if (!nodeId || networkMode !== 'host') {
       setAvailableAllocations([]);
       setAllocLoadError(null);
-      return;
+    } else {
+      setAllocLoadError(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!nodeId || networkMode !== 'host') {
+      let active = true;
+      return () => {
+        active = false;
+      };
     }
     let active = true;
-    setAllocLoadError(null);
     nodesApi
       .allocations(nodeId)
       .then((allocations) => {

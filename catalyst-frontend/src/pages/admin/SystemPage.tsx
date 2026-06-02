@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -146,8 +146,10 @@ function SystemPage() {
  onError: (error: any) => notifyError(error?.response?.data?.error || 'Failed to update mod manager settings'),
  });
 
- useEffect(() => {
- if (!smtpSettings) return;
+ const [prevSmtpSettings, setPrevSmtpSettings] = useState(smtpSettings);
+ if (smtpSettings !== prevSmtpSettings) {
+ setPrevSmtpSettings(smtpSettings);
+ if (smtpSettings) {
  setSmtpHost(smtpSettings.host ?? '');
  setSmtpPort(smtpSettings.port ? String(smtpSettings.port) : '587');
  setSmtpUsername(smtpSettings.username ?? '');
@@ -165,22 +167,29 @@ function SystemPage() {
  smtpSettings.maxMessages !== null && smtpSettings.maxMessages !== undefined
  ? String(smtpSettings.maxMessages) : '',
  );
- }, [smtpSettings]);
+ }
+ }
 
- useEffect(() => {
- if (!modManagerSettings) return;
+ const [prevModManagerSettings, setPrevModManagerSettings] = useState(modManagerSettings);
+ if (modManagerSettings !== prevModManagerSettings) {
+ setPrevModManagerSettings(modManagerSettings);
+ if (modManagerSettings) {
  setCurseforgeApiKey(modManagerSettings.curseforgeApiKey ?? '');
  setModrinthApiKey(modManagerSettings.modrinthApiKey ?? '');
- }, [modManagerSettings]);
+ }
+ }
 
- useEffect(() => {
- if (!dnsSettings) return;
+ const [prevDnsSettings, setPrevDnsSettings] = useState(dnsSettings);
+ if (dnsSettings !== prevDnsSettings) {
+ setPrevDnsSettings(dnsSettings);
+ if (dnsSettings) {
  setDnsEnabled(Boolean(dnsSettings.enabled));
  setDnsProvider(dnsSettings.provider ?? 'cloudflare');
  setDnsBaseDomain(dnsSettings.baseDomain ?? '');
  setDnsCloudflareApiToken(dnsSettings.cloudflareApiToken ?? '');
  setDnsCloudflareZoneId(dnsSettings.cloudflareZoneId ?? '');
- }, [dnsSettings]);
+ }
+ }
 
  const healthItems = [
  {

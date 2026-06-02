@@ -341,7 +341,7 @@ function AdminNodesPage() {
  return () => window.removeEventListener('catalyst:open-locations-modal', handler);
  }, []);
 
- const nodes = data?.nodes ?? [];
+ const nodes = useMemo(() => data?.nodes ?? [], [data?.nodes]);
 
  // ── Derived data ──
  const onlineNodes = nodes.filter((node) => node.isOnline);

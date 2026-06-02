@@ -166,20 +166,21 @@ export {
 } from 'lucide-react';
 
 // ── Design Token CSS Class Constants ──
-// Maps semantic names to the Tailwind classes used throughout Catalyst.
-// Use these in plugin code for consistent styling that follows the design system.
-export const SURFACE_0 = 'bg-background';
-export const SURFACE_1 = 'bg-card';
-export const SURFACE_2 = 'bg-surface-2';
-export const SURFACE_3 = 'bg-surface-3';
-export const TEXT_MUTED = 'text-muted-foreground';
-export const TEXT_FOREGROUND = 'text-foreground';
-export const TEXT_PRIMARY = 'text-primary';
-export const BORDER_COLOR = 'border-border';
-export const FONT_DISPLAY = 'font-display';
-export const FONT_BODY = 'font-body';
-export const FONT_MONO = 'font-mono';
-export const ROUNDED_LG = 'rounded-lg';
-export const ROUNDED_XL = 'rounded-xl';
-export const SHADOW_ELEVATED = 'shadow-elevated';
-export const SHADOW_ELEVATED_DARK = 'dark:shadow-elevated-dark';
+// Re-exported from plugin-ui-constants for backward compatibility.
+export {
+  SURFACE_0,
+  SURFACE_1,
+  SURFACE_2,
+  SURFACE_3,
+  TEXT_MUTED,
+  TEXT_FOREGROUND,
+  TEXT_PRIMARY,
+  BORDER_COLOR,
+  FONT_DISPLAY,
+  FONT_BODY,
+  FONT_MONO,
+  ROUNDED_LG,
+  ROUNDED_XL,
+  SHADOW_ELEVATED,
+  SHADOW_ELEVATED_DARK,
+} from './plugin-ui-constants';

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ModalPortal } from '@/components/ui/modal-portal';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -72,30 +72,36 @@ function CreateServerModal() {
  );
 
  // Auto-populate primary port from selected allocation in host mode
- useEffect(() => {
+ const [prevAllocationId, setPrevAllocationId] = useState(allocationId);
+ if (allocationId !== prevAllocationId) {
+ setPrevAllocationId(allocationId);
  if (networkMode === 'host' && allocationId) {
  const allocation = availableAllocations.find((a) => a.id === allocationId);
  if (allocation) {
  setPort(String(allocation.port));
  }
  }
- }, [allocationId, networkMode, availableAllocations]);
+ }
 
  // Clear additional bindings when switching away from host mode
- useEffect(() => {
+ const [prevNetworkMode, setPrevNetworkMode] = useState(networkMode);
+ if (networkMode !== prevNetworkMode) {
+ setPrevNetworkMode(networkMode);
  if (networkMode !== 'host') {
  setAdditionalBindings([]);
  }
- }, [networkMode]);
+ }
 
  // Set default port from template when template is selected
- useEffect(() => {
+ const [prevSelectedTemplate, setPrevSelectedTemplate] = useState(selectedTemplate);
+ if (selectedTemplate !== prevSelectedTemplate) {
+ setPrevSelectedTemplate(selectedTemplate);
  if (selectedTemplate?.supportedPorts && selectedTemplate.supportedPorts.length > 0) {
  if (networkMode !== 'host' || !allocationId) {
  setPort(String(selectedTemplate.supportedPorts[0]));
  }
  }
- }, [selectedTemplate]);
+ }
 
  const templateVariables = useMemo(() => {
  if (!selectedTemplate?.variables) return [];
@@ -109,9 +115,14 @@ function CreateServerModal() {
  const locationId = selectedNode?.locationId || availableNodes[0]?.locationId || '';
 
  // Load macvlan interfaces (IP pools) for the selected node
- useEffect(() => {
+ const [prevMacvlanDeps, setPrevMacvlanDeps] = useState({ nodeId, networkMode });
+ if (prevMacvlanDeps.nodeId !== nodeId || prevMacvlanDeps.networkMode !== networkMode) {
+ prevMacvlanDeps = { nodeId, networkMode };
  setMacvlanInterface('');
  setNodeIpPools([]);
+ }
+
+ useEffect(() => {
  if (!nodeId || networkMode !== 'macvlan') return;
  let active = true;
  nodesApi
@@ -131,16 +142,31 @@ function CreateServerModal() {
  }, [nodeId, networkMode]);
 
  // Load available IPs when macvlan interface is selected
- useEffect(() => {
+ const [prevIpDeps, setPrevIpDeps] = useState({ nodeId, networkMode, macvlanInterface });
+ if (
+ prevIpDeps.nodeId !== nodeId ||
+ prevIpDeps.networkMode !== networkMode ||
+ prevIpDeps.macvlanInterface !== macvlanInterface
+ ) {
+ setPrevIpDeps({ nodeId, networkMode, macvlanInterface });
  setPrimaryIp('');
  if (!nodeId || networkMode !== 'macvlan' || !macvlanInterface) {
  setAvailableIps([]);
  setIpLoadError(null);
- return;
+ } else {
+ setIpLoadError(null);
+ }
+ }
+
+ useEffect(() => {
+ if (!nodeId || networkMode !== 'macvlan' || !macvlanInterface) {
+ let active = true;
+ return () => {
+ active = false;
+ };
  }
 
  let active = true;
- setIpLoadError(null);
  nodesApi
  .availableIps(nodeId, macvlanInterface, 200)
  .then((ips) => {
@@ -160,17 +186,30 @@ function CreateServerModal() {
  }, [nodeId, networkMode, macvlanInterface]);
 
  // Load allocations for host (port mapping) mode
- useEffect(() => {
+ const [prevAllocDeps, setPrevAllocDeps] = useState({ nodeId, networkMode, allocRefreshKey });
+ if (
+ prevAllocDeps.nodeId !== nodeId ||
+ prevAllocDeps.networkMode !== networkMode ||
+ prevAllocDeps.allocRefreshKey !== allocRefreshKey
+ ) {
+ setPrevAllocDeps({ nodeId, networkMode, allocRefreshKey });
  setAllocationId('');
- let active = true;
  if (!nodeId || networkMode !== 'host') {
  setAvailableAllocations([]);
  setAllocLoadError(null);
+ } else {
+ setAllocLoadError(null);
+ }
+ }
+
+ useEffect(() => {
+ if (!nodeId || networkMode !== 'host') {
+ let active = true;
  return () => {
  active = false;
  };
  }
- setAllocLoadError(null);
+ let active = true;
  nodesApi
  .allocations(nodeId)
  .then((allocations) => {

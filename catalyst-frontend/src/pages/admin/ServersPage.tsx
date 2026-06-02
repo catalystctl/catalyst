@@ -145,9 +145,9 @@ function AdminServersPage() {
  const { data: nodesData } = useAdminNodes();
  const { data: templates = [] } = useTemplates();
 
- const servers = data?.servers ?? [];
+ const servers = useMemo(() => data?.servers ?? [], [data?.servers]);
  const pagination = data?.pagination;
- const nodes = nodesData?.nodes ?? [];
+ const nodes = useMemo(() => nodesData?.nodes ?? [], [nodesData?.nodes]);
 
  const statuses = useMemo(
  () => Array.from(new Set(servers.map((server) => server.status))).sort(),

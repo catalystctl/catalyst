@@ -2,8 +2,8 @@
 // Central data-fetching hook for the ticketing plugin.
 // Manages tickets, stats, comments, activities, tags, templates, users, servers, and settings.
 
-import { useState, useEffect, useCallback } from 'react';
-import { reportSystemError } from '../../../services/api/systemErrors';
+import { useState, useCallback } from 'react';
+import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import type {
   Ticket,
   TicketComment,
@@ -75,181 +75,68 @@ export interface TicketingDataActions {
 const INITIAL_SORT: TicketSort = { field: 'updatedAt', direction: 'desc' };
 
 export function useTicketingData(): TicketingDataState & TicketingDataActions {
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [ticketTotal, setTicketTotal] = useState(0);
-  const [ticketPage, setTicketPage] = useState(1);
-  const [ticketPageSize, setTicketPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [ticketTotalPages, setTicketTotalPages] = useState(1);
-  const [isLoadingTickets, setIsLoadingTickets] = useState(false);
-
+  const queryClient = useQueryClient();
   const [filters, setFiltersState] = useState<TicketFilters>({});
   const [sort, setSortState] = useState<TicketSort>(INITIAL_SORT);
-
+  const [ticketPage, setTicketPage] = useState(1);
+  const [ticketPageSize, setTicketPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
-  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
-  const [selectedTicketComments, setSelectedTicketComments] = useState<TicketComment[]>([]);
-  const [selectedTicketActivities, setSelectedTicketActivities] = useState<TicketActivity[]>([]);
-  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
-  const [stats, setStats] = useState<TicketStats | null>(null);
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [templates, setTemplates] = useState<TicketTemplate[]>([]);
-  const [users, setUsers] = useState<UserRef[]>([]);
-  const [servers, setServers] = useState<ServerRef[]>([]);
-  const [settings, setSettings] = useState<TicketingSettings | null>(null);
-  const [isLoadingRefData, setIsLoadingRefData] = useState(false);
+  // ── Tickets ──
+  const ticketsQuery = useQuery({
+    queryKey: ['ticketing', 'tickets', filters, sort, ticketPage, ticketPageSize],
+    queryFn: () => api.fetchTickets(filters, sort, ticketPage, ticketPageSize),
+    staleTime: 30_000,
+  });
 
-  const [error, setError] = useState<string | null>(null);
+  const tickets = ticketsQuery.data?.data ?? [];
+  const ticketTotal = ticketsQuery.data?.total ?? 0;
+  const ticketTotalPages = ticketsQuery.data?.totalPages ?? 1;
+  const isLoadingTickets = ticketsQuery.isLoading;
+  const ticketsError = ticketsQuery.error;
 
-  // ── Load tickets ──
-  const loadTickets = useCallback(async () => {
-    setIsLoadingTickets(true);
-    setError(null);
-    try {
-      const result = await api.fetchTickets(filters, sort, ticketPage, ticketPageSize);
-      setTickets(result.data);
-      setTicketTotal(result.total);
-      setTicketTotalPages(result.totalPages);
-    } catch (err: unknown) {
-      reportSystemError({
-        level: 'error',
-        component: 'useTicketingData',
-        message: err instanceof Error ? err.message : 'Failed to load tickets',
-        stack: err instanceof Error ? err.stack : undefined,
-        metadata: { context: 'Failed to load tickets' },
-      });
-      const msg = err instanceof Error ? err.message : 'Failed to load tickets';
-      setError(msg);
-    } finally {
-      setIsLoadingTickets(false);
+  // ── Detail ──
+  const detailQueries = useQueries({
+    queries: selectedTicketId
+      ? [
+          { queryKey: ['ticketing', 'ticket', selectedTicketId], queryFn: () => api.fetchTicket(selectedTicketId) },
+          { queryKey: ['ticketing', 'comments', selectedTicketId], queryFn: () => api.fetchComments(selectedTicketId) },
+          { queryKey: ['ticketing', 'activities', selectedTicketId], queryFn: () => api.fetchActivities(selectedTicketId) },
+        ]
+      : [],
+  });
+
+  const selectedTicket = (detailQueries[0]?.data as Ticket | undefined) ?? null;
+  const selectedTicketComments = (detailQueries[1]?.data ?? []) as TicketComment[];
+  const selectedTicketActivities = (() => {
+    const acts = detailQueries[2]?.data;
+    if (!acts) return [];
+    return (acts as any).data ?? (Array.isArray(acts) ? acts : []);
+  })();
+  const isLoadingDetail = detailQueries.some((q) => q.isLoading);
+
+  // ── Ref Data ──
+  const statsQuery = useQuery({ queryKey: ['ticketing', 'ref', 'stats'], queryFn: api.fetchStats, staleTime: 60_000 });
+  const tagsQuery = useQuery({ queryKey: ['ticketing', 'ref', 'tags'], queryFn: api.fetchTags, staleTime: 60_000 });
+  const templatesQuery = useQuery({ queryKey: ['ticketing', 'ref', 'templates'], queryFn: api.fetchTemplates, staleTime: 60_000 });
+  const usersQuery = useQuery({ queryKey: ['ticketing', 'ref', 'users'], queryFn: api.fetchUsers, staleTime: 60_000 });
+  const serversQuery = useQuery({ queryKey: ['ticketing', 'ref', 'servers'], queryFn: api.fetchServers, staleTime: 60_000 });
+  const settingsQuery = useQuery({ queryKey: ['ticketing', 'ref', 'settings'], queryFn: api.fetchSettings, staleTime: 60_000 });
+
+  const isLoadingRefData = [statsQuery, tagsQuery, templatesQuery, usersQuery, serversQuery, settingsQuery].some((q) => q.isLoading);
+
+  // Combine errors into a single string for consumers
+  const error = (() => {
+    if (ticketsError) {
+      return ticketsError instanceof Error ? ticketsError.message : 'Failed to load tickets';
     }
-  }, [filters, sort, ticketPage, ticketPageSize]);
-
-  // ── Load reference data ──
-  const loadRefData = useCallback(async () => {
-    setIsLoadingRefData(true);
-    setError(null);
-    try {
-      const [statsRes, tagsRes, templatesRes, usersRes, serversRes, settingsRes] = await Promise.allSettled([
-        api.fetchStats(),
-        api.fetchTags(),
-        api.fetchTemplates(),
-        api.fetchUsers(),
-        api.fetchServers(),
-        api.fetchSettings(),
-      ]);
-      if (statsRes.status === 'fulfilled') setStats(statsRes.value);
-      if (tagsRes.status === 'fulfilled') setTags(tagsRes.value);
-      if (templatesRes.status === 'fulfilled') setTemplates(templatesRes.value);
-      if (usersRes.status === 'fulfilled') setUsers(usersRes.value);
-      if (serversRes.status === 'fulfilled') setServers(serversRes.value);
-      if (settingsRes.status === 'fulfilled') setSettings(settingsRes.value);
-    } catch (err: unknown) {
-      reportSystemError({
-        level: 'error',
-        component: 'useTicketingData',
-        message: err instanceof Error ? err.message : 'Failed to load reference data',
-        stack: err instanceof Error ? err.stack : undefined,
-        metadata: { context: 'Failed to load reference data' },
-      });
-      const msg = err instanceof Error ? err.message : 'Failed to load reference data';
-      setError(msg);
-    } finally {
-      setIsLoadingRefData(false);
+    const refErrors = [statsQuery, tagsQuery, templatesQuery, usersQuery, serversQuery, settingsQuery].filter((q) => q.error);
+    if (refErrors.length > 0) {
+      const first = refErrors[0].error;
+      return first instanceof Error ? first.message : 'Failed to load reference data';
     }
-  }, []);
-
-  // ── Select ticket (load detail) ──
-  const selectTicket = useCallback((id: string | null) => {
-    setSelectedTicketId(id);
-    if (!id) {
-      setSelectedTicket(null);
-      setSelectedTicketComments([]);
-      setSelectedTicketActivities([]);
-      return;
-    }
-    // Detail loading happens in useEffect below
-  }, []);
-
-  // ── Load ticket detail ──
-  const loadDetail = useCallback(async (id: string) => {
-    setIsLoadingDetail(true);
-    setError(null);
-    try {
-      const [ticket, comments, activities] = await Promise.all([
-        api.fetchTicket(id),
-        api.fetchComments(id),
-        api.fetchActivities(id),
-      ]);
-      setSelectedTicket(ticket);
-      setSelectedTicketComments(comments);
-      setSelectedTicketActivities(activities.data || (Array.isArray(activities) ? activities : []));
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to load ticket detail';
-      setError(msg);
-    } finally {
-      setIsLoadingDetail(false);
-    }
-  }, []);
-
-  // Load detail when selectedTicketId changes
-  useEffect(() => {
-    if (selectedTicketId) {
-      loadDetail(selectedTicketId);
-    }
-  }, [selectedTicketId, loadDetail]);
-
-  // ── Individual refreshers ──
-  const refreshStats = useCallback(async () => {
-    try {
-      const s = await api.fetchStats();
-      setStats(s);
-    } catch (err: unknown) {
-      reportSystemError({
-        level: 'error',
-        component: 'useTicketingData',
-        message: err instanceof Error ? err.message : 'Failed to refresh stats',
-        stack: err instanceof Error ? err.stack : undefined,
-        metadata: { context: 'Failed to refresh ticket stats' },
-      });
-    }
-  }, []);
-
-  const refreshTags = useCallback(async () => {
-    try {
-      const t = await api.fetchTags();
-      setTags(t);
-    } catch (err: unknown) {
-      reportSystemError({
-        level: 'error',
-        component: 'useTicketingData',
-        message: err instanceof Error ? err.message : 'Failed to refresh tags',
-        stack: err instanceof Error ? err.stack : undefined,
-        metadata: { context: 'Failed to refresh tags' },
-      });
-    }
-  }, []);
-
-  const refreshTemplates = useCallback(async () => {
-    try {
-      const t = await api.fetchTemplates();
-      setTemplates(t);
-    } catch (err: unknown) {
-      reportSystemError({
-        level: 'error',
-        component: 'useTicketingData',
-        message: err instanceof Error ? err.message : 'Failed to refresh templates',
-        stack: err instanceof Error ? err.stack : undefined,
-        metadata: { context: 'Failed to refresh templates' },
-      });
-    }
-  }, []);
-
-  const refreshDetail = useCallback(async () => {
-    if (selectedTicketId) {
-      await loadDetail(selectedTicketId);
-    }
-  }, [selectedTicketId, loadDetail]);
+    return null;
+  })();
 
   // ── Pagination & filter handlers ──
   const setPage = useCallback((page: number) => {
@@ -263,23 +150,58 @@ export function useTicketingData(): TicketingDataState & TicketingDataActions {
 
   const setFilters = useCallback((newFilters: TicketFilters) => {
     setFiltersState(newFilters);
-    setTicketPage(1); // Reset page on filter change
+    setTicketPage(1);
   }, []);
 
   const setSort = useCallback((newSort: TicketSort) => {
     setSortState(newSort);
   }, []);
 
-  const clearError = useCallback(() => setError(null), []);
+  const selectTicket = useCallback((id: string | null) => {
+    setSelectedTicketId(id);
+  }, []);
 
-  // ── Load on mount ──
-  useEffect(() => {
-    loadTickets();
-  }, [loadTickets]);
+  const loadTickets = useCallback(async () => {
+    await ticketsQuery.refetch();
+  }, [ticketsQuery]);
 
-  useEffect(() => {
-    loadRefData();
-  }, [loadRefData]);
+  const refreshDetail = useCallback(async () => {
+    if (selectedTicketId) {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['ticketing', 'ticket', selectedTicketId] }),
+        queryClient.invalidateQueries({ queryKey: ['ticketing', 'comments', selectedTicketId] }),
+        queryClient.invalidateQueries({ queryKey: ['ticketing', 'activities', selectedTicketId] }),
+      ]);
+    }
+  }, [selectedTicketId, queryClient]);
+
+  const loadRefData = useCallback(async () => {
+    await Promise.all([
+      statsQuery.refetch(),
+      tagsQuery.refetch(),
+      templatesQuery.refetch(),
+      usersQuery.refetch(),
+      serversQuery.refetch(),
+      settingsQuery.refetch(),
+    ]);
+  }, [statsQuery, tagsQuery, templatesQuery, usersQuery, serversQuery, settingsQuery]);
+
+  const refreshStats = useCallback(async () => {
+    await statsQuery.refetch();
+  }, [statsQuery]);
+
+  const refreshTags = useCallback(async () => {
+    await tagsQuery.refetch();
+  }, [tagsQuery]);
+
+  const refreshTemplates = useCallback(async () => {
+    await templatesQuery.refetch();
+  }, [templatesQuery]);
+
+  const clearError = useCallback(() => {
+    queryClient.removeQueries({ queryKey: ['ticketing', 'tickets'] });
+    queryClient.removeQueries({ queryKey: ['ticketing', 'ref'] });
+  }, [queryClient]);
 
   return {
     tickets,
@@ -294,12 +216,12 @@ export function useTicketingData(): TicketingDataState & TicketingDataActions {
     selectedTicketComments,
     selectedTicketActivities,
     isLoadingDetail,
-    stats,
-    tags,
-    templates,
-    users,
-    servers,
-    settings,
+    stats: statsQuery.data ?? null,
+    tags: tagsQuery.data ?? [],
+    templates: templatesQuery.data ?? [],
+    users: usersQuery.data ?? [],
+    servers: serversQuery.data ?? [],
+    settings: settingsQuery.data ?? null,
     isLoadingRefData,
     error,
     loadTickets,

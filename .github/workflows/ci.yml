@@ -151,10 +151,11 @@ jobs:
 
       # ── Lint & Static Analysis ──
       # Maps to: step_lint() in run-workflow.sh
-      # Scope lint to backend only — frontend has pre-existing lint errors
-      # that were never gated in the original backend-ci.yml
-      - name: Run ESLint
+      - name: Run ESLint (backend)
         run: pnpm --filter catalyst-backend run lint
+
+      - name: Run ESLint (frontend)
+        run: pnpm --filter catalyst-frontend run lint
 
       - name: Security audit
         run: pnpm audit || true

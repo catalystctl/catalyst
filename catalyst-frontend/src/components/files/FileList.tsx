@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useFileListVirtualizer } from '../../hooks/useFileListVirtualizer';
 import { ArrowDown, ArrowUp, Folder, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { FileEntry } from '../../types/file';
@@ -144,14 +144,7 @@ function FileList({
  }));
  }, [files, selectedPaths, renamingEntry]);
 
- const virtualizer = useVirtualizer({
- count: files.length,
- getScrollElement: () => parentRef.current,
- estimateSize: () => ROW_HEIGHT,
- overscan: 20,
- });
-
- const virtualItems = virtualizer.getVirtualItems();
+ const { virtualItems } = useFileListVirtualizer(files.length, parentRef);
 
  const closeContextMenu = useCallback(() => {
  setContextMenuPosition(null);

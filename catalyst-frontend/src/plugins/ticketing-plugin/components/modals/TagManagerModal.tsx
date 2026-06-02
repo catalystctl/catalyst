@@ -37,6 +37,33 @@ import {
  AlertDialogTitle,
 } from '../../../plugin-ui';
 
+// ── Color picker grid ──
+function ColorGrid({
+  selected,
+  onSelect,
+}: {
+  selected: string;
+  onSelect: (color: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {TAG_COLORS.map((color) => (
+        <button
+          key={color}
+          type="button"
+          onClick={() => onSelect(color)}
+          className={cn(
+            'h-6 w-6 rounded-md border-2 transition-transform hover:scale-110',
+            selected === color ? 'border-foreground scale-110' : 'border-transparent',
+          )}
+          style={{ backgroundColor: color }}
+          title={color}
+        />
+      ))}
+    </div>
+  );
+}
+
 // ── Types ──
 
 interface TagManagerModalProps {
@@ -126,33 +153,6 @@ export function TagManagerModal({
  } finally {
  setIsDeleting(false);
  }
- }
-
- // ── Color picker grid ──
- function ColorGrid({
- selected,
- onSelect,
- }: {
- selected: string;
- onSelect: (color: string) => void;
- }) {
- return (
- <div className="flex flex-wrap gap-1.5">
- {TAG_COLORS.map((color) => (
- <button
- key={color}
- type="button"
- onClick={() => onSelect(color)}
- className={cn(
- 'h-6 w-6 rounded-md border-2 transition-transform hover:scale-110',
- selected === color ? 'border-foreground scale-110' : 'border-transparent',
- )}
- style={{ backgroundColor: color }}
- title={color}
- />
- ))}
- </div>
- );
  }
 
  return (

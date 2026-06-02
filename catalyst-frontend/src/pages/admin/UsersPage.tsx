@@ -361,9 +361,9 @@ function UsersPage() {
  const { data: roles = [] } = useAdminRoles();
  const { data: serversResponse } = useAdminServers({ page: 1, limit: 200 });
 
- const users = data?.users ?? [];
+ const users = useMemo(() => data?.users ?? [], [data?.users]);
  const pagination = data?.pagination;
- const servers = serversResponse?.servers ?? [];
+ const servers = useMemo(() => serversResponse?.servers ?? [], [serversResponse?.servers]);
 
  const sortedRoles = useMemo(
  () => [...roles].sort((a, b) => a.name.localeCompare(b.name)),

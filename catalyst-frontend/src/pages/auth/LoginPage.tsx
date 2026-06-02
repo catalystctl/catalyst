@@ -70,7 +70,7 @@ function LoginPage() {
  redirectedRef.current = true;
  navigate(from || '/servers', { replace: true });
  }
- }, [isAuthenticated, isReady]);
+ }, [isAuthenticated, isReady, from, navigate]);
 
  const syncPasskeySession = async () => {
  try {

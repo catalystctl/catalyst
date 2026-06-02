@@ -2,7 +2,7 @@
 // Modal for creating a new ticket with optional template pre-fill.
 
 import DOMPurify from 'dompurify';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type {
  CreateTicketPayload,
  TicketPriority,
@@ -88,17 +88,20 @@ export function CreateTicketModal({
  const [errors, setErrors] = useState<Record<string, string>>({});
 
  // ── Template pre-fill ──
- useEffect(() => {
- if (templateId === 'none') return;
- const template = templates.find((t) => t.id === templateId);
- if (!template) return;
-
- setTitle(template.titleTemplate);
- setDescription(template.descriptionTemplate);
- setPriority(template.priority);
- if (template.category) setCategory(template.category);
- if (template.tags.length > 0) setSelectedTagIds(new Set(template.tags));
- }, [templateId, templates]);
+ const [prevTemplateId, setPrevTemplateId] = useState(templateId);
+ if (prevTemplateId !== templateId) {
+   setPrevTemplateId(templateId);
+   if (templateId !== 'none') {
+     const template = templates.find((t) => t.id === templateId);
+     if (template) {
+       setTitle(template.titleTemplate);
+       setDescription(template.descriptionTemplate);
+       setPriority(template.priority);
+       if (template.category) setCategory(template.category);
+       if (template.tags.length > 0) setSelectedTagIds(new Set(template.tags));
+     }
+   }
+ }
 
  // ── Reset form ──
  function resetForm() {

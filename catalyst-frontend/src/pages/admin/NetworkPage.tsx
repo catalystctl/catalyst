@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import {
  Activity,
  Server,
@@ -225,7 +225,7 @@ function ActivityPage() {
 
  const { data, isLoading, isError, refetch, isFetching } = useAuditLogs(queryParams);
 
- const logs = data?.logs ?? [];
+ const logs = useMemo(() => data?.logs ?? [], [data?.logs]);
  const pagination = data?.pagination;
  const totalLogs = pagination?.total ?? 0;
 

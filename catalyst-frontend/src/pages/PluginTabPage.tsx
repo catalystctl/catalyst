@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { usePluginTabs } from '../plugins/hooks';
-import { usePluginContext } from '../plugins/PluginProvider';
+import { usePluginContext } from '../plugins/usePluginContext';
 import PluginErrorBoundary from '../plugins/PluginErrorBoundary';
 
 interface PluginTabPageProps {

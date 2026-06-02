@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -276,8 +276,10 @@ function SecurityPage() {
  search: search.trim() || undefined,
  });
 
- useEffect(() => {
- if (!settings) return;
+ const [prevSettings, setPrevSettings] = useState(settings);
+ if (settings !== prevSettings) {
+ setPrevSettings(settings);
+ if (settings) {
  setAuthRateLimitMax(String(settings.authRateLimitMax));
  setAuthRateLimitWindowMs(String(settings.authRateLimitWindowMs ?? 60000));
  setFileRateLimitMax(String(settings.fileRateLimitMax));
@@ -300,10 +302,11 @@ function SecurityPage() {
  setFileTunnelMaxPendingPerNode(String(settings.fileTunnelMaxPendingPerNode ?? 50));
  setFileTunnelConcurrentMax(String(settings.fileTunnelConcurrentMax ?? 10));
  setRequireEmailVerification(settings.requireEmailVerification ?? true);
- }, [settings]);
+ }
+ }
 
  // ── Validate time window values ──
- const validTimeWindows = new Set(TIME_WINDOWS.map((w) => Number(w.value)));
+ const validTimeWindows = useMemo(() => new Set(TIME_WINDOWS.map((w) => Number(w.value))), []);
 
  const canSubmit = useMemo(
  () =>
@@ -341,6 +344,7 @@ function SecurityPage() {
  fileTunnelRateLimitMax, fileTunnelRateLimitWindowMs,
  fileTunnelMaxUploadMb, fileTunnelMaxPendingPerNode,
  fileTunnelConcurrentMax,
+ validTimeWindows,
  ],
  );
 

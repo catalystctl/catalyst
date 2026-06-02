@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Save, RotateCcw, AlertCircle, CheckCircle2, Cog } from 'lucide-react';
 import { qk } from '../../../lib/queryKeys';
@@ -35,7 +35,9 @@ export default function ServerStartupVariablesSection({
  });
 
  // Sync local values when variables load
- useEffect(() => {
+ const [prevVariables, setPrevVariables] = useState(variables);
+ if (variables !== prevVariables) {
+ setPrevVariables(variables);
  if (variables) {
  const next: Record<string, string> = {};
  variables.forEach((v) => {
@@ -45,7 +47,7 @@ export default function ServerStartupVariablesSection({
  setLocalErrors({});
  setTouched(new Set());
  }
- }, [variables?.length, serverId]);
+ }
 
  const updateMutation = useMutation({
  mutationFn: (payload: Record<string, string>) =>

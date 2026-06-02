@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { fetchPlugins, togglePlugin, reloadPlugin, fetchPluginDetails, updatePluginConfig } from '../../plugins/api';
 import { toast } from 'sonner';
-import { usePluginContext } from '../../plugins/PluginProvider';
+import { usePluginContext } from '../../plugins/usePluginContext';
 import type { PluginManifest } from '../../plugins/types';
 import { ModalPortal } from '@/components/ui/modal-portal';
 import TabHeader from '../../components/servers/tabs/TabHeader';
@@ -200,11 +200,11 @@ function PluginSettingsModal({
  setLocalConfig((prev) => ({ ...(prev ?? config), [key]: value }));
  };
 
- useEffect(() => {
- if (open) {
- setLocalConfig(null);
+ const [prevOpen, setPrevOpen] = useState(open);
+ if (open !== prevOpen) {
+ setPrevOpen(open);
+ if (open) setLocalConfig(null);
  }
- }, [open]);
 
  const updateMutation = useMutation({
  mutationFn: (newConfig: PluginConfig) => updatePluginConfig(pluginName, newConfig),

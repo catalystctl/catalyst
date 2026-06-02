@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
  ArrowLeftRight,
@@ -323,42 +323,64 @@ export default function ServerModManagerTab({
  const [isUpdatingMods, setIsUpdatingMods] = useState(false);
 
  // ── Sync ──
- useEffect(() => {
- if (!modProviderOptions.length) {
+ // The following blocks use the React 19 "set state during render when an
+ // input changes" pattern. The previous value is tracked via useState and
+ // compared during render; when the tracked input differs, the dependent
+ // state is updated and the tracker is moved forward. This replaces the
+ // setState-in-useEffect anti-pattern flagged by react-hooks.
+ const [prevProviderOptions, setPrevProviderOptions] = useState(modProviderOptions);
+ if (modProviderOptions !== prevProviderOptions) {
+ setPrevProviderOptions(modProviderOptions);
+ if (modProviderOptions.length === 0) {
  if (modProviderKey) setModProviderKey('');
- return;
- }
+ } else {
  const hasSelected = modProviderOptions.some(
  (entry) => entry.key === modProviderKey,
  );
  if (!hasSelected) setModProviderKey(modProviderOptions[0].key);
- }, [modProviderKey, modProviderOptions]);
+ }
+ }
 
- useEffect(() => {
- if (!modTargetOptions.length) return;
- if (!modTargetOptions.includes(modTarget)) setModTarget(modTargetOptions[0]);
- }, [modTarget, modTargetOptions]);
+ const [prevTargetOptions, setPrevTargetOptions] = useState(modTargetOptions);
+ if (modTargetOptions !== prevTargetOptions) {
+ setPrevTargetOptions(modTargetOptions);
+ if (
+ modTargetOptions.length > 0 &&
+ !modTargetOptions.includes(modTarget)
+ ) {
+ setModTarget(modTargetOptions[0]);
+ }
+ }
 
- useEffect(() => {
+ const [prevServerIdSync, setPrevServerIdSync] = useState(serverId);
+ if (serverId !== prevServerIdSync) {
+ setPrevServerIdSync(serverId);
  setModGameVersion('');
- }, [serverId]);
+ }
 
- useEffect(() => {
+ const [prevServerGameVersion, setPrevServerGameVersion] = useState(serverGameVersion);
+ if (serverGameVersion !== prevServerGameVersion) {
+ setPrevServerGameVersion(serverGameVersion);
  const detectedVersion = serverGameVersion?.trim();
- if (!detectedVersion) return;
+ if (detectedVersion) {
  setModGameVersion((current) => (current ? current : detectedVersion));
- }, [serverGameVersion]);
+ }
+ }
 
- // Reset page and selection on filter change
- useEffect(() => {
+ const filterKey = `${modProvider}|${modProviderGame ?? ''}|${modQuery}|${modTarget}|${modLoader}|${modGameVersion}`;
+ const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+ if (filterKey !== prevFilterKey) {
+ setPrevFilterKey(filterKey);
  setSelectedProject(null);
  setSelectedVersion('');
  setSearchPage(1);
- }, [modProvider, modProviderGame, modQuery, modTarget, modLoader, modGameVersion]);
+ }
 
- useEffect(() => {
+ const [prevSelectedProject, setPrevSelectedProject] = useState<typeof selectedProject>(selectedProject);
+ if (selectedProject !== prevSelectedProject) {
+ setPrevSelectedProject(selectedProject);
  setSelectedVersion('');
- }, [selectedProject]);
+ }
 
  // ── Queries ──
  const { data: modGameVersionTags } = useQuery({
@@ -504,20 +526,32 @@ export default function ServerModManagerTab({
  );
 
  // Auto-select stable version
- useEffect(() => {
- if (!selectedProject) return;
- if (!modVersionOptions.length) {
- if (selectedVersion) setSelectedVersion('');
- return;
- }
+ const [prevAutoVersion, setPrevAutoVersion] = useState({
+ options: modVersionOptions,
+ project: selectedProject,
+ version: selectedVersion,
+ });
  if (
+ modVersionOptions !== prevAutoVersion.options ||
+ selectedProject !== prevAutoVersion.project ||
+ selectedVersion !== prevAutoVersion.version
+ ) {
+ setPrevAutoVersion({
+ options: modVersionOptions,
+ project: selectedProject,
+ version: selectedVersion,
+ });
+ if (selectedProject) {
+ if (modVersionOptions.length === 0) {
+ if (selectedVersion) setSelectedVersion('');
+ } else if (
+ !(
  selectedVersion &&
  modVersionOptions.some(
  (entry: any) => normalizeVersionId(entry) === selectedVersion,
  )
+ )
  ) {
- return;
- }
  const preferred =
  modVersionOptions.find((entry: any) => isStableRelease(entry)) ??
  modVersionOptions[0];
@@ -525,7 +559,9 @@ export default function ServerModManagerTab({
  if (preferredId && preferredId !== selectedVersion) {
  setSelectedVersion(preferredId);
  }
- }, [modVersionOptions, selectedProject, selectedVersion]);
+ }
+ }
+ }
 
  // ── Handlers ──
  const handleSearch = useCallback(() => {

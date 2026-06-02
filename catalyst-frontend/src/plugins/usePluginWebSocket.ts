@@ -56,6 +56,8 @@ export function usePluginWebSocket(
   const reconnectAttemptsRef = useRef(0);
   const handlerRef = useRef(handler);
   const enabledRef = useRef(enabled);
+  const intentionalCloseRef = useRef(false);
+  const connectRef = useRef<(() => void) | null>(null);
 
   // Keep handler ref up-to-date without re-triggering effects
   useEffect(() => {
@@ -67,18 +69,14 @@ export function usePluginWebSocket(
   }, [enabled]);
 
   const connect = useCallback(() => {
-    // Clean up any existing connection
+    // Close any previous socket without removing callbacks; stale-socket
+    // guards below will ignore events from the old instance.
     if (wsRef.current) {
-      wsRef.current.onopen = null;
-      wsRef.current.onclose = null;
-      wsRef.current.onerror = null;
-      wsRef.current.onmessage = null;
       try {
         wsRef.current.close();
       } catch {
         // ignore
       }
-      wsRef.current = null;
     }
 
     const wsUrl = url || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
@@ -87,67 +85,69 @@ export function usePluginWebSocket(
     // Don't attempt connection if no custom URL provided — the default /ws/plugins
     // endpoint doesn't exist on the backend yet. Only connect if an explicit URL is given.
     if (!url) {
-      setError('WebSocket not available');
       return;
     }
 
-    try {
-      const ws = new WebSocket(fullUrl);
-      wsRef.current = ws;
+    const ws = new WebSocket(fullUrl);
+    wsRef.current = ws;
 
-      ws.onopen = () => {
-        setConnected(true);
-        setError(null);
-        reconnectAttemptsRef.current = 0;
-      };
+    ws.onopen = () => {
+      if (wsRef.current !== ws) return;
+      setConnected(true);
+      setError(null);
+      reconnectAttemptsRef.current = 0;
+    };
 
-      ws.onclose = () => {
-        setConnected(false);
-        wsRef.current = null;
-
-        // If we never successfully connected, give up after 2 attempts
-        // to avoid spamming reconnect attempts to a non-existent endpoint
-        if (reconnectAttemptsRef.current >= 2) {
-          setError('WebSocket unavailable');
-          return;
-        }
-
-        // Auto-reconnect with exponential backoff if still enabled
-        if (enabledRef.current) {
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
-          reconnectAttemptsRef.current += 1;
-          reconnectTimeoutRef.current = setTimeout(connect, delay);
-        }
-      };
-
-      ws.onerror = () => {
-        setError('WebSocket connection error');
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          const expectedType = `plugin:${pluginName}:${eventType}`;
-          if (message.type === expectedType) {
-            handlerRef.current(message.data);
-          }
-        } catch {
-          // Ignore non-JSON or malformed messages
-        }
-      };
-    } catch (err: unknown) {
-      reportSystemError({
-        level: 'error',
-        component: 'usePluginWebSocket',
-        message: err instanceof Error ? err.message : 'Failed to create WebSocket',
-        stack: err instanceof Error ? err.stack : undefined,
-        metadata: { context: 'Failed to create WebSocket connection' },
-      });
-      const msg = err instanceof Error ? err.message : 'Failed to create WebSocket';
-      setError(msg);
+    ws.onclose = () => {
+      if (wsRef.current !== ws) return;
       setConnected(false);
-    }
+      wsRef.current = null;
+
+      if (intentionalCloseRef.current) {
+        intentionalCloseRef.current = false;
+        setError(null);
+        return;
+      }
+
+      // If we never successfully connected, give up after 2 attempts
+      // to avoid spamming reconnect attempts to a non-existent endpoint
+      if (reconnectAttemptsRef.current >= 2) {
+        setError('WebSocket unavailable');
+        return;
+      }
+
+      // Auto-reconnect with exponential backoff if still enabled
+      if (enabledRef.current) {
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
+        reconnectAttemptsRef.current += 1;
+        reconnectTimeoutRef.current = setTimeout(() => connectRef.current?.(), delay);
+      }
+    };
+
+    ws.onerror = () => {
+      if (wsRef.current !== ws) return;
+      setError('WebSocket connection error');
+    };
+
+    ws.onmessage = (event) => {
+      if (wsRef.current !== ws) return;
+      try {
+        const message = JSON.parse(event.data);
+        const expectedType = `plugin:${pluginName}:${eventType}`;
+        if (message.type === expectedType) {
+          handlerRef.current(message.data);
+        }
+      } catch {
+        // Ignore non-JSON or malformed messages
+      }
+    };
   }, [pluginName, eventType, url]);
+
+  // Sync connectRef so stale closures inside WebSocket callbacks
+  // always see the latest connect() definition.
+  useEffect(() => {
+    connectRef.current = connect;
+  });
 
   const send = useCallback((data: any) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -166,19 +166,9 @@ export function usePluginWebSocket(
         reconnectTimeoutRef.current = null;
       }
       if (wsRef.current) {
-        wsRef.current.onopen = null;
-        wsRef.current.onclose = null;
-        wsRef.current.onerror = null;
-        wsRef.current.onmessage = null;
-        try {
-          wsRef.current.close();
-        } catch {
-          // ignore
-        }
-        wsRef.current = null;
+        intentionalCloseRef.current = true;
+        wsRef.current.close();
       }
-      setConnected(false);
-      setError(null);
       return;
     }
 
@@ -190,19 +180,9 @@ export function usePluginWebSocket(
         reconnectTimeoutRef.current = null;
       }
       if (wsRef.current) {
-        wsRef.current.onopen = null;
-        wsRef.current.onclose = null;
-        wsRef.current.onerror = null;
-        wsRef.current.onmessage = null;
-        try {
-          wsRef.current.close();
-        } catch {
-          // ignore
-        }
-        wsRef.current = null;
+        intentionalCloseRef.current = true;
+        wsRef.current.close();
       }
-      setConnected(false);
-      reconnectAttemptsRef.current = 0;
     };
   }, [enabled, connect]);
 

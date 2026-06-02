@@ -71,6 +71,10 @@ function getResourceIcon(resource: string) {
  return icons[resource] || Activity;
 }
 
+function ResourceIcon({ resource, className }: { resource: string; className?: string }) {
+ return React.createElement(getResourceIcon(resource), { className });
+}
+
 function getActionTone(action: string): 'success' | 'warning' | 'danger' | 'neutral' {
  if (action.includes('delete') || action.includes('ban') || action.includes('failed') || action.includes('disconnect')) return 'danger';
  if (action.includes('suspend')) return 'warning';
@@ -125,7 +129,6 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
  // Filter out internal _actor.* keys from the generic details display
  const publicEntries = Object.entries(details).filter(([key]) => !key.startsWith('_actor'));
  const hasDetails = publicEntries.length > 0;
- const Icon = getResourceIcon(log.resource);
  const tone = getActionTone(log.action);
 
  const toneStyles: Record<string, { bg: string; border: string; text: string; dot: string }> = {
@@ -201,7 +204,7 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
  <div className="relative flex items-start justify-between gap-3">
  <div className="flex items-start gap-3">
  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${ts.bg} ${ts.text}`}>
- <Icon className="h-5 w-5" />
+ <ResourceIcon resource={log.resource} className="h-5 w-5" />
  </div>
  <div>
  <div className="flex items-center gap-2.5">
@@ -215,7 +218,7 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
  </div>
  <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
  <Badge variant="secondary" className="gap-1 text-[10px]">
- <Icon className="h-2.5 w-2.5" />
+ <ResourceIcon resource={log.resource} className="h-2.5 w-2.5" />
  {log.resource}
  </Badge>
  {log.resourceId && (
@@ -353,7 +356,7 @@ function AuditLogsPage() {
  return () => clearInterval(interval);
  }, [livePoll, refetch]);
 
- const logs = data?.logs ?? [];
+ const logs = useMemo(() => data?.logs ?? [], [data?.logs]);
  const pagination = data?.pagination;
  const hasFilters = action || resource || userId || from || to;
 
@@ -553,7 +556,6 @@ function AuditLogsPage() {
 
  <div className="space-y-2">
  {entries.map((log) => {
- const Icon = getResourceIcon(log.resource);
  const tone = getActionTone(log.action);
  const resourceLink = log.resource === 'server' && log.resourceId ? `/servers/${log.resourceId}` :
  log.resource === 'node' && log.resourceId ? `/admin/nodes/${log.resourceId}` : null;
@@ -565,7 +567,7 @@ function AuditLogsPage() {
  >
  <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary/0 transition-colors duration-150 group-hover:bg-primary/50" />
  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
- <Icon className="h-4 w-4" />
+ <ResourceIcon resource={log.resource} className="h-4 w-4" />
  </div>
 
  <div className="min-w-0 flex-1">

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qk } from '../lib/queryKeys';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -19,8 +19,6 @@ function InvitesPage() {
  const setSession = useAuthStore((s) => s.setSession);
  const queryClient = useQueryClient();
  const [accepted, setAccepted] = useState(false);
- const [registerUsername, setRegisterUsername] = useState('');
- const [registerPassword, setRegisterPassword] = useState('');
  const { data: invitePreview } = useQuery<ServerInvitePreview>({
  queryKey: qk.invitePreview(token ?? ''),
  queryFn: async () => {
@@ -30,10 +28,13 @@ function InvitesPage() {
  enabled: Boolean(token),
  staleTime: 60_000,
  });
- useEffect(() => {
- if (!invitePreview?.email) return;
+ const [registerUsername, setRegisterUsername] = useState('');
+ const [prevEmail, setPrevEmail] = useState(invitePreview?.email);
+ if (invitePreview?.email !== prevEmail) {
+ setPrevEmail(invitePreview.email);
  setRegisterUsername((current) => current || invitePreview.email.split('@')[0]);
- }, [invitePreview?.email]);
+ }
+ const [registerPassword, setRegisterPassword] = useState('');
 
  const acceptMutation = useMutation({
  mutationFn: () => serversApi.acceptInvite(token ?? ''),

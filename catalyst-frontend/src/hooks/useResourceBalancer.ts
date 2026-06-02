@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Cpu, MemoryStick, Network } from 'lucide-react';
 
 export const GAME_RESOURCES = [
@@ -48,6 +48,7 @@ export interface GameState {
   comboTimer: number;
   gameOver: boolean;
   newHighScore: boolean;
+  highScore: number;
   memorySpikeTimer: number;
   networkBurstTimer: number;
   networkBurstFilling: boolean;
@@ -74,6 +75,7 @@ function createInitialState(): GameState {
     comboTimer: 0,
     gameOver: false,
     newHighScore: false,
+    highScore: getHighScore(),
     memorySpikeTimer: Math.floor(Math.random() * 80) + 40,
     networkBurstTimer: 30,
     networkBurstFilling: true,
@@ -103,18 +105,17 @@ function getRate(base: number, wave: number) {
 
 export function useResourceBalancer() {
   const [game, setGame] = useState<GameState>(createInitialState);
-  const [highScore, setHighScoreState] = useState(getHighScore);
-  const [reducedMotion, setReducedMotion] = useState(false);
+  const reducedMotion = useSyncExternalStore(
+    (callback) => {
+      const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
+      mql.addEventListener('change', callback);
+      return () => mql.removeEventListener('change', callback);
+    },
+    () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    () => false,
+  );
   const eventIdRef = useRef(0);
   const comboResetRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setReducedMotion(mql.matches);
-    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
-  }, []);
 
   useEffect(() => {
     if (game.gameOver) return;
@@ -192,11 +193,12 @@ export function useResourceBalancer() {
         const isGameOver = clampedStability <= 0;
 
         let newHighScore = false;
+        let nextHighScore = prev.highScore;
         if (isGameOver) {
-          const hs = getHighScore();
-          if (score > hs) {
+          if (score > prev.highScore) {
             saveHighScore(score);
             newHighScore = true;
+            nextHighScore = score;
           }
         }
 
@@ -212,6 +214,7 @@ export function useResourceBalancer() {
           comboTimer,
           gameOver: isGameOver,
           newHighScore,
+          highScore: nextHighScore,
           memorySpikeTimer,
           networkBurstTimer,
           networkBurstFilling,
@@ -222,12 +225,6 @@ export function useResourceBalancer() {
 
     return () => window.clearInterval(interval);
   }, [game.gameOver, reducedMotion]);
-
-  useEffect(() => {
-    if (game.gameOver && game.newHighScore) {
-      setHighScoreState(game.score);
-    }
-  }, [game.gameOver, game.newHighScore, game.score]);
 
   const flush = useCallback((key: ResourceKey) => {
     setGame((prev) => {
@@ -270,7 +267,7 @@ export function useResourceBalancer() {
 
   return {
     game,
-    highScore,
+    highScore: game.highScore,
     flush,
     reset,
     reducedMotion,

@@ -309,13 +309,13 @@ function Sidebar() {
  const themeSettings = useThemeStore((s) => s.themeSettings);
  const sidebarCollapsed = useThemeStore((s) => s.sidebarCollapsed);
  const toggleSidebar = useThemeStore((s) => s.toggleSidebar);
- const userPermissions = user?.permissions || [];
  const pluginTabs = usePluginTabs('admin');
  const pluginRoutes = usePluginRoutes();
 
  const hasUserTicketPage = pluginRoutes.length > 0;
 
  const filteredSections = useMemo(() => {
+ const userPermissions = user?.permissions || [];
  const sections = adminSections
  .map((section) => ({
  ...section,
@@ -336,7 +336,7 @@ function Sidebar() {
  }
 
  return sections;
- }, [userPermissions, pluginTabs]);
+ }, [user, pluginTabs]);
 
  const displayName = user?.firstName || user?.lastName
  ? [user.firstName, user.lastName].filter(Boolean).join(' ')

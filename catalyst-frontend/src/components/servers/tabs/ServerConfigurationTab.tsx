@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { qk } from '../../../lib/queryKeys';
 import { filesApi } from '../../../services/api/files';
@@ -72,6 +72,48 @@ interface Props {
  onResetStartupCommand: () => void;
 }
 
+// ── Config helpers ──
+const isConfigMap = (value: ConfigNode): value is ConfigMap =>
+ Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const normalizeEntry = (key: string, value: ConfigNode): ConfigEntry => {
+ if (isConfigMap(value)) {
+ const children = Object.entries(value).map(([childKey, childValue]) =>
+ normalizeEntry(childKey, childValue),
+ );
+ return { key, value: '', type: 'object', children };
+ }
+ if (value === null) return { key, value: '', type: 'null' };
+ if (typeof value === 'boolean')
+ return { key, value: value ? 'true' : 'false', type: 'boolean' };
+ if (typeof value === 'number')
+ return { key, value: String(value), type: 'number' };
+ return { key, value: String(value), type: 'string' };
+};
+
+const toSections = (record: ConfigMap): ConfigSection[] => {
+ const rootEntries: ConfigEntry[] = [];
+ const sections: ConfigSection[] = [];
+ Object.entries(record).forEach(([key, value]) => {
+ if (isConfigMap(value)) {
+ const nestedEntries = Object.entries(value).map(([childKey, childValue]) =>
+ normalizeEntry(childKey, childValue),
+ );
+ sections.push({ title: key, entries: nestedEntries, collapsed: true });
+ } else {
+ rootEntries.push(normalizeEntry(key, value));
+ }
+ });
+ if (rootEntries.length || sections.length === 0) {
+ sections.unshift({
+ title: 'General',
+ entries: rootEntries,
+ collapsed: false,
+ });
+ }
+ return sections;
+};
+
 export default function ServerConfigurationTab({
  serverId,
  isSuspended,
@@ -95,48 +137,6 @@ export default function ServerConfigurationTab({
  ...(configTemplatePath ? [configTemplatePath] : []),
  ...configTemplatePaths,
  ];
-
- // ── Config helpers ──
- const isConfigMap = (value: ConfigNode): value is ConfigMap =>
- Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-
- const normalizeEntry = (key: string, value: ConfigNode): ConfigEntry => {
- if (isConfigMap(value)) {
- const children = Object.entries(value).map(([childKey, childValue]) =>
- normalizeEntry(childKey, childValue),
- );
- return { key, value: '', type: 'object', children };
- }
- if (value === null) return { key, value: '', type: 'null' };
- if (typeof value === 'boolean')
- return { key, value: value ? 'true' : 'false', type: 'boolean' };
- if (typeof value === 'number')
- return { key, value: String(value), type: 'number' };
- return { key, value: String(value), type: 'string' };
- };
-
- const toSections = (record: ConfigMap): ConfigSection[] => {
- const rootEntries: ConfigEntry[] = [];
- const sections: ConfigSection[] = [];
- Object.entries(record).forEach(([key, value]) => {
- if (isConfigMap(value)) {
- const nestedEntries = Object.entries(value).map(([childKey, childValue]) =>
- normalizeEntry(childKey, childValue),
- );
- sections.push({ title: key, entries: nestedEntries, collapsed: true });
- } else {
- rootEntries.push(normalizeEntry(key, value));
- }
- });
- if (rootEntries.length || sections.length === 0) {
- sections.unshift({
- title: 'General',
- entries: rootEntries,
- collapsed: false,
- });
- }
- return sections;
- };
 
  const buildConfigRecord = (sections: ConfigSection[]): ConfigMap => {
  const record: ConfigMap = {};
@@ -234,15 +234,17 @@ export default function ServerConfigurationTab({
  );
 
  // Load config files on mount
- useEffect(() => {
- if (!serverId || !server?.template) {
+ const [prevConfigDeps, setPrevConfigDeps] = useState({ serverId, configPathsKey: '' as string });
+ const configPathsKey = combinedConfigPaths.join('|');
+ if (
+ prevConfigDeps.serverId !== serverId ||
+ prevConfigDeps.configPathsKey !== configPathsKey
+ ) {
+ prevConfigDeps = { serverId, configPathsKey };
+ if (!serverId || !server?.template || combinedConfigPaths.length === 0) {
  setConfigFiles([]);
- return;
- }
- if (combinedConfigPaths.length === 0) {
- setConfigFiles([]);
- return;
- }
+ setOpenConfigIndex(-1);
+ } else {
  const uniquePaths = Array.from(new Set(combinedConfigPaths));
  setConfigFiles(
  uniquePaths.map((path) => ({
@@ -256,11 +258,22 @@ export default function ServerConfigurationTab({
  })),
  );
  setOpenConfigIndex(-1);
+ }
+ }
+
+ useEffect(() => {
+ if (!serverId || !server?.template || combinedConfigPaths.length === 0) return;
+ let active = true;
+ const uniquePaths = Array.from(new Set(combinedConfigPaths));
  Promise.all(uniquePaths.map((path) => loadConfigFile(path))).then(
  (results) => {
+ if (!active) return;
  setConfigFiles(results);
  },
  );
+ return () => {
+ active = false;
+ };
  }, [
  serverId,
  server?.template?.features?.configFile,

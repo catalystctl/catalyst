@@ -25,7 +25,7 @@ function formatDuration(ms: number): string {
 }
 
 export function SLATimer({ sla, className }: SLATimerProps) {
- const [now, setNow] = useState(Date.now());
+ const [now, setNow] = useState(() => Date.now());
 
  useEffect(() => {
  const interval = setInterval(() => setNow(Date.now()), 30000);

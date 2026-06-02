@@ -76,7 +76,7 @@ function renderMarkdown(markdown: string): string {
  }
 
  for (let i = 0; i < lines.length; i++) {
- let line = lines[i];
+ const line = lines[i];
 
  // Code block placeholder
  if (/^%%CODEBLOCK_\d+%%$/.test(line)) {

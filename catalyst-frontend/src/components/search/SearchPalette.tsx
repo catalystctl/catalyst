@@ -760,16 +760,15 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  const listRef = useRef<HTMLDivElement>(null);
  const prevIsOpenRef = useRef(isOpen);
 
- const userPermissions = user?.permissions || [];
-
  // ── Static items (permission-filtered) ──
 
  const staticItems = useMemo((): SearchItem[] => {
+ const userPermissions = user?.permissions || [];
  return STATIC_ITEMS.filter((item) => {
  if (item.permissions) return hasAnyPermission(userPermissions, item.permissions);
  return true;
  });
- }, [userPermissions]);
+ }, [user]);
 
  // ── Dynamic items (servers, nodes, templates, server tabs, actions) ──
 
@@ -932,7 +931,6 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
 
  useEffect(() => {
  if (isOpen && !prevIsOpenRef.current) {
- // eslint-disable-next-line react-hooks/set-state-in-effect
  setQuery('');
  setSelectedIndex(0);
  setActiveCategory('All');

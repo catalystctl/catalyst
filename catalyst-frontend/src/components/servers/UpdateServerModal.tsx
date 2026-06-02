@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -38,9 +38,9 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
  const [availableIps, setAvailableIps] = useState<string[]>([]);
  const [ipLoadError, setIpLoadError] = useState<string | null>(null);
  const { data: server } = useServer(serverId);
- const [resizeDone, setResizeDone] = useState(false);
-
- useSseResizeComplete(serverId, () => setResizeDone(true));
+ useSseResizeComplete(serverId, () => {
+ setOpen(false);
+ });
 
  const isRunning = server?.status !== 'stopped';
  const isIpamNetwork = server?.networkMode && !['bridge', 'host'].includes(server.networkMode);
@@ -105,9 +105,10 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
  onError: () => notifyError('Failed to update server'),
  });
 
- useEffect(() => {
- if (!server) return;
- // eslint-disable-next-line react-hooks/set-state-in-effect
+ const [prevServer, setPrevServer] = useState(server);
+ if (server !== prevServer) {
+ setPrevServer(server);
+ if (server) {
  setName(server.name ?? '');
  if (server.allocatedMemoryMb) setMemory(String(server.allocatedMemoryMb));
  if (server.allocatedCpuCores) setCpu(String(server.allocatedCpuCores));
@@ -115,20 +116,41 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
  setDatabaseAllocation(String(server.databaseAllocation ?? 0));
  setPrimaryIp(server.primaryIp ?? '');
  setAllocationId('');
- }, [server]);
+ }
+ }
 
- useEffect(() => {
- let active = true;
+ const [prevIpDeps, setPrevIpDeps] = useState({
+ nodeId: server?.nodeId,
+ networkMode: server?.networkMode,
+ isIpamNetwork,
+ });
+ if (
+ prevIpDeps.nodeId !== server?.nodeId ||
+ prevIpDeps.networkMode !== server?.networkMode ||
+ prevIpDeps.isIpamNetwork !== isIpamNetwork
+ ) {
+ setPrevIpDeps({
+ nodeId: server?.nodeId,
+ networkMode: server?.networkMode,
+ isIpamNetwork,
+ });
  if (!server?.nodeId || !isIpamNetwork) {
- // eslint-disable-next-line react-hooks/set-state-in-effect
  setAvailableIps([]);
  setIpLoadError(null);
+ } else {
+ setIpLoadError(null);
+ }
+ }
+
+ useEffect(() => {
+ if (!server?.nodeId || !isIpamNetwork) {
+ let active = true;
  return () => {
  active = false;
  };
  }
 
- setIpLoadError(null);
+ let active = true;
  const networkName = server.networkMode?.trim() || 'mc-lan-static';
  nodesApi
  .availableIps(server.nodeId, networkName, 200)
@@ -148,17 +170,40 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
  };
  }, [server?.nodeId, server?.networkMode, isIpamNetwork]);
 
- useEffect(() => {
- let active = true;
+ const [prevAllocDeps, setPrevAllocDeps] = useState({
+ nodeId: server?.nodeId,
+ networkMode: server?.networkMode,
+ serverId: server?.id,
+ isBridgeNetwork,
+ });
+ if (
+ prevAllocDeps.nodeId !== server?.nodeId ||
+ prevAllocDeps.networkMode !== server?.networkMode ||
+ prevAllocDeps.serverId !== server?.id ||
+ prevAllocDeps.isBridgeNetwork !== isBridgeNetwork
+ ) {
+ setPrevAllocDeps({
+ nodeId: server?.nodeId,
+ networkMode: server?.networkMode,
+ serverId: server?.id,
+ isBridgeNetwork,
+ });
  if (!server?.nodeId || !isBridgeNetwork) {
- // eslint-disable-next-line react-hooks/set-state-in-effect
  setAvailableAllocations([]);
  setAllocLoadError(null);
+ } else {
+ setAllocLoadError(null);
+ }
+ }
+
+ useEffect(() => {
+ if (!server?.nodeId || !isBridgeNetwork) {
+ let active = true;
  return () => {
  active = false;
  };
  }
- setAllocLoadError(null);
+ let active = true;
  nodesApi
  .allocations(server.nodeId, { serverId: server.id })
  .then((allocations) => {
@@ -186,14 +231,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
  };
  }, [server?.nodeId, server?.networkMode, server?.id, isBridgeNetwork]);
 
- // When SSE fires storage_resize_complete, close the modal
- useEffect(() => {
- if (resizeDone) {
- // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: reset flag after handling
- setResizeDone(false);
- setOpen(false);
- }
- }, [resizeDone]);
+ // SSE resize handler closes the modal directly via the callback above
 
  return (
  <>

@@ -6,7 +6,7 @@
  *
  * Use this in AppLayout to handle state updates for all servers globally.
  */
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useQueryClient, type Query } from '@tanstack/react-query';
 import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
 import { qk } from '../lib/queryKeys';
@@ -19,7 +19,7 @@ export function useServerStateUpdates() {
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isProcessing = useRef(false);
 
-  const processUpdates = () => {
+  const processUpdates = useCallback(() => {
     if (isProcessing.current || !pendingUpdates.current?.size) return;
     isProcessing.current = true;
 
@@ -74,15 +74,15 @@ export function useServerStateUpdates() {
     }
 
     isProcessing.current = false;
-  };
+  }, [queryClient]);
 
-  const scheduleProcess = () => {
+  const scheduleProcess = useCallback(() => {
     if (debounceTimer.current) return;
     debounceTimer.current = setTimeout(() => {
       debounceTimer.current = null;
       processUpdates();
     }, DEBOUNCE_MS);
-  };
+  }, [processUpdates]);
 
   useEffect(() => {
     const disconnect = createServerEventsStream(
@@ -205,5 +205,5 @@ export function useServerStateUpdates() {
         clearTimeout(debounceTimer.current);
       }
     };
-  }, [queryClient]);
+  }, [queryClient, scheduleProcess]);
 }

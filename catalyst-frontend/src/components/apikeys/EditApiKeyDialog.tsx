@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Settings, Server, Loader2 } from 'lucide-react';
 import { useUpdateApiKey } from '../../hooks/useApiKeys';
@@ -28,8 +28,12 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
 
  const isAgentKey = apiKey.metadata?.purpose === 'agent';
 
- // Sync form state when apiKey changes
- useEffect(() => {
+ // Reset form state during render when the dialog is re-opened or the
+ // selected API key changes. This is the React 19 idiomatic replacement
+ // for the setState-in-useEffect anti-pattern flagged by react-hooks.
+ const [prevSyncKey, setPrevSyncKey] = useState({ open, apiKey });
+ if (open !== prevSyncKey.open || apiKey !== prevSyncKey.apiKey) {
+ setPrevSyncKey({ open, apiKey });
  if (open) {
  setName(apiKey.name || '');
  setEnabled(apiKey.enabled);
@@ -37,7 +41,7 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  setRateLimitTimeWindow(Math.round((apiKey.rateLimitTimeWindow || 60000) / 1000));
  setError(null);
  }
- }, [open, apiKey]);
+ }
 
  const handleSubmit = async (e: React.FormEvent) => {
  e.preventDefault();

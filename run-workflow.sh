@@ -506,7 +506,8 @@ step_install_deps() {
 
 # ── Step 3: Lint & Static Analysis ────────────────────────────────────────────
 # Maps to:
-#   - pnpm --filter catalyst-backend run lint   (ci.yml lint: job)
+#   - pnpm --filter catalyst-backend run lint  (ci.yml lint: job)
+#   - pnpm --filter catalyst-frontend run lint (ci.yml lint: job)
 #   - cargo fmt --check + cargo clippy      (ci.yml lint: job)
 #   - pnpm audit (security audit)           (ci.yml lint: job)
 step_lint() {
@@ -525,12 +526,16 @@ step_lint() {
   local overall_exit=0
 
   # --- Bun lint (eslint) ---
-  # Maps to: pnpm --filter catalyst-backend run lint in ci.yml lint: job
-  # Runs across all workspace packages that have a lint script
+  # Maps to: pnpm --filter catalyst-backend run lint + pnpm --filter catalyst-frontend run lint in ci.yml lint: job
+  # Runs ESLint for both backend and frontend workspace packages
   if [[ "$HAS_PNPM" -eq 1 ]]; then
-    echo -e "  ${C_BOLD}[pnpm] Running ESLint...${C_RESET}"
-    local lint_cmd="${LINT_CMD:-pnpm --filter catalyst-backend run lint}"
-    if ! run_step "${step_name}_eslint" bash -c "$lint_cmd"; then
+    echo -e "  ${C_BOLD}[pnpm] Running ESLint (backend)...${C_RESET}"
+    if ! run_step "${step_name}_eslint_backend" bash -c "pnpm --filter catalyst-backend run lint"; then
+      overall_exit=1
+    fi
+
+    echo -e "  ${C_BOLD}[pnpm] Running ESLint (frontend)...${C_RESET}"
+    if ! run_step "${step_name}_eslint_frontend" bash -c "pnpm --filter catalyst-frontend run lint"; then
       overall_exit=1
     fi
 

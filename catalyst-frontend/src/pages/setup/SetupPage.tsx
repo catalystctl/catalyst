@@ -137,13 +137,6 @@ function SetupPage() {
  setThemeColors(tc);
  }, [generatedPalette]);
 
- // Auto-apply palette when seed or harmony mode changes
- useEffect(() => {
- if (generatedPalette) {
- handleApplyPalette();
- }
- }, [generatedPalette, handleApplyPalette]);
-
  // ── Validation ──
 
  const validateStep2 = useCallback((): boolean => {

@@ -132,7 +132,6 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
       batchBuffer.current = [];
       loadedKeyRef.current = ''; // force initial-logs effect to always repopulate
     }
-    setStreamStatus('connecting');
 
     consoleSseClient.connect(serverId);
 

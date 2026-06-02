@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { usePluginRoutes } from '../plugins/hooks';
-import { usePluginContext } from '../plugins/PluginProvider';
+import { usePluginContext } from '../plugins/usePluginContext';
 import { useParams, Navigate } from 'react-router-dom';
 import PluginErrorBoundary from '../plugins/PluginErrorBoundary';
 

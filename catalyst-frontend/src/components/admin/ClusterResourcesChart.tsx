@@ -20,7 +20,7 @@ import type {
  TimeRange,
 } from '@/hooks/useClusterMetrics';
 import { useClusterHistoricalMetrics } from '@/hooks/useClusterMetrics';
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 
 type MetricType = 'cpu' | 'memory' | 'network';
 type DataMode = 'live' | 'historical';
@@ -81,24 +81,37 @@ const MAX_LIVE_POINTS = 30;
 
 function useLiveHistory(data: ClusterMetrics | undefined, metric: MetricType) {
  const [history, setHistory] = useState<LivePoint[]>([]);
- const prevMetricRef = useRef<MetricType | null>(null);
+ const [prevSync, setPrevSync] = useState<{ metric: MetricType | null; data: ClusterMetrics | undefined }>({
+ metric: null,
+ data: undefined,
+ });
 
- useEffect(() => {
- if (!data?.nodes) return;
-
- const prev = prevMetricRef.current;
- if (prev !== null && prev !== metric) {
- // Metric changed — reset history
- // eslint-disable-next-line react-hooks/set-state-in-effect
+ // Metric changed → reset history
+ if (prevSync.metric !== null && prevSync.metric !== metric) {
+ if (data?.nodes) {
  setHistory([createLivePoint(data, metric)]);
  } else {
- setHistory((prev) => {
- const updated = [...prev, createLivePoint(data, metric)];
+ setHistory([]);
+ }
+ setPrevSync({ metric, data });
+ return history;
+ }
+
+ // New data arrived → append
+ if (data && data !== prevSync.data) {
+ setHistory((old) => {
+ const updated = [...old, createLivePoint(data, metric)];
  return updated.length > MAX_LIVE_POINTS ? updated.slice(-MAX_LIVE_POINTS) : updated;
  });
+ setPrevSync({ metric, data });
+ return history;
  }
- prevMetricRef.current = metric;
- }, [data, metric]);
+
+ // Sync tracker when props change without triggering history updates
+ if (prevSync.metric !== metric || prevSync.data !== data) {
+ setPrevSync({ metric, data });
+ return history;
+ }
 
  return history;
 }

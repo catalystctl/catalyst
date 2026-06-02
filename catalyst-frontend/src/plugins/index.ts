@@ -1,6 +1,8 @@
 export { usePlugins, useEnabledPlugins, usePlugin, usePluginRoutes, usePluginTabs, usePluginComponents, usePluginLoading } from './hooks';
-export { usePluginContext, PluginProvider } from './PluginProvider';
-export { usePluginSlots, PluginSlot } from './usePluginSlots';
+export { PluginProvider } from './PluginProvider';
+export { usePluginContext } from './usePluginContext';
+export { usePluginSlots } from './usePluginSlots';
+export { PluginSlot } from './PluginSlot';
 export { usePluginWebSocket } from './usePluginWebSocket';
 export { createPluginApiClient, fetchPluginApi } from './plugin-api';
 export { default as PluginErrorBoundary } from './PluginErrorBoundary';

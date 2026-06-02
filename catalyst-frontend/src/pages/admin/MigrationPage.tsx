@@ -770,34 +770,32 @@ export default function MigrationPage() {
 
  // Notify on job completion/failure
  const prevJobStatusRef = useRef<string | null>(null);
+ const jobStatus = activeJob?.status;
+ const jobError = activeJob?.error;
  useEffect(() => {
- if (!activeJob) return;
+ if (!jobStatus) return;
  const prev = prevJobStatusRef.current;
- if (prev && prev === 'running' && activeJob.status === 'completed') {
+ if (prev && prev === 'running' && jobStatus === 'completed') {
  notifySuccess('Migration completed successfully!');
  }
- if (prev && prev === 'running' && activeJob.status === 'failed') {
- notifyError(`Migration failed: ${activeJob.error || 'Unknown error'}`);
+ if (prev && prev === 'running' && jobStatus === 'failed') {
+ notifyError(`Migration failed: ${jobError || 'Unknown error'}`);
  }
- prevJobStatusRef.current = activeJob.status;
- }, [activeJob?.status]);
+ prevJobStatusRef.current = jobStatus;
+ }, [jobStatus, jobError]);
 
- // Auto-detect active job
- useEffect(() => {
+ // Auto-detect active job via state sync during render
+ const [prevSafeJobs, setPrevSafeJobs] = useState(safeJobs);
+ if (safeJobs !== prevSafeJobs) {
+ setPrevSafeJobs(safeJobs);
  if (safeJobs) {
  const active = safeJobs.find(j => j.status === 'running' || j.status === 'validating' || j.status === 'paused');
- if (active) {
- // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: set active job when found
+ if (active && active.id !== activeJobId) {
  setActiveJobId(active.id);
  setActiveTab('progress');
- } else {
- // If we were watching a job that's no longer active
- if (activeJobId && activeJob?.status && !['running', 'validating', 'paused'].includes(activeJob.status)) {
- // Keep showing it
  }
  }
  }
- }, [safeJobs]);
 
  // Mutations
  const testMutation = useMutation({
@@ -934,18 +932,24 @@ export default function MigrationPage() {
  }, [activeJob?.currentPhase]);
 
  // Elapsed time counter for running jobs
- const [elapsed, setElapsed] = useState(0);
- useEffect(() => {
- if (!activeJob?.startedAt || !['running', 'validating'].includes(activeJob.status)) {
- // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: reset elapsed when job stops
- setElapsed(0);
- return;
+ const startedAt = activeJob?.startedAt;
+ const status = activeJob?.status;
+ const shouldRun = Boolean(startedAt) && ['running', 'validating'].includes(status);
+ const [elapsed, setElapsed] = useState(() => {
+ if (!shouldRun || !startedAt) return 0;
+ return Date.now() - new Date(startedAt).getTime();
+ });
+ const [prevShouldRun, setPrevShouldRun] = useState(shouldRun);
+ if (shouldRun !== prevShouldRun) {
+ setPrevShouldRun(shouldRun);
+ if (!shouldRun) setElapsed(0);
  }
- const start = new Date(activeJob.startedAt).getTime();
- setElapsed(Date.now() - start);
- const timer = setInterval(() => setElapsed(Date.now() - start), 1000);
+ useEffect(() => {
+ if (!shouldRun || !startedAt) return;
+ const startTime = new Date(startedAt).getTime();
+ const timer = setInterval(() => setElapsed(Date.now() - startTime), 1000);
  return () => clearInterval(timer);
- }, [activeJob?.startedAt, activeJob?.status]);
+ }, [shouldRun, startedAt]);
 
  const tabs = [
  { id: 'new' as const, label: 'New Migration' },

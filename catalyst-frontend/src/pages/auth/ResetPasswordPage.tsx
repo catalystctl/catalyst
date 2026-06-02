@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { authApi } from '../../services/api/auth';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { getErrorMessage } from '../../utils/errors';
@@ -15,33 +16,32 @@ function ResetPasswordPage() {
  const [confirmPassword, setConfirmPassword] = useState('');
  const [isLoading, setIsLoading] = useState(false);
  const [isReset, setIsReset] = useState(false);
- const [isValidating, setIsValidating] = useState(true);
- const [isValid, setIsValid] = useState(false);
  const { panelName, logoUrl } = usePanelBranding();
 
- // Validate token on mount
- useEffect(() => {
- if (!token) {
- setIsValidating(false);
- return;
- }
-
- setIsValidating(true);
- authApi.validateResetToken(token)
- .then(() => setIsValid(true))
- .catch((err) => {
- reportSystemError({
- level: 'error',
- component: 'ResetPasswordPage',
- message: err instanceof Error ? err.message : String(err),
- stack: err instanceof Error ? err.stack : undefined,
- metadata: { context: 'validateResetToken' },
+ const {
+ isLoading: tokenValidating,
+ isSuccess: tokenValid,
+ isError: tokenInvalid,
+ } = useQuery({
+ queryKey: ['resetToken', token],
+ queryFn: async () => {
+ if (!token) throw new Error('No token');
+ await authApi.validateResetToken(token);
+ return true;
+ },
+ enabled: Boolean(token),
+ retry: false,
  });
- setIsValid(false);
+
+ const isValidating = Boolean(token) && tokenValidating;
+ const isValid = tokenValid;
+
+ // Notify once when token is invalid
+ useEffect(() => {
+ if (tokenInvalid) {
  notifyError('Invalid or expired reset link');
- })
- .finally(() => setIsValidating(false));
- }, [token]);
+ }
+ }, [tokenInvalid]);
 
  const handleSubmit = async (e: React.FormEvent) => {
  e.preventDefault();

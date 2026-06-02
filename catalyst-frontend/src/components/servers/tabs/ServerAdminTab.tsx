@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { qk } from '../../../lib/queryKeys';
@@ -282,18 +282,21 @@ export default function ServerAdminTab({
  const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>([]);
  const [envDirty, setEnvDirty] = useState(false);
 
- useEffect(() => {
+ const prevEnvRef = useRef(server?.environment);
+ if (server?.environment !== prevEnvRef.current) {
+ prevEnvRef.current = server?.environment;
  if (!server?.environment) {
  setEnvVars([]);
- return;
- }
+ setEnvDirty(false);
+ } else {
  const entries = Object.entries(server.environment).map(([key, value]) => ({
  key,
  value: String(value),
  }));
  setEnvVars(entries.length ? entries : [{ key: '', value: '' }]);
  setEnvDirty(false);
- }, [server?.id, server?.environment]);
+ }
+ }
 
  const envMutation = useMutation({
  mutationFn: () => {
