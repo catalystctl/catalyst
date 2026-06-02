@@ -40,15 +40,39 @@ RUN npx prisma generate --config prisma/prisma.config.ts
 # Compile TypeScript to JavaScript
 RUN pnpm run build
 
-# Back up generated Prisma client before pruning (pnpm install --prod may clear node_modules)
-RUN cp -r node_modules/.prisma /tmp/.prisma-backup
+# Back up generated Prisma client before pruning (pnpm install --prod may clear node_modules).
+# With pnpm node-linker=hoisted the .prisma cache lives at the workspace root, not
+# under catalyst-backend/node_modules. WORKDIR is /app/catalyst-backend so we
+# reference the hoisted location explicitly.
+RUN cp -r /app/node_modules/.prisma /tmp/.prisma-backup
 
 # Prune dev dependencies in-place (removes typescript, eslint, vitest, prisma CLI, etc.)
 # This drops node_modules from ~424 MB to ~200 MB
 RUN pnpm install --prod --frozen-lockfile
 
-# Restore Prisma client if it was removed during prune
-RUN if [ ! -d node_modules/.prisma ]; then cp -r /tmp/.prisma-backup node_modules/.prisma; fi
+# Restore Prisma client + engine cache if they were removed during the prune.
+# pnpm-hoisted mode keeps them at the workspace root, so restore there too.
+RUN if [ ! -d /app/node_modules/.prisma ]; then cp -r /tmp/.prisma-backup /app/node_modules/.prisma; fi
+
+# Materialise the Prisma client under catalyst-backend/node_modules so the
+# runtime stage's `COPY --from=builder /app/catalyst-backend/node_modules`
+# picks it up. With pnpm 11 + node-linker=hoisted, @prisma/client is a
+# symlink into node_modules/.pnpm and .prisma/client is the engine cache.
+# Use -L to dereference the symlinks and copy actual files (otherwise the
+# runtime image's broken symlink would point to a path it doesn't have).
+# Then copy the .pnpm store so the dereferenced .pnpm/... paths inside
+# the @prisma/client package resolve correctly at runtime.
+RUN mkdir -p /app/catalyst-backend/node_modules/.prisma /app/catalyst-backend/node_modules/@prisma
+RUN cp -rL /app/node_modules/.prisma /app/catalyst-backend/node_modules/.prisma
+RUN cp -rL /app/node_modules/@prisma/client /app/catalyst-backend/node_modules/@prisma/client
+RUN if [ -d /app/node_modules/@prisma/adapter-pg ]; then \
+      cp -rL /app/node_modules/@prisma/adapter-pg /app/catalyst-backend/node_modules/@prisma/adapter-pg; \
+    fi
+# Also copy the .pnpm store so that any inner symlinks in @prisma/client
+# (e.g. for transitive deps hoisted into .pnpm/...) resolve at runtime.
+RUN if [ -d /app/node_modules/.pnpm ]; then \
+      cp -r /app/node_modules/.pnpm /app/catalyst-backend/node_modules/.pnpm; \
+    fi
 
 # Stage 2: Runtime - clean image without build tools or dev dependencies
 FROM node:22-alpine
