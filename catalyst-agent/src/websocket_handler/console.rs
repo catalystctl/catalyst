@@ -157,7 +157,8 @@ impl WebSocketHandler {
                             &format!("Failed to remove container {}: {}", container_name, e),
                             None,
                             None,
-                        ).await;
+                        )
+                        .await;
                     } else {
                         cleaned += 1;
                     }
@@ -451,7 +452,8 @@ impl WebSocketHandler {
                         &format!("Auto-restart failed for {}: {}", server_id, e),
                         None,
                         None,
-                    ).await;
+                    )
+                    .await;
                     let _ = self
                         .emit_console_output(
                             server_id,
@@ -826,5 +828,4 @@ impl WebSocketHandler {
 
         Ok(())
     }
-
 }

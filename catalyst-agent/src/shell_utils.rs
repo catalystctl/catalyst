@@ -156,10 +156,7 @@ mod tests {
             "if [ $(( 1 )) -ne 0 ]; then echo yes; fi"
         );
         // No arithmetic condition → unchanged
-        assert_eq!(
-            normalize_startup_for_sh("echo hello"),
-            "echo hello"
-        );
+        assert_eq!(normalize_startup_for_sh("echo hello"), "echo hello");
     }
 
     #[test]

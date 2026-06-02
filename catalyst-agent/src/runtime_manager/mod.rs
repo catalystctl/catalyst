@@ -31,8 +31,8 @@ use containerd_client::services::v1::{
 };
 use containerd_client::with_namespace;
 use prost_types::Any;
-use tokio::process::Command;
 use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::Command;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::spawn_blocking;
 use tonic::Request;
@@ -40,9 +40,9 @@ use tracing::{debug, error, info, warn};
 
 use nix::errno::Errno;
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
+use nix::sys::signal::{kill, Signal};
 use nix::sys::stat::Mode;
 use nix::unistd::mkfifo;
-use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
 
 /// Guard that reliably kills a `ctr events` child process on Drop.
@@ -57,8 +57,16 @@ impl CtrChildGuard {
         self.child.id()
     }
 
-    pub fn into_lines(mut self) -> (Self, tokio::io::Lines<BufReader<tokio::process::ChildStdout>>) {
-        let stdout = self.child.stdout.take()
+    pub fn into_lines(
+        mut self,
+    ) -> (
+        Self,
+        tokio::io::Lines<BufReader<tokio::process::ChildStdout>>,
+    ) {
+        let stdout = self
+            .child
+            .stdout
+            .take()
             .expect("ctr events stdout should be available at guard creation");
         let reader = BufReader::new(stdout);
         (self, reader.lines())
@@ -125,18 +133,6 @@ impl CpuTracker {
         percent.clamp(0.0, 100.0 * max_cpus)
     }
 }
-
-/// Format bytes into a human-readable string
-
-/// Read PIDs from a cgroup's cgroup.procs
-
-/// Read network I/O stats for a container via /proc/{pid}/net/dev.
-/// Returns (rx_bytes, tx_bytes, display_string).
-
-/// Read block I/O stats from cgroup v2 io.stat.
-/// Returns (read_bytes, write_bytes, display_string).
-
-/// Rotate log files if they exceed MAX_LOG_SIZE
 
 /// Device access profiles for container security
 /// Each profile defines which devices the container can access
@@ -211,9 +207,6 @@ impl DeviceProfile {
 // CNI plugin directories to search as fallback, in order of preference
 // Fedora/RHEL install to /usr/libexec/cni, others typically use /opt/cni/bin
 const CNI_FALLBACK_BIN_DIRS: &[&str] = &["/usr/libexec/cni", "/usr/lib/cni"];
-
-/// Discover the CNI plugin directory: check the configured dir first,
-/// then fall back to standard locations.
 
 const PORT_FWD_STATE_PREFIX: &str = "catalyst-";
 const MAX_CONTENT_BLOB_SIZE: usize = 100 * 1024 * 1024; // 100MB
@@ -362,9 +355,32 @@ impl InstallerHandle {
     }
 }
 
+/// Configuration for constructing a [`ContainerdRuntime`].
+pub struct ContainerdRuntimeConfig {
+    /// Path to the containerd gRPC socket.
+    pub socket_path: PathBuf,
+    /// Containerd namespace used for all operations.
+    pub namespace: String,
+    /// DNS servers injected into container `/etc/resolv.conf`.
+    pub dns_servers: Vec<String>,
+    /// Directory for container console I/O (stdout/stderr FIFOs and log files).
+    pub console_log_dir: PathBuf,
+    /// Directory for CNI result/state files and port-forward state.
+    pub cni_results_dir: PathBuf,
+    /// Directory used by the host-local IPAM plugin for lease storage.
+    pub cni_data_dir: PathBuf,
+    /// Directory where CNI network configuration files are stored.
+    pub cni_dir: PathBuf,
+    /// Directory where CNI plugin binaries are installed.
+    pub cni_bin_dir: PathBuf,
+    /// Bridge interface name for the default NAT network.
+    pub cni_bridge_name: String,
+    /// Subnet for the default bridge NAT network.
+    pub cni_bridge_subnet: String,
+}
+
 #[derive(Clone)]
 pub struct ContainerdRuntime {
-    socket_path: String,
     namespace: String,
     channel: tonic::transport::Channel,
     container_io: Arc<Mutex<HashMap<String, ContainerIo>>>,
@@ -388,88 +404,79 @@ pub struct ContainerdRuntime {
     cni_bridge_subnet: String,
 }
 
-
 pub mod cni_network;
 pub mod container_ops;
 pub mod helpers;
 
 pub use helpers::{
-    format_bytes, get_container_pids, read_network_io, read_block_io,
-    rotate_logs, discover_cni_bin_dir, parse_ctr_event_line,
-    load_named_cni_plugin_config, detect_default_route_interface,
-    detect_host_network, calculate_ip_range_from_subnet,
-    create_fifo, open_fifo_rdwr, set_dir_perms,
-    parse_signal, grpc_err, is_not_found,
-    find_container_cgroup, find_cgroup_recursive,
-    read_cgroup_cpu_usage, read_cgroup_memory, read_cgroup_memory_limit,
+    calculate_ip_range_from_subnet, create_fifo, detect_default_route_interface,
+    detect_host_network, discover_cni_bin_dir, find_container_cgroup, grpc_err, is_not_found,
+    load_named_cni_plugin_config, open_fifo_rdwr, parse_ctr_event_line, parse_signal,
+    read_block_io, read_cgroup_cpu_usage, read_cgroup_memory, read_cgroup_memory_limit,
+    read_network_io, rotate_logs, set_dir_perms,
 };
 
 pub use image_and_spec::{
-    base_mounts, masked_paths, readonly_paths, seccomp_arches,
-    default_seccomp_profile, detect_install_interpreter,
+    base_mounts, default_seccomp_profile, detect_install_interpreter, masked_paths, readonly_paths,
 };
 pub mod image_and_spec;
 
 impl ContainerdRuntime {
-    pub async fn new(
-        socket_path: PathBuf,
-        namespace: String,
-        dns_servers: Vec<String>,
-        console_log_dir: PathBuf,
-        cni_results_dir: PathBuf,
-        cni_data_dir: PathBuf,
-        cni_dir: PathBuf,
-        cni_bin_dir: PathBuf,
-        cni_bridge_name: String,
-        cni_bridge_subnet: String,
-    ) -> AgentResult<Self> {
+    pub async fn new(config: ContainerdRuntimeConfig) -> AgentResult<Self> {
         // Ensure console log directory exists
-        fs::create_dir_all(&console_log_dir).map_err(|e| {
+        fs::create_dir_all(&config.console_log_dir).map_err(|e| {
             AgentError::ContainerError(format!(
                 "Failed to create console log dir {}: {}",
-                console_log_dir.display(),
+                config.console_log_dir.display(),
                 e
             ))
         })?;
 
-        let channel = containerd_client::connect(&socket_path)
+        let channel = containerd_client::connect(&config.socket_path)
             .await
             .map_err(|e| {
                 AgentError::ContainerError(format!(
                     "Failed to connect to containerd at {}: {}",
-                    socket_path.display(),
+                    config.socket_path.display(),
                     e
                 ))
             })?;
-        info!("Connected to containerd at {}", socket_path.display());
-        info!("DNS servers configured for containers: {:?}", dns_servers);
-        info!("Console log dir: {}", console_log_dir.display());
-        info!("CNI results dir: {}", cni_results_dir.display());
-        info!("CNI data dir: {}", cni_data_dir.display());
-        info!("CNI config dir: {}", cni_dir.display());
-        info!("CNI bridge: {} ({})", cni_bridge_name, cni_bridge_subnet);
+        info!(
+            "Connected to containerd at {}",
+            config.socket_path.display()
+        );
+        info!(
+            "DNS servers configured for containers: {:?}",
+            config.dns_servers
+        );
+        info!("Console log dir: {}", config.console_log_dir.display());
+        info!("CNI results dir: {}", config.cni_results_dir.display());
+        info!("CNI data dir: {}", config.cni_data_dir.display());
+        info!("CNI config dir: {}", config.cni_dir.display());
+        info!(
+            "CNI bridge: {} ({})",
+            config.cni_bridge_name, config.cni_bridge_subnet
+        );
         Ok(Self {
-            socket_path: socket_path.to_string_lossy().to_string(),
-            namespace,
+            namespace: config.namespace,
             channel,
             container_io: Arc::new(Mutex::new(HashMap::new())),
-            dns_servers,
+            dns_servers: config.dns_servers,
             cpu_tracker: Arc::new(CpuTracker::new()),
             cgroup_paths: Arc::new(RwLock::new(HashMap::new())),
             container_list_cache: Arc::new(RwLock::new((
                 Vec::new(),
                 Instant::now() - Duration::from_secs(10),
             ))),
-            console_log_dir,
-            cni_results_dir,
-            cni_data_dir,
-            cni_dir,
-            cni_bin_dir,
-            cni_bridge_name,
-            cni_bridge_subnet,
+            console_log_dir: config.console_log_dir,
+            cni_results_dir: config.cni_results_dir,
+            cni_data_dir: config.cni_data_dir,
+            cni_dir: config.cni_dir,
+            cni_bin_dir: config.cni_bin_dir,
+            cni_bridge_name: config.cni_bridge_name,
+            cni_bridge_subnet: config.cni_bridge_subnet,
         })
     }
-
 }
 
 /// Parsed container event from one line of `ctr events` output.

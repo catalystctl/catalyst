@@ -1,6 +1,8 @@
 use base64::Engine;
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
+use nix::sys::signal::{kill, Signal};
+use nix::unistd::Pid;
 use regex::Regex;
 use reqwest::Url;
 use serde_json::{json, Value};
@@ -12,9 +14,7 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use sysinfo::{Disks, Networks, System};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::{RwLock, Semaphore, broadcast};
-use nix::sys::signal::{kill, Signal};
-use nix::unistd::Pid;
+use tokio::sync::{broadcast, RwLock, Semaphore};
 use tokio_tungstenite::connect_async_with_config;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::tungstenite::Message;
@@ -22,12 +22,13 @@ use tracing::{debug, error, info, warn};
 
 use crate::backup_crypto;
 use crate::config::CniNetworkConfig;
+use crate::error_reporter::{ErrorLevel, DEDUP_WINDOW_SECS};
 use crate::shell_utils;
 use crate::{
-    runtime_manager::{rotate_logs, parse_ctr_event_line}, AgentConfig, AgentError, AgentResult, ContainerdRuntime,
-    FileManager, FirewallManager, NetworkManager, StorageManager,
+    runtime_manager::{parse_ctr_event_line, rotate_logs},
+    AgentConfig, AgentError, AgentResult, ContainerdRuntime, FileManager, FirewallManager,
+    NetworkManager, StorageManager,
 };
-use crate::error_reporter::{ErrorLevel, DEDUP_WINDOW_SECS};
 
 pub(crate) type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
@@ -184,10 +185,6 @@ pub(crate) struct DiscoveredServers<'a> {
     timestamp: i64,
 }
 
-
-
-
-
 #[derive(Clone, Debug)]
 pub(crate) struct StopPolicy {
     stop_command: Option<String>,
@@ -284,7 +281,6 @@ impl RestartTracker {
     }
 }
 
-
 pub(crate) fn parse_auto_restart_config(msg: &Value) -> AutoRestartConfig {
     let mut config = AutoRestartConfig::default();
     let Some(ar) = msg.get("autoRestart").and_then(Value::as_object) else {
@@ -325,8 +321,6 @@ pub(crate) async fn chown_to_container_user(dir: &std::path::Path) -> std::io::R
     Ok(())
 }
 
-
-
 pub struct WebSocketHandler {
     pub(crate) config: Arc<AgentConfig>,
     pub(crate) runtime: Arc<ContainerdRuntime>,
@@ -359,7 +353,8 @@ pub struct WebSocketHandler {
     /// seconds before reconnecting (progressive lockout).
     pub(crate) retry_after_seconds: Arc<RwLock<Option<u64>>>,
     /// Deduplication map for error reporting: (component|message_prefix) -> last_sent.
-    pub(crate) error_dedup: Arc<tokio::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>>,
+    pub(crate) error_dedup:
+        Arc<tokio::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>>,
     /// PID of the ctr events subprocess, for explicit cleanup during shutdown.
     pub(crate) ctr_event_pid: Arc<tokio::sync::Mutex<Option<u32>>>,
     /// Shutdown signal sender — used by restart_agent command to trigger graceful shutdown.
@@ -416,11 +411,10 @@ impl Clone for WebSocketHandler {
     }
 }
 
-
 mod backup;
-mod server_lifecycle;
 mod console;
 mod monitoring;
+mod server_lifecycle;
 
 impl WebSocketHandler {
     pub(crate) fn select_agent_auth_token(&self) -> AgentResult<(&str, &'static str)> {
@@ -494,16 +488,10 @@ impl WebSocketHandler {
         // Dedup: suppress duplicate reports within the window
         {
             let mut dedup = self.error_dedup.lock().await;
-            let key = format!(
-                "{}|{}",
-                component,
-                &message[..message.len().min(200)]
-            );
+            let key = format!("{}|{}", component, &message[..message.len().min(200)]);
             let now = std::time::Instant::now();
             if let Some(last) = dedup.get(&key) {
-                if now.duration_since(*last)
-                    < std::time::Duration::from_secs(DEDUP_WINDOW_SECS)
-                {
+                if now.duration_since(*last) < std::time::Duration::from_secs(DEDUP_WINDOW_SECS) {
                     return; // Duplicate suppressed
                 }
             }
@@ -620,7 +608,8 @@ impl WebSocketHandler {
                         &format!("{}", e),
                         None,
                         None,
-                    ).await;
+                    )
+                    .await;
                 }
             }
 
@@ -790,13 +779,15 @@ impl WebSocketHandler {
         connection_tasks.push(tokio::spawn(async move {
             if let Err(e) = handler_clone.monitor_global_events().await {
                 error!("Global event monitor failed: {}", e);
-                handler_clone.report_error(
-                    ErrorLevel::Error,
-                    "agent:event_monitor",
-                    &format!("{}", e),
-                    None,
-                    None,
-                ).await;
+                handler_clone
+                    .report_error(
+                        ErrorLevel::Error,
+                        "agent:event_monitor",
+                        &format!("{}", e),
+                        None,
+                        None,
+                    )
+                    .await;
             }
         }));
 
@@ -828,7 +819,8 @@ impl WebSocketHandler {
                             &format!("{}", e),
                             None,
                             None,
-                        ).await;
+                        )
+                        .await;
                     }
                 }
                 Ok(Message::Binary(data)) => {
@@ -853,7 +845,8 @@ impl WebSocketHandler {
                                     &format!("{}", e),
                                     None,
                                     None,
-                                ).await;
+                                )
+                                .await;
                                 routed = true;
                             }
                         }
@@ -873,7 +866,8 @@ impl WebSocketHandler {
                                 &format!("{}", e),
                                 None,
                                 None,
-                            ).await;
+                            )
+                            .await;
                         }
                     }
                 }
@@ -889,7 +883,8 @@ impl WebSocketHandler {
                         &format!("{}", e),
                         None,
                         None,
-                    ).await;
+                    )
+                    .await;
                     break;
                 }
                 _ => {}
@@ -958,13 +953,15 @@ impl WebSocketHandler {
                     if let Err(e) = handler.install_server(&msg).await {
                         error!("Error in install_server handler: {}", e);
                         let server_id = msg["serverId"].as_str().unwrap_or("unknown");
-                        handler.report_error(
-                            ErrorLevel::Error,
-                            &format!("agent:install_server:{}", server_id),
-                            &format!("{}", e),
-                            None,
-                            None,
-                        ).await;
+                        handler
+                            .report_error(
+                                ErrorLevel::Error,
+                                &format!("agent:install_server:{}", server_id),
+                                &format!("{}", e),
+                                None,
+                                None,
+                            )
+                            .await;
                     }
                 });
             }
@@ -974,13 +971,15 @@ impl WebSocketHandler {
                 tokio::spawn(async move {
                     if let Err(e) = handler.reinstall_server(&msg).await {
                         error!("Error in reinstall_server handler: {}", e);
-                        handler.report_error(
-                            ErrorLevel::Error,
-                            "agent:reinstall_server",
-                            &format!("{}", e),
-                            None,
-                            None,
-                        ).await;
+                        handler
+                            .report_error(
+                                ErrorLevel::Error,
+                                "agent:reinstall_server",
+                                &format!("{}", e),
+                                None,
+                                None,
+                            )
+                            .await;
                     }
                 });
             }
@@ -990,13 +989,15 @@ impl WebSocketHandler {
                 tokio::spawn(async move {
                     if let Err(e) = handler.rebuild_server(&msg).await {
                         error!("Error in rebuild_server handler: {}", e);
-                        handler.report_error(
-                            ErrorLevel::Error,
-                            "agent:rebuild_server",
-                            &format!("{}", e),
-                            None,
-                            None,
-                        ).await;
+                        handler
+                            .report_error(
+                                ErrorLevel::Error,
+                                "agent:rebuild_server",
+                                &format!("{}", e),
+                                None,
+                                None,
+                            )
+                            .await;
                     }
                 });
             }
@@ -1006,13 +1007,15 @@ impl WebSocketHandler {
                 tokio::spawn(async move {
                     if let Err(e) = handler.start_server_with_details(&msg).await {
                         error!("Error in start_server handler: {}", e);
-                        handler.report_error(
-                            ErrorLevel::Error,
-                            "agent:start_server",
-                            &format!("{}", e),
-                            None,
-                            None,
-                        ).await;
+                        handler
+                            .report_error(
+                                ErrorLevel::Error,
+                                "agent:start_server",
+                                &format!("{}", e),
+                                None,
+                                None,
+                            )
+                            .await;
                     }
                 });
             }
@@ -1076,13 +1079,15 @@ impl WebSocketHandler {
                                     .await
                                 {
                                     error!("Force kill failed during restart: {}", e);
-                                    handler.report_error(
-                                        ErrorLevel::Error,
-                                        "agent:restart_server:force_kill",
-                                        &format!("{}", e),
-                                        None,
-                                        None,
-                                    ).await;
+                                    handler
+                                        .report_error(
+                                            ErrorLevel::Error,
+                                            "agent:restart_server:force_kill",
+                                            &format!("{}", e),
+                                            None,
+                                            None,
+                                        )
+                                        .await;
                                 }
                                 break;
                             }
@@ -1092,13 +1097,15 @@ impl WebSocketHandler {
                     }
                     if let Err(e) = handler.start_server_with_details(&msg).await {
                         error!("Error in restart_server (start) handler: {}", e);
-                        handler.report_error(
-                            ErrorLevel::Error,
-                            "agent:restart_server:start",
-                            &format!("{}", e),
-                            None,
-                            None,
-                        ).await;
+                        handler
+                            .report_error(
+                                ErrorLevel::Error,
+                                "agent:restart_server:start",
+                                &format!("{}", e),
+                                None,
+                                None,
+                            )
+                            .await;
                     }
                 });
             }
@@ -1116,13 +1123,15 @@ impl WebSocketHandler {
                 tokio::spawn(async move {
                     if let Err(e) = handler.handle_create_backup(&msg, &write).await {
                         error!("Error in handle_create_backup handler: {}", e);
-                        handler.report_error(
-                            ErrorLevel::Error,
-                            "agent:create_backup",
-                            &format!("{}", e),
-                            None,
-                            None,
-                        ).await;
+                        handler
+                            .report_error(
+                                ErrorLevel::Error,
+                                "agent:create_backup",
+                                &format!("{}", e),
+                                None,
+                                None,
+                            )
+                            .await;
                     }
                 });
             }
@@ -1133,13 +1142,15 @@ impl WebSocketHandler {
                 tokio::spawn(async move {
                     if let Err(e) = handler.handle_restore_backup(&msg, &write).await {
                         error!("Error in handle_restore_backup handler: {}", e);
-                        handler.report_error(
-                            ErrorLevel::Error,
-                            "agent:restore_backup",
-                            &format!("{}", e),
-                            None,
-                            None,
-                        ).await;
+                        handler
+                            .report_error(
+                                ErrorLevel::Error,
+                                "agent:restore_backup",
+                                &format!("{}", e),
+                                None,
+                                None,
+                            )
+                            .await;
                     }
                 });
             }
@@ -1158,13 +1169,15 @@ impl WebSocketHandler {
                 tokio::spawn(async move {
                     if let Err(e) = handler.handle_start_backup_stream(&msg, &write).await {
                         error!("Error in handle_start_backup_stream handler: {}", e);
-                        handler.report_error(
-                            ErrorLevel::Error,
-                            "agent:backup_stream",
-                            &format!("{}", e),
-                            None,
-                            None,
-                        ).await;
+                        handler
+                            .report_error(
+                                ErrorLevel::Error,
+                                "agent:backup_stream",
+                                &format!("{}", e),
+                                None,
+                                None,
+                            )
+                            .await;
                     }
                 });
             }
@@ -1179,13 +1192,15 @@ impl WebSocketHandler {
                 tokio::spawn(async move {
                     if let Err(e) = handler.handle_clone_server_files(&msg, &write).await {
                         error!("Error in handle_clone_server_files handler: {}", e);
-                        handler.report_error(
-                            ErrorLevel::Error,
-                            "agent:clone_server_files",
-                            &format!("{}", e),
-                            None,
-                            None,
-                        ).await;
+                        handler
+                            .report_error(
+                                ErrorLevel::Error,
+                                "agent:clone_server_files",
+                                &format!("{}", e),
+                                None,
+                                None,
+                            )
+                            .await;
                     }
                 });
             }
@@ -1206,7 +1221,8 @@ impl WebSocketHandler {
                     .get("targetVersion")
                     .and_then(|v| v.as_str())
                     .map(String::from);
-                let target_version_display = target_version.as_deref().unwrap_or("latest").to_string();
+                let target_version_display =
+                    target_version.as_deref().unwrap_or("latest").to_string();
                 info!(
                     "Received update_agent command from backend (target={})",
                     target_version_display
@@ -1236,13 +1252,15 @@ impl WebSocketHandler {
                         }
                         Err(e) => {
                             error!("Agent update failed: {}", e);
-                            handler.report_error(
-                                ErrorLevel::Error,
-                                "agent:update",
-                                &format!("{}", e),
-                                None,
-                                None,
-                            ).await;
+                            handler
+                                .report_error(
+                                    ErrorLevel::Error,
+                                    "agent:update",
+                                    &format!("{}", e),
+                                    None,
+                                    None,
+                                )
+                                .await;
                             let payload = json!({
                                 "type": "agent_update_failed",
                                 "requestId": msg_clone.get("requestId"),
@@ -1267,28 +1285,32 @@ impl WebSocketHandler {
                     // OS, kernel, and containerd version never change at runtime —
                     // cache them on first call to avoid repeated syscalls and subprocess spawns.
                     static CACHED_SYSINFO: OnceLock<(String, String, String)> = OnceLock::new();
-                    let (os_info, kernel_version, containerd_version) = CACHED_SYSINFO.get_or_init(|| {
-                        let os_info = System::long_os_version().unwrap_or_default();
-                        let kernel_version = System::kernel_version().unwrap_or_default();
-                        // containerd version is queried synchronously here because
-                        // OnceLock::get_or_init is sync; it runs once and is fast enough.
-                        let containerd_version = std::process::Command::new("ctr")
-                            .arg("version")
-                            .output()
-                            .ok()
-                            .and_then(|o| {
-                                if o.status.success() {
-                                    String::from_utf8_lossy(&o.stdout)
-                                        .lines()
-                                        .find(|l| l.contains("Version:"))
-                                        .map(|l| l.split(':').nth(1).unwrap_or("").trim().to_string())
-                                } else {
-                                    None
-                                }
-                            })
-                            .unwrap_or_default();
-                        (os_info, kernel_version, containerd_version)
-                    }).clone();
+                    let (os_info, kernel_version, containerd_version) = CACHED_SYSINFO
+                        .get_or_init(|| {
+                            let os_info = System::long_os_version().unwrap_or_default();
+                            let kernel_version = System::kernel_version().unwrap_or_default();
+                            // containerd version is queried synchronously here because
+                            // OnceLock::get_or_init is sync; it runs once and is fast enough.
+                            let containerd_version = std::process::Command::new("ctr")
+                                .arg("version")
+                                .output()
+                                .ok()
+                                .and_then(|o| {
+                                    if o.status.success() {
+                                        String::from_utf8_lossy(&o.stdout)
+                                            .lines()
+                                            .find(|l| l.contains("Version:"))
+                                            .map(|l| {
+                                                l.split(':').nth(1).unwrap_or("").trim().to_string()
+                                            })
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .unwrap_or_default();
+                            (os_info, kernel_version, containerd_version)
+                        })
+                        .clone();
 
                     let uptime = crate::websocket_handler::get_uptime().await;
 
@@ -1354,19 +1376,22 @@ impl WebSocketHandler {
                 tokio::spawn(async move {
                     // Try journalctl first (systemd-managed agents)
                     let journal_output = tokio::process::Command::new("journalctl")
-                        .args(&[
-                            "-u", "catalyst-agent",
-                            "-n", &lines.to_string(),
+                        .args([
+                            "-u",
+                            "catalyst-agent",
+                            "-n",
+                            &lines.to_string(),
                             "--no-pager",
                             "--output=json",
                         ])
                         .output()
                         .await;
 
-                    let logs: Vec<Value> = match &journal_output {
-                        Ok(out) if out.status.success() && !out.stdout.is_empty() => {
-                            // Parse journalctl JSON output
-                            String::from_utf8_lossy(&out.stdout)
+                    let logs: Vec<Value> =
+                        match &journal_output {
+                            Ok(out) if out.status.success() && !out.stdout.is_empty() => {
+                                // Parse journalctl JSON output
+                                String::from_utf8_lossy(&out.stdout)
                                 .lines()
                                 .filter_map(|line| serde_json::from_str::<Value>(line).ok())
                                 .map(|entry| {
@@ -1392,35 +1417,35 @@ impl WebSocketHandler {
                                     })
                                 })
                                 .collect()
-                        }
-                        _ => {
-                            // Fallback: try reading from /var/log/catalyst-agent/ or agent data dir
-                            // Use tail-style reading to avoid loading huge files into memory.
-                            let log_paths = vec![
-                                "/var/log/catalyst-agent/agent.log",
-                                "/opt/catalyst-agent/agent.log",
-                            ];
-                            let mut parsed = vec![];
-                            for path in &log_paths {
-                                if let Ok(content) = read_tail(path, lines).await {
-                                    // Parse plain-text log lines
-                                    // Expected format: YYYY-MM-DDTHH:MM:SS [LEVEL] module::path: message
-                                    for line in content.lines() {
-                                        let (level, target, message) = parse_log_line(line);
-                                        let ts = extract_timestamp(line);
-                                        parsed.push(json!({
-                                            "timestamp": ts,
-                                            "level": level,
-                                            "target": target,
-                                            "message": message,
-                                        }));
-                                    }
-                                    break;
-                                }
                             }
-                            parsed
-                        }
-                    };
+                            _ => {
+                                // Fallback: try reading from /var/log/catalyst-agent/ or agent data dir
+                                // Use tail-style reading to avoid loading huge files into memory.
+                                let log_paths = vec![
+                                    "/var/log/catalyst-agent/agent.log",
+                                    "/opt/catalyst-agent/agent.log",
+                                ];
+                                let mut parsed = vec![];
+                                for path in &log_paths {
+                                    if let Ok(content) = read_tail(path, lines).await {
+                                        // Parse plain-text log lines
+                                        // Expected format: YYYY-MM-DDTHH:MM:SS [LEVEL] module::path: message
+                                        for line in content.lines() {
+                                            let (level, target, message) = parse_log_line(line);
+                                            let ts = extract_timestamp(line);
+                                            parsed.push(json!({
+                                                "timestamp": ts,
+                                                "level": level,
+                                                "target": target,
+                                                "message": message,
+                                            }));
+                                        }
+                                        break;
+                                    }
+                                }
+                                parsed
+                            }
+                        };
 
                     let response = json!({
                         "type": "agent_logs_response",
@@ -1460,7 +1485,10 @@ impl WebSocketHandler {
             }
             Some("agent_config_update") => {
                 let config_path = self.config.agent.config_path.clone();
-                let content = msg.get("content").and_then(|v| v.as_str()).map(String::from);
+                let content = msg
+                    .get("content")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
                 let write = Arc::clone(write);
                 let msg_clone = msg.clone();
                 tokio::spawn(async move {
@@ -1474,21 +1502,19 @@ impl WebSocketHandler {
                             // Validate that the content is parseable TOML before writing.
                             // A malformed config will crash the agent on restart.
                             match c.parse::<toml::Value>() {
-                                Ok(_) => {
-                                    match tokio::fs::write(&path, &c).await {
-                                        Ok(_) => json!({
-                                            "type": "agent_config_update_response",
-                                            "requestId": msg_clone.get("requestId"),
-                                            "saved": true,
-                                        }),
-                                        Err(e) => json!({
-                                            "type": "agent_config_update_response",
-                                            "requestId": msg_clone.get("requestId"),
-                                            "saved": false,
-                                            "error": e.to_string(),
-                                        }),
-                                    }
-                                }
+                                Ok(_) => match tokio::fs::write(&path, &c).await {
+                                    Ok(_) => json!({
+                                        "type": "agent_config_update_response",
+                                        "requestId": msg_clone.get("requestId"),
+                                        "saved": true,
+                                    }),
+                                    Err(e) => json!({
+                                        "type": "agent_config_update_response",
+                                        "requestId": msg_clone.get("requestId"),
+                                        "saved": false,
+                                        "error": e.to_string(),
+                                    }),
+                                },
                                 Err(e) => json!({
                                     "type": "agent_config_update_response",
                                     "requestId": msg_clone.get("requestId"),
@@ -2296,9 +2322,7 @@ impl WebSocketHandler {
 
         Ok(())
     }
-
 }
-
 
 /// Parse a plain-text log line into (level, target, message).
 /// Handles tracing-style output: `YYYY-MM-DDTHH:MM:SS.ZZZZ [LEVEL] module::path: message`
@@ -2324,7 +2348,10 @@ fn parse_log_line(line: &str) -> (&'static str, &str, &str) {
 
     // tracing format: module::path: message
     let (target, message) = if let Some(colon_pos) = rest.find(": ") {
-        (rest.get(..colon_pos).unwrap_or("agent"), rest.get(colon_pos + 2..).unwrap_or(rest))
+        (
+            rest.get(..colon_pos).unwrap_or("agent"),
+            rest.get(colon_pos + 2..).unwrap_or(rest),
+        )
     } else {
         ("agent", rest)
     };
@@ -2343,7 +2370,7 @@ fn extract_timestamp(line: &str) -> String {
 /// file into memory. Seeks backwards from the end in 4 KB chunks to find
 /// line boundaries. Returns up to `max_lines` lines as a single String.
 async fn read_tail(path: &str, max_lines: usize) -> Result<String, std::io::Error> {
-    use tokio::io::{AsyncSeekExt, AsyncReadExt};
+    use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
     let mut file = tokio::fs::File::open(path).await?;
     let file_size = file.metadata().await?.len();

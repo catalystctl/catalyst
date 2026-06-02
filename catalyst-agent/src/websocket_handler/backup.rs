@@ -144,7 +144,8 @@ impl WebSocketHandler {
                         &format!("Backup encryption failed for {}: {}", backup_name, e),
                         None,
                         None,
-                    ).await;
+                    )
+                    .await;
                     false
                 }
             }
@@ -259,7 +260,8 @@ impl WebSocketHandler {
 
         // Decompression bomb protection: reject oversized backup files
         const MAX_LOCAL_BACKUP_BYTES: u64 = 10 * 1024 * 1024 * 1024; // 10 GB
-        let backup_metadata = tokio::fs::metadata(&actual_backup_file).await
+        let backup_metadata = tokio::fs::metadata(&actual_backup_file)
+            .await
             .map_err(|e| AgentError::IoError(format!("Failed to read backup metadata: {}", e)))?;
         if backup_metadata.len() > MAX_LOCAL_BACKUP_BYTES {
             if let Some(ref tmp) = cleanup_temp {
@@ -267,7 +269,8 @@ impl WebSocketHandler {
             }
             return Err(AgentError::InvalidRequest(format!(
                 "Backup file too large ({} bytes, max {} bytes)",
-                backup_metadata.len(), MAX_LOCAL_BACKUP_BYTES
+                backup_metadata.len(),
+                MAX_LOCAL_BACKUP_BYTES
             )));
         }
 
@@ -335,9 +338,14 @@ impl WebSocketHandler {
         // Validation passed — atomically replace server_dir with restored data.
         // server_dir may not exist yet, so we ignore remove_dir_all errors.
         let _ = tokio::fs::remove_dir_all(&server_dir).await;
-        tokio::fs::rename(&tmp_dir, &server_dir).await.map_err(|e| {
-            AgentError::FileSystemError(format!("Failed to move restored directory into place: {}", e))
-        })?;
+        tokio::fs::rename(&tmp_dir, &server_dir)
+            .await
+            .map_err(|e| {
+                AgentError::FileSystemError(format!(
+                    "Failed to move restored directory into place: {}",
+                    e
+                ))
+            })?;
 
         // Ensure restored data is owned by container user
         if let Err(e) = chown_to_container_user(&server_dir).await {
@@ -800,7 +808,10 @@ impl WebSocketHandler {
                             MAX_BACKUP_UPLOAD_BYTES
                         )))
                     } else if let Err(e) = session.file.write_all(data).await {
-                        Err(AgentError::IoError(format!("Failed to write backup chunk: {}", e)))
+                        Err(AgentError::IoError(format!(
+                            "Failed to write backup chunk: {}",
+                            e
+                        )))
                     } else {
                         session.bytes_written = next_total;
                         session.last_activity = tokio::time::Instant::now();
@@ -1324,5 +1335,4 @@ impl WebSocketHandler {
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         Ok(())
     }
-
 }

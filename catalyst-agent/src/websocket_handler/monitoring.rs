@@ -253,7 +253,8 @@ impl WebSocketHandler {
                      Check that ctr is installed and containerd is healthy.",
                     None,
                     None,
-                ).await;
+                )
+                .await;
                 return Ok(());
             }
 
@@ -262,7 +263,7 @@ impl WebSocketHandler {
             if ctr_fallback_active {
                 debug!("monitor_global_events: using ctr events subprocess");
                 match self.runtime.start_ctr_events().await {
-                    Ok((mut ctr_guard, ctr_lines)) => {
+                    Ok((ctr_guard, ctr_lines)) => {
                         ctr_fallback_failures = 0;
                         // Store PID for explicit cleanup on agent shutdown.
                         *self.ctr_event_pid.lock().await = ctr_guard.pid();
@@ -279,13 +280,23 @@ impl WebSocketHandler {
                                         }
                                         match ce.topic.as_str() {
                                             "/tasks/start" | "/tasks/exit" | "/tasks/paused" => {
-                                                tokio::time::sleep(Duration::from_millis(100)).await;
-                                                if let Err(e) = self.sync_container_state(&ce.container_id).await {
-                                                    warn!("ctr events: sync for {} failed: {}", ce.container_id, e);
+                                                tokio::time::sleep(Duration::from_millis(100))
+                                                    .await;
+                                                if let Err(e) = self
+                                                    .sync_container_state(&ce.container_id)
+                                                    .await
+                                                {
+                                                    warn!(
+                                                        "ctr events: sync for {} failed: {}",
+                                                        ce.container_id, e
+                                                    );
                                                 }
                                             }
                                             "/containers/delete" => {
-                                                if let Err(e) = self.sync_removed_container_state(&ce.container_id).await {
+                                                if let Err(e) = self
+                                                    .sync_removed_container_state(&ce.container_id)
+                                                    .await
+                                                {
                                                     warn!("ctr events: sync-removed for {} failed: {}", ce.container_id, e);
                                                 }
                                             }
@@ -312,8 +323,10 @@ impl WebSocketHandler {
                         error!(
                             "ctr events: spawn failed (failure {}/{}): {}. \
                              Retrying in {:?}...",
-                            ctr_fallback_failures, MAX_EVENT_SUBSCRIBE_FAILURES,
-                            ctr_err, retry_delay
+                            ctr_fallback_failures,
+                            MAX_EVENT_SUBSCRIBE_FAILURES,
+                            ctr_err,
+                            retry_delay
                         );
                         if ctr_fallback_failures >= MAX_EVENT_SUBSCRIBE_FAILURES {
                             events_service_broken = true;
@@ -808,5 +821,4 @@ impl WebSocketHandler {
 
         Ok(())
     }
-
 }

@@ -9,8 +9,8 @@ use tracing::{error, info, warn};
 use sha2::{Digest, Sha256};
 
 use crate::config::CniNetworkConfig;
-use crate::{AgentConfig, AgentError};
 use crate::net_utils;
+use crate::{AgentConfig, AgentError};
 
 // ---------------------------------------------------------------------------
 // Sudo helper – prompts for password once, then reuses it for all install
@@ -999,11 +999,6 @@ impl SystemSetup {
 
         Ok(())
     }
-
-
-
-
-
 
     /// Helper to run a command and check for errors
     /// Run a command that may need elevated privileges.

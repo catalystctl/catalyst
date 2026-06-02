@@ -933,7 +933,11 @@ impl WebSocketHandler {
         result
     }
 
-    pub(crate) async fn start_server(&self, server_id: &str, container_id: String) -> AgentResult<()> {
+    pub(crate) async fn start_server(
+        &self,
+        server_id: &str,
+        container_id: String,
+    ) -> AgentResult<()> {
         if container_id.is_empty() {
             return Err(AgentError::ContainerError(format!(
                 "Container not found for server {}",
@@ -1106,7 +1110,11 @@ impl WebSocketHandler {
         Ok(())
     }
 
-    pub(crate) async fn kill_server(&self, server_id: &str, container_id: String) -> AgentResult<()> {
+    pub(crate) async fn kill_server(
+        &self,
+        server_id: &str,
+        container_id: String,
+    ) -> AgentResult<()> {
         if container_id.is_empty() {
             info!(
                 "No container found for server {}, marking as killed",
@@ -1171,7 +1179,11 @@ impl WebSocketHandler {
         Ok(())
     }
 
-    pub(crate) async fn delete_server(&self, server_id: &str, server_uuid: &str) -> AgentResult<()> {
+    pub(crate) async fn delete_server(
+        &self,
+        server_id: &str,
+        server_uuid: &str,
+    ) -> AgentResult<()> {
         info!("Deleting server: {} (uuid: {})", server_id, server_uuid);
 
         // Stop monitoring
@@ -1231,5 +1243,4 @@ impl WebSocketHandler {
         info!("Server {} deleted successfully", server_id);
         Ok(())
     }
-
 }

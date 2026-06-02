@@ -230,7 +230,6 @@ impl ContainerdRuntime {
         Ok(config.container_id.to_string())
     }
 
-
     pub async fn spawn_installer_container(
         &self,
         image: &str,
@@ -478,7 +477,6 @@ impl ContainerdRuntime {
         })
     }
 
-
     pub async fn start_container(&self, container_id: &str) -> AgentResult<()> {
         info!("Starting container: {}", container_id);
 
@@ -549,12 +547,10 @@ impl ContainerdRuntime {
         Ok(())
     }
 
-
     pub async fn stop_container(&self, container_id: &str, timeout_secs: u64) -> AgentResult<()> {
         self.stop_container_with_signal(container_id, "SIGTERM", timeout_secs)
             .await
     }
-
 
     pub async fn stop_container_with_signal(
         &self,
@@ -626,7 +622,6 @@ impl ContainerdRuntime {
         Ok(())
     }
 
-
     pub async fn kill_container(&self, container_id: &str, signal: &str) -> AgentResult<()> {
         info!("Killing container: {} with signal {}", container_id, signal);
         let sig = parse_signal(signal);
@@ -653,7 +648,6 @@ impl ContainerdRuntime {
         let _ = tasks.delete(req).await;
         Ok(())
     }
-
 
     pub async fn force_kill_container(&self, container_id: &str) -> AgentResult<()> {
         info!(
@@ -717,7 +711,6 @@ impl ContainerdRuntime {
         Ok(())
     }
 
-
     pub async fn remove_container(&self, container_id: &str) -> AgentResult<()> {
         info!("Removing container: {}", container_id);
         // Clean up firewall rules for this server.
@@ -768,7 +761,6 @@ impl ContainerdRuntime {
         let _ = fs::remove_dir_all(self.console_log_dir.join(container_id));
         Ok(())
     }
-
 
     pub async fn send_input(&self, container_id: &str, input: &str) -> AgentResult<()> {
         debug!("Sending input to container: {}", container_id);
@@ -861,7 +853,6 @@ impl ContainerdRuntime {
         Ok(())
     }
 
-
     pub async fn restore_console_writers(&self) -> AgentResult<()> {
         info!("Restoring console writers for running containers");
         let containers = self.list_containers().await?;
@@ -877,7 +868,6 @@ impl ContainerdRuntime {
         info!("Console writer restoration: {} restored", restored);
         Ok(())
     }
-
 
     pub async fn get_logs(&self, container_id: &str, lines: Option<u32>) -> AgentResult<String> {
         let base = self.console_log_dir.join(container_id);
@@ -898,7 +888,6 @@ impl ContainerdRuntime {
         }
         Ok(output)
     }
-
 
     pub async fn stream_logs<F>(&self, container_id: &str, mut callback: F) -> AgentResult<()>
     where
@@ -987,7 +976,6 @@ impl ContainerdRuntime {
         Ok(())
     }
 
-
     pub async fn spawn_log_stream(&self, container_id: &str) -> AgentResult<LogStream> {
         info!("Starting log stream for container: {}", container_id);
         let base = self.console_log_dir.join(container_id);
@@ -1007,7 +995,6 @@ impl ContainerdRuntime {
             container_id: container_id.to_string(),
         })
     }
-
 
     pub async fn list_containers(&self) -> AgentResult<Vec<ContainerInfo>> {
         // Return cached result if still fresh (2 seconds)
@@ -1052,7 +1039,6 @@ impl ContainerdRuntime {
         Ok(result)
     }
 
-
     pub async fn container_exists(&self, container_id: &str) -> bool {
         let mut client = ContainersClient::new(self.channel.clone());
         let req = GetContainerRequest {
@@ -1064,7 +1050,6 @@ impl ContainerdRuntime {
             Ok(Ok(_))
         )
     }
-
 
     pub async fn inspect_container(
         &self,
@@ -1168,7 +1153,6 @@ impl ContainerdRuntime {
         Ok(Some(info))
     }
 
-
     pub async fn is_container_running(&self, container_id: &str) -> AgentResult<bool> {
         let mut tasks = TasksClient::new(self.channel.clone());
         let req = containerd_client::services::v1::GetRequest {
@@ -1186,7 +1170,6 @@ impl ContainerdRuntime {
             Err(e) => Err(grpc_err(e)),
         }
     }
-
 
     pub async fn get_container_exit_code(&self, container_id: &str) -> AgentResult<Option<i32>> {
         let mut tasks = TasksClient::new(self.channel.clone());
@@ -1206,7 +1189,6 @@ impl ContainerdRuntime {
             Err(_) => Ok(None),
         }
     }
-
 
     pub async fn get_container_ip(&self, container_id: &str) -> AgentResult<String> {
         // Check CNI result file
@@ -1255,7 +1237,6 @@ impl ContainerdRuntime {
         Ok(String::new())
     }
 
-
     pub async fn get_stats(&self, container_id: &str) -> AgentResult<ContainerStats> {
         tokio::time::timeout(Duration::from_secs(10), self.get_stats_inner(container_id))
             .await
@@ -1263,7 +1244,6 @@ impl ContainerdRuntime {
                 AgentError::ContainerError(format!("get_stats timed out for {}", container_id))
             })?
     }
-
 
     pub(crate) async fn get_stats_inner(&self, container_id: &str) -> AgentResult<ContainerStats> {
         let cg = {
@@ -1331,7 +1311,6 @@ impl ContainerdRuntime {
         })
     }
 
-
     pub async fn exec(&self, container_id: &str, command: Vec<&str>) -> AgentResult<String> {
         let exec_id = format!("exec-{}", &uuid::Uuid::new_v4().to_string()[..8]);
         let io_dir = self.console_log_dir.join(container_id);
@@ -1383,7 +1362,6 @@ impl ContainerdRuntime {
         Ok(out)
     }
 
-
     pub async fn subscribe_to_container_events(
         &self,
         container_id: &str,
@@ -1427,7 +1405,6 @@ impl ContainerdRuntime {
             receiver: resp.into_inner(),
         })
     }
-
 
     pub async fn diagnose_events_service(&self) -> AgentResult<String> {
         let mut version_client = VersionClient::new(self.channel.clone());
@@ -1483,11 +1460,8 @@ impl ContainerdRuntime {
         ))
     }
 
-
     pub async fn subscribe_to_all_events(&self) -> AgentResult<EventStream> {
-        debug!(
-            "subscribe_to_all_events: using main channel"
-        );
+        debug!("subscribe_to_all_events: using main channel");
 
         let mut client = EventsClient::new(self.channel.clone());
         let req = SubscribeRequest { filters: vec![] };
@@ -1512,7 +1486,6 @@ impl ContainerdRuntime {
         })
     }
 
-
     pub(crate) async fn wait_for_exit(&self, container_id: &str) -> AgentResult<u32> {
         let mut tasks = TasksClient::new(self.channel.clone());
         let req = WaitRequest {
@@ -1528,7 +1501,6 @@ impl ContainerdRuntime {
             .map_err(grpc_err)?;
         Ok(resp.into_inner().exit_status)
     }
-
 
     pub(crate) async fn ensure_container_io(&self, container_id: &str) -> AgentResult<bool> {
         if self.container_io.lock().await.contains_key(container_id) {
@@ -1552,10 +1524,7 @@ impl ContainerdRuntime {
         Ok(true)
     }
 
-
     pub(crate) fn cleanup_io(&self, container_id: &str) {
         let _ = fs::remove_dir_all(self.console_log_dir.join(container_id));
     }
-
-
 }

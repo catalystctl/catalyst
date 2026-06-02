@@ -58,11 +58,9 @@ impl ContainerdRuntime {
         Ok(removed)
     }
 
-
     pub fn release_static_ip(cni_data_dir: &Path, network: &str, ip: &str) -> std::io::Result<()> {
         fs::remove_file(cni_data_dir.join(network).join(ip))
     }
-
 
     pub(crate) fn derive_bridge_range(subnet: &str) -> (String, String, String) {
         let (addr_str, prefix_str) = match subnet.split_once('/') {
@@ -112,7 +110,6 @@ impl ContainerdRuntime {
             gateway.to_string(),
         )
     }
-
 
     pub(crate) async fn setup_cni_network(
         &self,
@@ -307,7 +304,6 @@ impl ContainerdRuntime {
         Ok(())
     }
 
-
     pub(crate) async fn ensure_bridge_forward_rules(&self) {
         // Detect the host's default route interface
         let external_iface = detect_default_route_interface().await.unwrap_or_else(|| {
@@ -394,7 +390,6 @@ impl ContainerdRuntime {
         }
     }
 
-
     pub(crate) async fn resolve_task_netns(
         &self,
         container_id: &str,
@@ -436,7 +431,6 @@ impl ContainerdRuntime {
             container_id, initial_pid, pid, detail
         )))
     }
-
 
     pub(crate) async fn exec_cni_plugin(
         &self,
@@ -488,7 +482,6 @@ impl ContainerdRuntime {
         }
         Ok(serde_json::from_slice(&out.stdout).unwrap_or(serde_json::json!({})))
     }
-
 
     pub(crate) async fn setup_port_forward(&self, hp: u16, cp: u16, cip: &str) -> AgentResult<()> {
         let dest = if cip.contains(':') {
@@ -580,7 +573,6 @@ impl ContainerdRuntime {
         Ok(())
     }
 
-
     pub(crate) async fn teardown_port_forward(&self, container_id: &str) -> AgentResult<()> {
         let state_path = self.cni_results_dir.join(format!(
             "{}{}-ports.json",
@@ -624,8 +616,12 @@ impl ContainerdRuntime {
         Ok(())
     }
 
-
-    pub(crate) async fn teardown_port_forward_rules(&self, hp: u16, cp: u16, cip: &str) -> AgentResult<()> {
+    pub(crate) async fn teardown_port_forward_rules(
+        &self,
+        hp: u16,
+        cp: u16,
+        cip: &str,
+    ) -> AgentResult<()> {
         if cip.is_empty() {
             return Ok(());
         }
@@ -717,7 +713,6 @@ impl ContainerdRuntime {
         Ok(())
     }
 
-
     pub(crate) async fn teardown_cni_network(&self, container_id: &str) -> AgentResult<()> {
         let _ = self.teardown_port_forward(container_id).await;
         let rp = self
@@ -789,7 +784,6 @@ impl ContainerdRuntime {
         let _ = tokio::fs::remove_file(&cfg_path).await;
         Ok(())
     }
-
 
     pub async fn cleanup_stale_cni_leases(&self) {
         // --- Phase 1: Release leases via CNI result files ---
@@ -872,22 +866,19 @@ impl ContainerdRuntime {
         }
     }
 
-
     pub async fn start_ctr_events(
         &self,
     ) -> AgentResult<(
         CtrChildGuard,
         tokio::io::Lines<BufReader<tokio::process::ChildStdout>>,
     )> {
-        let mut child = Command::new("ctr")
+        let child = Command::new("ctr")
             .args(["-n", &self.namespace, "events"])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .kill_on_drop(false) // CtrChildGuard handles cleanup
             .spawn()
-            .map_err(|e| AgentError::ContainerError(format!(
-                "ctr events spawn failed: {}", e
-            )))?;
+            .map_err(|e| AgentError::ContainerError(format!("ctr events spawn failed: {}", e)))?;
 
         let _ = child.stdout.as_ref().ok_or_else(|| {
             AgentError::ContainerError("ctr events: stdout pipe not available".into())
@@ -897,6 +888,4 @@ impl ContainerdRuntime {
         let (guard, lines) = CtrChildGuard::into_lines(guard);
         Ok((guard, lines))
     }
-
-
 }

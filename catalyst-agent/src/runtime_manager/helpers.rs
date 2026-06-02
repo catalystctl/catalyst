@@ -152,32 +152,34 @@ pub fn discover_cni_bin_dir(configured_dir: &Path) -> PathBuf {
 pub fn parse_ctr_event_line(line: &str) -> Option<CtrEvent> {
     // 7 space-delimited fields; the last one is the JSON payload.
     let mut parts = line.splitn(7, ' ');
-    let _date = parts.next()?;   // "2026-05-21"
-    let _time = parts.next()?;   // "20:34:35.416197115"
-    let _off  = parts.next()?;   // "+0000"
-    let _zone = parts.next()?;   // "UTC"
-    let _ns   = parts.next()?;   // "catalyst"
+    let _date = parts.next()?; // "2026-05-21"
+    let _time = parts.next()?; // "20:34:35.416197115"
+    let _off = parts.next()?; // "+0000"
+    let _zone = parts.next()?; // "UTC"
+    let _ns = parts.next()?; // "catalyst"
     let topic = parts.next()?.to_string();
-    let json  = parts.next()?;
+    let json = parts.next()?;
 
     // Extract container ID from the JSON payload's "id" field.
     let container_id = json
         .find("\"id\":\"")
         .and_then(|start| {
-            let after = &json[start + 6..];            // skip "id":"
+            let after = &json[start + 6..]; // skip "id":"
             after.find('"').map(|end| after[..end].to_string())
         })
         .or_else(|| {
             // Fallback: "id":<value> (no quotes, unlikely)
-            json.find("\"id\":").and_then(|start| {
+            json.find("\"id\":").map(|start| {
                 let after = &json[start + 5..];
-                let end = after.find(|c: char| c == ',' || c == '}')
-                    .unwrap_or(after.len());
-                Some(after[..end].trim_matches('"').to_string())
+                let end = after.find([',', '}']).unwrap_or(after.len());
+                after[..end].trim_matches('"').to_string()
             })
         })?;
 
-    Some(CtrEvent { topic, container_id })
+    Some(CtrEvent {
+        topic,
+        container_id,
+    })
 }
 
 pub fn load_named_cni_plugin_config(cni_dir: &Path, network: &str) -> Option<serde_json::Value> {
@@ -578,4 +580,3 @@ pub async fn read_cgroup_memory_limit(path: &str) -> Option<u64> {
     }
     trimmed.parse().ok()
 }
-

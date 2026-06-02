@@ -2,8 +2,8 @@ use std::path::PathBuf;
 use tokio::fs;
 use tracing::{error, info, warn};
 
-use crate::{AgentConfig, AgentError, AgentResult};
 use crate::command_utils;
+use crate::{AgentConfig, AgentError, AgentResult};
 
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -12,7 +12,8 @@ const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 fn is_valid_version(v: &str) -> bool {
     v.chars().all(|c| c.is_ascii_digit() || c == '.')
         && v.split('.').count() >= 2
-        && v.split('.').all(|p| !p.is_empty() && p.parse::<u32>().is_ok())
+        && v.split('.')
+            .all(|p| !p.is_empty() && p.parse::<u32>().is_ok())
 }
 
 /// GitHub repository that hosts agent release binaries.
@@ -22,7 +23,6 @@ pub struct AgentUpdater {
     current_binary_path: PathBuf,
     release_repo: String,
 }
-
 
 /// Options for controlling the update behavior.
 #[derive(Debug, Clone, Default)]
@@ -83,9 +83,10 @@ impl AgentUpdater {
     ) -> AgentResult<()> {
         if let Some(ver) = target_version {
             if !is_valid_version(ver) {
-                return Err(AgentError::SecurityViolation(
-                    format!("Invalid target version '{}': must be semver (e.g. 1.12.2)", ver),
-                ));
+                return Err(AgentError::SecurityViolation(format!(
+                    "Invalid target version '{}': must be semver (e.g. 1.12.2)",
+                    ver
+                )));
             }
         }
         let asset_name = Self::asset_name();
@@ -153,9 +154,10 @@ impl AgentUpdater {
     ) -> AgentResult<()> {
         if let Some(ver) = target_version {
             if !is_valid_version(ver) {
-                return Err(AgentError::SecurityViolation(
-                    format!("Invalid target version '{}': must be semver (e.g. 1.12.2)", ver),
-                ));
+                return Err(AgentError::SecurityViolation(format!(
+                    "Invalid target version '{}': must be semver (e.g. 1.12.2)",
+                    ver
+                )));
             }
         }
         let mut download_url = format!(
@@ -220,7 +222,9 @@ impl AgentUpdater {
             .timeout(std::time::Duration::from_secs(30))
             .send()
             .await
-            .map_err(|e| AgentError::NetworkError(format!("Backend checksum download failed: {}", e)))?;
+            .map_err(|e| {
+                AgentError::NetworkError(format!("Backend checksum download failed: {}", e))
+            })?;
 
         if !response.status().is_success() {
             return Err(AgentError::NetworkError(format!(
@@ -267,9 +271,10 @@ impl AgentUpdater {
     ) -> AgentResult<String> {
         if let Some(ver) = target_version {
             if !is_valid_version(ver) {
-                return Err(AgentError::SecurityViolation(
-                    format!("Invalid target version '{}': must be semver (e.g. 1.12.2)", ver),
-                ));
+                return Err(AgentError::SecurityViolation(format!(
+                    "Invalid target version '{}': must be semver (e.g. 1.12.2)",
+                    ver
+                )));
             }
         }
         let asset_name = Self::asset_name();
@@ -399,7 +404,10 @@ impl AgentUpdater {
                         info!("Backend update checksum verified successfully");
                     }
                     Err(e) => {
-                        warn!("Could not download backend checksum (skipping verification): {}", e);
+                        warn!(
+                            "Could not download backend checksum (skipping verification): {}",
+                            e
+                        );
                     }
                 }
                 Ok(temp_path)

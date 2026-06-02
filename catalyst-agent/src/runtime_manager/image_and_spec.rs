@@ -141,7 +141,7 @@ pub fn default_seccomp_profile() -> serde_json::Value {
     })
 }
 
-use super::*;
+use super::ContainerdRuntime;
 
 impl ContainerdRuntime {
     pub(crate) async fn ensure_image(&self, image: &str) -> AgentResult<()> {
@@ -177,7 +177,6 @@ impl ContainerdRuntime {
         Ok(())
     }
 
-
     pub(crate) fn qualify_image_ref(image: &str) -> String {
         let name = image.split(':').next().unwrap_or(image);
         if name.contains('/') {
@@ -189,7 +188,6 @@ impl ContainerdRuntime {
         }
     }
 
-
     pub(crate) async fn get_image_env(&self, image: &str) -> Vec<String> {
         match self.get_image_env_inner(image).await {
             Ok(env) => env,
@@ -199,7 +197,6 @@ impl ContainerdRuntime {
             }
         }
     }
-
 
     pub(crate) async fn get_image_env_inner(&self, image: &str) -> AgentResult<Vec<String>> {
         let config_digest = self.resolve_image_config_digest(image).await?;
@@ -220,7 +217,6 @@ impl ContainerdRuntime {
             .unwrap_or_default())
     }
 
-
     pub(crate) async fn get_image_entrypoint(
         &self,
         image: &str,
@@ -233,7 +229,6 @@ impl ContainerdRuntime {
             }
         }
     }
-
 
     pub(crate) async fn get_image_entrypoint_inner(
         &self,
@@ -266,7 +261,6 @@ impl ContainerdRuntime {
 
         Ok((entrypoint, cmd))
     }
-
 
     pub(crate) async fn resolve_image_config_digest(&self, image: &str) -> AgentResult<String> {
         let mut images = ImagesClient::new(self.channel.clone());
@@ -320,8 +314,10 @@ impl ContainerdRuntime {
             .ok_or_else(|| AgentError::ContainerError("No config in manifest".into()))
     }
 
-
-    pub(crate) async fn resolve_snapshot_parent_key(&self, image: &str) -> AgentResult<Option<String>> {
+    pub(crate) async fn resolve_snapshot_parent_key(
+        &self,
+        image: &str,
+    ) -> AgentResult<Option<String>> {
         let config_digest = self.resolve_image_config_digest(image).await?;
         let mut content = ContentClient::new(self.channel.clone());
         let req = InfoRequest {
@@ -338,7 +334,6 @@ impl ContainerdRuntime {
             .get("containerd.io/gc.ref.snapshot.overlayfs")
             .cloned())
     }
-
 
     pub(crate) async fn read_content_blob(&self, digest: &str) -> AgentResult<Vec<u8>> {
         let mut content = ContentClient::new(self.channel.clone());
@@ -359,7 +354,6 @@ impl ContainerdRuntime {
         }
         Ok(data)
     }
-
 
     pub(crate) async fn prepare_snapshot(&self, image: &str, key: &str) -> AgentResult<()> {
         let _ = Command::new("ctr")
@@ -417,7 +411,6 @@ impl ContainerdRuntime {
         )))
     }
 
-
     pub(crate) async fn get_snapshot_mounts(
         &self,
         key: &str,
@@ -435,7 +428,6 @@ impl ContainerdRuntime {
             .into_inner()
             .mounts)
     }
-
 
     pub(crate) fn build_oci_spec(
         &self,
@@ -621,6 +613,4 @@ impl ContainerdRuntime {
                 "seccomp": default_seccomp_profile()}
         }))
     }
-
-
 }

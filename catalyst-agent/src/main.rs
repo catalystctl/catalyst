@@ -1,18 +1,18 @@
+use nix::sys::signal::{kill, Signal};
+use nix::unistd::Pid;
 use std::sync::Arc;
 use tokio::signal::ctrl_c;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::{broadcast, RwLock};
 use tokio::task::JoinSet;
 use tracing::{error, info, warn};
-use nix::sys::signal::{kill, Signal};
-use nix::unistd::Pid;
 
 mod atomic_write;
 mod backup_crypto;
 mod command_utils;
 mod config;
-mod errors;
 mod error_reporter;
+mod errors;
 mod file_manager;
 mod file_tunnel;
 mod firewall_manager;
@@ -32,7 +32,7 @@ pub use file_manager::FileManager;
 pub use file_tunnel::FileTunnelClient;
 pub use firewall_manager::FirewallManager;
 pub use network_manager::NetworkManager;
-pub use runtime_manager::ContainerdRuntime;
+pub use runtime_manager::{ContainerdRuntime, ContainerdRuntimeConfig};
 pub use storage_manager::StorageManager;
 pub use system_setup::SystemSetup;
 pub use websocket_handler::WebSocketHandler;
@@ -53,21 +53,19 @@ impl CatalystAgent {
         info!("Initializing Catalyst Agent v{}", env!("CARGO_PKG_VERSION"));
 
         let config = Arc::new(config);
-        let runtime = Arc::new(
-            ContainerdRuntime::new(
-                config.containerd.socket_path.clone(),
-                config.containerd.namespace.clone(),
-                config.networking.dns_servers.clone(),
-                config.server.console_log_dir.clone(),
-                config.containerd.cni_results_dir.clone(),
-                config.containerd.cni_data_dir.clone(),
-                config.containerd.cni_dir.clone(),
-                config.containerd.cni_bin_dir.clone(),
-                config.containerd.cni_bridge_name.clone(),
-                config.containerd.cni_bridge_subnet.clone(),
-            )
-            .await?,
-        );
+        let runtime_config = ContainerdRuntimeConfig {
+            socket_path: config.containerd.socket_path.clone(),
+            namespace: config.containerd.namespace.clone(),
+            dns_servers: config.networking.dns_servers.clone(),
+            console_log_dir: config.server.console_log_dir.clone(),
+            cni_results_dir: config.containerd.cni_results_dir.clone(),
+            cni_data_dir: config.containerd.cni_data_dir.clone(),
+            cni_dir: config.containerd.cni_dir.clone(),
+            cni_bin_dir: config.containerd.cni_bin_dir.clone(),
+            cni_bridge_name: config.containerd.cni_bridge_name.clone(),
+            cni_bridge_subnet: config.containerd.cni_bridge_subnet.clone(),
+        };
+        let runtime = Arc::new(ContainerdRuntime::new(runtime_config).await?);
 
         // Initialize firewall manager — loads persisted rule state from disk
         // so rules can be cleaned up even after agent restart.
@@ -173,7 +171,7 @@ impl CatalystAgent {
                         sftp_ws_handler.report_error(
                             crate::error_reporter::ErrorLevel::Error,
                             "agent:sftp_server",
-                            &format!("{}", e),
+                            &e.to_string(),
                             None,
                             None,
                         ).await;
@@ -207,7 +205,7 @@ impl CatalystAgent {
                         error_reporter_agent.ws_handler.report_error(
                             crate::error_reporter::ErrorLevel::Error,
                             "agent:task_panic",
-                            &format!("{}", e),
+                            &e.to_string(),
                             None,
                             None,
                         ).await;

@@ -3,8 +3,8 @@ use tokio::fs;
 use tracing::info;
 
 use crate::atomic_write;
-use crate::net_utils;
 use crate::config::CniNetworkConfig;
+use crate::net_utils;
 use crate::AgentError;
 use serde_json::json;
 use toml::Value as TomlValue;
@@ -550,13 +550,4 @@ impl NetworkManager {
         );
         TomlValue::Table(table)
     }
-
-
-
-
-
-
-
-
-
 }

@@ -25,9 +25,7 @@ impl ErrorLevel {
     /// Map an `AgentError` variant to an appropriate severity level.
     pub fn from_agent_error(err: &AgentError) -> Self {
         match err {
-            AgentError::SecurityViolation(_) | AgentError::PermissionDenied(_) => {
-                ErrorLevel::Warn
-            }
+            AgentError::SecurityViolation(_) | AgentError::PermissionDenied(_) => ErrorLevel::Warn,
             AgentError::ConfigError(_) => ErrorLevel::Critical,
             _ => ErrorLevel::Error,
         }

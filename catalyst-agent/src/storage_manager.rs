@@ -6,8 +6,8 @@ use tracing::{error, info, warn};
 
 const MAX_METRICS_BUFFER_BYTES: u64 = 100 * 1024 * 1024;
 
-use crate::{AgentError, AgentResult};
 use crate::command_utils;
+use crate::{AgentError, AgentResult};
 use serde_json::Value;
 
 pub struct StorageManager {
@@ -135,7 +135,10 @@ impl StorageManager {
             let image_str = image
                 .to_str()
                 .ok_or_else(|| AgentError::FileSystemError("Invalid image path".to_string()))?;
-            command_utils::run_command_sync("fallocate", &["-l", &format!("{}M", size), image_str])?;
+            command_utils::run_command_sync(
+                "fallocate",
+                &["-l", &format!("{}M", size), image_str],
+            )?;
             command_utils::run_command_sync("mkfs.ext4", &["-F", image_str])?;
             Ok(())
         })
@@ -281,7 +284,10 @@ impl StorageManager {
             .ok_or_else(|| AgentError::FileSystemError("Invalid mount path".to_string()))?
             .to_string();
         spawn_blocking(move || {
-            command_utils::run_command_sync("mount", &["-o", "loop,exec,nodev,nosuid", &image, &mount])?;
+            command_utils::run_command_sync(
+                "mount",
+                &["-o", "loop,exec,nodev,nosuid", &image, &mount],
+            )?;
             Ok::<(), AgentError>(())
         })
         .await
@@ -404,4 +410,3 @@ impl StorageManager {
         Ok(entries.next_entry().await?.is_some())
     }
 }
-
