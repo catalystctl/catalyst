@@ -9,9 +9,12 @@ WORKDIR /app
 # Use the root workspace lockfile for reproducible installs.
 # We create a minimal workspace root containing only the frontend so
 # pnpm doesn't fail when other monorepo packages aren't copied into the image.
+# The devDeps listed here must match the root package.json specifiers —
+# pnpm --frozen-lockfile validates that the lockfile specifiers match
+# the package.json specifiers.
 COPY pnpm-lock.yaml .npmrc ./
 COPY pnpm-workspace.yaml ./
-RUN printf '%s\n' '{"name":"catalyst","private":true}' > package.json
+RUN printf '%s\n' '{"name":"catalyst","private":true,"devDependencies":{"@commitlint/cli":"^21.0.2","@commitlint/config-conventional":"^21.0.2","husky":"^9.1.7","typescript":"~6.0.3"}}' > package.json
 
 # Copy frontend manifest first for dependency-layer caching
 COPY catalyst-frontend/package.json ./catalyst-frontend/
