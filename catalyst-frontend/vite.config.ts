@@ -46,10 +46,6 @@ export default defineConfig(async ({ mode }) => {
       alias: [
         { find: '@', replacement: path.resolve(__dirname, './src') },
         { find: '@plugins', replacement: path.resolve(__dirname, '../catalyst-plugins') },
-        { find: /^react$/, replacement: path.resolve(__dirname, './node_modules/react/index.js') },
-        { find: /^react-dom$/, replacement: path.resolve(__dirname, './node_modules/react-dom/index.js') },
-        { find: /^react\/jsx-runtime$/, replacement: path.resolve(__dirname, './node_modules/react/jsx-runtime.js') },
-        { find: /^react\/jsx-dev-runtime$/, replacement: path.resolve(__dirname, './node_modules/react/jsx-dev-runtime.js') },
       ],
     },
     server: {
