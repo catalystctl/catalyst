@@ -296,6 +296,10 @@ model SystemSetting {
   fileTunnelMaxUploadMb       Int?
   fileTunnelMaxPendingPerNode Int?
   fileTunnelConcurrentMax     Int?
+  // Chunked / resumable upload settings
+  chunkedUploadMaxFileMb      Int?
+  chunkedUploadChunkMb        Int?
+  chunkedUploadSessionTtlMs   Int?
   // Email verification
   requireEmailVerification     Boolean  @default(true)
   // DNS provider settings

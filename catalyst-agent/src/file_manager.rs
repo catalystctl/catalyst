@@ -6,7 +6,7 @@ use tracing::{debug, info, warn};
 
 use crate::{AgentError, AgentResult};
 
-const MAX_FILE_SIZE: u64 = 500 * 1024 * 1024; // 500MB
+const MAX_FILE_SIZE: u64 = 50 * 1024 * 1024 * 1024; // 50 GB — matches backend's chunked-upload hard cap (issue #135)
 
 pub struct FileManager {
     data_dir: PathBuf,

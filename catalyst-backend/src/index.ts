@@ -72,6 +72,7 @@ import { normalizeHostIp } from "./utils/ipam";
 import { PluginLoader } from "./plugins/loader";
 import { pluginRoutes } from "./routes/plugins";
 import { FileTunnelService } from "./services/file-tunnel";
+import { ChunkedUploadService } from "./services/chunked-upload";
 import { fileTunnelRoutes } from "./routes/file-tunnel";
 import { migrationRoutes } from "./routes/migration";
 import { updateRoutes } from "./routes/update";
@@ -143,6 +144,7 @@ const taskScheduler = new TaskScheduler(prisma, logger);
 const webhookService = new WebhookService(prisma, logger);
 const alertService = new AlertService(prisma, logger);
 const fileTunnel = new FileTunnelService(logger);
+const chunkedUpload = new ChunkedUploadService(logger, fileTunnel);
 const pluginLoader = new PluginLoader(
 	process.env.PLUGINS_DIR || "/var/lib/catalyst/plugins",
 	prisma,
@@ -407,6 +409,8 @@ const authenticate = async (request: any, reply: any) => {
 (app as any).authenticate = authenticate;
 (app as any).wsGateway = wsGateway;
 (app as any).fileTunnel = fileTunnel;
+(app as any).chunkedUpload = chunkedUpload;
+(app as any).chunkedUpload = chunkedUpload;
 (app as any).taskScheduler = taskScheduler;
 (app as any).webhookService = webhookService;
 (app as any).alertService = alertService;
@@ -786,6 +790,7 @@ async function bootstrap() {
 		await app.register(nodeRoutes, { prefix: "/api/nodes" });
 		await app.register(serverRoutes, {
 			prefix: "/api/servers",
+			bodyLimit: 134217728, // 128 MB (chunked upload max chunk size)
 		});
 		// SSE console streaming — GET stream + POST command
 		await app.register((app) => consoleStreamRoutes(app, wsGateway), {
@@ -1747,6 +1752,8 @@ async function shutdown(signal: string) {
 	wsGateway?.destroy();
 	pluginLoader?.shutdown().catch(() => {});
 	fileTunnel?.destroy();
+	chunkedUpload?.destroy();
+	chunkedUpload?.destroy();
 	if (auditRetentionInterval) clearInterval(auditRetentionInterval);
 	if (statRetentionInterval) clearInterval(statRetentionInterval);
 	if (backupRetentionInterval) clearInterval(backupRetentionInterval);

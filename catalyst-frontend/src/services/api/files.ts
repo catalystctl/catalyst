@@ -2,6 +2,17 @@ import type { FileEntry, FileListing } from '../../types/file';
 import { joinPath, normalizePath } from '../../utils/filePaths';
 import { reportSystemError } from './systemErrors';
 
+// ── Chunked upload types ──
+
+type ChunkedInitResponse = {
+  uploadId: string;
+  chunkSize: number;
+  maxFileSize: number;
+  expiresAt: number;
+};
+
+const CHUNKED_UPLOAD_THRESHOLD = 5 * 1024 * 1024; // 5 MB
+
 type ApiResponse<T> = {
   success: boolean;
   data?: T;
@@ -174,73 +185,178 @@ export const filesApi = {
     return blob.text();
   },
 
+  /**
+   * Single-shot multipart upload (legacy, kept for small files).
+   */
+  legacyUpload: async (
+    serverId: string,
+    path: string,
+    file: File,
+    onProgress?: (fileIndex: number, progress: number) => void,
+    fileIndex?: number,
+  ) => {
+    const normalizedPath = normalizePath(path);
+    return new Promise<void>((resolve, reject) => {
+      const formData = new FormData();
+      formData.append('path', normalizedPath);
+      formData.append('file', file);
+
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable && onProgress) {
+          onProgress(fileIndex ?? 0, Math.round((e.loaded / e.total) * 100));
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+        } else {
+          const err = new Error(`Upload failed: ${xhr.status}`);
+          reportSystemError({
+            level: 'error',
+            component: 'ApiFiles',
+            message: err.message,
+            stack: err.stack,
+            metadata: { action: 'upload', status: xhr.status },
+          });
+          reject(err);
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        const err = new Error('Upload failed');
+        reportSystemError({
+          level: 'error',
+          component: 'ApiFiles',
+          message: err.message,
+          stack: err.stack,
+          metadata: { action: 'upload' },
+        });
+        reject(err);
+      });
+      xhr.addEventListener('abort', () => {
+        const err = new Error('Upload aborted');
+        reportSystemError({
+          level: 'error',
+          component: 'ApiFiles',
+          message: err.message,
+          stack: err.stack,
+          metadata: { action: 'upload' },
+        });
+        reject(err);
+      });
+
+      xhr.open('POST', `/api/servers/${serverId}/files/upload`);
+      xhr.withCredentials = true;
+      xhr.send(formData);
+    });
+  },
+
+  /**
+   * Chunked/resumable upload for large files.
+   * Splits the file into chunks, uploads each individually with optional resume.
+   */
+  chunkedUpload: async (
+    serverId: string,
+    path: string,
+    file: File,
+    onProgress?: (fileIndex: number, progress: number) => void,
+    fileIndex?: number,
+  ) => {
+    const normalizedPath = normalizePath(path);
+
+    // 1. Initialize session
+    const initRes = await fetch(
+      `/api/servers/${serverId}/files/upload/init`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path: normalizedPath,
+          filename: file.name,
+          totalSize: file.size,
+        }),
+        credentials: 'include',
+      },
+    );
+    await assertOk(initRes);
+    const { data: initData } = await initRes.json() as ApiResponse<ChunkedInitResponse>;
+    const uploadId = initData!.uploadId;
+    const chunkSize = initData!.chunkSize;
+
+    // 2. Upload chunks
+    const totalChunks = Math.ceil(file.size / chunkSize);
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * chunkSize;
+      const end = Math.min(start + chunkSize, file.size);
+      const blob = file.slice(start, end);
+
+      // Retry each chunk up to 3 times on network errors
+      let lastErr: Error | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await fetch(
+            `/api/servers/${serverId}/files/upload/${uploadId}/chunk`,
+            {
+              method: 'POST',
+              headers: {
+                'X-Chunk-Index': String(i),
+                'Content-Type': 'application/octet-stream',
+              },
+              body: blob,
+              credentials: 'include',
+            },
+          );
+          await assertOk(res);
+          break;
+        } catch (err) {
+          lastErr = err instanceof Error ? err : new Error(String(err));
+          if (attempt === 2) throw lastErr;
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+        }
+      }
+
+      if (onProgress) {
+        onProgress(fileIndex ?? 0, Math.round(((i + 1) / totalChunks) * 100));
+      }
+    }
+
+    // 3. Complete assembly on backend and stream to agent
+    const completeRes = await fetch(
+      `/api/servers/${serverId}/files/upload/${uploadId}/complete`,
+      {
+        method: 'POST',
+        credentials: 'include',
+      },
+    );
+    await assertOk(completeRes);
+  },
+
   upload: async (
     serverId: string,
     path: string,
     files: File[],
     onProgress?: (fileIndex: number, progress: number) => void,
   ) => {
-    const normalizedPath = normalizePath(path);
-    await Promise.all(
-      files.map((file, index) =>
-        new Promise<void>((resolve, reject) => {
-          const formData = new FormData();
-          formData.append('path', normalizedPath);
-          formData.append('file', file);
-
-          const xhr = new XMLHttpRequest();
-
-          xhr.upload.addEventListener('progress', (e) => {
-            if (e.lengthComputable && onProgress) {
-              onProgress(index, Math.round((e.loaded / e.total) * 100));
-            }
-          });
-
-          xhr.addEventListener('load', () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              resolve();
-            } else {
-              const err = new Error(`Upload failed: ${xhr.status}`);
-              reportSystemError({
-                level: 'error',
-                component: 'ApiFiles',
-                message: err.message,
-                stack: err.stack,
-                metadata: { action: 'upload', status: xhr.status },
-              });
-              reject(err);
-            }
-          });
-
-          xhr.addEventListener('error', () => {
-            const err = new Error('Upload failed');
-            reportSystemError({
-              level: 'error',
-              component: 'ApiFiles',
-              message: err.message,
-              stack: err.stack,
-              metadata: { action: 'upload' },
-            });
-            reject(err);
-          });
-          xhr.addEventListener('abort', () => {
-            const err = new Error('Upload aborted');
-            reportSystemError({
-              level: 'error',
-              component: 'ApiFiles',
-              message: err.message,
-              stack: err.stack,
-              metadata: { action: 'upload' },
-            });
-            reject(err);
-          });
-
-          xhr.open('POST', `/api/servers/${serverId}/files/upload`);
-          xhr.withCredentials = true;
-          xhr.send(formData);
-        }),
-      ),
-    );
+    for (let index = 0; index < files.length; index++) {
+      const file = files[index];
+      try {
+        if (file.size >= CHUNKED_UPLOAD_THRESHOLD) {
+          await filesApi.chunkedUpload(serverId, path, file, onProgress, index);
+        } else {
+          await filesApi.legacyUpload(serverId, path, file, onProgress, index);
+        }
+      } catch (error: any) {
+        // If the chunked endpoint doesn't exist (old backend), fall back to legacy
+        if (error?.status === 404 || error?.status === 503) {
+          await filesApi.legacyUpload(serverId, path, file, onProgress, index);
+        } else {
+          throw error;
+        }
+      }
+    }
   },
 
   create: async (

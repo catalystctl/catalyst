@@ -44,6 +44,10 @@ export type SecuritySettings = {
   fileTunnelMaxUploadMb: number;
   fileTunnelMaxPendingPerNode: number;
   fileTunnelConcurrentMax: number;
+  // Chunked / resumable upload settings
+  chunkedUploadMaxFileMb: number;
+  chunkedUploadChunkMb: number;
+  chunkedUploadSessionTtlMs: number;
 };
 
 export type ModManagerSettings = {
@@ -111,6 +115,10 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   fileTunnelMaxUploadMb: 100,
   fileTunnelMaxPendingPerNode: 50,
   fileTunnelConcurrentMax: 10,
+  // Chunked / resumable upload defaults
+  chunkedUploadMaxFileMb: 5120, // 5 GB
+  chunkedUploadChunkMb: 8,      // 8 MB
+  chunkedUploadSessionTtlMs: 3600000, // 1 hour
 };
 
 export const getSmtpSettings = async (): Promise<SmtpSettings> => {
@@ -212,6 +220,9 @@ export const getSecuritySettings = async (): Promise<SecuritySettings> => {
     fileTunnelMaxUploadMb: settings.fileTunnelMaxUploadMb ?? DEFAULT_SECURITY_SETTINGS.fileTunnelMaxUploadMb,
     fileTunnelMaxPendingPerNode: settings.fileTunnelMaxPendingPerNode ?? DEFAULT_SECURITY_SETTINGS.fileTunnelMaxPendingPerNode,
     fileTunnelConcurrentMax: settings.fileTunnelConcurrentMax ?? DEFAULT_SECURITY_SETTINGS.fileTunnelConcurrentMax,
+    chunkedUploadMaxFileMb: settings.chunkedUploadMaxFileMb ?? DEFAULT_SECURITY_SETTINGS.chunkedUploadMaxFileMb,
+    chunkedUploadChunkMb: settings.chunkedUploadChunkMb ?? DEFAULT_SECURITY_SETTINGS.chunkedUploadChunkMb,
+    chunkedUploadSessionTtlMs: settings.chunkedUploadSessionTtlMs ?? DEFAULT_SECURITY_SETTINGS.chunkedUploadSessionTtlMs,
   };
 };
 
@@ -285,6 +296,9 @@ export const upsertSecuritySettings = async (payload: SecuritySettings) => {
       fileTunnelMaxUploadMb: payload.fileTunnelMaxUploadMb,
       fileTunnelMaxPendingPerNode: payload.fileTunnelMaxPendingPerNode,
       fileTunnelConcurrentMax: payload.fileTunnelConcurrentMax,
+      chunkedUploadMaxFileMb: payload.chunkedUploadMaxFileMb,
+      chunkedUploadChunkMb: payload.chunkedUploadChunkMb,
+      chunkedUploadSessionTtlMs: payload.chunkedUploadSessionTtlMs,
     },
     update: {
       authRateLimitMax: payload.authRateLimitMax,
@@ -309,6 +323,9 @@ export const upsertSecuritySettings = async (payload: SecuritySettings) => {
       fileTunnelMaxUploadMb: payload.fileTunnelMaxUploadMb,
       fileTunnelMaxPendingPerNode: payload.fileTunnelMaxPendingPerNode,
       fileTunnelConcurrentMax: payload.fileTunnelConcurrentMax,
+      chunkedUploadMaxFileMb: payload.chunkedUploadMaxFileMb,
+      chunkedUploadChunkMb: payload.chunkedUploadChunkMb,
+      chunkedUploadSessionTtlMs: payload.chunkedUploadSessionTtlMs,
     },
   });
 };

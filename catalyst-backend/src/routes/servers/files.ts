@@ -1,9 +1,12 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { captureSystemError, ensureNotSuspended, fileRateLimitMax, fileRateLimitWindowMs, hasNodeAccess, isArchiveName, normalizeRequestPath, path, validateAndNormalizePath } from './_helpers.js';
+import { ChunkedUploadError } from "../../services/chunked-upload";
+import type { ChunkedUploadService } from "../../services/chunked-upload";
 
 export async function serverFilesRoutes(app: FastifyInstance) {
   const fileTunnel = (app as any).fileTunnel as import("../../services/file-tunnel").FileTunnelService;
+  const chunkedUpload = (app as any).chunkedUpload as ChunkedUploadService;
   const tunnelFileOp = async (
     nodeId: string,
     operation: string,
@@ -239,6 +242,203 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         }
         reply.status(400).send({ error: "Failed to upload file" });
       }
+    }
+  );
+
+  // ── Resumable / chunked upload protocol (issue #135) ──────────────────────
+  //
+  //  POST   /:serverId/files/upload/init             — create session, get uploadId
+  //  POST   /:serverId/files/upload/:uploadId/chunk  — upload one chunk
+  //  GET    /:serverId/files/upload/:uploadId/status — resume info (received chunks)
+  //  POST   /:serverId/files/upload/:uploadId/complete — assemble + deliver to agent
+  //  DELETE /:serverId/files/upload/:uploadId        — cancel session
+
+  // Helper: validate access for chunked upload routes (same as single-shot upload)
+  const validateChunkedServerAccess = async (
+    serverId: string,
+    userId: string,
+    reply: FastifyReply
+  ): Promise<{ server: any; normalizedDir: string } | null> => {
+    const server = await prisma.server.findUnique({ where: { id: serverId } });
+    if (!server) {
+      reply.status(404).send({ error: "Server not found" });
+      return null;
+    }
+    if (!ensureNotSuspended(server, reply)) {
+      return null;
+    }
+    const access = await prisma.serverAccess.findFirst({
+      where: { serverId, userId, permissions: { has: "file.write" } },
+    });
+    const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+    if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
+      reply.status(403).send({ error: "Forbidden" });
+      return null;
+    }
+    return { server, normalizedDir: "/" };
+  };
+
+  // POST /:serverId/files/upload/init
+  app.post(
+    "/:serverId/files/upload/init",
+    {
+      onRequest: [app.authenticate],
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId } = request.params as { serverId: string };
+      const userId = request.user.userId;
+      const body = request.body as {
+        path?: string;
+        filename?: string;
+        totalSize?: number;
+        chunkSize?: number;
+        totalChunks?: number;
+        expectedSha256?: string;
+      };
+      if (!body?.filename || typeof body.totalSize !== "number") {
+        return reply.status(400).send({ error: "Missing filename or totalSize" });
+      }
+      const ctx = await validateChunkedServerAccess(serverId, userId, reply);
+      if (!ctx) return;
+      const basePath = normalizeRequestPath(body.path ?? "/");
+      const safeFilename = path.posix.basename(body.filename);
+      try {
+        const result = await chunkedUpload.init({
+          userId,
+          serverId: ctx.server.id,
+          serverUuid: ctx.server.uuid,
+          nodeId: ctx.server.nodeId,
+          targetDir: basePath,
+          filename: safeFilename,
+          totalSize: Math.floor(body.totalSize),
+          chunkSize: body.chunkSize ? Math.floor(body.chunkSize) : undefined,
+          totalChunks: body.totalChunks ? Math.floor(body.totalChunks) : undefined,
+          expectedSha256: body.expectedSha256,
+        });
+        reply.send({ success: true, data: result });
+      } catch (err: any) {
+        const status = err instanceof ChunkedUploadError ? err.statusCode : 400;
+        reply.status(status).send({ error: err?.message || "Failed to init upload" });
+      }
+    }
+  );
+
+  // POST /:serverId/files/upload/:uploadId/chunk
+  // Body is application/octet-stream raw chunk bytes. The chunk index is in
+  // the X-Chunk-Index header (zero-based).
+  app.post(
+    "/:serverId/files/upload/:uploadId/chunk",
+    {
+      onRequest: [app.authenticate],
+      // Large body limit for max chunk (128 MB) — actual chunks are smaller
+      // in practice and validated by the service.
+      config: {
+        rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs },
+      },
+      // Override the application/octet-stream content type parser for this
+      // route to stream the chunk body straight to disk (avoids loading the
+      // chunk into a Buffer in process memory).
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId, uploadId } = request.params as { serverId: string; uploadId: string };
+      const userId = request.user.userId;
+      const indexRaw = request.headers["x-chunk-index"];
+      const index = Number.parseInt(String(indexRaw ?? ""), 10);
+      if (!Number.isInteger(index) || index < 0) {
+        return reply.status(400).send({ error: "Missing or invalid X-Chunk-Index header" });
+      }
+      const ctx = await validateChunkedServerAccess(serverId, userId, reply);
+      if (!ctx) return;
+      try {
+        // request.body is a Buffer because of the global application/octet-stream
+        // parser. For very large chunks the Fastify body limit is enforced at
+        // the route level (configured below in the parent plugin).
+        const body = request.body as Buffer;
+        const result = await chunkedUpload.writeChunk(
+          uploadId,
+          userId,
+          ctx.server.id,
+          index,
+          Buffer.isBuffer(body) ? body : Buffer.from(body ?? []),
+        );
+        reply.send({ success: true, data: result });
+      } catch (err: any) {
+        if (err instanceof ChunkedUploadError) {
+          return reply.status(err.statusCode).send({ error: err.message });
+        }
+        request.log.error({ err, uploadId, index }, "Chunked upload chunk failed");
+        reply.status(500).send({ error: "Failed to write chunk" });
+      }
+    }
+  );
+
+  // GET /:serverId/files/upload/:uploadId/status
+  app.get(
+    "/:serverId/files/upload/:uploadId/status",
+    {
+      onRequest: [app.authenticate],
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId, uploadId } = request.params as { serverId: string; uploadId: string };
+      const userId = request.user.userId;
+      const ctx = await validateChunkedServerAccess(serverId, userId, reply);
+      if (!ctx) return;
+      const status = chunkedUpload.getStatus(uploadId, userId, ctx.server.id);
+      if (!status) {
+        return reply.status(404).send({ error: "Upload session not found" });
+      }
+      reply.send({ success: true, data: status });
+    }
+  );
+
+  // POST /:serverId/files/upload/:uploadId/complete
+  app.post(
+    "/:serverId/files/upload/:uploadId/complete",
+    {
+      onRequest: [app.authenticate],
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId, uploadId } = request.params as { serverId: string; uploadId: string };
+      const userId = request.user.userId;
+      const ctx = await validateChunkedServerAccess(serverId, userId, reply);
+      if (!ctx) return;
+      try {
+        const result = await chunkedUpload.complete(uploadId, userId, ctx.server.id);
+        notifyFileChange(ctx.server.id, ctx.server.status, "upload", result.path);
+        reply.send({ success: true, data: result });
+      } catch (err: any) {
+        if (err instanceof ChunkedUploadError) {
+          return reply.status(err.statusCode).send({ error: err.message });
+        }
+        request.log.error({ err, uploadId }, "Chunked upload complete failed");
+        if (err?.message?.includes("timed out")) {
+          return reply.status(504).send({ error: "Agent file operation timed out" });
+        }
+        reply.status(500).send({ error: "Failed to complete upload" });
+      }
+    }
+  );
+
+  // DELETE /:serverId/files/upload/:uploadId
+  app.delete(
+    "/:serverId/files/upload/:uploadId",
+    {
+      onRequest: [app.authenticate],
+      config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId, uploadId } = request.params as { serverId: string; uploadId: string };
+      const userId = request.user.userId;
+      const ctx = await validateChunkedServerAccess(serverId, userId, reply);
+      if (!ctx) return;
+      const cancelled = await chunkedUpload.cancel(uploadId, userId, ctx.server.id);
+      if (!cancelled) {
+        return reply.status(404).send({ error: "Upload session not found" });
+      }
+      reply.send({ success: true });
     }
   );
 

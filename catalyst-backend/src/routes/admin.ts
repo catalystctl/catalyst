@@ -2131,6 +2131,9 @@ export async function adminRoutes(app: FastifyInstance) {
         fileTunnelMaxUploadMb = DEFAULT_SECURITY_SETTINGS.fileTunnelMaxUploadMb,
         fileTunnelMaxPendingPerNode = DEFAULT_SECURITY_SETTINGS.fileTunnelMaxPendingPerNode,
         fileTunnelConcurrentMax = DEFAULT_SECURITY_SETTINGS.fileTunnelConcurrentMax,
+        chunkedUploadMaxFileMb = DEFAULT_SECURITY_SETTINGS.chunkedUploadMaxFileMb,
+        chunkedUploadChunkMb = DEFAULT_SECURITY_SETTINGS.chunkedUploadChunkMb,
+        chunkedUploadSessionTtlMs = DEFAULT_SECURITY_SETTINGS.chunkedUploadSessionTtlMs,
         requireEmailVerification = DEFAULT_SECURITY_SETTINGS.requireEmailVerification,
       } = request.body as Partial<typeof DEFAULT_SECURITY_SETTINGS>;
 
@@ -2152,6 +2155,9 @@ export async function adminRoutes(app: FastifyInstance) {
         fileTunnelMaxUploadMb,
         fileTunnelMaxPendingPerNode,
         fileTunnelConcurrentMax,
+        chunkedUploadMaxFileMb,
+        chunkedUploadChunkMb,
+        chunkedUploadSessionTtlMs,
       ];
       if (numericFields.some((value) => !Number.isFinite(value) || Number(value) <= 0)) {
         return reply.status(400).send({ error: 'Security settings must be positive numbers' });
@@ -2184,6 +2190,9 @@ export async function adminRoutes(app: FastifyInstance) {
         fileTunnelMaxUploadMb: Number(fileTunnelMaxUploadMb),
         fileTunnelMaxPendingPerNode: Number(fileTunnelMaxPendingPerNode),
         fileTunnelConcurrentMax: Number(fileTunnelConcurrentMax),
+        chunkedUploadMaxFileMb: Number(chunkedUploadMaxFileMb),
+        chunkedUploadChunkMb: Number(chunkedUploadChunkMb),
+        chunkedUploadSessionTtlMs: Number(chunkedUploadSessionTtlMs),
         requireEmailVerification: Boolean(requireEmailVerification),
       });
 
@@ -2212,6 +2221,9 @@ export async function adminRoutes(app: FastifyInstance) {
           fileTunnelMaxUploadMb,
           fileTunnelMaxPendingPerNode,
           fileTunnelConcurrentMax,
+          chunkedUploadMaxFileMb,
+          chunkedUploadChunkMb,
+          chunkedUploadSessionTtlMs,
           requireEmailVerification,
         },
       });

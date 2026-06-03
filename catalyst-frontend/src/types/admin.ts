@@ -278,6 +278,10 @@ export interface SecuritySettings {
   fileTunnelMaxUploadMb: number;
   fileTunnelMaxPendingPerNode: number;
   fileTunnelConcurrentMax: number;
+  // Chunked upload settings
+  chunkedUploadMaxFileMb: number;
+  chunkedUploadChunkMb: number;
+  chunkedUploadSessionTtlMs: number;
 }
 
 export interface ModManagerSettings {

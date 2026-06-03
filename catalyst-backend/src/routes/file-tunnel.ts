@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import type { Logger } from "pino";
+import { createReadStream } from "fs";
 import type { FileTunnelService, FileTunnelResponse } from "../services/file-tunnel";
 import { getSecuritySettings } from "../services/mailer";
 import { verifyAgentApiKey } from "../lib/agent-auth";
@@ -203,6 +204,9 @@ export function fileTunnelRoutes(
   /**
    * GET /api/internal/file-tunnel/upload/:requestId
    * Agent fetches upload data for a write/upload operation.
+   *
+   * For large files (> 10 MB) the data is streamed from disk rather than
+   * buffered into a Buffer in memory.
    */
   app.get(
     "/api/internal/file-tunnel/upload/:requestId",
@@ -230,7 +234,11 @@ export function fileTunnelRoutes(
         return reply.status(404).send({ error: "Upload data not found or expired" });
       }
 
-      reply.type("application/octet-stream").send(data);
+      if ("streamPath" in data) {
+        reply.type("application/octet-stream").header("Content-Length", String(data.size)).send(createReadStream(data.streamPath));
+      } else {
+        reply.type("application/octet-stream").send(data);
+      }
     }
   );
 }

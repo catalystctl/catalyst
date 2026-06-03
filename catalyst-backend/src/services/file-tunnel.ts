@@ -56,7 +56,7 @@ export class FileTunnelService {
   /** Agents currently long-polling, keyed by nodeId */
   private pollers = new Map<string, WaitingPoller[]>();
   /** Upload temp files keyed by requestId - includes nodeId for validation */
-  private uploads = new Map<string, { filePath: string; size: number; nodeId: string; createdAt: number }>();
+  private uploads = new Map<string, { filePath: string; size: number; nodeId: string; createdAt: number; sourcePath?: string }>();
   private logger: Logger;
   private cleanupTimer: ReturnType<typeof setInterval>;
   private tempDir: string;
@@ -84,7 +84,7 @@ export class FileTunnelService {
     filePath: string,
     data?: Record<string, unknown>,
     uploadData?: Buffer,
-    options?: { bypassToken?: string }
+    options?: { bypassToken?: string; sourcePath?: string }
   ): Promise<FileTunnelResponse> {
     const settings = await getSecuritySettings();
 
@@ -100,8 +100,10 @@ export class FileTunnelService {
       throw new Error(`File tunnel queue full for node ${nodeId}`);
     }
 
-    // Check upload size limit
-    if (uploadData) {
+    // Check upload size limit (only for in-memory buffers; path-based uploads are
+    // staged externally and validated by the caller via getUploadData size)
+    const uploadSize = uploadData ? uploadData.length : (options?.sourcePath ? 0 : undefined);
+    if (uploadSize !== undefined && uploadData) {
       const maxSizeBytes = settings.fileTunnelMaxUploadMb * 1024 * 1024;
       if (uploadData.length > maxSizeBytes) {
         // Allow bypass only with a valid migration token
@@ -146,6 +148,33 @@ export class FileTunnelService {
       } catch (err) {
         captureSystemError({ level: 'error', component: 'FileTunnel', message: 'Failed to write upload temp file', stack: err instanceof Error ? err.stack : undefined, metadata: { requestId } }).catch(() => {});
         this.logger.error({ err, requestId }, "Failed to write upload temp file");
+        throw new Error("Failed to stage upload data");
+      }
+    }
+
+    // External (path‐based) staging: caller already assembled the file on
+    // disk (used by the chunked‐upload flow). We track the sourcePath and
+    // the fileSize from the caller so we can stream it to the agent.
+    if (options?.sourcePath && !uploadData) {
+      try {
+        const stats = fs.statSync(options.sourcePath);
+        const destPath = path.join(this.tempDir, `${requestId}.bin`);
+        try {
+          fs.renameSync(options.sourcePath, destPath);
+        } catch {
+          // Fallback to copy then delete if rename fails (cross-device)
+          fs.copyFileSync(options.sourcePath, destPath);
+          try { fs.unlinkSync(options.sourcePath); } catch { /* no-op */ }
+        }
+        this.uploads.set(requestId, {
+          filePath: destPath,
+          size: stats.size,
+          nodeId,
+          createdAt: Date.now(),
+        });
+      } catch (err) {
+        captureSystemError({ level: 'error', component: 'FileTunnel', message: 'Failed to stage external upload file', stack: err instanceof Error ? err.stack : undefined, metadata: { requestId, sourcePath: options.sourcePath } }).catch(() => {});
+        this.logger.error({ err, requestId, sourcePath: options.sourcePath }, "Failed to stage external upload file");
         throw new Error("Failed to stage upload data");
       }
     }
@@ -262,8 +291,11 @@ export class FileTunnelService {
    * Get upload data for a request (agent pulls upload content).
    * Now validates that the requesting node matches the upload's target node.
    * Reads from the temporary disk file instead of keeping data in memory.
+   *
+   * For path‐based uploads (chunked uploads) the returned path is used to
+   * stream the file directly to the agent without buffering in memory.
    */
-  getUploadData(requestId: string, nodeId: string): Buffer | null {
+  getUploadData(requestId: string, nodeId: string): Buffer | { streamPath: string; size: number } | null {
     const entry = this.uploads.get(requestId);
     if (!entry) {
       return null;
@@ -273,6 +305,19 @@ export class FileTunnelService {
     if (entry.nodeId !== nodeId) {
       this.logger.warn({ requestId, expectedNodeId: entry.nodeId, actualNodeId: nodeId },
         "Node attempted to access upload destined for another node");
+      return null;
+    }
+
+    try {
+      const stats = fs.statSync(entry.filePath);
+      // For files > 10 MB, return a stream token so the route can pipe
+      // the file directly to the response without loading into a Buffer.
+      if (stats.size > 10 * 1024 * 1024) {
+        return { streamPath: entry.filePath, size: stats.size };
+      }
+    } catch (err) {
+      captureSystemError({ level: 'error', component: 'FileTunnel', message: 'Failed to stat upload temp file', stack: err instanceof Error ? err.stack : undefined, metadata: { requestId, filePath: entry.filePath } }).catch(() => {});
+      this.logger.error({ err, requestId, filePath: entry.filePath }, "Failed to stat upload temp file");
       return null;
     }
 

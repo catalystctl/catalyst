@@ -268,6 +268,9 @@ function SecurityPage() {
  const [fileTunnelMaxUploadMb, setFileTunnelMaxUploadMb] = useState('100');
  const [fileTunnelMaxPendingPerNode, setFileTunnelMaxPendingPerNode] = useState('50');
  const [fileTunnelConcurrentMax, setFileTunnelConcurrentMax] = useState('10');
+ const [chunkedUploadMaxFileMb, setChunkedUploadMaxFileMb] = useState('5120');
+ const [chunkedUploadChunkMb, setChunkedUploadChunkMb] = useState('8');
+ const [chunkedUploadSessionTtlMs, setChunkedUploadSessionTtlMs] = useState('3600000');
  const [requireEmailVerification, setRequireEmailVerification] = useState(true);
 
  const { data: lockoutResponse, isLoading: lockoutsLoading } = useAuthLockouts({
@@ -301,6 +304,9 @@ function SecurityPage() {
  setFileTunnelMaxUploadMb(String(settings.fileTunnelMaxUploadMb ?? 100));
  setFileTunnelMaxPendingPerNode(String(settings.fileTunnelMaxPendingPerNode ?? 50));
  setFileTunnelConcurrentMax(String(settings.fileTunnelConcurrentMax ?? 10));
+ setChunkedUploadMaxFileMb(String(settings.chunkedUploadMaxFileMb ?? 5120));
+ setChunkedUploadChunkMb(String(settings.chunkedUploadChunkMb ?? 8));
+ setChunkedUploadSessionTtlMs(String(settings.chunkedUploadSessionTtlMs ?? 3600000));
  setRequireEmailVerification(settings.requireEmailVerification ?? true);
  }
  }
@@ -331,7 +337,11 @@ function SecurityPage() {
  validTimeWindows.has(Number(fileTunnelRateLimitWindowMs)) &&
  Number(fileTunnelMaxUploadMb) > 0 &&
  Number(fileTunnelMaxPendingPerNode) > 0 &&
- Number(fileTunnelConcurrentMax) > 0
+ Number(fileTunnelConcurrentMax) > 0 &&
+ Number(chunkedUploadMaxFileMb) > 0 &&
+ Number(chunkedUploadChunkMb) >= 1 &&
+ Number(chunkedUploadChunkMb) <= 128 &&
+ Number(chunkedUploadSessionTtlMs) >= 60000
  ,
  [
  authRateLimitMax, authRateLimitWindowMs,
@@ -344,6 +354,7 @@ function SecurityPage() {
  fileTunnelRateLimitMax, fileTunnelRateLimitWindowMs,
  fileTunnelMaxUploadMb, fileTunnelMaxPendingPerNode,
  fileTunnelConcurrentMax,
+ chunkedUploadMaxFileMb, chunkedUploadChunkMb, chunkedUploadSessionTtlMs,
  validTimeWindows,
  ],
  );
@@ -372,6 +383,9 @@ function SecurityPage() {
  fileTunnelMaxUploadMb: Number(fileTunnelMaxUploadMb),
  fileTunnelMaxPendingPerNode: Number(fileTunnelMaxPendingPerNode),
  fileTunnelConcurrentMax: Number(fileTunnelConcurrentMax),
+ chunkedUploadMaxFileMb: Number(chunkedUploadMaxFileMb),
+ chunkedUploadChunkMb: Number(chunkedUploadChunkMb),
+ chunkedUploadSessionTtlMs: Number(chunkedUploadSessionTtlMs),
  requireEmailVerification,
  }),
  onSuccess: () => notifySuccess('Security settings updated'),
@@ -603,6 +617,24 @@ function SecurityPage() {
  value={fileTunnelConcurrentMax}
  onChange={setFileTunnelConcurrentMax}
  tooltip="Maximum concurrent file operations processed by each agent. Requires agent restart to take effect."
+ />
+ <NumberField
+ label="Chunked max file size (MB)"
+ value={chunkedUploadMaxFileMb}
+ onChange={setChunkedUploadMaxFileMb}
+ tooltip="Maximum file size for resumable chunked uploads (up to 51200 MB)."
+ />
+ <NumberField
+ label="Chunked chunk size (MB)"
+ value={chunkedUploadChunkMb}
+ onChange={setChunkedUploadChunkMb}
+ tooltip="Size of each chunk for resumable uploads (1–128 MB)."
+ />
+ <NumberField
+ label="Chunked session TTL (ms)"
+ value={chunkedUploadSessionTtlMs}
+ onChange={setChunkedUploadSessionTtlMs}
+ tooltip="How long an idle chunked upload session is retained before cleanup (min 60000 ms)."
  />
  </div>
  </Section>
