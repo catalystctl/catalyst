@@ -24,6 +24,8 @@ const prisma = new PrismaClient({
 });
 
 describe('RBAC - Route Protection Verification', () => {
+  // All test data is per-run scoped via nanoid so re-runs and
+  // parallel CI jobs cannot collide with each other or with real users.
   let adminUserId: string;
   let moderatorUserId: string;
   let basicUserId: string;
@@ -33,38 +35,37 @@ describe('RBAC - Route Protection Verification', () => {
   let testModeratorRoleId: string;
   let testBasicRoleId: string;
 
+  const rid = nanoid(8);
+  const routeAdminEmail = `route-admin-${rid}@test.local`;
+  const routeModeratorEmail = `route-moderator-${rid}@test.local`;
+  const routeBasicEmail = `route-basic-${rid}@test.local`;
+
   beforeAll(async () => {
     // Create test users with different permission levels
-    const adminUser = await prisma.user.upsert({
-      where: { email: 'route-admin@test.com' },
-      update: {},
-      create: {
-        email: 'route-admin@test.com',
-        username: 'routeadmin',
+    const adminUser = await prisma.user.create({
+      data: {
+        email: routeAdminEmail,
+        username: `routeadmin_${rid}`,
         name: 'Route Admin',
         emailVerified: true,
       },
     });
     adminUserId = adminUser.id;
 
-    const moderatorUser = await prisma.user.upsert({
-      where: { email: 'route-moderator@test.com' },
-      update: {},
-      create: {
-        email: 'route-moderator@test.com',
-        username: 'routemoderator',
+    const moderatorUser = await prisma.user.create({
+      data: {
+        email: routeModeratorEmail,
+        username: `routemoderator_${rid}`,
         name: 'Route Moderator',
         emailVerified: true,
       },
     });
     moderatorUserId = moderatorUser.id;
 
-    const basicUser = await prisma.user.upsert({
-      where: { email: 'route-basic@test.com' },
-      update: {},
-      create: {
-        email: 'route-basic@test.com',
-        username: 'routebasic',
+    const basicUser = await prisma.user.create({
+      data: {
+        email: routeBasicEmail,
+        username: `routebasic_${rid}`,
         name: 'Route Basic',
         emailVerified: true,
       },

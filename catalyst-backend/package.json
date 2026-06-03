@@ -20,6 +20,7 @@
 		"db:generate": "prisma generate --config prisma/prisma.config.ts",
 		"db:seed": "tsx prisma/seed.ts",
 		"db:seed:admin": "tsx prisma/seed-admin.ts",
+		"recover:admin": "tsx scripts/recover-admin.ts",
 		"bulk-servers": "tsx scripts/bulk-servers.ts",
 		"lint": "eslint src --ext .ts",
 		"test": "vitest run",

@@ -22,6 +22,17 @@ const prisma = new PrismaClient({
   log: ["error"],
 });
 
+// ── Per-run namespace ──────────────────────────────────────────────────
+// All test data is tagged with a random `runId` so tests are safe to run
+// against a live database (catalyst_db) without colliding with real users,
+// roles, or each other across re-runs. Cleanup is scoped to this prefix.
+const runId = require("crypto").randomBytes(4).toString("hex");
+const mkName = (base: string) => `${base}-${runId}`;
+const mkEmail = (base: string) => `${base}-${runId}@test.local`;
+const mkUsername = (base: string) => `${base.slice(0, 12)}_${runId}`;
+// eslint-disable-next-line no-console
+console.log(`[rbac.test] runId=${runId}`);
+
 describe('RBAC - Permission Utilities', () => {
   describe('parseScopedPermission', () => {
     it('should parse permission without scope', () => {
@@ -60,8 +71,8 @@ describe('RBAC - Permission Utilities', () => {
       // Create test user
       const user = await prisma.user.create({
         data: {
-          email: 'rbac-test@example.com',
-          username: 'rbactest',
+          email: mkEmail('rbac-test'),
+          username: mkUsername('rbactest'),
           name: 'RBAC Test',
           emailVerified: true,
         },
@@ -71,7 +82,7 @@ describe('RBAC - Permission Utilities', () => {
       // Create Administrator role with wildcard
       adminRole = await prisma.role.create({
         data: {
-          name: 'TestAdmin',
+          name: mkName('TestAdmin'),
           description: 'Admin role for testing',
           permissions: ['*'],
         },
@@ -80,7 +91,7 @@ describe('RBAC - Permission Utilities', () => {
       // Create Moderator role
       moderatorRole = await prisma.role.create({
         data: {
-          name: 'TestModerator',
+          name: mkName('TestModerator'),
           description: 'Moderator role for testing',
           permissions: [
             'node.read',
@@ -98,7 +109,7 @@ describe('RBAC - Permission Utilities', () => {
       // Create scoped role (can only manage specific node)
       scopedRole = await prisma.role.create({
         data: {
-          name: 'TestScoped',
+          name: mkName('TestScoped'),
           description: 'Scoped role for testing',
           permissions: ['node.delete:test-node-123'],
         },
@@ -109,7 +120,16 @@ describe('RBAC - Permission Utilities', () => {
       // Cleanup
       await prisma.user.delete({ where: { id: testUserId } });
       await prisma.role.deleteMany({
-        where: { name: { in: ['TestAdmin', 'TestModerator', 'TestScoped'] } },
+        where: { name: { startsWith: `TestAdmin-${runId}` } },
+      });
+      await prisma.role.deleteMany({
+        where: { name: { startsWith: `TestModerator-${runId}` } },
+      });
+      await prisma.role.deleteMany({
+        where: { name: { startsWith: `TestScoped-${runId}` } },
+      });
+      await prisma.role.deleteMany({
+        where: { name: { startsWith: `TestExtra-${runId}` } },
       });
     });
 
@@ -187,7 +207,7 @@ describe('RBAC - Permission Utilities', () => {
       // Create another role with different permissions
       const extraRole = await prisma.role.create({
         data: {
-          name: 'TestExtra',
+          name: mkName('TestExtra'),
           description: 'Extra permissions',
           permissions: ['server.delete'],
         },
@@ -216,8 +236,8 @@ describe('RBAC - Permission Utilities', () => {
     beforeAll(async () => {
       const user = await prisma.user.create({
         data: {
-          email: 'rbac-any-test@example.com',
-          username: 'rbacanytest',
+          email: mkEmail('rbac-any-test'),
+          username: mkUsername('rbacanytest'),
           name: 'RBAC Any Test',
           emailVerified: true,
         },
@@ -226,7 +246,7 @@ describe('RBAC - Permission Utilities', () => {
 
       limitedRole = await prisma.role.create({
         data: {
-          name: 'TestLimited',
+          name: mkName('TestLimited'),
           description: 'Limited permissions',
           permissions: ['node.read', 'server.read'],
         },
@@ -271,8 +291,8 @@ describe('RBAC - Permission Utilities', () => {
     beforeAll(async () => {
       const user = await prisma.user.create({
         data: {
-          email: 'rbac-all-test@example.com',
-          username: 'rbacalltest',
+          email: mkEmail('rbac-all-test'),
+          username: mkUsername('rbacalltest'),
           name: 'RBAC All Test',
           emailVerified: true,
         },
@@ -281,7 +301,7 @@ describe('RBAC - Permission Utilities', () => {
 
       limitedRole = await prisma.role.create({
         data: {
-          name: 'TestLimitedAll',
+          name: mkName('TestLimitedAll'),
           description: 'Limited permissions for hasAll test',
           permissions: ['node.read', 'server.read'],
         },
@@ -419,7 +439,7 @@ describe('RBAC - Permission Utilities', () => {
 
       role1 = await prisma.role.create({
         data: {
-          name: 'TestGetRoles1',
+          name: mkName('TestGetRoles1'),
           description: 'First test role',
           permissions: ['node.read'],
         },
@@ -427,7 +447,7 @@ describe('RBAC - Permission Utilities', () => {
 
       role2 = await prisma.role.create({
         data: {
-          name: 'TestGetRoles2',
+          name: mkName('TestGetRoles2'),
           description: 'Second test role',
           permissions: ['server.read'],
         },
@@ -455,13 +475,13 @@ describe('RBAC - Permission Utilities', () => {
 
       expect(role1Found).toMatchObject({
         id: role1.id,
-        name: 'TestGetRoles1',
+        name: mkName('TestGetRoles1'),
         description: 'First test role',
         permissions: ['node.read'],
       });
       expect(role2Found).toMatchObject({
         id: role2.id,
-        name: 'TestGetRoles2',
+        name: mkName('TestGetRoles2'),
         description: 'Second test role',
         permissions: ['server.read'],
       });
@@ -735,28 +755,36 @@ describe('RBAC - Full Permission Coverage', () => {
   });
 });
 
-describe('RBAC - Default Roles Validation', () => {
-  let defaultAdminRoleId: string;
+describe('RBAC - Default Role Shape Validation', () => {
+  // This block verifies that the SYSTEM correctly handles roles with the
+  // expected shape for the three default tiers (admin / moderator / user).
+  // It does NOT touch the real `Administrator`/`Moderator`/`User` roles or
+  // the real `admin@example.com` user. It creates per-run scoped copies.
+
+  const adminRoleName = mkName('DefaultAdmin');
+  const moderatorRoleName = mkName('DefaultModerator');
+  const userRoleName = mkName('DefaultUser');
+  const adminEmail = mkEmail('default-admin');
+  const adminUsername = mkUsername('defaultadmin');
+
+  let adminRoleId: string;
+  let moderatorRoleId: string;
+  let userRoleId: string;
+  let adminUserId: string;
 
   beforeAll(async () => {
-    // Seed the default roles that the seed script would create.
-    // In CI the DB is empty, so we create them here.
-    const adminRole = await prisma.role.upsert({
-      where: { name: 'Administrator' },
-      update: {},
-      create: {
-        name: 'Administrator',
+    const adminRole = await prisma.role.create({
+      data: {
+        name: adminRoleName,
         description: 'Full access to all resources',
         permissions: ['*'],
       },
     });
-    defaultAdminRoleId = adminRole.id;
+    adminRoleId = adminRole.id;
 
-    await prisma.role.upsert({
-      where: { name: 'Moderator' },
-      update: {},
-      create: {
-        name: 'Moderator',
+    const moderatorRole = await prisma.role.create({
+      data: {
+        name: moderatorRoleName,
         description: 'Limited management access',
         permissions: [
           'node.read',
@@ -770,71 +798,57 @@ describe('RBAC - Default Roles Validation', () => {
         ],
       },
     });
+    moderatorRoleId = moderatorRole.id;
 
-    await prisma.role.upsert({
-      where: { name: 'User' },
-      update: {},
-      create: {
-        name: 'User',
+    const userRole = await prisma.role.create({
+      data: {
+        name: userRoleName,
         description: 'Basic user permissions',
         permissions: ['server.read'],
       },
     });
+    userRoleId = userRole.id;
 
-    // Seed the default admin user with Administrator role
-    const existingAdmin = await prisma.user.findUnique({
-      where: { email: 'admin@example.com' },
+    const adminUser = await prisma.user.create({
+      data: {
+        email: adminEmail,
+        username: adminUsername,
+        name: 'Default Admin (test)',
+        emailVerified: true,
+        roles: { connect: { id: adminRoleId } },
+      },
     });
-
-    if (!existingAdmin) {
-      const adminUser = await prisma.user.create({
-        data: {
-          email: 'admin@example.com',
-          username: 'admin',
-          name: 'Admin',
-          emailVerified: true,
-          roles: {
-            connect: { id: defaultAdminRoleId },
-          },
-        },
-      });
-    }
+    adminUserId = adminUser.id;
   });
 
   afterAll(async () => {
-    // Cleanup seeded data
-    await prisma.user.deleteMany({ where: { email: 'admin@example.com' } });
-    await prisma.role.deleteMany({ where: { name: { in: ['Administrator', 'Moderator', 'User'] } } });
+    // Scoped cleanup — only what THIS run created.
+    await prisma.user.deleteMany({ where: { email: { startsWith: `default-admin-${runId}` } } });
+    await prisma.role.deleteMany({ where: { name: { startsWith: `DefaultAdmin-${runId}` } } });
+    await prisma.role.deleteMany({ where: { name: { startsWith: `DefaultModerator-${runId}` } } });
+    await prisma.role.deleteMany({ where: { name: { startsWith: `DefaultUser-${runId}` } } });
   });
 
-  it('should verify default roles exist with correct structure', async () => {
-    const roles = await prisma.role.findMany({
-      where: {
-        name: { in: ['Administrator', 'Moderator', 'User'] },
-      },
-    });
-
-    expect(roles.length).toBeGreaterThanOrEqual(3);
-
-    const adminRole = roles.find((r) => r.name === 'Administrator');
-    expect(adminRole?.permissions).toContain('*');
-
-    const moderatorRole = roles.find((r) => r.name === 'Moderator');
-    expect(moderatorRole?.permissions).toContain('node.read');
-    expect(moderatorRole?.permissions).toContain('server.start');
-
-    const userRole = roles.find((r) => r.name === 'User');
-    expect(userRole?.permissions).toContain('server.read');
+  it('should give the test admin role wildcard permission', async () => {
+    const role = await prisma.role.findUnique({ where: { id: adminRoleId } });
+    expect(role?.permissions).toContain('*');
   });
 
-  it('should verify default admin user has Administrator role', async () => {
-    const adminUser = await prisma.user.findFirst({
-      where: { email: 'admin@example.com' },
-      include: { roles: true },
-    });
+  it('should give the test moderator role scoped permissions', async () => {
+    const role = await prisma.role.findUnique({ where: { id: moderatorRoleId } });
+    expect(role?.permissions).toContain('node.read');
+    expect(role?.permissions).toContain('server.start');
+  });
 
-    expect(adminUser).toBeDefined();
-    expect(adminUser?.roles.some((r) => r.name === 'Administrator')).toBe(true);
+  it('should give the test user role read-only server permission', async () => {
+    const role = await prisma.role.findUnique({ where: { id: userRoleId } });
+    expect(role?.permissions).toContain('server.read');
+    expect(role?.permissions).not.toContain('server.delete');
+  });
+
+  it('should report the test admin user as having admin via hasPermission(*)', async () => {
+    const ok = await hasPermission(prisma, adminUserId, '*');
+    expect(ok).toBe(true);
   });
 });
 

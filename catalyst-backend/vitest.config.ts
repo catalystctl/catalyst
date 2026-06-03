@@ -17,6 +17,6 @@ export default defineConfig({
       forks: { singleFork: true },
     },
     reporters: ['verbose'],
-    setupFiles: [],
+    setupFiles: ['./vitest.setup.ts'],
   },
 });
