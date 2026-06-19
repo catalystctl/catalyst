@@ -50,7 +50,7 @@
 		"nanoid": "~5.1.11",
 		"node-cron": "~4.2.1",
 		"node-fetch": "~3.3.2",
-		"nodemailer": "~8.0.7",
+		"nodemailer": "~9.0.1",
 		"pg": "~8.20.0",
 		"pino": "~10.3.0",
 		"pino-pretty": "~13.1.3",
