@@ -56,7 +56,7 @@ jobs:
     runs-on: blacksmith-2vcpu-ubuntu-2404
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -199,7 +199,7 @@ jobs:
       DATABASE_URL: postgresql://catalyst:catalyst_dev_password@localhost:5432/catalyst_db
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -314,7 +314,7 @@ jobs:
     if: github.event_name == 'push'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -429,7 +429,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: dorny/paths-filter@v4
         id: filter
@@ -461,7 +461,7 @@ jobs:
       needs.detect-changes.outputs.backend == 'true'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Blacksmith Builder
         uses: useblacksmith/setup-docker-builder@v1
@@ -508,7 +508,7 @@ jobs:
       needs.detect-changes.outputs.frontend == 'true'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Blacksmith Builder
         uses: useblacksmith/setup-docker-builder@v1
