@@ -1,4 +1,4 @@
-import type { PluginCollectionAPI, PluginCollectionOptions } from './types';
+import type { PluginCollectionAPI, PluginCollectionOptions } from './types.js';
 
 export interface TypedCollection<T> {
   find(filter?: any, options?: PluginCollectionOptions): Promise<T[]>;

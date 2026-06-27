@@ -423,9 +423,9 @@ function ThemeSettingsPage() {
  const [enabledThemes, setEnabledThemes] = useState<string[]>(['light', 'dark']);
 
  // ── Brand Colors ──
- const [primaryColor, setPrimaryColor] = useState(DEFAULTS.primaryColor);
- const [secondaryColor, setSecondaryColor] = useState(DEFAULTS.secondaryColor);
- const [accentColor, setAccentColor] = useState(DEFAULTS.accentColor);
+ const [primaryColor, setPrimaryColor] = useState<string>(DEFAULTS.primaryColor);
+ const [secondaryColor, setSecondaryColor] = useState<string>(DEFAULTS.secondaryColor);
+ const [accentColor, setAccentColor] = useState<string>(DEFAULTS.accentColor);
 
  // ── Extended Theme Colors ──
  const [themeColors, setThemeColors] = useState<ThemeColors>({ ...DEFAULTS.themeColors });
@@ -434,7 +434,7 @@ function ThemeSettingsPage() {
  const [customCss, setCustomCss] = useState('');
 
  // ── Palette Generator ──
- const [seedColor, setSeedColor] = useState(DEFAULTS.primaryColor);
+ const [seedColor, setSeedColor] = useState<string>(DEFAULTS.primaryColor);
  const [harmonyMode, setHarmonyMode] = useState<HarmonyMode>('auto');
 
  // ── Helper: push preview to DOM ──

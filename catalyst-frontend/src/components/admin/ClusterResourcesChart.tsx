@@ -15,7 +15,6 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Cpu, MemoryStick, Network, Waves, History, Radio } from 'lucide-react';
 import type {
  ClusterMetrics,
- ClusterHistoricalMetrics,
  ClusterTimelinePoint,
  TimeRange,
 } from '@/hooks/useClusterMetrics';

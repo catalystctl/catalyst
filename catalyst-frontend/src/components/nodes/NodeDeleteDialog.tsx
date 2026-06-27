@@ -36,7 +36,7 @@ function NodeDeleteDialog({ nodeId, nodeName, open: controlledOpen, onOpenChange
  );
  return { prev };
  },
- onError: (_err, _vars, ctx) => {
+ onError: (_err: { response?: { data?: { error?: string } }; message?: string }, _vars, ctx) => {
  if (ctx?.prev) {
  for (const [queryKey, data] of ctx.prev) {
  queryClient.setQueryData(queryKey, data);

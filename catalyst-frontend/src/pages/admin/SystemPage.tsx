@@ -4,8 +4,6 @@ import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import {
  Settings,
- Activity,
- Server,
  Mail,
  ShieldCheck,
  Lock,
@@ -13,8 +11,6 @@ import {
  Globe,
  Hash,
  User,
- CheckCircle,
- AlertTriangle,
  ArrowUpCircle,
 } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';

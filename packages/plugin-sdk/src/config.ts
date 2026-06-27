@@ -45,7 +45,7 @@ export function createConfigSchema(definitions: Record<string, ConfigFieldDef>):
         }
         break;
       case 'object':
-        schema = z.record(z.any());
+        schema = z.record(z.string(), z.any());
         break;
       case 'array':
         schema = z.array(z.any());

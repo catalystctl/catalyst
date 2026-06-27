@@ -82,10 +82,10 @@ function SetupPage() {
  // ── Step 3 state ──
  const [seedColor, setSeedColor] = useState('#0d9488');
  const [harmonyMode, setHarmonyMode] = useState<HarmonyMode>('auto');
- const [primaryColor, setPrimaryColor] = useState('#0d9488');
- const [secondaryColor, setSecondaryColor] = useState('#8b5cf6');
- const [accentColor, setAccentColor] = useState('#06b6d4');
- const [themeColors, setThemeColors] = useState<ThemeColors>({ ...defaultThemeColors });
+ const [primaryColor] = useState('#0d9488');
+ const [secondaryColor] = useState('#8b5cf6');
+ const [accentColor] = useState('#06b6d4');
+ const [themeColors] = useState<ThemeColors>({ ...defaultThemeColors });
  const [defaultTheme, setDefaultTheme] = useState<'light' | 'dark'>('dark');
 
  // ── Palette generation ──
@@ -126,16 +126,6 @@ function SetupPage() {
  applyTheme();
  };
  }, [primaryColor, secondaryColor, accentColor, themeColors, previewColors, cancelPreview, applyTheme]);
-
- // When palette is generated, apply it to local state + preview
- const handleApplyPalette = useCallback(() => {
- if (!generatedPalette) return;
- const { primaryColor: p, secondaryColor: sec, accentColor: acc, themeColors: tc } = generatedPalette;
- setPrimaryColor(p);
- setSecondaryColor(sec);
- setAccentColor(acc);
- setThemeColors(tc);
- }, [generatedPalette]);
 
  // ── Validation ──
 

@@ -2,6 +2,7 @@ import ServerMetrics from '../ServerMetrics';
 import ServerMetricsTrends from '../ServerMetricsTrends';
 import MetricsTimeRangeSelector from '../MetricsTimeRangeSelector';
 import type { MetricsTimeRange } from '../../../hooks/useServerMetricsHistory';
+import type { ServerMetricsPoint } from '../../../types/server';
 import ServerTabCard from './ServerTabCard';
 import StatGrid from './StatGrid';
 import TabHeader from './TabHeader';
@@ -20,10 +21,7 @@ interface LiveMetrics {
 }
 
 interface MetricsHistory {
- latest?: {
- networkRxBytes?: number;
- networkTxBytes?: number;
- } | null;
+ latest?: ServerMetricsPoint | null;
  history: any[];
 }
 

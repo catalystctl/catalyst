@@ -5,8 +5,6 @@ import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import {
  Server,
- Cpu,
- HardDrive,
  Search,
  Filter,
  ArrowUpDown,
@@ -123,7 +121,6 @@ function NodeRow({
  node,
  isSelected,
  canDelete,
- selectedIds,
  setSelectedIds,
  handleBulkDelete,
  deleteMutation,
@@ -132,7 +129,6 @@ function NodeRow({
  node: NodeInfo;
  isSelected: boolean;
  canDelete: boolean;
- selectedIds: string[];
  setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
  handleBulkDelete: (ids: string[], label: string) => void;
  deleteMutation: { isPending: boolean };
@@ -331,7 +327,7 @@ function AdminNodesPage() {
  );
 
  const canDelete = useMemo(
- () => user?.permissions?.includes('node.delete') || user?.permissions?.includes('*'),
+ () => Boolean(user?.permissions?.includes('node.delete') || user?.permissions?.includes('*')),
  [user?.permissions],
  );
 
@@ -503,7 +499,6 @@ function AdminNodesPage() {
  node={node}
  isSelected={selectedIds.includes(node.id)}
  canDelete={canDelete}
- selectedIds={selectedIds}
  setSelectedIds={setSelectedIds}
  handleBulkDelete={handleBulkDelete}
  deleteMutation={deleteMutation}
@@ -852,7 +847,6 @@ function AdminNodesPage() {
  node={node}
  isSelected={selectedIds.includes(node.id)}
  canDelete={canDelete}
- selectedIds={selectedIds}
  setSelectedIds={setSelectedIds}
  handleBulkDelete={handleBulkDelete}
  deleteMutation={deleteMutation}

@@ -50,3 +50,40 @@ pub fn decrypt_backup(data: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
         .decrypt(nonce, ciphertext)
         .map_err(|e| format!("Decryption failed: {}", e))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_key() -> [u8; 32] {
+        let mut key = [0u8; 32];
+        for (i, b) in key.iter_mut().enumerate() {
+            *b = i as u8;
+        }
+        key
+    }
+
+    #[test]
+    fn encrypt_decrypt_roundtrip() {
+        let key = test_key();
+        let plaintext = b"Hello, catalyst backup!";
+        let encrypted = encrypt_backup(plaintext, &key).unwrap();
+        assert!(encrypted.starts_with(BACKUP_ENCRYPTION_MAGIC));
+        let decrypted = decrypt_backup(&encrypted, &key).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn tampered_ciphertext_rejected() {
+        let key = test_key();
+        let plaintext = b"sensitive data";
+        let mut encrypted = encrypt_backup(plaintext, &key).unwrap();
+        // Flip a bit in the ciphertext (after magic + nonce)
+        let tamper_idx = BACKUP_ENCRYPTION_MAGIC.len() + 12 + 2;
+        if tamper_idx < encrypted.len() {
+            encrypted[tamper_idx] ^= 0xff;
+        }
+        let result = decrypt_backup(&encrypted, &key);
+        assert!(result.is_err(), "tampered ciphertext must be rejected");
+    }
+}

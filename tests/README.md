@@ -74,24 +74,13 @@ cd /root/catalyst3/tests
 | Suite | File | Tests | Description |
 |-------|------|-------|-------------|
 | **06** | `06-websocket.test.sh` | TBD | WebSocket connectivity, real-time messaging |
-| **07** | `07-agent-connectivity.test.sh` | TBD | Agent startup, backend connection |
 | **08** | `08-container-lifecycle.test.sh` | TBD | Container create, start, stop, delete |
-| **09** | `09-file-operations.test.sh` | TBD | File read/write, security checks |
 
 ### Phase 3: End-to-End Workflows
 
 | Suite | File | Tests | Description |
 |-------|------|-------|-------------|
 | **10** | `10-full-workflow.test.sh` | 18 | Complete user journey with real containers |
-| **11** | `11-multi-server.test.sh` | TBD | Multiple servers, resource isolation |
-| **12** | `12-failure-scenarios.test.sh` | TBD | Crash recovery, network failures |
-
-### Phase 4: Advanced Tests
-
-| Suite | File | Tests | Description |
-|-------|------|-------|-------------|
-| **13** | `13-load-test.test.sh` | TBD | Performance, concurrent operations |
-| **14** | `14-security.test.sh` | TBD | SQL injection, XSS, path traversal |
 
 ## Test Coverage
 

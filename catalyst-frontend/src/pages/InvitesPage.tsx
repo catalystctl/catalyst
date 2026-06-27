@@ -30,7 +30,7 @@ function InvitesPage() {
  });
  const [registerUsername, setRegisterUsername] = useState('');
  const [prevEmail, setPrevEmail] = useState(invitePreview?.email);
- if (invitePreview?.email !== prevEmail) {
+ if (invitePreview?.email && invitePreview.email !== prevEmail) {
  setPrevEmail(invitePreview.email);
  setRegisterUsername((current) => current || invitePreview.email.split('@')[0]);
  }

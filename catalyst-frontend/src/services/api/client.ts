@@ -53,6 +53,7 @@ class ApiClient {
       credentials?: RequestCredentials;
       signal?: AbortSignal;
       responseType?: 'json' | 'blob' | 'text';
+      onDownloadProgress?: (event: { loaded: number; total?: number }) => void;
     },
   ): Promise<T> {
     const {
@@ -178,8 +179,26 @@ class ApiClient {
     }
 
     switch (responseType) {
-      case 'blob':
+      case 'blob': {
+        if (options?.onDownloadProgress && response.body) {
+          const total = Number(response.headers.get('Content-Length')) || undefined;
+          const reader = response.body.getReader();
+          const chunks: BlobPart[] = [];
+          let loaded = 0;
+          // ponytail: stream the body so onDownloadProgress can report incremental progress
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) {
+              chunks.push(value);
+              loaded += value.length;
+              options.onDownloadProgress({ loaded, total });
+            }
+          }
+          return Promise.resolve(new Blob(chunks)) as Promise<T>;
+        }
         return response.blob() as Promise<T>;
+      }
       case 'text':
         return response.text() as Promise<T>;
       default:
@@ -187,7 +206,7 @@ class ApiClient {
     }
   }
 
-  get<T>(path: string, options?: { params?: Record<string, string | number | boolean | undefined | null>; headers?: Record<string, string>; credentials?: RequestCredentials; signal?: AbortSignal; responseType?: 'json' | 'blob' | 'text' }): Promise<T> {
+  get<T>(path: string, options?: { params?: Record<string, string | number | boolean | undefined | null>; headers?: Record<string, string>; credentials?: RequestCredentials; signal?: AbortSignal; responseType?: 'json' | 'blob' | 'text'; onDownloadProgress?: (event: { loaded: number; total?: number }) => void }): Promise<T> {
     return this.request<T>('GET', path, options);
   }
 

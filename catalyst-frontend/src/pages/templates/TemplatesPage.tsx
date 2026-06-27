@@ -56,7 +56,6 @@ function TemplateRow({
  isSelected,
  canWrite,
  hideHeader,
- selectedIds,
  setSelectedIds,
  setEditingTemplateId,
  handleBulkDelete,
@@ -66,7 +65,6 @@ function TemplateRow({
  isSelected: boolean;
  canWrite: boolean;
  hideHeader?: boolean;
- selectedIds: string[];
  setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
  setEditingTemplateId: (id: string) => void;
  handleBulkDelete: (ids: string[], label: string) => void;
@@ -276,7 +274,7 @@ function TemplatesPage({ hideHeader }: Props) {
  const user = useAuthStore((s) => s.user);
 
  const canWrite = useMemo(
- () => user?.permissions?.includes('admin.write') || user?.permissions?.includes('*'),
+ () => Boolean(user?.permissions?.includes('admin.write') || user?.permissions?.includes('*')),
  [user?.permissions],
  );
 
@@ -725,7 +723,6 @@ function TemplatesPage({ hideHeader }: Props) {
  isSelected={selectedIds.includes(template.id)}
  canWrite={canWrite}
  hideHeader={hideHeader}
- selectedIds={selectedIds}
  setSelectedIds={setSelectedIds}
  setEditingTemplateId={setEditingTemplateId}
  handleBulkDelete={handleBulkDelete}
@@ -796,7 +793,6 @@ function TemplatesPage({ hideHeader }: Props) {
  isSelected={selectedIds.includes(template.id)}
  canWrite={canWrite}
  hideHeader={hideHeader}
- selectedIds={selectedIds}
  setSelectedIds={setSelectedIds}
  setEditingTemplateId={setEditingTemplateId}
  handleBulkDelete={handleBulkDelete}

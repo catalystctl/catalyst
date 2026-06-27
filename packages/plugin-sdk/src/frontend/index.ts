@@ -19,7 +19,6 @@ export type {
   FrontendRouteConfig,
   FrontendComponentSlot,
   PluginApiResponse,
-  FrontendPluginOptions,
   PluginErrorFallbackProps,
 } from './types.js';
 

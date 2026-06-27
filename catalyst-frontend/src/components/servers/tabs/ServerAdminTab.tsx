@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { qk } from '../../../lib/queryKeys';
@@ -11,7 +11,6 @@ import {
  Info,
  Loader2,
  Network,
- RefreshCw,
  RotateCcw,
  Server,
  Shield,

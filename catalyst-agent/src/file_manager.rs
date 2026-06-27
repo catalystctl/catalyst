@@ -265,23 +265,6 @@ impl FileManager {
         Ok(entries)
     }
 
-    pub async fn compress_directory(&self, _server_id: &str, _path: &str) -> AgentResult<Vec<u8>> {
-        Err(AgentError::InvalidRequest(
-            "Directory compression is not supported yet".to_string(),
-        ))
-    }
-
-    pub async fn decompress_archive(
-        &self,
-        _server_id: &str,
-        _path: &str,
-        _archive: &[u8],
-    ) -> AgentResult<()> {
-        Err(AgentError::InvalidRequest(
-            "Archive decompression is not supported yet".to_string(),
-        ))
-    }
-
     /// Create a file or directory at the given path.
     pub async fn create_entry(
         &self,
@@ -793,4 +776,50 @@ pub struct ArchiveEntry {
     pub size: u64,
     pub is_dir: bool,
     pub modified: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_fm() -> FileManager {
+        let dir = std::env::temp_dir().join(format!(
+            "catalyst-fm-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        FileManager::new(dir)
+    }
+
+    #[test]
+    fn rejects_parent_dir_traversal() {
+        let fm = make_fm();
+        let result = fm.resolve_path("srv1", "../../../etc/passwd");
+        assert!(result.is_err(), "'..' traversal must be rejected");
+    }
+
+    #[test]
+    fn rejects_absolute_escape() {
+        let fm = make_fm();
+        let result = fm.resolve_path("srv1", "/etc/passwd");
+        // Absolute paths are re-rooted under the server dir, so /etc/passwd
+        // becomes <data_dir>/srv1/etc/passwd — but let's verify it stays inside.
+        match result {
+            Ok(p) => {
+                let base = fm.data_dir.join("srv1");
+                assert!(
+                    p.starts_with(&base),
+                    "absolute path must be confined to server dir"
+                );
+            }
+            Err(_) => { /* acceptable: some impls reject absolutes */ }
+        }
+    }
+
+    #[test]
+    fn rejects_server_id_with_slash() {
+        let fm = make_fm();
+        let result = fm.resolve_path("evil/../other", "file.txt");
+        assert!(result.is_err(), "server_id with '/' must be rejected");
+    }
 }

@@ -449,7 +449,7 @@ step_install_deps() {
   STEP_STARTS["$step_name"]=$(now_ms)
   local overall_exit=0
 
-  # --- Bun workspace install ---
+  # --- pnpm workspace install ---
   # Maps to: pnpm install --frozen-lockfile in ci.yml
   if [[ "$HAS_PNPM" -eq 1 ]]; then
     echo -e "  ${C_BOLD}[pnpm] Installing workspace dependencies...${C_RESET}"
@@ -525,7 +525,7 @@ step_lint() {
   STEP_STARTS["$step_name"]=$(now_ms)
   local overall_exit=0
 
-  # --- Bun lint (eslint) ---
+  # --- pnpm lint (eslint) ---
   # Maps to: pnpm --filter catalyst-backend run lint + pnpm --filter catalyst-frontend run lint in ci.yml lint: job
   # Runs ESLint for both backend and frontend workspace packages
   if [[ "$HAS_PNPM" -eq 1 ]]; then
@@ -602,7 +602,7 @@ step_test() {
   STEP_STARTS["$step_name"]=$(now_ms)
   local overall_exit=0
 
-  # --- Bun tests (vitest) ---
+  # --- pnpm tests (vitest) ---
   # Maps to: pnpm --filter catalyst-backend run test in ci.yml test: job
   if [[ "$HAS_PNPM" -eq 1 ]]; then
     echo -e "  ${C_BOLD}[pnpm] Running Vitest across workspace...${C_RESET}"
@@ -668,11 +668,11 @@ step_build_verify() {
   STEP_STARTS["$step_name"]=$(now_ms)
   local overall_exit=0
 
-  # --- Bun build ---
+  # --- pnpm build ---
   # Maps to: pnpm run build:backend + build:frontend in ci.yml build: job
   if [[ "$HAS_PNPM" -eq 1 ]]; then
     echo -e "  ${C_BOLD}[pnpm] Building workspace...${C_RESET}"
-    if ! run_step "${step_name}_pnpm" bash -c "pnpm run build:shared && pnpm run build:backend && pnpm run build:frontend"; then
+    if ! run_step "${step_name}_pnpm" bash -c "pnpm run build:backend && pnpm run build:frontend"; then
       overall_exit=1
     fi
   fi

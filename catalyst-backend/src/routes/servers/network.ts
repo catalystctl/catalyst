@@ -1,13 +1,21 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { z } from "zod";
 import { prisma } from "../../db.js";
 import { hasNodeAccess } from "../../lib/permissions.js";
-import { checkIsAdmin, collectUsedHostPortsByIp, ensureNotSuspended, findPortConflict, parsePortValue, parseStoredPortBindings, shouldUseIpam } from './_helpers.js';
+import { createRbacMiddleware } from "../../middleware/rbac.js";
+import { checkIsAdmin, collectUsedHostPortsByIp, ensureNotSuspended, findPortConflict, parsePortValue, parseStoredPortBindings, shouldUseIpam, validateRequestBody } from './_helpers.js';
 
 /** Statuses that allow allocation changes. Stopped servers can always change allocations;
  *  running servers support hot-add / hot-remove (the agent will sync firewall rules). */
 const ALLOCATION_ALLOWED_STATUSES = new Set(["stopped", "running", "crashed", "error"]);
 
+const allocationSchema = z.object({
+  containerPort: z.number().int().min(1).max(65535),
+  hostPort: z.number().int().min(1).max(65535),
+});
+
 export async function serverNetworkRoutes(app: FastifyInstance) {
+  const rbac = createRbacMiddleware(prisma);
   app.get(
     "/:serverId/allocations",
     { onRequest: [app.authenticate] },
@@ -67,17 +75,12 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
   );
 
   // Add allocation (hot-add supported for running servers)
-  // TODO(#134): Add Zod request-body schema for containerPort/hostPort validation
-  // TODO(#134): Add RBAC middleware (rbac.checkPermission) to onRequest array
   app.post(
     "/:serverId/allocations",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate, rbac.requirePermission('server.update', 'serverId')], preHandler: [validateRequestBody(allocationSchema)] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
-      const { containerPort, hostPort } = request.body as {
-        containerPort: number;
-        hostPort: number;
-      };
+      const { containerPort, hostPort } = request.body as z.infer<typeof allocationSchema>;
       const userId = request.user.userId;
 
       const server = await prisma.server.findUnique({
@@ -159,13 +162,33 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         }
       }
 
-      bindings[parsedContainerPort] = parsedHostPort;
-      const updated = await prisma.server.update({
-        where: { id: serverId },
-        data: {
-          portBindings: bindings,
-        },
-      });
+      // Wrap port-binding read-modify-write in a transaction to prevent lost updates
+      let updated;
+      try {
+        updated = await prisma.$transaction(async (tx) => {
+          const fresh = await tx.server.findUnique({
+            where: { id: serverId },
+            select: { portBindings: true, primaryPort: true },
+          });
+          if (!fresh) throw new Error("Server not found");
+          const txBindings = parseStoredPortBindings(fresh.portBindings);
+          // Re-check inside transaction — concurrent request may have added this port
+          if (txBindings[parsedContainerPort]) {
+            throw new Error("Allocation already exists for container port");
+          }
+          txBindings[parsedContainerPort] = parsedHostPort;
+          return tx.server.update({
+            where: { id: serverId },
+            data: { portBindings: txBindings },
+          });
+        });
+      } catch (err) {
+        const msg = (err as Error)?.message || "";
+        if (msg === "Allocation already exists for container port") {
+          return reply.status(409).send({ error: msg });
+        }
+        throw err;
+      }
 
       const wsGateway = app.wsGateway;
 
@@ -216,8 +239,6 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
     }
   );
 
-  // TODO(#134): Port bindings read-modify-write should use prisma.$transaction
-  // with optimistic concurrency to prevent lost updates under concurrent requests.
   // Remove allocation (hot-remove supported for running servers)
   app.delete(
     "/:serverId/allocations/:containerPort",
@@ -413,5 +434,4 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
     }
   );
 
-  // Update restart policy
 }

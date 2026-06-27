@@ -19,7 +19,7 @@ interface AuthState {
   _pendingLogoutController?: AbortController;
   /** @internal BroadcastChannel for cross-tab logout sync */
   _broadcast?: BroadcastChannel;
-  login: (values: LoginSchema, options?: { forcePasskeyFallback?: boolean }) => Promise<void>;
+  login: (values: LoginSchema) => Promise<void>;
   register: (values: RegisterSchema) => Promise<void>;
   refresh: () => Promise<void>;
   init: () => Promise<void>;
@@ -59,7 +59,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
     isLoading: false,
     isRefreshing: false,
     error: null,
-    login: async (values, options) => {
+    login: async (values) => {
       // Abort any in-flight server sign-out from a previous logout — otherwise
       // it can destroy the new session cookie we're about to create.
       (get as AuthGet)()._pendingLogoutController?.abort();
@@ -70,7 +70,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
       loginGuard.enter();
       (set as AuthSet)({ isLoading: true, error: null });
       try {
-        const { user } = await authApi.login(values, options);
+        const { user } = await authApi.login(values);
         // Cookie-based authentication - tokens stored in HttpOnly cookies
         (set as AuthSet)({
           user: { ...user, image: sanitizeImageUrl(user.image) },
@@ -176,9 +176,6 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
           (set as AuthSet)({ isRefreshing: false, isReady: true });
           return; // silently swallow — login() owns the auth state now
         }
-        const err = error as { response?: { data?: { error?: unknown } }; message?: string };
-        const rawError = err.response?.data?.error;
-
         // Clean up any remaining localStorage items from previous token-based auth
         localStorage.removeItem('catalyst-auth-token');
         localStorage.removeItem('catalyst-session-token');

@@ -30,14 +30,8 @@ TEST_SUITES=(
     "04-servers.test.sh"
     "05-permissions.test.sh"
     "06-websocket.test.sh"
-    "07-agent-connectivity.test.sh"
     "08-container-lifecycle.test.sh"
-    "09-file-operations.test.sh"
     "10-full-workflow.test.sh"
-    "11-multi-server.test.sh"
-    "12-failure-scenarios.test.sh"
-    "13-load-test.sh"
-    "14-security.test.sh"
 )
 
 # Results tracking

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { qk } from '../../../lib/queryKeys';
 import { filesApi } from '../../../services/api/files';
@@ -59,11 +59,11 @@ interface Props {
  };
  templateId?: string;
  environment?: Record<string, any>;
- allocatedMemoryMb: number;
- allocatedCpuCores: number;
+ allocatedMemoryMb?: number;
+ allocatedCpuCores?: number;
  primaryPort?: number | string;
  networkMode?: string;
- startupCommand?: string;
+ startupCommand?: string | null;
  };
  startupCommand: string;
  onStartupCommandChange: (cmd: string) => void;

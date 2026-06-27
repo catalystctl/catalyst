@@ -25,7 +25,6 @@ interface Database {
 }
 
 interface Props {
- serverId: string;
  isSuspended: boolean;
  databases: Database[];
  databasesLoading: boolean;
@@ -46,7 +45,6 @@ interface Props {
 }
 
 export default function ServerDatabasesTab({
- serverId,
  isSuspended,
  databases,
  databasesLoading,

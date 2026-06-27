@@ -139,6 +139,7 @@ export interface ServerListParams {
   status?: ServerStatus;
   search?: string;
   nodeId?: string;
+  [key: string]: string | number | boolean | null | undefined;
 }
 
 export interface CreateServerPayload {

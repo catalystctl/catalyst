@@ -15,9 +15,9 @@ import type {
   PluginTaskHandler,
   PluginCollectionAPI,
   ScopedPluginDB,
-} from './types';
-import type { TypedPluginContext, LoggerLike } from './types';
-import { createTypedCollection } from './storage';
+} from './types.js';
+import type { TypedPluginContext, LoggerLike } from './types.js';
+import { createTypedCollection } from './storage.js';
 
 /**
  * Wraps a raw PluginBackendContext with typed Config and Events generics.
@@ -46,7 +46,7 @@ export function createTypedContext<
         const result = schema.safeParse(rawValue);
         if (!result.success) {
           raw.logger.warn(
-            { key, errors: result.error.errors },
+            { key, errors: result.error.issues },
             `Plugin config value for "${key}" does not match schema`,
           );
         }
@@ -72,7 +72,7 @@ export function createTypedContext<
         const result = schema.safeParse(value);
         if (!result.success) {
           const msg = `Config "${String(key)}" validation failed: ${result.error.message}`;
-          raw.logger.error({ key, value, errors: result.error.errors }, msg);
+          raw.logger.error({ key, value, errors: result.error.issues }, msg);
           throw new Error(msg);
         }
       }
@@ -91,7 +91,7 @@ export function createTypedContext<
           const result = schema.safeParse(data);
           if (!result.success) {
             raw.logger.warn(
-              { event, data, errors: result.error.errors },
+              { event, data, errors: result.error.issues },
               `Event payload for "${event as string}" does not match schema`,
             );
           }
@@ -107,7 +107,7 @@ export function createTypedContext<
         const result = schema.safeParse(data);
         if (!result.success) {
           const msg = `Cannot emit event "${event as string}" — payload validation failed: ${result.error.message}`;
-          raw.logger.error({ event, data, errors: result.error.errors }, msg);
+          raw.logger.error({ event, data, errors: result.error.issues }, msg);
           throw new Error(msg);
         }
       }

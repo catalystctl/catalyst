@@ -108,7 +108,7 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   // File tunnel security settings
   fileTunnelRateLimitMax: 100,
   fileTunnelRateLimitWindowMs: RATE_LIMIT_TIME_WINDOWS_MS.minute,
-  fileTunnelMaxUploadMb: 100,
+  fileTunnelMaxUploadMb: 500,
   fileTunnelMaxPendingPerNode: 50,
   fileTunnelConcurrentMax: 10,
 };

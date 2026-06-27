@@ -6,23 +6,10 @@ import TabHeader from './TabHeader';
 import TabEmptyState from './TabEmptyState';
 import TabLoadingState from './TabLoadingState';
 import { Clock } from 'lucide-react';
+import type { Task } from '../../../types/task';
 
 const formatDateTime = (value?: string | null) =>
  value ? new Date(value).toLocaleString() : '—';
-
-interface Task {
- id: string;
- name: string;
- action: string;
- description?: string;
- schedule: string;
- nextRunAt?: string | null;
- lastRunAt?: string | null;
- lastStatus?: string | null;
- runCount?: number;
- lastError?: string | null;
- enabled?: boolean;
-}
 
 interface Props {
  serverId: string;

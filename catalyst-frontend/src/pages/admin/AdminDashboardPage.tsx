@@ -22,8 +22,6 @@ import {
  Settings,
  Database,
  Zap,
- Play,
- Square,
  Plus,
 } from 'lucide-react';
 import {
@@ -35,18 +33,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 // ── Helpers ──
-function formatTime(timestamp: string): string {
- const date = new Date(timestamp);
- const now = new Date();
- const diff = now.getTime() - date.getTime();
- const mins = Math.floor(diff / 60000);
- if (mins < 1) return 'Just now';
- if (mins < 60) return `${mins}m ago`;
- const hours = Math.floor(mins / 60);
- if (hours < 24) return `${hours}h ago`;
- return date.toLocaleDateString();
-}
-
 function AdminDashboardPage() {
  const { data: stats, isLoading: statsLoading } = useAdminStats();
  const { data: health, isLoading: healthLoading } = useAdminHealth();

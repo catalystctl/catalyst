@@ -11,7 +11,6 @@ import {
  Trash2,
  Plus,
  ArrowLeft,
- Copy,
  Info,
 } from 'lucide-react';
 import apiClient from '../../services/api/client';
@@ -98,7 +97,7 @@ function NodeAllocationsPage() {
  const { data: allocations = [], isLoading: allocationsLoading } = useQuery<NodeAllocation[]>({
  queryKey: qk.adminNodeAllocations(nodeId!),
  queryFn: async () => {
- const response = await apiClient.get(`/api/nodes/${nodeId}/allocations`);
+ const response = await apiClient.get<{ success: boolean; data: NodeAllocation[] }>(`/api/nodes/${nodeId}/allocations`);
  return response.data ?? [];
  },
  enabled: !!nodeId,
@@ -117,14 +116,14 @@ function NodeAllocationsPage() {
  // Port allocation mutations
  const createPortMutation = useMutation({
  mutationFn: async () => {
- return apiClient.post(`/api/nodes/${nodeId}/allocations`, {
+ return apiClient.post<{ success: boolean; data: { created: number } }>(`/api/nodes/${nodeId}/allocations`, {
  ip: ipInput.trim(),
  ports: portsInput.trim(),
  alias: aliasInput.trim() || undefined,
  });
  },
  onSuccess: (response) => {
- const created = response.data?.data?.created || 0;
+ const created = response.data?.created || 0;
  notifySuccess(`Created ${created} port allocation${created !== 1 ? 's' : ''}`);
  setShowCreatePortModal(false);
  setIpInput('');
@@ -405,13 +404,11 @@ function NodeAllocationsPage() {
  label="IP"
  value={allocation.ip}
  copyable
- mono
  />
  <DataField
  label="Port"
  value={String(allocation.port)}
  copyable
- mono
  />
  {allocation.alias && (
  <span className="hidden sm:inline text-xs text-muted-foreground truncate">

@@ -7,7 +7,6 @@ import {
  ArrowRightLeft,
  Play,
  Pause,
- RotateCcw,
  X,
  CheckCircle2,
  XCircle,
@@ -27,7 +26,6 @@ import {
  Shield,
  ArrowRight,
  Wifi,
- WifiOff,
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -52,7 +50,6 @@ import type {
  MigrationJob,
  MigrationStep,
  PterodactylTestResult,
- MigrationPhaseId,
  MigrationScope,
  CatalystNodeOption,
  PterodactylServerInfo,
@@ -756,7 +753,7 @@ export default function MigrationPage() {
  });
 
  // Fetch steps for active job
- const { data: activeSteps, isLoading: loadingSteps } = useQuery({
+ const { data: activeSteps } = useQuery({
  queryKey: qk.migrationSteps(activeJobId!),
  queryFn: () => migrationApi.getSteps(activeJobId!, { limit: 500 }),
  enabled: !!activeJobId,
@@ -934,7 +931,7 @@ export default function MigrationPage() {
  // Elapsed time counter for running jobs
  const startedAt = activeJob?.startedAt;
  const status = activeJob?.status;
- const shouldRun = Boolean(startedAt) && ['running', 'validating'].includes(status);
+ const shouldRun = Boolean(startedAt) && status !== undefined && ['running', 'validating'].includes(status);
  const [elapsed, setElapsed] = useState(() => {
  if (!shouldRun || !startedAt) return 0;
  return Date.now() - new Date(startedAt).getTime();

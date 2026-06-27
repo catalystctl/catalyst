@@ -72,7 +72,6 @@ export const authApi = {
    */
   async login(
     values: LoginSchema,
-    options?: { forcePasskeyFallback?: boolean },
   ): Promise<{ token: string; user: User; rememberMe?: boolean }> {
     try {
       const response = await apiClient.post<{
@@ -313,7 +312,7 @@ export const authApi = {
 
   async forgotPassword(email: string): Promise<void> {
     const normalizedEmail = email.trim().toLowerCase();
-    const res = await authClient.forgetPassword({ email: normalizedEmail, redirectTo: `${window.location.origin}/reset-password` });
+    const res = await authClient.requestPasswordReset({ email: normalizedEmail, redirectTo: `${window.location.origin}/reset-password` });
     // Better Auth always returns success to prevent email enumeration.
     // We don't throw even on error — same anti-enumeration principle.
     if (res.error) {

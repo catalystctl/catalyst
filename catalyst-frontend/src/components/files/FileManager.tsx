@@ -2,7 +2,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
  ArrowUp,
  ChevronRight,
@@ -30,7 +30,8 @@ import FileList from './FileList';
 import FileTree from './FileTree';
 import FileUploader from './FileUploader';
 import { useFileManager } from '../../hooks/useFileManager';
-import { filesApi } from '../../services/api/files';
+import { filesApi, DEFAULT_MAX_UPLOAD_MB } from '../../services/api/files';
+import { adminApi } from '../../services/api/admin';
 import type { FileEntry } from '../../types/file';
 import { formatFileMode } from '../../utils/formatters';
 import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
@@ -63,12 +64,12 @@ const isBufferError = (error: any): { currentMaxBufferMb: number; recommendedMax
  return null;
 };
 
-const containerVariants = {
+const containerVariants: Variants = {
  hidden: { opacity: 0 },
  visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.05 } },
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
  hidden: { opacity: 0, y: 8 },
  visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 350, damping: 26 } },
 };
@@ -285,8 +286,27 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  });
 
  const uploadMutation = useMutation({
- mutationFn: async ({ files, onProgress }: { files: File[]; onProgress?: (fileIndex: number, progress: number) => void }) => {
- await filesApi.upload(serverId, path, files, onProgress);
+ mutationFn: async ({ files, onProgress, signal }: { files: File[]; onProgress?: (fileIndex: number, progress: number) => void; signal?: AbortSignal }) => {
+ // Validate file sizes against the configurable upload limit (with fallback)
+ let maxUploadMb: number;
+ try {
+ const controller = new AbortController();
+ const timeout = setTimeout(() => controller.abort(), 5000);
+ try {
+ maxUploadMb = await adminApi.getFileTunnelUploadLimit();
+ } finally {
+ clearTimeout(timeout);
+ }
+ } catch {
+ maxUploadMb = DEFAULT_MAX_UPLOAD_MB; // fallback — when the setting can't be fetched
+ }
+ const maxBytes = maxUploadMb * 1024 * 1024;
+ const oversized = files.filter((f) => f.size > maxBytes);
+ if (oversized.length > 0) {
+ const names = oversized.map((f) => f.name).join(', ');
+ throw new Error(`Files exceed the maximum upload size of ${maxUploadMb}MB: ${names}`);
+ }
+ await filesApi.upload(serverId, path, files, onProgress, signal);
  },
  onSuccess: () => {
  setShowUpload(false);
@@ -1218,8 +1238,8 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  <FileUploader
  path={path}
  isUploading={uploadMutation.isPending}
- onUpload={(filesToUpload, onProgress) =>
- uploadMutation.mutate({ files: filesToUpload, onProgress })
+ onUpload={(filesToUpload, onProgress, signal) =>
+ uploadMutation.mutate({ files: filesToUpload, onProgress, signal })
  }
  onClose={() => setShowUpload(false)}
  inModal

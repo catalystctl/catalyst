@@ -1,6 +1,6 @@
 # Catalyst
 
-![Early Testing](https://img.shields.io/badge/status-early%20testing-orange) ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue) ![React 18](https://img.shields.io/badge/React-18-cyan) ![Rust](https://img.shields.io/badge/Rust-1.70-orange) ![License](https://img.shields.io/badge/license-GPLv3-green)
+![Early Testing](https://img.shields.io/badge/status-early%20testing-orange) ![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue) ![React](https://img.shields.io/badge/React-19-cyan) ![Rust](https://img.shields.io/badge/Rust-1.95-orange) ![License](https://img.shields.io/badge/license-GPLv3-green)
 
 **An experimental game server management platform in early testing.** Expect breaking changes and instability while core workflows are being validated.
 
@@ -121,9 +121,9 @@ See [Docker Setup](docs/docker-setup.md) for full TLS, reverse proxy, and harden
 
 **Tech Stack:**
 
-- **Backend:** TypeScript 5.9, Fastify, PostgreSQL, WebSocket Gateway
-- **Frontend:** React 18, Vite, TanStack Query, Radix UI
-- **Agent:** Rust 1.70, Tokio, containerd gRPC
+- **Backend:** TypeScript 6.0, Fastify, PostgreSQL, WebSocket Gateway
+- **Frontend:** React 19, Vite, TanStack Query, Radix UI
+- **Agent:** Rust 1.95, Tokio, containerd gRPC
 - **Features:** RBAC, SFTP, Plugin System, Task Scheduling, Alerts
 
 👉 [Full architecture details](docs/architecture.md)

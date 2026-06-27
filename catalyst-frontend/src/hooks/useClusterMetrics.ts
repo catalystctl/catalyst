@@ -54,7 +54,7 @@ export interface ClusterHistoricalMetrics {
 }
 
 export interface ClusterTimelinePoint {
-  timestamp: string;
+  timestamp: string | number;
   time: string;
   [key: string]: string | number | null;
 }

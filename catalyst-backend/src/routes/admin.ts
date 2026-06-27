@@ -3579,5 +3579,18 @@ export async function adminRoutes(app: FastifyInstance) {
       reply.send(serialize({ success: true, message: 'OIDC configuration updated. Restart required for changes to take full effect.' }));
     }
   );
+
+  // File tunnel upload size limit (available to all authenticated users)
+  app.get(
+    '/settings/file-tunnel-upload-limit',
+    { preHandler: authenticate },
+    async (_request: FastifyRequest, reply: FastifyReply) => {
+      const settings = await getSecuritySettings();
+      reply.send({
+        success: true,
+        data: { maxUploadMb: settings.fileTunnelMaxUploadMb },
+      });
+    },
+  );
 }
 

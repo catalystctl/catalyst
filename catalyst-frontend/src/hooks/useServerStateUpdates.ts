@@ -15,7 +15,7 @@ const DEBOUNCE_MS = 16; // ~60fps
 
 export function useServerStateUpdates() {
   const queryClient = useQueryClient();
-  const pendingUpdates = useRef<Map<string, { state: string; data: Record<string, unknown> }>>();
+  const pendingUpdates = useRef<Map<string, { state: string; data: Record<string, unknown> }>>(new Map());
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isProcessing = useRef(false);
 

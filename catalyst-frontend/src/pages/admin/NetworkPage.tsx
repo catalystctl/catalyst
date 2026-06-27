@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
  Activity,
  Server,
@@ -361,7 +361,7 @@ function ActivityPage() {
  log.resource.toLowerCase().includes(q) ||
  log.user?.username?.toLowerCase().includes(q) ||
  log.resourceId?.toLowerCase().includes(q) ||
- formatDetails(log.details)?.toLowerCase().includes(q)
+ formatDetails(log.metadata)?.toLowerCase().includes(q)
  );
  })
  .map((log) => {
@@ -369,7 +369,7 @@ function ActivityPage() {
  const colorClass = getResourceColor(log.resource);
  const tone = getActionTone(log.action);
  const actionLabel = formatAction(log.action);
- const details = log.details ? formatDetails(log.details) : null;
+ const details = log.metadata ? formatDetails(log.metadata) : null;
  const resourceId = log.resourceId;
  const resourceType = log.resource;
 

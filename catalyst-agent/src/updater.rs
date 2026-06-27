@@ -369,10 +369,14 @@ impl AgentUpdater {
                         }
                     }
                     Err(e) => {
-                        warn!("Could not download checksum (skipping verification): {}", e);
-                        // Continue without verification — backwards compatibility.
-                        // TODO: Make checksum mandatory in a future release.
-                        return Ok(temp_path);
+                        // Checksums are now mandatory. A blocked checksum endpoint
+                        // must not let a MITM serve a malicious agent binary.
+                        // (May require sidecar .sha256 files in air-gapped setups — intended.)
+                        let _ = fs::remove_file(&temp_path).await;
+                        return Err(AgentError::SecurityViolation(format!(
+                            "GitHub checksum download failed — refusing to use unverified binary: {}",
+                            e
+                        )));
                     }
                 }
             }
@@ -404,10 +408,13 @@ impl AgentUpdater {
                         info!("Backend update checksum verified successfully");
                     }
                     Err(e) => {
-                        warn!(
-                            "Could not download backend checksum (skipping verification): {}",
+                        // Checksums are now mandatory — reject the unverified binary.
+                        // (May require sidecar checksum files in air-gapped setups — intended.)
+                        let _ = fs::remove_file(&temp_path).await;
+                        return Err(AgentError::SecurityViolation(format!(
+                            "Backend checksum download failed — refusing to use unverified binary: {}",
                             e
-                        );
+                        )));
                     }
                 }
                 Ok(temp_path)
@@ -518,5 +525,58 @@ impl AgentUpdater {
     #[allow(dead_code)]
     pub fn current_version() -> &'static str {
         CURRENT_VERSION
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runtime_manager::ContainerdRuntime;
+
+    #[test]
+    fn valid_version_accepted() {
+        assert!(is_valid_version("1.12.2"));
+        assert!(is_valid_version("1.0"));
+        assert!(is_valid_version("0.0.0"));
+        assert!(is_valid_version("100.200.300"));
+    }
+
+    #[test]
+    fn empty_version_rejected() {
+        assert!(!is_valid_version(""));
+        assert!(!is_valid_version("."));
+        assert!(!is_valid_version(".."));
+    }
+
+    #[test]
+    fn injection_attempts_rejected() {
+        assert!(!is_valid_version("../etc/passwd"));
+        assert!(!is_valid_version("1.2; rm -rf /"));
+        assert!(!is_valid_version("1.2 "));
+        assert!(!is_valid_version(" 1.2"));
+        assert!(!is_valid_version("1.2\n"));
+        assert!(!is_valid_version("1.2/"));
+        assert!(!is_valid_version("v1.2.3"));
+        assert!(!is_valid_version("1.2-rc1"));
+    }
+
+    #[test]
+    fn qualify_image_ref_tests() {
+        assert_eq!(
+            ContainerdRuntime::qualify_image_ref("alpine:3.19"),
+            "docker.io/library/alpine:3.19"
+        );
+        assert_eq!(
+            ContainerdRuntime::qualify_image_ref("alpine"),
+            "docker.io/library/alpine"
+        );
+        assert_eq!(
+            ContainerdRuntime::qualify_image_ref("ghcr.io/org/img:tag"),
+            "ghcr.io/org/img:tag"
+        );
+        assert_eq!(
+            ContainerdRuntime::qualify_image_ref("user/repo:latest"),
+            "user/repo:latest"
+        );
     }
 }

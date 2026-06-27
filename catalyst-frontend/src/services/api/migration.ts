@@ -40,18 +40,15 @@ export const migrationApi = {
   },
 
   pause: async (jobId: string) => {
-    const { data } = await apiClient.post(`/api/admin/migration/${jobId}/pause`);
-    return data;
+    return apiClient.post(`/api/admin/migration/${jobId}/pause`);
   },
 
   resume: async (jobId: string) => {
-    const { data } = await apiClient.post(`/api/admin/migration/${jobId}/resume`);
-    return data;
+    return apiClient.post(`/api/admin/migration/${jobId}/resume`);
   },
 
   cancel: async (jobId: string) => {
-    const { data } = await apiClient.post(`/api/admin/migration/${jobId}/cancel`);
-    return data;
+    return apiClient.post(`/api/admin/migration/${jobId}/cancel`);
   },
 
   getSteps: async (
@@ -66,7 +63,6 @@ export const migrationApi = {
   },
 
   retryStep: async (jobId: string, stepId: string) => {
-    const { data } = await apiClient.post(`/api/admin/migration/${jobId}/retry/${stepId}`);
-    return data;
+    return apiClient.post(`/api/admin/migration/${jobId}/retry/${stepId}`);
   },
 };

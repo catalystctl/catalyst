@@ -6,13 +6,14 @@ import { FileTypeIcon } from './FileTypeIcon';
 type Props = {
  path: string;
  isUploading: boolean;
- onUpload: (files: File[], onProgress?: (fileIndex: number, progress: number) => void) => void;
+ onUpload: (files: File[], onProgress?: (fileIndex: number, progress: number) => void, signal?: AbortSignal) => void;
  onClose: () => void;
  inModal?: boolean;
 };
 
 function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }: Props) {
  const inputRef = useRef<HTMLInputElement | null>(null);
+ const abortRef = useRef<AbortController | null>(null);
  const [isDragActive, setIsDragActive] = useState(false);
  const [fileProgress, setFileProgress] = useState<Record<number, number>>({});
  const [fileNames, setFileNames] = useState<string[]>([]);
@@ -22,10 +23,20 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  const arr = Array.from(files);
  setFileNames(arr.map((f) => f.name));
  setFileProgress({});
- onUpload(arr, (fileIndex, progress) => {
+ const controller = new AbortController();
+ abortRef.current = controller;
+ onUpload(
+ arr,
+ (fileIndex, progress) => {
  setFileProgress((prev) => ({ ...prev, [fileIndex]: progress }));
- });
+ },
+ controller.signal,
+ );
  if (inputRef.current) inputRef.current.value = '';
+ };
+
+ const handleCancel = () => {
+ abortRef.current?.abort();
  };
 
  const allComplete = fileNames.length > 0 && fileNames.every((_, i) => (fileProgress[i] ?? 0) >= 100);
@@ -96,6 +107,16 @@ function FileUploader({ path, isUploading, onUpload, onClose, inModal = false }:
  >
  {isUploading ? 'Uploading…' : 'Choose Files'}
  </button>
+ {isUploading && (
+ <button
+ type="button"
+ className="inline-flex items-center gap-1.5 rounded-lg border border-danger/30 px-4 py-2 text-xs font-semibold text-danger transition-colors hover:bg-danger-muted"
+ onClick={handleCancel}
+ >
+ <X className="h-3.5 w-3.5" />
+ Cancel
+ </button>
+ )}
  </div>
  </div>
 

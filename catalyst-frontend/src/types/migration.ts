@@ -68,8 +68,8 @@ export interface PterodactylTestResult {
     users: number;
     servers: number;
   };
-  nodes?: PterodactylNodeInfo[];
-  servers?: PterodactylServerInfo[];
+  nodesList?: PterodactylNodeInfo[];
+  serversList?: PterodactylServerInfo[];
   error?: string;
 }
 

@@ -46,6 +46,7 @@ interface PtdlEgg {
     files?: Record<string, PtdlConfigFile> | string; // Can be object or JSON string
     logs?: string;
     file?: string;
+    file_denylist?: string[];
   };
   scripts?: {
     installation?: {
@@ -313,7 +314,10 @@ function addBuiltinVariables(
     description: string;
     default: string;
     required: boolean;
-    input: 'text' | 'number' | 'select' | 'checkbox';
+    userViewable: boolean;
+    userEditable: boolean;
+    input: 'text' | 'number' | 'select' | 'checkbox' | 'password';
+    options?: string[];
     rules?: string[];
   }>,
   startup: string,
@@ -323,7 +327,10 @@ function addBuiltinVariables(
   description: string;
   default: string;
   required: boolean;
-  input: 'text' | 'number' | 'select' | 'checkbox';
+  userViewable: boolean;
+  userEditable: boolean;
+  input: 'text' | 'number' | 'select' | 'checkbox' | 'password';
+  options?: string[];
   rules?: string[];
 }> {
   const existingVarNames = new Set(variables.map((v) => v.name));
@@ -346,6 +353,8 @@ function addBuiltinVariables(
         description: builtin.description,
         default: builtin.default,
         required: false,
+        userViewable: true,
+        userEditable: true,
         input: builtin.name === 'SERVER_PORT' || builtin.name === 'SERVER_MEMORY' ? 'number' : 'text',
       });
       existingVarNames.add(builtin.name);
@@ -418,25 +427,6 @@ export function convertPterodactylEgg(egg: PtdlEgg): Record<string, unknown> {
 
   // Parse stop command and determine signal
   const { stopCommand, sendSignalTo } = parseStopCommand(egg.config?.stop);
-
-  // Extract startup detection pattern - can be object or JSON string
-  let startupDonePattern: string | undefined;
-  if (egg.config?.startup) {
-    if (typeof egg.config.startup === 'object') {
-      startupDonePattern = egg.config.startup.done;
-    } else if (typeof egg.config.startup === 'string') {
-      // Try to parse as JSON
-      try {
-        const parsed = JSON.parse(egg.config.startup);
-        if (parsed && typeof parsed === 'object' && 'done' in parsed) {
-          startupDonePattern = parsed.done;
-        }
-      } catch {
-        // Not valid JSON, use as-is
-        startupDonePattern = egg.config.startup;
-      }
-    }
-  }
 
   // Extract config files - can be object or JSON string
   let configFiles: Record<string, PtdlConfigFile> | undefined;

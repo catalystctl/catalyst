@@ -14,7 +14,7 @@ function EditTaskModal({
  disabled = false,
 }: {
  serverId: string;
- task: Task;
+ task: Omit<Task, 'serverId'>;
  disabled?: boolean;
 }) {
  const [open, setOpen] = useState(false);

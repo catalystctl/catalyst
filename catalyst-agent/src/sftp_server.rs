@@ -29,9 +29,12 @@
 
 use std::collections::HashMap;
 use std::future::Future;
+use std::io::SeekFrom;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
+
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 use russh::server::{Auth, Msg, Server, Session};
 use russh::{Channel, ChannelId, MethodSet};
@@ -343,22 +346,43 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
         let path = Self::path_from_handle(&handle).unwrap_or_default();
 
         async move {
-            let data = fm
-                .read_file(&server_id, &path)
+            // Stream: resolve path (permission check), then seek+read exactly
+            // len bytes instead of loading the entire file into memory.
+            let full_path = fm
+                .resolve_path(&server_id, &path)
+                .map_err(|e| SftpError(format!("Read failed: {}", e)))?;
+
+            let mut file = tokio::fs::File::open(&full_path)
                 .await
                 .map_err(|e| SftpError(format!("Read failed: {}", e)))?;
 
-            let start = offset as usize;
-            let end = std::cmp::min(start + len as usize, data.len());
+            let file_len = file
+                .metadata()
+                .await
+                .map_err(|e| SftpError(format!("Read failed: {}", e)))?
+                .len();
 
-            if start >= data.len() {
+            if offset >= file_len {
                 return Err(SftpError("EOF".into()));
             }
 
-            Ok(russh_sftp::protocol::Data {
-                id,
-                data: data[start..end].to_vec(),
-            })
+            file.seek(SeekFrom::Start(offset))
+                .await
+                .map_err(|e| SftpError(format!("Read seek failed: {}", e)))?;
+
+            let to_read = std::cmp::min(len as u64, file_len - offset) as usize;
+            let mut buf = vec![0u8; to_read];
+            let n = file
+                .read(&mut buf)
+                .await
+                .map_err(|e| SftpError(format!("Read failed: {}", e)))?;
+            buf.truncate(n);
+
+            if n == 0 {
+                return Err(SftpError("EOF".into()));
+            }
+
+            Ok(russh_sftp::protocol::Data { id, data: buf })
         }
     }
 
@@ -380,22 +404,34 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
                 return Err(SftpError("Permission denied".into()));
             }
 
-            // Read-modify-write: read existing, patch at offset, write back.
-            let existing = fm.read_file(&server_id, &path).await.unwrap_or_default();
-            let mut content = existing;
-
-            let offset_usize = offset as usize;
-            let needed_len = offset_usize + data.len();
-            if content.len() < needed_len {
-                content.resize(needed_len, 0);
-            }
-            content[offset_usize..offset_usize + data.len()].copy_from_slice(&data);
-
-            if content.len() as u64 > max_file_size {
+            // Stream: seek directly to the offset and write the chunk.
+            // Avoids O(n²) read-modify-write of the entire file per chunk.
+            if offset.saturating_add(data.len() as u64) > max_file_size {
                 return Err(SftpError("File too large".into()));
             }
 
-            fm.write_file_bytes(&server_id, &path, &content)
+            let full_path = fm
+                .resolve_path(&server_id, &path)
+                .map_err(|e| SftpError(format!("Write failed: {}", e)))?;
+
+            if let Some(parent) = full_path.parent() {
+                tokio::fs::create_dir_all(parent)
+                    .await
+                    .map_err(|e| SftpError(format!("Write failed: {}", e)))?;
+            }
+
+            let mut file = tokio::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(&full_path)
+                .await
+                .map_err(|e| SftpError(format!("Write failed: {}", e)))?;
+
+            file.seek(SeekFrom::Start(offset))
+                .await
+                .map_err(|e| SftpError(format!("Write seek failed: {}", e)))?;
+
+            file.write_all(&data)
                 .await
                 .map_err(|e| SftpError(format!("Write failed: {}", e)))?;
 

@@ -3,7 +3,6 @@ import { usePluginStore } from './store';
 import { fetchPlugins } from './api';
 import { loadPluginFrontend } from './loader';
 import { useAuthStore } from '../stores/authStore';
-import { reportSystemError } from '../services/api/systemErrors';
 import { PluginContext, type PluginContextValue } from './PluginContext';
 import type { LoadedPlugin } from './types';
 

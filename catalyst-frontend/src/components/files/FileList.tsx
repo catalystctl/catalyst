@@ -1,3 +1,4 @@
+// ponytail: responsive FileList card layout + bottom nav deferred to a dedicated mobile pass
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFileListVirtualizer } from '../../hooks/useFileListVirtualizer';
 import { ArrowDown, ArrowUp, Folder, Check } from 'lucide-react';

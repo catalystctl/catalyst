@@ -93,7 +93,7 @@ export function useUpdateApiKey() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateApiKeyRequest }) =>
       apiKeyService.update(id, data),
-    onSuccess: (_, variables) => {
+    onSuccess: () => {
       toast.success('API key updated successfully');
     },
     onError: (error: any) => {

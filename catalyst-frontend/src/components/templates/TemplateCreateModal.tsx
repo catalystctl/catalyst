@@ -12,7 +12,6 @@ import {
  Loader2,
  Download,
  CheckCircle,
- AlertTriangle,
 } from 'lucide-react';
 import {
  Select,
@@ -392,10 +391,10 @@ function TemplateCreateModal() {
  : '',
  );
  setTemplateFeatures(payload.features ?? {});
- setModManagerEnabled(!!payload.features?.modManager);
- setModProviders(extractProviderIds((payload.features?.modManager as any)?.providers));
- setPluginManagerEnabled(!!payload.features?.pluginManager);
- setPluginProviders(extractProviderIds((payload.features?.pluginManager as any)?.providers));
+ setModManagerEnabled(!!features.modManager);
+ setModProviders(extractProviderIds((features.modManager as any)?.providers));
+ setPluginManagerEnabled(!!features.pluginManager);
+ setPluginProviders(extractProviderIds((features.pluginManager as any)?.providers));
  const importedVariables = Array.isArray(payload.variables)
  ? (payload.variables as Record<string, unknown>[]).map((variable) => ({
  name: String(variable?.name ?? ''),

@@ -2,17 +2,8 @@ import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react
 import { useNavigate, useParams } from 'react-router-dom';
 
 import {
- ArrowUpCircle,
- CheckSquare,
- Download,
- ExternalLink,
- Loader2,
  Package,
  Puzzle,
- RefreshCw,
- Search,
- Square,
- Trash2,
  Terminal,
  FolderOpen,
  HardDrive,
@@ -50,7 +41,6 @@ import { getErrorMessage } from '../../utils/errors';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { reportSystemError } from '../../services/api/systemErrors';
 import type {
- ServerAccessEntry,
  ServerInvite,
  ServerPermissionsResponse,
 } from '../../types/server';
@@ -171,15 +161,19 @@ function ServerDetailsPage() {
  // ── Auth / permissions ──
  const isAdmin = useMemo(
  () =>
+ Boolean(
  user?.permissions?.includes('*') ||
  user?.permissions?.includes('admin.read') ||
  user?.permissions?.includes('admin.write'),
+ ),
  [user?.permissions],
  );
  const canAdminWrite = useMemo(
  () =>
+ Boolean(
  user?.permissions?.includes('*') ||
  user?.permissions?.includes('admin.write'),
+ ),
  [user?.permissions],
  );
  const serverPerms = useMemo(
@@ -310,7 +304,7 @@ function ServerDetailsPage() {
 
  const [prevPermissionsData, setPrevPermissionsData] = useState(permissionsData?.data);
  if (permissionsData?.data !== prevPermissionsData) {
- setPrevPermissionsData(permissionsData.data);
+ setPrevPermissionsData(permissionsData?.data);
  if (permissionsData?.data) {
  const nextPermissions: Record<string, string[]> = {};
  permissionsData.data.forEach((entry) => {
@@ -481,7 +475,7 @@ function ServerDetailsPage() {
  setSuspendReason('');
  },
  onSettled: () => {
- queryClient.invalidateQueries({ queryKey: qk.server(server?.id) });
+ if (server?.id) queryClient.invalidateQueries({ queryKey: qk.server(server.id) });
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) =>
@@ -500,7 +494,7 @@ function ServerDetailsPage() {
  },
  onSuccess: () => notifySuccess('Server unsuspended'),
  onSettled: () => {
- queryClient.invalidateQueries({ queryKey: qk.server(server?.id) });
+ if (server?.id) queryClient.invalidateQueries({ queryKey: qk.server(server.id) });
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) =>
@@ -536,8 +530,10 @@ function ServerDetailsPage() {
  notifySuccess('Allocation added');
  },
  onSettled: () => {
+ if (serverId) {
  queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ }
  },
  onError: (error: any) =>
  notifyError(
@@ -557,8 +553,10 @@ function ServerDetailsPage() {
  },
  onSuccess: () => notifySuccess('Allocation removed'),
  onSettled: () => {
+ if (serverId) {
  queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ }
  },
  onError: (error: any) =>
  notifyError(
@@ -576,8 +574,10 @@ function ServerDetailsPage() {
  },
  onSuccess: () => notifySuccess('Primary allocation updated'),
  onSettled: () => {
+ if (serverId) {
  queryClient.invalidateQueries({ queryKey: qk.serverAllocations(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ }
  },
  onError: (error: any) =>
  notifyError(
@@ -613,7 +613,7 @@ function ServerDetailsPage() {
  },
  onSuccess: () => notifySuccess('Restart policy updated'),
  onSettled: () => {
- queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ if (serverId) queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) =>
@@ -634,7 +634,7 @@ function ServerDetailsPage() {
  },
  onSuccess: () => notifySuccess('Crash count reset'),
  onSettled: () => {
- queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ if (serverId) queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) =>
@@ -660,7 +660,7 @@ function ServerDetailsPage() {
  },
  onSuccess: () => notifySuccess('Server name updated'),
  onSettled: () => {
- queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ if (serverId) queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) =>
@@ -685,7 +685,7 @@ function ServerDetailsPage() {
  },
  onSuccess: () => notifySuccess('Startup command updated'),
  onSettled: () => {
- queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+ if (serverId) queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  },
  onError: (error: any) =>
  notifyError(
@@ -714,6 +714,7 @@ function ServerDetailsPage() {
  notifySuccess('Invite sent');
  },
  onSettled: () => {
+ if (serverId)
  queryClient.invalidateQueries({
  queryKey: qk.serverInvites(serverId),
  });
@@ -732,6 +733,7 @@ function ServerDetailsPage() {
  },
  onSuccess: () => notifySuccess('Invite cancelled'),
  onSettled: () => {
+ if (serverId)
  queryClient.invalidateQueries({
  queryKey: qk.serverInvites(serverId),
  });
@@ -743,7 +745,7 @@ function ServerDetailsPage() {
  });
 
  const saveAccessMutation = useMutation({
- mutationFn: (entry: ServerAccessEntry) => {
+ mutationFn: (entry: { userId: string }) => {
  if (!serverId) {
  reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Missing server id', metadata: { context: 'saveAccessMutation' } });
  throw new Error('Missing server id');
@@ -756,6 +758,7 @@ function ServerDetailsPage() {
  },
  onSuccess: () => notifySuccess('Permissions updated'),
  onSettled: () => {
+ if (serverId)
  queryClient.invalidateQueries({
  queryKey: qk.serverPermissions(serverId),
  });
@@ -776,6 +779,7 @@ function ServerDetailsPage() {
  },
  onSuccess: () => notifySuccess('Access removed'),
  onSettled: () => {
+ if (serverId)
  queryClient.invalidateQueries({
  queryKey: qk.serverPermissions(serverId),
  });
@@ -897,14 +901,14 @@ function ServerDetailsPage() {
  <div className="flex flex-wrap items-center gap-2.5">
  {isLoading ? (
  <div className="h-6 w-48 animate-pulse rounded-md bg-muted" />
- ) : (
+ ) : server ? (
  <>
  <h1 className="font-display truncate text-xl font-bold tracking-tight text-foreground">
  {server.name}
  </h1>
  <ServerStatusBadge status={server.status} />
  </>
- )}
+ ) : null}
  </div>
  <p className="mt-1 text-xs text-muted-foreground">
  {isLoading ? 'Loading…' : `${nodeLabel} · ${nodeIp}:${nodePort}`}
@@ -1003,7 +1007,7 @@ function ServerDetailsPage() {
  {activeTab === 'sftp' && server && (
  <ServerSftpTab
  serverId={server.id}
- ownerId={server.ownerId}
+ ownerId={server.ownerId ?? ''}
  currentUserId={user?.id}
  />
  )}
@@ -1033,7 +1037,6 @@ function ServerDetailsPage() {
 
  {activeTab === 'databases' && server && (
  <ServerDatabasesTab
- serverId={server.id}
  isSuspended={isSuspended}
  databases={databases}
  databasesLoading={databasesLoading}
@@ -1096,15 +1099,13 @@ function ServerDetailsPage() {
 
  {activeTab === 'users' && server && (
  <ServerUsersTab
- serverId={server.id}
- ownerId={server.ownerId}
+ ownerId={server.ownerId ?? ''}
  inviteEmail={inviteEmail}
  onInviteEmailChange={setInviteEmail}
  invitePreset={invitePreset}
  onInvitePresetChange={setInvitePreset}
  invitePermissions={invitePermissions}
  onInvitePermissionsChange={setInvitePermissions}
- permissionPresets={permissionsData?.presets ?? {}}
  permissionOptions={permissionOptions}
  createInvitePending={createInviteMutation.isPending}
  onCreateInvite={() => createInviteMutation.mutate()}

@@ -1,4 +1,4 @@
-import type { PluginRouteHandler } from './types';
+import type { PluginRouteHandler } from './types.js';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 

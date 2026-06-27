@@ -1,8 +1,17 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
-import { captureSystemError, ensureNotSuspended, fileRateLimitMax, fileRateLimitWindowMs, hasNodeAccess, isArchiveName, normalizeRequestPath, path, validateAndNormalizePath } from './_helpers.js';
+import { captureSystemError, ensureNotSuspended, fileRateLimitMax, fileRateLimitWindowMs, getSecuritySettings, hasNodeAccess, isArchiveName, normalizeRequestPath, path, validateAndNormalizePath } from './_helpers.js';
 
 export async function serverFilesRoutes(app: FastifyInstance) {
+  // Compute per-route body limit for upload (mirrors index.ts file-tunnel pattern)
+  const uploadSettings = await getSecuritySettings();
+  const uploadBodyLimit = Math.max(
+    5 * 1024 * 1024, // 5MB minimum
+    Math.min(
+      uploadSettings.fileTunnelMaxUploadMb * 1024 * 1024,
+      500 * 1024 * 1024,
+    ),
+  );
   const fileTunnel = (app as any).fileTunnel as import("../../services/file-tunnel").FileTunnelService;
   const tunnelFileOp = async (
     nodeId: string,
@@ -171,6 +180,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     "/:serverId/files/upload",
     {
       onRequest: [app.authenticate],
+      bodyLimit: uploadBodyLimit,
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {

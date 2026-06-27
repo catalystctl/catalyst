@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -92,7 +92,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
  onSuccess: () => {
  if (diskValue !== existingDiskMb) {
  notifySuccess('Storage resize initiated');
- setResizeDone(false); // Wait for SSE event to close modal
+ // Wait for SSE event to close modal
  } else {
  notifySuccess('Server updated');
  setOpen(false);
@@ -144,10 +144,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
 
  useEffect(() => {
  if (!server?.nodeId || !isIpamNetwork) {
- let active = true;
- return () => {
- active = false;
- };
+ return;
  }
 
  let active = true;
@@ -198,10 +195,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
 
  useEffect(() => {
  if (!server?.nodeId || !isBridgeNetwork) {
- let active = true;
- return () => {
- active = false;
- };
+ return;
  }
  let active = true;
  nodesApi

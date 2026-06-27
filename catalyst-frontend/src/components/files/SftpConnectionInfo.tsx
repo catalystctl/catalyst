@@ -103,7 +103,8 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  const revokeAllMutation = useMutation({
  mutationFn: () => serversApi.revokeAllSftpTokens(serverId),
  onSuccess: (data) => {
- notifySuccess(`Revoked ${data.revoked} SFTP session${data.revoked !== 1 ? 's' : ''}`);
+ const count = data?.revoked ?? 0;
+ notifySuccess(`Revoked ${count} SFTP session${count !== 1 ? 's' : ''}`);
  setShowPassword(false);
  },
  onSettled: () => {

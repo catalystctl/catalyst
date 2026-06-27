@@ -57,7 +57,6 @@ function RuleRow({
  onEdit,
  onDelete,
  isPending,
- index,
 }: {
  rule: AlertRule;
  showAdminTargets: boolean;
@@ -66,7 +65,6 @@ function RuleRow({
  onEdit: () => void;
  onDelete: () => void;
  isPending: boolean;
- index: number;
 }) {
  const isOwner = !rule.userId || !user?.id || rule.userId === user.id;
  return (
@@ -493,11 +491,10 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  <SectionHeader icon={Settings} title="Alert rules" description="Manage thresholds and notification targets." />
  <div className="space-y-2">
  {alertRules.length > 0 ? (
- alertRules.map((rule, i) => (
+ alertRules.map((rule) => (
  <RuleRow
  key={rule.id}
  rule={rule}
- index={i}
  showAdminTargets={showAdminTargets}
  user={user}
  onToggle={() => updateRuleMutation.mutate({ rule, updates: { enabled: !rule.enabled } })}

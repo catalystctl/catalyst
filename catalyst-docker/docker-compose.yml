@@ -123,7 +123,7 @@ services:
       # @fastify/compress to prevent "premature close" stream errors that
       # truncate compressed responses when nginx closes the upstream connection
       # before the compression stream finishes flushing.
-      ENABLE_COMPRESSION: "false"
+      ENABLE_COMPRESSION: ${ENABLE_COMPRESSION:-false}
 
       # Webhooks (optional)
       WEBHOOK_URLS: ${WEBHOOK_URLS:-}

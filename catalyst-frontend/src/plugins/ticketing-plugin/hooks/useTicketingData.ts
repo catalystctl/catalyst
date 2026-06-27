@@ -97,13 +97,11 @@ export function useTicketingData(): TicketingDataState & TicketingDataActions {
 
   // ── Detail ──
   const detailQueries = useQueries({
-    queries: selectedTicketId
-      ? [
-          { queryKey: ['ticketing', 'ticket', selectedTicketId], queryFn: () => api.fetchTicket(selectedTicketId) },
-          { queryKey: ['ticketing', 'comments', selectedTicketId], queryFn: () => api.fetchComments(selectedTicketId) },
-          { queryKey: ['ticketing', 'activities', selectedTicketId], queryFn: () => api.fetchActivities(selectedTicketId) },
-        ]
-      : [],
+    queries: [
+      { queryKey: ['ticketing', 'ticket', selectedTicketId ?? ''], queryFn: () => api.fetchTicket(selectedTicketId ?? ''), enabled: !!selectedTicketId },
+      { queryKey: ['ticketing', 'comments', selectedTicketId ?? ''], queryFn: () => api.fetchComments(selectedTicketId ?? ''), enabled: !!selectedTicketId },
+      { queryKey: ['ticketing', 'activities', selectedTicketId ?? ''], queryFn: () => api.fetchActivities(selectedTicketId ?? ''), enabled: !!selectedTicketId },
+    ],
   });
 
   const selectedTicket = (detailQueries[0]?.data as Ticket | undefined) ?? null;
@@ -116,7 +114,7 @@ export function useTicketingData(): TicketingDataState & TicketingDataActions {
   const isLoadingDetail = detailQueries.some((q) => q.isLoading);
 
   // ── Ref Data ──
-  const statsQuery = useQuery({ queryKey: ['ticketing', 'ref', 'stats'], queryFn: api.fetchStats, staleTime: 60_000 });
+  const statsQuery = useQuery({ queryKey: ['ticketing', 'ref', 'stats'], queryFn: () => api.fetchStats(), staleTime: 60_000 });
   const tagsQuery = useQuery({ queryKey: ['ticketing', 'ref', 'tags'], queryFn: api.fetchTags, staleTime: 60_000 });
   const templatesQuery = useQuery({ queryKey: ['ticketing', 'ref', 'templates'], queryFn: api.fetchTemplates, staleTime: 60_000 });
   const usersQuery = useQuery({ queryKey: ['ticketing', 'ref', 'users'], queryFn: api.fetchUsers, staleTime: 60_000 });

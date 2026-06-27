@@ -858,7 +858,9 @@ impl SystemSetup {
     }
 
     fn has_required_cni_plugins_check_paths(dirs: &[PathBuf]) -> bool {
-        const REQUIRED: [&str; 4] = ["bridge", "host-local", "portmap", "macvlan"];
+        // ponytail: portmap CNI plugin not used; manual iptables DNAT + explicit cleanup
+        // (see cni_network.rs teardown_port_forward_rules for the matching -D deletion).
+        const REQUIRED: [&str; 3] = ["bridge", "host-local", "macvlan"];
 
         for dir in dirs {
             let has_all = REQUIRED.iter().all(|name| dir.join(name).exists());

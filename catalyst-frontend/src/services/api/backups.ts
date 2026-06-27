@@ -43,7 +43,7 @@ export const backupsApi = {
         },
       },
     );
-    return response.data;
+    return response;
   },
   get: async (serverId: string, backupId: string) => {
     const data = await apiClient.get<Backup>(`/api/servers/${serverId}/backups/${backupId}`);

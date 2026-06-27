@@ -12,14 +12,14 @@ function Pagination({ page, totalPages, onPageChange }: Props) {
  </span>
  <div className="flex gap-2">
  <button
- className="rounded-md border border-border/30 px-2 py-1 text-xs text-muted-foreground transition-all duration-200 hover:border-primary hover:text-foreground disabled:opacity-50"
+ className="min-h-[40px] rounded-md border border-border/30 px-3 py-2 text-xs text-muted-foreground transition-all duration-200 hover:border-primary hover:text-foreground disabled:opacity-50"
  onClick={() => onPageChange(Math.max(1, page - 1))}
  disabled={page <= 1}
  >
  Previous
  </button>
  <button
- className="rounded-md border border-border/30 px-2 py-1 text-xs text-muted-foreground transition-all duration-200 hover:border-primary hover:text-foreground disabled:opacity-50"
+ className="min-h-[40px] rounded-md border border-border/30 px-3 py-2 text-xs text-muted-foreground transition-all duration-200 hover:border-primary hover:text-foreground disabled:opacity-50"
  onClick={() => onPageChange(Math.min(totalPages, page + 1))}
  disabled={page >= totalPages}
  >

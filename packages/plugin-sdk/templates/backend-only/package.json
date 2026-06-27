@@ -7,7 +7,7 @@
 		"dev": "tsc --watch"
 	},
 	"dependencies": {
-		"@catalyst/plugin-sdk": "^0.1.0"
+		"@catalyst/plugin-sdk": "workspace:*"
 	},
 	"devDependencies": {
 		"typescript": "^6.0.0"

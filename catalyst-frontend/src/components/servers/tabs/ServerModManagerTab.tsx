@@ -277,7 +277,7 @@ export default function ServerModManagerTab({
  };
  })
  .filter(
- (entry): entry is ModManagerProviderOption => Boolean(entry),
+ (entry: ModManagerProviderOption | null): entry is ModManagerProviderOption => Boolean(entry),
  );
  }, [modManagerConfig]);
 

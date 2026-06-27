@@ -29,7 +29,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
  const { data: catalog, isLoading: catalogLoading } = usePermissionsCatalog();
  const { data: myPermissions = [] } = useMyPermissions();
 
- const [formData, setFormData] = useState<CreateApiKeyRequest>({
+ const [formData, setFormData] = useState<CreateApiKeyRequest & { permissions: string[] }>({
  name: '',
  expiresIn: 7776000,
  allPermissions: true,

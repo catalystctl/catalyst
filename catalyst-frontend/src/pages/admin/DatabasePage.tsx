@@ -15,10 +15,6 @@ import {
  XCircle,
  RefreshCw,
  Loader2,
- Layers,
- HardDrive,
- Cable,
- Table2,
 } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';

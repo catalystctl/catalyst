@@ -30,7 +30,7 @@ export const qk = {
     params ? ['servers', serverId, 'metrics', params] as const : ['servers', serverId, 'metrics'] as const,
 
   // ── Server Logs ────────────────────────────────────────────────────
-  serverLogs: (serverId: string, initialLines?: number) =>
+  serverLogs: (serverId: string | undefined, initialLines?: number) =>
     initialLines ? ['servers', serverId, 'logs', initialLines] as const : ['servers', serverId, 'logs'] as const,
 
   // ── Backups ─────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ export const qk = {
   dashboardResources: () => ['dashboard-resources'] as const,
 
   // ── Alerts ──────────────────────────────────────────────────────────
-  alerts: (params?: { filterResolved?: boolean; serverId?: string; scope?: string }) =>
+  alerts: (params?: { filterResolved?: 'true' | 'all' | 'false'; serverId?: string; scope?: string }) =>
     params ? ['alerts', params] as const : ['alerts'] as const,
   alertRules: (params?: Record<string, unknown>) =>
     params ? ['alert-rules', params] as const : ['alert-rules'] as const,

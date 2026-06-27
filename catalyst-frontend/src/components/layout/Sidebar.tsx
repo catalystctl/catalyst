@@ -15,7 +15,6 @@ import {
  FileText,
  Bell,
  Database,
- Globe,
  Settings,
  Shield,
  Palette,
@@ -331,6 +330,7 @@ function Sidebar() {
  to: `/admin/plugin/${tab.id}`,
  label: tab.label,
  icon: Plug,
+ permissions: [],
  })),
  });
  }

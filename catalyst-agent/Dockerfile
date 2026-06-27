@@ -2,8 +2,8 @@ FROM rust:1-bookworm AS builder
 
 WORKDIR /app
 
-# Copy Cargo files
-COPY Cargo.toml Cargo.lock ./
+# Copy Cargo files + pinned toolchain
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 
 # Cache dependencies
 RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && rm -rf src
@@ -12,6 +12,8 @@ RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && r
 COPY src ./src
 
 # Build
+# ponytail: Dockerfile builds gnu target but updater expects musl asset name
+# (catalyst-agent-x86_64-linux-musl) — align release-pipeline asset naming in a follow-up
 RUN touch src/main.rs && cargo build --release
 
 # Runtime stage

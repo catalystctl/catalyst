@@ -241,12 +241,12 @@ function applyThemeToDOM(
 // Instead we stash the latest values and flush once per animation frame.
 
 let previewRafId: number | null = null;
-let pendingPreview: {
+let pendingPreview: Partial<{
   primaryColor: string;
   secondaryColor: string;
   accentColor: string;
   themeColors: ThemeColors;
-} | null = null;
+}> | null = null;
 
 function schedulePreview(getState: () => ThemeState) {
   const { themeSettings } = getState();
@@ -267,7 +267,13 @@ function schedulePreview(getState: () => ThemeState) {
     pendingPreview = null;
     if (!data) return;
     const currentTheme = getState().theme;
-    applyThemeToDOM(currentTheme, data.primaryColor, data.secondaryColor, data.accentColor, data.themeColors);
+    const {
+      primaryColor = base.primaryColor,
+      secondaryColor = base.secondaryColor,
+      accentColor = base.accentColor,
+      themeColors = base.themeColors || defaultThemeColors,
+    } = data;
+    applyThemeToDOM(currentTheme, primaryColor, secondaryColor, accentColor, themeColors);
   });
 }
 

@@ -83,7 +83,7 @@ async function hideDevtoolsAndSettle(page: Page) {
 
 /** Skip pages that are still showing "Loading..." */
 async function isStuckOnLoading(page: Page): Promise<boolean> {
-  const text = await page.locator('body').textContent({ timeout: 2_000 }).catch(() => '');
+  const text = (await page.locator('body').textContent({ timeout: 2_000 }).catch(() => '')) ?? '';
   return text.trim() === 'Loading...' || text.trim() === '';
 }
 
@@ -170,7 +170,7 @@ async function discoverFirstEntity(
   if (!ok) return null;
 
   const links = page.locator(`a[href*="${linkPattern}"]`);
-  const count = await links.count({ timeout: 10_000 }).catch(() => 0);
+  const count = await links.count().catch(() => 0);
   if (count === 0) return null;
 
   const href = await links.first().getAttribute('href', { timeout: 3_000 }).catch(() => null);

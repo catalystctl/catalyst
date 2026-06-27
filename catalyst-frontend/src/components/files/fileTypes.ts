@@ -6,7 +6,6 @@ import {
   FileImage,
   FileArchive,
   FileSpreadsheet,
-  Folder,
   Settings,
   Terminal,
   Binary,

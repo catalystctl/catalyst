@@ -260,15 +260,6 @@ CatalystAgent
 2. **Health monitoring** — 5-second interval heartbeat to backend
 3. **File tunnel server** — HTTP endpoint for backend to fetch server files
 
-### Shared Layer
-
-**Location:** `catalyst-shared/`
-
-**Responsibilities:**
-
-- Exports TypeScript interfaces used by both frontend and backend.
-- No runtime code — types-only package shared via pnpm workspaces.
-
 ---
 
 ## Data Flows

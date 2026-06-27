@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ModalPortal } from '@/components/ui/modal-portal';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -160,10 +160,7 @@ function CreateServerModal() {
 
  useEffect(() => {
  if (!nodeId || networkMode !== 'macvlan' || !macvlanInterface) {
- let active = true;
- return () => {
- active = false;
- };
+ return;
  }
 
  let active = true;
@@ -204,10 +201,7 @@ function CreateServerModal() {
 
  useEffect(() => {
  if (!nodeId || networkMode !== 'host') {
- let active = true;
- return () => {
- active = false;
- };
+ return;
  }
  let active = true;
  nodesApi

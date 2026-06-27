@@ -18,7 +18,6 @@ interface Invite {
 }
 
 interface Props {
- serverId: string;
  ownerId: string;
  inviteEmail: string;
  onInviteEmailChange: (email: string) => void;
@@ -26,7 +25,6 @@ interface Props {
  onInvitePresetChange: (preset: 'readOnly' | 'power' | 'full' | 'custom') => void;
  invitePermissions: string[];
  onInvitePermissionsChange: (permissions: string[]) => void;
- permissionPresets: Record<string, string[]>;
  permissionOptions: string[];
  createInvitePending: boolean;
  onCreateInvite: () => void;
@@ -43,7 +41,6 @@ interface Props {
 }
 
 export default function ServerUsersTab({
- serverId,
  ownerId,
  inviteEmail,
  onInviteEmailChange,
@@ -51,7 +48,6 @@ export default function ServerUsersTab({
  onInvitePresetChange,
  invitePermissions,
  onInvitePermissionsChange,
- permissionPresets,
  permissionOptions,
  createInvitePending,
  onCreateInvite,

@@ -29,8 +29,6 @@ import { metricsRoutes } from "./routes/metrics";
 import { adminEventsRoutes } from "./routes/admin-events";
 import { metricsStreamRoutes } from "./routes/metrics-stream";
 import { backupRoutes } from "./routes/backups";
-import { RbacMiddleware } from "./middleware/rbac";
-
 import { adminRoutes } from "./routes/admin";
 import { roleRoutes } from "./routes/roles";
 import { taskRoutes } from "./routes/tasks";
@@ -90,7 +88,7 @@ const logger = pino(
 
 const app = Fastify({
 	logger: true,
-	bodyLimit: 1048576, // 1MB default limit (lowered from 100MB)
+	bodyLimit: 10485760, // 10MB global — upload/file routes override with a higher per-route limit
 	trustProxy: true,
 });
 
@@ -138,7 +136,6 @@ app.setErrorHandler((error, request, reply) => {
 const wsGateway = new WebSocketGateway(prisma, logger);
 setWsGateway(wsGateway);
 setErrorLoggerGateway(wsGateway);
-const rbac = new RbacMiddleware(prisma);
 const taskScheduler = new TaskScheduler(prisma, logger);
 const webhookService = new WebhookService(prisma, logger);
 const alertService = new AlertService(prisma, logger);
@@ -412,7 +409,6 @@ const authenticate = async (request: any, reply: any) => {
 (app as any).alertService = alertService;
 // (app as any).auth is set after initAuth() below
 (app as any).prisma = prisma;
-(app as any).rbac = rbac;
 (app as any).pluginLoader = pluginLoader;
 
 // ============================================================================
@@ -526,7 +522,7 @@ async function bootstrap() {
 
 		await app.register(fastifyMultipart, {
 			limits: {
-				fileSize: 104857600,
+				fileSize: 524288000, // 500MB max — per-route bodyLimit on upload routes is the actual control
 			},
 			attachFieldsToBody: false,
 		});

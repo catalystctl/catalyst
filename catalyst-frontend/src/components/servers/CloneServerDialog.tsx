@@ -109,10 +109,7 @@ function CloneServerDialog({ server, disabled = false }: Props) {
 
   useEffect(() => {
     if (!nodeId || networkMode !== 'host') {
-      let active = true;
-      return () => {
-        active = false;
-      };
+      return;
     }
     let active = true;
     nodesApi

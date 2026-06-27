@@ -20,8 +20,6 @@ import { createWriteStream } from "fs";
 import { promises as fs } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { execFile } from "child_process";
-import { promisify } from "util";
 import type { Readable } from "stream";
 import { pipeline } from "stream/promises";
 import { captureSystemError } from "../../services/error-logger";
@@ -433,10 +431,6 @@ export const withConnectionInfo = (server: any, fallbackNode?: { publicAddress?:
 export const __filename = fileURLToPath(import.meta.url);
 export const __dirname = path.dirname(path.dirname(__filename));
 // Using shared prisma instance from db.ts
-/** @deprecated Server file operations must be delegated to the agent. Do not use execFile on the backend for server data. */
-export const execFileAsync = promisify(execFile);
-/** @deprecated Server data lives on the agent, not the backend. Do not use this for server file operations. */
-export const serverDataRoot = process.env.SERVER_DATA_DIR || "/var/lib/catalyst/servers";
 export let fileRateLimitMax = 60;
 export let fileRateLimitWindowMs: string | number = "1 minute";
 export let maxBufferBytes = 50 * 1024 * 1024;
@@ -1100,43 +1094,6 @@ export const fetchDownload = async (
   return fetch(downloadUrl, { headers: dlHeaders, redirect: "follow" });
 };
 
-/** @deprecated Server file operations must be delegated to the agent. Do not create server directories on the backend. */
-export const resolveServerPath = async (serverUuid: string, requestedPath: string, nodeServerDataDir?: string) => {
-  console.warn("[DEPRECATED] resolveServerPath called on backend. Server file operations must be delegated to the agent.");
-  const baseDir = path.resolve(nodeServerDataDir || serverDataRoot, serverUuid);
-  await fs.mkdir(baseDir, { recursive: true });
-  const safePath = path.resolve(baseDir, requestedPath.replace(/\\/g, "/").replace(/^\/+/, ""));
-  const basePrefix = baseDir.endsWith(path.sep) ? baseDir : `${baseDir}${path.sep}`;
-  if (safePath !== baseDir && !safePath.startsWith(basePrefix)) {
-    throw new Error("Path traversal attempt detected");
-  }
-  return { baseDir, targetPath: safePath };
-};
-/** @deprecated Server file operations must be delegated to the agent. Do not run archive commands on the backend. */
-export const validateArchiveEntries = async (archivePath: string, isZip: boolean) => {
-  console.warn("[DEPRECATED] validateArchiveEntries called on backend. Server file operations must be delegated to the agent.");
-  const { stdout } = isZip
-    ? await execFileAsync("unzip", ["-Z", "-1", archivePath], { maxBuffer: maxBufferBytes })
-    : await execFileAsync("tar", ["-tzf", archivePath], { maxBuffer: maxBufferBytes });
-  const entries = stdout
-    .split("\n")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-  if (entries.length > 5000) {
-    throw new Error("Archive contains too many entries");
-  }
-  for (const entry of entries) {
-    const normalized = path.posix.normalize(entry);
-    if (normalized.startsWith("..") || path.posix.isAbsolute(normalized)) {
-      throw new Error("Archive contains invalid paths");
-    }
-    const depth = normalized.split("/").filter(Boolean).length;
-    if (depth > 20) {
-      throw new Error("Archive contains deeply nested paths");
-    }
-  }
-};
-
 export const isSuspensionEnforced = () => process.env.SUSPENSION_ENFORCED !== "false";
 
 export const isSuspensionDeleteBlocked = () =>
@@ -1393,8 +1350,6 @@ export { createWriteStream } from "fs";
 export { promises as fs } from "fs";
 export { default as path } from "path";
 export { fileURLToPath } from "url";
-export { execFile } from "child_process";
-export { promisify } from "util";
 export type { Readable } from "stream";
 export { pipeline } from "stream/promises";
 export { captureSystemError } from "../../services/error-logger.js";

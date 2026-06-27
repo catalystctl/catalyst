@@ -109,7 +109,6 @@ jobs:
             node_modules
             catalyst-backend/node_modules
             catalyst-frontend/node_modules
-            catalyst-shared/node_modules
           key: pnpm-deps-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'package.json') }}
           restore-keys: pnpm-deps-${{ runner.os }}-
 
@@ -248,7 +247,6 @@ jobs:
             node_modules
             catalyst-backend/node_modules
             catalyst-frontend/node_modules
-            catalyst-shared/node_modules
           key: pnpm-deps-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'package.json') }}
           restore-keys: pnpm-deps-${{ runner.os }}-
 
@@ -363,7 +361,6 @@ jobs:
             node_modules
             catalyst-backend/node_modules
             catalyst-frontend/node_modules
-            catalyst-shared/node_modules
           key: pnpm-deps-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'package.json') }}
           restore-keys: pnpm-deps-${{ runner.os }}-
 
@@ -396,14 +393,18 @@ jobs:
 
       # ── Build Verification ──
       # Maps to: step_build_verify() in run-workflow.sh
-      - name: Build shared types
-        run: pnpm run build:shared
-
       - name: Build backend
         run: pnpm run build:backend
 
       - name: Build frontend
         run: pnpm run build:frontend
+
+      # ponytail: SDK must build before CLI (CLI depends on @catalyst/plugin-sdk workspace link)
+      - name: Build plugin SDK
+        run: pnpm --filter @catalyst/plugin-sdk run build
+
+      - name: Build plugin SDK CLI
+        run: pnpm --filter @catalyst/plugin-sdk-cli run build
 
       - name: Build agent (debug)
         run: cargo build --manifest-path catalyst-agent/Cargo.toml
@@ -437,12 +438,10 @@ jobs:
           filters: |
             backend:
               - 'catalyst-backend/**'
-              - 'catalyst-shared/**'
               - 'pnpm-lock.yaml'
               - 'package.json'
             frontend:
               - 'catalyst-frontend/**'
-              - 'catalyst-shared/**'
               - 'pnpm-lock.yaml'
               - 'package.json'
 

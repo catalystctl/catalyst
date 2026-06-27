@@ -111,10 +111,7 @@ function LoginPage() {
  return;
  }
  localStorage.setItem('catalyst-remember-me', values.rememberMe ? 'true' : 'false');
- await login(
- { ...values, allowPasskeyFallback: Boolean(allowFallback) },
- allowFallback ? { forcePasskeyFallback: true } : undefined,
- );
+ await login({ ...values, allowPasskeyFallback: Boolean(allowFallback) });
  setTimeout(() => navigate(from || '/servers'), 100);
  } catch (err) {
  reportSystemError({

@@ -70,8 +70,6 @@ catalyst/
 │   ├── src/                   # React components, pages, hooks
 │   ├── e2e/                   # Playwright E2E tests
 │   └── package.json
-├── catalyst-shared/           # Shared TypeScript types (types-only package)
-│   └── types.ts
 ├── catalyst-agent/            # Rust daemon (Tokio + containerd gRPC)
 │   ├── src/                   # Rust source code
 │   ├── Cargo.toml             # Rust dependencies
@@ -1047,7 +1045,7 @@ Each PR runs automated checks:
 
 | Job | Scope | Checks |
 |-----|-------|--------|
-| **Backend CI** | `catalyst-backend/**`, `catalyst-shared/**` | Lint, build, Prisma generate, security audit (pnpm audit) |
+| **Backend CI** | `catalyst-backend/**` | Lint, build, Prisma generate, security audit (pnpm audit) |
 | **Agent CI** | `catalyst-agent/**` | `cargo fmt --check`, `cargo check`, `cargo clippy -- -D warnings`, unit tests |
 | **Docker Publish** | Changes in backend or frontend | Conditional Docker image build & push to GHCR |
 

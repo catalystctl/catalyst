@@ -19,8 +19,8 @@ type Props = {
 const OPTIMISTIC_STATUS: Record<string, ServerStatus> = {
  start: 'starting',
  stop: 'stopping',
- restart: 'restarting',
- kill: 'killed',
+ restart: 'starting',
+ kill: 'stopped',
 };
 
 function ServerControls({ serverId, status, permissions }: Props) {
@@ -45,7 +45,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
  );
  optimisticSet(queryClient, qk.servers(), (servers: Server[]) =>
  Array.isArray(servers)
- ? servers.map((s) => (s.id === serverId || s.uuid === serverId ? { ...s, status: nextStatus } : s))
+ ? servers.map((s) => (s.id === serverId ? { ...s, status: nextStatus } : s))
  : servers,
  );
  return prevServer;

@@ -3,7 +3,6 @@
 // Listens for messages with type `plugin:{pluginName}:{eventType}` and auto-reconnects.
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { reportSystemError } from '../services/api/systemErrors';
 
 interface UsePluginWebSocketOptions {
   /** Whether the WebSocket connection is active (default: true) */

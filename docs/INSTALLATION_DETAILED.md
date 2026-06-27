@@ -1037,7 +1037,7 @@ Migrations run automatically, but you can verify:
 
 ```bash
 # Check migration status
-docker compose exec backend bunx prisma migrate status --schema prisma/schema.prisma
+docker compose exec backend npx prisma migrate status --schema prisma/schema.prisma
 
 # View migration logs
 docker compose logs backend | grep -i "migrat"

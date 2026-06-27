@@ -2,6 +2,9 @@ import type { FileEntry, FileListing } from '../../types/file';
 import { joinPath, normalizePath } from '../../utils/filePaths';
 import { reportSystemError } from './systemErrors';
 
+/** Fallback max upload size (MB) when the backend setting can't be fetched. */
+export const DEFAULT_MAX_UPLOAD_MB = 500;
+
 type ApiResponse<T> = {
   success: boolean;
   data?: T;
@@ -179,6 +182,7 @@ export const filesApi = {
     path: string,
     files: File[],
     onProgress?: (fileIndex: number, progress: number) => void,
+    signal?: AbortSignal,
   ) => {
     const normalizedPath = normalizePath(path);
     await Promise.all(
@@ -189,6 +193,7 @@ export const filesApi = {
           formData.append('file', file);
 
           const xhr = new XMLHttpRequest();
+          xhr.timeout = 300_000; // 5-minute timeout
 
           xhr.upload.addEventListener('progress', (e) => {
             if (e.lengthComputable && onProgress) {
@@ -200,7 +205,16 @@ export const filesApi = {
             if (xhr.status >= 200 && xhr.status < 300) {
               resolve();
             } else {
-              const err = new Error(`Upload failed: ${xhr.status}`);
+              let message = `Upload failed: ${xhr.status}`;
+              if (xhr.responseText) {
+                try {
+                  const parsed = JSON.parse(xhr.responseText);
+                  message = parsed.error || parsed.message || message;
+                } catch {
+                  message = xhr.responseText;
+                }
+              }
+              const err = new Error(message);
               reportSystemError({
                 level: 'error',
                 component: 'ApiFiles',
@@ -213,7 +227,9 @@ export const filesApi = {
           });
 
           xhr.addEventListener('error', () => {
-            const err = new Error('Upload failed');
+            const err = new Error(
+              'Upload failed — connection lost or server unreachable',
+            );
             reportSystemError({
               level: 'error',
               component: 'ApiFiles',
@@ -223,17 +239,34 @@ export const filesApi = {
             });
             reject(err);
           });
+
+          xhr.addEventListener('timeout', () => {
+            const err = new Error(
+              'Upload timed out (server did not respond in 5 minutes)',
+            );
+            reportSystemError({
+              level: 'error',
+              component: 'ApiFiles',
+              message: err.message,
+              stack: err.stack,
+              metadata: { action: 'upload' },
+            });
+            reject(err);
+          });
+
+          // An aborted XHR must reject, not hang forever.
           xhr.addEventListener('abort', () => {
-            const err = new Error('Upload aborted');
-            reportSystemError({
-              level: 'error',
-              component: 'ApiFiles',
-              message: err.message,
-              stack: err.stack,
-              metadata: { action: 'upload' },
-            });
-            reject(err);
+            reject(new Error('Upload aborted'));
           });
+
+          // Allow the caller to cancel an in-flight upload via AbortSignal.
+          if (signal) {
+            if (signal.aborted) {
+              reject(new Error('Upload aborted'));
+              return;
+            }
+            signal.addEventListener('abort', () => xhr.abort(), { once: true });
+          }
 
           xhr.open('POST', `/api/servers/${serverId}/files/upload`);
           xhr.withCredentials = true;

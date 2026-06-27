@@ -10,7 +10,7 @@
 		"test": "vitest run"
 	},
 	"dependencies": {
-		"@catalyst/plugin-sdk": "^0.1.0",
+		"@catalyst/plugin-sdk": "workspace:*",
 		"react": "^19.0.0"
 	},
 	"devDependencies": {

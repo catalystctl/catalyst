@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
- ScrollText,
  Search,
  Download,
  RotateCcw,
@@ -72,7 +71,8 @@ function getResourceIcon(resource: string) {
 }
 
 function ResourceIcon({ resource, className }: { resource: string; className?: string }) {
- return React.createElement(getResourceIcon(resource), { className });
+  const Icon = getResourceIcon(resource);
+  return <Icon className={className} />;
 }
 
 function getActionTone(action: string): 'success' | 'warning' | 'danger' | 'neutral' {

@@ -545,12 +545,10 @@ impl ContainerdRuntime {
         let mut mounts = base_mounts(config.data_dir);
         // Pterodactyl images expect server data at /home/container; bind it to the same host dir as /data
         mounts.push(serde_json::json!({"destination":"/home/container","type":"bind","source":config.data_dir,"options":["rbind","rw"]}));
-        // Mount only stdin as rw; stdout/stderr are log sinks that the container
-        // process should not write to directly.  This reduces the blast radius of
-        // an RCE inside the game server.
-        mounts.push(serde_json::json!({"destination":io_dir.join("stdin").to_string_lossy(),"type":"bind","source":io_dir.join("stdin").to_string_lossy(),"options":["rbind","rw"]}));
-        mounts.push(serde_json::json!({"destination":io_dir.join("stdout").to_string_lossy(),"type":"bind","source":io_dir.join("stdout").to_string_lossy(),"options":["rbind","ro"]}));
-        mounts.push(serde_json::json!({"destination":io_dir.join("stderr").to_string_lossy(),"type":"bind","source":io_dir.join("stderr").to_string_lossy(),"options":["rbind","ro"]}));
+        // stdio is wired via CreateTaskRequest (stdin/stdout/stderr fields),
+        // so no bind mounts are needed here.  Binding host log paths into the
+        // container at those same absolute host paths would let a container
+        // enumerate other containers' log directories.
 
         // Generate /etc/hosts so the container hostname resolves (Java getLocalHost() etc.)
         let hosts_path = io_dir.join("hosts");

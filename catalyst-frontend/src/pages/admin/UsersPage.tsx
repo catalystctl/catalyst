@@ -26,7 +26,6 @@ import {
  ChevronLeft,
  Check,
  Server,
- Info,
  Pencil,
  Lock,
  Eye,
@@ -339,7 +338,7 @@ function UsersPage() {
 
  // Wizard state
  const [wizardStep, setWizardStep] = useState(0);
- const [wizardDirection, setWizardDirection] = useState(1);
+ const [, setWizardDirection] = useState(1);
 
  // Delete/ban confirmation state
  const [deletingUser, setDeletingUser] = useState<{ id: string; username: string } | null>(null);

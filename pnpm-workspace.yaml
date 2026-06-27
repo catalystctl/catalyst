@@ -1,7 +1,6 @@
 packages:
   - catalyst-backend
   - catalyst-frontend
-  - catalyst-shared
   - catalyst-plugins/*
   - packages/*
 allowBuilds:

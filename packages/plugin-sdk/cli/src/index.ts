@@ -115,7 +115,7 @@ async function createPlugin(name: string, options: Record<string, string | boole
   console.log(`  npm run dev    # Start development server`);
 }
 
-async function buildPlugin(options: Record<string, boolean>) {
+async function buildPlugin(options: Record<string, string | boolean>) {
   console.log('🔨 Building plugin...');
   // Simple build: just validate manifest and check for TypeScript
   try {

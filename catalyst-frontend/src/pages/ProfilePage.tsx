@@ -1,17 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qk } from '../lib/queryKeys';
 import { Link } from 'react-router-dom';
 import {
  Shield, ShieldCheck, ShieldOff, Key, KeyRound, Fingerprint, Smartphone,
- Globe, Clock, Monitor, Trash2, AlertTriangle, User, Mail, Calendar,
- Copy, CheckCircle2, Loader2, ExternalLink, LogOut, QrCode, RefreshCw,
- Eye, EyeOff, Plus, Camera, Pencil, X, Download, FileText, Activity,
- ChevronRight, History, Settings, Info, Check, Ban, MailCheck,
+ Globe, Monitor, Trash2, AlertTriangle, User, Mail, Calendar,
+ Copy, Loader2, ExternalLink, LogOut, QrCode, RefreshCw,
+ Eye, EyeOff, Plus, Camera, Pencil, X, Download,
+ ChevronRight, History, Info, Check, MailCheck,
 } from 'lucide-react';
 import { useProfile, useProfileSsoAccounts, useSessions, useAuditLog, useProfileApiKeys } from '../hooks/useProfile';
 import { useAuthStore } from '../stores/authStore';
-import { type Passkey, profileApi } from '../services/api/profile';
+import { useThemeStore } from '../stores/themeStore';
+import { profileApi } from '../services/api/profile';
 import { notifyError, notifySuccess } from '../utils/notify';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -110,7 +111,7 @@ export default function ProfilePage() {
  const { data: apiKeys } = useProfileApiKeys();
  const authUser = useAuthStore((s) => s.user);
 
- const authProviders = useAuthStore((s) => s.themeSettings?.authProviders);
+ const authProviders = useThemeStore((s) => s.themeSettings?.authProviders);
  const availableProviders = useMemo(() => (['whmcs', 'paymenter'] as const).filter((p) => authProviders?.[p]), [authProviders]);
 
  const [editingProfile, setEditingProfile] = useState(false);
@@ -216,12 +217,12 @@ export default function ProfilePage() {
  });
  const revokeAllMutation = useMutation({
  mutationFn: () => profileApi.revokeAllSessions(),
- onSuccess: (data) => { notifySuccess(`Revoked ${data.revoked} session(s)`); },
+ onSuccess: () => { notifySuccess(`Revoked ${sessions?.length ?? 0} session(s)`); },
  onSettled: () => { queryClient.invalidateQueries({ queryKey: qk.profileSessions() }); queryClient.invalidateQueries({ queryKey: qk.profileAuditLog() }); },
  onError: (e: any) => notifyError(e?.message || 'Failed'),
  });
  const resendVerifyMutation = useMutation({
- mutationFn: () => profileApi.resendVerification(),
+ mutationFn: () => profileApi.resendVerification(profile?.email ?? ''),
  onSuccess: () => { notifySuccess('Verification email sent'); },
  onSettled: () => { queryClient.invalidateQueries({ queryKey: qk.profileAuditLog() }); },
  onError: (e: any) => notifyError(e?.message || 'Failed'),
@@ -567,7 +568,7 @@ export default function ProfilePage() {
  <div className="mb-4 rounded-lg border border-border/50 bg-surface-2/50 p-3 text-center">
  <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Manual Key</div>
  <code className="mt-1 block text-sm font-mono font-semibold text-foreground select-all">{tfaSetup.secret}</code>
- <button onClick={() => { navigator.clipboard.writeText(tfaSetup.secret); notifySuccess('Copied'); }} className="mt-2 flex items-center gap-1 mx-auto text-[10px] text-muted-foreground hover:text-foreground"><Copy className="h-3 w-3" /> Copy</button>
+ <button onClick={() => { navigator.clipboard.writeText(tfaSetup?.secret ?? ''); notifySuccess('Copied'); }} className="mt-2 flex items-center gap-1 mx-auto text-[10px] text-muted-foreground hover:text-foreground"><Copy className="h-3 w-3" /> Copy</button>
  </div>
  )}
  {(tfaSetup?.backupCodes?.length ?? 0) > 0 && (

@@ -13,7 +13,6 @@ import {
  RefreshCw,
  Search,
  Trash2,
- X,
 } from 'lucide-react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { formatBytes } from '../../../utils/formatters';

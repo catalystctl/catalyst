@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { DEFAULT_MAX_UPLOAD_MB } from './files';
 import type { CreateIpPoolPayload, IpPool } from '../../types/ipam';
 import type {
   AdminHealthResponse,
@@ -209,6 +210,12 @@ export const adminApi = {
     const data = await apiClient.get<ApiResponse<SecuritySettings>>('/api/admin/security-settings');
     return data.data;
   },
+  getFileTunnelUploadLimit: async (): Promise<number> => {
+    const data = await apiClient.get<ApiResponse<{ maxUploadMb: number }>>(
+      '/api/admin/settings/file-tunnel-upload-limit',
+    );
+    return data.data?.maxUploadMb ?? DEFAULT_MAX_UPLOAD_MB;
+  },
   updateSecuritySettings: async (payload: SecuritySettings) => {
     const data = await apiClient.put<ApiResponse<void>>('/api/admin/security-settings', payload);
     return data;
@@ -247,7 +254,7 @@ export const adminApi = {
     to?: string;
     format?: 'csv' | 'json';
   }) => {
-    const { data } = await apiClient.get('/api/admin/audit-logs/export', {
+    const data = await apiClient.get<string>('/api/admin/audit-logs/export', {
       params,
       responseType: 'text',
     });

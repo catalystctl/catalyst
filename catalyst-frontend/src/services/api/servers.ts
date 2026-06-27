@@ -291,7 +291,7 @@ export const serversApi = {
     const data = await apiClient.get<{
       success: boolean;
       data: import('../../types/server').ServerActivityLogEntry[];
-      pagination: import('../../types/server').ActivityPagination;
+      pagination: { page: number; limit: number; total: number; totalPages: number };
     }>(
       `/api/servers/${id}/activity`,
       { params },

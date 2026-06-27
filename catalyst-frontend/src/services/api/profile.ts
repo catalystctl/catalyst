@@ -95,7 +95,7 @@ export const profileApi = {
     return data.data;
   },
   async updateProfile(payload: { username?: string; firstName?: string; lastName?: string }) {
-    const { data } = await apiClient.patch('/api/auth/profile', payload);
+    const { data } = await apiClient.patch<{ success: boolean; data: unknown }>('/api/auth/profile', payload);
     return data;
   },
   async updatePreferences(prefs: Record<string, unknown>) {
@@ -110,7 +110,15 @@ export const profileApi = {
     return res.data;
   },
   async setPassword(payload: { newPassword: string }) {
-    const res = await authClient.setPassword({ newPassword: payload.newPassword });
+    // ponytail: better-auth exposes no client route to set a first password for
+    // credential-less (SSO) users — the server `setPassword` endpoint is server-only.
+    // Delegate to changePassword (the correct authenticated password method); a
+    // credential-less user gets CREDENTIAL_ACCOUNT_NOT_FOUND until a backend
+    // /profile/set-password wrapper (auth.api.setPassword) is added.
+    const res = await authClient.changePassword({
+      currentPassword: '',
+      newPassword: payload.newPassword,
+    });
     if (res.error) throw new Error(res.error.message || 'Failed to set password');
     return res.data;
   },
@@ -185,8 +193,8 @@ export const profileApi = {
   },
 
   // ── Email ──
-  async resendVerification() {
-    const res = await authClient.sendVerificationEmail();
+  async resendVerification(email: string) {
+    const res = await authClient.sendVerificationEmail({ email });
     if (res.error) throw new Error(res.error.message || 'Failed to send verification email');
     return res.data;
   },
@@ -198,7 +206,15 @@ export const profileApi = {
       reportSystemError({ level: 'error', component: 'ApiProfile', message: 'Failed to load sessions', metadata: { action: 'listSessions' } });
       throw new Error('Failed to load sessions');
     }
-    return (res.data ?? []) as UserSession[];
+    return (res.data ?? []).map((s) => ({
+      id: s.id,
+      token: s.token,
+      expiresAt: new Date(s.expiresAt).toISOString(),
+      createdAt: new Date(s.createdAt).toISOString(),
+      updatedAt: new Date(s.updatedAt).toISOString(),
+      ipAddress: s.ipAddress ?? null,
+      userAgent: s.userAgent ?? null,
+    }));
   },
   async revokeSession(id: string) {
     // Better Auth's revokeSession takes a session token or id
@@ -294,7 +310,7 @@ export const profileApi = {
     return data;
   },
   async unlinkSso(providerId: string, accountId?: string) {
-    const { data } = await apiClient.post('/api/auth/profile/sso/unlink', { providerId, accountId });
+    const { data } = await apiClient.post<{ success: boolean; data: unknown }>('/api/auth/profile/sso/unlink', { providerId, accountId });
     return data;
   },
 };

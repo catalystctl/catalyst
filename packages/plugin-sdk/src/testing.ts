@@ -5,7 +5,7 @@ import type {
   PluginWebSocketHandler,
   PluginTaskHandler,
   PluginEventHandler,
-} from './types';
+} from './types.js';
 
 export interface MockContext {
   manifest: PluginManifest;
@@ -47,25 +47,25 @@ export function createMockLogger(): Logger {
 export function createMockCollection(): PluginCollectionAPI {
   const data: any[] = [];
   return {
-    async find(filter) {
+    async find(filter?: Record<string, unknown>) {
       if (!filter) return data;
       return data.filter(d => Object.entries(filter).every(([k, v]) => d[k] === v));
     },
-    async findOne(filter) {
+    async findOne(filter: Record<string, unknown>) {
       const results = await this.find(filter);
       return results[0] || null;
     },
-    async insert(doc) {
+    async insert(doc: Record<string, unknown>) {
       const item = { ...doc, _id: String(Date.now()), _createdAt: new Date().toISOString(), _updatedAt: new Date().toISOString() };
       data.push(item);
       return item;
     },
-    async update(filter, update) {
+    async update(filter: Record<string, unknown>, update: Record<string, unknown>) {
       const items = data.filter(d => Object.entries(filter).every(([k, v]) => d[k] === v));
       items.forEach(item => Object.assign(item, update, { _updatedAt: new Date().toISOString() }));
       return items.length;
     },
-    async delete(filter) {
+    async delete(filter: Record<string, unknown>) {
       const before = data.length;
       for (let i = data.length - 1; i >= 0; i--) {
         if (Object.entries(filter).every(([k, v]) => data[i][k] === v)) {
@@ -74,7 +74,7 @@ export function createMockCollection(): PluginCollectionAPI {
       }
       return before - data.length;
     },
-    async count(filter) {
+    async count(filter?: Record<string, unknown>) {
       if (!filter) return data.length;
       return (await this.find(filter)).length;
     },
