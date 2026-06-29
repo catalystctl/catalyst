@@ -357,7 +357,7 @@ jobs:
 
       - name: Cache protoc
         id: cache-protoc
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: /usr/local/bin/protoc
           key: protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}
@@ -380,7 +380,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Cache cargo registry + git deps
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index/
@@ -390,7 +390,7 @@ jobs:
           restore-keys: agent-cargo-deps-
 
       - name: Cache cargo build (release ${{ matrix.target }})
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: catalyst-agent/target/
           key: agent-release-${{ matrix.target }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-${{ hashFiles('catalyst-agent/src/**') }}

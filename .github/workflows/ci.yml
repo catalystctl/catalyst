@@ -77,7 +77,7 @@ jobs:
       # Was in original agent-ci.yml; missing from first version of unified workflow
       - name: Cache protoc
         id: cache-protoc
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.local/bin/protoc
@@ -102,7 +102,7 @@ jobs:
         run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
       - name: Cache pnpm install
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ${{ env.STORE_PATH }}
@@ -114,7 +114,7 @@ jobs:
           restore-keys: pnpm-deps-${{ runner.os }}-
 
       - name: Cache Prisma Client
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             node_modules/.prisma
@@ -128,7 +128,7 @@ jobs:
         run: npx prisma generate
 
       - name: Cache cargo registry + git deps
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index/
@@ -138,7 +138,7 @@ jobs:
           restore-keys: agent-cargo-deps-
 
       - name: Cache cargo build (check)
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: catalyst-agent/target/
           key: agent-check-${{ runner.os }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-${{ hashFiles('catalyst-agent/src/**') }}
@@ -217,7 +217,7 @@ jobs:
       # ── Install protoc ──
       - name: Cache protoc
         id: cache-protoc
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.local/bin/protoc
@@ -241,7 +241,7 @@ jobs:
         run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
       - name: Cache pnpm install
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ${{ env.STORE_PATH }}
@@ -253,7 +253,7 @@ jobs:
           restore-keys: pnpm-deps-${{ runner.os }}-
 
       - name: Cache Prisma Client
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             node_modules/.prisma
@@ -271,7 +271,7 @@ jobs:
         run: pnpm run db:push
 
       - name: Cache cargo registry + git deps
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index/
@@ -281,7 +281,7 @@ jobs:
           restore-keys: agent-cargo-deps-
 
       - name: Cache cargo build (test)
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: catalyst-agent/target/
           key: agent-test-${{ runner.os }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-${{ hashFiles('catalyst-agent/src/**') }}
@@ -332,7 +332,7 @@ jobs:
       # ── Install protoc ──
       - name: Cache protoc
         id: cache-protoc
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.local/bin/protoc
@@ -356,7 +356,7 @@ jobs:
         run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
       - name: Cache pnpm install
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ${{ env.STORE_PATH }}
@@ -368,7 +368,7 @@ jobs:
           restore-keys: pnpm-deps-${{ runner.os }}-
 
       - name: Cache Prisma Client
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             node_modules/.prisma
@@ -382,7 +382,7 @@ jobs:
         run: npx prisma generate
 
       - name: Cache cargo registry + git deps
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index/
