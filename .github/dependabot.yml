@@ -1,8 +1,8 @@
 version: 2
 updates:
-  # Backend + Frontend — pnpm monorepo workspace
-  # Both share a single root pnpm-lock.yaml, so Dependabot must scan
-  # the root directory with ecosystem "npm" (which covers pnpm too).
+  # Backend + Frontend — Bun monorepo workspace
+  # Both share a single root bun.lock, so Dependabot must scan
+  # the root directory with ecosystem "npm" (which covers bun too).
   - package-ecosystem: "npm"
     directory: "/"
     schedule:

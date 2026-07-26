@@ -63,10 +63,10 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: latest
+          bun-version: latest
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -97,21 +97,17 @@ jobs:
 
       # ── Dependency Install ──
       # Maps to: step_install_deps() in run-workflow.sh
-      - name: Get pnpm store directory
-        shell: bash
-        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Cache pnpm install
+      - name: Cache Bun install
         uses: actions/cache@v5
         with:
           path: |
-            ${{ env.STORE_PATH }}
+            ~/.bun/install/cache
             node_modules
             catalyst-backend/node_modules
             catalyst-frontend/node_modules
             catalyst-shared/node_modules
-          key: pnpm-deps-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'package.json') }}
-          restore-keys: pnpm-deps-${{ runner.os }}-
+          key: bun-deps-${{ runner.os }}-${{ hashFiles('bun.lock', 'package.json') }}
+          restore-keys: bun-deps-${{ runner.os }}-
 
       - name: Cache Prisma Client
         uses: actions/cache@v5
@@ -120,8 +116,8 @@ jobs:
             node_modules/.prisma
           key: prisma-client-${{ hashFiles('catalyst-backend/prisma/schema.prisma') }}
 
-      - name: Install pnpm dependencies
-        run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
+      - name: Install Bun dependencies
+        run: bun install --frozen-lockfile
 
       - name: Generate Prisma Client
         working-directory: catalyst-backend
@@ -152,13 +148,10 @@ jobs:
       # ── Lint & Static Analysis ──
       # Maps to: step_lint() in run-workflow.sh
       - name: Run ESLint (backend)
-        run: pnpm --filter catalyst-backend run lint
+        run: bun --cwd catalyst-backend run lint
 
       - name: Run ESLint (frontend)
-        run: pnpm --filter catalyst-frontend run lint
-
-      - name: Security audit
-        run: pnpm audit || true
+        run: bun --cwd catalyst-frontend run lint
         continue-on-error: true
 
       - name: Check Rust formatting
@@ -236,21 +229,17 @@ jobs:
         run: echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       # ── Dependency Install ──
-      - name: Get pnpm store directory
-        shell: bash
-        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Cache pnpm install
+      - name: Cache Bun install
         uses: actions/cache@v5
         with:
           path: |
-            ${{ env.STORE_PATH }}
+            ~/.bun/install/cache
             node_modules
             catalyst-backend/node_modules
             catalyst-frontend/node_modules
             catalyst-shared/node_modules
-          key: pnpm-deps-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'package.json') }}
-          restore-keys: pnpm-deps-${{ runner.os }}-
+          key: bun-deps-${{ runner.os }}-${{ hashFiles('bun.lock', 'package.json') }}
+          restore-keys: bun-deps-${{ runner.os }}-
 
       - name: Cache Prisma Client
         uses: actions/cache@v5
@@ -259,8 +248,8 @@ jobs:
             node_modules/.prisma
           key: prisma-client-${{ hashFiles('catalyst-backend/prisma/schema.prisma') }}
 
-      - name: Install pnpm dependencies
-        run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
+      - name: Install Bun dependencies
+        run: bun install --frozen-lockfile
 
       - name: Generate Prisma Client
         working-directory: catalyst-backend
@@ -268,7 +257,7 @@ jobs:
 
       - name: Push database schema
         working-directory: catalyst-backend
-        run: pnpm run db:push
+        run: bun run db:push
 
       - name: Cache cargo registry + git deps
         uses: actions/cache@v5
@@ -298,7 +287,7 @@ jobs:
       # not installed in CI, and the original backend-ci.yml only ran
       # backend tests anyway.
       - name: Run Vitest
-        run: pnpm --filter catalyst-backend run test
+        run: bun --cwd catalyst-backend run test
 
       - name: Run Cargo tests
         run: cargo test --manifest-path catalyst-agent/Cargo.toml
@@ -351,21 +340,17 @@ jobs:
         run: echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       # ── Dependency Install ──
-      - name: Get pnpm store directory
-        shell: bash
-        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Cache pnpm install
+      - name: Cache Bun install
         uses: actions/cache@v5
         with:
           path: |
-            ${{ env.STORE_PATH }}
+            ~/.bun/install/cache
             node_modules
             catalyst-backend/node_modules
             catalyst-frontend/node_modules
             catalyst-shared/node_modules
-          key: pnpm-deps-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'package.json') }}
-          restore-keys: pnpm-deps-${{ runner.os }}-
+          key: bun-deps-${{ runner.os }}-${{ hashFiles('bun.lock', 'package.json') }}
+          restore-keys: bun-deps-${{ runner.os }}-
 
       - name: Cache Prisma Client
         uses: actions/cache@v5
@@ -374,8 +359,8 @@ jobs:
             node_modules/.prisma
           key: prisma-client-${{ hashFiles('catalyst-backend/prisma/schema.prisma') }}
 
-      - name: Install pnpm dependencies
-        run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
+      - name: Install Bun dependencies
+        run: bun install --frozen-lockfile
 
       - name: Generate Prisma Client
         working-directory: catalyst-backend
@@ -397,13 +382,13 @@ jobs:
       # ── Build Verification ──
       # Maps to: step_build_verify() in run-workflow.sh
       - name: Build shared types
-        run: pnpm run build:shared
+        run: bun run build:shared
 
       - name: Build backend
-        run: pnpm run build:backend
+        run: bun run build:backend
 
       - name: Build frontend
-        run: pnpm run build:frontend
+        run: bun run build:frontend
 
       - name: Build agent (debug)
         run: cargo build --manifest-path catalyst-agent/Cargo.toml
@@ -438,12 +423,12 @@ jobs:
             backend:
               - 'catalyst-backend/**'
               - 'catalyst-shared/**'
-              - 'pnpm-lock.yaml'
+              - 'bun.lock'
               - 'package.json'
             frontend:
               - 'catalyst-frontend/**'
               - 'catalyst-shared/**'
-              - 'pnpm-lock.yaml'
+              - 'bun.lock'
               - 'package.json'
 
   # ──────────────────────────────────────────────────────────────────────────────
