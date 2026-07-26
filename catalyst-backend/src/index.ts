@@ -1,5 +1,10 @@
-// Load .env before anything else — Bun did this automatically, Node.js does not
-import "dotenv/config";
+// Load .env before anything else — Bun does this automatically, Node.js uses dotenv
+try {
+	const dotenv = await import("dotenv");
+	dotenv.default?.config?.();
+} catch {
+	// Bun natively loads .env; dotenv is optional in production
+}
 
 import Fastify from "fastify";
 import fastifyCompress from "@fastify/compress";
