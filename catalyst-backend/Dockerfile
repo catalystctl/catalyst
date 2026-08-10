@@ -137,6 +137,11 @@ RUN mkdir -p /var/lib/catalyst/servers \
 # Make local bins (prisma) resolvable without relying on npx network fetches
 ENV PATH="/app/node_modules/.bin:${PATH}"
 
+# Label for GHCR consumers / one-liner install (issue #206 packaging fix)
+LABEL org.opencontainers.image.source="https://github.com/catalystctl/catalyst" \
+      org.opencontainers.image.description="Catalyst backend API (pnpm deploy production tree)" \
+      org.opencontainers.image.licenses="MIT"
+
 USER catalyst
 
 # Expose port
