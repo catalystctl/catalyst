@@ -58,7 +58,9 @@ export default function PluginTabPage({ location, serverId }: PluginTabPageProps
 
   return (
     <PluginErrorBoundary pluginName={pluginName}>
-      <TabComponent serverId={serverId} />
+      <div className="flex min-h-0 flex-1 flex-col">
+        <TabComponent serverId={serverId} />
+      </div>
     </PluginErrorBoundary>
   );
 }

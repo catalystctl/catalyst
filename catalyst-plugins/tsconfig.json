@@ -18,5 +18,5 @@
       "lucide-react": ["../catalyst-frontend/node_modules/lucide-react"]
     }
   },
-  "include": ["egg-explorer/frontend", "example-plugin/frontend"]
+  "include": ["egg-explorer/frontend", "example-plugin/frontend", "ticketing-plugin/frontend"]
 }

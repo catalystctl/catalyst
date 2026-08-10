@@ -100,7 +100,7 @@ function AppLayout() {
               </kbd>
             </button>
           </div>
-          <div className="min-h-0 flex-1 animate-fade-up">
+          <div className="flex min-h-0 flex-1 flex-col animate-fade-up">
             <Outlet />
           </div>
         </div>

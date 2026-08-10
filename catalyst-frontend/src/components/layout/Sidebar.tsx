@@ -27,6 +27,7 @@ import {
   Lock,
   ArrowRightLeft,
   Bug,
+  Ticket,
 } from 'lucide-react';
 import { useState, MouseEvent, useMemo } from 'react';
 import { cn } from '@/lib/utils';
@@ -37,7 +38,7 @@ import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 const mainLinks = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/servers', label: 'Servers', icon: Server },
-  { to: '/tickets', label: 'Tickets', icon: Plug },
+  { to: '/tickets', label: 'Tickets', icon: Ticket },
 ];
 
 const adminSections = [
@@ -200,6 +201,8 @@ interface MenuItemProps {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   collapsed?: boolean;
+  /** Used for admin section filtering only; not rendered by MenuItem. */
+  permissions?: string[];
 }
 
 function MenuItem({ to, label, icon: Icon, collapsed }: MenuItemProps) {
@@ -316,7 +319,10 @@ function Sidebar() {
   const pluginTabs = usePluginTabs('admin');
   const pluginRoutes = usePluginRoutes();
 
-  const hasUserTicketPage = pluginRoutes.length > 0;
+  // Show main "Tickets" nav only when the ticketing user route is loaded.
+  const hasUserTicketPage = pluginRoutes.some(
+    (r) => r.path === '/ticketing-plugin' || r.path === '/tickets',
+  );
 
   const filteredSections = useMemo(() => {
     const userPermissions = user?.permissions || [];
@@ -327,15 +333,17 @@ function Sidebar() {
       }))
       .filter((section) => section.links.length > 0);
 
-    // Inject plugin tabs as a section
+    // Inject enabled plugin admin tabs (e.g. Ticketing)
     if (pluginTabs.length > 0 && hasAnyPermission(userPermissions, ['admin.read', 'admin.write'])) {
       sections.push({
-        title: 'Plugin Tabs',
+        title: 'Plugins',
         links: pluginTabs.map((tab) => ({
           to: `/admin/plugin/${tab.id}`,
           label: tab.label,
-          icon: Plug,
-          permissions: [],
+          icon: tab.id.includes('ticket') ? Ticket : Plug,
+          permissions: tab.requiredPermissions?.length
+            ? tab.requiredPermissions
+            : ['admin.read', 'admin.write'],
         })),
       });
     }

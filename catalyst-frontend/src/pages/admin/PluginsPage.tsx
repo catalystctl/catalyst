@@ -60,6 +60,8 @@ function PluginCard({
  onReload: () => void;
  onSettings: () => void;
 }) {
+ const permissions = plugin.permissions ?? [];
+
  return (
  <ServerTabCard>
  <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
@@ -118,10 +120,10 @@ function PluginCard({
  {plugin.hasBackend && plugin.hasFrontend ? ' + ' : null}
  {plugin.hasFrontend ? 'Frontend' : null}
  </span>
- {plugin.permissions.length > 0 && (
+ {permissions.length > 0 && (
  <Badge variant="secondary" className="flex items-center gap-1 text-[9px]">
  <Shield className="h-2.5 w-2.5" />
- {plugin.permissions.length} perm{plugin.permissions.length === 1 ? '' : 's'}
+ {permissions.length} perm{permissions.length === 1 ? '' : 's'}
  </Badge>
  )}
  </div>

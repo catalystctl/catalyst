@@ -32,15 +32,15 @@ function generateId(): string {
 // ── Allowed fields for plugin database queries ──────────────────────────────
 const SERVER_ALLOWED_SELECT_FIELDS = new Set([
   'id', 'name', 'uuid', 'description', 'status', 'createdAt', 'updatedAt',
-  'nodeId', 'userId', 'dockerImage', 'allocationId', 'oomKilled',
-  'memory', 'cpu', 'disk', 'snapshotLimit', 'backupLimit',
-  'databaseLimit', 'allocationLimit', 'nests', 'environment',
-  'installing', 'suspended', 'installedAt', 'skipScripts',
-  'skipStartup', 'skipUpdate',
+  'nodeId', 'ownerId', 'templateId', 'locationId',
+  'allocatedMemoryMb', 'allocatedCpuCores', 'allocatedDiskMb', 'allocatedSwapMb',
+  'containerId', 'containerName', 'networkMode', 'primaryPort', 'primaryIp',
+  'subdomain', 'environment', 'startupCommand', 'suspendedAt', 'suspensionReason',
 ]);
 
 const USER_ALLOWED_SELECT_FIELDS = new Set([
-  'id', 'username', 'email', 'name', 'image', 'banned', 'createdAt', 'roleIds',
+  'id', 'username', 'email', 'name', 'image', 'banned', 'createdAt', 'updatedAt',
+  'firstName', 'lastName', 'role',
 ]);
 
 /**

@@ -77,7 +77,7 @@ catalyst/
 ├── catalyst-plugins/          # Bundled plugins
 │   ├── egg-explorer/          # Game egg metadata browser
 │   ├── example-plugin/        # Plugin system demonstration
-│   └── ticketing-plugin/      # WHMCS ticket integration
+│   └── ticketing-plugin/      # Support ticketing (SLA, comments, bulk ops)
 ├── packages/plugin-sdk/       # Official Plugin SDK
 │   ├── cli/                   # CLI scaffolding tool
 │   ├── src/                   # SDK source types & helpers

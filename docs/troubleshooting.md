@@ -1217,36 +1217,41 @@ sudo docker compose up -d frontend
 # in the frontend's system errors page (/admin/system-errors)
 ```
 
-### Plugin Ticketing System Issues (WHMCS Integration)
+### Plugin Ticketing System Issues
 
 **Symptoms:**
-- Ticketing plugin shows "Connection error"
-- WHMCS OAuth flow fails
-- Tickets not syncing between Catalyst and WHMCS
+- Ticketing plugin fails to load or create tickets
+- Reporter/assignee always null on new tickets
+- SLA breach flags never update
 
 **Fix:**
 
 ```bash
-# Check if WHMCS OIDC is configured
-# Admin → System Settings → OIDC Providers
+# Confirm the plugin is discovered and enabled
+curl -s http://localhost:3000/api/plugins | jq '.[] | select(.name=="ticketing-plugin")'
 
-# Verify WHMCS connection:
-# 1. WHMCS_OIDC_CLIENT_ID and WHMCS_OIDC_CLIENT_SECRET must match
-# 2. WHMCS_OIDC_DISCOVERY_URL must resolve:
-   curl -s https://billing.example.com/.well-known/openid-configuration
+# Enable if needed
+curl -X POST http://localhost:3000/api/plugins/ticketing-plugin/enable \
+  -H "Authorization: Bearer <token>"
 
-# Check plugin logs:
-docker compose logs backend | grep -i "whmcs\|ticketing\|plugin"
+# Check backend logs for plugin errors
+docker compose logs backend | grep -i "ticketing\|plugin"
 
-# Reset plugin state:
-# Admin → Plugins → Ticketing → Reset Configuration
-
-# Verify ticket creation works from the API:
-curl -X POST http://localhost:3000/api/plugins/ticketing/tickets \
+# Create a ticket (title + description are required)
+curl -X POST http://localhost:3000/api/plugins/ticketing-plugin/tickets \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"subject":"Test","body":"Test ticket"}'
+  -d '{"title":"Test","description":"Test ticket"}'
+
+# List tickets
+curl -s http://localhost:3000/api/plugins/ticketing-plugin/tickets \
+  -H "Authorization: Bearer <token>"
 ```
+
+Notes:
+- Host auth exposes `request.user.userId` (not `.id`) — v3 of the plugin uses this correctly.
+- Nested SLA fields are written as full objects via `$set`; dotted-key updates are not supported by collection storage.
+- Frontend lives at `catalyst-plugins/ticketing-plugin/frontend/` (not under `catalyst-frontend/src/plugins/`).
 
 ### Plugin Hot Reload Not Working
 

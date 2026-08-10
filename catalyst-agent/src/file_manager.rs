@@ -59,10 +59,26 @@ impl FileManager {
         };
 
         let normalized = if requested.is_absolute() {
-            canonical_base.join(requested_path.trim_start_matches('/'))
+            let trimmed = requested_path.trim_start_matches('/');
+            if trimmed.is_empty() {
+                // Listing the server root ("/" or "") must resolve to the
+                // server base itself — not its parent. join("") is a no-op on
+                // PathBuf, but the parent-canonicalize fallback below would
+                // then reject data_dir as "outside" server_base.
+                canonical_base.clone()
+            } else {
+                canonical_base.join(trimmed)
+            }
+        } else if requested_path.is_empty() || requested_path == "." {
+            canonical_base.clone()
         } else {
             canonical_base.join(requested_path)
         };
+
+        // Exact server root (existing or not).
+        if normalized == canonical_base {
+            return Ok(canonical_base);
+        }
 
         if let Ok(canonical) = normalized.canonicalize() {
             if !canonical.starts_with(&canonical_base) {
@@ -234,29 +250,62 @@ impl FileManager {
 
         debug!("Listing directory: {:?}", full_path);
 
+        // Auto-create the server root so the file explorer works immediately
+        // after server create / before first install (Wings also ensures the
+        // data directory exists before SFTP/file ops).
+        if path == "/" || path.is_empty() || path == "." {
+            if let Err(e) = fs::create_dir_all(&full_path).await {
+                // Not fatal if it already exists or is a mount point we can read.
+                debug!("create_dir_all for list root {:?}: {}", full_path, e);
+            }
+        }
+
         let mut entries = Vec::new();
-        let mut dir = fs::read_dir(&full_path)
-            .await
-            .map_err(|e| AgentError::FileSystemError(format!("Failed to read dir: {}", e)))?;
+        let mut dir = fs::read_dir(&full_path).await.map_err(|e| {
+            AgentError::FileSystemError(format!("Failed to read dir {}: {}", path, e))
+        })?;
 
         while let Some(entry) = dir
             .next_entry()
             .await
             .map_err(|e| AgentError::FileSystemError(format!("Error reading dir entry: {}", e)))?
         {
-            let metadata = entry.metadata().await.map_err(|e| {
-                AgentError::FileSystemError(format!("Failed to get metadata: {}", e))
-            })?;
-
             let name = entry.file_name().to_string_lossy().to_string();
 
-            let is_dir = metadata.is_dir();
+            // Prefer symlink_metadata so a broken symlink (common after partial
+            // installs / SteamCMD self-updates) does not fail the entire listing.
+            let meta = match entry.metadata().await {
+                Ok(m) => m,
+                Err(_) => match fs::symlink_metadata(entry.path()).await {
+                    Ok(m) => m,
+                    Err(e) => {
+                        warn!(
+                            "Skipping unreadable entry {:?} in {:?}: {}",
+                            name, full_path, e
+                        );
+                        continue;
+                    }
+                },
+            };
+
+            let file_type = meta.file_type();
+            let is_dir = file_type.is_dir();
+            // Report symlinks to directories as directories when the target is
+            // resolvable; otherwise treat as a file entry so the UI can show it.
+            let is_dir = if file_type.is_symlink() && !is_dir {
+                fs::metadata(entry.path())
+                    .await
+                    .map(|m| m.is_dir())
+                    .unwrap_or(false)
+            } else {
+                is_dir
+            };
 
             entries.push(FileEntry {
                 name,
                 is_dir,
-                size: if is_dir { 0 } else { metadata.len() },
-                modified: metadata
+                size: if is_dir { 0 } else { meta.len() },
+                modified: meta
                     .modified()
                     .ok()
                     .and_then(|t| {
@@ -265,9 +314,16 @@ impl FileManager {
                             .map(|d| d.as_secs())
                     })
                     .unwrap_or(0),
-                mode: metadata.permissions().mode(),
+                mode: meta.permissions().mode(),
             });
         }
+
+        // Deterministic ordering: directories first, then name.
+        entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        });
 
         info!(
             "Directory listed: {:?} ({} entries)",
@@ -855,5 +911,50 @@ mod tests {
         );
         let p = result.unwrap();
         assert!(p.ends_with("srv1/server.properties") || p.ends_with("srv1\\server.properties"));
+    }
+
+    #[test]
+    fn resolves_server_root_before_dir_exists() {
+        let fm = make_fm();
+        // Critical file-explorer path: list "/" on a brand-new server whose
+        // data directory has not been created yet must NOT fail with
+        // "path outside data directory".
+        let root = fm.resolve_path("new-server", "/");
+        assert!(
+            root.is_ok(),
+            "root path must resolve before server dir exists: {:?}",
+            root.err()
+        );
+        let p = root.unwrap();
+        assert!(p.ends_with("new-server") || p.ends_with("new-server/"));
+
+        let empty = fm.resolve_path("new-server", "");
+        assert!(empty.is_ok(), "empty path should also resolve to root");
+    }
+
+    #[tokio::test]
+    async fn list_dir_creates_root_and_skips_broken_symlinks() {
+        let fm = make_fm();
+        let server = "srv-list";
+        // Root does not exist yet — list_dir should create it and return empty.
+        let entries = fm.list_dir(server, "/").await.expect("list root");
+        assert!(entries.is_empty());
+
+        let root = fm.data_dir.join(server);
+        std::fs::write(root.join("a.txt"), b"hi").unwrap();
+        std::fs::create_dir(root.join("world")).unwrap();
+        // Broken symlink must not fail the entire listing.
+        std::os::unix::fs::symlink(root.join("missing-target"), root.join("broken-link")).unwrap();
+
+        let entries = fm
+            .list_dir(server, "/")
+            .await
+            .expect("list with mixed entries");
+        let names: Vec<_> = entries.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"a.txt"));
+        assert!(names.contains(&"world"));
+        assert!(names.contains(&"broken-link"));
+        // Directories first
+        assert!(entries[0].is_dir, "directories should sort first");
     }
 }

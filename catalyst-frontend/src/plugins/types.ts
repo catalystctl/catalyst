@@ -12,7 +12,8 @@ export interface PluginManifest {
   loadedAt?: string;
   enabledAt?: string;
   error?: string;
-  permissions: string[];
+  /** Declared plugin permissions; may be omitted by older/partial payloads */
+  permissions?: string[];
   hasBackend: boolean;
   hasFrontend: boolean;
 

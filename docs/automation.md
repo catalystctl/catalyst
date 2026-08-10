@@ -1271,19 +1271,20 @@ Catalyst ships with a full-featured ticketing plugin that demonstrates advanced 
 ```json
 {
   "name": "ticketing-plugin",
-  "version": "1.0.0",
-  "displayName": "Ticketing System",
-  "description": "Full-featured ticketing system with server/user linking",
+  "version": "3.0.0",
+  "displayName": "Ticketing",
+  "description": "Support ticketing with SLA tracking, comments, tags, templates, bulk actions, and real-time updates",
   "config": {
+    "autoAssignEnabled": { "type": "boolean", "default": false },
     "autoCloseDays": { "type": "number", "default": 30 },
-    "maxOpenTicketsPerUser": { "type": "number", "default": 20 },
-    "defaultPriority": { "type": "string", "default": "medium" },
-    "notifyOnAssignment": { "type": "boolean", "default": true }
+    "defaultPriority": { "type": "select", "default": "medium" },
+    "responseSlaHours": { "type": "number", "default": 4 },
+    "resolutionSlaHours": { "type": "number", "default": 48 }
   }
 }
 ```
 
-This plugin registers custom API routes for CRUD operations on tickets, uses WebSocket for real-time notifications, and stores all data in the plugin's key-value storage.
+This plugin registers custom API routes for CRUD on tickets/comments/tags/templates, uses WebSocket for real-time notifications, stores data in plugin collections, and ships admin/server/user frontend surfaces via `createFrontendPlugin`.
 
 ### Plugin Configuration
 

@@ -349,6 +349,47 @@ impl WebSocketHandler {
         env_map.insert("HOST_SERVER_DIR".to_string(), host_server_dir.clone());
         env_map.insert("SERVER_DIR".to_string(), CONTAINER_SERVER_DIR.to_string());
 
+        // Wings always provides these builtins to install containers. Mirror them
+        // from the live allocation so $SERVER_MEMORY / $SERVER_PORT / $SERVER_IP
+        // work even when the panel omitted them from the template variable list.
+        let memory_mb = msg["allocatedMemoryMb"].as_u64().unwrap_or(1024);
+        let primary_port = msg["primaryPort"].as_u64().unwrap_or(0);
+        env_map
+            .entry("SERVER_MEMORY".to_string())
+            .or_insert_with(|| memory_mb.to_string());
+        env_map
+            .entry("MEMORY".to_string())
+            .or_insert_with(|| memory_mb.to_string());
+        if primary_port > 0 {
+            env_map
+                .entry("SERVER_PORT".to_string())
+                .or_insert_with(|| primary_port.to_string());
+            env_map
+                .entry("PORT".to_string())
+                .or_insert_with(|| primary_port.to_string());
+        }
+        env_map
+            .entry("SERVER_IP".to_string())
+            .or_insert_with(|| "0.0.0.0".to_string());
+        env_map
+            .entry("SERVER_UUID".to_string())
+            .or_insert_with(|| server_uuid.to_string());
+        env_map
+            .entry("P_SERVER_UUID".to_string())
+            .or_insert_with(|| server_uuid.to_string());
+        env_map
+            .entry("UUID".to_string())
+            .or_insert_with(|| server_uuid.to_string());
+        env_map
+            .entry("P_SERVER_LOCATION".to_string())
+            .or_insert_with(|| "catalyst".to_string());
+        env_map
+            .entry("TZ".to_string())
+            .or_insert_with(|| "UTC".to_string());
+        env_map
+            .entry("HOME".to_string())
+            .or_insert_with(|| CONTAINER_SERVER_DIR.to_string());
+
         info!(
             "Executing installation script in containerized environment using image: {}",
             install_image
@@ -762,15 +803,34 @@ impl WebSocketHandler {
             // Replace template variables in startup command
             let mut final_startup_command = startup_command.to_string();
 
-            // Add MEMORY to environment for variable replacement
+            // Wings builtins + Catalyst aliases for startup command substitution.
             env_map.insert("MEMORY".to_string(), memory_mb.to_string());
+            env_map.insert("SERVER_MEMORY".to_string(), memory_mb.to_string());
             env_map.insert("PORT".to_string(), primary_port.to_string());
+            env_map.insert("SERVER_PORT".to_string(), primary_port.to_string());
+            env_map
+                .entry("SERVER_IP".to_string())
+                .or_insert_with(|| "0.0.0.0".to_string());
+            env_map
+                .entry("SERVER_UUID".to_string())
+                .or_insert_with(|| server_uuid.to_string());
+            env_map
+                .entry("P_SERVER_UUID".to_string())
+                .or_insert_with(|| server_uuid.to_string());
+            env_map
+                .entry("UUID".to_string())
+                .or_insert_with(|| server_uuid.to_string());
+            env_map
+                .entry("P_SERVER_LOCATION".to_string())
+                .or_insert_with(|| "catalyst".to_string());
+            env_map
+                .entry("TZ".to_string())
+                .or_insert_with(|| "UTC".to_string());
+            env_map
+                .entry("HOME".to_string())
+                .or_insert_with(|| CONTAINER_SERVER_DIR.to_string());
 
-            // Sync port-related environment variables with primary_port
-            // This ensures the server listens on the same port used for port forwarding
-            if env_map.contains_key("SERVER_PORT") {
-                env_map.insert("SERVER_PORT".to_string(), primary_port.to_string());
-            }
+            // Keep GAME_PORT in sync when the egg defines it.
             if env_map.contains_key("GAME_PORT") {
                 env_map.insert("GAME_PORT".to_string(), primary_port.to_string());
             }
@@ -788,20 +848,63 @@ impl WebSocketHandler {
                 env_map.insert("MEMORY_XMS".to_string(), memory_xms.to_string());
             }
 
-            // Replace all {{VARIABLE}} placeholders
-            // Shell-escape values for defense-in-depth, same as install script.
-            // The startup command is passed to /bin/sh -c, so unquoted values
-            // could enable command injection if backend-controlled values are malicious.
+            // Replace all {{VARIABLE}} placeholders.
+            // Values are inserted RAW (not shell-escaped) because eggs commonly
+            // embed them inside larger tokens (e.g. -Xmx{{SERVER_MEMORY}}M).
+            // Shell-escaping each value would break those tokens ('2048'M).
+            // Defense-in-depth against injection is handled by the panel's
+            // variable validation + the fact that the full command is passed
+            // as a single argv element to sh -c / image entrypoint.
             for (key, value) in &env_map {
                 let placeholder = format!("{{{{{}}}}}", key);
-                let escaped = shell_utils::shell_escape_value(value);
-                final_startup_command = final_startup_command.replace(&placeholder, &escaped);
+                final_startup_command = final_startup_command.replace(&placeholder, value);
             }
 
             // Some templates use bash-style arithmetic tests like ((1)); convert for /bin/sh.
             final_startup_command = shell_utils::normalize_startup_for_sh(&final_startup_command);
 
             info!("Final startup command: {}", final_startup_command);
+
+            // Apply Pterodactyl egg config.files (properties/json/ini/yaml/xml/file)
+            // before the container starts — same timing as Wings UpdateConfigurationFiles.
+            {
+                let specs = crate::config_parser::specs_from_template(template);
+                if !specs.is_empty() {
+                    let primary_ip = env_map
+                        .get("SERVER_IP")
+                        .cloned()
+                        .unwrap_or_else(|| "0.0.0.0".to_string());
+                    let disk_mb = msg["allocatedDiskMb"].as_u64().unwrap_or(10240);
+                    let cfg_ctx = crate::config_parser::ConfigResolveContext {
+                        env: env_map.clone(),
+                        primary_port,
+                        primary_ip,
+                        server_uuid: server_uuid.to_string(),
+                        server_memory_mb: memory_mb,
+                        server_disk_mb: disk_mb,
+                        docker_interface: "0.0.0.0".to_string(),
+                    };
+                    if let Err(e) = crate::config_parser::apply_configuration_files(
+                        &server_dir_path,
+                        &specs,
+                        &cfg_ctx,
+                    )
+                    .await
+                    {
+                        warn!(
+                            "Config file application reported error for {}: {}",
+                            server_uuid, e
+                        );
+                    }
+                    // Ensure runtime user can still write after config rewrites.
+                    if let Err(e) = chown_to_container_user(&server_dir_path).await {
+                        warn!(
+                            "Failed to chown after config apply for {}: {}",
+                            server_uuid, e
+                        );
+                    }
+                }
+            }
 
             let network_ip = env_map
                 .get("CATALYST_NETWORK_IP")

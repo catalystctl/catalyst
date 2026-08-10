@@ -17,6 +17,7 @@ import { sanitizeInput } from "../lib/validation";
 import { ServerStateMachine } from "../services/state-machine";
 import { normalizeHostIp } from "../utils/ipam";
 import { captureSystemError } from "../services/error-logger";
+import { injectPterodactylCompatibilityVars } from "../utils/pterodactyl-env.js";
 
 /**
  * Simple capped Map that evicts the oldest entries when max size is reached.
@@ -1565,10 +1566,28 @@ export class WebSocketGateway {
             message.portBindings && typeof message.portBindings === "object"
               ? message.portBindings
               : server.portBindings;
-          const syncedEnvironment = syncPortEnvironmentVariables(
-            environment,
-            server.primaryPort,
-            portBindings as Record<string, unknown> | undefined
+          const syncedEnvironment = injectPterodactylCompatibilityVars(
+            syncPortEnvironmentVariables(
+              environment,
+              server.primaryPort,
+              portBindings as Record<string, unknown> | undefined
+            ),
+            {
+              uuid: server.uuid,
+              name: server.name,
+              primaryIp: server.primaryIp,
+              primaryPort: server.primaryPort,
+              allocatedMemoryMb: server.allocatedMemoryMb,
+              allocatedDiskMb: server.allocatedDiskMb,
+              subdomain: server.subdomain,
+            },
+            portBindings as Record<number, number> | undefined,
+            {
+              startupCommand:
+                (server as any).startupCommand ||
+                (server.template as any)?.startup ||
+                undefined,
+            },
           );
 
           const restartSent = await this.sendToAgent(server.nodeId, {

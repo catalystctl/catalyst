@@ -11,6 +11,7 @@ mod atomic_write;
 mod backup_crypto;
 mod command_utils;
 mod config;
+mod config_parser;
 mod error_reporter;
 mod errors;
 mod file_manager;

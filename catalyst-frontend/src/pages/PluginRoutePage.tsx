@@ -53,7 +53,9 @@ export default function PluginRoutePage() {
   const Component = matched.component;
   return (
     <PluginErrorBoundary pluginName={matched.path}>
-      <Component />
+      <div className="flex min-h-0 flex-1 flex-col">
+        <Component />
+      </div>
     </PluginErrorBoundary>
   );
 }

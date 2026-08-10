@@ -931,25 +931,21 @@ Demonstrates all plugin capabilities:
 
 Location: `catalyst-plugins/ticketing-plugin/`
 
-A production-grade ticketing system demonstrating complex plugin patterns:
+Support ticketing built on the modern plugin SDK (`createFrontendPlugin`, collection storage, host auth).
 
 **Features:**
 - Full CRUD for tickets, comments, tags, templates
-- Activity logging system
-- SLA tracking with configurable deadlines
-- Bulk operations
-- CSV/JSON export
-- Auto-assignment logic
-- Status transition validation
-- WebSocket broadcasting for real-time updates
-- 9 declared typed events
-- Admin UI tabs for ticket management
+- Activity logging + status transition validation
+- SLA response/resolution deadlines with auto-escalation and auto-close
+- Bulk operations and CSV/JSON export
+- WebSocket real-time updates (9 declared events)
+- Admin tab, per-server tab, and `/ticketing-plugin` user page
 
 **Manifest:**
 ```json
 {
   "name": "ticketing-plugin",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "permissions": ["server.read", "user.read"],
   "config": {
     "autoAssignEnabled": { "type": "boolean", "default": false },
@@ -966,7 +962,7 @@ A production-grade ticketing system demonstrating complex plugin patterns:
 - `ticket:status-changed`, `ticket:assigned`, `ticket:escalated`
 - `ticket:sla-breached`, `ticket:bulk-updated`
 
-**Backend size:** ~1,471 lines (one of the most complex plugins)
+**Layout:** modular backend (`helpers` / `routes` / `jobs`) + co-located frontend under `catalyst-plugins/ticketing-plugin/frontend/`.
 
 ### Egg Explorer Plugin
 

@@ -65,3 +65,6 @@ packages/plugin-sdk/dist/
 .fusion
 .impeccable/
 image.png
+
+# Catalyst Code harness local state
+.catalyst-code/

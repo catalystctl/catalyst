@@ -188,13 +188,20 @@ function isAlpineImage(image: string): boolean {
 
 /**
  * Detect which shell interpreter the agent would use.
- * Mirrors detect_install_interpreter() in runtime_manager.rs
+ * Mirrors detect_install_interpreter() in runtime_manager/image_and_spec.rs
+ *
+ * Alpine images do not ship bash. Even an explicit `#!/bin/bash` shebang is
+ * remapped to `sh` (busybox ash), which supports the bash-isms Pterodactyl
+ * scripts rely on (`[[ ]]`, etc.).
  */
 function detectInterpreter(image: string, script: string): string {
 	const alpine = isAlpineImage(image);
 	const shebang = extractShebang(script);
 
-	if (shebang === 'bash') return 'bash';
+	if (shebang === 'bash') {
+		// Alpine has no bash binary — busybox ash is the compatible fallback.
+		return alpine ? 'sh' : 'bash';
+	}
 	if (shebang === 'ash') return alpine ? 'sh' : 'bash';
 	if (alpine) return 'sh';
 	return 'bash';
@@ -288,15 +295,30 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 		});
 
 		it.concurrent('install wrapper creates /mnt/server symlink before script runs', () => {
-			// This is a documentation test — verifies the wrapper order
-			// The wrapper in runtime_manager.rs does:
-			//   1. set -e  (fail fast so install failures are not masked by chown)
-			//   2. rm -rf /mnt/server && ln -s /data /mnt/server
-			//   3. export HOME=/data
-			//   4. <user script>
-			//   5. chown -R 1000:1000 /data
-			// The symlink must come BEFORE the user script
-			expect(true).toBe(true); // Placeholder — actual behavior is in runtime_manager.rs
+			// Documentation contract — must stay in sync with container_ops.rs wrapper:
+			//   1. trap EXIT → chown -R 1000:1000 /data
+			//   2. set -e for preamble only
+			//   3. rm -rf /mnt/server && ln -s /data /mnt/server
+			//   4. ensure /home/container → /data (bind or symlink)
+			//   5. export HOME=/data
+			//   6. set +e  (Pterodactyl scripts are NOT run with set -e)
+			//   7. <user script>
+			const wrapperSrc = fs.readFileSync(
+				path.resolve(process.cwd(), '..', 'catalyst-agent/src/runtime_manager/container_ops.rs'),
+				'utf-8',
+			);
+			expect(wrapperSrc).toContain('rm -rf /mnt/server && ln -s /data /mnt/server');
+			expect(wrapperSrc).toContain('export HOME=/data');
+			expect(wrapperSrc).toContain('set +e');
+			expect(wrapperSrc).toContain('chown -R 1000:1000 /data');
+			// Symlink setup must appear before the script interpolation point
+			const symlinkIdx = wrapperSrc.indexOf('ln -s /data /mnt/server');
+			const scriptIdx = wrapperSrc.indexOf('{},\n            container_id, script');
+			// Fallback: the format! ends with script as last arg
+			const altScriptIdx = wrapperSrc.indexOf('container_id, script');
+			const endIdx = scriptIdx >= 0 ? scriptIdx : altScriptIdx;
+			expect(symlinkIdx).toBeGreaterThan(0);
+			expect(endIdx).toBeGreaterThan(symlinkIdx);
 		});
 	});
 
@@ -348,7 +370,7 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 			expect(failures).toEqual([]);
 		});
 
-		it.concurrent('bash scripts on any image use bash', () => {
+		it.concurrent('bash scripts on non-Alpine images use bash', () => {
 			const failures: string[] = [];
 
 			for (const fp of allFiles) {
@@ -358,12 +380,37 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 				const script = getInstallScript(egg);
 				const container = getInstallContainer(egg);
 				if (!script.trim() || !container) continue;
+				if (isAlpineImage(container)) continue;
 
 				const shebang = extractShebang(script);
 				if (shebang === 'bash') {
 					const interp = detectInterpreter(container, script);
 					if (interp !== 'bash') {
 						failures.push(`${egg.name} (${rel}): bash shebang should use bash, got ${interp}`);
+					}
+				}
+			}
+
+			expect(failures).toEqual([]);
+		});
+
+		it.concurrent('bash scripts on Alpine images use sh (no bash binary)', () => {
+			const failures: string[] = [];
+
+			for (const fp of allFiles) {
+				const parsed = parseEgg(fp);
+				if (!parsed) continue;
+				const { egg, rel } = parsed;
+				const script = getInstallScript(egg);
+				const container = getInstallContainer(egg);
+				if (!script.trim() || !container) continue;
+				if (!isAlpineImage(container)) continue;
+
+				const shebang = extractShebang(script);
+				if (shebang === 'bash') {
+					const interp = detectInterpreter(container, script);
+					if (interp !== 'sh') {
+						failures.push(`${egg.name} (${rel}): bash shebang on Alpine should use sh, got ${interp}`);
 					}
 				}
 			}
@@ -529,10 +576,10 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 				image: string; script: string; expected: string;
 				reason: string;
 			}> = [
-				// bash shebang on any image → bash
+				// bash shebang on Debian/Ubuntu → bash; on Alpine → sh (no bash binary)
 				{ image: 'debian:bullseye-slim', script: '#!/bin/bash\necho hi', expected: 'bash', reason: 'explicit bash shebang' },
 				{ image: 'eclipse-temurin:8-jdk-jammy', script: '#!/bin/bash\necho hi', expected: 'bash', reason: 'explicit bash on temurin' },
-				{ image: 'alpine:latest', script: '#!/bin/bash\necho hi', expected: 'bash', reason: 'explicit bash on alpine' },
+				{ image: 'alpine:latest', script: '#!/bin/bash\necho hi', expected: 'sh', reason: 'explicit bash on alpine → sh (no bash)' },
 
 				// ash shebang on Alpine → sh
 				{ image: 'ghcr.io/ptero-eggs/installers:alpine', script: '#!/bin/ash\necho hi', expected: 'sh', reason: 'ash on alpine → sh (busybox ash)' },

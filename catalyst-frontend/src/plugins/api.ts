@@ -51,7 +51,11 @@ async function apiFetch<T>(
  */
 export async function fetchPlugins(): Promise<PluginManifest[]> {
   const data = await apiFetch<{ data: PluginManifest[] }>('/api/plugins');
-  return data.data;
+  // Normalize partial payloads so UI never crashes on missing arrays
+  return (data.data ?? []).map((plugin) => ({
+    ...plugin,
+    permissions: plugin.permissions ?? [],
+  }));
 }
 
 /**

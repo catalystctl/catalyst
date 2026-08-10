@@ -188,10 +188,24 @@ export async function serverPowerRoutes(app: FastifyInstance) {
 
       // Sync port environment variables with primaryPort
       const portBindings = parseStoredPortBindings(server.portBindings);
-      const syncedEnvironment = syncPortEnvironmentVariables(
+      let syncedEnvironment = syncPortEnvironmentVariables(
         environment,
         server.primaryPort,
         portBindings
+      );
+      syncedEnvironment = injectPterodactylCompatibilityVars(
+        syncedEnvironment,
+        {
+          uuid: server.uuid,
+          name: server.name,
+          primaryIp: server.primaryIp,
+          primaryPort: server.primaryPort,
+          allocatedMemoryMb: server.allocatedMemoryMb,
+          allocatedDiskMb: server.allocatedDiskMb,
+          subdomain: server.subdomain,
+        },
+        portBindings,
+        { startupCommand: runtimeTemplate.startup },
       );
 
       // Install is long-running — fire-and-forget with delivery check.
@@ -333,10 +347,24 @@ export async function serverPowerRoutes(app: FastifyInstance) {
 
       // Sync port environment variables with primaryPort
       const portBindings = parseStoredPortBindings(server.portBindings);
-      const syncedEnvironment = syncPortEnvironmentVariables(
+      let syncedEnvironment = syncPortEnvironmentVariables(
         environment,
         server.primaryPort,
         portBindings
+      );
+      syncedEnvironment = injectPterodactylCompatibilityVars(
+        syncedEnvironment,
+        {
+          uuid: server.uuid,
+          name: server.name,
+          primaryIp: server.primaryIp,
+          primaryPort: server.primaryPort,
+          allocatedMemoryMb: server.allocatedMemoryMb,
+          allocatedDiskMb: server.allocatedDiskMb,
+          subdomain: server.subdomain,
+        },
+        portBindings,
+        { startupCommand: runtimeTemplate.startup },
       );
 
       // Reinstall is long-running — fire-and-forget with delivery check.
@@ -549,10 +577,24 @@ export async function serverPowerRoutes(app: FastifyInstance) {
 
       // Sync port environment variables with primaryPort
       const portBindings = parseStoredPortBindings(server.portBindings);
-      const syncedEnvironment = syncPortEnvironmentVariables(
+      let syncedEnvironment = syncPortEnvironmentVariables(
         environment,
         server.primaryPort,
         portBindings
+      );
+      syncedEnvironment = injectPterodactylCompatibilityVars(
+        syncedEnvironment,
+        {
+          uuid: server.uuid,
+          name: server.name,
+          primaryIp: server.primaryIp,
+          primaryPort: server.primaryPort,
+          allocatedMemoryMb: server.allocatedMemoryMb,
+          allocatedDiskMb: server.allocatedDiskMb,
+          subdomain: server.subdomain,
+        },
+        portBindings,
+        { startupCommand: runtimeTemplate.startup },
       );
 
       const success = await gateway.sendToAgent(server.nodeId, {
@@ -690,11 +732,20 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         portBindings
       );
 
-      // Inject Pterodactyl-compatible env vars for migrated servers
+      // Inject Pterodactyl-compatible env vars (SERVER_MEMORY, SERVER_PORT, …)
       syncedEnvironment = injectPterodactylCompatibilityVars(
         syncedEnvironment,
-        server,
-        portBindings
+        {
+          uuid: server.uuid,
+          name: server.name,
+          primaryIp: server.primaryIp,
+          primaryPort: server.primaryPort,
+          allocatedMemoryMb: server.allocatedMemoryMb,
+          allocatedDiskMb: server.allocatedDiskMb,
+          subdomain: server.subdomain,
+        },
+        portBindings,
+        { startupCommand: runtimeTemplate.startup },
       );
 
       const powerResult = await sendPowerCommand(
@@ -1161,10 +1212,24 @@ export async function serverPowerRoutes(app: FastifyInstance) {
 
       // Sync port environment variables with primaryPort
       const portBindings = parseStoredPortBindings(server.portBindings);
-      const syncedEnvironment = syncPortEnvironmentVariables(
+      let syncedEnvironment = syncPortEnvironmentVariables(
         environment,
         server.primaryPort,
         portBindings
+      );
+      syncedEnvironment = injectPterodactylCompatibilityVars(
+        syncedEnvironment,
+        {
+          uuid: server.uuid,
+          name: server.name,
+          primaryIp: server.primaryIp,
+          primaryPort: server.primaryPort,
+          allocatedMemoryMb: server.allocatedMemoryMb,
+          allocatedDiskMb: server.allocatedDiskMb,
+          subdomain: server.subdomain,
+        },
+        portBindings,
+        { startupCommand: runtimeTemplate.startup },
       );
 
       const powerResult = await sendPowerCommand(

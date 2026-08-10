@@ -299,7 +299,15 @@ impl ContainerdRuntime {
         // scripts download and execute binaries from /tmp. Adding noexec would
         // break these scripts. If future hardening requires noexec, an alternative
         // executable tmpfs mount at /opt/install-tmp must be provided.
+        // Also mount /home/container for install containers: some eggs and tools
+        // hardcode that Pterodactyl path even during install (not only runtime).
         let mut mounts = base_mounts(data_dir);
+        mounts.push(serde_json::json!({
+            "destination": "/home/container",
+            "type": "bind",
+            "source": data_dir,
+            "options": ["rbind", "rw"]
+        }));
         mounts.push(serde_json::json!({
             "destination": "/etc/resolv.conf",
             "type": "bind",
@@ -348,7 +356,7 @@ impl ContainerdRuntime {
         // This matches Pterodactyl's behavior: install scripts run without
         // `set -e`, and the final exit code determines success/failure.
         let wrapped_script = format!(
-            "__catalyst_on_exit() {{ __e=$?; chown -R 1000:1000 /data 2>/dev/null; exit $__e; }}\ntrap '__catalyst_on_exit' EXIT\necho '[Catalyst] Install wrapper started (container: {})'\nset -e\nrm -rf /mnt/server && ln -s /data /mnt/server\nexport HOME=/data\necho '[Catalyst] Wrapper setup complete, running install script...'\nset +e\n\n{}",
+            "__catalyst_on_exit() {{ __e=$?; chown -R 1000:1000 /data 2>/dev/null; exit $__e; }}\ntrap '__catalyst_on_exit' EXIT\necho '[Catalyst] Install wrapper started (container: {})'\nset -e\nrm -rf /mnt/server && ln -s /data /mnt/server\n# Some eggs also write to /home/container during install\nif [ ! -e /home/container ]; then ln -s /data /home/container; fi\nexport HOME=/data\nexport USER=container\necho '[Catalyst] Wrapper setup complete, running install script...'\nset +e\n\n{}",
             container_id, script
         );
 
