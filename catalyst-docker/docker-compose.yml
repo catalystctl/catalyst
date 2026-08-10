@@ -27,7 +27,11 @@ services:
     volumes:
       - catalyst-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U catalyst"]
+      # -d catalyst_db: without an explicit DB, pg_isready defaults to a database
+      # named after the user ("catalyst"), which does not exist (POSTGRES_DB is
+      # catalyst_db). That spams FATAL logs and can confuse install debugging
+      # (see GitHub issue #206).
+      test: ["CMD-SHELL", "pg_isready -U catalyst -d catalyst_db"]
       interval: 10s
       timeout: 5s
       retries: 5
