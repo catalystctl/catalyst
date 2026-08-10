@@ -9,6 +9,7 @@ import { verifyAgentApiKey } from "../lib/agent-auth";
 import { createApiKey, deleteApiKey } from "../services/api-key-service";
 import { captureSystemError } from "../services/error-logger";
 import { getUpdateStatus } from "../services/auto-updater";
+import { createAuditLog } from "../middleware/audit.js";
 
 // ID format validation — accepts UUID, Cuid2, and other safe identifier formats.
 const ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -319,18 +320,23 @@ export async function nodeRoutes(app: FastifyInstance) {
 				);
 
 				// Audit log the security event
-				await prisma.auditLog.create({
-					data: {
-						userId: request.user.userId,
-						action: "node.created.wildcard_warning",
-						resource: "node",
-						resourceId: node.id,
-						details: {
-							nodeName: node.name,
-							wildcardAssignmentCount: wildcardAssignments.length,
-							message:
-								"Node created while wildcard assignments exist - users/roles may have implicit access",
-						},
+				await createAuditLog(request.user.userId, {
+					action: "node.created.wildcard_warning",
+					resource: "node",
+					resourceId: node.id,
+					request,
+					details: {
+						nodeName: node.name,
+						locationId,
+						wildcardAssignmentCount: wildcardAssignments.length,
+						wildcardUsers: wildcardAssignments
+							.filter((a) => a.userId)
+							.map((a) => a.user?.email || a.userId),
+						wildcardRoles: wildcardAssignments
+							.filter((a) => a.roleId)
+							.map((a) => a.role?.name || a.roleId),
+						message:
+							"Node created while wildcard assignments exist - users/roles may have implicit access",
 					},
 				});
 			}
@@ -1586,18 +1592,17 @@ export async function nodeRoutes(app: FastifyInstance) {
 			);
 
 			// Log the action
-			await prisma.auditLog.create({
-				data: {
-					userId: request.user.userId,
-					action: `node.assign.${targetType}`,
-					resource: "node",
-					resourceId: nodeId,
-					details: {
-						targetType,
-						targetId,
-						assignmentId: assignment.id,
-						expiresAt: expirationDate?.toISOString(),
-					},
+			await createAuditLog(request.user.userId, {
+				action: `node.assign.${targetType}`,
+				resource: "node",
+				resourceId: nodeId,
+				request,
+				details: {
+					nodeName: node?.name,
+					targetType,
+					targetId,
+					assignmentId: assignment.id,
+					expiresAt: expirationDate?.toISOString(),
 				},
 			});
 
@@ -1650,17 +1655,17 @@ export async function nodeRoutes(app: FastifyInstance) {
 			await removeNodeAssignment(prisma, assignmentId);
 
 			// Log the action
-			await prisma.auditLog.create({
-				data: {
-					userId: request.user.userId,
-					action: "node.unassign",
-					resource: "node",
-					resourceId: nodeId,
-					details: {
-						assignmentId,
-						wasUserAssignment: !!assignment.userId,
-						wasRoleAssignment: !!assignment.roleId,
-					},
+			await createAuditLog(request.user.userId, {
+				action: "node.unassign",
+				resource: "node",
+				resourceId: nodeId,
+				request,
+				details: {
+					assignmentId,
+					wasUserAssignment: !!assignment.userId,
+					wasRoleAssignment: !!assignment.roleId,
+					userId: assignment.userId ?? undefined,
+					roleId: assignment.roleId ?? undefined,
 				},
 			});
 
@@ -2039,19 +2044,19 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			// Audit log
-			await prisma.auditLog.create({
-				data: {
-					userId: request.user.userId,
-					action: "server.import",
-					resource: "server",
-					resourceId: server.id,
-					details: {
-						containerId,
-						nodeId,
-						templateId,
-						ownerId,
-						source: "auto_import",
-					},
+			await createAuditLog(request.user.userId, {
+				action: "server.import",
+				resource: "server",
+				resourceId: server.id,
+				request,
+				details: {
+					serverName: server.name,
+					serverUuid: server.uuid,
+					containerId,
+					nodeId,
+					templateId,
+					ownerId,
+					source: "auto_import",
 				},
 			});
 
@@ -2159,18 +2164,17 @@ export async function nodeRoutes(app: FastifyInstance) {
 			);
 
 			// Log the action
-			await prisma.auditLog.create({
-				data: {
-					userId: request.user.userId,
-					action: `node.assign_wildcard.${targetType}`,
-					resource: "node",
-					resourceId: "*", // Wildcard indicator
-					details: {
-						targetType,
-						targetId,
-						assignmentId: assignment.id,
-						expiresAt: expirationDate?.toISOString(),
-					},
+			await createAuditLog(request.user.userId, {
+				action: `node.assign_wildcard.${targetType}`,
+				resource: "node",
+				resourceId: "*", // Wildcard indicator
+				request,
+				details: {
+					targetType,
+					targetId,
+					assignmentId: assignment.id,
+					expiresAt: expirationDate?.toISOString(),
+					wildcard: true,
 				},
 			});
 
@@ -2230,17 +2234,16 @@ export async function nodeRoutes(app: FastifyInstance) {
 			await removeNodeAssignment(prisma, wildcardAssignment.id);
 
 			// Log the action
-			await prisma.auditLog.create({
-				data: {
-					userId: request.user.userId,
-					action: "node.unassign_wildcard",
-					resource: "node",
-					resourceId: "*",
-					details: {
-						targetType,
-						targetId,
-						assignmentId: wildcardAssignment.id,
-					},
+			await createAuditLog(request.user.userId, {
+				action: "node.unassign_wildcard",
+				resource: "node",
+				resourceId: "*",
+				request,
+				details: {
+					targetType,
+					targetId,
+					assignmentId: wildcardAssignment.id,
+					wildcard: true,
 				},
 			});
 
@@ -2422,13 +2425,16 @@ export async function nodeRoutes(app: FastifyInstance) {
 				return reply.status(503).send({ error: "Failed to send restart command to agent" });
 			}
 
-			await prisma.auditLog.create({
-				data: {
-					userId: request.user.userId,
-					action: "agent.restart",
-					resource: "node",
-					resourceId: nodeId,
-					details: { nodeName: node.name },
+			await createAuditLog(request.user.userId, {
+				action: "agent.restart",
+				resource: "node",
+				resourceId: nodeId,
+				request,
+				details: {
+					nodeName: node.name,
+					publicAddress: node.publicAddress,
+					isOnline: node.isOnline,
+					agentVersion: (node as any).agentVersion ?? undefined,
 				},
 			});
 
@@ -2469,13 +2475,16 @@ export async function nodeRoutes(app: FastifyInstance) {
 				return reply.status(503).send({ error: "Failed to send update command to agent" });
 			}
 
-			await prisma.auditLog.create({
-				data: {
-					userId: request.user.userId,
-					action: "agent.update",
-					resource: "node",
-					resourceId: nodeId,
-					details: { nodeName: node.name, targetVersion: version },
+			await createAuditLog(request.user.userId, {
+				action: "agent.update",
+				resource: "node",
+				resourceId: nodeId,
+				request,
+				details: {
+					nodeName: node.name,
+					publicAddress: node.publicAddress,
+					targetVersion: version,
+					previousVersion: (node as any).agentVersion ?? undefined,
 				},
 			});
 
@@ -2649,13 +2658,15 @@ export async function nodeRoutes(app: FastifyInstance) {
 				});
 
 				if (response?.saved) {
-					await prisma.auditLog.create({
-						data: {
-							userId: request.user.userId,
-							action: "agent.config_update",
-							resource: "node",
-							resourceId: nodeId,
-							details: { nodeName: node.name },
+					await createAuditLog(request.user.userId, {
+						action: "agent.config_update",
+						resource: "node",
+						resourceId: nodeId,
+						request,
+						details: {
+							nodeName: node.name,
+							publicAddress: node.publicAddress,
+							configBytes: content.length,
 						},
 					});
 

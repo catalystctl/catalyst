@@ -126,15 +126,33 @@ function getDateLabel(date: string): string {
 
 // ── Log Detail Modal ──
 function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => void }) {
- const details = log.metadata || {};
+ const rawDetails = (log.details ?? log.metadata ?? {}) as Record<string, any>;
+ const details = rawDetails && typeof rawDetails === 'object' && !Array.isArray(rawDetails) ? rawDetails : { value: rawDetails };
 
  // Extract actor info auto-injected by the backend
  const actorUsername = details['_actor.username'] || log.user?.username;
  const actorEmail = details['_actor.email'] || log.user?.email;
+ const requestMeta = (details._request && typeof details._request === 'object')
+   ? details._request as Record<string, unknown>
+   : null;
+ const requestIp: string | null = (typeof details.ip === 'string' ? details.ip : null)
+   || (typeof requestMeta?.ip === 'string' ? String(requestMeta.ip) : null)
+   || log.ipAddress
+   || null;
+ const requestUa: string | null = (typeof details.userAgent === 'string' ? details.userAgent : null)
+   || (typeof requestMeta?.userAgent === 'string' ? String(requestMeta.userAgent) : null);
+ const requestMethod = typeof requestMeta?.method === 'string' ? requestMeta.method : null;
+ const requestPath = typeof requestMeta?.path === 'string' ? requestMeta.path : null;
 
- // Filter out internal _actor.* keys from the generic details display
- const publicEntries = Object.entries(details).filter(([key]) => !key.startsWith('_actor'));
- const hasDetails = publicEntries.length > 0;
+ // Filter out internal bookkeeping keys from the generic details display
+ const publicEntries = Object.entries(details).filter(([key]) => {
+   if (key.startsWith('_actor')) return false;
+   if (key === '_meta' || key === '_request') return false;
+   // ip/userAgent shown in chips
+   if (key === 'ip' || key === 'userAgent') return false;
+   return true;
+ });
+ const hasDetails = publicEntries.length > 0 || Boolean(requestIp) || Boolean(requestUa);
  const tone = getActionTone(log.action);
 
  const toneStyles: Record<string, { bg: string; border: string; text: string; dot: string }> = {
@@ -280,10 +298,20 @@ function LogDetailModal({ log, onClose }: { log: AuditLogEntry; onClose: () => v
 
  {/* Quick facts */}
  <div className="flex flex-wrap items-center gap-2">
- {log.ipAddress && (
+ {requestIp && (
  <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
  <Globe className="h-3 w-3" />
- <span className="font-mono">{log.ipAddress}</span>
+ <span className="font-mono">{requestIp}</span>
+ </div>
+ )}
+ {requestUa && (
+ <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground max-w-full">
+ <span className="truncate" title={requestUa}>{requestUa}</span>
+ </div>
+ )}
+ {requestMethod && requestPath && (
+ <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
+ <code className="font-mono">{requestMethod} {requestPath}</code>
  </div>
  )}
  {log.userId && (

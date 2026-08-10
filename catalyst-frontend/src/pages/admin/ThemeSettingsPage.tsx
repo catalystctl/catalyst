@@ -168,8 +168,15 @@ function Swatch({ color, label, mono }: { color: string; label?: string; mono?: 
 
 // ─── OIDC Provider Section ───
 
+// Stable empty default — inline `= {}` creates a new object every render and
+// trips the React 19 "adjust state when props change" sync into an infinite loop.
+const EMPTY_OIDC_CONFIGS: Record<
+ string,
+ { clientId: string; clientSecret: string; discoveryUrl: string; source: string }
+> = {};
+
 function OidcProviderSection() {
- const { data: serverConfigs = {}, isLoading } = useOidcConfig();
+ const { data: serverConfigs = EMPTY_OIDC_CONFIGS, isLoading } = useOidcConfig();
  const [configs, setConfigs] = useState<
  Record<string, { clientId: string; clientSecret: string; discoveryUrl: string; source: string }>
  >({});
@@ -230,10 +237,10 @@ function OidcProviderSection() {
  {provider.charAt(0).toUpperCase() + provider.slice(1)}
  </span>
  <span
- className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+ className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
  isConfigured
- ? 'bg-success/10 text-success'
- : 'bg-muted text-muted-foreground'
+ ? 'border-success/30 bg-success/10 text-success'
+ : 'border-border/60 bg-surface-2 text-foreground/80'
  }`}
  >
  {isConfigured ? `Configured (${cfg.source})` : 'Not configured'}

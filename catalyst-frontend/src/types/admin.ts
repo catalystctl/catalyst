@@ -173,6 +173,9 @@ export interface AuditLogEntry {
   action: string;
   resource: string;
   resourceId?: string | null;
+  /** Backend stores this as `details` (Json). Kept as both for compat. */
+  details?: Record<string, any> | null;
+  /** @deprecated Use `details` — some older clients expected metadata. */
   metadata?: Record<string, any> | null;
   timestamp: string;
   ipAddress?: string | null;

@@ -54,7 +54,7 @@ function ModalShell({
     <ModalPortal>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 px-4 backdrop-blur-sm">
         <div
-          className={`w-full max-w-2xl rounded-xl border bg-card shadow-xl ${
+          className={`w-full max-w-2xl min-w-0 overflow-hidden rounded-xl border bg-card shadow-xl ${
             variant === 'danger' ? 'border-destructive/50' : 'border-border/40'
           }`}
         >
@@ -71,7 +71,7 @@ function ModalShell({
               Close
             </button>
           </div>
-          <div className="space-y-3 px-6 py-4 text-sm text-muted-foreground">
+          <div className="min-w-0 space-y-3 overflow-x-hidden px-6 py-4 text-sm text-muted-foreground">
             {children}
           </div>
         </div>
@@ -497,15 +497,32 @@ function NodeDetailsPage() {
       {/* Deploy Script Modal */}
       <ModalShell open={!!deployInfo} onClose={() => setDeployInfo(null)} title="Deploy agent">
         <div>Run this on the node to install and register the agent (valid for 24 hours).</div>
-        <div className="rounded-lg border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
-          <code className="whitespace-pre-wrap">
+        <div className="min-w-0 max-w-full overflow-x-auto rounded-lg border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
+          <code className="block max-w-full break-all whitespace-pre-wrap">
             {deployInfo
               ? `curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`
               : ''}
           </code>
         </div>
-        <div className="text-xs text-muted-foreground">
-          Token expires: {deployInfo ? new Date(deployInfo.expiresAt).toLocaleString() : ''}
+        <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+          <span className="min-w-0">
+            Token expires: {deployInfo ? new Date(deployInfo.expiresAt).toLocaleString() : ''}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-1.5"
+            onClick={() => {
+              if (!deployInfo) return;
+              navigator.clipboard.writeText(
+                `curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`,
+              );
+              notifySuccess('Copied to clipboard');
+            }}
+          >
+            <Copy className="h-3 w-3" />
+            Copy
+          </Button>
         </div>
         <div className="flex justify-end gap-2 border-t border-border/30 pt-4 text-xs">
           <Button variant="outline" size="sm" onClick={() => setDeployInfo(null)}>
@@ -534,8 +551,8 @@ function NodeDetailsPage() {
           Add this API key to your agent's{' '}
           <code className="rounded bg-surface-2 px-1">config.toml</code> file:
         </div>
-        <div className="rounded-lg border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
-          <code className="whitespace-pre-wrap break-all">
+        <div className="min-w-0 max-w-full overflow-x-auto rounded-lg border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
+          <code className="block max-w-full break-all whitespace-pre-wrap">
             api_key = &quot;{generatedApiKey}&quot;
           </code>
         </div>

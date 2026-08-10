@@ -9,6 +9,7 @@ import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { serialize } from '../utils/serialize';
 import { getUserAccessibleNodes } from '../lib/permissions';
+import { enrichAuditDetails, resolveActorDetails, buildServerAuditDetails } from '../middleware/audit.js';
 
 interface BulkResult {
   success: string[];
@@ -126,6 +127,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       });
 
       const serverMap = new Map(servers.map((s) => [s.id, s]));
+      const actorDetails = await resolveActorDetails(userId);
       const auditLogs: Array<{ userId: string; action: string; resource: string; resourceId: string; details: any }> = [];
 
       for (const serverId of serverIds) {
@@ -188,7 +190,22 @@ export async function bulkServerRoutes(app: FastifyInstance) {
             action: 'server.bulk_suspend',
             resource: 'server',
             resourceId: serverId,
-            details: { reason: reason?.trim() || undefined },
+            details: await enrichAuditDetails({
+              userId,
+              action: 'server.bulk_suspend',
+              resource: 'server',
+              resourceId: serverId,
+              request,
+              actorDetails,
+              details: buildServerAuditDetails(server, {
+                bulk: true,
+                reason: reason?.trim() || undefined,
+                stopServer: shouldStop,
+                newStatus: 'suspended',
+                previousStatus: server.status,
+                serverName: server.name,
+              }),
+            }),
           });
 
           result.success.push(serverId);
@@ -274,6 +291,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         select: { id: true, name: true, suspendedAt: true, ownerId: true },
       });
       const serverMap = new Map(servers.map((s) => [s.id, s]));
+      const actorDetails = await resolveActorDetails(userId);
       const auditLogs: Array<{ userId: string; action: string; resource: string; resourceId: string; details: any }> = [];
 
       for (const serverId of serverIds) {
@@ -324,7 +342,19 @@ export async function bulkServerRoutes(app: FastifyInstance) {
             action: 'server.bulk_unsuspend',
             resource: 'server',
             resourceId: serverId,
-            details: {},
+            details: await enrichAuditDetails({
+              userId,
+              action: 'server.bulk_unsuspend',
+              resource: 'server',
+              resourceId: serverId,
+              request,
+              actorDetails,
+              details: buildServerAuditDetails(server, {
+                bulk: true,
+                newStatus: 'stopped',
+                serverName: server.name,
+              }),
+            }),
           });
 
           result.success.push(serverId);
@@ -409,6 +439,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         select: { id: true, name: true, status: true, nodeId: true, uuid: true, suspendedAt: true, ownerId: true, node: { select: { isOnline: true } } },
       });
       const serverMap = new Map(servers.map((s) => [s.id, s]));
+      const actorDetails = await resolveActorDetails(userId);
       const auditLogs: Array<{ userId: string; action: string; resource: string; resourceId: string; details: any }> = [];
 
       for (const serverId of serverIds) {
@@ -481,10 +512,20 @@ export async function bulkServerRoutes(app: FastifyInstance) {
             action: 'server.bulk_delete',
             resource: 'server',
             resourceId: serverId,
-            details: {
-              serverName: server.name,
-              ...(agentOffline ? { agentCleanup: false, warning: 'agent offline' } : {}),
-            },
+            details: await enrichAuditDetails({
+              userId,
+              action: 'server.bulk_delete',
+              resource: 'server',
+              resourceId: serverId,
+              request,
+              actorDetails,
+              details: buildServerAuditDetails(server, {
+                bulk: true,
+                serverName: server.name,
+                previousStatus: server.status,
+                ...(agentOffline ? { agentCleanup: false, warning: 'agent offline' } : { agentCleanup: true }),
+              }),
+            }),
           });
 
           result.success.push(serverId);

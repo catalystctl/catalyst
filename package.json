@@ -11,6 +11,7 @@
 	],
 	"scripts": {
 		"dev": "pnpm run dev:infra && pnpm -r --parallel --filter catalyst-backend --filter catalyst-frontend run dev --host",
+		"dev:run": "./dev_run.sh",
 		"dev:infra": "cd catalyst-docker && podman-compose up -d --no-recreate postgres redis 2>/dev/null || podman-compose start postgres redis 2>/dev/null || true",
 		"dev:agent": "cd catalyst-agent && sudo cargo run -- ./config.toml",
 		"dev:all": "pnpm run dev:infra && pnpm -r --parallel --filter catalyst-backend --filter catalyst-frontend run dev",

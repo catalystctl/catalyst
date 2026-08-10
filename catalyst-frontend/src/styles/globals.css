@@ -2,6 +2,11 @@
 @import 'sonner/dist/styles.css';
 @config "../../tailwind.config.js";
 
+/*
+ * Precision Console design tokens
+ * All color values are HSL channels without `hsl()` so themeStore can
+ * rewrite them at runtime from Theme Settings.
+ */
 :root {
   --accent-teal: 174 80% 46%;
   --accent-teal-light: 174 72% 56%;
@@ -35,7 +40,19 @@
   --destructive: var(--danger);
   --destructive-foreground: 0 0% 100%;
   --ring: var(--accent-teal);
-  --radius: 0.5rem;
+  --radius: 0.625rem;
+
+  --primary-50: 174 80% 95%;
+  --primary-100: 174 72% 90%;
+  --primary-200: 174 72% 80%;
+  --primary-300: 174 72% 70%;
+  --primary-400: 174 80% 56%;
+  --primary-500: 174 80% 46%;
+  --primary-600: 174 80% 40%;
+  --primary-700: 174 80% 32%;
+  --primary-800: 174 80% 24%;
+  --primary-900: 174 80% 16%;
+  --primary-950: 174 80% 8%;
 
   --zinc-50: 40 15% 98%;
   --zinc-100: 40 10% 95%;
@@ -58,6 +75,14 @@
   --scrollbar-thumb: 40 8% 85%;
   --scrollbar-thumb-hover: 250 5% 60%;
 
+  --shadow-surface: 0 1px 2px 0 rgb(21 18 38 / 0.04);
+  --shadow-elevated: 0 8px 24px -8px rgb(21 18 38 / 0.12), 0 2px 6px -2px rgb(21 18 38 / 0.06);
+  --shadow-panel: 0 0 0 1px rgb(21 18 38 / 0.04), 0 1px 2px rgb(21 18 38 / 0.04);
+
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+
   --sonner-background: hsl(var(--card));
   --sonner-border: hsl(var(--border));
   --sonner-text: hsl(var(--foreground));
@@ -70,19 +95,19 @@
 }
 
 .dark {
-  --background: 240 10% 7%;
+  --background: 240 12% 6%;
   --foreground: 240 10% 96%;
-  --muted: 240 8% 18%;
-  --muted-foreground: 240 5% 60%;
-  --popover: 240 10% 9%;
+  --muted: 240 10% 14%;
+  --muted-foreground: 240 5% 62%;
+  --popover: 240 12% 9%;
   --popover-foreground: 240 10% 96%;
-  --card: 240 10% 9%;
+  --card: 240 12% 9%;
   --card-foreground: 240 10% 96%;
-  --border: 240 8% 20%;
-  --input: 240 8% 20%;
+  --border: 240 9% 18%;
+  --input: 240 9% 18%;
   --primary: var(--accent-teal);
   --primary-foreground: 240 10% 5%;
-  --secondary: 240 8% 18%;
+  --secondary: 240 10% 14%;
   --secondary-foreground: 240 10% 96%;
   --accent: var(--accent-teal);
   --accent-foreground: 240 10% 5%;
@@ -90,14 +115,18 @@
   --destructive-foreground: 0 0% 100%;
   --ring: var(--accent-teal);
 
-  --surface-0: 240 10% 7%;
-  --surface-1: 240 10% 12%;
-  --surface-2: 240 8% 18%;
-  --surface-3: 240 8% 27%;
+  --surface-0: 240 12% 6%;
+  --surface-1: 240 12% 9%;
+  --surface-2: 240 10% 14%;
+  --surface-3: 240 9% 20%;
 
   --scrollbar-track: transparent;
-  --scrollbar-thumb: 240 3.7% 15.9%;
-  --scrollbar-thumb-hover: 240 5% 33.9%;
+  --scrollbar-thumb: 240 8% 22%;
+  --scrollbar-thumb-hover: 240 6% 36%;
+
+  --shadow-surface: 0 1px 2px 0 rgb(0 0 0 / 0.35);
+  --shadow-elevated: 0 12px 32px -10px rgb(0 0 0 / 0.55), 0 2px 8px -2px rgb(0 0 0 / 0.4);
+  --shadow-panel: 0 0 0 1px rgb(255 255 255 / 0.04), 0 1px 2px rgb(0 0 0 / 0.35);
 
   --sonner-background: hsl(var(--surface-1));
   --sonner-border: hsl(var(--border));
@@ -120,40 +149,102 @@
   border-color: hsl(var(--border));
 }
 
+html {
+  text-rendering: optimizeLegibility;
+}
+
 body {
   margin: 0;
-  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  min-height: 100dvh;
+  font-family: 'DM Sans Variable', 'DM Sans', system-ui, -apple-system, sans-serif;
+  font-feature-settings: 'ss01' on, 'cv11' on;
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.011em;
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.22);
+  color: hsl(var(--foreground));
 }
 
 .font-display {
-  font-family: 'Outfit', system-ui, sans-serif;
+  font-family: 'Outfit Variable', 'Outfit', system-ui, sans-serif;
+  letter-spacing: -0.02em;
 }
 
 .font-mono {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: 'JetBrains Mono Variable', 'JetBrains Mono', 'Fira Code', monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 .app-shell {
+  position: relative;
+  isolation: isolate;
   background: hsl(var(--background));
 }
 
-/* ── Scrollbar ── */
+/* Soft ambient wash that tracks the theme primary without hardcoding hue */
+.app-shell::before {
+  content: '';
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(1200px 600px at 0% -10%, hsl(var(--primary) / 0.07), transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, hsl(var(--primary) / 0.04), transparent 50%);
+  opacity: 0.9;
+}
 
-/* Scrollbar styling — only apply to explicitly scrollable containers.
- * Applying scrollbar-width globally forces visible scrollbar tracks on
- * elements with overflow-y-auto even when there's no overflow content.
- */
+.dark .app-shell::before {
+  background:
+    radial-gradient(1100px 700px at 0% -15%, hsl(var(--primary) / 0.1), transparent 55%),
+    radial-gradient(800px 480px at 100% 0%, hsl(var(--primary) / 0.05), transparent 50%);
+  opacity: 1;
+}
+
+/* Content frame used by main workspace */
+.panel-frame {
+  border: 1px solid hsl(var(--border) / 0.8);
+  border-radius: calc(var(--radius) + 4px);
+  background: hsl(var(--card) / 0.72);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(8px);
+}
+
+.dark .panel-frame {
+  background: hsl(var(--card) / 0.82);
+}
+
+/* Page title block without forcing a heavy card wrapper */
+.page-title {
+  font-family: 'Outfit Variable', 'Outfit', system-ui, sans-serif;
+  font-size: clamp(1.35rem, 1.1rem + 0.8vw, 1.75rem);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  color: hsl(var(--foreground));
+  text-wrap: balance;
+}
+
+.page-subtitle {
+  max-width: 65ch;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: hsl(var(--muted-foreground));
+  text-wrap: pretty;
+}
+
+/* ── Scrollbar ── */
 
 html,
 body {
   scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
 }
 
-/* Only elements that actually scroll get thin scrollbars */
 .overflow-y-auto,
 .overflow-auto,
 .overflow-scroll,
@@ -256,7 +347,7 @@ select option {
 
 .console-line {
   padding: 1px 0;
-  transition: background-color 0.1s ease;
+  transition: background-color var(--duration-fast) var(--ease-standard);
 }
 
 .console-line:hover {
@@ -309,6 +400,20 @@ select option {
   display: none;
 }
 
+/* Interactive press feedback for dense panel controls */
+.pressable {
+  transition:
+    transform var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-normal) var(--ease-standard),
+    border-color var(--duration-normal) var(--ease-standard),
+    color var(--duration-normal) var(--ease-standard),
+    box-shadow var(--duration-normal) var(--ease-standard);
+}
+
+.pressable:active:not(:disabled) {
+  transform: translateY(0.5px) scale(0.985);
+}
+
 /* ── Reduced motion ── */
 
 @media (prefers-reduced-motion: reduce) {
@@ -318,5 +423,13 @@ select option {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .app-shell::before {
+    display: none;
+  }
+
+  .pressable:active:not(:disabled) {
+    transform: none;
   }
 }

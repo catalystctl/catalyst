@@ -56,6 +56,10 @@ import type {
 } from '../../types/migration';
 import { MIGRATION_PHASES } from '../../types/migration';
 
+// Stable empty default — inline `[]` creates a new array every render and
+// trips the React 19 prev-state sync into an infinite loop while jobs load.
+const EMPTY_MIGRATION_JOBS: MigrationJob[] = [];
+
 // ── Status helpers ──
 const statusConfig: Record<string, { label: string; variant: 'default' | 'success' | 'destructive' | 'secondary' | 'outline'; icon: any }> = {
  pending: { label: 'Pending', variant: 'secondary', icon: Clock },
@@ -736,8 +740,8 @@ export default function MigrationPage() {
  },
  });
 
- // Ensure jobs is always an array for safe usage
- const safeJobs = Array.isArray(jobs) ? jobs : [];
+ // Ensure jobs is always an array for safe usage.
+ const safeJobs = Array.isArray(jobs) ? jobs : EMPTY_MIGRATION_JOBS;
 
  // Fetch active job
  const { data: activeJob } = useQuery({

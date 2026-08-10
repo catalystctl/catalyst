@@ -5,6 +5,7 @@ import { createApiKey, deleteApiKey as deleteApiKeyService, updateApiKey as upda
 import { PERMISSION_CATEGORIES, hasPermission } from "../lib/permissions-catalog";
 import { serialize } from '../utils/serialize';
 import { captureSystemError } from "../services/error-logger";
+import { createAuditLog } from "../middleware/audit.js";
 
 const createApiKeySchema = z.object({
   name: z.string().min(1).max(100),
@@ -90,18 +91,21 @@ export async function apiKeyRoutes(app: FastifyInstance) {
       });
 
       // Audit log
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "api_key.create",
-          resource: "apikey",
-          resourceId: apiKeyData.id,
-          details: {
-            name: body.name,
-            allPermissions: body.allPermissions,
-            permissionCount: body.allPermissions ? -1 : body.permissions.length,
-            expiresAt: apiKeyData.expiresAt,
-          },
+      await createAuditLog(userId, {
+        action: "api_key.create",
+        resource: "apikey",
+        resourceId: apiKeyData.id,
+        request,
+        details: {
+          name: body.name,
+          allPermissions: body.allPermissions,
+          permissionCount: body.allPermissions ? -1 : body.permissions.length,
+          permissions: body.allPermissions ? ['*'] : body.permissions,
+          expiresAt: apiKeyData.expiresAt,
+          rateLimitEnabled: true,
+          rateLimitMax: body.rateLimitMax,
+          rateLimitTimeWindow: body.rateLimitTimeWindow,
+          hasMetadata: Boolean(body.metadata && Object.keys(body.metadata || {}).length),
         },
       });
 
@@ -229,13 +233,15 @@ export async function apiKeyRoutes(app: FastifyInstance) {
         return reply.status(404).send({ success: false, error: "API key not found" });
       }
 
-      await prisma.auditLog.create({
-        data: {
-          userId: request.user.userId,
-          action: "api_key.update",
-          resource: "apikey",
-          resourceId: id,
-          details: body,
+      await createAuditLog(request.user.userId, {
+        action: "api_key.update",
+        resource: "apikey",
+        resourceId: id,
+        request,
+        details: {
+          name: apiKey.name,
+          changes: body,
+          changedFields: Object.keys(body || {}),
         },
       });
 
@@ -273,7 +279,11 @@ export async function apiKeyRoutes(app: FastifyInstance) {
       const { id } = request.params;
       const apiKey = await prisma.apikey.findUnique({
         where: { id },
-        select: { name: true },
+        select: {
+          name: true,
+          // Better Auth apikey model may not expose these; keep best-effort.
+          metadata: true,
+        },
       });
 
       if (!apiKey) {
@@ -282,13 +292,14 @@ export async function apiKeyRoutes(app: FastifyInstance) {
 
       await deleteApiKeyService(id);
 
-      await prisma.auditLog.create({
-        data: {
-          userId: request.user.userId,
-          action: "api_key.delete",
-          resource: "apikey",
-          resourceId: id,
-          details: { name: apiKey.name },
+      await createAuditLog(request.user.userId, {
+        action: "api_key.delete",
+        resource: "apikey",
+        resourceId: id,
+        request,
+        details: {
+          name: apiKey.name,
+          metadata: apiKey.metadata ?? undefined,
         },
       });
 

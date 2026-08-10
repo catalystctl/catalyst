@@ -457,7 +457,7 @@ export function initAuth() {
                 action: 'user_login',
                 resource: 'user',
                 resourceId: user.id,
-                details: { email: user.email, method: 'email' },
+                details: { email: user.email, username: user.username, method: 'email', outcome: 'success' },
               });
             } catch { /* non-critical */ }
           }
@@ -482,7 +482,7 @@ export function initAuth() {
                 action: 'user_login',
                 resource: 'user',
                 resourceId: user.id,
-                details: { email: user.email, method: 'passkey' },
+                details: { email: user.email, username: user.username, method: 'passkey', outcome: 'success' },
               });
             } catch { /* non-critical */ }
           }

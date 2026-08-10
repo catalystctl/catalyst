@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
+import { createAuditLog } from '../../middleware/audit.js';
 import { ModManagerTarget, buildProviderHeaders, ensureModManagerEnabled, ensurePluginManagerEnabled, ensureServerAccess, extractGameVersion, fileRateLimitMax, fileRateLimitWindowMs, getModManagerSettings, getProviderTargets, loadPluginProviderConfig, loadProviderConfig, normalizeTargetValue, path, resolveCurseforgeClassId, validateAndNormalizePath, resolveCurseforgeGameId, resolveCurseforgeLoaderType, resolveModManagerProvider, resolveModrinthGameVersion, resolvePaperDownload, resolveSpigotDownload, resolveTemplatePath, sanitizeFilename } from './_helpers.js';
 
 export async function serverModpluginsRoutes(app: FastifyInstance) {
@@ -385,20 +386,18 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         if (!result.success) {
           return reply.status(400).send({ error: result.error || "Failed to install asset" });
         }
-        await prisma.auditLog.create({
-          data: {
-            userId,
-            action: "mod_manager.install",
-            resource: "server",
-            resourceId: serverId,
-            details: {
+        await createAuditLog(userId, {
+          action: "mod_manager.install",
+          resource: "server",
+          resourceId: serverId,
+          request,
+          details: {
               provider: providerId,
               game: providerEntry.game ?? game ?? null,
               projectId,
               versionId,
               target: normalizedFile,
             },
-          },
         });
         await prisma.installedMod.upsert({
           where: { serverId_filename: { serverId, filename } },
@@ -831,14 +830,12 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         if (!result.success) {
           return reply.status(400).send({ error: result.error || "Failed to install asset" });
         }
-        await prisma.auditLog.create({
-          data: {
-            userId,
-            action: "plugin_manager.install",
-            resource: "server",
-            resourceId: serverId,
-            details: { provider, projectId, versionId, target: normalizedFile },
-          },
+        await createAuditLog(userId, {
+          action: "plugin_manager.install",
+          resource: "server",
+          resourceId: serverId,
+          request,
+          details: { provider, projectId, versionId, target: normalizedFile },
         });
         await prisma.installedMod.upsert({
           where: { serverId_filename: { serverId, filename } },
@@ -1021,14 +1018,12 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
           return reply.status(400).send({ error: result.error || "Failed to uninstall mod" });
         }
         await prisma.installedMod.deleteMany({ where: { serverId, filename: safeName } });
-        await prisma.auditLog.create({
-          data: {
-            userId,
-            action: "mod_manager.uninstall",
-            resource: "server",
-            resourceId: serverId,
-            details: { filename: safeName, target: targetValue },
-          },
+        await createAuditLog(userId, {
+          action: "mod_manager.uninstall",
+          resource: "server",
+          resourceId: serverId,
+          request,
+          details: { filename: safeName, target: targetValue },
         });
         reply.send({ success: true });
 
@@ -1087,14 +1082,12 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
           return reply.status(400).send({ error: result.error || "Failed to uninstall plugin" });
         }
         await prisma.installedMod.deleteMany({ where: { serverId, filename: safeName } });
-        await prisma.auditLog.create({
-          data: {
-            userId,
-            action: "plugin_manager.uninstall",
-            resource: "server",
-            resourceId: serverId,
-            details: { filename: safeName },
-          },
+        await createAuditLog(userId, {
+          action: "plugin_manager.uninstall",
+          resource: "server",
+          resourceId: serverId,
+          request,
+          details: { filename: safeName },
         });
         reply.send({ success: true });
 

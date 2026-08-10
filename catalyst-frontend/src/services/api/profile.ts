@@ -141,11 +141,19 @@ export const profileApi = {
   },
 
   // ── Passkeys ──
+  // Better Auth client path proxy maps camelCase → kebab path segments.
+  // Server endpoint is GET /passkey/list-user-passkeys → client: passkey.listUserPasskeys().
+  // (passkey.listPasskeys would hit the non-existent /passkey/list-passkeys.)
   async listPasskeys(): Promise<Passkey[]> {
-    const res = await (authClient as any).passkey.listPasskeys();
+    const res = await (authClient as any).passkey.listUserPasskeys();
     if (res.error) {
-      reportSystemError({ level: 'error', component: 'ApiProfile', message: 'Failed to load passkeys', metadata: { action: 'listPasskeys' } });
-      throw new Error('Failed to load passkeys');
+      reportSystemError({
+        level: 'error',
+        component: 'ApiProfile',
+        message: res.error.message || 'Failed to load passkeys',
+        metadata: { action: 'listPasskeys', code: res.error.code, status: res.error.status },
+      });
+      throw new Error(res.error.message || 'Failed to load passkeys');
     }
     return (res.data ?? []) as Passkey[];
   },
@@ -282,17 +290,26 @@ export const profileApi = {
   },
 
   // ── SSO ──
+  // Better Auth client path proxy: listAccounts → GET /list-accounts
+  // (listUserAccounts would hit the non-existent /list-user-accounts.)
   async listSsoAccounts(): Promise<ProfileAccount[]> {
-    const res = await (authClient as any).listUserAccounts();
+    const res = await (authClient as any).listAccounts();
     if (res.error) {
-      reportSystemError({ level: 'error', component: 'ApiProfile', message: 'Failed to load SSO accounts', metadata: { action: 'listSsoAccounts' } });
-      throw new Error('Failed to load SSO accounts');
+      reportSystemError({
+        level: 'error',
+        component: 'ApiProfile',
+        message: res.error.message || 'Failed to load SSO accounts',
+        metadata: { action: 'listSsoAccounts', code: res.error.code, status: res.error.status },
+      });
+      throw new Error(res.error.message || 'Failed to load SSO accounts');
     }
     return (res.data ?? []) as ProfileAccount[];
   },
   async linkSso(providerId: string) {
     const frontendOrigin = typeof window !== 'undefined' ? window.location.origin : '';
-    const res = await (authClient as any).linkSocialAccount({
+    // WHMCS/Paymenter use genericOAuth → POST /oauth2/link (client: oauth2.link).
+    // Body field is providerId. Built-in social linkSocial is a different endpoint.
+    const res = await (authClient as any).oauth2.link({
       providerId,
       callbackURL: `${frontendOrigin}/profile`,
     });
@@ -302,7 +319,7 @@ export const profileApi = {
       // Validate redirect origin to prevent open-redirect attacks
       const trusted = new URL(data.url);
       const allowed = [frontendOrigin, import.meta.env.VITE_BETTER_AUTH_URL].filter(Boolean);
-      if (!allowed.some(o => trusted.origin === new URL(o).origin)) {
+      if (!allowed.some(o => trusted.origin === new URL(o as string).origin)) {
         throw new Error('Untrusted redirect URL from SSO link');
       }
       window.location.href = data.url;

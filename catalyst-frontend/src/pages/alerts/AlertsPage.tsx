@@ -420,20 +420,13 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  setCooldownMinutes(String((actions.cooldownMinutes as number | undefined) ?? 5));
  };
 
- const emptyState = (
- <TabEmptyState
- title="All clear"
- description={showAdminTargets
- ? 'No active alerts. Create rules to get notified when something breaks.'
- : 'No active alerts for this server.'}
- action={
- <Button size="sm" onClick={() => setShowRuleModal(true)} className="gap-1.5">
- <Plus className="h-3.5 w-3.5" />
- Create alert rule
- </Button>
- }
- />
- );
+ const unresolvedCount = alerts.filter((a) => !a.resolved).length;
+ const hasRules = alertRules.length > 0;
+ const openCreateRule = () => {
+ setEditingRule(null);
+ resetRuleForm();
+ setShowRuleModal(true);
+ };
 
  return (
  <div className="space-y-4">
@@ -444,42 +437,22 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  ? 'Monitor incidents and resolve alerts in real time.'
  : 'Manage alert rules and incidents for this server.'}
  actions={
- <div className="flex items-center gap-2">
- <Badge variant="outline" className="text-xs">{alerts.filter((a) => !a.resolved).length} active</Badge>
- <Badge variant="secondary" className="text-xs">{alerts.length} total</Badge>
- <Button size="sm" onClick={() => setShowRuleModal(true)} className="gap-1.5">
+ <Button size="sm" onClick={openCreateRule} className="gap-1.5">
  <Plus className="h-3.5 w-3.5" />
  Create Rule
  </Button>
- </div>
  }
  />
 
- {/* ── Filter Bar ── */}
- <div className="flex flex-wrap items-center gap-2">
- <select
- value={filterResolved}
- onChange={(e) => setFilterResolved(e.target.value as 'false' | 'true' | 'all')}
- className="rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
- >
- <option value="false">Unresolved</option>
- <option value="true">Resolved</option>
- <option value="all">All</option>
- </select>
- <Button variant="outline" size="sm" disabled={!canBulkResolve} onClick={() => bulkResolveMutation.mutate(unresolvedAlertIds)}>
- Resolve all
- </Button>
- </div>
-
- {/* ── Stats ── */}
+ {/* ── Stats (admin overview only; header no longer duplicates badges) ── */}
  {alertStats && (
  <ServerTabCard>
  <SectionHeader icon={BarChart3} title="Overview" />
  <StatGrid
  columns={3}
  items={[
- { label: 'Active alerts', value: alertStats?.unresolved ?? 0 },
- { label: 'Total alerts', value: alertStats?.total ?? 0 },
+ { label: 'Active alerts', value: alertStats?.unresolved ?? unresolvedCount },
+ { label: 'Total alerts', value: alertStats?.total ?? alerts.length },
  { label: 'Critical', value: alertStats?.bySeverity?.critical ?? 0 },
  ]}
  />
@@ -488,9 +461,24 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
 
  {/* ── Alert Rules ── */}
  <ServerTabCard>
- <SectionHeader icon={Settings} title="Alert rules" description="Manage thresholds and notification targets." />
+ <div className="flex flex-wrap items-start justify-between gap-2">
+ <div className="min-w-0 flex-1">
+ <SectionHeader
+ icon={Settings}
+ title="Alert rules"
+ description={hasRules
+ ? 'Thresholds and notification targets that fire incidents.'
+ : 'Rules define when incidents are created and how you are notified.'}
+ />
+ </div>
+ {hasRules ? (
+ <Badge variant="secondary" className="mt-0.5 text-[10px]">
+ {alertRules.length} rule{alertRules.length === 1 ? '' : 's'}
+ </Badge>
+ ) : null}
+ </div>
  <div className="space-y-2">
- {alertRules.length > 0 ? (
+ {hasRules ? (
  alertRules.map((rule) => (
  <RuleRow
  key={rule.id}
@@ -505,14 +493,8 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  ))
  ) : (
  <TabEmptyState
- title="No alert rules"
- description="Create a rule to get notified when something breaks."
- action={
- <Button variant="outline" size="sm" className="mt-3 gap-1.5" onClick={() => setShowRuleModal(true)}>
- <Plus className="h-3.5 w-3.5" />
- Create rule
- </Button>
- }
+ title="No alert rules yet"
+ description="Use Create Rule above to set thresholds and notification targets. Incidents will appear in history once a rule fires."
  />
  )}
  </div>
@@ -520,7 +502,35 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
 
  {/* ── Alert History ── */}
  <ServerTabCard>
- <SectionHeader icon={Activity} title="Alert history" description="Latest triggered alerts and delivery status." />
+ <div className="mb-1 flex flex-wrap items-start justify-between gap-3">
+ <div className="min-w-0 flex-1">
+ <SectionHeader
+ icon={Activity}
+ title="Alert history"
+ description="Triggered incidents and delivery status."
+ />
+ </div>
+ <div className="flex flex-wrap items-center gap-2">
+ <select
+ value={filterResolved}
+ onChange={(e) => setFilterResolved(e.target.value as 'false' | 'true' | 'all')}
+ className="rounded-lg border border-border/40 bg-card px-3 py-2 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+ aria-label="Filter alerts by resolution status"
+ >
+ <option value="false">Unresolved</option>
+ <option value="true">Resolved</option>
+ <option value="all">All</option>
+ </select>
+ <Button
+ variant="outline"
+ size="sm"
+ disabled={!canBulkResolve}
+ onClick={() => bulkResolveMutation.mutate(unresolvedAlertIds)}
+ >
+ Resolve all{unresolvedCount > 0 ? ` (${unresolvedCount})` : ''}
+ </Button>
+ </div>
+ </div>
  <div className="space-y-2">
  {alertsLoading ? (
  <TabLoadingState rows={3} />
@@ -536,12 +546,21 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  />
  ))
  ) : (
- emptyState
+ <TabEmptyState
+ title={filterResolved === 'false' ? 'No unresolved alerts' : filterResolved === 'true' ? 'No resolved alerts' : 'No alerts yet'}
+ description={
+ !hasRules
+ ? 'History stays empty until a rule fires. Create a rule to start monitoring.'
+ : filterResolved === 'false'
+ ? 'Nothing needs attention right now. Switch the filter to see resolved history.'
+ : 'No alerts match this filter.'
+ }
+ />
  )}
  </div>
  </ServerTabCard>
 
- {/* ── Rule Create/Edit Modal ── */}
+  {/* ── Rule Create/Edit Modal ── */}
  {showRuleModal && (
  <ModalPortal>
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">

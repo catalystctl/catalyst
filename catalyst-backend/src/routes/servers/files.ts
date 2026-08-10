@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
+import { createAuditLog } from '../../middleware/audit.js';
 import { captureSystemError, ensureServerAccess, fileRateLimitMax, fileRateLimitWindowMs, getSecuritySettings, isArchiveName, path, validateAndNormalizePath } from './_helpers.js';
 
 export async function serverFilesRoutes(app: FastifyInstance) {
@@ -24,6 +25,48 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     return fileTunnel.queueRequest(nodeId, operation, serverUuid, filePath, data, uploadData);
   };
 
+  /**
+   * Fail fast when the node is offline so the client gets 503 instead of waiting
+   * the full file-tunnel timeout (60s) and surfacing a gateway 504.
+   * Uses DB isOnline (agent heartbeat) and live poller presence as a secondary signal.
+   */
+  const ensureNodeOnlineForFiles = async (
+    nodeId: string,
+    reply: FastifyReply,
+  ): Promise<boolean> => {
+    const node = await prisma.node.findUnique({
+      where: { id: nodeId },
+      select: { isOnline: true, name: true },
+    });
+    if (!node) {
+      reply.status(404).send({ error: "Node not found" });
+      return false;
+    }
+    if (!node.isOnline && !fileTunnel.isNodeConnected(nodeId)) {
+      reply.status(503).send({
+        error: "Node is offline",
+        code: "NODE_OFFLINE",
+        nodeName: node.name,
+      });
+      return false;
+    }
+    return true;
+  };
+
+
+  /** Map tunnel errors to HTTP responses shared by all file routes. */
+  const replyTunnelError = (reply: FastifyReply, error: any) => {
+    if (error?.message?.includes("timed out")) {
+      return reply.status(504).send({
+        error: "Agent file operation timed out",
+        code: "AGENT_TIMEOUT",
+      });
+    }
+    if (error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
+      return reply.status(503).send({ error: error.message, code: "FILE_TUNNEL_BUSY" });
+    }
+    return reply.status(400).send({ error: error?.message || "Invalid path" });
+  };
 
   /**
    * Align file routes with ensureServerAccess:
@@ -73,6 +116,10 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return;
       }
 
+      if (!(await ensureNodeOnlineForFiles(server.nodeId, reply))) {
+        return;
+      }
+
       const normalizedPath = validateAndNormalizePath(requestedPath, server.uuid, userId);
 
       try {
@@ -91,10 +138,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
           },
         });
       } catch (error: any) {
-        if (error?.message?.includes("timed out")) {
-          return reply.status(504).send({ error: "Agent file operation timed out" });
-        }
-        reply.status(400).send({ error: "Invalid path" });
+        return replyTunnelError(reply, error);
       }
     }
   );
@@ -120,6 +164,10 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return;
       }
 
+      if (!(await ensureNodeOnlineForFiles(server.nodeId, reply))) {
+        return;
+      }
+
       const normalizedPath = validateAndNormalizePath(requestedPath, server.uuid, userId);
 
       try {
@@ -137,10 +185,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
           reply.status(500).send({ error: "No file data received from agent" });
         }
       } catch (error: any) {
-        if (error?.message?.includes("timed out")) {
-          return reply.status(504).send({ error: "Agent file operation timed out" });
-        }
-        reply.status(400).send({ error: "Invalid path" });
+        return replyTunnelError(reply, error);
       }
     }
   );
@@ -159,6 +204,10 @@ export async function serverFilesRoutes(app: FastifyInstance) {
 
       const server = await requireFileAccess(serverId, userId, "file.write", reply);
       if (!server) {
+        return;
+      }
+
+      if (!(await ensureNodeOnlineForFiles(server.nodeId, reply))) {
         return;
       }
 
@@ -203,10 +252,11 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         notifyFileChange(server.id, server.status, 'upload', filePath);
         reply.send({ success: true });
       } catch (error: any) {
-        if (error?.message?.includes("timed out")) {
-          return reply.status(504).send({ error: "Agent file operation timed out" });
+        // Prefer shared tunnel mapping; keep route-specific fallback message.
+        if (error?.message?.includes("timed out") || error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
+          return replyTunnelError(reply, error);
         }
-        reply.status(400).send({ error: "Failed to upload file" });
+        return reply.status(400).send({ error: error?.message || "Failed to upload file" });
       }
     }
   );
@@ -236,6 +286,10 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return;
       }
 
+      if (!(await ensureNodeOnlineForFiles(server.nodeId, reply))) {
+        return;
+      }
+
       const normalizedPath = validateAndNormalizePath(requestedPath, server.uuid, userId);
       if (normalizedPath === "/") {
         return reply.status(400).send({ error: "Invalid path" });
@@ -252,10 +306,11 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         notifyFileChange(server.id, server.status, 'create', normalizedPath);
         reply.send({ success: true });
       } catch (error: any) {
-        if (error?.message?.includes("timed out")) {
-          return reply.status(504).send({ error: "Agent file operation timed out" });
+        // Prefer shared tunnel mapping; keep route-specific fallback message.
+        if (error?.message?.includes("timed out") || error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
+          return replyTunnelError(reply, error);
         }
-        reply.status(400).send({ error: "Failed to create item" });
+        return reply.status(400).send({ error: error?.message || "Failed to create item" });
       }
     }
   );
@@ -285,6 +340,10 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return;
       }
 
+      if (!(await ensureNodeOnlineForFiles(server.nodeId, reply))) {
+        return;
+      }
+
       try {
         const normalizedArchive = validateAndNormalizePath(archiveName, server.uuid, userId);
         const normalizedPaths = paths.map((p) => validateAndNormalizePath(p, server.uuid, userId));
@@ -298,13 +357,13 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         notifyFileChange(server.id, server.status, 'compress', normalizedArchive);
         reply.send({ success: true, data: { archivePath: normalizedArchive } });
       } catch (error: any) {
-        if (error?.message?.includes("timed out")) {
-          return reply.status(504).send({ error: "Agent file operation timed out" });
+        if (error?.message?.includes("timed out") || error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
+          return replyTunnelError(reply, error);
         }
         if (error?.message?.includes("Path traversal") || error?.message?.includes("Invalid path")) {
           return reply.status(400).send({ error: error.message });
         }
-        reply.status(500).send({ error: "Failed to compress files" });
+        reply.status(500).send({ error: error?.message || "Failed to compress files" });
       }
     }
   );
@@ -333,6 +392,10 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return;
       }
 
+      if (!(await ensureNodeOnlineForFiles(server.nodeId, reply))) {
+        return;
+      }
+
       try {
         const normalizedArchive = validateAndNormalizePath(archivePath, server.uuid, userId);
         const normalizedTarget = validateAndNormalizePath(targetPath, server.uuid, userId);
@@ -346,13 +409,13 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         notifyFileChange(server.id, server.status, 'decompress', normalizedArchive);
         reply.send({ success: true });
       } catch (error: any) {
-        if (error?.message?.includes("timed out")) {
-          return reply.status(504).send({ error: "Agent file operation timed out" });
+        if (error?.message?.includes("timed out") || error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
+          return replyTunnelError(reply, error);
         }
         if (error?.message?.includes("Path traversal") || error?.message?.includes("Invalid path")) {
           return reply.status(400).send({ error: error.message });
         }
-        reply.status(500).send({ error: "Failed to decompress archive" });
+        reply.status(500).send({ error: error?.message || "Failed to decompress archive" });
       }
     }
   );
@@ -378,6 +441,10 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return;
       }
 
+      if (!(await ensureNodeOnlineForFiles(server.nodeId, reply))) {
+        return;
+      }
+
       try {
         const normalizedArchive = validateAndNormalizePath(archivePath, server.uuid, userId);
 
@@ -398,8 +465,8 @@ export async function serverFilesRoutes(app: FastifyInstance) {
           metadata: { archivePath },
         }).catch(() => {});
         request.log.error({ err: error, archivePath }, "Failed to read archive contents");
-        if (error?.message?.includes("timed out")) {
-          return reply.status(504).send({ error: "Agent file operation timed out" });
+        if (error?.message?.includes("timed out") || error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
+          return replyTunnelError(reply, error);
         }
         reply.status(500).send({ error: error?.message || "Failed to read archive contents" });
       }
@@ -420,7 +487,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return;
       }
 
-      // Get logs from database
+      // Get logs from database (no agent/file-tunnel involved)
       const lineCount = lines ? parseInt(lines) : 100;
       const streamFilter = stream || undefined;
 
@@ -472,6 +539,10 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return;
       }
 
+      if (!(await ensureNodeOnlineForFiles(server.nodeId, reply))) {
+        return;
+      }
+
       let normalizedPath: string;
       try {
         normalizedPath = validateAndNormalizePath(filePath, server.uuid, userId);
@@ -491,21 +562,20 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         }
         notifyFileChange(server.id, server.status, 'write', normalizedPath);
       } catch (error: any) {
-        if (error?.message?.includes("timed out")) {
-          return reply.status(504).send({ error: "Agent file operation timed out" });
+        // Prefer shared tunnel mapping; keep route-specific fallback message.
+        if (error?.message?.includes("timed out") || error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
+          return replyTunnelError(reply, error);
         }
-        return reply.status(400).send({ error: "Failed to write file" });
+        return reply.status(400).send({ error: error?.message || "Failed to write file" });
       }
 
       // Log action
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "file.write",
-          resource: "server",
-          resourceId: serverId,
-          details: { path: normalizedPath },
-        },
+      await createAuditLog(userId, {
+        action: "file.write",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: { path: normalizedPath },
       });
 
       reply.send({ success: true, message: "File saved" });
@@ -530,6 +600,10 @@ export async function serverFilesRoutes(app: FastifyInstance) {
 
       const server = await requireFileAccess(serverId, userId, "file.write", reply);
       if (!server) {
+        return;
+      }
+
+      if (!(await ensureNodeOnlineForFiles(server.nodeId, reply))) {
         return;
       }
 
@@ -559,20 +633,19 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         }
         notifyFileChange(server.id, server.status, 'permissions', normalizedPath);
       } catch (error: any) {
-        if (error?.message?.includes("timed out")) {
-          return reply.status(504).send({ error: "Agent file operation timed out" });
+        // Prefer shared tunnel mapping; keep route-specific fallback message.
+        if (error?.message?.includes("timed out") || error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
+          return replyTunnelError(reply, error);
         }
-        return reply.status(400).send({ error: "Failed to update permissions" });
+        return reply.status(400).send({ error: error?.message || "Failed to update permissions" });
       }
 
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "file.chmod",
-          resource: "server",
-          resourceId: serverId,
-          details: { path: normalizedPath, mode: parsedMode },
-        },
+      await createAuditLog(userId, {
+        action: "file.chmod",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: { path: normalizedPath, mode: parsedMode },
       });
 
       reply.send({ success: true, message: "Permissions updated" });
@@ -597,6 +670,10 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return;
       }
 
+      if (!(await ensureNodeOnlineForFiles(server.nodeId, reply))) {
+        return;
+      }
+
       const normalizedPath = validateAndNormalizePath(requestedPath, server.uuid, userId);
       if (normalizedPath === "/") {
         return reply.status(400).send({ error: "Invalid path" });
@@ -609,21 +686,20 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         }
         notifyFileChange(server.id, server.status, 'delete', normalizedPath);
       } catch (error: any) {
-        if (error?.message?.includes("timed out")) {
-          return reply.status(504).send({ error: "Agent file operation timed out" });
+        // Prefer shared tunnel mapping; keep route-specific fallback message.
+        if (error?.message?.includes("timed out") || error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
+          return replyTunnelError(reply, error);
         }
-        return reply.status(400).send({ error: "Failed to delete selection" });
+        return reply.status(400).send({ error: error?.message || "Failed to delete selection" });
       }
 
       // Log action
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "file.delete",
-          resource: "server",
-          resourceId: serverId,
-          details: { path: normalizedPath },
-        },
+      await createAuditLog(userId, {
+        action: "file.delete",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: { path: normalizedPath },
       });
 
       reply.send({ success: true, message: "File deleted" });
@@ -651,6 +727,10 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return;
       }
 
+      if (!(await ensureNodeOnlineForFiles(server.nodeId, reply))) {
+        return;
+      }
+
       let normalizedFrom: string;
       let normalizedTo: string;
       try {
@@ -672,20 +752,19 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         }
         notifyFileChange(server.id, server.status, 'rename', undefined, normalizedFrom, normalizedTo);
       } catch (error: any) {
-        if (error?.message?.includes("timed out")) {
-          return reply.status(504).send({ error: "Agent file operation timed out" });
+        // Prefer shared tunnel mapping; keep route-specific fallback message.
+        if (error?.message?.includes("timed out") || error?.message?.includes("Too many pending") || error?.message?.includes("queue full")) {
+          return replyTunnelError(reply, error);
         }
-        return reply.status(400).send({ error: "Failed to rename" });
+        return reply.status(400).send({ error: error?.message || "Failed to rename" });
       }
 
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "file.rename",
-          resource: "server",
-          resourceId: serverId,
-          details: { from: normalizedFrom, to: normalizedTo },
-        },
+      await createAuditLog(userId, {
+        action: "file.rename",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: { from: normalizedFrom, to: normalizedTo },
       });
 
       reply.send({ success: true, message: "Renamed successfully" });

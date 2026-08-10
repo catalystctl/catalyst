@@ -43,23 +43,23 @@ export const defaultThemeColors: ThemeColors = {
   warningColor: '#f59e0b',
   dangerColor: '#ef4444',
   infoColor: '#3b82f6',
-  darkBackground: '#121217',
-  darkForeground: '#f5f5f7',
-  darkCard: '#18181f',
-  darkSurface1: '#1e1e28',
-  darkSurface2: '#2a2a36',
-  darkSurface3: '#40404e',
-  darkBorder: '#2e2e3a',
-  darkMuted: '#9999a6',
-  lightBackground: '#f6f5f4',
-  lightForeground: '#1a1a1f',
-  lightCard: '#faf9f8',
+  darkBackground: '#0c0c14',
+  darkForeground: '#f4f4f7',
+  darkCard: '#12121c',
+  darkSurface1: '#161622',
+  darkSurface2: '#222230',
+  darkSurface3: '#303042',
+  darkBorder: '#2a2a3a',
+  darkMuted: '#9494a3',
+  lightBackground: '#f5f4f2',
+  lightForeground: '#15141c',
+  lightCard: '#fbfaf9',
   lightSurface1: '#fcfbfa',
   lightSurface2: '#efeeec',
-  lightSurface3: '#dedddb',
-  lightBorder: '#dedddb',
-  lightMuted: '#767680',
-  borderRadius: '0.5rem',
+  lightSurface3: '#e2e0dc',
+  lightBorder: '#e1dfdb',
+  lightMuted: '#6f6f7a',
+  borderRadius: '0.625rem',
 };
 
 // ─── Pure color utilities ───
@@ -205,10 +205,13 @@ function applyThemeToDOM(
     root.style.setProperty('--input', hexToHSL(colors[borderKey]));
   }
   if (colors[s1Key]) root.style.setProperty('--surface-1', hexToHSL(colors[s1Key]));
-  if (colors[s2Key]) root.style.setProperty('--surface-2', hexToHSL(colors[s2Key]));
+  if (colors[s2Key]) {
+    root.style.setProperty('--surface-2', hexToHSL(colors[s2Key]));
+    // Keep muted as a surface tone so badges/inputs stay readable under customization.
+    root.style.setProperty('--muted', hexToHSL(colors[s2Key]));
+  }
   if (colors[s3Key]) root.style.setProperty('--surface-3', hexToHSL(colors[s3Key]));
   if (colors[mutedKey]) {
-    root.style.setProperty('--muted', hexToHSL(colors[mutedKey]));
     root.style.setProperty('--muted-foreground', hexToHSL(colors[mutedKey]));
   }
 

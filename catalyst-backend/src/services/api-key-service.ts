@@ -19,6 +19,50 @@ const DEFAULT_PREFIX = "catalyst";
 const KEY_LENGTH = 32; // bytes of randomness
 
 /**
+ * Resolve the HMAC secret used to hash panel/agent API keys.
+ *
+ * Preference order (mirrors catalyst-docker/docker-compose.yml):
+ *   1. `API_KEY_SECRET` — dedicated secret (recommended for rotation isolation)
+ *   2. `BETTER_AUTH_SECRET` — always required for auth, so one-liner / local
+ *      installs keep working without an extra env var
+ *
+ * Never falls back to a hardcoded constant (that was removed after the
+ * exhaustive security review). Missing both secrets is a hard error.
+ */
+let warnedAboutApiKeySecretFallback = false;
+
+export function resolveApiKeySecret(): string {
+  const dedicated = process.env.API_KEY_SECRET?.trim();
+  if (dedicated) {
+    return dedicated;
+  }
+
+  const authSecret = process.env.BETTER_AUTH_SECRET?.trim();
+  if (authSecret) {
+    // Cache onto process.env so subsequent lookups (and other modules) see a
+    // stable, non-empty API_KEY_SECRET for the rest of the process lifetime.
+    process.env.API_KEY_SECRET = authSecret;
+    if (!warnedAboutApiKeySecretFallback && process.env.NODE_ENV !== "test") {
+      warnedAboutApiKeySecretFallback = true;
+      console.warn(
+        "[api-key-service] API_KEY_SECRET is unset; falling back to BETTER_AUTH_SECRET. " +
+          "Set a dedicated API_KEY_SECRET (openssl rand -base64 32) for key-rotation isolation.",
+      );
+    }
+    return authSecret;
+  }
+
+  throw new Error(
+    "API_KEY_SECRET environment variable is required and must be a non-empty secret " +
+      "(or set BETTER_AUTH_SECRET as a fallback)",
+  );
+}
+
+function requireApiKeySecret(): string {
+  return resolveApiKeySecret();
+}
+
+/**
  * Hash an API key using HMAC-SHA256 with a per-key salt.
  *
  * The salt is deterministically derived from the first 16 characters of the key,
@@ -29,16 +73,6 @@ const KEY_LENGTH = 32; // bytes of randomness
  * migration is applied, update this function to accept the stored salt and
  * adjust the lookup strategy in verifyApiKey accordingly.
  */
-function requireApiKeySecret(): string {
-  const secret = process.env.API_KEY_SECRET?.trim();
-  if (!secret) {
-    throw new Error(
-      "API_KEY_SECRET environment variable is required and must be a non-empty secret",
-    );
-  }
-  return secret;
-}
-
 export function hashApiKey(key: string): string {
   const salt = key.slice(0, 16);
   const secret = requireApiKeySecret();

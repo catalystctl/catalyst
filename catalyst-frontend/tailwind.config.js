@@ -12,9 +12,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"DM Sans Variable"', 'system-ui', 'sans-serif'],
-        display: ['"Outfit Variable"', 'system-ui', 'sans-serif'],
-        mono: ['"JetBrains Mono Variable"', 'Fira Code', 'monospace'],
+        sans: ['"DM Sans Variable"', 'DM Sans', 'system-ui', 'sans-serif'],
+        display: ['"Outfit Variable"', 'Outfit', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono Variable"', 'JetBrains Mono', 'Fira Code', 'monospace'],
       },
       colors: {
         background: 'hsl(var(--background))',
@@ -28,17 +28,18 @@ export default {
         primary: {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',
-          50: 'hsl(174 80% 95%)',
-          100: 'hsl(174 72% 90%)',
-          200: 'hsl(174 72% 80%)',
-          300: 'hsl(174 72% 70%)',
-          400: 'hsl(174 80% 56%)',
-          500: 'hsl(174 80% 46%)',
-          600: 'hsl(174 80% 40%)',
-          700: 'hsl(174 80% 32%)',
-          800: 'hsl(174 80% 24%)',
-          900: 'hsl(174 80% 16%)',
-          950: 'hsl(174 80% 8%)',
+          // Theme-store rewrites these at runtime for customization
+          50: 'hsl(var(--primary-50))',
+          100: 'hsl(var(--primary-100))',
+          200: 'hsl(var(--primary-200))',
+          300: 'hsl(var(--primary-300))',
+          400: 'hsl(var(--primary-400))',
+          500: 'hsl(var(--primary-500, var(--primary)))',
+          600: 'hsl(var(--primary-600))',
+          700: 'hsl(var(--primary-700))',
+          800: 'hsl(var(--primary-800))',
+          900: 'hsl(var(--primary-900))',
+          950: 'hsl(var(--primary-950))',
         },
         'primary-foreground': 'hsl(var(--primary-foreground))',
         secondary: 'hsl(var(--secondary))',
@@ -94,17 +95,25 @@ export default {
         },
       },
       borderRadius: {
-        lg: '0.5rem',
-        md: '0.375rem',
-        sm: '0.25rem',
-        xl: '0.75rem',
-        '2xl': '1rem',
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)',
+        xl: 'calc(var(--radius) + 4px)',
+        '2xl': 'calc(var(--radius) + 8px)',
       },
       boxShadow: {
-        'surface-light': '0 1px 2px 0 rgb(0 0 0 / 0.05)',
-        'surface-dark': '0 1px 2px 0 rgb(0 0 0 / 0.3)',
-        'elevated': '0 4px 12px -2px rgb(0 0 0 / 0.1)',
-        'elevated-dark': '0 4px 12px -2px rgb(0 0 0 / 0.5)',
+        'surface-light': 'var(--shadow-surface)',
+        'surface-dark': 'var(--shadow-surface)',
+        elevated: 'var(--shadow-elevated)',
+        'elevated-dark': 'var(--shadow-elevated)',
+        panel: 'var(--shadow-panel)',
+      },
+      transitionTimingFunction: {
+        standard: 'var(--ease-standard)',
+      },
+      transitionDuration: {
+        fast: 'var(--duration-fast)',
+        normal: 'var(--duration-normal)',
       },
       keyframes: {
         'accordion-down': {
@@ -115,10 +124,15 @@ export default {
           from: { height: 'var(--radix-accordion-content-height)' },
           to: { height: '0' },
         },
+        'fade-up': {
+          from: { opacity: '0', transform: 'translateY(4px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+        'fade-up': 'fade-up 0.2s var(--ease-standard)',
       },
     },
   },

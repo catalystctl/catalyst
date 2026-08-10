@@ -93,11 +93,15 @@ components:
 
 # Design System: Catalyst
 
-## 1. Overview: The Workshop Bench
+## 1. Overview: Precision Console
 
-**Creative North Star: "The Workshop Bench"**
+**Creative North Star: "Precision Console"**
 
-Catalyst's visual system treats the interface as a clean work surface: warm zinc neutrals form the bench, a single warm aqua accent marks the active tool, and every element is within reach without clutter. The aesthetic is contemporary infrastructure tooling — precise, warm, and unapologetically functional. There is no decorative layer; every color, radius, and spacing choice serves wayfinding or interaction.
+Catalyst is a dense product UI for game-server operations. The visual system is a refined workshop bench: warm zinc neutrals form the work surface, a single primary accent (customizable) marks active tools, and tonal layering replaces heavy chrome. Layout stays stable and scannable. Motion stays functional. Density favors operators who live in the panel all day.
+
+**Taste dials (panel UI):** DESIGN_VARIANCE 3 · MOTION_INTENSITY 3 · VISUAL_DENSITY 7
+
+**Stack lock:** shadcn/ui + CSS variables. Theme Settings rewrites `--primary`, surfaces, radius, and semantics at runtime. Never hardcode brand hex in components; always use theme tokens (`bg-primary`, `bg-card`, `bg-surface-*`, `text-muted-foreground`, etc.).
 
 The system is built on tonal layering rather than shadow elevation. Depth is communicated through background color steps (`surface-0` through `surface-3`), not lifted cards. This keeps the interface grounded and avoids the visual noise of competing drop shadows. Dark mode inverts the warmth to a cool zinc — same systematic logic, different ambient temperature.
 

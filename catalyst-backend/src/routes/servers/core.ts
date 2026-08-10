@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
+import { createAuditLog } from '../../middleware/audit.js';
 import { allocateIpForServer, ALL_SERVER_PERMISSIONS, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, DatabaseProvisioningError, dropDatabase, ensureNotSuspended, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, OWNER_SERVER_PERMISSIONS, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, ServerState, shouldUseIpam, uuidv4, validateRequestBody, withConnectionInfo, WILDCARD_HOST } from './_helpers.js';
 
 /**
@@ -976,18 +977,16 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       });
 
       // Audit log
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: 'server.clone',
-          resource: 'server',
-          resourceId: server.id,
-          details: {
+      await createAuditLog(userId, {
+        action: 'server.clone',
+        resource: 'server',
+        resourceId: server.id,
+        request,
+        details: {
             sourceServerId: sourceServer.id,
             sourceServerName: sourceServer.name,
             clonedByName: resolvedName,
           },
-        },
       });
 
       // If copyFiles is requested, set status to "cloning" and kick off async file copy
@@ -1845,14 +1844,12 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         data: { allocatedDiskMb },
       });
 
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "server.storage.resize",
-          resource: "server",
-          resourceId: serverId,
-          details: { allocatedDiskMb, previousDiskMb: server.allocatedDiskMb },
-        },
+      await createAuditLog(userId, {
+        action: "server.storage.resize",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: { allocatedDiskMb, previousDiskMb: server.allocatedDiskMb },
       });
 
       const wsGateway = app.wsGateway;

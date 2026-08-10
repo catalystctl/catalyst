@@ -665,9 +665,9 @@ function NodeCreateModal(_props: Props) {
  Generating deployment script…
  </div>
  ) : deployInfo ? (
- <div className="mt-6 w-full space-y-3 text-left">
- <div className="rounded-lg border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
- <code className="whitespace-pre-wrap break-all">
+ <div className="mt-6 w-full min-w-0 space-y-3 text-left">
+ <div className="min-w-0 max-w-full overflow-x-auto rounded-lg border border-border/40 bg-surface-2 px-4 py-3 font-mono text-xs text-foreground">
+ <code className="block max-w-full break-all whitespace-pre-wrap">
 {`curl -s '${deployInfo.deployUrl}?apiKey=${encodeURIComponent(deployInfo.apiKey)}' | sudo bash -x`}
  </code>
  </div>

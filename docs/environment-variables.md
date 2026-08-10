@@ -149,6 +149,7 @@ The application crashes on startup if `DATABASE_URL` is not set. Use the Docker 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `BETTER_AUTH_SECRET` | 32-byte base64 | **Required** | Cryptographic secret for Better Auth sessions, JWT signing, and CSRF protection. Generate with: `openssl rand -base64 32`. **Rotate carefully** — rotating invalidates all existing sessions. |
+| `API_KEY_SECRET` | Base64 string | Falls back to `BETTER_AUTH_SECRET` | HMAC secret for hashing panel/agent API keys. If unset, falls back to `BETTER_AUTH_SECRET` (same as Docker Compose). Set a dedicated value for key-rotation isolation: `openssl rand -base64 32`. |
 | `BETTER_AUTH_URL` | Full URL | `http://localhost:3000` | Better Auth base URL. Defaults to `PUBLIC_URL` if set. Override only for split internal/external setups. |
 | `PASSKEY_RP_ID` | Hostname | `localhost` | Passkey (WebAuthn) relying party ID. Must match the hostname portion of `PUBLIC_URL`. For `https://panel.example.com`, set `PASSKEY_RP_ID=panel.example.com`. |
 
@@ -252,7 +253,6 @@ These variables are **reserved for future implementation** and currently have no
 |----------|------|---------|-------------|
 | `WEBHOOK_URLS` | Comma-separated URLs | — | Comma-separated list of webhook endpoints for global notifications. Example: `WEBHOOK_URLS=https://discord.example.com/hook,https://slack.example.com/hook`. |
 | `WEBHOOK_SECRET` | Hex string | Auto-generated | Secret for HMAC-signing all outbound webhook payloads. If not set, a random 32-byte hex key is generated at startup (changes on restart). For reliable signature verification, set this explicitly. Generate with: `openssl rand -hex 32`. |
-| `API_KEY_SECRET` | Base64 string | Auto-generated | Secret for signing API keys. If not set, a random 32-byte base64 key is generated at startup. Generate with: `openssl rand -base64 32`. |
 
 ::: tip Webhook Signing
 Webhooks include an `X-Webhook-Signature` header with an HMAC-SHA256 hash of the payload, signed using `WEBHOOK_SECRET`. Recipients should verify this signature to ensure authenticity.
@@ -606,7 +606,8 @@ openssl rand -base64 32
 
 | Variable | Risk if Compromised | Rotation Impact |
 |----------|---------------------|-----------------|
-| `BETTER_AUTH_SECRET` | Full session takeover, auth bypass | **Invalidates ALL user sessions.** Rotate during maintenance window. |
+| `BETTER_AUTH_SECRET` | Full session takeover, auth bypass | **Invalidates ALL user sessions.** Rotate during maintenance window. If `API_KEY_SECRET` is unset and was falling back to this value, also re-hash or re-issue API keys. |
+| `API_KEY_SECRET` | Forgeable panel/agent API keys | **Invalidates all existing API keys** (hashes no longer match). Re-issue keys after rotation. |
 | `DATABASE_URL` (contains password) | Full database access | Change password and update. |
 | `POSTGRES_PASSWORD` | Full database access | Change in Docker Compose. |
 | `BACKUP_CREDENTIALS_ENCRYPTION_KEY` | Unencrypted backup credential access | **Backup credentials become unreadable.** Must rotate with credential re-encryption. |
@@ -618,13 +619,14 @@ openssl rand -base64 32
 1. ✅ `NODE_ENV=production`
 2. ✅ `PUBLIC_URL` set to the real domain
 3. ✅ `BETTER_AUTH_SECRET` set (not the example value)
-4. ✅ `DATABASE_URL` pointing to a secured PostgreSQL instance
-5. ✅ `POSTGRES_PASSWORD` changed from default
-6. ✅ `BACKUP_CREDENTIALS_ENCRYPTION_KEY` generated (if using backups)
-7. ✅ `WEBHOOK_SECRET` set explicitly (not auto-generated)
-8. ✅ `PASSKEY_RP_ID` matching your domain
-9. ✅ `SUSPENSION_ENFORCED=true`
-10. ✅ `AUTO_UPDATE_ENABLED=true` with `AUTO_UPDATE_AUTO_TRIGGER=false` (review before updating)
+4. ✅ `API_KEY_SECRET` set (or intentionally relying on `BETTER_AUTH_SECRET` fallback)
+5. ✅ `DATABASE_URL` pointing to a secured PostgreSQL instance
+6. ✅ `POSTGRES_PASSWORD` changed from default
+7. ✅ `BACKUP_CREDENTIALS_ENCRYPTION_KEY` generated (if using backups)
+8. ✅ `WEBHOOK_SECRET` set explicitly (not auto-generated)
+9. ✅ `PASSKEY_RP_ID` matching your domain
+10. ✅ `SUSPENSION_ENFORCED=true`
+11. ✅ `AUTO_UPDATE_ENABLED=true` with `AUTO_UPDATE_AUTO_TRIGGER=false` (review before updating)
 
 ---
 

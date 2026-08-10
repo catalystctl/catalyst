@@ -6,7 +6,7 @@ import { auth } from '../auth';
 import { ServerState } from '../shared-types';
 import { ServerStateMachine } from '../services/state-machine';
 import { normalizeHostIp, releaseIpForServer, summarizePool } from '../utils/ipam';
-import { createAuditLog } from '../middleware/audit';
+import { createAuditLog, buildServerAuditDetails, enrichAuditDetails, resolveActorDetails } from '../middleware/audit';
 import { revokeSftpTokensForUser } from '../services/sftp-token-manager';
 import {
   hasNodeAccess,
@@ -440,6 +440,7 @@ export async function adminRoutes(app: FastifyInstance) {
       }
 
       await createAuditLog(user.userId, {
+        request,
         action: 'user_create',
         resource: 'user',
         resourceId: created.id,
@@ -696,6 +697,7 @@ export async function adminRoutes(app: FastifyInstance) {
       }
 
       await createAuditLog(user.userId, {
+        request,
         action: 'user_update',
         resource: 'user',
         resourceId: userId,
@@ -868,6 +870,7 @@ export async function adminRoutes(app: FastifyInstance) {
       await prisma.user.delete({ where: { id: userId } });
 
       await createAuditLog(user.userId, {
+        request,
         action: 'user_delete',
         resource: 'user',
         resourceId: userId,
@@ -1034,6 +1037,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
       const result = await prisma.passkey.deleteMany({ where: { userId } });
       await createAuditLog((request.user as any).userId, {
+        request,
         action: 'user_passkeys_wiped',
         resource: 'user',
         resourceId: userId,
@@ -1058,6 +1062,7 @@ export async function adminRoutes(app: FastifyInstance) {
       await prisma.twoFactor.deleteMany({ where: { userId } });
       await prisma.user.update({ where: { id: userId }, data: { twoFactorEnabled: false } });
       await createAuditLog((request.user as any).userId, {
+        request,
         action: 'user_2fa_wiped',
         resource: 'user',
         resourceId: userId,
@@ -1092,6 +1097,7 @@ export async function adminRoutes(app: FastifyInstance) {
         data: { twoFactorEnabled: !!enforce },
       });
       await createAuditLog((request.user as any).userId, {
+        request,
         action: enforce ? 'user_2fa_enforced' : 'user_2fa_unenforced',
         resource: 'user',
         resourceId: userId,
@@ -1128,6 +1134,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
       await prisma.account.delete({ where: { id: accountId } });
       await createAuditLog((request.user as any).userId, {
+        request,
         action: 'user_sso_unlinked',
         resource: 'user',
         resourceId: userId,
@@ -1160,6 +1167,7 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       await createAuditLog((request.user as any).userId, {
+        request,
         action: 'user_email_verified',
         resource: 'user',
         resourceId: userId,
@@ -1487,14 +1495,17 @@ export async function adminRoutes(app: FastifyInstance) {
                 where: { id: server.id },
                 data: { status: 'starting' },
               });
-              await prisma.auditLog.create({
-                data: {
-                  userId: user.userId,
-                  action: 'server.start',
-                  resource: 'server',
-                  resourceId: server.id,
-                  details: {},
-                },
+              await createAuditLog(user.userId, {
+                action: 'server.start',
+                resource: 'server',
+                resourceId: server.id,
+                request,
+                details: buildServerAuditDetails(server, {
+                  bulk: true,
+                  bulkAction: action,
+                  newStatus: 'starting',
+                  nodeOnline: server.node?.isOnline,
+                }),
               });
               return { serverId: server.id, status: 'success' };
             }
@@ -1522,14 +1533,17 @@ export async function adminRoutes(app: FastifyInstance) {
                 where: { id: server.id },
                 data: { status: 'stopping' },
               });
-              await prisma.auditLog.create({
-                data: {
-                  userId: user.userId,
-                  action: 'server.stop',
-                  resource: 'server',
-                  resourceId: server.id,
-                  details: {},
-                },
+              await createAuditLog(user.userId, {
+                action: 'server.stop',
+                resource: 'server',
+                resourceId: server.id,
+                request,
+                details: buildServerAuditDetails(server, {
+                  bulk: true,
+                  bulkAction: action,
+                  force: false,
+                  newStatus: 'stopping',
+                }),
               });
               return { serverId: server.id, status: 'success' };
             }
@@ -1560,14 +1574,17 @@ export async function adminRoutes(app: FastifyInstance) {
                 where: { id: server.id },
                 data: { status: 'stopping' },
               });
-              await prisma.auditLog.create({
-                data: {
-                  userId: user.userId,
-                  action: 'server.stop',
-                  resource: 'server',
-                  resourceId: server.id,
-                  details: { force: true },
-                },
+              await createAuditLog(user.userId, {
+                action: 'server.kill',
+                resource: 'server',
+                resourceId: server.id,
+                request,
+                details: buildServerAuditDetails(server, {
+                  bulk: true,
+                  bulkAction: action,
+                  force: true,
+                  newStatus: 'stopping',
+                }),
               });
               return { serverId: server.id, status: 'success' };
             }
@@ -1635,14 +1652,17 @@ export async function adminRoutes(app: FastifyInstance) {
               if (!success) {
                 return { serverId: server.id, status: 'failed', error: 'Failed to send command to agent' };
               }
-              await prisma.auditLog.create({
-                data: {
-                  userId: user.userId,
-                  action: 'server.restart',
-                  resource: 'server',
-                  resourceId: server.id,
-                  details: {},
-                },
+              await createAuditLog(user.userId, {
+                action: 'server.restart',
+                resource: 'server',
+                resourceId: server.id,
+                request,
+                details: buildServerAuditDetails(server, {
+                  bulk: true,
+                  bulkAction: action,
+                  wasRunning: server.status === ServerState.RUNNING,
+                  newStatus: 'starting',
+                }),
               });
               return { serverId: server.id, status: 'success' };
             }
@@ -1670,14 +1690,18 @@ export async function adminRoutes(app: FastifyInstance) {
                   suspensionReason: reason?.trim() || null,
                 },
               });
-              await prisma.auditLog.create({
-                data: {
-                  userId: user.userId,
-                  action: 'server.suspend',
-                  resource: 'server',
-                  resourceId: server.id,
-                  details: { reason: reason?.trim() || undefined },
-                },
+              await createAuditLog(user.userId, {
+                action: 'server.suspend',
+                resource: 'server',
+                resourceId: server.id,
+                request,
+                details: buildServerAuditDetails(server, {
+                  bulk: true,
+                  bulkAction: action,
+                  reason: reason?.trim() || undefined,
+                  newStatus: 'suspended',
+                  previousStatus: server.status,
+                }),
               });
               await prisma.serverLog.create({
                 data: {
@@ -1724,14 +1748,17 @@ export async function adminRoutes(app: FastifyInstance) {
                   suspensionReason: null,
                 },
               });
-              await prisma.auditLog.create({
-                data: {
-                  userId: user.userId,
-                  action: 'server.unsuspend',
-                  resource: 'server',
-                  resourceId: server.id,
-                  details: {},
-                },
+              await createAuditLog(user.userId, {
+                action: 'server.unsuspend',
+                resource: 'server',
+                resourceId: server.id,
+                request,
+                details: buildServerAuditDetails(server, {
+                  bulk: true,
+                  bulkAction: action,
+                  previousSuspensionReason: server.suspensionReason ?? undefined,
+                  newStatus: 'stopped',
+                }),
               });
               await prisma.serverLog.create({
                 data: {
@@ -1833,19 +1860,20 @@ export async function adminRoutes(app: FastifyInstance) {
                 await tx.server.delete({ where: { id: server.id } });
               });
 
-              await prisma.auditLog.create({
-                data: {
-                  userId: user.userId,
-                  action: 'server.delete',
-                  resource: 'server',
-                  resourceId: server.id,
-                  details: {
-                    ...(agentOffline ? { agentCleanup: false } : {}),
-                    ...(dbDropFailures.length > 0
-                      ? { databaseWarnings: dbDropFailures }
-                      : {}),
-                  },
-                },
+              await createAuditLog(user.userId, {
+                action: 'server.delete',
+                resource: 'server',
+                resourceId: server.id,
+                request,
+                details: buildServerAuditDetails(server, {
+                  bulk: true,
+                  bulkAction: action,
+                  serverName: server.name,
+                  ...(agentOffline ? { agentCleanup: false, warning: 'agent offline' } : { agentCleanup: true }),
+                  ...(dbDropFailures.length > 0
+                    ? { databaseWarnings: dbDropFailures }
+                    : {}),
+                }),
               });
 
               const wsGateway = (app as any).wsGateway;
@@ -1962,8 +1990,18 @@ export async function adminRoutes(app: FastifyInstance) {
         prisma.auditLog.count({ where }),
       ]);
 
+      // Expose details under both `details` and `metadata` so FE/clients never miss payload.
       reply.send({
-        logs,
+        logs: logs.map((log) => ({
+          ...log,
+          details: log.details ?? null,
+          metadata: log.details ?? null,
+          // Convenience top-level IP when present in details
+          ipAddress:
+            (log.details && typeof log.details === 'object' && !Array.isArray(log.details)
+              ? ((log.details as any).ip || (log.details as any)?._request?.ip)
+              : null) ?? null,
+        })),
         pagination: {
           page: Number(page),
           limit: Number(limit),
@@ -2276,6 +2314,7 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       await createAuditLog(user.userId, {
+        request,
         action: 'security.settings.update',
         resource: 'system',
         details: {
@@ -2804,6 +2843,7 @@ export async function adminRoutes(app: FastifyInstance) {
         });
 
         await createAuditLog(user.userId, {
+        request,
           action: 'database.host.create',
           resource: 'database_host',
           resourceId: created.id,
@@ -2895,6 +2935,7 @@ export async function adminRoutes(app: FastifyInstance) {
         });
 
         await createAuditLog(user.userId, {
+        request,
           action: 'database.host.update',
           resource: 'database_host',
           resourceId: updated.id,
@@ -2943,6 +2984,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const deleted = await prisma.databaseHost.delete({ where: { id: hostId } });
 
       await createAuditLog(user.userId, {
+        request,
         action: 'database.host.delete',
         resource: 'database_host',
         resourceId: hostId,
@@ -3202,6 +3244,7 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       await createAuditLog(user.userId, {
+        request,
         action: 'smtp_update',
         resource: 'system',
         details: {
@@ -3263,6 +3306,7 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       await createAuditLog(user.userId, {
+        request,
         action: 'mod_manager.settings.update',
         resource: 'system',
         details: {
@@ -3352,6 +3396,7 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       await createAuditLog(user.userId, {
+        request,
         action: 'dns_settings_update',
         resource: 'system',
         details: { enabled, provider, baseDomain },
@@ -3472,6 +3517,7 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       await createAuditLog(user.userId, {
+        request,
         action: 'theme_settings.update',
         resource: 'system',
         details: updateData,
@@ -3564,6 +3610,7 @@ export async function adminRoutes(app: FastifyInstance) {
       });
 
       await createAuditLog(user.userId, {
+        request,
         action: 'auth_lockout.delete',
         resource: 'auth_lockout',
         resourceId: lockoutId,
@@ -3688,6 +3735,7 @@ export async function adminRoutes(app: FastifyInstance) {
       }
 
       await createAuditLog(request.user.userId, {
+        request,
         action: 'oidc_config.update',
         resource: 'oidc_config',
         details: { providers: Object.keys(meta.oidcProviders) },

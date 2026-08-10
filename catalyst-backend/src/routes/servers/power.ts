@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
+import { createAuditLog, buildServerAuditDetails } from "../../middleware/audit.js";
 import { ServerState, ServerStateMachine, checkIsAdmin, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, injectPterodactylCompatibilityVars, normalizeHostIp, parseStoredPortBindings, patchTemplateForRuntime, resolveTemplateImage, syncPortEnvironmentVariables } from './_helpers.js';
 
 /** Default timeouts for power command acks from the agent. */
@@ -735,6 +736,23 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         data: { status: "starting" },
       });
 
+      await createAuditLog(userId, {
+        action: "server.start",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: buildServerAuditDetails(server, {
+          powerResult: powerResult.mode,
+          requestId: "requestId" in powerResult ? powerResult.requestId : undefined,
+          allocatedMemoryMb: server.allocatedMemoryMb,
+          allocatedCpuCores: server.allocatedCpuCores,
+          allocatedDiskMb: server.allocatedDiskMb,
+          networkMode: server.networkMode,
+          primaryPort: server.primaryPort,
+          newStatus: "starting",
+        }),
+      });
+
       if (powerResult.mode === "acked") {
         return reply.send({
           success: true,
@@ -814,6 +832,17 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           where: { id: serverId },
           data: { status: "stopped" },
         });
+        await createAuditLog(userId, {
+          action: "server.stop",
+          resource: "server",
+          resourceId: serverId,
+          request,
+          details: buildServerAuditDetails(server, {
+            method: "mark_stopped",
+            reason: "already_crashed",
+            newStatus: "stopped",
+          }),
+        });
         return reply.send({ success: true, message: "Server marked as stopped" });
       }
 
@@ -857,6 +886,19 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           error: powerResult.error.message || "Failed to send command to agent",
         });
       }
+
+      await createAuditLog(userId, {
+        action: "server.stop",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: buildServerAuditDetails(server, {
+          powerResult: powerResult.mode,
+          requestId: "requestId" in powerResult ? powerResult.requestId : undefined,
+          force: false,
+          newStatus: "stopping",
+        }),
+      });
 
       if (powerResult.mode === "acked") {
         return reply.send({
@@ -935,6 +977,18 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           where: { id: serverId },
           data: { status: "stopped" },
         });
+        await createAuditLog(userId, {
+          action: "server.kill",
+          resource: "server",
+          resourceId: serverId,
+          request,
+          details: buildServerAuditDetails(server, {
+            method: "mark_stopped",
+            reason: "already_crashed",
+            force: true,
+            newStatus: "stopped",
+          }),
+        });
         return reply.send({ success: true, message: "Server marked as stopped" });
       }
 
@@ -973,6 +1027,19 @@ export async function serverPowerRoutes(app: FastifyInstance) {
           error: powerResult.error.message || "Failed to send command to agent",
         });
       }
+
+      await createAuditLog(userId, {
+        action: "server.kill",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: buildServerAuditDetails(server, {
+          powerResult: powerResult.mode,
+          requestId: "requestId" in powerResult ? powerResult.requestId : undefined,
+          force: true,
+          newStatus: "stopping",
+        }),
+      });
 
       if (powerResult.mode === "acked") {
         return reply.send({
@@ -1131,6 +1198,22 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         data: { status: "starting" },
       });
 
+      await createAuditLog(userId, {
+        action: "server.restart",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: buildServerAuditDetails(server, {
+          powerResult: powerResult.mode,
+          requestId: "requestId" in powerResult ? powerResult.requestId : undefined,
+          wasRunning: currentState === ServerState.RUNNING,
+          newStatus: "starting",
+          allocatedMemoryMb: server.allocatedMemoryMb,
+          allocatedCpuCores: server.allocatedCpuCores,
+          primaryPort: server.primaryPort,
+        }),
+      });
+
       if (powerResult.mode === "acked") {
         return reply.send({
           success: true,
@@ -1228,14 +1311,18 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         }
       }
 
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "server.suspend",
-          resource: "server",
-          resourceId: serverId,
-          details: { reason: updated.suspensionReason ?? undefined, stopServer: shouldStop, tasksDisabled: disabledTasks.count },
-        },
+      await createAuditLog(userId, {
+        action: "server.suspend",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: buildServerAuditDetails(server, {
+          reason: updated.suspensionReason ?? undefined,
+          stopServer: shouldStop,
+          tasksDisabled: disabledTasks.count,
+          newStatus: "suspended",
+          previousStatus: server.status,
+        }),
       });
 
       await prisma.serverLog.create({
@@ -1325,14 +1412,16 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         }
       }
 
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "server.unsuspend",
-          resource: "server",
-          resourceId: serverId,
-          details: { tasksReEnabled: reEnabledTasks.count },
-        },
+      await createAuditLog(userId, {
+        action: "server.unsuspend",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: buildServerAuditDetails(server, {
+          tasksReEnabled: reEnabledTasks.count,
+          previousSuspensionReason: server.suspensionReason ?? undefined,
+          newStatus: "stopped",
+        }),
       });
 
       await prisma.serverLog.create({

@@ -183,6 +183,7 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       await createAuditLog(userId, {
+        request,
         action: 'role.create',
         resource: 'role',
         resourceId: role.id,
@@ -288,6 +289,7 @@ export async function roleRoutes(app: FastifyInstance) {
       }
 
       await createAuditLog(userId, {
+        request,
         action: 'role.update',
         resource: 'role',
         resourceId: roleId,
@@ -347,6 +349,7 @@ export async function roleRoutes(app: FastifyInstance) {
       });
 
       await createAuditLog(userId, {
+        request,
         action: 'role.delete',
         resource: 'role',
         resourceId: roleId,
@@ -423,6 +426,7 @@ export async function roleRoutes(app: FastifyInstance) {
       flushAllPermissionCaches();
 
       await createAuditLog(userId, {
+        request,
         action: 'role.permission.add',
         resource: 'role',
         resourceId: roleId,
@@ -497,6 +501,7 @@ export async function roleRoutes(app: FastifyInstance) {
       flushAllPermissionCaches();
 
       await createAuditLog(userId, {
+        request,
         action: 'role.permission.remove',
         resource: 'role',
         resourceId: roleId,
@@ -591,6 +596,7 @@ export async function roleRoutes(app: FastifyInstance) {
       invalidateNodeAccessCache(userId);
 
       await createAuditLog(currentUserId, {
+        request,
         action: 'user.role.assign',
         resource: 'user',
         resourceId: userId,
@@ -660,6 +666,7 @@ export async function roleRoutes(app: FastifyInstance) {
       invalidateNodeAccessCache(userId);
 
       await createAuditLog(currentUserId, {
+        request,
         action: 'user.role.remove',
         resource: 'user',
         resourceId: userId,

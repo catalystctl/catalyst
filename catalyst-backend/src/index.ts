@@ -44,6 +44,7 @@ import {
 	verifyApiKey as verifyApiKeyService,
 	createApiKey as createApiKeyService,
 	deleteApiKey as deleteApiKeyService,
+	resolveApiKeySecret,
 } from "./services/api-key-service";
 import { apiKeyRoutes } from "./routes/api-keys";
 import { AlertService } from "./services/alert-service";
@@ -80,6 +81,12 @@ import { fileTunnelRoutes } from "./routes/file-tunnel";
 import { migrationRoutes } from "./routes/migration";
 import { updateRoutes } from "./routes/update";
 import { verifyAgentApiKey } from "./lib/agent-auth";
+
+// Resolve API_KEY_SECRET early (falls back to BETTER_AUTH_SECRET). Fail fast if
+// neither is set so deployment-token / API-key routes never 500 mid-request.
+if (process.env.NODE_ENV !== "test") {
+	resolveApiKeySecret();
+}
 
 const logger = pino(
 	process.env.NODE_ENV === "production"

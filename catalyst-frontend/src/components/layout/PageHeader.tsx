@@ -1,29 +1,27 @@
-import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 interface PageHeaderProps {
- title: string;
- description?: string;
- actions?: React.ReactNode;
- className?: string;
+  title: string;
+  description?: string;
+  actions?: React.ReactNode;
+  className?: string;
 }
 
 export function PageHeader({ title, description, actions, className }: PageHeaderProps) {
- return (
- <Card className={cn('border-border', className)}>
- <CardContent className="px-6 py-4">
- <div className="flex flex-wrap items-center justify-between gap-4">
- <div className="space-y-1">
- <h1 className="font-display text-2xl font-bold text-foreground">{title}</h1>
- {description && (
- <p className="text-sm text-muted-foreground">{description}</p>
- )}
- </div>
- {actions && <div className="flex items-center gap-2">{actions}</div>}
- </div>
- </CardContent>
- </Card>
- );
+  return (
+    <div
+      className={cn(
+        'flex flex-wrap items-end justify-between gap-4 border-b border-border/70 pb-4',
+        className,
+      )}
+    >
+      <div className="min-w-0 space-y-1.5">
+        <h1 className="page-title">{title}</h1>
+        {description && <p className="page-subtitle">{description}</p>}
+      </div>
+      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+    </div>
+  );
 }
 
 export default PageHeader;

@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
+import { createAuditLog } from '../../middleware/audit.js';
 import { DEFAULT_PERMISSION_PRESETS, INVITE_EXPIRY_DAYS, auth, canAccessServer, captureSystemError, nanoid, renderInviteEmail, revokeSftpTokensForUser, sendEmail } from './_helpers.js';
 import { withRegistrationBypass } from '../../lib/registration-gate.js';
 
@@ -168,14 +169,12 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         app.log.warn(emailErr, "Failed to send invite email");
       }
 
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "server.invite",
-          resource: "server",
-          resourceId: serverId,
-          details: { email: normalizedEmail, permissions: sanitizedPermissions },
-        },
+      await createAuditLog(userId, {
+        action: "server.invite",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: { email: normalizedEmail, permissions: sanitizedPermissions },
       });
 
       const wsGateway = app.wsGateway;
@@ -236,14 +235,12 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         data: { cancelledAt: new Date() },
       });
 
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "server.invite.cancel",
-          resource: "server",
-          resourceId: serverId,
-          details: { email: invite.email },
-        },
+      await createAuditLog(userId, {
+        action: "server.invite.cancel",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: { email: invite.email },
       });
 
       const wsGateway = app.wsGateway;
@@ -318,13 +315,14 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       });
     });
 
-    await prisma.auditLog.create({
-      data: {
-        userId: args.userId,
-        action: "server.invite.accept",
-        resource: "server",
-        resourceId: invite.serverId,
-        details: { email: invite.email },
+    await createAuditLog(args.userId, {
+      action: "server.invite.accept",
+      resource: "server",
+      resourceId: invite.serverId,
+      details: {
+        email: invite.email,
+        permissions: invite.permissions,
+        inviteId: invite.id,
       },
     });
 
@@ -569,14 +567,12 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         update: { permissions: sanitizedPermissions },
       });
 
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "server.access.update",
-          resource: "server",
-          resourceId: serverId,
-          details: { targetUserId, permissions: sanitizedPermissions },
-        },
+      await createAuditLog(userId, {
+        action: "server.access.update",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: { targetUserId, permissions: sanitizedPermissions },
       });
 
       reply.send({ success: true, data: access });
@@ -630,14 +626,12 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       // Instantly revoke SFTP tokens for the removed user on this server
       revokeSftpTokensForUser(targetUserId, serverId);
 
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "server.access.remove",
-          resource: "server",
-          resourceId: serverId,
-          details: { targetUserId },
-        },
+      await createAuditLog(userId, {
+        action: "server.access.remove",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: { targetUserId },
       });
 
       reply.send({ success: true });

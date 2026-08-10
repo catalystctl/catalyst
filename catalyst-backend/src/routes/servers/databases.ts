@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
+import { createAuditLog } from '../../middleware/audit.js';
 import { DatabaseProvisioningError, dropDatabase, ensureDatabasePermission, generateSafeIdentifier, isValidDatabaseIdentifier, provisionDatabase, rotateDatabasePassword, toDatabaseIdentifier } from './_helpers.js';
 
 export async function serverDatabasesRoutes(app: FastifyInstance) {
@@ -138,17 +139,15 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
           },
         });
 
-        await prisma.auditLog.create({
-          data: {
-            userId,
-            action: "database.create",
-            resource: "server",
-            resourceId: serverId,
-            details: {
+        await createAuditLog(userId, {
+          action: "database.create",
+          resource: "server",
+          resourceId: serverId,
+          request,
+          details: {
               hostId,
               name: database.name,
             },
-          },
         });
 
         // Broadcast database_created event
@@ -236,17 +235,15 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
         data: { password: nextPassword },
       });
 
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "database.rotate",
-          resource: "server",
-          resourceId: serverId,
-          details: {
+      await createAuditLog(userId, {
+        action: "database.rotate",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: {
             databaseId: database.id,
             name: database.name,
           },
-        },
       });
 
       // Broadcast database_password_rotated event
@@ -328,14 +325,12 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
 
       await prisma.serverDatabase.delete({ where: { id: database.id } });
 
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "database.delete",
-          resource: "server",
-          resourceId: serverId,
-          details: { databaseId },
-        },
+      await createAuditLog(userId, {
+        action: "database.delete",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: { databaseId },
       });
 
       // Broadcast database_deleted event

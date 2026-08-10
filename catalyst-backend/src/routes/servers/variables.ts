@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
+import { createAuditLog } from '../../middleware/audit.js';
 import { canAccessServer, ensureNotSuspended, validateVariableRule } from './_helpers.js';
 
 export async function serverVariablesRoutes(app: FastifyInstance) {
@@ -152,14 +153,12 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
         data: { environment },
       });
 
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "server.variables_updated",
-          resource: "server",
-          resourceId: serverId,
-          details: { updatedKeys: Object.keys(body) },
-        },
+      await createAuditLog(userId, {
+        action: "server.variables_updated",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: { updatedKeys: Object.keys(body), updatedCount: Object.keys(body).length },
       });
 
       const wsGateway = app.wsGateway;

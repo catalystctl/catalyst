@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
+import { createAuditLog, buildServerAuditDetails } from "../../middleware/audit.js";
 import { allocateIpForServer, canAccessServer, checkIsAdmin, decryptBackupConfig, encryptBackupConfig, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, OWNER_SERVER_PERMISSIONS, path, redactBackupConfig, releaseIpForServer, ServerState, shouldUseIpam } from './_helpers.js';
 
 export async function serverAdminopsRoutes(app: FastifyInstance) {
@@ -663,18 +664,18 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         return s;
       });
 
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "server.transfer_ownership",
-          resource: "server",
-          resourceId: serverId,
-          details: {
-            previousOwnerId: server.ownerId,
-            newOwnerId,
-            serverName: server.name,
-          },
-        },
+      await createAuditLog(userId, {
+        action: "server.transfer_ownership",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: buildServerAuditDetails(server, {
+          previousOwnerId: server.ownerId,
+          newOwnerId,
+          newOwnerUsername: targetUser.username ?? undefined,
+          newOwnerEmail: targetUser.email ?? undefined,
+          serverName: server.name,
+        }),
       });
 
       await prisma.serverLog.create({
@@ -752,14 +753,16 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         data: { status: "archived" },
       });
 
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "server.archive",
-          resource: "server",
-          resourceId: serverId,
-          details: {},
-        },
+      await createAuditLog(userId, {
+        action: "server.archive",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: buildServerAuditDetails(server, {
+          previousStatus: server.status,
+          newStatus: "archived",
+          stoppedBeforeArchive: server.status === "running" || server.status === "starting",
+        }),
       });
 
       await prisma.serverLog.create({
@@ -824,14 +827,16 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
         data: { status: "stopped" },
       });
 
-      await prisma.auditLog.create({
-        data: {
-          userId,
-          action: "server.restore",
-          resource: "server",
-          resourceId: serverId,
-          details: {},
-        },
+      await createAuditLog(userId, {
+        action: "server.restore",
+        resource: "server",
+        resourceId: serverId,
+        request,
+        details: buildServerAuditDetails(server, {
+          previousStatus: server.status,
+          newStatus: "stopped",
+          restoredFrom: "archived",
+        }),
       });
 
       await prisma.serverLog.create({
