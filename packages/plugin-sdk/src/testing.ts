@@ -1,10 +1,10 @@
-import type { Logger } from 'pino';
 import type {
   PluginManifest,
   PluginCollectionAPI,
   PluginWebSocketHandler,
   PluginTaskHandler,
   PluginEventHandler,
+  LoggerLike,
 } from './types.js';
 
 export interface MockContext {
@@ -16,7 +16,7 @@ export interface MockContext {
     plugin: any;
     collection: (name: string) => PluginCollectionAPI;
   };
-  logger: Logger;
+  logger: LoggerLike;
   wsGateway: any;
   registerRoute: (options: any) => void;
   registerMiddleware: (handler: any, options?: any) => void;
@@ -33,7 +33,7 @@ export interface MockContext {
   collection: (name: string) => PluginCollectionAPI;
 }
 
-export function createMockLogger(): Logger {
+export function createMockLogger(): LoggerLike {
   return {
     info: () => {},
     warn: () => {},
@@ -41,7 +41,7 @@ export function createMockLogger(): Logger {
     debug: () => {},
     trace: () => {},
     child: () => createMockLogger(),
-  } as any;
+  };
 }
 
 export function createMockCollection(): PluginCollectionAPI {
