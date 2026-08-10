@@ -4,6 +4,8 @@
 
 **An experimental game server management platform in early testing.** Expect breaking changes and instability while core workflows are being validated.
 
+> **Official support channels:** [GitHub Issues](https://github.com/catalystctl/catalyst/issues) and [Discord](https://discord.gg/mybxhmru3y). These are the only official lines of communication for support, bug reports, and project discussion.
+
 ---
 
 ## What is Catalyst?
@@ -34,6 +36,8 @@ Open your `PUBLIC_URL` in a browser. The **first user to register becomes the ad
 That's it. No build steps, no dependency installation, no manual secret generation (the install script does that for you).
 
 👉 Want more detail? See the [Quick Start Guide](docs/QUICKSTART.md) for the full walkthrough with screenshots, or the [Detailed Installation Guide](docs/INSTALLATION_DETAILED.md) for every option, every edge case, and production hardening.
+
+Stuck or have questions? Join the community on [Discord](https://discord.gg/mybxhmru3y) or open a [GitHub Issue](https://github.com/catalystctl/catalyst/issues).
 
 ---
 
@@ -288,9 +292,24 @@ The full documentation catalog is in the table above.
 
 ---
 
+## Support & Community
+
+**Official support channels are GitHub Issues and Discord only.** Please use these for bug reports, feature requests, installation help, and project discussion — they are our official lines of communication.
+
+| Channel | Use for |
+|---------|---------|
+| **[GitHub Issues](https://github.com/catalystctl/catalyst/issues)** | Bug reports, feature requests, tracked work |
+| **[Discord](https://discord.gg/mybxhmru3y)** | Real-time help, community discussion, announcements |
+
+Invite link: [https://discord.gg/mybxhmru3y](https://discord.gg/mybxhmru3y)
+
+---
+
 ## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for repository guidelines, code conventions, and commit standards.
+
+Questions about contributing? Hop into [Discord](https://discord.gg/mybxhmru3y) or open a [GitHub Issue](https://github.com/catalystctl/catalyst/issues).
 
 ---
 

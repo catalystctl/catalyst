@@ -737,9 +737,10 @@ We welcome documentation improvements! Areas that need help:
 
 ### Community
 
-- **GitHub Issues:** Report bugs, request features
-- **Discord:** Real-time chat with community
-- **Email:** support@catalyst.dev (enterprise support)
+**Official support channels are GitHub Issues and Discord only.**
+
+- **[GitHub Issues](https://github.com/catalystctl/catalyst/issues):** Report bugs, request features
+- **[Discord](https://discord.gg/mybxhmru3y):** Real-time chat with the community
 
 ### Good First Issues
 
