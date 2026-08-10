@@ -9,6 +9,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
   PROTOC_VERSION: "25.1"
   PROTOC_ARCH: "linux-x86_64"
 
@@ -337,7 +338,9 @@ jobs:
     name: Agent Release Build (${{ matrix.target }})
     needs: version
     if: needs.version.outputs.bump != 'none'
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    # 8 vCPU: release + cross-compile is the slowest part of shipping a release.
+    # Minutes cost 4× 2vCPU, but wall-clock usually drops more than that on Rust.
+    runs-on: blacksmith-8vcpu-ubuntu-2404
 
     container:
       image: rust:1.93-bookworm
@@ -405,24 +408,15 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Cache cargo registry + git deps
-        uses: actions/cache@v5
+      # Prefer Swatinem/rust-cache over raw actions/cache for target/: it only
+      # persists dependency artifacts (not the final binary), shares better
+      # across runs, and sets CARGO_INCREMENTAL=0 automatically.
+      - name: Cache Rust (release ${{ matrix.target }})
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: agent-cargo-deps-${{ hashFiles('catalyst-agent/Cargo.lock') }}
-          restore-keys: agent-cargo-deps-
-
-      - name: Cache cargo build (release ${{ matrix.target }})
-        uses: actions/cache@v5
-        with:
-          path: catalyst-agent/target/
-          key: agent-release-${{ matrix.target }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-${{ hashFiles('catalyst-agent/src/**') }}
-          restore-keys: |
-            agent-release-${{ matrix.target }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-
-            agent-release-${{ matrix.target }}-
+          workspaces: catalyst-agent -> target
+          shared-key: agent-release-${{ matrix.target }}
+          cache-on-failure: true
 
       - name: Build release
         run: |

@@ -15,9 +15,9 @@
 # ║    build        — pnpm build + cargo build verification                       ║
 # ║                                                                              ║
 # ║  Publish (push to main/develop):                                           ║
-# ║    detect-changes — Determine which Docker images need rebuilding           ║
-# ║    publish-backend  — Build & push backend Docker image to GHCR              ║
-# ║    publish-frontend — Build & push frontend Docker image to GHCR             ║
+# ║    detect-changes — path filter (parallel with build)                       ║
+# ║    publish-backend  — GHCR image (after lint+test+detect, || build)         ║
+# ║    publish-frontend — GHCR image (after lint+test+detect, || build)         ║
 # ║                                                                              ║
 # ║  Release (in auto-version.yml, not here):                                    ║
 # ║    agent-release — Build release agent binaries, upload to GitHub Release    ║
@@ -37,10 +37,18 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # Disable incremental compilation — CI caches dep artifacts better without it,
+  # and incremental objects bloat/slow the target cache (Swatinem/rust-cache pattern).
+  CARGO_INCREMENTAL: "0"
   PROTOC_VERSION: "25.1"
   PROTOC_ARCH: "linux-x86_64"
   REGISTRY: ghcr.io
   IMAGE_OWNER: ${{ github.repository_owner }}
+
+# Cancel superseded runs on the same ref (new pushes shouldn't wait on old ones).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 # ────────────────────────────────────────────────────────────────────────────────
 # CI GATES — Lint + Test (run on every push and PR)
@@ -53,6 +61,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   lint:
     name: Lint & Static Analysis
+    # 2 vCPU is enough for eslint + clippy; keep free-tier-friendly.
     runs-on: blacksmith-2vcpu-ubuntu-2404
 
     steps:
@@ -109,7 +118,9 @@ jobs:
             node_modules
             catalyst-backend/node_modules
             catalyst-frontend/node_modules
-          key: pnpm-deps-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'package.json') }}
+            packages/plugin-sdk/node_modules
+            packages/plugin-sdk-cli/node_modules
+          key: pnpm-deps-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
           restore-keys: pnpm-deps-${{ runner.os }}-
 
       - name: Cache Prisma Client
@@ -126,24 +137,14 @@ jobs:
         working-directory: catalyst-backend
         run: npx prisma generate
 
-      - name: Cache cargo registry + git deps
-        uses: actions/cache@v5
+      # Smart cargo cache (registry + dependency target artifacts).
+      # Replaces separate registry/target caches that rarely hit on the build job.
+      - name: Cache Rust (lint)
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: agent-cargo-deps-${{ hashFiles('catalyst-agent/Cargo.lock') }}
-          restore-keys: agent-cargo-deps-
-
-      - name: Cache cargo build (check)
-        uses: actions/cache@v5
-        with:
-          path: catalyst-agent/target/
-          key: agent-check-${{ runner.os }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-${{ hashFiles('catalyst-agent/src/**') }}
-          restore-keys: |
-            agent-check-${{ runner.os }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-
-            agent-check-${{ runner.os }}-
+          workspaces: catalyst-agent -> target
+          shared-key: agent-ci
+          cache-on-failure: true
 
       - name: Install cargo dependencies
         run: cargo fetch --manifest-path catalyst-agent/Cargo.toml
@@ -251,7 +252,9 @@ jobs:
             node_modules
             catalyst-backend/node_modules
             catalyst-frontend/node_modules
-          key: pnpm-deps-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'package.json') }}
+            packages/plugin-sdk/node_modules
+            packages/plugin-sdk-cli/node_modules
+          key: pnpm-deps-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
           restore-keys: pnpm-deps-${{ runner.os }}-
 
       - name: Cache Prisma Client
@@ -272,24 +275,12 @@ jobs:
         working-directory: catalyst-backend
         run: pnpm run db:push
 
-      - name: Cache cargo registry + git deps
-        uses: actions/cache@v5
+      - name: Cache Rust (test)
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: agent-cargo-deps-${{ hashFiles('catalyst-agent/Cargo.lock') }}
-          restore-keys: agent-cargo-deps-
-
-      - name: Cache cargo build (test)
-        uses: actions/cache@v5
-        with:
-          path: catalyst-agent/target/
-          key: agent-test-${{ runner.os }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-${{ hashFiles('catalyst-agent/src/**') }}
-          restore-keys: |
-            agent-test-${{ runner.os }}-${{ hashFiles('catalyst-agent/Cargo.lock') }}-
-            agent-test-${{ runner.os }}-
+          workspaces: catalyst-agent -> target
+          shared-key: agent-ci
+          cache-on-failure: true
 
       - name: Install cargo dependencies
         run: cargo fetch --manifest-path catalyst-agent/Cargo.toml
@@ -312,7 +303,8 @@ jobs:
   build:
     name: Build Verification
     needs: [lint, test]
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    # 4 vCPU: agent debug cargo build is the bottleneck (~75s on 2 vCPU).
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.event_name == 'push'
 
     steps:
@@ -365,7 +357,9 @@ jobs:
             node_modules
             catalyst-backend/node_modules
             catalyst-frontend/node_modules
-          key: pnpm-deps-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'package.json') }}
+            packages/plugin-sdk/node_modules
+            packages/plugin-sdk-cli/node_modules
+          key: pnpm-deps-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
           restore-keys: pnpm-deps-${{ runner.os }}-
 
       - name: Cache Prisma Client
@@ -382,15 +376,15 @@ jobs:
         working-directory: catalyst-backend
         run: npx prisma generate
 
-      - name: Cache cargo registry + git deps
-        uses: actions/cache@v5
+      # Previously this job only cached the cargo registry — not target/ — so
+      # "Build agent (debug)" recompiled everything (~75s). Share the same
+      # rust-cache key as lint/test so dependency objects are reused.
+      - name: Cache Rust (build)
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: agent-cargo-deps-${{ hashFiles('catalyst-agent/Cargo.lock') }}
-          restore-keys: agent-cargo-deps-
+          workspaces: catalyst-agent -> target
+          shared-key: agent-ci
+          cache-on-failure: true
 
       - name: Install cargo dependencies
         run: cargo fetch --manifest-path catalyst-agent/Cargo.toml
@@ -427,6 +421,8 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   detect-changes:
     name: Detect Changes
+    # Only needs lint+test green; run in parallel with Build Verification so
+    # Docker publish can start as soon as both finish (not after build alone).
     needs: [lint, test]
     runs-on: blacksmith-2vcpu-ubuntu-2404
     if: github.event_name == 'push'
@@ -457,8 +453,11 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   publish-backend:
     name: Publish Backend Image
-    needs: [build, detect-changes]
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    # Docker build is independent of the TypeScript/cargo verify job — only wait
+    # for gates + path detect. Overlaps with Build Verification wall-clock.
+    needs: [lint, test, detect-changes]
+    # 4 vCPU helps native module compile (ssh2/cpu-features) inside the image.
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: >-
       github.event_name == 'push' &&
       needs.detect-changes.outputs.backend == 'true'
@@ -504,8 +503,8 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   publish-frontend:
     name: Publish Frontend Image
-    needs: [build, detect-changes]
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    needs: [lint, test, detect-changes]
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: >-
       github.event_name == 'push' &&
       needs.detect-changes.outputs.frontend == 'true'
