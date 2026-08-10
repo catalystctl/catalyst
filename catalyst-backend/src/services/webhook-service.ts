@@ -31,7 +31,60 @@ export class WebhookService {
   constructor(prisma: PrismaClient, logger: pino.Logger) {
     this.prisma = prisma;
     this.logger = logger.child({ component: "WebhookService" });
-    this.secret = process.env.WEBHOOK_SECRET || crypto.randomBytes(32).toString("hex");
+    // Prefer env; otherwise load/persist a stable secret from SystemSetting so
+    // multi-worker / restart does not rotate signatures every boot.
+    this.secret = process.env.WEBHOOK_SECRET || "";
+    if (!this.secret) {
+      // Sync bootstrap path is not possible with async Prisma; resolve lazily on first sign.
+      this.secret = "";
+    }
+  }
+
+  /**
+   * Ensure HMAC secret is available. Env WEBHOOK_SECRET wins; otherwise
+   * SystemSetting(id="webhooks").smtpPassword holds a persisted random secret.
+   */
+  private async ensureSecret(): Promise<string> {
+    if (process.env.WEBHOOK_SECRET) {
+      this.secret = process.env.WEBHOOK_SECRET;
+      return this.secret;
+    }
+    if (this.secret) return this.secret;
+
+    try {
+      const existing = await this.prisma.systemSetting.findUnique({ where: { id: "webhooks" } });
+      if (existing?.smtpPassword && existing.smtpPassword.length > 0) {
+        this.secret = existing.smtpPassword;
+        return this.secret;
+      }
+      const generated = crypto.randomBytes(32).toString("hex");
+      await this.prisma.systemSetting.upsert({
+        where: { id: "webhooks" },
+        create: {
+          id: "webhooks",
+          smtpPassword: generated,
+          // Preserve any existing URL payload if present later via getWebhookUrls
+          smtpHost: existing?.smtpHost ?? null,
+        },
+        update: {
+          smtpPassword: generated,
+        },
+      });
+      this.secret = generated;
+      this.logger.info("Persisted new webhook HMAC secret to SystemSetting(webhooks)");
+      return this.secret;
+    } catch (err) {
+      // Last resort — process-local only (logged so operators notice).
+      this.secret = crypto.randomBytes(32).toString("hex");
+      this.logger.warn(err, "Failed to persist webhook secret; using process-local secret until restart");
+      captureSystemError({
+        level: "warn",
+        component: "WebhookService",
+        message: "Failed to persist webhook secret",
+        stack: err instanceof Error ? err.stack : undefined,
+      }).catch(() => {});
+      return this.secret;
+    }
   }
 
   /**
@@ -100,6 +153,7 @@ export class WebhookService {
     const urls = await this.getWebhookUrls();
     if (urls.length === 0) return;
 
+    await this.ensureSecret();
     const payload = JSON.stringify(event);
     const signature = this.sign(payload);
 

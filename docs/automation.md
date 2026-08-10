@@ -1416,7 +1416,7 @@ curl -sSL "http://your-catalyst-panel:3000/api/deploy/TOKEN?apiKey=KEY" | bash
 
 The deploy script automatically:
 - Installs containerd if not present
-- Downloads the pre-built agent binary (x86_64 or aarch64)
+- Downloads the pre-built agent binary for the host arch (`x86_64` or `aarch64` musl static builds from GitHub Releases)
 - Generates `config.toml` with the correct node ID and API key
 - Sets up systemd service for the agent
 

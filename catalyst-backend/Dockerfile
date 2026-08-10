@@ -23,9 +23,6 @@ RUN printf '%s\n' '{"name":"catalyst","private":true,"devDependencies":{"@commit
 COPY catalyst-backend/package.json ./catalyst-backend/
 COPY catalyst-backend/tsconfig.json ./catalyst-backend/
 
-# Copy shared types (resolved by tsconfig paths)
-COPY catalyst-shared/types.ts ./catalyst-shared/types.ts
-
 # Install all dependencies (including devDeps needed for prisma generate and tsc)
 RUN pnpm install --frozen-lockfile
 
@@ -95,10 +92,6 @@ COPY --from=builder /app/catalyst-backend/dist ./dist
 COPY --from=builder /app/catalyst-backend/prisma ./prisma
 COPY --from=builder /app/catalyst-backend/package.json ./package.json
 COPY --from=builder /app/catalyst-backend/tsconfig.json ./tsconfig.json
-
-# Copy shared types (resolved by tsconfig paths at runtime for source maps)
-RUN mkdir -p ../catalyst-shared
-COPY --from=builder /app/catalyst-shared/types.ts ../catalyst-shared/types.ts
 
 # Copy deploy script
 COPY scripts/deploy-agent.sh /scripts/deploy-agent.sh

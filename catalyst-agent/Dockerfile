@@ -11,9 +11,10 @@ RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && r
 # Copy source
 COPY src ./src
 
-# Build
-# ponytail: Dockerfile builds gnu target but updater expects musl asset name
-# (catalyst-agent-x86_64-linux-musl) — align release-pipeline asset naming in a follow-up
+# Build (glibc / gnu target — matches this Debian/Ubuntu runtime image).
+# Bare-metal auto-update downloads the musl asset
+# (catalyst-agent-x86_64-linux-musl) from GitHub Releases; that path is separate
+# from this Docker image. Do not rename the container binary to the musl asset.
 RUN touch src/main.rs && cargo build --release
 
 # Runtime stage

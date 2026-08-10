@@ -93,14 +93,19 @@ export function metricsStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
         }
       }
 
-      // SSE headers — prevent proxy buffering
+      // SSE headers — prevent proxy buffering. CORS uses the same origin whitelist
+      // as console SSE (never reflect arbitrary Origin with credentials).
+      const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
+      const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').map((o) => o.trim()).filter(Boolean);
+      if (origin && allowedOrigins.includes(origin)) {
+        reply.raw.setHeader('Access-Control-Allow-Origin', origin);
+        reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no',
-        'Access-Control-Allow-Origin': request.headers.origin || '*',
-        'Access-Control-Allow-Credentials': 'true',
       });
 
       reply.raw.write(formatSseComment('connected'));

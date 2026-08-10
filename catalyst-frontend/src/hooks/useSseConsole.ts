@@ -96,25 +96,38 @@ export function useSseConsole(serverId?: string, options: ConsoleOptions = {}) {
     refetchOnReconnect: false,
   });
 
-  // ── Load initial logs into state ──
-  // Keyed by serverId + initialLines so remounting with the same params
-  // still loads cached data into the fresh state.
+  // ── Load / refresh logs into state ──
+  // Initial load is keyed by serverId + initialLines.
+  // While SSE is disconnected, poll refetches must also replace the buffer
+  // so the UI does not freeze on the last streamed snapshot.
   useEffect(() => {
     if (!serverId || !Array.isArray(logsQuery.data)) return;
 
     const key = `${serverId}:${initialLines}`;
-    if (loadedKeyRef.current === key) return;
+    const isInitialLoad = loadedKeyRef.current !== key;
+    const isPollRefresh =
+      !isInitialLoad &&
+      streamStatus !== 'connected' &&
+      streamStatus !== 'connecting';
 
-    const initialEntries: ConsoleEntry[] = logsQuery.data.map((log: ServerLogEntry) => ({
+    if (!isInitialLoad && !isPollRefresh) return;
+
+    // Reset id counter on initial load only; poll refresh reassigns ids.
+    if (isInitialLoad) {
+      nextId.current = 0;
+      batchBuffer.current = [];
+    }
+
+    const nextEntries: ConsoleEntry[] = logsQuery.data.map((log: ServerLogEntry) => ({
       id: String(nextId.current++),
       stream: log.stream,
       data: normalizeData(log.data),
       timestamp: log.timestamp,
     }));
 
-    setEntries(initialEntries.slice(-maxEntries));
+    setEntries(nextEntries.slice(-maxEntries));
     loadedKeyRef.current = key;
-  }, [logsQuery.data, serverId, initialLines, maxEntries]);
+  }, [logsQuery.data, serverId, initialLines, maxEntries, streamStatus]);
 
   // ── SSE Stream ──
   useEffect(() => {

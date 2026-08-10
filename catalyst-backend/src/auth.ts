@@ -265,6 +265,49 @@ export function initAuth() {
       before: async (ctx: any) => {
         const path = ctx.path ?? '';
 
+        // ── Before email sign-up: enforce registrationEnabled ─────────
+        // Blocks both the better-auth catch-all (/api/auth/sign-up/email)
+        // and any direct better-auth sign-up path. Custom /register also
+        // checks this independently before calling signUpEmail.
+        if (path === '/sign-up/email') {
+          try {
+            // Always allow the very first account (panel setup) even if registration
+            // was pre-disabled via env — otherwise first-run setup cannot complete.
+            // Also allow admin-created users / invite accept via withRegistrationBypass.
+            const { isRegistrationBypassed } = await import('./lib/registration-gate.js');
+            if (isRegistrationBypassed()) {
+              // fall through
+            } else {
+              const userCount = await prisma.user.count();
+              if (userCount === 0) {
+                // fall through — first-run setup
+              } else {
+                const settings = await (await import('./services/mailer')).getSecuritySettings();
+                if (!settings.registrationEnabled) {
+                  return {
+                    response: {
+                      error: 'Registration is disabled. Contact an administrator for an invite.',
+                      code: 'REGISTRATION_DISABLED',
+                    },
+                    status: 403,
+                    headers: null,
+                  } as any;
+                }
+              }
+            }
+          } catch {
+            // Fail closed if we cannot load security settings / count users.
+            return {
+              response: {
+                error: 'Registration is temporarily unavailable',
+                code: 'REGISTRATION_UNAVAILABLE',
+              },
+              status: 503,
+              headers: null,
+            } as any;
+          }
+        }
+
         // ── Before email sign-in: enforce email verification setting ──
         // Better Auth caches `requireEmailVerification` at startup, so
         // runtime changes to the admin setting are not reflected.  We
@@ -285,7 +328,34 @@ export function initAuth() {
                 }
               }
             }
-          } catch { /* non-critical — don't block login if check fails */ }
+          } catch (err) {
+            // Fail closed when verification is required: settings/DB errors must not
+            // allow unverified (or potentially unverified) users to sign in.
+            try {
+              const settings = await (await import('./services/mailer')).getSecuritySettings();
+              if (settings.requireEmailVerification) {
+                return {
+                  response: {
+                    error: 'Unable to verify email status. Please try again later.',
+                    code: 'EMAIL_VERIFICATION_CHECK_FAILED',
+                  },
+                  status: 503,
+                  headers: null,
+                } as any;
+              }
+            } catch {
+              // Even the settings re-read failed — default is requireEmailVerification=true
+              // in DEFAULT_SECURITY_SETTINGS, so deny login.
+              return {
+                response: {
+                  error: 'Unable to verify email status. Please try again later.',
+                  code: 'EMAIL_VERIFICATION_CHECK_FAILED',
+                },
+                status: 503,
+                headers: null,
+              } as any;
+            }
+          }
         }
 
         // ── Before passkey verification: check account lockout ────────

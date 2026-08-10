@@ -536,7 +536,23 @@ impl ContainerdRuntime {
             ..Default::default()
         };
         let req = with_namespace!(req, &self.namespace);
-        tasks.create(req).await.map_err(grpc_err)?;
+        let create_resp = tasks.create(req).await.map_err(grpc_err)?;
+        let pid = create_resp.into_inner().pid;
+
+        // Re-attach CNI / port-forward / firewall to the new task netns when
+        // prior network state is available (critical for stop→start paths that
+        // do not go through create_container).
+        if let Err(e) = self
+            .reattach_network_on_start(container_id, pid, container_id)
+            .await
+        {
+            warn!(
+                "Network reattach failed for {} (pid {}): {}",
+                container_id, pid, e
+            );
+            // Do not fail start solely on network reattach — create path is the
+            // primary networking path. Log loudly so operators can investigate.
+        }
 
         let req = StartRequest {
             container_id: container_id.to_string(),

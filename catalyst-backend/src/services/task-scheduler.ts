@@ -158,6 +158,44 @@ export class TaskScheduler {
 
     this.runningTasks.add(task.id);
     const startedAt = new Date();
+
+    // Cross-path lock: node-cron and the minute check loop can both fire the same
+    // task in the same second. Claim via lastStatus so only one execution proceeds.
+    // Stale 'running' locks older than 15 minutes are reclaimable after a crash.
+    const staleCutoff = new Date(Date.now() - 15 * 60 * 1000);
+    try {
+      const claimed = await this.prisma.scheduledTask.updateMany({
+        where: {
+          id: task.id,
+          enabled: true,
+          OR: [
+            { lastStatus: null },
+            { lastStatus: { not: 'running' } },
+            { lastStatus: 'running', updatedAt: { lt: staleCutoff } },
+          ],
+        },
+        data: { lastStatus: 'running' },
+      });
+      if (claimed.count === 0) {
+        this.logger.warn(
+          `Task ${task.id} could not be claimed (already running or disabled), skipping`,
+        );
+        this.runningTasks.delete(task.id);
+        return;
+      }
+    } catch (error) {
+      this.logger.error(error, `Failed to claim task lock for ${task.id}`);
+      captureSystemError({
+        level: 'error',
+        component: 'TaskScheduler',
+        message: `Failed to claim task lock for ${task.id}`,
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { taskId: task.id },
+      }).catch(() => {});
+      this.runningTasks.delete(task.id);
+      return;
+    }
+
     this.logger.info(`Executing task: ${task.name} (${task.id})`);
 
     // Notify clients that task is running

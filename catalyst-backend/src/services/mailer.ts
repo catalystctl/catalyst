@@ -38,6 +38,8 @@ export type SecuritySettings = {
   maxBufferMb: number;
   // Email verification
   requireEmailVerification: boolean;
+  // Open self-registration for /register and better-auth sign-up
+  registrationEnabled: boolean;
   // File tunnel security settings
   fileTunnelRateLimitMax: number;
   fileTunnelRateLimitWindowMs: number;
@@ -105,6 +107,8 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   maxBufferMb: 50,
   // Email verification
   requireEmailVerification: true,
+  // Open registration defaults OFF. First setup keeps it false; admins may enable.
+  registrationEnabled: false,
   // File tunnel security settings
   fileTunnelRateLimitMax: 100,
   fileTunnelRateLimitWindowMs: RATE_LIMIT_TIME_WINDOWS_MS.minute,
@@ -207,6 +211,14 @@ export const getSecuritySettings = async (): Promise<SecuritySettings> => {
     auditRetentionDays: settings.auditRetentionDays ?? DEFAULT_SECURITY_SETTINGS.auditRetentionDays,
     maxBufferMb: settings.maxBufferMb ?? DEFAULT_SECURITY_SETTINGS.maxBufferMb,
     requireEmailVerification: settings.requireEmailVerification ?? DEFAULT_SECURITY_SETTINGS.requireEmailVerification,
+    // Prefer explicit env override; otherwise DB (default false — invite/admin only).
+    registrationEnabled: (() => {
+      const env = process.env.REGISTRATION_ENABLED;
+      if (env !== undefined && env !== '') {
+        return !['0', 'false', 'no', 'off'].includes(env.toLowerCase());
+      }
+      return settings.registrationEnabled ?? DEFAULT_SECURITY_SETTINGS.registrationEnabled;
+    })(),
     fileTunnelRateLimitMax: settings.fileTunnelRateLimitMax ?? DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitMax,
     fileTunnelRateLimitWindowMs: resolveWindow(settings.fileTunnelRateLimitWindowMs, DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitWindowMs),
     fileTunnelMaxUploadMb: settings.fileTunnelMaxUploadMb ?? DEFAULT_SECURITY_SETTINGS.fileTunnelMaxUploadMb,
@@ -280,6 +292,7 @@ export const upsertSecuritySettings = async (payload: SecuritySettings) => {
       auditRetentionDays: payload.auditRetentionDays,
       maxBufferMb: payload.maxBufferMb,
       requireEmailVerification: payload.requireEmailVerification,
+      registrationEnabled: payload.registrationEnabled,
       fileTunnelRateLimitMax: payload.fileTunnelRateLimitMax,
       fileTunnelRateLimitWindowMs,
       fileTunnelMaxUploadMb: payload.fileTunnelMaxUploadMb,
@@ -304,6 +317,7 @@ export const upsertSecuritySettings = async (payload: SecuritySettings) => {
       auditRetentionDays: payload.auditRetentionDays,
       maxBufferMb: payload.maxBufferMb,
       requireEmailVerification: payload.requireEmailVerification,
+      registrationEnabled: payload.registrationEnabled,
       fileTunnelRateLimitMax: payload.fileTunnelRateLimitMax,
       fileTunnelRateLimitWindowMs,
       fileTunnelMaxUploadMb: payload.fileTunnelMaxUploadMb,

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
-import { ModManagerTarget, buildProviderHeaders, ensureModManagerEnabled, ensurePluginManagerEnabled, ensureServerAccess, extractGameVersion, fileRateLimitMax, fileRateLimitWindowMs, getModManagerSettings, getProviderTargets, loadPluginProviderConfig, loadProviderConfig, normalizeRequestPath, normalizeTargetValue, path, resolveCurseforgeClassId, resolveCurseforgeGameId, resolveCurseforgeLoaderType, resolveModManagerProvider, resolveModrinthGameVersion, resolvePaperDownload, resolveSpigotDownload, resolveTemplatePath, sanitizeFilename } from './_helpers.js';
+import { ModManagerTarget, buildProviderHeaders, ensureModManagerEnabled, ensurePluginManagerEnabled, ensureServerAccess, extractGameVersion, fileRateLimitMax, fileRateLimitWindowMs, getModManagerSettings, getProviderTargets, loadPluginProviderConfig, loadProviderConfig, normalizeTargetValue, path, resolveCurseforgeClassId, validateAndNormalizePath, resolveCurseforgeGameId, resolveCurseforgeLoaderType, resolveModManagerProvider, resolveModrinthGameVersion, resolvePaperDownload, resolveSpigotDownload, resolveTemplatePath, sanitizeFilename } from './_helpers.js';
 
 export async function serverModpluginsRoutes(app: FastifyInstance) {
   const fileTunnel = (app as any).fileTunnel as import("../../services/file-tunnel").FileTunnelService;
@@ -378,7 +378,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       }
 
       const normalizedBase = resolveTemplatePath(modManager.paths?.[target], target);
-      const normalizedFile = normalizeRequestPath(path.posix.join(normalizedBase, filename));
+      const normalizedFile = validateAndNormalizePath(path.posix.join(normalizedBase, filename), server.uuid);
 
       try {
         const result = await tunnelFileOp(server.nodeId, "install-url", server.uuid, normalizedFile, { url: downloadUrl });
@@ -824,7 +824,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       }
 
       const normalizedBase = resolveTemplatePath(pluginManager.paths?.plugins, "plugins");
-      const normalizedFile = normalizeRequestPath(path.posix.join(normalizedBase, filename));
+      const normalizedFile = validateAndNormalizePath(path.posix.join(normalizedBase, filename), server.uuid);
 
       try {
         const result = await tunnelFileOp(server.nodeId, "install-url", server.uuid, normalizedFile, { url: downloadUrl });
@@ -1013,7 +1013,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const targetValue = normalizeTargetValue(target) ?? "mods";
       const normalizedBase = resolveTemplatePath(modManager.paths?.[targetValue], targetValue);
       const safeName = sanitizeFilename(filename);
-      const normalizedFile = normalizeRequestPath(path.posix.join(normalizedBase, safeName));
+      const normalizedFile = validateAndNormalizePath(path.posix.join(normalizedBase, safeName), server.uuid);
 
       try {
         const result = await tunnelFileOp(server.nodeId, "delete", server.uuid, normalizedFile);
@@ -1079,7 +1079,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
 
       const normalizedBase = resolveTemplatePath(pluginManager.paths?.plugins, "plugins");
       const safeName = sanitizeFilename(filename);
-      const normalizedFile = normalizeRequestPath(path.posix.join(normalizedBase, safeName));
+      const normalizedFile = validateAndNormalizePath(path.posix.join(normalizedBase, safeName), server.uuid);
 
       try {
         const result = await tunnelFileOp(server.nodeId, "delete", server.uuid, normalizedFile);
@@ -1435,14 +1435,14 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
 
           // Delete old file via tunnel
           try {
-            const oldFile = normalizeRequestPath(path.posix.join(normalizedBase, record.filename));
+            const oldFile = validateAndNormalizePath(path.posix.join(normalizedBase, record.filename), server.uuid);
             await tunnelFileOp(server.nodeId, "delete", server.uuid, oldFile);
           } catch {
             // Best-effort cleanup before writing the new file.
           }
 
           // Download new file via tunnel
-          const normalizedFile = normalizeRequestPath(path.posix.join(normalizedBase, newFilename));
+          const normalizedFile = validateAndNormalizePath(path.posix.join(normalizedBase, newFilename), server.uuid);
           const installResult = await tunnelFileOp(server.nodeId, "install-url", server.uuid, normalizedFile, { url: downloadUrl });
           if (!installResult.success) throw new Error(installResult.error || "Download failed");
 
@@ -1565,14 +1565,14 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
 
           // Delete old file via tunnel
           try {
-            const oldFile = normalizeRequestPath(path.posix.join(normalizedBase, record.filename));
+            const oldFile = validateAndNormalizePath(path.posix.join(normalizedBase, record.filename), server.uuid);
             await tunnelFileOp(server.nodeId, "delete", server.uuid, oldFile);
           } catch {
             // Best-effort cleanup before writing the new file.
           }
 
           // Download new file via tunnel
-          const normalizedFile = normalizeRequestPath(path.posix.join(normalizedBase, newFilename));
+          const normalizedFile = validateAndNormalizePath(path.posix.join(normalizedBase, newFilename), server.uuid);
           const installResult = await tunnelFileOp(server.nodeId, "install-url", server.uuid, normalizedFile, { url: downloadUrl });
           if (!installResult.success) throw new Error(installResult.error || "Download failed");
 

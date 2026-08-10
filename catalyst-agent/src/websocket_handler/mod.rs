@@ -20,6 +20,7 @@ use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{debug, error, info, warn};
 
+use crate::atomic_write;
 use crate::backup_crypto;
 use crate::config::CniNetworkConfig;
 use crate::error_reporter::{ErrorLevel, DEDUP_WINDOW_SECS};
@@ -262,6 +263,91 @@ pub(crate) struct RestartTracker {
     timestamps: VecDeque<Instant>,
 }
 
+/// In-memory agent self-update progress, reported via `agent_update_status`.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct AgentUpdateState {
+    pub status: String,
+    pub progress: u8,
+    pub target_version: Option<String>,
+    pub error: Option<String>,
+    pub started_at: Option<String>,
+}
+
+/// Redact secret values from agent config TOML before returning over the wire.
+/// Falls back to line-based redaction if the content is not valid TOML.
+pub(crate) fn redact_agent_config_secrets(content: &str) -> String {
+    const SECRET_KEYS: &[&str] = &[
+        "api_key",
+        "apikey",
+        "token",
+        "secret",
+        "password",
+        "passwd",
+        "private_key",
+        "privatekey",
+        "auth_token",
+        "webhook_secret",
+    ];
+
+    fn is_secret_key(key: &str) -> bool {
+        let lower = key.to_ascii_lowercase();
+        SECRET_KEYS
+            .iter()
+            .any(|s| lower == *s || lower.ends_with(&format!("_{s}")) || lower.contains(s))
+    }
+
+    fn redact_value(value: &mut toml::Value) {
+        match value {
+            toml::Value::Table(table) => {
+                let keys: Vec<String> = table.keys().cloned().collect();
+                for key in keys {
+                    if is_secret_key(&key) {
+                        table.insert(key, toml::Value::String("[REDACTED]".to_string()));
+                    } else if let Some(child) = table.get_mut(&key) {
+                        redact_value(child);
+                    }
+                }
+            }
+            toml::Value::Array(arr) => {
+                for item in arr.iter_mut() {
+                    redact_value(item);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    match content.parse::<toml::Value>() {
+        Ok(mut value) => {
+            redact_value(&mut value);
+            // Prefer original formatting style via toml::to_string
+            toml::to_string_pretty(&value).unwrap_or_else(|_| content.to_string())
+        }
+        Err(_) => {
+            // Line-based fallback for malformed files
+            content
+                .lines()
+                .map(|line| {
+                    let trimmed = line.trim_start();
+                    if let Some((key, _rest)) = trimmed.split_once('=') {
+                        let key_clean = key.trim().trim_matches('"');
+                        if is_secret_key(key_clean) {
+                            let indent_len = line.len() - trimmed.len();
+                            return format!(
+                                "{}{} = \"[REDACTED]\"",
+                                &line[..indent_len],
+                                key.trim()
+                            );
+                        }
+                    }
+                    line.to_string()
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
+    }
+}
+
 impl RestartTracker {
     fn record_and_check(&mut self, max: u32, window: Duration) -> bool {
         let now = Instant::now();
@@ -329,7 +415,11 @@ pub struct WebSocketHandler {
     pub(crate) network_manager: NetworkManager,
     pub(crate) backend_connected: Arc<RwLock<bool>>,
     pub(crate) write: Arc<RwLock<Option<Arc<tokio::sync::Mutex<WsWrite>>>>>,
-    pub(crate) active_log_streams: Arc<RwLock<HashSet<String>>>,
+    /// Active console log tail tasks keyed by "{serverId}:{containerId}".
+    /// Storing JoinHandles (not just keys) lets stop_log_streams_for_server abort them.
+    /// Uses a std Mutex so spawn_log_stream can register/abort synchronously.
+    pub(crate) active_log_streams:
+        Arc<std::sync::Mutex<HashMap<String, tokio::task::JoinHandle<()>>>>,
     pub(crate) monitor_tasks: Arc<RwLock<HashMap<String, tokio::task::JoinHandle<()>>>>,
     pub(crate) active_uploads: Arc<RwLock<HashMap<String, BackupUploadSession>>>,
     /// Auto-restart config per server_id, stored when start_server_with_details is called.
@@ -337,8 +427,10 @@ pub struct WebSocketHandler {
     /// Tracks restart attempt timestamps per server_id.
     pub(crate) restart_trackers: Arc<RwLock<HashMap<String, RestartTracker>>>,
     /// Stores the original start_server message JSON per server_id for auto-restart.
-    /// Sensitive fields (installScript, environment values) are stripped before storage.
+    /// `installScript` is stripped; environment values are kept so restart works.
     pub(crate) start_server_messages: Arc<RwLock<HashMap<String, Value>>>,
+    /// Tracks in-flight agent self-update progress for `agent_update_status`.
+    pub(crate) agent_update_state: Arc<RwLock<Option<AgentUpdateState>>>,
     /// Maps server_id -> (container_id, primary_port) for health checking.
     pub(crate) server_ports: Arc<RwLock<HashMap<String, (String, u16)>>>,
     /// Tracks per-server health state to avoid duplicate unhealthy/healthy emissions.
@@ -374,11 +466,12 @@ pub struct WebSocketHandler {
 //   8. auto_restart_configs
 //   9. restart_trackers
 //  10. start_server_messages
-//  11. server_ports
-//  12. server_health_state
-//  13. retry_after_seconds
-//  14. backend_connected (rarely contended, almost always read)
-//  15. shutdown_tx (read-only in restart_agent, never held with other locks)
+//  11. agent_update_state
+//  12. server_ports
+//  13. server_health_state
+//  14. retry_after_seconds
+//  15. backend_connected (rarely contended, almost always read)
+//  16. shutdown_tx (read-only in restart_agent, never held with other locks)
 //
 // Rule: never hold lock N while attempting to acquire lock M where M < N.
 
@@ -398,6 +491,7 @@ impl Clone for WebSocketHandler {
             auto_restart_configs: self.auto_restart_configs.clone(),
             restart_trackers: self.restart_trackers.clone(),
             start_server_messages: self.start_server_messages.clone(),
+            agent_update_state: self.agent_update_state.clone(),
             server_ports: self.server_ports.clone(),
             server_health_state: self.server_health_state.clone(),
             active_restore_streams: self.active_restore_streams.clone(),
@@ -446,12 +540,13 @@ impl WebSocketHandler {
             network_manager,
             backend_connected,
             write: Arc::new(RwLock::new(None)),
-            active_log_streams: Arc::new(RwLock::new(HashSet::new())),
+            active_log_streams: Arc::new(std::sync::Mutex::new(HashMap::new())),
             monitor_tasks: Arc::new(RwLock::new(HashMap::new())),
             active_uploads: Arc::new(RwLock::new(HashMap::new())),
             auto_restart_configs: Arc::new(RwLock::new(HashMap::new())),
             restart_trackers: Arc::new(RwLock::new(HashMap::new())),
             start_server_messages: Arc::new(RwLock::new(HashMap::new())),
+            agent_update_state: Arc::new(RwLock::new(None)),
             server_ports: Arc::new(RwLock::new(HashMap::new())),
             server_health_state: Arc::new(RwLock::new(HashMap::new())),
             active_restore_streams: Arc::new(RwLock::new(HashMap::new())),
@@ -594,10 +689,15 @@ impl WebSocketHandler {
             });
         }
 
+        // Network reconnect backoff: 5s → 10s → 20s → 40s → 60s (capped) + jitter.
+        // Auth lockout `retry_after_seconds` always takes precedence when set.
+        let mut network_backoff_secs: u64 = 5;
         loop {
             match self.establish_connection().await {
                 Ok(()) => {
                     info!("WebSocket connection closed");
+                    // Clean disconnect after a successful session — reset backoff.
+                    network_backoff_secs = 5;
                 }
                 Err(e) => {
                     error!("Connection error: {}", e);
@@ -614,14 +714,62 @@ impl WebSocketHandler {
             }
 
             self.set_backend_connected(false).await;
-            let retry_secs = {
+            let auth_lockout = {
                 let mut ra = self.retry_after_seconds.write().await;
-                ra.take().unwrap_or(5)
+                ra.take()
             };
-            if retry_secs > 5 {
-                info!("Auth lockout: waiting {}s before reconnecting", retry_secs);
-            }
+            let retry_secs = if let Some(lockout) = auth_lockout {
+                if lockout > 5 {
+                    info!("Auth lockout: waiting {}s before reconnecting", lockout);
+                }
+                // After lockout, keep network backoff from growing unbounded next time.
+                network_backoff_secs = 5;
+                lockout
+            } else {
+                // ±20% jitter so many agents don't reconnect in lockstep.
+                let jitter_span = (network_backoff_secs / 5).max(1);
+                let raw = rand_08::random::<u64>() % (jitter_span * 2 + 1);
+                let with_jitter = if raw >= jitter_span {
+                    network_backoff_secs.saturating_add(raw - jitter_span)
+                } else {
+                    network_backoff_secs.saturating_sub(jitter_span - raw)
+                }
+                .max(1);
+                info!(
+                    "Reconnecting in {}s (backoff base {}s)",
+                    with_jitter, network_backoff_secs
+                );
+                // Double for next failure, cap at 60s.
+                network_backoff_secs = (network_backoff_secs.saturating_mul(2)).min(60);
+                with_jitter
+            };
             tokio::time::sleep(Duration::from_secs(retry_secs)).await;
+        }
+    }
+
+    /// Best-effort clean WebSocket close before process exit / task abort.
+    pub async fn graceful_ws_close(&self) {
+        self.set_backend_connected(false).await;
+        let writer = {
+            let mut guard = self.write.write().await;
+            guard.take()
+        };
+        let Some(ws) = writer else {
+            return;
+        };
+        let close_result = tokio::time::timeout(Duration::from_secs(2), async {
+            let mut w = ws.lock().await;
+            // Prefer a protocol Close frame; fall back to plain sink close.
+            if let Err(e) = w.send(Message::Close(None)).await {
+                debug!("WS Close frame failed during shutdown: {}", e);
+            }
+            if let Err(e) = w.close().await {
+                debug!("WS sink close failed during shutdown: {}", e);
+            }
+        })
+        .await;
+        if close_result.is_err() {
+            warn!("Timed out waiting for WebSocket close during shutdown");
         }
     }
 
@@ -826,7 +974,9 @@ impl WebSocketHandler {
                 Ok(Message::Binary(data)) => {
                     // Binary frames are used for two purposes:
                     // 1. Pipe relay: raw tar data when active_restore_request_id is set
-                    // 2. Upload backup chunks: first 16 bytes = requestId header
+                    // 2. Upload backup chunks:
+                    //    - v2 length-prefixed: [u16 BE idLen][id UTF-8][payload]
+                    //    - legacy: fixed 16-byte zero-padded requestId prefix + payload
                     let restore_id = { self.active_restore_request_id.read().await.clone() };
                     let mut routed = false;
                     if let Some(restore_id) = restore_id {
@@ -851,23 +1001,32 @@ impl WebSocketHandler {
                             }
                         }
                     }
-                    if !routed && data.len() > 16 {
-                        let request_id = String::from_utf8_lossy(&data[..16])
-                            .trim_end_matches('\0')
-                            .to_string();
-                        if let Err(e) = self
-                            .handle_upload_backup_chunk_binary(&request_id, &data[16..])
-                            .await
-                        {
-                            error!("Error handling binary backup chunk: {}", e);
-                            self.report_error(
-                                ErrorLevel::Error,
-                                "agent:backup_upload",
-                                &format!("{}", e),
-                                None,
-                                None,
-                            )
-                            .await;
+                    if !routed {
+                        if let Some((header, payload)) = backup::parse_backup_binary_frame(&data) {
+                            // Sessions are keyed by full requestId from upload_backup_start.
+                            // Length-prefixed frames carry the full id; legacy 16-byte
+                            // frames only carry a prefix — resolve either form.
+                            let request_id = {
+                                let uploads = self.active_uploads.read().await;
+                                backup::resolve_backup_upload_request_id(
+                                    &header,
+                                    uploads.keys().map(|k| k.as_str()),
+                                )
+                            };
+                            if let Err(e) = self
+                                .handle_upload_backup_chunk_binary(&request_id, payload)
+                                .await
+                            {
+                                error!("Error handling binary backup chunk: {}", e);
+                                self.report_error(
+                                    ErrorLevel::Error,
+                                    "agent:backup_upload",
+                                    &format!("{}", e),
+                                    None,
+                                    None,
+                                )
+                                .await;
+                            }
                         }
                     }
                 }
@@ -1005,6 +1164,23 @@ impl WebSocketHandler {
                 let handler = self.clone();
                 let msg = msg.clone();
                 tokio::spawn(async move {
+                    let request_id = msg["requestId"].as_str().map(|s| s.to_string());
+                    let server_id = msg["serverId"]
+                        .as_str()
+                        .or_else(|| msg["serverUuid"].as_str())
+                        .unwrap_or("unknown")
+                        .to_string();
+                    // Immediate accept-ack: start is long-running; completion is via
+                    // server_state_update. requestFromAgent resolves on this ack.
+                    handler
+                        .emit_power_command_ack(
+                            request_id.as_deref(),
+                            &server_id,
+                            "start",
+                            true,
+                            None,
+                        )
+                        .await;
                     if let Err(e) = handler.start_server_with_details(&msg).await {
                         error!("Error in start_server handler: {}", e);
                         handler
@@ -1020,32 +1196,101 @@ impl WebSocketHandler {
                 });
             }
             Some("stop_server") => {
+                let request_id = msg["requestId"].as_str().map(|s| s.to_string());
                 let server_uuid = msg["serverUuid"]
                     .as_str()
                     .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
                 let server_id = msg["serverId"].as_str().unwrap_or(server_uuid);
                 let container_id = self.resolve_container_id(server_id, server_uuid).await;
                 let stop_policy = parse_stop_policy(&msg);
-                self.stop_server(server_id, container_id, &stop_policy)
-                    .await?;
+                match self
+                    .stop_server(server_id, container_id, &stop_policy)
+                    .await
+                {
+                    Ok(()) => {
+                        self.emit_power_command_ack(
+                            request_id.as_deref(),
+                            server_id,
+                            "stop",
+                            true,
+                            None,
+                        )
+                        .await;
+                    }
+                    Err(e) => {
+                        self.emit_power_command_ack(
+                            request_id.as_deref(),
+                            server_id,
+                            "stop",
+                            false,
+                            Some(&e.to_string()),
+                        )
+                        .await;
+                        return Err(e);
+                    }
+                }
             }
             Some("kill_server") => {
+                let request_id = msg["requestId"].as_str().map(|s| s.to_string());
                 let server_uuid = msg["serverUuid"]
                     .as_str()
                     .ok_or_else(|| AgentError::InvalidRequest("Missing serverUuid".to_string()))?;
                 let server_id = msg["serverId"].as_str().unwrap_or(server_uuid);
                 let container_id = self.resolve_container_id(server_id, server_uuid).await;
-                self.kill_server(server_id, container_id).await?;
+                match self.kill_server(server_id, container_id).await {
+                    Ok(()) => {
+                        self.emit_power_command_ack(
+                            request_id.as_deref(),
+                            server_id,
+                            "kill",
+                            true,
+                            None,
+                        )
+                        .await;
+                    }
+                    Err(e) => {
+                        self.emit_power_command_ack(
+                            request_id.as_deref(),
+                            server_id,
+                            "kill",
+                            false,
+                            Some(&e.to_string()),
+                        )
+                        .await;
+                        return Err(e);
+                    }
+                }
             }
             Some("restart_server") => {
                 let handler = self.clone();
                 let msg = msg.clone();
                 tokio::spawn(async move {
+                    let request_id = msg["requestId"].as_str().map(|s| s.to_string());
                     let Some(server_uuid) = msg["serverUuid"].as_str() else {
                         error!("Error in restart_server handler: Missing serverUuid");
+                        handler
+                            .emit_power_command_ack(
+                                request_id.as_deref(),
+                                "unknown",
+                                "restart",
+                                false,
+                                Some("Missing serverUuid"),
+                            )
+                            .await;
                         return;
                     };
                     let server_id = msg["serverId"].as_str().unwrap_or(server_uuid);
+                    // Immediate accept-ack: restart is long-running (stop + start).
+                    // Completion is via server_state_update.
+                    handler
+                        .emit_power_command_ack(
+                            request_id.as_deref(),
+                            server_id,
+                            "restart",
+                            true,
+                            None,
+                        )
+                        .await;
                     let container_id = handler.resolve_container_id(server_id, server_uuid).await;
                     let stop_policy = parse_stop_policy(&msg);
                     let container_id_clone = container_id.clone();
@@ -1230,12 +1475,33 @@ impl WebSocketHandler {
                 let msg_clone = msg.clone();
                 let handler = self.clone();
                 let write = Arc::clone(write);
+                // Track in-flight update so agent_update_status can report progress.
+                {
+                    let mut st = self.agent_update_state.write().await;
+                    *st = Some(AgentUpdateState {
+                        status: "downloading".to_string(),
+                        progress: 10,
+                        target_version: target_version.clone(),
+                        error: None,
+                        started_at: Some(chrono::Utc::now().to_rfc3339()),
+                    });
+                }
                 tokio::spawn(async move {
                     let updater = crate::updater::AgentUpdater::new(&handler.config);
                     let options = crate::updater::UpdateOptions { target_version };
                     match updater.update(&options).await {
                         Ok(_) => {
                             info!("Agent update succeeded, restarting via exec()");
+                            {
+                                let mut st = handler.agent_update_state.write().await;
+                                *st = Some(AgentUpdateState {
+                                    status: "applying".to_string(),
+                                    progress: 90,
+                                    target_version: options.target_version.clone(),
+                                    error: None,
+                                    started_at: st.as_ref().and_then(|s| s.started_at.clone()),
+                                });
+                            }
                             // Notify backend that update is being applied (before exec replaces us).
                             // After exec() the new process will reconnect with
                             // the updated version, but this message lets the
@@ -1252,6 +1518,16 @@ impl WebSocketHandler {
                         }
                         Err(e) => {
                             error!("Agent update failed: {}", e);
+                            {
+                                let mut st = handler.agent_update_state.write().await;
+                                *st = Some(AgentUpdateState {
+                                    status: "failed".to_string(),
+                                    progress: 0,
+                                    target_version: options.target_version.clone(),
+                                    error: Some(e.to_string()),
+                                    started_at: st.as_ref().and_then(|s| s.started_at.clone()),
+                                });
+                            }
                             handler
                                 .report_error(
                                     ErrorLevel::Error,
@@ -1272,6 +1548,31 @@ impl WebSocketHandler {
                     }
                 });
             }
+            Some("agent_update_status") => {
+                let state = self.agent_update_state.read().await.clone();
+                let (status, progress, target_version, error, started_at) = match state {
+                    Some(s) => (
+                        s.status,
+                        s.progress,
+                        s.target_version,
+                        s.error,
+                        s.started_at,
+                    ),
+                    None => ("idle".to_string(), 0, None, None, None),
+                };
+                let response = json!({
+                    "type": "agent_update_status_response",
+                    "requestId": msg.get("requestId"),
+                    "currentVersion": env!("CARGO_PKG_VERSION"),
+                    "targetVersion": target_version,
+                    "status": status,
+                    "progress": progress,
+                    "error": error,
+                    "startedAt": started_at,
+                });
+                let mut w = write.lock().await;
+                let _ = w.send(Message::Text(response.to_string().into())).await;
+            }
             Some("agent_status") => {
                 let config_path = self.config.agent.config_path.clone();
                 let sftp_port = self.config.sftp.port;
@@ -1291,23 +1592,33 @@ impl WebSocketHandler {
                             let kernel_version = System::kernel_version().unwrap_or_default();
                             // containerd version is queried synchronously here because
                             // OnceLock::get_or_init is sync; it runs once and is fast enough.
-                            let containerd_version = std::process::Command::new("ctr")
-                                .arg("version")
-                                .output()
-                                .ok()
-                                .and_then(|o| {
-                                    if o.status.success() {
-                                        String::from_utf8_lossy(&o.stdout)
-                                            .lines()
-                                            .find(|l| l.contains("Version:"))
-                                            .map(|l| {
-                                                l.split(':').nth(1).unwrap_or("").trim().to_string()
-                                            })
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .unwrap_or_default();
+                            // Blocking ctr is fine inside OnceLock init (runs once), but keep it off
+                            // the main async worker by using a dedicated thread when possible.
+                            let containerd_version = std::thread::spawn(|| {
+                                std::process::Command::new("ctr")
+                                    .arg("version")
+                                    .output()
+                                    .ok()
+                                    .and_then(|o| {
+                                        if o.status.success() {
+                                            String::from_utf8_lossy(&o.stdout)
+                                                .lines()
+                                                .find(|l| l.contains("Version:"))
+                                                .map(|l| {
+                                                    l.split(':')
+                                                        .nth(1)
+                                                        .unwrap_or("")
+                                                        .trim()
+                                                        .to_string()
+                                                })
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .unwrap_or_default()
+                            })
+                            .join()
+                            .unwrap_or_default();
                             (os_info, kernel_version, containerd_version)
                         })
                         .clone();
@@ -1467,7 +1778,9 @@ impl WebSocketHandler {
                         config_path
                     };
                     let path_str = path.display().to_string();
-                    let content = tokio::fs::read_to_string(&path).await.unwrap_or_default();
+                    let raw_content = tokio::fs::read_to_string(&path).await.unwrap_or_default();
+                    // Never return secrets (api_key, tokens, passwords) over node.read.
+                    let content = redact_agent_config_secrets(&raw_content);
                     let metadata = tokio::fs::metadata(&path).await.ok();
                     let response = json!({
                         "type": "agent_config_response",
@@ -1499,22 +1812,56 @@ impl WebSocketHandler {
                     };
                     let response = match content {
                         Some(c) => {
-                            // Validate that the content is parseable TOML before writing.
-                            // A malformed config will crash the agent on restart.
+                            // Validate parseable TOML + required fields, then atomic write + 0600.
                             match c.parse::<toml::Value>() {
-                                Ok(_) => match tokio::fs::write(&path, &c).await {
-                                    Ok(_) => json!({
-                                        "type": "agent_config_update_response",
-                                        "requestId": msg_clone.get("requestId"),
-                                        "saved": true,
-                                    }),
-                                    Err(e) => json!({
-                                        "type": "agent_config_update_response",
-                                        "requestId": msg_clone.get("requestId"),
-                                        "saved": false,
-                                        "error": e.to_string(),
-                                    }),
-                                },
+                                Ok(parsed) => {
+                                    let validation_err = (|| -> Option<String> {
+                                        let table = parsed.as_table()?;
+                                        let server = table.get("server")?.as_table()?;
+                                        for key in [
+                                            "backend_url",
+                                            "node_id",
+                                            "api_key",
+                                            "hostname",
+                                            "data_dir",
+                                        ] {
+                                            let val = server
+                                                .get(key)
+                                                .and_then(|v| v.as_str())
+                                                .unwrap_or("")
+                                                .trim();
+                                            if val.is_empty() {
+                                                return Some(format!(
+                                                    "Missing required server.{} field",
+                                                    key
+                                                ));
+                                            }
+                                        }
+                                        None
+                                    })();
+                                    if let Some(err) = validation_err {
+                                        json!({
+                                            "type": "agent_config_update_response",
+                                            "requestId": msg_clone.get("requestId"),
+                                            "saved": false,
+                                            "error": err,
+                                        })
+                                    } else {
+                                        match atomic_write::atomic_write(&path, &c).await {
+                                            Ok(_) => json!({
+                                                "type": "agent_config_update_response",
+                                                "requestId": msg_clone.get("requestId"),
+                                                "saved": true,
+                                            }),
+                                            Err(e) => json!({
+                                                "type": "agent_config_update_response",
+                                                "requestId": msg_clone.get("requestId"),
+                                                "saved": false,
+                                                "error": e.to_string(),
+                                            }),
+                                        }
+                                    }
+                                }
                                 Err(e) => json!({
                                     "type": "agent_config_update_response",
                                     "requestId": msg_clone.get("requestId"),
@@ -1613,11 +1960,60 @@ impl WebSocketHandler {
             }
             "kill" => self.kill_server(server_id, container_id).await?,
             "restart" => {
+                // Match dedicated restart_server: wait up to 30s for stop, force-kill
+                // if needed, then start with full details when available.
+                // Capture start details before stop_server clears start_server_messages.
+                let stored_start = self
+                    .start_server_messages
+                    .read()
+                    .await
+                    .get(server_id)
+                    .cloned();
+                let container_id_for_wait = container_id.clone();
                 self.stop_server(server_id, container_id, &stop_policy)
                     .await?;
-                tokio::time::sleep(Duration::from_secs(2)).await;
-                let container_id = self.resolve_container_id(server_id, server_uuid).await;
-                self.start_server(server_id, container_id).await?;
+                let wait_start = Instant::now();
+                loop {
+                    if container_id_for_wait.is_empty() {
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        break;
+                    }
+                    match self
+                        .runtime
+                        .is_container_running(&container_id_for_wait)
+                        .await
+                    {
+                        Ok(false) => break,
+                        Ok(true) if wait_start.elapsed() > Duration::from_secs(30) => {
+                            warn!(
+                                "Container {} did not stop within 30s during server_control restart, forcing kill",
+                                container_id_for_wait
+                            );
+                            if let Err(e) = self
+                                .kill_server(server_id, container_id_for_wait.clone())
+                                .await
+                            {
+                                error!("Force kill failed during server_control restart: {}", e);
+                            }
+                            break;
+                        }
+                        _ => {}
+                    }
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+                // Prefer start_server_with_details when the original start message is
+                // still available (env, mounts, ports); otherwise fall back to start.
+                if let Some(stored) = stored_start {
+                    self.start_server_with_details(&stored).await?;
+                } else if msg.get("dockerImage").is_some()
+                    || msg.get("image").is_some()
+                    || msg.get("startupCommand").is_some()
+                {
+                    self.start_server_with_details(msg).await?;
+                } else {
+                    let container_id = self.resolve_container_id(server_id, server_uuid).await;
+                    self.start_server(server_id, container_id).await?;
+                }
             }
             _ => {
                 return Err(AgentError::InvalidRequest(format!(
@@ -1735,6 +2131,7 @@ impl WebSocketHandler {
         msg: &Value,
         write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
+        let request_id = msg.get("requestId").cloned().unwrap_or(Value::Null);
         let source_uuid = msg["sourceServerUuid"]
             .as_str()
             .ok_or_else(|| AgentError::InvalidRequest("Missing sourceServerUuid".to_string()))?;
@@ -1752,6 +2149,7 @@ impl WebSocketHandler {
         if !source_dir.exists() {
             let event = json!({
                 "type": "clone_files_complete",
+                "requestId": request_id,
                 "serverId": server_id,
                 "success": false,
                 "error": format!("Source server directory not found: {}", source_dir.display()),
@@ -1790,6 +2188,7 @@ impl WebSocketHandler {
         if !status.success() {
             let event = json!({
                 "type": "clone_files_complete",
+                "requestId": request_id,
                 "serverId": server_id,
                 "success": false,
                 "error": format!("cp -a exited with code {}", status.code().unwrap_or(-1)),
@@ -1836,6 +2235,7 @@ impl WebSocketHandler {
 
         let event = json!({
             "type": "clone_files_complete",
+            "requestId": request_id,
             "serverId": server_id,
             "success": true,
         });
@@ -1908,6 +2308,7 @@ impl WebSocketHandler {
         msg: &Value,
         write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
+        let request_id = msg.get("requestId").cloned().unwrap_or(Value::Null);
         let network = self.parse_network_config(msg)?;
 
         let result = self.network_manager.create_network(&network).await;
@@ -1915,11 +2316,13 @@ impl WebSocketHandler {
         let event = match &result {
             Ok(_) => json!({
                 "type": "network_created",
+                "requestId": request_id,
                 "networkName": network.name,
                 "success": true,
             }),
             Err(err) => json!({
                 "type": "network_created",
+                "requestId": request_id,
                 "networkName": network.name,
                 "success": false,
                 "error": err.to_string(),
@@ -1941,6 +2344,7 @@ impl WebSocketHandler {
         msg: &Value,
         write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
+        let request_id = msg.get("requestId").cloned().unwrap_or(Value::Null);
         let old_name = msg["oldName"]
             .as_str()
             .ok_or_else(|| AgentError::InvalidRequest("Missing oldName".to_string()))?;
@@ -1955,12 +2359,14 @@ impl WebSocketHandler {
         let event = match &result {
             Ok(_) => json!({
                 "type": "network_updated",
+                "requestId": request_id,
                 "oldName": old_name,
                 "networkName": network.name,
                 "success": true,
             }),
             Err(err) => json!({
                 "type": "network_updated",
+                "requestId": request_id,
                 "oldName": old_name,
                 "networkName": network.name,
                 "success": false,
@@ -1983,6 +2389,7 @@ impl WebSocketHandler {
         msg: &Value,
         write: &Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
+        let request_id = msg.get("requestId").cloned().unwrap_or(Value::Null);
         let network_name = msg["networkName"]
             .as_str()
             .ok_or_else(|| AgentError::InvalidRequest("Missing networkName".to_string()))?;
@@ -1992,11 +2399,13 @@ impl WebSocketHandler {
         let event = match &result {
             Ok(_) => json!({
                 "type": "network_deleted",
+                "requestId": request_id,
                 "networkName": network_name,
                 "success": true,
             }),
             Err(err) => json!({
                 "type": "network_deleted",
+                "requestId": request_id,
                 "networkName": network_name,
                 "success": false,
                 "error": err.to_string(),
@@ -2060,6 +2469,49 @@ impl WebSocketHandler {
         }
 
         Ok(())
+    }
+
+    /// Echo a power-command acknowledgement so the panel's requestFromAgent
+    /// can resolve. Only sent when the inbound message carried a requestId.
+    pub(crate) async fn emit_power_command_ack(
+        &self,
+        request_id: Option<&str>,
+        server_id: &str,
+        action: &str,
+        success: bool,
+        error: Option<&str>,
+    ) {
+        let Some(request_id) = request_id.filter(|id| !id.is_empty()) else {
+            return;
+        };
+
+        let mut payload = json!({
+            "type": "power_command_ack",
+            "requestId": request_id,
+            "serverId": server_id,
+            "action": action,
+            "success": success,
+            "timestamp": chrono::Utc::now().timestamp_millis(),
+        });
+        if let Some(err) = error {
+            payload["error"] = json!(err);
+        }
+
+        let text = match serde_json::to_string(&payload) {
+            Ok(t) => t,
+            Err(_) => return,
+        };
+
+        let writer = { self.write.read().await.clone() };
+        if let Some(ws) = writer {
+            let mut w = ws.lock().await;
+            if let Err(err) = w.send(Message::Text(text.into())).await {
+                warn!(
+                    "Failed to send power_command_ack for {} ({}): {}",
+                    action, server_id, err
+                );
+            }
+        }
     }
 
     pub(crate) async fn emit_console_output(
@@ -2488,12 +2940,14 @@ fn parse_percent(value: &str) -> Option<f64> {
     trimmed.parse::<f64>().ok()
 }
 
-fn parse_memory_usage_mb(value: &str) -> Option<u64> {
+/// Parse container memory usage strings like "512MiB / 1GiB" into used MiB.
+/// Division uses 1024² so MiB/GiB (and sysinfo byte counts) stay consistent.
+pub(crate) fn parse_memory_usage_mb(value: &str) -> Option<u64> {
     let first = value.split('/').next()?.trim();
     parse_size_to_bytes(first).map(|bytes| bytes / (1024 * 1024))
 }
 
-fn parse_size_to_bytes(value: &str) -> Option<u64> {
+pub(crate) fn parse_size_to_bytes(value: &str) -> Option<u64> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return None;
@@ -2538,4 +2992,52 @@ fn parse_df_output_mb(output: &str) -> Option<(u64, u64)> {
     let total_mb = parts[1].parse::<u64>().ok()?;
     let used_mb = parts[2].parse::<u64>().ok()?;
     Some((used_mb, total_mb))
+}
+
+#[cfg(test)]
+mod memory_parse_tests {
+    use super::{parse_memory_usage_mb, parse_size_to_bytes};
+
+    #[test]
+    fn parses_mib_as_mebibytes() {
+        // 512 MiB => 512 MiB (not off-by-1024)
+        assert_eq!(parse_memory_usage_mb("512MiB / 1GiB"), Some(512));
+        assert_eq!(parse_memory_usage_mb("1024MiB"), Some(1024));
+    }
+
+    #[test]
+    fn parses_gib_correctly() {
+        assert_eq!(parse_memory_usage_mb("1GiB"), Some(1024));
+        assert_eq!(parse_memory_usage_mb("2GiB / 4GiB"), Some(2048));
+    }
+
+    #[test]
+    fn parses_raw_bytes_with_1024_divisor() {
+        // 1 GiB in bytes must become 1024 MiB, not ~1 MiB (old /1024-only bug)
+        let one_gib = 1024u64 * 1024 * 1024;
+        assert_eq!(parse_size_to_bytes(&one_gib.to_string()), Some(one_gib));
+        assert_eq!(parse_memory_usage_mb(&one_gib.to_string()), Some(1024));
+    }
+
+    #[test]
+    fn rejects_empty() {
+        assert_eq!(parse_memory_usage_mb(""), None);
+        assert_eq!(parse_size_to_bytes("   "), None);
+    }
+
+    #[test]
+    fn parses_decimal_units() {
+        // SI megabytes / kilobytes
+        assert_eq!(parse_size_to_bytes("1000kB"), Some(1_000_000));
+        assert_eq!(parse_size_to_bytes("1.5MB"), Some(1_500_000));
+        // 1.5 MiB => 1_572_864 bytes; integer /1024² floors to 1 MiB
+        assert_eq!(parse_memory_usage_mb("1.5MiB"), Some(1));
+        assert_eq!(parse_memory_usage_mb("2048KiB"), Some(2));
+    }
+
+    #[test]
+    fn rejects_garbage_units() {
+        assert_eq!(parse_size_to_bytes("12xx"), None);
+        assert_eq!(parse_memory_usage_mb("not-a-size"), None);
+    }
 }

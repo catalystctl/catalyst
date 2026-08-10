@@ -17,6 +17,7 @@ import { serialize } from '../utils/serialize';
 import { captureSystemError } from '../services/error-logger';
 import { hasNodeAccess } from '../lib/permissions';
 import { ServerState } from '../shared-types';
+import { createServerBackup } from '../services/create-backup';
 
 export async function backupRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
@@ -108,145 +109,47 @@ export async function backupRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Server not found" });
       }
 
-      if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) {
-        return reply.status(423).send({
-          error: "Server is suspended",
-          suspendedAt: server.suspendedAt,
-          suspensionReason: server.suspensionReason ?? null,
-        });
+      const gateway = app.wsGateway;
+      if (!gateway) {
+        return reply.status(500).send({ error: "Gateway not available" });
       }
 
-      // Check if node is online
-      if (!server.node.isOnline) {
-        return reply.status(503).send({ error: "Node is offline" });
-      }
-
-      // Atomically transition server to CREATING_BACKUP to prevent concurrent
-      // start operations during the backup (TOCTOU fix). Only allowed from STOPPED.
-      const lockResult = await prisma.server.updateMany({
-        where: { id: serverId, status: ServerState.STOPPED },
-        data: { status: ServerState.CREATING_BACKUP },
-      });
-      if (lockResult.count === 0) {
-        // Server was no longer stopped (race with start/another operation)
-        const current = await prisma.server.findUnique({
-          where: { id: serverId },
-          select: { status: true },
-        });
-        if (current?.status === ServerState.CREATING_BACKUP) {
-          return reply.status(409).send({ error: "A backup is already in progress" });
-        }
-        return reply.status(409).send({
-          error: `Server must be stopped before creating a backup (current: ${current?.status ?? "unknown"})`,
-        });
-      }
-
-       const mode = resolveBackupStorageMode(server);
-       const allocationMb = server.backupAllocationMb ?? 0;
-       const hasExternalStorage = mode === "s3" || mode === "sftp";
-       if (allocationMb <= 0 && !hasExternalStorage) {
-         await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
-         return reply.status(403).send({
-           error: "Backup allocation disabled. Configure S3 or SFTP to enable backups.",
-         });
-       }
-
-       // Enforce backup allocation quota for local mode (pre-check)
-       if (allocationMb > 0 && mode === 'local') {
-         const existingBackups = await prisma.backup.findMany({
-           where: { serverId, sizeMb: { gt: 0 } },
-           select: { sizeMb: true },
-         });
-         const totalUsedMb = existingBackups.reduce((sum, b) => sum + b.sizeMb, 0);
-         if (totalUsedMb >= allocationMb) {
-           await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
-           return reply.status(403).send({
-             error: `Backup allocation exceeded (${totalUsedMb.toFixed(1)} MB used of ${allocationMb} MB). Delete existing backups to create a new one.`,
-           });
-         }
-       }
-
-       // Generate backup name
-       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-       const cleanedName = sanitizeBackupName(name);
-       const backupName = cleanedName || `backup-${timestamp}`;
-       const { agentPath, storagePath, storageKey } = buildBackupPaths(
-         server.uuid,
-         backupName,
-         mode,
-         server,
-       );
-       const serverDir = buildServerDir(server.uuid);
-
-       if (mode === "s3" && !storageKey) {
-         await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
-         return reply.status(500).send({ error: "Missing S3 storage key" });
-       }
-       if (mode === "sftp" && !storageKey) {
-         await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
-         return reply.status(500).send({ error: "Missing SFTP storage key" });
-       }
-
-      // Resolve optional backup encryption key
-      const encryptionKey = process.env.BACKUP_ENCRYPTION_KEY;
-
-      const backupRecord = await prisma.backup.create({
-        data: {
-          serverId: server.id,
-          name: backupName,
-          path: storagePath,
-          storageMode: mode,
-          sizeMb: 0,
-          metadata: {
-            agentPath,
-            storageKey,
-            encrypted: !!encryptionKey,
-          },
+      const result = await createServerBackup({
+        prisma,
+        logger: request.log,
+        server,
+        name,
+        sendToAgent: (nodeId, message) => gateway.sendToAgent(nodeId, message),
+        onStarted: async ({ serverId: sid, backupId, backupName }) => {
+          if (gateway.routeToClients) {
+            await gateway.routeToClients(sid, {
+              type: 'backup_started',
+              serverId: sid,
+              backupId,
+              backupName,
+              timestamp: Date.now(),
+            }).catch(() => {});
+          }
         },
       });
 
-      // Send backup request to agent
-      const gateway = app.wsGateway;
-      if (!gateway) {
-        // Revert status on early failure
-        await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
-        return reply.status(500).send({ error: "Gateway not available" });
-      }
-      const success = await gateway.sendToAgent(server.nodeId, {
-        type: "create_backup",
-        serverId: server.id,
-        serverUuid: server.uuid,
-        serverDir,
-        backupName,
-        backupPath: agentPath,
-        backupId: backupRecord.id,
-        ...(encryptionKey ? { encryptionKey } : {}),
-      });
-
-      if (!success) {
-        await prisma.backup.delete({ where: { id: backupRecord.id } });
-        // Revert status on failure
-        await prisma.server.update({ where: { id: serverId }, data: { status: ServerState.STOPPED } });
-        return reply.status(503).send({ error: "Failed to send backup request to agent" });
+      if (!result.ok) {
+        if (result.statusCode === 423) {
+          return reply.status(423).send({
+            error: result.error,
+            suspendedAt: server.suspendedAt,
+            suspensionReason: server.suspensionReason ?? null,
+          });
+        }
+        return reply.status(result.statusCode).send({ error: result.error });
       }
 
       reply.send(serialize({
         success: true,
         message: "Backup creation started",
-        backupName,
-        backupId: backupRecord.id,
+        backupName: result.backupName,
+        backupId: result.backupId,
       }));
-
-      const wsGatewayBackup = app.wsGateway;
-      if (wsGatewayBackup?.routeToClients) {
-        wsGatewayBackup.routeToClients(server.id, {
-          type: 'backup_started',
-          serverId: server.id,
-          backupId: backupRecord.id,
-          backupName,
-          timestamp: Date.now(),
-        }).catch(() => {});
-      }
     }
   );
 

@@ -42,6 +42,33 @@ const decryptValue = (value: string) => {
   return decrypted.toString("utf8");
 };
 
+/**
+ * Encrypt a single secret string with the backup-credentials AES key.
+ * Returns the plaintext unchanged when BACKUP_CREDENTIALS_ENCRYPTION_KEY is unset
+ * (callers should still redact secrets in API responses).
+ */
+export const encryptSecretValue = (value: string | null | undefined): string | null | undefined => {
+  if (value === null || value === undefined || value === '') return value;
+  try {
+    return encryptValue(value);
+  } catch {
+    return value;
+  }
+};
+
+/**
+ * Decrypt a value previously produced by encryptSecretValue / encryptBackupConfig.
+ * Plaintext (non v1:) values pass through unchanged.
+ */
+export const decryptSecretValue = (value: string | null | undefined): string | null | undefined => {
+  if (value === null || value === undefined || value === '') return value;
+  try {
+    return decryptValue(value);
+  } catch {
+    return value;
+  }
+};
+
 export const encryptBackupConfig = (config: Record<string, any> | null | undefined) => {
   if (!config) return config;
   return {

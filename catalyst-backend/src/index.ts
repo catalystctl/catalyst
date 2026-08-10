@@ -49,6 +49,12 @@ import { apiKeyRoutes } from "./routes/api-keys";
 import { AlertService } from "./services/alert-service";
 import { getSecuritySettings } from "./services/mailer";
 import {
+	bootstrapCluster,
+	shouldRunBackgroundJobs,
+	backgroundJobOwnerLabel,
+} from "./cluster";
+import { createServerBackup } from "./services/create-backup";
+import {
 	generateSftpToken,
 	validateSftpToken,
 	rotateSftpToken,
@@ -86,10 +92,18 @@ const logger = pino(
 			},
 );
 
+// TRUST_PROXY defaults true for Docker/reverse-proxy deployments; set TRUST_PROXY=false
+// when the process is reached directly and client IPs must not be taken from X-Forwarded-*.
+const trustProxyEnv = process.env.TRUST_PROXY;
+const trustProxy =
+	trustProxyEnv === undefined || trustProxyEnv === ""
+		? true
+		: !["0", "false", "no", "off"].includes(trustProxyEnv.toLowerCase());
+
 const app = Fastify({
 	logger: true,
 	bodyLimit: 10485760, // 10MB global — upload/file routes override with a higher per-route limit
-	trustProxy: true,
+	trustProxy,
 });
 
 // Parse application/octet-stream as raw Buffer (used by file tunnel stream responses)
@@ -213,13 +227,40 @@ taskScheduler.setTaskExecutor({
 		}
 
 		if (action === "backup") {
-			await wsGateway.sendToAgent(server.nodeId, {
-				type: "create_backup",
-				serverId: server.id,
-				serverUuid: server.uuid,
-				environment,
-				payload: task.payload ?? {},
+			// Use the same locking / quota / DB-row path as HTTP create-backup.
+			const result = await createServerBackup({
+				prisma,
+				logger,
+				server,
+				name: typeof task.payload?.name === "string" ? task.payload.name : undefined,
+				sendToAgent: (nodeId, message) => wsGateway.sendToAgent(nodeId, message),
+				onStarted: async ({ serverId, backupId, backupName }) => {
+					if (wsGateway.routeToClients) {
+						await wsGateway
+							.routeToClients(serverId, {
+								type: "backup_started",
+								serverId,
+								backupId,
+								backupName,
+								timestamp: Date.now(),
+								scheduled: true,
+								taskId: task.id,
+							})
+							.catch(() => {});
+					}
+				},
 			});
+			if (!result.ok) {
+				logger.warn(
+					{ taskId: task.id, serverId: server.id, error: result.error, statusCode: result.statusCode },
+					"Scheduled backup failed pre-checks or agent dispatch",
+				);
+				throw new Error(result.error);
+			}
+			logger.info(
+				{ taskId: task.id, serverId: server.id, backupId: result.backupId },
+				"Scheduled backup started",
+			);
 			return;
 		}
 
@@ -309,19 +350,21 @@ const authenticate = async (request: any, reply: any) => {
 					return;
 				}
 
-				// Attach user info and resolved permissions from the API key
-				let permissions: string[];
-				if (verification.key.allPermissions) {
-					const { resolveUserPermissions } = await import(
-						"./lib/permissions-catalog"
-					);
-					permissions = await resolveUserPermissions(verification.key.userId);
-				} else {
-					permissions = verification.key.permissions;
+				// Reject banned or locked accounts before accepting API key auth
+				const account = await prisma.user.findUnique({
+					where: { id: verification.user.id },
+					select: { banned: true, lockedUntil: true },
+				});
+				if (account?.banned) {
+					reply.status(403).send({ error: "Account is banned", code: "ACCOUNT_BANNED" });
+					return;
+				}
+				if (account?.lockedUntil && new Date(account.lockedUntil) > new Date()) {
+					reply.status(403).send({ error: "Account is locked", code: "ACCOUNT_LOCKED" });
+					return;
 				}
 
-				// Validate API key permissions don't exceed user's current permissions
-				// This prevents stale permissions when a user's roles are revoked after key creation
+				// Attach user info and resolved permissions from the API key
 				const { resolveUserPermissions } = await import(
 					"./lib/permissions-catalog"
 				);
@@ -330,17 +373,35 @@ const authenticate = async (request: any, reply: any) => {
 				);
 				const hasWildcard = currentUserPermissions.includes("*");
 
-				if (!hasWildcard && !verification.key.allPermissions) {
-					// For keys with specific permissions, ensure user still has those permissions
-					const stalePermissions = permissions.filter(
-						(p) => !currentUserPermissions.includes(p),
-					);
-					if (stalePermissions.length > 0) {
+				// Validate API key permissions don't exceed user's current permissions.
+				// Applies to both scoped keys and allPermissions keys so revoked roles
+				// shrink (or zero out) the effective permission set immediately.
+				let permissions: string[];
+				if (verification.key.allPermissions) {
+					// allPermissions keys inherit live user perms only.
+					if (!hasWildcard && currentUserPermissions.length === 0) {
 						reply.status(403).send({
 							error:
 								"API key permissions revoked - user no longer has required permissions",
 						});
 						return;
+					}
+					permissions = currentUserPermissions;
+				} else {
+					permissions = verification.key.permissions;
+					if (!hasWildcard) {
+						const stalePermissions = permissions.filter(
+							(p) =>
+								!currentUserPermissions.includes(p) &&
+								!currentUserPermissions.includes("*"),
+						);
+						if (stalePermissions.length > 0) {
+							reply.status(403).send({
+								error:
+									"API key permissions revoked - user no longer has required permissions",
+							});
+							return;
+						}
 					}
 				}
 
@@ -378,6 +439,21 @@ const authenticate = async (request: any, reply: any) => {
 			reply.status(401).send({ error: "Unauthorized" });
 			return;
 		}
+
+		// Reject banned or locked accounts on the main session auth path
+		const account = await prisma.user.findUnique({
+			where: { id: session.user.id },
+			select: { banned: true, lockedUntil: true },
+		});
+		if (account?.banned) {
+			reply.status(403).send({ error: "Account is banned", code: "ACCOUNT_BANNED" });
+			return;
+		}
+		if (account?.lockedUntil && new Date(account.lockedUntil) > new Date()) {
+			reply.status(403).send({ error: "Account is locked", code: "ACCOUNT_LOCKED" });
+			return;
+		}
+
 		// Resolve permissions from roles for session auth too
 		let permissions: string[] = [];
 		try {
@@ -472,8 +548,37 @@ async function bootstrap() {
 				return err;
 			},
 			keyGenerator: (request) => {
-				// Use user ID for authenticated requests, IP for unauthenticated
-				return request.user?.userId || request.ip;
+				// Rate-limit plugin runs before authenticate, so request.user is usually unset.
+				// Key by IP always, and when an API key is present add a stable hash of that
+				// credential so each key gets its own bucket (shared-IP clients don't collide).
+				const ip = request.ip || "unknown";
+				const authHeader = typeof request.headers.authorization === "string"
+					? request.headers.authorization
+					: "";
+				const xApiKey = typeof request.headers["x-api-key"] === "string"
+					? request.headers["x-api-key"]
+					: "";
+				let apiKeyMaterial = "";
+				if (authHeader.toLowerCase().startsWith("bearer ")) {
+					const token = authHeader.slice(7).trim();
+					if (token.startsWith("catalyst")) {
+						apiKeyMaterial = token;
+					}
+				} else if (xApiKey.startsWith("catalyst")) {
+					apiKeyMaterial = xApiKey.trim();
+				}
+				if (apiKeyMaterial) {
+					const keyHash = crypto.createHash("sha256")
+						.update(apiKeyMaterial)
+						.digest("hex")
+						.slice(0, 16);
+					return `ip:${ip}|key:${keyHash}`;
+				}
+				// Prefer authenticated user id when available (route-level rate limits after auth).
+				if (request.user?.userId) {
+					return `user:${request.user.userId}`;
+				}
+				return `ip:${ip}`;
 			},
 			allowList: async (request) => {
 				// Only bypass rate limiting for internal/agent endpoints.
@@ -1045,6 +1150,11 @@ async function bootstrap() {
 				return reply.status(401).send({ error: "Invalid or expired token" });
 			}
 
+			// Single-use: reject tokens already consumed by a successful deploy script fetch.
+			if (deployToken.usedAt) {
+				return reply.status(401).send({ error: "Deployment token has already been used" });
+			}
+
 			const apiKeyValue = typeof apiKey === "string" ? apiKey.trim() : "";
 			if (!apiKeyValue) {
 				return reply
@@ -1061,6 +1171,16 @@ async function bootstrap() {
 				return reply
 					.status(401)
 					.send({ error: "Invalid API key for this node" });
+			}
+
+			// Atomically mark the token used before emitting the script so concurrent
+			// fetches cannot both succeed (usedAt null → set once).
+			const consume = await prisma.deploymentToken.updateMany({
+				where: { id: deployToken.id, usedAt: null },
+				data: { usedAt: new Date() },
+			});
+			if (consume.count !== 1) {
+				return reply.status(401).send({ error: "Deployment token has already been used" });
 			}
 
 			// For the deploy script, use the externally-reachable address.
@@ -1231,6 +1351,8 @@ async function bootstrap() {
 						enabled,
 						host,
 						port,
+						// SFTP login username is the server id (agent scopes the session by it)
+						username: serverId,
 						sftpPassword: result.token,
 						expiresAt: result.expiresAt,
 						ttlMs: result.ttlMs,
@@ -1591,61 +1713,77 @@ async function bootstrap() {
 		// Token generation and validation remain in the backend;
 		// the agent validates tokens via /api/agent/sftp/validate-token.
 
-		// Start task scheduler
-		await taskScheduler.start();
-		logger.info(
-			`Task scheduler started with ${taskScheduler.getScheduledTasksCount()} active tasks`,
-		);
+		// Background jobs must run on exactly one process. When WORKERS>0,
+		// only worker id=1 owns schedulers/retention (see cluster.ts).
+		// HTTP handling still runs on every worker.
+		const runBackgroundJobs = shouldRunBackgroundJobs();
+		if (runBackgroundJobs) {
+			logger.info(
+				{ owner: backgroundJobOwnerLabel() },
+				"This process owns background jobs (scheduler/alerts/retention)",
+			);
 
-		// Start alert service
-		await alertService.start();
-		logger.info("Alert monitoring service started");
+			// Start task scheduler
+			await taskScheduler.start();
+			logger.info(
+				`Task scheduler started with ${taskScheduler.getScheduledTasksCount()} active tasks`,
+			);
 
-		// Start auto-updater
-		if (process.env.AUTO_UPDATE_ENABLED === "true") {
-			const { scheduleUpdateCheck } = await import("./services/auto-updater");
-			scheduleUpdateCheck(
-				parseInt(process.env.AUTO_UPDATE_INTERVAL_MS || "3600000"),
-				logger,
+			// Start alert service
+			await alertService.start();
+			logger.info("Alert monitoring service started");
+
+			// Start auto-updater
+			if (process.env.AUTO_UPDATE_ENABLED === "true") {
+				const { scheduleUpdateCheck } = await import("./services/auto-updater");
+				scheduleUpdateCheck(
+					parseInt(process.env.AUTO_UPDATE_INTERVAL_MS || "3600000"),
+					logger,
+				);
+			}
+
+			const retentionJitter = () => Math.floor(Math.random() * 60_000);
+
+			setTimeout(() => {
+				auditRetentionInterval = startAuditRetention(prisma, logger);
+				logger.info("Audit retention job scheduled");
+			}, retentionJitter());
+
+			setTimeout(() => {
+				statRetentionInterval = startStatRetention(prisma, logger);
+				logger.info("Stat retention job scheduled");
+			}, retentionJitter());
+
+			setTimeout(() => {
+				backupRetentionInterval = startBackupRetention(prisma, logger, wsGateway);
+				logger.info("Backup retention job scheduled");
+			}, retentionJitter());
+
+			setTimeout(() => {
+				stuckBackupStateInterval = startStuckBackupStateWatchdog(prisma, logger, wsGateway);
+				logger.info("Stuck backup state watchdog scheduled");
+			}, retentionJitter());
+
+			setTimeout(() => {
+				logRetentionInterval = startLogRetention(prisma, logger);
+				logger.info("Log retention job scheduled");
+			}, retentionJitter());
+
+			setTimeout(() => {
+				metricsRetentionInterval = startMetricsRetention(prisma, logger);
+				logger.info("Metrics retention job scheduled");
+			}, retentionJitter());
+
+			setTimeout(() => {
+				authRetentionInterval = startAuthRetention(prisma, logger);
+				logger.info("Auth retention job scheduled");
+			}, retentionJitter());
+		} else {
+			logger.info(
+				{ owner: backgroundJobOwnerLabel() },
+				"Skipping background jobs on this worker (owned by worker id=1)",
 			);
 		}
-
-		const retentionJitter = () => Math.floor(Math.random() * 60_000);
-
-		setTimeout(() => {
-			auditRetentionInterval = startAuditRetention(prisma, logger);
-			logger.info("Audit retention job scheduled");
-		}, retentionJitter());
-
-		setTimeout(() => {
-			statRetentionInterval = startStatRetention(prisma, logger);
-			logger.info("Stat retention job scheduled");
-		}, retentionJitter());
-
-		setTimeout(() => {
-			backupRetentionInterval = startBackupRetention(prisma, logger, wsGateway);
-			logger.info("Backup retention job scheduled");
-		}, retentionJitter());
-
-		setTimeout(() => {
-			stuckBackupStateInterval = startStuckBackupStateWatchdog(prisma, logger, wsGateway);
-			logger.info("Stuck backup state watchdog scheduled");
-		}, retentionJitter());
-
-		setTimeout(() => {
-			logRetentionInterval = startLogRetention(prisma, logger);
-			logger.info("Log retention job scheduled");
-		}, retentionJitter());
-
-		setTimeout(() => {
-			metricsRetentionInterval = startMetricsRetention(prisma, logger);
-			logger.info("Metrics retention job scheduled");
-		}, retentionJitter());
-
-		setTimeout(() => {
-			authRetentionInterval = startAuthRetention(prisma, logger);
-			logger.info("Auth retention job scheduled");
-		}, retentionJitter());
 	} catch (err) {
 		logger.error(err, "Failed to start server");
 		captureSystemError({
@@ -1756,8 +1894,6 @@ async function shutdown(signal: string) {
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
-
-import { bootstrapCluster } from './cluster';
 
 const run = () => bootstrap().catch((err) => {
 	logger.error(err, "Bootstrap error");

@@ -215,15 +215,24 @@ impl CatalystAgent {
             }
         }
 
+        // Best-effort WebSocket close before aborting tasks so the backend
+        // sees a clean disconnect instead of a dropped TCP connection.
+        self.ws_handler.graceful_ws_close().await;
+
         // Explicitly abort all remaining tasks
         join_set.abort_all();
 
-        // Wait for all tasks to finish
+        // Wait for all tasks to finish (short bounded wait so shutdown can't hang)
+        let shutdown_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(3);
         while let Some(result) = join_set.join_next().await {
             if let Err(e) = result {
                 if e.is_panic() {
                     error!("Task panicked during shutdown: {}", e);
                 }
+            }
+            if tokio::time::Instant::now() >= shutdown_deadline {
+                warn!("Shutdown wait timed out; remaining tasks will be dropped");
+                break;
             }
         }
 
@@ -233,9 +242,26 @@ impl CatalystAgent {
             let _ = kill(Pid::from_raw(ctr_pid as i32), Signal::SIGKILL);
         }
 
-        // Clean up firewall rules on shutdown.
-        info!("Shutting down — cleaning up tracked firewall rules");
-        FirewallManager::remove_all_tracked().await;
+        // Do NOT tear down firewall rules for still-running containers on
+        // graceful agent shutdown (SIGTERM/restart). Containers may keep
+        // running under containerd; removing host firewall/NAT would cut
+        // player traffic. Full uninstall paths can call remove_all_tracked.
+        match self.runtime.list_containers().await {
+            Ok(containers) if containers.iter().any(|c| c.managed) => {
+                info!(
+                    "Shutting down with managed containers still present — preserving firewall rules"
+                );
+            }
+            Ok(_) => {
+                info!("Shutting down with no managed containers — skipping firewall teardown");
+            }
+            Err(e) => {
+                warn!(
+                    "Could not list containers during shutdown ({}); leaving firewall rules in place",
+                    e
+                );
+            }
+        }
 
         Ok(())
     }

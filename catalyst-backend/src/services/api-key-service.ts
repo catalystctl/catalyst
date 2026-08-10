@@ -29,9 +29,19 @@ const KEY_LENGTH = 32; // bytes of randomness
  * migration is applied, update this function to accept the stored salt and
  * adjust the lookup strategy in verifyApiKey accordingly.
  */
+function requireApiKeySecret(): string {
+  const secret = process.env.API_KEY_SECRET?.trim();
+  if (!secret) {
+    throw new Error(
+      "API_KEY_SECRET environment variable is required and must be a non-empty secret",
+    );
+  }
+  return secret;
+}
+
 export function hashApiKey(key: string): string {
   const salt = key.slice(0, 16);
-  const secret = process.env.API_KEY_SECRET || "fallback-secret";
+  const secret = requireApiKeySecret();
   return createHmac("sha256", secret).update(key + salt).digest("hex");
 }
 

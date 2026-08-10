@@ -234,10 +234,16 @@ function renderInline(text: string): string {
  result = result.replace(/\*(.+?)\*/g, '<em>$1</em>');
  result = result.replace(/(?<!\w)_(.+?)_(?!\w)/g, '<em>$1</em>');
 
- // Links [text](url)
+ // Links [text](url) — only http(s) and mailto schemes are allowed.
  result = result.replace(
  /\[([^\]]+)\]\(([^)]+)\)/g,
- '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary underline hover:no-underline">$1</a>',
+ (_match, label: string, rawUrl: string) => {
+ const href = sanitizeHref(rawUrl.trim());
+ if (!href) {
+ return label; // drop unsafe schemes (javascript:, data:, etc.)
+ }
+ return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="text-primary underline hover:no-underline">${label}</a>`;
+ },
  );
 
  // Strikethrough ~~text~~
@@ -253,4 +259,23 @@ function escapeHtml(str: string): string {
  .replace(/>/g, '&gt;')
  .replace(/"/g, '&quot;')
  .replace(/'/g, '&#039;');
+}
+
+/** Allow only http(s) and mailto hrefs. Returns null for unsafe schemes. */
+function sanitizeHref(url: string): string | null {
+ if (!url) return null;
+ // Protocol-relative or absolute with scheme
+ if (/^https?:\/\//i.test(url) || /^mailto:/i.test(url)) {
+ return url;
+ }
+ // Relative paths (no scheme) are fine for in-app links
+ if (url.startsWith('/') || url.startsWith('#') || url.startsWith('?')) {
+ return url;
+ }
+ // Reject bare schemes like javascript:, data:, vbscript:, etc.
+ if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)) {
+ return null;
+ }
+ // Treat remaining as relative path
+ return url;
 }

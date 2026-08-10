@@ -31,6 +31,21 @@ pub async fn atomic_write(path: &Path, data: &str) -> AgentResult<()> {
             e
         )));
     }
+
+    // Config files contain API keys — always restrict to owner read/write.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o600);
+        if let Err(e) = fs::set_permissions(path, perms).await {
+            return Err(AgentError::IoError(format!(
+                "Failed to set 0600 permissions on {}: {}",
+                path.display(),
+                e
+            )));
+        }
+    }
+
     Ok(())
 }
 

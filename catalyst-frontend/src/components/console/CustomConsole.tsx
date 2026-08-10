@@ -12,6 +12,7 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown, Download, Trash2 } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { RawEntry, ProcessedEntry } from './types';
 import { processEntry } from './processEntry';
@@ -61,24 +62,28 @@ function escapeRegex(s: string): string {
 }
 
 function highlightSearchInHtml(html: string, query: string): string {
- if (!query) return html;
- const regex = new RegExp(escapeRegex(query), 'gi');
- let result = '';
- let inTag = false;
- let i = 0;
- while (i < html.length) {
- if (html[i] === '<') { inTag = true; result += '<'; i++; continue; }
- if (html[i] === '>') { inTag = false; result += '>'; i++; continue; }
- if (inTag) { result += html[i]; i++; continue; }
- const textEnd = html.indexOf('<', i);
- if (textEnd === -1) {
- result += html.slice(i).replace(regex, '<mark class="console-search-match">$&</mark>');
- break;
- }
- result += html.slice(i, textEnd).replace(regex, '<mark class="console-search-match">$&</mark>');
- i = textEnd;
- }
- return result;
+  if (!query) return html;
+  const regex = new RegExp(escapeRegex(query), 'gi');
+  let result = '';
+  let inTag = false;
+  let i = 0;
+  while (i < html.length) {
+    if (html[i] === '<') { inTag = true; result += '<'; i++; continue; }
+    if (html[i] === '>') { inTag = false; result += '>'; i++; continue; }
+    if (inTag) { result += html[i]; i++; continue; }
+    const textEnd = html.indexOf('<', i);
+    if (textEnd === -1) {
+      result += html.slice(i).replace(regex, '<mark class="console-search-match">$&</mark>');
+      break;
+    }
+    result += html.slice(i, textEnd).replace(regex, '<mark class="console-search-match">$&</mark>');
+    i = textEnd;
+  }
+  // Re-sanitize after mark injection so search cannot introduce executable markup.
+  return DOMPurify.sanitize(result, {
+    ADD_TAGS: ['mark'],
+    ADD_ATTR: ['class'],
+  });
 }
 
 // ── Row component ──

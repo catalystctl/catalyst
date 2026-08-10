@@ -186,7 +186,10 @@ export const qk = {
 
   // ── Files / SFTP ────────────────────────────────────────────────────
   sftpTokens: (serverId: string) => ['servers', serverId, 'sftp-tokens'] as const,
-  sftpConnectionInfo: (serverId: string) => ['servers', serverId, 'sftp-connection-info'] as const,
+  sftpConnectionInfo: (serverId: string, ttlMs?: number) =>
+    ttlMs != null
+      ? (['servers', serverId, 'sftp-connection-info', ttlMs] as const)
+      : (['servers', serverId, 'sftp-connection-info'] as const),
 
   // ── Mutation Keys ───────────────────────────────────────────────────
   mutation: {

@@ -23,6 +23,9 @@ export const PluginManifestSchema = z.object({
   author: z.string().min(1).max(100),
   catalystVersion: z.string().min(1),
   permissions: z.array(z.string()).default([]),
+  // Isolation / storage engine flags — must be kept (not stripped) so loader can activate them.
+  runtime: z.enum(['legacy', 'isolated']).optional(),
+  storageEngine: z.enum(['legacy', 'dedicated']).optional(),
   backend: z
     .object({
       entry: z.string(),

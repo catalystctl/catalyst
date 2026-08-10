@@ -332,9 +332,25 @@ export const useThemeStore = create<ThemeState>()(
           orphaned.parentNode.removeChild(orphaned);
         }
         if (css && css.trim()) {
+          // Basic length cap + strip obviously dangerous constructs before DOM injection.
+          // Full CSS parsing is out of scope; this is a defense-in-depth bound only.
+          const MAX_CUSTOM_CSS_CHARS = 100_000; // 100 KB
+          let safeCss = css.trim();
+          if (safeCss.length > MAX_CUSTOM_CSS_CHARS) {
+            safeCss = safeCss.slice(0, MAX_CUSTOM_CSS_CHARS);
+            debugLog('[themeStore] custom CSS truncated to', MAX_CUSTOM_CSS_CHARS, 'chars');
+          }
+          // Neutralize common CSS injection vectors (expression, behavior, -moz-binding, javascript: urls)
+          safeCss = safeCss
+            .replace(/expression\s*\(/gi, '/*blocked*/(')
+            .replace(/behavior\s*:/gi, '/*blocked*/:')
+            .replace(/-moz-binding\s*:/gi, '/*blocked*/:')
+            .replace(/javascript\s*:/gi, '/*blocked*/:')
+            .replace(/@import\b/gi, '/*blocked-import*/');
+
           const style = document.createElement('style');
           style.id = 'catalyst-custom-css';
-          style.textContent = css;
+          style.textContent = safeCss;
           document.head.appendChild(style);
           debugLog('[themeStore] injected style element into <head>, id:', style.id);
           set({ customCssElement: style });

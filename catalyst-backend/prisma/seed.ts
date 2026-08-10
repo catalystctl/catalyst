@@ -9,6 +9,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 import { auth, initAuth } from "../src/auth";
+import { withRegistrationBypass } from "../src/lib/registration-gate.js";
 initAuth();
 import * as fs from 'fs';
 import * as path from 'path';
@@ -165,7 +166,7 @@ async function main() {
   });
 
   if (!user) {
-    const signUpResponse = await auth.api.signUpEmail({
+    const signUpResponse = await withRegistrationBypass(() => auth.api.signUpEmail({
       headers: new Headers({
         origin: process.env.FRONTEND_URL || "http://localhost:5173",
       }),
@@ -176,7 +177,7 @@ async function main() {
         username: "admin",
       } as any,
       returnHeaders: true,
-    });
+    }));
 
     const data =
       "headers" in signUpResponse && signUpResponse.response

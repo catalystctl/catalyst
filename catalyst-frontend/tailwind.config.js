@@ -6,6 +6,8 @@ export default {
   content: [
     './index.html',
     './src/**/*.{ts,tsx}',
+    // External plugin UIs (vite @plugins → ../catalyst-plugins)
+    '../catalyst-plugins/**/*.{ts,tsx,js,jsx}',
   ],
   theme: {
     extend: {

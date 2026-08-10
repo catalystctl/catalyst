@@ -8,9 +8,10 @@
  *
  * Only connects if the user has admin permissions (avoids 401 spam on /api/admin/events).
  */
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useQueryClient, type Query } from '@tanstack/react-query';
 import { useAuthStore } from '../stores/authStore';
+import { hasAnyAdminPermission } from '../components/auth/ProtectedRoute';
 import { createAdminEventsStream, type AdminEventType } from '../services/api/admin-events';
 import { qk } from '../lib/queryKeys';
 import type { AdminUser, SystemError } from '../types/admin';
@@ -19,7 +20,12 @@ import type { Template } from '../types/template';
 export function useSseAdminEvents() {
   const queryClient = useQueryClient();
   const permissions = useAuthStore((s) => s.user?.permissions);
-  const isAdmin = permissions?.includes('admin.read') || permissions?.includes('admin.write') || permissions?.includes('*');
+  // Any admin-panel permission (node.*, user.*, template.*, …) — not only
+  // admin.read / admin.write — should receive live invalidation events.
+  const isAdmin = useMemo(
+    () => hasAnyAdminPermission(permissions),
+    [permissions],
+  );
 
   useEffect(() => {
     if (!isAdmin) return;

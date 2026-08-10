@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
-import { DEFAULT_PERMISSION_PRESETS, INVITE_EXPIRY_DAYS, auth, canAccessServer, captureSystemError, hasNodeAccess, nanoid, renderInviteEmail, revokeSftpTokensForUser, sendEmail } from './_helpers.js';
+import { DEFAULT_PERMISSION_PRESETS, INVITE_EXPIRY_DAYS, auth, canAccessServer, captureSystemError, nanoid, renderInviteEmail, revokeSftpTokensForUser, sendEmail } from './_helpers.js';
+import { withRegistrationBypass } from '../../lib/registration-gate.js';
 
 export async function serverInvitesRoutes(app: FastifyInstance) {
   app.get(
@@ -18,14 +19,9 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Server not found" });
       }
 
-      // Check if user has access - owner, admin, or node-assigned user
-      if (!(await canAccessServer(userId, server))) {
-        const access = await prisma.serverAccess.findUnique({
-          where: { userId_serverId: { userId, serverId } },
-        });
-        if (!access) {
-          return reply.status(403).send({ error: "Forbidden" });
-        }
+      // Check if user has access - owner, admin.write/*, ServerAccess, or (node + node.update)
+      if (!(await canAccessServer(userId, { id: serverId, ownerId: server.ownerId, nodeId: server.nodeId }))) {
+        return reply.status(403).send({ error: "Forbidden" });
       }
 
       // Get all access entries for this server
@@ -63,14 +59,8 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Server not found" });
       }
 
-      if (server.ownerId !== userId) {
-        const access = await prisma.serverAccess.findFirst({
-          where: { serverId, userId, permissions: { has: "server.read" } },
-        });
-        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-        if (!access && !hasNodeAccessToServer) {
-          return reply.status(403).send({ error: "Forbidden" });
-        }
+      if (!(await canAccessServer(userId, server))) {
+        return reply.status(403).send({ error: "Forbidden" });
       }
 
       const invites = await prisma.serverAccessInvite.findMany({
@@ -421,18 +411,20 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         return reply.status(409).send({ error: "Email or username already in use" });
       }
 
-      const signUpResponse = await auth.api.signUpEmail({
-        headers: new Headers({
-          origin: request.headers.origin || request.headers.host || "http://localhost:3000",
+      const signUpResponse = await withRegistrationBypass(() =>
+        auth.api.signUpEmail({
+          headers: new Headers({
+            origin: request.headers.origin || request.headers.host || "http://localhost:3000",
+          }),
+          body: {
+            email: invite.email,
+            password,
+            name: username,
+            username,
+          } as any,
+          returnHeaders: true,
         }),
-        body: {
-          email: invite.email,
-          password,
-          name: username,
-          username,
-        } as any,
-        returnHeaders: true,
-      });
+      );
 
       const signUpUser =
         "headers" in signUpResponse && signUpResponse.response

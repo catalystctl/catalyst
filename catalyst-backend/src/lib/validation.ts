@@ -164,8 +164,18 @@ export const apiKeyNameSchema = z.string()
 /**
  * Permission validation
  */
+/**
+ * Permission strings:
+ * - "*" — global wildcard
+ * - "resource.action" — unscoped (e.g. server.read)
+ * - "resource.action:resourceId" — scoped (e.g. node.delete:node_abc)
+ * Multi-segment resources allowed (e.g. admin.read, file.sftp).
+ */
 export const permissionSchema = z.string()
-  .regex(/^[a-z]+.[a-z]+$/, 'Permission must be in format "resource.action" (e.g., "server.read")');
+  .refine(
+    (value) => value === '*' || /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+(:[A-Za-z0-9_\-:.*]+)?$/.test(value),
+    { message: 'Permission must be "*", "resource.action", or "resource.action:resourceId"' },
+  );
 
 /**
  * Role validation

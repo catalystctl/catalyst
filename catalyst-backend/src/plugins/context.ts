@@ -129,7 +129,9 @@ function matchFilter(doc: any, filter: any): boolean {
 
 // ── Field whitelist for write operations ────────────────────────────────────
 const SERVER_WRITE_WHITELIST = new Set(['status']);
-const USER_WRITE_WHITELIST = new Set(['roleIds']);
+// roleIds intentionally omitted — plugins with only user.write must not escalate
+// privileges by assigning roles. Admin-only role assignment stays outside plugins.
+const USER_WRITE_WHITELIST = new Set<string>([]);
 
 /**
  * Scoped database wrapper that limits plugin access to safe operations only.
@@ -256,7 +258,9 @@ class ScopedPluginDBClient implements ScopedPluginDB {
           }
         }
         if (Object.keys(filtered).length === 0) {
-          throw new Error('No whitelisted fields in update data. Allowed fields: roleIds');
+          throw new Error(
+            'No whitelisted fields in update data. user.write cannot modify roleIds (privilege escalation). Allowed fields: (none — use admin APIs for role assignment)',
+          );
         }
         logger.info({ plugin: pluginName, userId: id, fields: Object.keys(filtered) }, 'Plugin updated user');
         return prisma.user.update({ where: { id }, data: filtered });

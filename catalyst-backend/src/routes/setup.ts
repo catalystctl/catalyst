@@ -4,6 +4,7 @@ import { auth } from "../auth";
 import { fromNodeHeaders } from "better-auth/node";
 import { z } from "zod";
 import { captureSystemError } from "../services/error-logger";
+import { withRegistrationBypass } from "../lib/registration-gate.js";
 
 const setupSchema = z.object({
 	email: z.string().email("Invalid email format"),
@@ -187,6 +188,13 @@ export async function setupRoutes(app: FastifyInstance) {
 			},
 		});
 
+		// Disable open self-registration after first setup (admins re-enable via security settings).
+		await prisma.systemSetting.upsert({
+			where: { id: "security" },
+			create: { id: "security", registrationEnabled: false },
+			update: { registrationEnabled: false },
+		});
+
 		// 4. Fetch full user record and return success
 		const fullUser = await prisma.user.findUnique({
 			where: { id: existingUser.id },
@@ -324,11 +332,13 @@ export async function setupRoutes(app: FastifyInstance) {
 				});
 
 				// 6. Create the admin user via better-auth
-				const response = await auth.api.signUpEmail({
-					headers: getHeaders(request),
-					body: { email, password, name: username, username } as any,
-					returnHeaders: true,
-				});
+				const response = await withRegistrationBypass(() =>
+					auth.api.signUpEmail({
+						headers: getHeaders(request),
+						body: { email, password, name: username, username } as any,
+						returnHeaders: true,
+					}),
+				);
 
 				const data =
 					"headers" in response && response.response
@@ -375,6 +385,14 @@ export async function setupRoutes(app: FastifyInstance) {
 						logoUrl: logoUrl || null,
 						metadata,
 					},
+				});
+
+				// Disable open self-registration after first setup completes.
+				// Admins can re-enable via security settings or REGISTRATION_ENABLED=true.
+				await prisma.systemSetting.upsert({
+					where: { id: "security" },
+					create: { id: "security", registrationEnabled: false },
+					update: { registrationEnabled: false },
 				});
 
 				// 9. Forward auth headers (set-cookie) so user is immediately logged in

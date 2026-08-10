@@ -183,6 +183,31 @@ export function EditApiKeyDialog({ apiKey, open, onClose }: EditApiKeyDialogProp
  <p className="text-[11px] text-muted-foreground">Maximum requests allowed in the given time window.</p>
  </div>
 
+ {/* Permissions — API update schema does not accept permission changes */}
+ <div className="rounded-lg border border-border/50 bg-surface-2/40 px-4 py-3 dark:bg-surface-2/20">
+ <div className="flex items-center justify-between gap-2">
+ <span className="text-xs font-medium text-foreground">Permissions</span>
+ <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Read-only</span>
+ </div>
+ <p className="mt-1 text-[11px] text-muted-foreground">
+ Permissions and expiry are fixed at creation. Revoke this key and create a new one to change them.
+ </p>
+ <div className="mt-2 flex flex-wrap gap-1.5">
+ {apiKey.allPermissions ? (
+ <span className="rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">All permissions</span>
+ ) : apiKey.permissions?.length ? (
+ apiKey.permissions.map((p) => (
+ <span key={p} className="rounded-md border border-border/50 bg-card px-2 py-0.5 font-mono text-[10px] text-muted-foreground">{p}</span>
+ ))
+ ) : (
+ <span className="text-[11px] text-muted-foreground">No specific permissions listed</span>
+ )}
+ </div>
+ {apiKey.expiresAt && (
+ <p className="mt-2 text-[11px] text-muted-foreground">Expires: {new Date(apiKey.expiresAt).toLocaleString()}</p>
+ )}
+ </div>
+
  {/* Actions */}
  <div className="flex justify-end gap-2 border-t border-border/50 pt-4">
  <Button variant="outline" size="sm" type="button" onClick={onClose}>Cancel</Button>

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
-import { checkIsAdmin, hasNodeAccess } from './_helpers.js';
+import { canAccessServer } from './_helpers.js';
 
 export async function serverStatsRoutes(app: FastifyInstance) {
   app.get(
@@ -15,19 +15,15 @@ export async function serverStatsRoutes(app: FastifyInstance) {
         interval?: string;
       };
 
-      // Verify server access
+      // Verify server access (owner | ServerAccess | node+node.update | admin.write/*)
       const server = await prisma.server.findUnique({
         where: { id: serverId },
-        include: { access: true },
+        select: { id: true, ownerId: true, nodeId: true },
       });
       if (!server) {
         return reply.status(404).send({ error: "Server not found" });
       }
-      const hasAccess =
-        server.ownerId === userId ||
-        server.access.some((a) => a.userId === userId) ||
-        (await hasNodeAccess(prisma, userId, server.nodeId));
-      if (!hasAccess) {
+      if (!(await canAccessServer(userId, server))) {
         return reply.status(403).send({ error: "Forbidden" });
       }
 
@@ -109,19 +105,9 @@ export async function serverStatsRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Server not found" });
       }
 
-      // Permission check: owner, admin, or server.read access
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
-        const access = await prisma.serverAccess.findFirst({
-          where: {
-            userId,
-            serverId,
-            permissions: { has: "server.read" },
-          },
-        });
-        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-        if (!access && !hasNodeAccessToServer) {
-          return reply.status(403).send({ error: "Forbidden" });
-        }
+      // Permission check: decideServerAccess contract (not bare node assignment)
+      if (!(await canAccessServer(userId, server))) {
+        return reply.status(403).send({ error: "Forbidden" });
       }
 
       const [items, total] = await Promise.all([

@@ -36,6 +36,7 @@ import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { Skeleton } from '../../../components/ui/skeleton';
 import EmptyState from '../../shared/EmptyState';
+import ConfirmDialog from '../../shared/ConfirmDialog';
 import UpdateConfirmModal, {
  type UpdateItem,
 } from './UpdateConfirmModal';
@@ -232,6 +233,9 @@ export default function ServerPluginManagerTab({
  const [updateConfirmPlugins, setUpdateConfirmPlugins] = useState<
  UpdateItem[]
  >([]);
+ const [pendingRemovePlugins, setPendingRemovePlugins] = useState<
+ string[] | null
+ >(null);
  const [isCheckingPluginUpdates, setIsCheckingPluginUpdates] =
  useState(false);
  const [isUpdatingPlugins, setIsUpdatingPlugins] = useState(false);
@@ -1049,16 +1053,7 @@ export default function ServerPluginManagerTab({
  size="sm"
  className="gap-1.5 border-danger/30 text-danger hover:bg-danger/10 hover:text-danger"
  onClick={() => {
- if (
- !confirm(
- `Remove ${selectedPluginFiles.size} selected plugin${selectedPluginFiles.size !== 1 ? 's' : ''}?`,
- )
- )
- return;
- selectedPluginFiles.forEach((name) =>
- uninstallPluginMutation.mutate(name),
- );
- setSelectedPluginFiles(new Set());
+ setPendingRemovePlugins(Array.from(selectedPluginFiles));
  }}
  >
  <Trash2 className="h-3.5 w-3.5" />
@@ -1309,14 +1304,7 @@ export default function ServerPluginManagerTab({
  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
  title="Remove"
  onClick={() => {
- if (
- confirm(
- `Remove ${plugin.projectName || plugin.name}?`,
- )
- )
- uninstallPluginMutation.mutate(
- plugin.name,
- );
+ setPendingRemovePlugins([plugin.name]);
  }}
  >
  <Trash2 className="h-4 w-4" />
@@ -1329,6 +1317,33 @@ export default function ServerPluginManagerTab({
  </motion.div>
  )}
  </div>
+
+ {/* Remove confirmation modal */}
+ <ConfirmDialog
+ open={pendingRemovePlugins !== null && pendingRemovePlugins.length > 0}
+ title={
+ pendingRemovePlugins?.length === 1 ? 'Remove plugin' : 'Remove plugins'
+ }
+ message={
+ pendingRemovePlugins?.length === 1
+ ? `Remove ${pendingRemovePlugins[0]}? This cannot be undone.`
+ : `Remove ${pendingRemovePlugins?.length ?? 0} selected plugins? This cannot be undone.`
+ }
+ confirmText="Remove"
+ variant="danger"
+ loading={uninstallPluginMutation.isPending}
+ onConfirm={() => {
+ if (!pendingRemovePlugins) return;
+ pendingRemovePlugins.forEach((name) =>
+ uninstallPluginMutation.mutate(name),
+ );
+ setSelectedPluginFiles(new Set());
+ setPendingRemovePlugins(null);
+ }}
+ onCancel={() => {
+ if (!uninstallPluginMutation.isPending) setPendingRemovePlugins(null);
+ }}
+ />
 
  {/* Update confirmation modal */}
  <UpdateConfirmModal

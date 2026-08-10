@@ -20,13 +20,20 @@ function BackupList({
  serverStatus,
  isSuspended = false,
  canWrite = true,
+ canRestore,
+ canDelete,
 }: {
  serverId: string;
  backups: BackupWithDownload[];
  serverStatus: string;
  isSuspended?: boolean;
+ /** @deprecated prefer canRestore/canDelete */
  canWrite?: boolean;
+ canRestore?: boolean;
+ canDelete?: boolean;
 }) {
+ const allowRestore = canRestore ?? canWrite;
+ const allowDelete = canDelete ?? canWrite;
  const sorted = useMemo(() => {
  const next = [...backups];
  next.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -72,12 +79,16 @@ function BackupList({
  {backup.downloadProgress ?? 'Download'}
  </button>
  ) : null}
+ {allowRestore ? (
  <RestoreBackupDialog
  serverId={serverId}
  backup={backup}
- disabled={serverStatus !== 'stopped' || isSuspended || !canWrite}
+ disabled={serverStatus !== 'stopped' || isSuspended}
  />
- <DeleteBackupDialog serverId={serverId} backup={backup} disabled={isSuspended || !canWrite} />
+ ) : null}
+ {allowDelete ? (
+ <DeleteBackupDialog serverId={serverId} backup={backup} disabled={isSuspended} />
+ ) : null}
  </div>
  </div>
  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-5">

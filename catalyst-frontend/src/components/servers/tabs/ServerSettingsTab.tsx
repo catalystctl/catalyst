@@ -8,6 +8,7 @@ import { serversApi } from '../../../services/api/servers';
 import { notifySuccess, notifyError } from '../../../utils/notify';
 import { reportSystemError } from '../../../services/api/systemErrors';
 import CloneServerDialog from '../CloneServerDialog';
+import { ConfirmDialog } from '../../shared/ConfirmDialog';
 import type { Server } from '../../../types/server';
 import { Settings, PenLine, Globe, Wrench } from 'lucide-react';
 
@@ -21,6 +22,8 @@ interface Props {
  serverStatus: string;
  subdomain: string | null;
  server: Server;
+ /** Effective server permissions used to gate reinstall. */
+ permissions?: string[];
 }
 
 const SUBDOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -35,9 +38,18 @@ export default function ServerSettingsTab({
  serverStatus,
  subdomain,
  server,
+ permissions,
 }: Props) {
  const queryClient = useQueryClient();
  const [subdomainInput, setSubdomainInput] = useState(subdomain ?? '');
+ const [showReinstallConfirm, setShowReinstallConfirm] = useState(false);
+ const [reinstallPending, setReinstallPending] = useState(false);
+
+ const permSet = new Set(permissions ?? []);
+ const canReinstall =
+   permSet.has('*') ||
+   permSet.has('server.install') ||
+   permSet.has('server.reinstall');
 
  const updateSubdomainMutation = useMutation({
  mutationFn: (value: string | null) => serversApi.updateSubdomain(serverId, value),
@@ -55,9 +67,11 @@ export default function ServerSettingsTab({
  };
 
  const handleReinstall = async () => {
+ setReinstallPending(true);
  try {
  await serversApi.install(serverId);
  notifySuccess('Reinstall started');
+ setShowReinstallConfirm(false);
  } catch (error: unknown) {
  reportSystemError({
  level: 'error',
@@ -68,6 +82,7 @@ export default function ServerSettingsTab({
  });
  notifyError(error instanceof Error ? error.message : 'Failed to reinstall server');
  } finally {
+ setReinstallPending(false);
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  }
@@ -136,18 +151,32 @@ export default function ServerSettingsTab({
  <ServerTabCard>
  <SectionHeader icon={Wrench} title="Maintenance" />
  <div className="flex flex-wrap gap-2">
+ {canReinstall && (
  <button
  type="button"
  className="rounded-md border border-warning/25 bg-warning/10 px-3 py-1.5 text-xs font-semibold text-warning transition-all hover:border-warning/40 hover:bg-warning/15 disabled:opacity-50"
- disabled={serverStatus !== 'stopped' || isSuspended}
- onClick={handleReinstall}
+ disabled={serverStatus !== 'stopped' || isSuspended || reinstallPending}
+ onClick={() => setShowReinstallConfirm(true)}
  >
  Reinstall
  </button>
+ )}
  <CloneServerDialog server={server} disabled={isSuspended} />
  </div>
  </ServerTabCard>
  </div>
+
+ <ConfirmDialog
+ open={showReinstallConfirm}
+ title="Reinstall server?"
+ message="This will wipe server files and re-run the install script. Data that is not backed up will be lost. Are you sure?"
+ confirmText="Reinstall"
+ cancelText="Cancel"
+ variant="danger"
+ loading={reinstallPending}
+ onConfirm={() => { void handleReinstall(); }}
+ onCancel={() => setShowReinstallConfirm(false)}
+ />
  </div>
  );
 }

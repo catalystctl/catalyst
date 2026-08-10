@@ -1,48 +1,64 @@
 import { useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Navigate } from 'react-router-dom';
 import { usePluginTabs } from '../plugins/hooks';
 import { usePluginContext } from '../plugins/usePluginContext';
 import PluginErrorBoundary from '../plugins/PluginErrorBoundary';
+import { useAuthStore } from '../stores/authStore';
+import { hasAnyPermission } from '../components/auth/ProtectedRoute';
+import LoadingSpinner from '../components/shared/LoadingSpinner';
 
 interface PluginTabPageProps {
- location: 'admin' | 'server';
- serverId?: string;
+  location: 'admin' | 'server';
+  serverId?: string;
 }
 
 export default function PluginTabPage({ location, serverId }: PluginTabPageProps) {
- const { pluginTabId } = useParams<{ pluginTabId: string }>();
- const { reloadPlugins, initialized, loading } = usePluginContext();
- const pluginTabs = usePluginTabs(location);
+  const { pluginTabId } = useParams<{ pluginTabId: string }>();
+  const { reloadPlugins, initialized, loading } = usePluginContext();
+  const pluginTabs = usePluginTabs(location);
+  const userPermissions = useAuthStore((s) => s.user?.permissions);
 
- useEffect(() => {
- if (!initialized && !loading) {
- reloadPlugins();
- }
- }, [initialized, loading, reloadPlugins]);
+  useEffect(() => {
+    if (!initialized && !loading) {
+      reloadPlugins();
+    }
+  }, [initialized, loading, reloadPlugins]);
 
- const tab = pluginTabs.find((t) => t.id === pluginTabId);
+  if (!initialized || loading) {
+    return <LoadingSpinner />;
+  }
 
- if (!tab) {
- return (
- <div className="rounded-lg border border-border bg-card p-12 text-center">
- <h2 className="mb-2 text-xl font-semibold text-foreground">
- Plugin Tab Not Found
- </h2>
- <p className="text-muted-foreground">
- The requested plugin tab could not be found or is not enabled.
- </p>
- </div>
- );
- }
+  const tab = pluginTabs.find((t) => t.id === pluginTabId);
 
- const TabComponent = tab.component;
+  if (!tab) {
+    return (
+      <div className="rounded-lg border border-border bg-card p-12 text-center">
+        <h2 className="mb-2 text-xl font-semibold text-foreground">
+          Plugin Tab Not Found
+        </h2>
+        <p className="text-muted-foreground">
+          The requested plugin tab could not be found or is not enabled.
+        </p>
+      </div>
+    );
+  }
 
- // Extract plugin name from tab id (format: {pluginName}-{location})
- const pluginName = tab.id.replace(/-(admin|server)$/, '');
+  if (
+    tab.requiredPermissions &&
+    tab.requiredPermissions.length > 0 &&
+    !hasAnyPermission(userPermissions, tab.requiredPermissions)
+  ) {
+    return <Navigate to={location === 'admin' ? '/admin' : '/dashboard'} replace />;
+  }
 
- return (
- <PluginErrorBoundary pluginName={pluginName}>
- <TabComponent serverId={serverId} />
- </PluginErrorBoundary>
- );
+  const TabComponent = tab.component;
+
+  // Extract plugin name from tab id (format: {pluginName}-{location})
+  const pluginName = tab.id.replace(/-(admin|server)$/, '');
+
+  return (
+    <PluginErrorBoundary pluginName={pluginName}>
+      <TabComponent serverId={serverId} />
+    </PluginErrorBoundary>
+  );
 }

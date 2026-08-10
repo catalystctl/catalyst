@@ -8,6 +8,7 @@ import StatGrid from './StatGrid';
 import TabHeader from './TabHeader';
 import SectionHeader from './SectionHeader';
 import { BarChart3, Activity, TrendingUp } from 'lucide-react';
+import { formatBytes } from '../../../utils/formatters';
 
 interface LiveMetrics {
  cpuPercent?: number;
@@ -111,18 +112,19 @@ export default function ServerMetricsTab({
  value: liveDiskIoMb != null ? `${liveDiskIoMb} MB` : 'n/a',
  },
  {
- label: 'Net RX',
+ // Live stream reports cumulative counters (bytes), not rates — match console sidebar.
+ label: 'Net RX (total)',
  value: (() => {
- const rate = liveMetrics?.networkRxBytes;
- if (rate != null && typeof rate === 'number') return `${rate.toFixed(2)} MB/s`;
+ const bytes = liveMetrics?.networkRxBytes;
+ if (bytes != null && typeof bytes === 'number') return formatBytes(bytes);
  return 'n/a';
  })(),
  },
  {
- label: 'Net TX',
+ label: 'Net TX (total)',
  value: (() => {
- const rate = liveMetrics?.networkTxBytes;
- if (rate != null && typeof rate === 'number') return `${rate.toFixed(2)} MB/s`;
+ const bytes = liveMetrics?.networkTxBytes;
+ if (bytes != null && typeof bytes === 'number') return formatBytes(bytes);
  return 'n/a';
  })(),
  },

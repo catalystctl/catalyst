@@ -8,7 +8,7 @@
 import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { serialize } from '../utils/serialize';
-import { hasNodeAccess, getUserAccessibleNodes } from '../lib/permissions';
+import { getUserAccessibleNodes } from '../lib/permissions';
 
 interface BulkResult {
   success: string[];
@@ -26,7 +26,6 @@ export async function bulkServerRoutes(app: FastifyInstance) {
     if (
       perms.includes('*') ||
       perms.includes('admin.write') ||
-      perms.includes('admin.read') ||
       perms.includes('server.suspend')
     ) {
       return true;
@@ -48,8 +47,8 @@ export async function bulkServerRoutes(app: FastifyInstance) {
     // Check permissions from request.user.permissions
     const userPermissions = new Set(request.user?.permissions ?? []);
 
-    // Admins have access
-    if (userPermissions.has('*') || userPermissions.has('admin.write') || userPermissions.has('admin.read')) {
+    // Admins with write access have access
+    if (userPermissions.has('*') || userPermissions.has('admin.write')) {
       return true;
     }
 
@@ -77,9 +76,10 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       select: { nodeId: true, ownerId: true },
     });
 
-    if (server) {
-      const nodeAccess = await hasNodeAccess(prismaClient, request.user.userId, server.nodeId);
-      if (nodeAccess) return true;
+    // Node assignment alone must not grant bulk server power ops.
+    // Admins already passed via admin.write/* above; owners via ownerId below if needed.
+    if (server && server.ownerId === request.user.userId) {
+      return true;
     }
 
     return false;
@@ -433,16 +433,27 @@ export async function bulkServerRoutes(app: FastifyInstance) {
 
         try {
           const { releaseIpForServer: rip } = await import('../utils/ipam');
+          const { dropDatabase } = await import('../services/mysql');
 
-          await prisma.$transaction(async (tx) => {
-            await rip(tx, serverId);
-            await tx.server.delete({ where: { id: serverId } });
+          // Drop provisioned MySQL DBs before cascade-deleting the Server row.
+          const serverDatabases = await prisma.serverDatabase.findMany({
+            where: { serverId },
+            include: { host: true },
           });
+          for (const database of serverDatabases) {
+            try {
+              await dropDatabase(database.host, database.name, database.username);
+            } catch (err: any) {
+              app.log.warn(
+                { serverId, databaseId: database.id, error: err?.message },
+                'Failed to drop server database during bulk delete — continuing',
+              );
+            }
+          }
 
-          // Tell agent to clean up
+          // Best-effort agent cleanup before cascade delete so offline status is known.
+          let agentOffline = false;
           if (gateway && server.nodeId) {
-            // Proactively remove from discovered containers cache so the deleted
-            // server doesn't temporarily re-appear in the node discovery section.
             if (gateway.removeDiscoveredContainer) {
               gateway.removeDiscoveredContainer(server.nodeId, server.id);
             }
@@ -452,19 +463,28 @@ export async function bulkServerRoutes(app: FastifyInstance) {
               serverUuid: server.uuid,
             });
             if (!sent) {
+              agentOffline = true;
               app.log.warn(
                 { serverId: server.id, nodeId: server.nodeId },
-                'Agent offline during bulk delete — container cleanup skipped'
+                'Agent offline during bulk delete — container cleanup skipped',
               );
             }
           }
+
+          await prisma.$transaction(async (tx) => {
+            await rip(tx, serverId);
+            await tx.server.delete({ where: { id: serverId } });
+          });
 
           auditLogs.push({
             userId,
             action: 'server.bulk_delete',
             resource: 'server',
             resourceId: serverId,
-            details: { serverName: server.name },
+            details: {
+              serverName: server.name,
+              ...(agentOffline ? { agentCleanup: false, warning: 'agent offline' } : {}),
+            },
           });
 
           result.success.push(serverId);
@@ -563,9 +583,9 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         },
       });
 
-      // Check if user has admin permissions (can see all servers)
+      // Check if user has admin write permissions (can see all servers)
       const perms: string[] = request.user?.permissions ?? [];
-      const isAdmin = perms.includes('*') || perms.includes('admin.write') || perms.includes('admin.read');
+      const isAdmin = perms.includes('*') || perms.includes('admin.write');
 
       // Filter servers based on authorization
       const filteredServers = servers.filter((server) => {

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
-import { captureSystemError, ensureNotSuspended, fileRateLimitMax, fileRateLimitWindowMs, getSecuritySettings, hasNodeAccess, isArchiveName, normalizeRequestPath, path, validateAndNormalizePath } from './_helpers.js';
+import { captureSystemError, ensureServerAccess, fileRateLimitMax, fileRateLimitWindowMs, getSecuritySettings, isArchiveName, path, validateAndNormalizePath } from './_helpers.js';
 
 export async function serverFilesRoutes(app: FastifyInstance) {
   // Compute per-route body limit for upload (mirrors index.ts file-tunnel pattern)
@@ -23,6 +23,19 @@ export async function serverFilesRoutes(app: FastifyInstance) {
   ) => {
     return fileTunnel.queueRequest(nodeId, operation, serverUuid, filePath, data, uploadData);
   };
+
+
+  /**
+   * Align file routes with ensureServerAccess:
+   * owner, explicit serverAccess perm, admin.write/*, or (node assignment + node.update).
+   * Bare hasNodeAccess alone is not enough.
+   */
+  const requireFileAccess = async (
+    serverId: string,
+    userId: string,
+    permission: string,
+    reply: FastifyReply,
+  ) => ensureServerAccess(serverId, userId, permission, reply);
 
   const notifyFileChange = (serverId: string, status: string, action: string, path?: string, from?: string, to?: string) => {
     const wsGateway = app.wsGateway;
@@ -55,31 +68,9 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
       const { path: requestedPath } = request.query as { path?: string };
 
-      const server = await prisma.server.findUnique({
-        where: { id: serverId },
-      });
-
+      const server = await requireFileAccess(serverId, userId, "file.read", reply);
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
-      }
-
-      if (!ensureNotSuspended(server, reply)) {
         return;
-      }
-
-      // Check permissions
-      const access = await prisma.serverAccess.findFirst({
-        where: {
-          serverId,
-          userId,
-          permissions: { has: "file.read" },
-        },
-      });
-
-      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-
-      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
-        return reply.status(403).send({ error: "Forbidden" });
       }
 
       const normalizedPath = validateAndNormalizePath(requestedPath, server.uuid, userId);
@@ -124,30 +115,9 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing path parameter" });
       }
 
-      const server = await prisma.server.findUnique({
-        where: { id: serverId },
-      });
-
+      const server = await requireFileAccess(serverId, userId, "file.read", reply);
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
-      }
-
-      if (!ensureNotSuspended(server, reply)) {
         return;
-      }
-
-      const access = await prisma.serverAccess.findFirst({
-        where: {
-          serverId,
-          userId,
-          permissions: { has: "file.read" },
-        },
-      });
-
-      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-
-      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
-        return reply.status(403).send({ error: "Forbidden" });
       }
 
       const normalizedPath = validateAndNormalizePath(requestedPath, server.uuid, userId);
@@ -187,30 +157,9 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
 
-      const server = await prisma.server.findUnique({
-        where: { id: serverId },
-      });
-
+      const server = await requireFileAccess(serverId, userId, "file.write", reply);
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
-      }
-
-      if (!ensureNotSuspended(server, reply)) {
         return;
-      }
-
-      const access = await prisma.serverAccess.findFirst({
-        where: {
-          serverId,
-          userId,
-          permissions: { has: "file.write" },
-        },
-      });
-
-      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-
-      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
-        return reply.status(403).send({ error: "Forbidden" });
       }
 
       const upload = await request.file();
@@ -221,9 +170,19 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       const rawPath = (upload.fields as any)?.path?.value;
       const basePath =
         typeof rawPath === "string" ? rawPath : rawPath ? String(rawPath) : "/";
-      const normalizedPath = normalizeRequestPath(basePath);
       const safeFilename = path.posix.basename(upload.filename || "upload");
-      const filePath = path.posix.join(normalizedPath, safeFilename);
+      let filePath: string;
+      try {
+        const normalizedPath = validateAndNormalizePath(basePath, server.uuid, userId);
+        // Re-validate joined path under server jail
+        filePath = validateAndNormalizePath(
+          path.posix.join(normalizedPath, safeFilename),
+          server.uuid,
+          userId,
+        );
+      } catch (pathErr: any) {
+        return reply.status(400).send({ error: pathErr?.message || "Invalid path" });
+      }
 
       try {
         // Buffer the upload data and send to agent
@@ -272,30 +231,9 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing path" });
       }
 
-      const server = await prisma.server.findUnique({
-        where: { id: serverId },
-      });
-
+      const server = await requireFileAccess(serverId, userId, "file.write", reply);
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
-      }
-
-      if (!ensureNotSuspended(server, reply)) {
         return;
-      }
-
-      const access = await prisma.serverAccess.findFirst({
-        where: {
-          serverId,
-          userId,
-          permissions: { has: "file.write" },
-        },
-      });
-
-      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-
-      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
-        return reply.status(403).send({ error: "Forbidden" });
       }
 
       const normalizedPath = validateAndNormalizePath(requestedPath, server.uuid, userId);
@@ -342,35 +280,14 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Unsupported archive type" });
       }
 
-      const server = await prisma.server.findUnique({
-        where: { id: serverId },
-      });
-
+      const server = await requireFileAccess(serverId, userId, "file.write", reply);
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
-      }
-
-      if (!ensureNotSuspended(server, reply)) {
         return;
       }
 
-      const access = await prisma.serverAccess.findFirst({
-        where: {
-          serverId,
-          userId,
-          permissions: { has: "file.write" },
-        },
-      });
-
-      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-
-      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
-        return reply.status(403).send({ error: "Forbidden" });
-      }
-
       try {
-        const normalizedArchive = normalizeRequestPath(archiveName);
-        const normalizedPaths = paths.map((p) => normalizeRequestPath(p));
+        const normalizedArchive = validateAndNormalizePath(archiveName, server.uuid, userId);
+        const normalizedPaths = paths.map((p) => validateAndNormalizePath(p, server.uuid, userId));
 
         const result = await tunnelFileOp(server.nodeId, "compress", server.uuid, normalizedArchive, {
           paths: normalizedPaths,
@@ -383,6 +300,9 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       } catch (error: any) {
         if (error?.message?.includes("timed out")) {
           return reply.status(504).send({ error: "Agent file operation timed out" });
+        }
+        if (error?.message?.includes("Path traversal") || error?.message?.includes("Invalid path")) {
+          return reply.status(400).send({ error: error.message });
         }
         reply.status(500).send({ error: "Failed to compress files" });
       }
@@ -408,35 +328,14 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing archive or target path" });
       }
 
-      const server = await prisma.server.findUnique({
-        where: { id: serverId },
-      });
-
+      const server = await requireFileAccess(serverId, userId, "file.write", reply);
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
-      }
-
-      if (!ensureNotSuspended(server, reply)) {
         return;
       }
 
-      const access = await prisma.serverAccess.findFirst({
-        where: {
-          serverId,
-          userId,
-          permissions: { has: "file.write" },
-        },
-      });
-
-      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-
-      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
-        return reply.status(403).send({ error: "Forbidden" });
-      }
-
       try {
-        const normalizedArchive = normalizeRequestPath(archivePath);
-        const normalizedTarget = normalizeRequestPath(targetPath);
+        const normalizedArchive = validateAndNormalizePath(archivePath, server.uuid, userId);
+        const normalizedTarget = validateAndNormalizePath(targetPath, server.uuid, userId);
 
         const result = await tunnelFileOp(server.nodeId, "decompress", server.uuid, normalizedArchive, {
           targetPath: normalizedTarget,
@@ -449,6 +348,9 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       } catch (error: any) {
         if (error?.message?.includes("timed out")) {
           return reply.status(504).send({ error: "Agent file operation timed out" });
+        }
+        if (error?.message?.includes("Path traversal") || error?.message?.includes("Invalid path")) {
+          return reply.status(400).send({ error: error.message });
         }
         reply.status(500).send({ error: "Failed to decompress archive" });
       }
@@ -471,34 +373,13 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing archive path" });
       }
 
-      const server = await prisma.server.findUnique({
-        where: { id: serverId },
-      });
-
+      const server = await requireFileAccess(serverId, userId, "file.read", reply);
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
-      }
-
-      if (!ensureNotSuspended(server, reply)) {
         return;
       }
 
-      const access = await prisma.serverAccess.findFirst({
-        where: {
-          serverId,
-          userId,
-          permissions: { has: "file.read" },
-        },
-      });
-
-      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-
-      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
-        return reply.status(403).send({ error: "Forbidden" });
-      }
-
       try {
-        const normalizedArchive = normalizeRequestPath(archivePath);
+        const normalizedArchive = validateAndNormalizePath(archivePath, server.uuid, userId);
 
         const result = await tunnelFileOp(server.nodeId, "archive-contents", server.uuid, normalizedArchive);
         if (!result.success) {
@@ -534,31 +415,9 @@ export async function serverFilesRoutes(app: FastifyInstance) {
       const userId = request.user.userId;
       const { lines, stream } = request.query as { lines?: string; stream?: string };
 
-      const server = await prisma.server.findUnique({
-        where: { id: serverId },
-      });
-
+      const server = await requireFileAccess(serverId, userId, "console.read", reply);
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
-      }
-
-      if (!ensureNotSuspended(server, reply)) {
         return;
-      }
-
-      // Check permissions - owner, explicit access, or node assignment
-      const hasExplicitAccess = await prisma.serverAccess.findFirst({
-        where: {
-          serverId,
-          userId,
-          permissions: { has: "console.read" },
-        },
-      });
-
-      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-
-      if (!hasExplicitAccess && server.ownerId !== userId && !hasNodeAccessToServer) {
-        return reply.status(403).send({ error: "Forbidden" });
       }
 
       // Get logs from database
@@ -608,34 +467,17 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing path or content" });
       }
 
-      const server = await prisma.server.findUnique({
-        where: { id: serverId },
-      });
-
+      const server = await requireFileAccess(serverId, userId, "file.write", reply);
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
-      }
-
-      if (!ensureNotSuspended(server, reply)) {
         return;
       }
 
-      // Check permissions
-      const access = await prisma.serverAccess.findFirst({
-        where: {
-          serverId,
-          userId,
-          permissions: { has: "file.write" },
-        },
-      });
-
-      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-
-      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
-        return reply.status(403).send({ error: "Forbidden" });
+      let normalizedPath: string;
+      try {
+        normalizedPath = validateAndNormalizePath(filePath, server.uuid, userId);
+      } catch (pathErr: any) {
+        return reply.status(400).send({ error: pathErr?.message || "Invalid path" });
       }
-
-      const normalizedPath = normalizeRequestPath(filePath);
       if (normalizedPath === "/") {
         return reply.status(400).send({ error: "Invalid path" });
       }
@@ -686,30 +528,9 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing path or mode" });
       }
 
-      const server = await prisma.server.findUnique({
-        where: { id: serverId },
-      });
-
+      const server = await requireFileAccess(serverId, userId, "file.write", reply);
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
-      }
-
-      if (!ensureNotSuspended(server, reply)) {
         return;
-      }
-
-      const access = await prisma.serverAccess.findFirst({
-        where: {
-          serverId,
-          userId,
-          permissions: { has: "file.write" },
-        },
-      });
-
-      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-
-      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
-        return reply.status(403).send({ error: "Forbidden" });
       }
 
       const normalizedPath = validateAndNormalizePath(requestedPath, server.uuid, userId);
@@ -771,31 +592,9 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing path parameter" });
       }
 
-      const server = await prisma.server.findUnique({
-        where: { id: serverId },
-      });
-
+      const server = await requireFileAccess(serverId, userId, "file.write", reply);
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
-      }
-
-      if (!ensureNotSuspended(server, reply)) {
         return;
-      }
-
-      // Check permissions
-      const access = await prisma.serverAccess.findFirst({
-        where: {
-          serverId,
-          userId,
-          permissions: { has: "file.write" },
-        },
-      });
-
-      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-
-      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
-        return reply.status(403).send({ error: "Forbidden" });
       }
 
       const normalizedPath = validateAndNormalizePath(requestedPath, server.uuid, userId);
@@ -847,34 +646,19 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Missing from or to path" });
       }
 
-      const server = await prisma.server.findUnique({
-        where: { id: serverId },
-      });
-
+      const server = await requireFileAccess(serverId, userId, "file.write", reply);
       if (!server) {
-        return reply.status(404).send({ error: "Server not found" });
-      }
-
-      if (!ensureNotSuspended(server, reply)) {
         return;
       }
 
-      const access = await prisma.serverAccess.findFirst({
-        where: {
-          serverId,
-          userId,
-          permissions: { has: "file.write" },
-        },
-      });
-
-      const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-
-      if (!access && server.ownerId !== userId && !hasNodeAccessToServer) {
-        return reply.status(403).send({ error: "Forbidden" });
+      let normalizedFrom: string;
+      let normalizedTo: string;
+      try {
+        normalizedFrom = validateAndNormalizePath(fromPath, server.uuid, userId);
+        normalizedTo = validateAndNormalizePath(toPath, server.uuid, userId);
+      } catch (pathErr: any) {
+        return reply.status(400).send({ error: pathErr?.message || "Invalid path" });
       }
-
-      const normalizedFrom = normalizeRequestPath(fromPath);
-      const normalizedTo = normalizeRequestPath(toPath);
       if (normalizedFrom === "/" || normalizedTo === "/") {
         return reply.status(400).send({ error: "Invalid path" });
       }

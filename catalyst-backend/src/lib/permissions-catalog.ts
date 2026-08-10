@@ -214,6 +214,7 @@ export function hasAnyPermission(request: any, permissions: string[]): boolean {
 
 import { prisma } from '../db';
 import { SimpleCache } from './cache';
+import { broadcastCacheInvalidate, onCacheInvalidate } from './cache-bus';
 
 // 30-second TTL cache for resolved user permissions
 const permissionsCache = new SimpleCache<string, string[]>(30_000);
@@ -245,14 +246,27 @@ export async function resolveUserPermissions(
 
 /**
  * Invalidate cached permissions for a specific user.
+ * Broadcasts to sibling workers when clustered.
  */
 export function invalidateUserPermissions(userId: string): void {
   permissionsCache.delete(userId);
+  broadcastCacheInvalidate('permissions', { userId });
 }
 
 /**
  * Flush the entire permissions cache.
+ * Broadcasts to sibling workers when clustered.
  */
 export function flushPermissionsCache(): void {
   permissionsCache.clear();
+  broadcastCacheInvalidate('permissions', { flushAll: true });
 }
+
+// Multi-worker IPC handlers (local-only apply; broadcast already done by sender)
+onCacheInvalidate('permissions', (payload) => {
+  if (payload.flushAll || !payload.userId) {
+    permissionsCache.clear();
+  } else {
+    permissionsCache.delete(payload.userId);
+  }
+});

@@ -1,7 +1,7 @@
 // Catalyst Service Worker v2 — caches static assets for faster loads
 // API/WebSocket requests are NEVER intercepted (pass through directly)
 
-const CACHE_NAME = 'catalyst-v1';
+const CACHE_NAME = 'catalyst-v2';
 
 // Assets to cache immediately on install
 const PRECACHE_ASSETS = ['/index.html', '/favicon.ico'];

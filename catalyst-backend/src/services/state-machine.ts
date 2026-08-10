@@ -17,7 +17,7 @@ export class ServerStateMachine {
   private static readonly TRANSITIONS: Map<ServerState, ServerState[]> = new Map([
     [
       ServerState.STOPPED,
-      [ServerState.INSTALLING, ServerState.STARTING, ServerState.ERROR, ServerState.SUSPENDED, ServerState.ARCHIVED, ServerState.RESTORING, ServerState.CREATING_BACKUP],
+      [ServerState.INSTALLING, ServerState.STARTING, ServerState.ERROR, ServerState.SUSPENDED, ServerState.ARCHIVED, ServerState.RESTORING, ServerState.CREATING_BACKUP, ServerState.TRANSFERRING, ServerState.CLONING],
     ],
     [ServerState.INSTALLING, [ServerState.STOPPED, ServerState.ERROR]],
     [
@@ -26,7 +26,7 @@ export class ServerStateMachine {
     ],
     [
       ServerState.RUNNING,
-      [ServerState.STOPPING, ServerState.CRASHED, ServerState.ERROR, ServerState.SUSPENDED, ServerState.INSTALLING],
+      [ServerState.STOPPING, ServerState.CRASHED, ServerState.ERROR, ServerState.SUSPENDED, ServerState.INSTALLING, ServerState.TRANSFERRING],
     ],
     [ServerState.STOPPING, [ServerState.STOPPED, ServerState.ERROR]],
     [ServerState.CRASHED, [ServerState.STARTING, ServerState.STOPPED, ServerState.INSTALLING]],
@@ -36,6 +36,9 @@ export class ServerStateMachine {
     // Transitional states for backup operations — always return to STOPPED on completion
     [ServerState.RESTORING, [ServerState.STOPPED, ServerState.ERROR]],
     [ServerState.CREATING_BACKUP, [ServerState.STOPPED, ServerState.ERROR]],
+    // Node transfer / clone operations
+    [ServerState.TRANSFERRING, [ServerState.STOPPED, ServerState.ERROR, ServerState.INSTALLING]],
+    [ServerState.CLONING, [ServerState.STOPPED, ServerState.ERROR, ServerState.INSTALLING]],
   ]);
 
   /**
@@ -105,6 +108,6 @@ export class ServerStateMachine {
    * Check if server is transitioning
    */
   static isTransitioning(state: ServerState): boolean {
-    return [ServerState.STARTING, ServerState.STOPPING, ServerState.RESTORING, ServerState.CREATING_BACKUP].includes(state);
+    return [ServerState.STARTING, ServerState.STOPPING, ServerState.RESTORING, ServerState.CREATING_BACKUP, ServerState.TRANSFERRING, ServerState.CLONING].includes(state);
   }
 }

@@ -52,10 +52,23 @@ export function useServerStateUpdates() {
       );
     }
 
-    // Update servers list once for all changes
+    // Update all servers list caches (unfiltered + filtered query keys like ['servers', filters])
+    // Skip detail keys where queryKey[1] is a server id string.
     q.setQueriesData(
-      { predicate: (query: Query) =>
-        Array.isArray(query.queryKey) && query.queryKey[0] === 'servers' && (query.queryKey.length === 1 || query.queryKey[1] === null) },
+      {
+        predicate: (query: Query) => {
+          if (!Array.isArray(query.queryKey) || query.queryKey[0] !== 'servers') return false;
+          // ['servers'] — unfiltered list
+          if (query.queryKey.length === 1) return true;
+          // ['servers', null] legacy
+          if (query.queryKey.length === 2 && query.queryKey[1] === null) return true;
+          // ['servers', { status: 'running' }] — filtered lists
+          if (query.queryKey.length >= 2 && typeof query.queryKey[1] === 'object' && query.queryKey[1] !== null) {
+            return true;
+          }
+          return false;
+        },
+      },
       (prev: any) => {
         if (!Array.isArray(prev)) return prev;
         return prev.map((srv: any) => {

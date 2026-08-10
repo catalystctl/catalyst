@@ -266,7 +266,19 @@ impl ContainerdRuntime {
             let mut forwards: Vec<PortForward> = Vec::new();
             if !port_bindings.is_empty() {
                 for (cp, hp) in port_bindings {
-                    self.setup_port_forward(*hp, *cp, cip).await?;
+                    if let Err(e) = self.setup_port_forward(*hp, *cp, cip).await {
+                        // Roll back any rules already installed in this call.
+                        for prev in &forwards {
+                            let _ = self
+                                .teardown_port_forward_rules(
+                                    prev.host_port,
+                                    prev.container_port,
+                                    cip,
+                                )
+                                .await;
+                        }
+                        return Err(e);
+                    }
                     forwards.push(PortForward {
                         host_port: *hp,
                         container_port: *cp,
@@ -496,79 +508,120 @@ impl ContainerdRuntime {
         };
         let hps = hp.to_string();
         let cps = cp.to_string();
+        let mut any_rule_added = false;
+        let mut first_error: Option<String> = None;
+
         // Set up forwarding for both TCP and UDP (many game servers use UDP)
-        for proto in ["tcp", "udp"] {
+        'setup: {
+            for proto in ["tcp", "udp"] {
+                for args in [
+                    vec![
+                        "-t",
+                        "nat",
+                        "-A",
+                        "PREROUTING",
+                        "-p",
+                        proto,
+                        "--dport",
+                        &hps,
+                        "-j",
+                        "DNAT",
+                        "--to-destination",
+                        &dest,
+                    ],
+                    vec![
+                        "-t",
+                        "nat",
+                        "-A",
+                        "OUTPUT",
+                        "-p",
+                        proto,
+                        "--dport",
+                        &hps,
+                        "-j",
+                        "DNAT",
+                        "--to-destination",
+                        &dest,
+                    ],
+                ] {
+                    match Command::new(cmd).args(&args).output().await {
+                        Ok(o) if o.status.success() => {
+                            any_rule_added = true;
+                        }
+                        Ok(o) => {
+                            let err = String::from_utf8_lossy(&o.stderr).to_string();
+                            warn!("{}: {}", cmd, err);
+                            first_error = Some(format!("{} failed: {}", cmd, err));
+                            break 'setup;
+                        }
+                        Err(e) => {
+                            first_error = Some(format!("Failed to run {}: {}", cmd, e));
+                            break 'setup;
+                        }
+                    }
+                }
+            }
+            // MASQUERADE rule for outgoing traffic (needed for NAT)
             for args in [
                 vec![
                     "-t",
                     "nat",
                     "-A",
-                    "PREROUTING",
+                    "POSTROUTING",
                     "-p",
-                    proto,
+                    "tcp",
+                    "-d",
+                    cip,
                     "--dport",
-                    &hps,
+                    &cps,
                     "-j",
-                    "DNAT",
-                    "--to-destination",
-                    &dest,
+                    "MASQUERADE",
                 ],
                 vec![
                     "-t",
                     "nat",
                     "-A",
-                    "OUTPUT",
+                    "POSTROUTING",
                     "-p",
-                    proto,
+                    "udp",
+                    "-d",
+                    cip,
                     "--dport",
-                    &hps,
+                    &cps,
                     "-j",
-                    "DNAT",
-                    "--to-destination",
-                    &dest,
+                    "MASQUERADE",
                 ],
             ] {
-                let o = Command::new(cmd).args(&args).output().await?;
-                if !o.status.success() {
-                    warn!("{}: {}", cmd, String::from_utf8_lossy(&o.stderr));
+                match Command::new(cmd).args(&args).output().await {
+                    Ok(o) if o.status.success() => {
+                        any_rule_added = true;
+                    }
+                    Ok(o) => {
+                        let err = String::from_utf8_lossy(&o.stderr).to_string();
+                        warn!("{}: {}", cmd, err);
+                        first_error = Some(format!("{} failed: {}", cmd, err));
+                        break;
+                    }
+                    Err(e) => {
+                        first_error = Some(format!("Failed to run {}: {}", cmd, e));
+                        break;
+                    }
                 }
             }
         }
-        // MASQUERADE rule for outgoing traffic (needed for NAT)
-        for args in [
-            vec![
-                "-t",
-                "nat",
-                "-A",
-                "POSTROUTING",
-                "-p",
-                "tcp",
-                "-d",
-                cip,
-                "--dport",
-                &cps,
-                "-j",
-                "MASQUERADE",
-            ],
-            vec![
-                "-t",
-                "nat",
-                "-A",
-                "POSTROUTING",
-                "-p",
-                "udp",
-                "-d",
-                cip,
-                "--dport",
-                &cps,
-                "-j",
-                "MASQUERADE",
-            ],
-        ] {
-            let o = Command::new(cmd).args(&args).output().await?;
-            if !o.status.success() {
-                warn!("{}: {}", cmd, String::from_utf8_lossy(&o.stderr));
+
+        if let Some(err) = first_error {
+            if any_rule_added {
+                warn!(
+                    "Port-forward setup partially failed for {}:{} -> {}:{}; tearing down rules added in this call",
+                    hp, cp, cip, cp
+                );
+                let _ = self.teardown_port_forward_rules(hp, cp, cip).await;
             }
+            return Err(AgentError::NetworkError(format!(
+                "Port-forward setup failed for host {} -> {}/{}: {}",
+                hp, cip, cp, err
+            )));
         }
         Ok(())
     }
@@ -710,6 +763,169 @@ impl ContainerdRuntime {
                 warn!("{}: {}", cmd, String::from_utf8_lossy(&o.stderr));
             }
         }
+        Ok(())
+    }
+
+    /// Re-attach CNI networking, port forwards, and firewall when restarting an
+    /// existing container task (stop → start without full recreate).
+    ///
+    /// Uses previously persisted CNI config / port-forward state when present.
+    /// If no prior network state exists, this is a no-op (create_container path
+    /// is responsible for first-time setup).
+    pub(crate) async fn reattach_network_on_start(
+        &self,
+        container_id: &str,
+        pid: u32,
+        server_id: &str,
+    ) -> AgentResult<()> {
+        let cfg_path = self
+            .cni_results_dir
+            .join(format!("catalyst-{}-config", container_id));
+        let ports_path = self.cni_results_dir.join(format!(
+            "{}{}-ports.json",
+            PORT_FWD_STATE_PREFIX, container_id
+        ));
+
+        // Nothing to reattach if we never set up networking for this container.
+        if !cfg_path.exists() && !ports_path.exists() {
+            debug!(
+                "No prior CNI/port-forward state for {}; skipping network reattach",
+                container_id
+            );
+            return Ok(());
+        }
+
+        // Clear any stale port-forward rules from the previous task netns before
+        // re-adding against the new PID's network namespace.
+        let _ = self.teardown_port_forward(container_id).await;
+
+        // Prefer full CNI re-ADD with the stored config so the new netns gets an interface.
+        if cfg_path.exists() {
+            let raw = fs::read_to_string(&cfg_path).map_err(|e| {
+                AgentError::ContainerError(format!(
+                    "Failed to read CNI config for {}: {}",
+                    container_id, e
+                ))
+            })?;
+            let cfg: serde_json::Value = serde_json::from_str(&raw).map_err(|e| {
+                AgentError::ContainerError(format!(
+                    "Failed to parse CNI config for {}: {}",
+                    container_id, e
+                ))
+            })?;
+
+            let netns = self.resolve_task_netns(container_id, pid).await?;
+            let result = self
+                .exec_cni_plugin(&cfg, "ADD", container_id, &netns, "eth0")
+                .await?;
+            if let Ok(j) = serde_json::to_string_pretty(&result) {
+                let _ = fs::write(
+                    self.cni_results_dir
+                        .join(format!("catalyst-{}", container_id)),
+                    &j,
+                );
+            }
+
+            let cip = result
+                .get("ips")
+                .and_then(|v| v.as_array())
+                .and_then(|a| a.first())
+                .and_then(|ip| ip.get("address"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .split('/')
+                .next()
+                .unwrap_or("");
+
+            if !cip.is_empty() {
+                let mut forwards: Vec<PortForward> = Vec::new();
+                if ports_path.exists() {
+                    if let Ok(raw) = fs::read_to_string(&ports_path) {
+                        if let Ok(prev) = serde_json::from_str::<PortForwardState>(&raw) {
+                            for fwd in prev.forwards {
+                                if let Err(e) = self
+                                    .setup_port_forward(fwd.host_port, fwd.container_port, cip)
+                                    .await
+                                {
+                                    warn!(
+                                        "Failed to reattach port forward {}->{}:{}: {}",
+                                        fwd.host_port, cip, fwd.container_port, e
+                                    );
+                                } else {
+                                    forwards.push(fwd);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if !forwards.is_empty() {
+                    let state = PortForwardState {
+                        container_ip: cip.to_string(),
+                        forwards: forwards.clone(),
+                    };
+                    if let Ok(j) = serde_json::to_string_pretty(&state) {
+                        let _ = fs::write(&ports_path, &j);
+                    }
+
+                    for fwd in &forwards {
+                        if let Err(e) =
+                            FirewallManager::allow_port(fwd.host_port, "tcp", cip, server_id).await
+                        {
+                            error!("Firewall reattach failed for port {}: {}", fwd.host_port, e);
+                        }
+                    }
+                } else {
+                    info!(
+                        "CNI reattached for {} at {} without prior port-forward state",
+                        container_id, cip
+                    );
+                }
+            }
+
+            info!(
+                "Network reattached for container {} (pid {})",
+                container_id, pid
+            );
+            return Ok(());
+        }
+
+        // Config missing but ports state exists: try to re-bind DNAT to current IP if known.
+        if let Ok(ip) = self.get_container_ip(container_id).await {
+            if !ip.is_empty() && ports_path.exists() {
+                if let Ok(raw) = fs::read_to_string(&ports_path) {
+                    if let Ok(prev) = serde_json::from_str::<PortForwardState>(&raw) {
+                        let mut forwards = Vec::new();
+                        for fwd in prev.forwards {
+                            if self
+                                .setup_port_forward(fwd.host_port, fwd.container_port, &ip)
+                                .await
+                                .is_ok()
+                            {
+                                let _ = FirewallManager::allow_port(
+                                    fwd.host_port,
+                                    "tcp",
+                                    &ip,
+                                    server_id,
+                                )
+                                .await;
+                                forwards.push(fwd);
+                            }
+                        }
+                        if !forwards.is_empty() {
+                            let state = PortForwardState {
+                                container_ip: ip,
+                                forwards,
+                            };
+                            if let Ok(j) = serde_json::to_string_pretty(&state) {
+                                let _ = fs::write(&ports_path, &j);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 

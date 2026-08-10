@@ -12,13 +12,21 @@ use tracing::warn;
 // Network interface detection (sync variants for system_setup)
 // ---------------------------------------------------------------------------
 
+/// Run a blocking `std::process::Command` on a dedicated thread so callers on
+/// an async runtime do not stall a worker (system_setup still uses the sync API).
+fn run_command_blocking(program: &str, args: &[&str]) -> Result<std::process::Output, AgentError> {
+    let program = program.to_string();
+    let args: Vec<String> = args.iter().map(|s| (*s).to_string()).collect();
+    std::thread::spawn(move || std::process::Command::new(program).args(args).output())
+        .join()
+        .map_err(|_| AgentError::InternalError("command thread panicked".to_string()))?
+        .map_err(|e| AgentError::IoError(format!("Failed to run command: {}", e)))
+}
+
 /// Detect the primary network interface (sync version using `std::process::Command`).
 pub fn detect_network_interface_sync() -> Result<String, AgentError> {
     // Try to get default route interface
-    let output = std::process::Command::new("ip")
-        .args(["route", "show", "default"])
-        .output()
-        .map_err(|e| AgentError::IoError(format!("Failed to detect default route: {}", e)))?;
+    let output = run_command_blocking("ip", &["route", "show", "default"])?;
 
     if output.status.success() {
         let interface = String::from_utf8_lossy(&output.stdout)
@@ -39,10 +47,7 @@ pub fn detect_network_interface_sync() -> Result<String, AgentError> {
     }
 
     // Fallback: find first non-loopback interface
-    let output = std::process::Command::new("ip")
-        .args(["-o", "link", "show"])
-        .output()
-        .map_err(|e| AgentError::IoError(format!("Failed to detect interfaces: {}", e)))?;
+    let output = run_command_blocking("ip", &["-o", "link", "show"])?;
 
     if output.status.success() {
         let interface = String::from_utf8_lossy(&output.stdout)
@@ -70,10 +75,7 @@ pub fn detect_network_interface_sync() -> Result<String, AgentError> {
 
 /// Detect default gateway (sync version).
 pub fn detect_default_gateway_sync() -> Result<String, AgentError> {
-    let output = std::process::Command::new("ip")
-        .args(["route", "show", "default"])
-        .output()
-        .map_err(|e| AgentError::IoError(format!("Failed to detect default gateway: {}", e)))?;
+    let output = run_command_blocking("ip", &["route", "show", "default"])?;
 
     if output.status.success() {
         let gateway = String::from_utf8_lossy(&output.stdout)
@@ -100,10 +102,7 @@ pub fn detect_default_gateway_sync() -> Result<String, AgentError> {
 
 /// Detect interface CIDR (sync version, IPv4 only).
 pub fn detect_interface_cidr_sync(interface: &str) -> Result<String, AgentError> {
-    let output = std::process::Command::new("ip")
-        .args(["-4", "addr", "show", "dev", interface])
-        .output()
-        .map_err(|e| AgentError::IoError(format!("Failed to detect interface CIDR: {}", e)))?;
+    let output = run_command_blocking("ip", &["-4", "addr", "show", "dev", interface])?;
 
     if output.status.success() {
         let cidr = String::from_utf8_lossy(&output.stdout)

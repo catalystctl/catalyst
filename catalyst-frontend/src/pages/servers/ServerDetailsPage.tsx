@@ -19,6 +19,7 @@ import {
  Activity,
  AlertTriangle,
  Copy,
+ Plug,
 } from 'lucide-react';
 import { useServer } from '../../hooks/useServer';
 import { useServerMetrics } from '../../hooks/useServerMetrics';
@@ -49,6 +50,9 @@ import ServerControls from '../../components/servers/ServerControls';
 import ServerStatusBadge from '../../components/servers/ServerStatusBadge';
 import FileManager from '../../components/files/FileManager';
 import BackupSection from '../../components/backups/BackupSection';
+import { usePluginTabs } from '../../plugins/hooks';
+import PluginErrorBoundary from '../../plugins/PluginErrorBoundary';
+import { hasAnyPermission } from '../../components/auth/ProtectedRoute';
 import EulaModal from '../../components/servers/EulaModal';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 
@@ -121,6 +125,8 @@ function ServerDetailsPage() {
  const { data: server, isLoading, isError, refetch } = useServer(serverId);
  const liveMetrics = useServerMetrics(serverId, server?.allocatedMemoryMb);
  const user = useAuthStore((s) => s.user);
+ const serverPluginTabs = usePluginTabs('server');
+ const userPermissions = user?.permissions ?? [];
 
  // ── Metrics ──
  const [metricsTimeRange, setMetricsTimeRange] = useState<MetricsTimeRange>({
@@ -190,9 +196,13 @@ function ServerDetailsPage() {
 
  // ── Derived state ──
  const isSuspended = server?.status === 'suspended';
+ const isPluginTab = Boolean(tab?.startsWith('plugin:'));
+ const activePluginTabId = isPluginTab ? tab!.slice('plugin:'.length) : null;
  const activeTab = useMemo(() => {
  const key = tab ?? 'console';
- return key in tabLabels ? (key as keyof typeof tabLabels) : 'console';
+ if (key in tabLabels) return key as keyof typeof tabLabels;
+ // Plugin tabs use raw `tab` param; keep a built-in default for header logic only
+ return 'console';
  }, [tab]);
 
  // canSend: allow commands when SSE is connected (or reconnecting) AND server is running
@@ -813,7 +823,31 @@ function ServerDetailsPage() {
  if (key === 'files') return hasServerPerm('file.read');
  if (key === 'backups') return hasServerPerm('backup.read');
  if (key === 'databases') return hasServerPerm('database.read');
- if (key === 'schedules') return hasServerPerm('server.schedule');
+ // Tab key is `tasks` (not legacy `schedules`)
+ if (key === 'tasks') return hasServerPerm('server.schedule');
+ if (key === 'sftp') return hasServerPerm('file.read');
+ if (key === 'metrics') return hasServerPerm('server.read');
+ if (key === 'alerts')
+ return hasServerPerm('alert.read') || hasServerPerm('server.read');
+ if (key === 'users')
+ return hasServerPerm('server.delete') || isAdmin || canAdminWrite;
+ if (key === 'settings')
+ return (
+ hasServerPerm('server.install') ||
+ hasServerPerm('server.reinstall') ||
+ hasServerPerm('server.start') ||
+ hasServerPerm('server.stop') ||
+ hasServerPerm('file.write') ||
+ isAdmin
+ );
+ if (key === 'configuration')
+ return (
+ isAdmin ||
+ canAdminWrite ||
+ hasServerPerm('server.update') ||
+ hasServerPerm('server.install') ||
+ hasServerPerm('file.write')
+ );
  if (key === 'modManager') return Boolean(modManagerConfig);
  if (key === 'pluginManager') return Boolean(pluginManagerConfig);
  if (key === 'activity') return hasServerPerm('server.read');
@@ -822,9 +856,19 @@ function ServerDetailsPage() {
  }, [
  canAdminWrite,
  hasServerPerm,
+ isAdmin,
  modManagerConfig,
  pluginManagerConfig,
  ]);
+
+ const filteredServerPluginTabs = useMemo(() => {
+ return serverPluginTabs.filter((t) => {
+ if (!t.requiredPermissions || t.requiredPermissions.length === 0) return true;
+ // Server-scoped tabs: allow if global perms match OR any required perm is on the server
+ if (hasAnyPermission(userPermissions, t.requiredPermissions)) return true;
+ return t.requiredPermissions.some((p) => hasServerPerm(p));
+ });
+ }, [serverPluginTabs, userPermissions, hasServerPerm]);
 
  // ── Error state (fatal — don't render anything) ──
  if (isError) {
@@ -955,7 +999,7 @@ function ServerDetailsPage() {
  {/* ── Tab navigation ── */}
  <div className="flex flex-wrap gap-1 rounded-xl border border-border/40 bg-surface-2/40 p-1.5 ">
  {visibleTabs.map(([key, label]) => {
- const isActive = activeTab === key;
+ const isActive = !isPluginTab && activeTab === key;
  const Icon = tabIcons[key as keyof typeof tabLabels];
  return (
  <button
@@ -974,12 +1018,32 @@ function ServerDetailsPage() {
  </button>
  );
  })}
+ {filteredServerPluginTabs.map((ptab) => {
+ const pluginTabKey = `plugin:${ptab.id}`;
+ const isActive = tab === pluginTabKey;
+ return (
+ <button
+ key={ptab.id}
+ type="button"
+ title={ptab.label}
+ className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
+ isActive
+ ? 'bg-primary text-primary-foreground '
+ : 'text-muted-foreground hover:bg-surface-2/60 hover:text-foreground'
+ }`}
+ onClick={() => server && navigate(`/servers/${server.id}/${pluginTabKey}`)}
+ >
+ <Plug className="h-3.5 w-3.5" />
+ <span className="hidden sm:inline">{ptab.label}</span>
+ </button>
+ );
+ })}
  </div>
 
  {/* ── Tab Content ── */}
  <div>
  <Suspense fallback={<TabSkeleton />}>
- {activeTab === 'console' && (
+ {!isPluginTab && activeTab === 'console' && (
  <ServerConsoleTab
  liveMetrics={liveMetrics}
  liveDiskUsageMb={liveDiskUsageMb}
@@ -995,16 +1059,17 @@ function ServerDetailsPage() {
  />
  )}
 
- {activeTab === 'files' && server && (
+ {!isPluginTab && activeTab === 'files' && server && (
  <ServerTabCard>
  <FileManager
  serverId={server.id}
  isSuspended={isSuspended}
+ canWrite={hasServerPerm('file.write')}
  />
  </ServerTabCard>
  )}
 
- {activeTab === 'sftp' && server && (
+ {!isPluginTab && activeTab === 'sftp' && server && (
  <ServerSftpTab
  serverId={server.id}
  ownerId={server.ownerId ?? ''}
@@ -1012,7 +1077,7 @@ function ServerDetailsPage() {
  />
  )}
 
- {activeTab === 'backups' && server && (
+ {!isPluginTab && activeTab === 'backups' && server && (
  <ServerTabCard>
  <BackupSection
  serverId={server.id}
@@ -1022,7 +1087,7 @@ function ServerDetailsPage() {
  </ServerTabCard>
  )}
 
- {activeTab === 'tasks' && server && (
+ {!isPluginTab && activeTab === 'tasks' && server && (
  <ServerTasksTab
  serverId={server.id}
  isSuspended={isSuspended}
@@ -1035,7 +1100,7 @@ function ServerDetailsPage() {
  />
  )}
 
- {activeTab === 'databases' && server && (
+ {!isPluginTab && activeTab === 'databases' && server && (
  <ServerDatabasesTab
  isSuspended={isSuspended}
  databases={databases}
@@ -1057,7 +1122,7 @@ function ServerDetailsPage() {
  />
  )}
 
- {activeTab === 'metrics' && server && (
+ {!isPluginTab && activeTab === 'metrics' && server && (
  <ServerMetricsTab
  serverCpuPercent={server.cpuPercent ?? 0}
  serverMemoryPercent={server.memoryPercent ?? 0}
@@ -1071,17 +1136,17 @@ function ServerDetailsPage() {
  />
  )}
 
- {activeTab === 'alerts' && server && (
+ {!isPluginTab && activeTab === 'alerts' && server && (
  <div className="space-y-4">
  <AlertsPage serverId={server.id} />
  </div>
  )}
 
- {activeTab === 'activity' && server && (
+ {!isPluginTab && activeTab === 'activity' && server && (
  <ServerActivityLogTab serverId={server.id} />
  )}
 
- {activeTab === 'modManager' && (
+ {!isPluginTab && activeTab === 'modManager' && (
  <ServerModManagerTab
  serverId={serverId}
  serverGameVersion={serverGameVersion}
@@ -1089,7 +1154,7 @@ function ServerDetailsPage() {
  />
  )}
 
- {activeTab === 'pluginManager' && (
+ {!isPluginTab && activeTab === 'pluginManager' && (
  <ServerPluginManagerTab
  serverId={serverId}
  serverGameVersion={serverGameVersion}
@@ -1097,7 +1162,7 @@ function ServerDetailsPage() {
  />
  )}
 
- {activeTab === 'users' && server && (
+ {!isPluginTab && activeTab === 'users' && server && (
  <ServerUsersTab
  ownerId={server.ownerId ?? ''}
  inviteEmail={inviteEmail}
@@ -1126,11 +1191,17 @@ function ServerDetailsPage() {
  />
  )}
 
- {activeTab === 'configuration' && server && (
+ {!isPluginTab && activeTab === 'configuration' && server && (
  <ServerConfigurationTab
  serverId={serverId}
  isSuspended={isSuspended}
- isAdmin={isAdmin}
+ canEdit={
+ isAdmin ||
+ canAdminWrite ||
+ hasServerPerm('server.update') ||
+ hasServerPerm('server.install') ||
+ hasServerPerm('file.write')
+ }
  server={server}
  startupCommand={startupCommand}
  onStartupCommandChange={setStartupCommand}
@@ -1140,7 +1211,7 @@ function ServerDetailsPage() {
  />
  )}
 
- {activeTab === 'admin' && server && (
+ {!isPluginTab && activeTab === 'admin' && server && (
  <ServerAdminTab
  serverId={server.id}
  serverName={server.name}
@@ -1183,7 +1254,7 @@ function ServerDetailsPage() {
  />
  )}
 
- {activeTab === 'settings' && server && (
+ {!isPluginTab && activeTab === 'settings' && server && (
  <ServerSettingsTab
  serverId={server.id}
  serverName={serverName}
@@ -1194,8 +1265,29 @@ function ServerDetailsPage() {
  serverStatus={server.status}
  subdomain={server.subdomain ?? null}
  server={server}
+ permissions={server.effectivePermissions}
  />
  )}
+ {isPluginTab && server && activePluginTabId && (() => {
+ const ptab = filteredServerPluginTabs.find((t) => t.id === activePluginTabId);
+ if (!ptab) {
+ return (
+ <div className="rounded-lg border border-border bg-card p-12 text-center">
+ <h2 className="mb-2 text-xl font-semibold text-foreground">Plugin Tab Not Found</h2>
+ <p className="text-muted-foreground">
+ The requested plugin tab could not be found or is not enabled.
+ </p>
+ </div>
+ );
+ }
+ const TabComponent = ptab.component;
+ const pluginName = ptab.id.replace(/-(admin|server)$/, '');
+ return (
+ <PluginErrorBoundary pluginName={pluginName}>
+ <TabComponent serverId={server.id} />
+ </PluginErrorBoundary>
+ );
+ })()}
  </Suspense>
  </div>
  </div>

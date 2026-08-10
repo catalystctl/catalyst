@@ -8,7 +8,12 @@ import { ServerStateMachine } from '../services/state-machine';
 import { normalizeHostIp, releaseIpForServer, summarizePool } from '../utils/ipam';
 import { createAuditLog } from '../middleware/audit';
 import { revokeSftpTokensForUser } from '../services/sftp-token-manager';
-import { hasNodeAccess } from '../lib/permissions.js';
+import {
+  hasNodeAccess,
+  invalidateAdminUserCache,
+  invalidateNodeAccessCache,
+} from '../lib/permissions.js';
+import { invalidateUserPermissions } from '../lib/permissions-catalog.js';
 import { captureSystemError } from '../services/error-logger';
 // Permission checks use request.user.permissions (populated by auth middleware)
 // No DB queries needed — works for both session and API key auth.
@@ -23,6 +28,7 @@ import {
   isValidTimeWindowMs,
 } from '../services/mailer';
 import { serialize } from '../utils/serialize';
+import { withRegistrationBypass } from '../lib/registration-gate.js';
 
 export async function adminRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
@@ -373,16 +379,18 @@ export async function adminRoutes(app: FastifyInstance) {
               ];
       }
 
-      const signUpResponse = await auth.api.signUpEmail({
-        headers: fromNodeHeaders(request.headers as Record<string, string | string[] | undefined>),
-        body: {
-          email,
-          password,
-          name: username,
-          username,
-        } as any,
-        returnHeaders: true,
-      });
+      const signUpResponse = await withRegistrationBypass(() =>
+        auth.api.signUpEmail({
+          headers: fromNodeHeaders(request.headers as Record<string, string | string[] | undefined>),
+          body: {
+            email,
+            password,
+            name: username,
+            username,
+          } as any,
+          returnHeaders: true,
+        }),
+      );
 
       const signUpData =
         'headers' in signUpResponse && signUpResponse.response
@@ -424,6 +432,12 @@ export async function adminRoutes(app: FastifyInstance) {
           },
         },
       });
+
+      if (rolesToAssign.length) {
+        invalidateUserPermissions(created.id);
+        invalidateAdminUserCache(created.id);
+        invalidateNodeAccessCache(created.id);
+      }
 
       await createAuditLog(user.userId, {
         action: 'user_create',
@@ -580,6 +594,12 @@ export async function adminRoutes(app: FastifyInstance) {
           },
         },
       });
+
+      if (roleIds) {
+        invalidateUserPermissions(userId);
+        invalidateAdminUserCache(userId);
+        invalidateNodeAccessCache(userId);
+      }
 
       if (serverIds) {
         const uniqueServerIds = Array.from(new Set(serverIds));
@@ -1752,23 +1772,79 @@ export async function adminRoutes(app: FastifyInstance) {
               if (server.status !== 'stopped') {
                 return { serverId: server.id, status: 'skipped', error: 'Server must be stopped' };
               }
+
+              // Drop provisioned MySQL databases BEFORE cascade-deleting the Server row,
+              // otherwise host-side DB/user rows are orphaned permanently.
+              const { dropDatabase } = await import('../services/mysql.js');
+              const serverDatabases = await prisma.serverDatabase.findMany({
+                where: { serverId: server.id },
+                include: { host: true },
+              });
+              const dbDropFailures: Array<{ id: string; name: string; error: string }> = [];
+              for (const database of serverDatabases) {
+                try {
+                  await dropDatabase(database.host, database.name, database.username);
+                } catch (error: any) {
+                  const msg = error?.message || String(error);
+                  dbDropFailures.push({ id: database.id, name: database.name, error: msg });
+                  app.log?.warn?.({
+                    serverId: server.id,
+                    databaseId: database.id,
+                    error: msg,
+                  }, 'Failed to drop server database during admin bulk delete — continuing');
+                  captureSystemError({
+                    level: 'warn',
+                    component: 'AdminRoutes',
+                    message: `dropDatabase failed during admin bulk delete: ${msg}`,
+                    metadata: {
+                      serverId: server.id,
+                      databaseId: database.id,
+                      databaseName: database.name,
+                    },
+                  }).catch(() => {});
+                }
+              }
+
+              // Best-effort agent cleanup before cascade delete.
+              const wsGatewayDel = (app as any).wsGateway;
+              let agentOffline = false;
+              if (wsGatewayDel && server.nodeId) {
+                if (wsGatewayDel.removeDiscoveredContainer) {
+                  wsGatewayDel.removeDiscoveredContainer(server.nodeId, server.id);
+                }
+                if (typeof wsGatewayDel.sendToAgent === 'function') {
+                  const sent = await wsGatewayDel.sendToAgent(server.nodeId, {
+                    type: 'delete_server',
+                    serverId: server.id,
+                    serverUuid: server.uuid,
+                  });
+                  if (!sent) {
+                    agentOffline = true;
+                    app.log?.warn?.({
+                      serverId: server.id,
+                      nodeId: server.nodeId,
+                    }, 'Agent offline during admin bulk delete — container cleanup skipped');
+                  }
+                }
+              }
+
               await prisma.$transaction(async (tx) => {
                 await releaseIpForServer(tx, server.id);
                 await tx.server.delete({ where: { id: server.id } });
               });
-              // Proactively remove from discovered containers cache so the deleted
-              // server doesn't temporarily re-appear in the node discovery section.
-              const wsGatewayDel = (app as any).wsGateway;
-              if (wsGatewayDel?.removeDiscoveredContainer && server.nodeId) {
-                wsGatewayDel.removeDiscoveredContainer(server.nodeId, server.id);
-              }
+
               await prisma.auditLog.create({
                 data: {
                   userId: user.userId,
                   action: 'server.delete',
                   resource: 'server',
                   resourceId: server.id,
-                  details: {},
+                  details: {
+                    ...(agentOffline ? { agentCleanup: false } : {}),
+                    ...(dbDropFailures.length > 0
+                      ? { databaseWarnings: dbDropFailures }
+                      : {}),
+                  },
                 },
               });
 
@@ -1779,7 +1855,17 @@ export async function adminRoutes(app: FastifyInstance) {
               if (wsGateway?.pushToGlobalSubscribers) {
                 wsGateway.pushToGlobalSubscribers('server_deleted', { type: 'server_deleted', serverId: server.id, serverName: server.name, deletedBy: user.userId, timestamp: new Date().toISOString() });
               }
-              return { serverId: server.id, status: 'success' };
+              return {
+                serverId: server.id,
+                status: 'success',
+                ...(agentOffline ? { agentCleanup: false } : {}),
+                ...(dbDropFailures.length > 0
+                  ? {
+                      databaseWarnings: dbDropFailures,
+                      warning: `${dbDropFailures.length} database(s) could not be dropped on the host and may need manual cleanup.`,
+                    }
+                  : {}),
+              };
             }
 
             return { serverId: server.id, status: 'skipped', error: 'Unsupported action' };
@@ -2132,6 +2218,7 @@ export async function adminRoutes(app: FastifyInstance) {
         fileTunnelMaxPendingPerNode = DEFAULT_SECURITY_SETTINGS.fileTunnelMaxPendingPerNode,
         fileTunnelConcurrentMax = DEFAULT_SECURITY_SETTINGS.fileTunnelConcurrentMax,
         requireEmailVerification = DEFAULT_SECURITY_SETTINGS.requireEmailVerification,
+        registrationEnabled = DEFAULT_SECURITY_SETTINGS.registrationEnabled,
       } = request.body as Partial<typeof DEFAULT_SECURITY_SETTINGS>;
 
       const numericFields = [
@@ -2185,6 +2272,7 @@ export async function adminRoutes(app: FastifyInstance) {
         fileTunnelMaxPendingPerNode: Number(fileTunnelMaxPendingPerNode),
         fileTunnelConcurrentMax: Number(fileTunnelConcurrentMax),
         requireEmailVerification: Boolean(requireEmailVerification),
+        registrationEnabled: Boolean(registrationEnabled),
       });
 
       await createAuditLog(user.userId, {
@@ -2213,6 +2301,7 @@ export async function adminRoutes(app: FastifyInstance) {
           fileTunnelMaxPendingPerNode,
           fileTunnelConcurrentMax,
           requireEmailVerification,
+          registrationEnabled,
         },
       });
 
@@ -2405,26 +2494,37 @@ export async function adminRoutes(app: FastifyInstance) {
         },
       });
 
-      // Send network creation request to agent
+      // Wait for agent ack so panel knows CNI create succeeded/failed.
       const wsGateway = app.wsGateway;
-      if (wsGateway) {
-        await wsGateway.sendToAgent(nodeId, {
-          type: 'create_network',
-          networkName,
-          cidr,
-          gateway: gateway || undefined,
-          rangeStart: startIp || undefined,
-          rangeEnd: endIp || undefined,
-        }).catch((err: Error) => {
+      if (wsGateway?.requestFromAgent) {
+        try {
+          const agentResult = await wsGateway.requestFromAgent(nodeId, {
+            type: 'create_network',
+            networkName,
+            cidr,
+            gateway: gateway || undefined,
+            rangeStart: startIp || undefined,
+            rangeEnd: endIp || undefined,
+          }, 30000);
+          if (agentResult && agentResult.success === false) {
+            captureSystemError({
+              level: 'warn',
+              component: 'AdminRoutes',
+              message: `Agent failed to create network: ${agentResult.error || 'unknown'}`,
+              metadata: { nodeId, networkName, error: agentResult.error },
+            }).catch(() => {});
+            console.error('Agent failed to create network', { nodeId, networkName, error: agentResult.error });
+          }
+        } catch (err: any) {
           captureSystemError({
             level: 'warn',
             component: 'AdminRoutes',
-            message: `Failed to send network creation to agent: ${err.message}`,
-            stack: err.stack,
-            metadata: { nodeId, error: err.message },
+            message: `Failed to create network on agent: ${err?.message || err}`,
+            stack: err?.stack,
+            metadata: { nodeId, error: err?.message },
           }).catch(() => {});
-          console.error("Failed to send network creation to agent", { nodeId, error: err.message });
-        });
+          console.error('Failed to create network on agent', { nodeId, error: err?.message });
+        }
       }
 
       reply.status(201).send({ success: true, data: pool });
@@ -2501,27 +2601,38 @@ export async function adminRoutes(app: FastifyInstance) {
         },
       });
 
-      // Send network update request to agent
+      // Wait for agent ack so panel knows CNI update succeeded/failed.
       const wsGateway = app.wsGateway;
-      if (wsGateway) {
-        await wsGateway.sendToAgent(pool.nodeId, {
-          type: 'update_network',
-          oldName: pool.networkName,
-          networkName: updated.networkName,
-          cidr: updated.cidr,
-          gateway: updated.gateway || undefined,
-          rangeStart: updated.startIp || undefined,
-          rangeEnd: updated.endIp || undefined,
-        }).catch((err: Error) => {
+      if (wsGateway?.requestFromAgent) {
+        try {
+          const agentResult = await wsGateway.requestFromAgent(pool.nodeId, {
+            type: 'update_network',
+            oldName: pool.networkName,
+            networkName: updated.networkName,
+            cidr: updated.cidr,
+            gateway: updated.gateway || undefined,
+            rangeStart: updated.startIp || undefined,
+            rangeEnd: updated.endIp || undefined,
+          }, 30000);
+          if (agentResult && agentResult.success === false) {
+            captureSystemError({
+              level: 'warn',
+              component: 'AdminRoutes',
+              message: `Agent failed to update network: ${agentResult.error || 'unknown'}`,
+              metadata: { nodeId: pool.nodeId, error: agentResult.error },
+            }).catch(() => {});
+            console.error(`Agent failed to update network on ${pool.nodeId}:`, agentResult.error);
+          }
+        } catch (err: any) {
           captureSystemError({
             level: 'warn',
             component: 'AdminRoutes',
-            message: `Failed to send network update to agent ${pool.nodeId}: ${err.message}`,
-            stack: err.stack,
-            metadata: { nodeId: pool.nodeId, error: err.message },
+            message: `Failed to update network on agent ${pool.nodeId}: ${err?.message || err}`,
+            stack: err?.stack,
+            metadata: { nodeId: pool.nodeId, error: err?.message },
           }).catch(() => {});
-          console.error(`Failed to send network update to agent ${pool.nodeId}:`, err);
-        });
+          console.error(`Failed to update network on agent ${pool.nodeId}:`, err);
+        }
       }
 
       reply.send(serialize({ success: true, data: updated }));
@@ -2569,23 +2680,34 @@ export async function adminRoutes(app: FastifyInstance) {
 
       await prisma.ipPool.delete({ where: { id: poolId } });
 
-      // Send network deletion request to agent
+      // Wait for agent ack so panel knows CNI delete succeeded/failed.
       if (pool) {
         const wsGateway = app.wsGateway;
-        if (wsGateway) {
-          await wsGateway.sendToAgent(pool.nodeId, {
-            type: 'delete_network',
-            networkName: pool.networkName,
-          }).catch((err: Error) => {
+        if (wsGateway?.requestFromAgent) {
+          try {
+            const agentResult = await wsGateway.requestFromAgent(pool.nodeId, {
+              type: 'delete_network',
+              networkName: pool.networkName,
+            }, 30000);
+            if (agentResult && agentResult.success === false) {
+              captureSystemError({
+                level: 'warn',
+                component: 'AdminRoutes',
+                message: `Agent failed to delete network: ${agentResult.error || 'unknown'}`,
+                metadata: { nodeId: pool.nodeId, error: agentResult.error },
+              }).catch(() => {});
+              console.error(`Agent failed to delete network on ${pool.nodeId}:`, agentResult.error);
+            }
+          } catch (err: any) {
             captureSystemError({
               level: 'warn',
               component: 'AdminRoutes',
-              message: `Failed to send network deletion to agent ${pool.nodeId}: ${err.message}`,
-              stack: err.stack,
-              metadata: { nodeId: pool.nodeId, error: err.message },
+              message: `Failed to delete network on agent ${pool.nodeId}: ${err?.message || err}`,
+              stack: err?.stack,
+              metadata: { nodeId: pool.nodeId, error: err?.message },
             }).catch(() => {});
-            console.error(`Failed to send network deletion to agent ${pool.nodeId}:`, err);
-          });
+            console.error(`Failed to delete network on agent ${pool.nodeId}:`, err);
+          }
         }
       }
 

@@ -30,7 +30,7 @@ export class CollectionStorage implements PluginCollectionAPI {
 
     if (filter) {
       const translated = this.translateFilter(filter);
-      if (Object.keys(translated).length > 0) {
+      if (translated.length > 0) {
         where.AND = translated;
       }
     }
@@ -210,15 +210,66 @@ export class CollectionStorage implements PluginCollectionAPI {
 
   // ── Private helpers ──────────────────────────────────────────────────
 
+  /**
+   * Push simple equality / $in / $eq filters down to Postgres JSONB so find()
+   * does not always full-scan the collection client-side.
+   * Returns Prisma `AND` conditions (array). Complex ops fall through to
+   * needsClientSideFilter + matchFilter.
+   */
   private translateFilter(filter: any): any[] {
     const conditions: any[] = [];
+    if (!filter || typeof filter !== 'object') return conditions;
+
     for (const [key, value] of Object.entries(filter)) {
       if (key === '$or' || key === '$and') continue;
-      if (value !== null && typeof value === 'object' && !Array.isArray(value) && !('$regex' in value)) {
+
+      // docId is a first-class column
+      if (key === '_id' || key === 'docId') {
+        if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+          const op = value as Record<string, any>;
+          if (op.$eq !== undefined && this.isJsonScalar(op.$eq)) {
+            conditions.push({ docId: String(op.$eq) });
+          } else if (Array.isArray(op.$in) && op.$in.every((v) => this.isJsonScalar(v))) {
+            conditions.push({ docId: { in: op.$in.map(String) } });
+          }
+          continue;
+        }
+        if (this.isJsonScalar(value)) {
+          conditions.push({ docId: String(value) });
+        }
         continue;
+      }
+
+      // Equality on a JSON document field: document->>'key' = value
+      if (this.isJsonScalar(value)) {
+        conditions.push({
+          document: { path: [key], equals: value as string | number | boolean },
+        });
+        continue;
+      }
+
+      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+        const op = value as Record<string, any>;
+        if (op.$eq !== undefined && this.isJsonScalar(op.$eq)) {
+          conditions.push({
+            document: { path: [key], equals: op.$eq as string | number | boolean },
+          });
+        } else if (Array.isArray(op.$in) && op.$in.every((v) => this.isJsonScalar(v))) {
+          conditions.push({
+            OR: op.$in.map((v: string | number | boolean) => ({
+              document: { path: [key], equals: v },
+            })),
+          });
+        }
+        // $ne/$gt/$regex/etc. stay client-side
       }
     }
     return conditions;
+  }
+
+  private isJsonScalar(value: unknown): value is string | number | boolean {
+    const t = typeof value;
+    return t === 'string' || t === 'number' || t === 'boolean';
   }
 
   private needsClientSideFilter(filter: any): boolean {
@@ -227,6 +278,17 @@ export class CollectionStorage implements PluginCollectionAPI {
       if (key === '$or' || key === '$and') return true;
       const value = filter[key];
       if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+        const op = value as Record<string, any>;
+        // $eq / $in on scalars are pushed down — no client filter needed for those alone
+        const keys = Object.keys(op);
+        const onlyPushdown =
+          keys.length > 0 &&
+          keys.every(
+            (k) =>
+              (k === '$eq' && this.isJsonScalar(op.$eq)) ||
+              (k === '$in' && Array.isArray(op.$in) && op.$in.every((v: unknown) => this.isJsonScalar(v))),
+          );
+        if (onlyPushdown) continue;
         return true;
       }
     }

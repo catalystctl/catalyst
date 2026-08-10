@@ -97,6 +97,15 @@ export async function authRoutes(app: FastifyInstance) {
       const { email, username, password } = regValidation.data;
 
       try {
+        // Gate open self-registration (env REGISTRATION_ENABLED overrides DB security setting).
+        const security = await (await import('../services/mailer')).getSecuritySettings();
+        if (!security.registrationEnabled) {
+          return reply.status(403).send({
+            error: 'Registration is disabled. Contact an administrator for an invite.',
+            code: 'REGISTRATION_DISABLED',
+          });
+        }
+
         const response = await getAuth().api.signUpEmail({
           headers: getHeaders(request),
           body: { email, password, name: username, username } as any,
@@ -200,6 +209,16 @@ export async function authRoutes(app: FastifyInstance) {
       if (!userRecord) {
         await logAuthAttempt(normalizedEmail, false, request.ip, request.headers["user-agent"]);
         return reply.status(401).send({ error: "Invalid credentials" });
+      }
+
+      // Reject banned or locked accounts before password verification
+      if (userRecord.banned) {
+        await logAuthAttempt(normalizedEmail, false, request.ip, request.headers["user-agent"]);
+        return reply.status(403).send({ error: "Account is banned", code: "ACCOUNT_BANNED" });
+      }
+      if (userRecord.lockedUntil && new Date(userRecord.lockedUntil) > new Date()) {
+        await logAuthAttempt(normalizedEmail, false, request.ip, request.headers["user-agent"]);
+        return reply.status(403).send({ error: "Account is locked", code: "ACCOUNT_LOCKED" });
       }
 
       try {

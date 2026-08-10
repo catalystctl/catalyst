@@ -856,10 +856,10 @@ step_docker_publish() {
   local backend_changed=1
   local frontend_changed=1
 
-  if git diff --quiet HEAD~1 -- catalyst-backend/ catalyst-shared/ pnpm-lock.yaml package.json 2>/dev/null; then
+  if git diff --quiet HEAD~1 -- catalyst-backend/ pnpm-lock.yaml package.json 2>/dev/null; then
     backend_changed=0
   fi
-  if git diff --quiet HEAD~1 -- catalyst-frontend/ catalyst-shared/ pnpm-lock.yaml package.json 2>/dev/null; then
+  if git diff --quiet HEAD~1 -- catalyst-frontend/ pnpm-lock.yaml package.json 2>/dev/null; then
     frontend_changed=0
   fi
 

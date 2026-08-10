@@ -249,9 +249,23 @@ export const authApi = {
     trustDevice?: boolean;
     rememberMe?: boolean;
   }): Promise<{ token: string; user: User; rememberMe?: boolean }> {
+    // Consume the challenge token stored during custom /api/auth/login when
+    // two-factor was required. better-auth primarily relies on the signed
+    // two_factor cookie (forwarded via Set-Cookie + credentials:include), but
+    // we also attach the token as Bearer so the challenge is not dropped.
+    const challengeToken = consumePendingTwoFactorToken();
     const response = await authClient.twoFactor.verifyTotp({
       code: payload.code,
       trustDevice: payload.trustDevice,
+      ...(challengeToken
+        ? {
+            fetchOptions: {
+              headers: {
+                Authorization: `Bearer ${challengeToken}`,
+              },
+            },
+          }
+        : {}),
     });
     const data = extractResponse(response);
     const token = data.token || data.session?.token || '';

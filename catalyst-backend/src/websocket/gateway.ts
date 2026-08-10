@@ -860,6 +860,68 @@ export class WebSocketGateway {
         return;
       }
 
+      // Network lifecycle events from agents (create/update/delete).
+      // Always resolve a matching pending requestId (admin waits for ack), and
+      // surface the result to admin subscribers for observability.
+      if (
+        message.type === "network_created" ||
+        message.type === "network_updated" ||
+        message.type === "network_deleted"
+      ) {
+        if (message.requestId) {
+          const pending = this.pendingAgentRequests.get(message.requestId);
+          if (pending && pending.kind === "json") {
+            clearTimeout(pending.timeout);
+            this.pendingAgentRequests.delete(message.requestId);
+            pending.resolve(message);
+          }
+        }
+        if (message.success === false) {
+          this.logger.warn(
+            {
+              nodeId,
+              type: message.type,
+              networkName: message.networkName,
+              error: message.error,
+            },
+            "Agent network operation failed",
+          );
+        } else {
+          this.logger.info(
+            {
+              nodeId,
+              type: message.type,
+              networkName: message.networkName,
+            },
+            "Agent network operation succeeded",
+          );
+        }
+        this.pushToAdminSubscribers(message.type, {
+          ...message,
+          nodeId,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      // Clone file-copy completion (same-node clone via requestFromAgent).
+      if (message.type === "clone_files_complete") {
+        if (message.requestId) {
+          const pending = this.pendingAgentRequests.get(message.requestId);
+          if (pending && pending.kind === "json") {
+            clearTimeout(pending.timeout);
+            this.pendingAgentRequests.delete(message.requestId);
+            pending.resolve(message);
+            return;
+          }
+        }
+        this.logger.info(
+          { nodeId, serverId: message.serverId, success: message.success },
+          "clone_files_complete without matching pending request",
+        );
+        return;
+      }
+
       // Generic pending request resolver — any message with a requestId that
       // matches a pending request will resolve it.
       if (message.requestId) {
@@ -2489,14 +2551,26 @@ export class WebSocketGateway {
    */
   pushToGlobalSubscribers(eventType: string, data: unknown): void {
     const eventData = JSON.stringify(data);
+    // When payload carries a serverId, honor per-subscriber server scope so
+    // non-admin global streams cannot observe other tenants' lifecycle events.
+    const payloadServerId =
+      data && typeof data === 'object' && typeof (data as any).serverId === 'string'
+        ? ((data as any).serverId as string)
+        : undefined;
     for (const [, sub] of this.globalSseSubscribers) {
-      if (sub.eventTypes.includes(eventType)) {
-        sub.lastActivity = Date.now();
-        try {
-          sub.push(eventType, eventData);
-        } catch {
-          // subscriber connection closed — will be cleaned up
-        }
+      if (!sub.eventTypes.includes(eventType)) continue;
+      if (
+        payloadServerId &&
+        sub.serverIds &&
+        !sub.serverIds.has(payloadServerId)
+      ) {
+        continue;
+      }
+      sub.lastActivity = Date.now();
+      try {
+        sub.push(eventType, eventData);
+      } catch {
+        // subscriber connection closed — will be cleaned up
       }
     }
   }
@@ -2746,7 +2820,8 @@ export class WebSocketGateway {
     this.globalSseSubscribers.set(subscriberId, {
       eventTypes,
       push,
-      serverIds: serverIds?.length ? new Set(serverIds) : undefined,
+      // undefined = no filter (full admin). Explicit empty array = no servers allowed.
+      serverIds: serverIds === undefined ? undefined : new Set(serverIds),
       lastActivity: Date.now(),
     });
     this.logger.debug({ subscriberId, eventTypes, serverIds }, 'Global SSE subscriber added');

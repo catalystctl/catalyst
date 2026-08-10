@@ -190,9 +190,22 @@ impl WebSocketHandler {
     }
 
     pub(crate) async fn stop_log_streams_for_server(&self, server_id: &str) {
-        let mut streams = self.active_log_streams.write().await;
-        // Remove all stream keys that start with server_id:
-        streams.retain(|key| !key.starts_with(&format!("{}:", server_id)));
+        let prefix = format!("{}:", server_id);
+        let mut streams = match self.active_log_streams.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        // Abort and drop every tail task for this server (not just the keys).
+        let keys: Vec<String> = streams
+            .keys()
+            .filter(|key| key.starts_with(&prefix))
+            .cloned()
+            .collect();
+        for key in keys {
+            if let Some(handle) = streams.remove(&key) {
+                handle.abort();
+            }
+        }
     }
 
     pub(crate) async fn restart_console_streams(&self) {
@@ -530,30 +543,14 @@ impl WebSocketHandler {
         let handler = self.clone();
         let server_id = server_id.to_string();
         let container_id = container_id.to_string();
-        tokio::spawn(async move {
+        let stream_key = format!("{}:{}", server_id, container_id);
+        let prefix = format!("{}:", server_id);
+        let stream_key_for_task = stream_key.clone();
+
+        let handle = tokio::spawn(async move {
             // Rotate logs if they exceed the size limit
             rotate_logs(&handler.config.server.console_log_dir, &container_id).await;
 
-            // First, clean up any stale streams for this server
-            // This prevents issues when switching from installer to game server container
-            {
-                let mut streams = handler.active_log_streams.write().await;
-                streams.retain(|key| {
-                    // Keep only streams that don't belong to this server
-                    // or keep the exact stream we're about to create (prevents duplicates)
-                    !key.starts_with(&format!("{}:", server_id))
-                        || *key == format!("{}:{}", server_id, container_id)
-                });
-            }
-
-            let stream_key = format!("{}:{}", server_id, container_id);
-            {
-                let mut guard = handler.active_log_streams.write().await;
-                if guard.contains(&stream_key) {
-                    return;
-                }
-                guard.insert(stream_key.clone());
-            }
             if let Err(err) = handler
                 .stream_container_logs(&server_id, &container_id)
                 .await
@@ -570,8 +567,35 @@ impl WebSocketHandler {
                     )
                     .await;
             }
-            handler.active_log_streams.write().await.remove(&stream_key);
+
+            // Remove ourselves if we are still the registered task for this key.
+            let mut streams = match handler.active_log_streams.lock() {
+                Ok(g) => g,
+                Err(p) => p.into_inner(),
+            };
+            if let Some(existing) = streams.get(&stream_key_for_task) {
+                if existing.is_finished() {
+                    streams.remove(&stream_key_for_task);
+                }
+            }
         });
+
+        // Register synchronously: abort any prior tails for this server, then insert.
+        let mut streams = match self.active_log_streams.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        let stale: Vec<String> = streams
+            .keys()
+            .filter(|key| key.starts_with(&prefix))
+            .cloned()
+            .collect();
+        for key in stale {
+            if let Some(old) = streams.remove(&key) {
+                old.abort();
+            }
+        }
+        streams.insert(stream_key, handle);
     }
 
     async fn stream_container_logs(&self, server_id: &str, container_id: &str) -> AgentResult<()> {

@@ -17,6 +17,7 @@
 import type { PrismaClient } from "@prisma/client";
 import type { Permission } from "../shared-types";
 import { SimpleCache } from "./cache";
+import { broadcastCacheInvalidate, onCacheInvalidate } from "./cache-bus";
 
 // 30-second TTL cache for isAdminUser results
 const adminUserCache = new SimpleCache<string, boolean>(30_000);
@@ -25,6 +26,66 @@ const adminUserCache = new SimpleCache<string, boolean>(30_000);
 // TTL of 30s balances freshness with query reduction.
 const nodeAccessCache = new SimpleCache<string, boolean>(30_000);
 const userAccessibleNodesCache = new SimpleCache<string, { nodeIds: string[]; hasWildcard: boolean }>(30_000);
+
+/** Local-only clear (no broadcast) — used by IPC receivers. */
+function clearAdminUserCacheLocal(userId?: string): void {
+  if (!userId) {
+    adminUserCache.clear();
+    return;
+  }
+  // Keys are `${userId}:true` / `${userId}:false`
+  adminUserCache.delete(`${userId}:true`);
+  adminUserCache.delete(`${userId}:false`);
+}
+
+function clearNodeAccessCachesLocal(userId?: string): void {
+  if (!userId) {
+    nodeAccessCache.clear();
+    userAccessibleNodesCache.clear();
+    return;
+  }
+  // nodeAccess keys are `${userId}:${nodeId}` — scan prefix
+  // SimpleCache has no iterator export; clear whole map on user-scoped for safety.
+  // TTL is 30s; user-scoped precision is best-effort via full clear of related maps.
+  nodeAccessCache.clear();
+  userAccessibleNodesCache.delete(userId);
+}
+
+/**
+ * Invalidate isAdminUser cache for a user (or all users).
+ * Broadcasts to sibling workers when clustered.
+ */
+export function invalidateAdminUserCache(userId?: string): void {
+  clearAdminUserCacheLocal(userId);
+  broadcastCacheInvalidate("admin-user", userId ? { userId } : { flushAll: true });
+}
+
+/**
+ * Invalidate node-access caches for a user (or all).
+ * Broadcasts to sibling workers when clustered.
+ */
+export function invalidateNodeAccessCache(userId?: string): void {
+  clearNodeAccessCachesLocal(userId);
+  broadcastCacheInvalidate("node-access", userId ? { userId } : { flushAll: true });
+}
+
+/** Flush all RBAC process-local caches and broadcast. */
+export function flushRbacCaches(): void {
+  clearAdminUserCacheLocal();
+  clearNodeAccessCachesLocal();
+  broadcastCacheInvalidate("admin-user", { flushAll: true });
+  broadcastCacheInvalidate("node-access", { flushAll: true });
+}
+
+onCacheInvalidate("admin-user", (payload) => {
+  if (payload.flushAll || !payload.userId) clearAdminUserCacheLocal();
+  else clearAdminUserCacheLocal(payload.userId);
+});
+
+onCacheInvalidate("node-access", (payload) => {
+  if (payload.flushAll || !payload.userId) clearNodeAccessCachesLocal();
+  else clearNodeAccessCachesLocal(payload.userId);
+});
 
 /**
  * Parse a permission string with optional scope

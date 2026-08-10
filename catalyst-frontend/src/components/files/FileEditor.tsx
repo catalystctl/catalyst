@@ -1,4 +1,5 @@
-import { useEffect, useMemo, lazy, Suspense } from 'react';
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
+import ConfirmDialog from '../shared/ConfirmDialog';
 
 const Editor = lazy(() => import('@monaco-editor/react'));
 import { Download, RotateCcw, Save, X, FileCode, Circle } from 'lucide-react';
@@ -90,6 +91,7 @@ function FileEditor({
  const theme = useThemeStore((s) => s.theme);
  const monacoTheme = theme === 'dark' ? 'vs-dark' : 'vs';
  const fileInfo = file ? getFileTypeInfo(file.name) : null;
+ const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
 
  // Ctrl+S keyboard shortcut
  useEffect(() => {
@@ -119,13 +121,31 @@ function FileEditor({
  // Handle close with unsaved changes confirmation
  const handleClose = () => {
  if (isDirty) {
- const confirmed = window.confirm('You have unsaved changes. Are you sure you want to close this file?');
- if (!confirmed) return;
+ setConfirmCloseOpen(true);
+ return;
  }
  onClose();
  };
 
+ const confirmClose = () => {
+ setConfirmCloseOpen(false);
+ onClose();
+ };
+
  if (!file) return null;
+
+ const closeConfirmDialog = (
+ <ConfirmDialog
+ open={confirmCloseOpen}
+ title="Unsaved changes"
+ message="You have unsaved changes. Are you sure you want to close this file? Your edits will be lost."
+ confirmText="Discard"
+ cancelText="Keep editing"
+ variant="warning"
+ onConfirm={confirmClose}
+ onCancel={() => setConfirmCloseOpen(false)}
+ />
+ );
 
  const btnSecondary =
  'inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 dark:border-border dark:text-muted-foreground dark:hover:bg-surface-2 dark:hover:text-foreground';
@@ -256,6 +276,7 @@ function FileEditor({
  </Suspense>
  )}
  </div>
+ {closeConfirmDialog}
  </div>
  );
 }

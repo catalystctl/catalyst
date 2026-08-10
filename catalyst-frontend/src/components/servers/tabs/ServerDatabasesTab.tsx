@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import ServerTabCard from './ServerTabCard';
 
 import TabHeader from './TabHeader';
@@ -5,6 +6,7 @@ import TabEmptyState from './TabEmptyState';
 import TabLoadingState from './TabLoadingState';
 import TabErrorState from './TabErrorState';
 import DataField from './DataField';
+import { ConfirmDialog } from '../../shared/ConfirmDialog';
 import { Database } from 'lucide-react';
 
 interface DatabaseHost {
@@ -63,9 +65,11 @@ export default function ServerDatabasesTab({
  deletePending,
  onDelete,
 }: Props) {
+ const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
  const databaseLimitReached =
  databaseAllocation > 0 && databases.length >= databaseAllocation;
  const disabled = isSuspended || databaseAllocation === 0;
+ const pendingDeleteDb = databases.find((db) => db.id === pendingDeleteId);
 
  return (
  <div className="space-y-4">
@@ -160,7 +164,7 @@ export default function ServerDatabasesTab({
  <button
  type="button"
  className="rounded-md border border-danger/20 px-2 py-1 text-[10px] font-medium text-danger transition-all hover:border-danger/40 hover:bg-danger/5 disabled:opacity-50"
- onClick={() => onDelete(db.id)}
+ onClick={() => setPendingDeleteId(db.id)}
  disabled={deletePending || isSuspended}
  >
  Delete
@@ -178,6 +182,26 @@ export default function ServerDatabasesTab({
  </div>
  )}
  </ServerTabCard>
+
+ <ConfirmDialog
+ open={Boolean(pendingDeleteId)}
+ title="Delete database?"
+ message={
+ pendingDeleteDb
+ ? `This will permanently drop database "${pendingDeleteDb.name}" and its credentials. This cannot be undone.`
+ : 'This will permanently drop the database and its credentials. This cannot be undone.'
+ }
+ confirmText="Delete"
+ cancelText="Cancel"
+ variant="danger"
+ loading={deletePending}
+ onConfirm={() => {
+ if (!pendingDeleteId) return;
+ onDelete(pendingDeleteId);
+ setPendingDeleteId(null);
+ }}
+ onCancel={() => setPendingDeleteId(null)}
+ />
  </div>
  );
 }

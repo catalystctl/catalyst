@@ -190,7 +190,7 @@ The agent runs several background tasks concurrently:
 
 | Requirement | Minimum | Recommended |
 |---|---|---|
-| **OS** | Linux (x86_64, aarch64) | Ubuntu 22.04+, Debian 12+ |
+| **OS** | Linux x86_64 or aarch64 (pre-built musl release assets for both) | Ubuntu 22.04+, Debian 12+ |
 | **containerd** | 1.6+ | Latest stable (with CRI plugin) |
 | **OCI Runtime** | runc or crun | runc latest |
 | **CPU** | 2 cores | 4+ cores (for game servers) |
@@ -304,7 +304,10 @@ docker run -d \
 
 The Dockerfile uses a two-stage build (Rust builder → Ubuntu 24.04 runtime) and runs as a non-root `catalyst` user (uid 1000). The default CMD passes `--config /opt/catalyst-agent/config.toml`.
 
-> **Note:** Running the agent in Docker is not recommended for production. It requires `--privileged` access for containerd, networking, and firewall management. Use the native binary for production deployments.
+> **Note:** Running the agent in Docker is **not** recommended for production. The image is for development/testing only:
+> - Production needs **root** for mount/umount, CNI, firewall, and containerd socket access — the non-root `USER catalyst` cannot perform those operations.
+> - The container binary is **glibc (gnu)**, while bare-metal auto-update downloads the **musl** release asset (`catalyst-agent-{arch}-linux-musl`). Do not mix the two paths.
+> - Prefer the native musl binary + systemd unit from `deploy-agent.sh` for production.
 
 ### Building from Source
 
@@ -924,7 +927,7 @@ Backups are encrypted using **AES-256-GCM**:
 Backup uploads support two formats:
 
 1. **JSON chunk** — Standard JSON message with base64-encoded chunk data
-2. **Binary chunk** — Raw tar data with 16-byte `requestId` header
+2. **Binary chunk** — Raw tar data with a requestId header (see below)
 
 **Upload lifecycle:**
 1. `upload_backup_start` — Backend sends start request
@@ -934,7 +937,9 @@ Backup uploads support two formats:
 **Limits:**
 - Maximum upload size: 10 GB
 - Inactivity timeout: 10 minutes (stale sessions cleaned up every 60s)
-- Binary chunk format: first 16 bytes = request ID, remainder = data
+- Binary chunk formats (agent accepts both):
+  - **v2 length-prefixed (preferred):** `[u16 BE idLen][id UTF-8][payload]` — full UUID on every frame
+  - **Legacy fixed 16-byte header:** first 16 UTF-8 bytes of requestId (zero-padded) + payload; resolved via unique session prefix match
 
 ### Backup Download (Streaming)
 
@@ -1093,9 +1098,9 @@ The frontend must respond with `accept_eula` or `decline_eula` to resume.
 
 | Command | Description |
 |---|---|
-| `file_operation` | File operation request (handled by File Tunnel) |
+| `file_operation` | Legacy/unused WebSocket message type still accepted by the agent for local debugging. **Production file I/O uses the HTTP file tunnel** (`/api/internal/file-tunnel/*`), not this WS command. |
 
-The file tunnel supports 12 operations: `list`, `read`, `write`, `delete`, `create`, `rename`, `permissions`, `compress`, `decompress`, `archive-contents`, `upload`, `install-url`.
+The HTTP file tunnel supports 12 operations: `list`, `read`, `write`, `delete`, `create`, `rename`, `permissions`, `compress`, `decompress`, `archive-contents`, `upload`, `install-url`. The backend never sends `file_operation` over WebSocket.
 
 ### Backup Commands (Panel → Agent)
 
@@ -1189,16 +1194,17 @@ The agent supports self-updates initiated by the panel via the `update_agent` We
 
 **Update flow:**
 1. Panel sends `update_agent` command
-2. Agent downloads new binary from `{backend_url}/api/agent/download`
+2. Agent downloads the arch-matching musl asset from GitHub Releases (`catalyst-agent-{x86_64|aarch64}-linux-musl`), falling back to `{backend_url}/api/agent/download`
 3. Agent writes to `{binary_path}.update`
 4. Agent renames current binary to `{binary_path}.backup`
 5. Agent moves new binary into place
 6. Agent performs `exec` (Unix) or spawns new process (non-Unix) with same arguments
 
 **Security:**
-- Download URL uses the same backend URL as WebSocket
+- Prefer GitHub Releases checksums; backend proxy is a fallback
 - Binary is made executable on Unix (mode 0755)
 - Current binary is backed up before replacement
+- Docker/gnu container binaries are not auto-updated via the musl asset path
 
 ---
 

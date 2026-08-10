@@ -29,9 +29,12 @@ function ServerControls({ serverId, status, permissions }: Props) {
  const isCloning = status === 'cloning';
  const [showKillConfirm, setShowKillConfirm] = useState(false);
 
+ // Fail CLOSED: missing/empty permissions hide all power controls.
+ // Callers must pass effectivePermissions (or ['*']) explicitly.
  const p = new Set(permissions ?? []);
- const canStart = p.size === 0 || p.has('server.start');
- const canStop = p.size === 0 || p.has('server.stop');
+ const hasWildcard = p.has('*');
+ const canStart = hasWildcard || p.has('server.start');
+ const canStop = hasWildcard || p.has('server.stop');
  const canRestart = canStart && canStop;
  const canKill = canStop;
 
@@ -124,7 +127,7 @@ function ServerControls({ serverId, status, permissions }: Props) {
  },
  });
 
- if (permissions && permissions.length > 0 && !canStart && !canStop && !canKill) {
+ if (!canStart && !canStop && !canKill) {
  return null;
  }
 

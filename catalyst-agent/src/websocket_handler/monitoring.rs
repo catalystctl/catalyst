@@ -6,12 +6,17 @@ impl WebSocketHandler {
     pub async fn send_health_report(&self) -> AgentResult<()> {
         debug!("Sending health report");
         let containers = self.runtime.list_containers().await?;
+        // First sample after System::new() is unreliable (no prior baseline).
+        // Double-refresh with a short sleep so CPU % is meaningful.
         let mut system = System::new();
+        system.refresh_cpu_all();
+        tokio::time::sleep(Duration::from_millis(200)).await;
         system.refresh_cpu_all();
         system.refresh_memory();
         let cpu_percent = system.global_cpu_usage();
-        let memory_usage_mb = system.used_memory() / 1024;
-        let memory_total_mb = system.total_memory() / 1024;
+        // sysinfo reports memory in bytes; convert to MiB.
+        let memory_usage_mb = system.used_memory() / (1024 * 1024);
+        let memory_total_mb = system.total_memory() / (1024 * 1024);
         let mut disks = Disks::new_with_refreshed_list();
         disks.refresh(true);
         let mut disk_usage_mb = 0u64;
@@ -750,9 +755,17 @@ impl WebSocketHandler {
                 let network_tx_bytes = stats.network_tx_bytes;
                 let disk_io_mb = (stats.block_read_bytes + stats.block_write_bytes) / (1024 * 1024);
 
-                // Skip df exec in hot path; use block IO as a proxy for disk usage
-                let disk_usage_mb = disk_io_mb;
-                let disk_total_mb = 0u64;
+                // Prefer real df-based filesystem usage (same as immediate stats path).
+                // Fall back to block IO only if df fails/times out; total stays 0 then.
+                let (disk_usage_mb, disk_total_mb) = match tokio::time::timeout(
+                    Duration::from_secs(2),
+                    runtime.exec(&container.id, vec!["df", "-m", "/data"]),
+                )
+                .await
+                {
+                    Ok(Ok(output)) => parse_df_output_mb(&output).unwrap_or((disk_io_mb, 0)),
+                    _ => (disk_io_mb, 0),
+                };
 
                 Some(ResourceStatsEntry {
                     serverUuid: server_uuid,

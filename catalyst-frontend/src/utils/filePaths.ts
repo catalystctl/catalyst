@@ -1,9 +1,31 @@
+/**
+ * Normalize a server-relative file path.
+ * - Collapses `.` segments
+ * - Resolves `..` within the virtual root (never escapes above `/`)
+ * - Converts backslashes to forward slashes
+ *
+ * Examples:
+ *   normalizePath('/a/../b')  → '/b'
+ *   normalizePath('../x')    → '/x'  (escaped segments dropped)
+ *   normalizePath('/a/./b')  → '/a/b'
+ */
 export const normalizePath = (value: string) => {
   if (!value) return '/';
   const replaced = value.replace(/\\/g, '/').trim();
   if (!replaced) return '/';
-  const parts = replaced.split('/').filter(Boolean);
-  return `/${parts.join('/')}`;
+
+  const stack: string[] = [];
+  for (const part of replaced.split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') {
+      // Drop parent segment when possible; never allow escaping root.
+      if (stack.length > 0) stack.pop();
+      continue;
+    }
+    stack.push(part);
+  }
+
+  return `/${stack.join('/')}`;
 };
 
 export const joinPath = (base: string, segment: string) => {

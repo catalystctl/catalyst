@@ -44,8 +44,6 @@ Catalyst is a full-stack game server management system built as a three-tier mon
    - Health reporting, metrics collection, file operations
    - System metrics collection every 30 seconds
 
-4. **Shared Types** (`catalyst-shared/`) - Type definitions synced across services
-
 ---
 
 ## Critical Architecture Decisions & Why

@@ -1,6 +1,95 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
-import { ServerState, ServerStateMachine, checkIsAdmin, ensureNotSuspended, ensureSuspendPermission, hasNodeAccess, injectPterodactylCompatibilityVars, normalizeHostIp, parseStoredPortBindings, patchTemplateForRuntime, resolveTemplateImage, syncPortEnvironmentVariables } from './_helpers.js';
+import { ServerState, ServerStateMachine, checkIsAdmin, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, injectPterodactylCompatibilityVars, normalizeHostIp, parseStoredPortBindings, patchTemplateForRuntime, resolveTemplateImage, syncPortEnvironmentVariables } from './_helpers.js';
+
+/** Default timeouts for power command acks from the agent. */
+const POWER_ACK_TIMEOUT = {
+  /** stop waits for graceful shutdown + container remove */
+  stop: 60_000,
+  /** kill is force path — usually faster */
+  kill: 30_000,
+  /** start/restart only wait for accept-ack; lifecycle finishes via server_state_update */
+  start: 15_000,
+  restart: 15_000,
+} as const;
+
+type PowerSendResult =
+  | { mode: "acked"; result: any; requestId?: string }
+  | { mode: "sent"; requestId?: string }
+  | { mode: "timeout"; requestId?: string; error: Error }
+  | { mode: "failed"; error: Error };
+
+/**
+ * Send a power command to the agent.
+ *
+ * Prefers requestFromAgent (agent echoes power_command_ack with the same
+ * requestId). Falls back to sendToAgent when requestFromAgent is unavailable.
+ *
+ * Notes:
+ * - stop/kill acks after the operation finishes on the agent.
+ * - start/restart acks immediately on accept; final state arrives via
+ *   server_state_update (already handled by the gateway).
+ * - On timeout the command was still delivered — callers should treat that as
+ *   async-in-progress rather than a hard failure.
+ */
+async function sendPowerCommand(
+  gateway: any,
+  nodeId: string,
+  message: Record<string, unknown>,
+  timeoutMs: number,
+): Promise<PowerSendResult> {
+  if (!gateway) {
+    return { mode: "failed", error: new Error("WebSocket gateway not available") };
+  }
+
+  if (typeof gateway.requestFromAgent === "function") {
+    try {
+      const result = await gateway.requestFromAgent(nodeId, message, timeoutMs);
+      const requestId =
+        (result && typeof result.requestId === "string" && result.requestId) ||
+        (typeof message.requestId === "string" ? message.requestId : undefined);
+      if (result && result.success === false) {
+        return {
+          mode: "failed",
+          error: new Error(
+            typeof result.error === "string" && result.error
+              ? result.error
+              : "Agent rejected power command",
+          ),
+        };
+      }
+      return { mode: "acked", result, requestId };
+    } catch (err: any) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      const msg = error.message || "";
+      if (msg.includes("timed out") || msg.includes("timeout")) {
+        return { mode: "timeout", error };
+      }
+      return { mode: "failed", error };
+    }
+  }
+
+  if (typeof gateway.sendToAgent === "function") {
+    const success = await gateway.sendToAgent(nodeId, message);
+    if (!success) {
+      return { mode: "failed", error: new Error("Failed to send command to agent") };
+    }
+    return { mode: "sent" };
+  }
+
+  return { mode: "failed", error: new Error("WebSocket gateway not available") };
+}
+
+function powerFailureStatus(result: PowerSendResult): number {
+  if (result.mode === "failed") {
+    const msg = result.error.message || "";
+    if (msg.includes("not connected") || msg.includes("Failed to send")) {
+      return 503;
+    }
+    return 502;
+  }
+  return 502;
+}
 
 export async function serverPowerRoutes(app: FastifyInstance) {
   app.post(
@@ -27,7 +116,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       }
 
       // Check permissions
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
+      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
         const access = await prisma.serverAccess.findFirst({
           where: {
             userId,
@@ -35,8 +124,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
             permissions: { has: "server.install" },
           },
         });
-        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-        if (!access && !hasNodeAccessToServer) {
+        // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
+        if (!access) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }
@@ -104,6 +193,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         portBindings
       );
 
+      // Install is long-running — fire-and-forget with delivery check.
+      // Final status arrives via server_state_update from the agent.
       const success = await gateway.sendToAgent(server.nodeId, {
         type: "install_server",
         serverId: server.id,
@@ -135,7 +226,13 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         },
       });
 
-      reply.send({ success: true, message: "Install command sent to agent" });
+      // 202: accepted for async processing; completion via server_state_update
+      reply.status(202).send({
+        success: true,
+        accepted: true,
+        async: true,
+        message: "Install command accepted; completion is asynchronous",
+      });
     }
   );
 
@@ -164,7 +261,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       }
 
       // Check permissions
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
+      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
         const access = await prisma.serverAccess.findFirst({
           where: {
             userId,
@@ -172,8 +269,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
             permissions: { has: "server.reinstall" },
           },
         });
-        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-        if (!access && !hasNodeAccessToServer) {
+        // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
+        if (!access) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }
@@ -241,6 +338,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         portBindings
       );
 
+      // Reinstall is long-running — fire-and-forget with delivery check.
       const success = await gateway.sendToAgent(server.nodeId, {
         type: "reinstall_server",
         serverId: server.id,
@@ -272,7 +370,12 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         },
       });
 
-      reply.send({ success: true, message: "Reinstall command sent to agent" });
+      reply.status(202).send({
+        success: true,
+        accepted: true,
+        async: true,
+        message: "Reinstall command accepted; completion is asynchronous",
+      });
     }
   );
 
@@ -285,17 +388,25 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         serverId: string;
         accepted: boolean;
       };
+      const userId = request.user.userId;
 
       if (!serverId || typeof accepted !== "boolean") {
         return reply.status(400).send({ error: "serverId (string) and accepted (boolean) are required" });
       }
 
-      const server = await prisma.server.findUnique({
+      // Require ownership, ServerAccess with start (install flow), or admin.write/*
+      // EULA is part of install/start lifecycle — treat as server.start capability.
+      const server = await ensureServerAccess(serverId, userId, "server.start", reply);
+      if (!server) {
+        return;
+      }
+
+      // ensureServerAccess already checked suspension, but re-load node for sendToAgent
+      const serverWithNode = await prisma.server.findUnique({
         where: { id: serverId },
         include: { node: true },
       });
-
-      if (!server) {
+      if (!serverWithNode) {
         return reply.status(404).send({ error: "Server not found" });
       }
 
@@ -304,10 +415,10 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         return reply.status(500).send({ error: "WebSocket gateway not available" });
       }
 
-      const success = await gateway.sendToAgent(server.nodeId, {
+      const success = await gateway.sendToAgent(serverWithNode.nodeId, {
         type: accepted ? "accept_eula" : "decline_eula",
-        serverId: server.id,
-        serverUuid: server.uuid,
+        serverId: serverWithNode.id,
+        serverUuid: serverWithNode.uuid,
       });
 
       if (!success) {
@@ -357,7 +468,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       }
 
       // Check permissions
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
+      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
         const access = await prisma.serverAccess.findFirst({
           where: {
             userId,
@@ -365,8 +476,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
             permissions: { has: "server.rebuild" },
           },
         });
-        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-        if (!access && !hasNodeAccessToServer) {
+        // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
+        if (!access) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }
@@ -498,7 +609,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       }
 
       // Check permissions
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
+      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
         const access = await prisma.serverAccess.findFirst({
           where: {
             userId,
@@ -506,8 +617,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
             permissions: { has: "server.start" },
           },
         });
-        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-        if (!access && !hasNodeAccessToServer) {
+        // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
+        if (!access) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }
@@ -585,39 +696,68 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         portBindings
       );
 
-      const success = await gateway.sendToAgent(server.nodeId, {
-        type: "start_server",
-        serverId: server.id,
-        serverUuid: server.uuid,
-        template: runtimeTemplate,
-        environment: syncedEnvironment,
-        allocatedMemoryMb: server.allocatedMemoryMb,
-        allocatedCpuCores: server.allocatedCpuCores,
-        allocatedDiskMb: server.allocatedDiskMb,
-        allocatedSwapMb: server.allocatedSwapMb,
-        ioWeight: server.ioWeight,
-        primaryPort: server.primaryPort,
-        portBindings: portBindings,
-        networkMode: server.networkMode,
-        autoRestart: {
-          enabled: server.restartPolicy !== "never",
-          delay: 10,
-          maxRestarts: server.maxCrashCount ?? 5,
-          windowSecs: 60,
+      const powerResult = await sendPowerCommand(
+        gateway,
+        server.nodeId,
+        {
+          type: "start_server",
+          serverId: server.id,
+          serverUuid: server.uuid,
+          template: runtimeTemplate,
+          environment: syncedEnvironment,
+          allocatedMemoryMb: server.allocatedMemoryMb,
+          allocatedCpuCores: server.allocatedCpuCores,
+          allocatedDiskMb: server.allocatedDiskMb,
+          allocatedSwapMb: server.allocatedSwapMb,
+          ioWeight: server.ioWeight,
+          primaryPort: server.primaryPort,
+          portBindings: portBindings,
+          networkMode: server.networkMode,
+          autoRestart: {
+            enabled: server.restartPolicy !== "never",
+            delay: 10,
+            maxRestarts: server.maxCrashCount ?? 5,
+            windowSecs: 60,
+          },
         },
-      });
+        POWER_ACK_TIMEOUT.start,
+      );
 
-      if (!success) {
-        return reply.status(503).send({ error: "Failed to send command to agent" });
+      if (powerResult.mode === "failed") {
+        return reply.status(powerFailureStatus(powerResult)).send({
+          error: powerResult.error.message || "Failed to send command to agent",
+        });
       }
 
-      // Update server status
+      // Update server status optimistically; final state via server_state_update
       await prisma.server.update({
         where: { id: serverId },
         data: { status: "starting" },
       });
 
-      reply.send({ success: true, message: "Start command sent to agent" });
+      if (powerResult.mode === "acked") {
+        return reply.send({
+          success: true,
+          accepted: true,
+          acked: true,
+          requestId: powerResult.requestId,
+          message: "Start command accepted by agent; completion is asynchronous",
+        });
+      }
+
+      // timeout or legacy send: command was delivered (or we can't tell for legacy),
+      // completion remains async via server_state_update.
+      return reply.status(202).send({
+        success: true,
+        accepted: true,
+        async: true,
+        timedOutWaitingForAck: powerResult.mode === "timeout",
+        requestId: "requestId" in powerResult ? powerResult.requestId : undefined,
+        message:
+          powerResult.mode === "timeout"
+            ? "Start command sent; agent ack timed out — completion is asynchronous"
+            : "Start command sent to agent; completion is asynchronous",
+      });
     }
   );
 
@@ -646,7 +786,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       }
 
       // Check permissions
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
+      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
         const access = await prisma.serverAccess.findFirst({
           where: {
             userId,
@@ -654,8 +794,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
             permissions: { has: "server.stop" },
           },
         });
-        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-        if (!access && !hasNodeAccessToServer) {
+        // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
+        if (!access) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }
@@ -695,23 +835,50 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         data: { status: "stopping" },
       });
 
-      const success = await gateway.sendToAgent(server.nodeId, {
-        type: "stop_server",
-        serverId: server.id,
-        serverUuid: server.uuid,
-        template: patchTemplateForRuntime(server.template),
-      });
+      const powerResult = await sendPowerCommand(
+        gateway,
+        server.nodeId,
+        {
+          type: "stop_server",
+          serverId: server.id,
+          serverUuid: server.uuid,
+          template: patchTemplateForRuntime(server.template),
+        },
+        POWER_ACK_TIMEOUT.stop,
+      );
 
-      if (!success) {
-        // Revert status since agent didn't receive the command
+      if (powerResult.mode === "failed") {
+        // Revert status since agent didn't accept/complete the command
         await prisma.server.update({
           where: { id: serverId },
           data: { status: server.status },
         });
-        return reply.status(503).send({ error: "Failed to send command to agent" });
+        return reply.status(powerFailureStatus(powerResult)).send({
+          error: powerResult.error.message || "Failed to send command to agent",
+        });
       }
 
-      reply.send({ success: true, message: "Stop command sent to agent" });
+      if (powerResult.mode === "acked") {
+        return reply.send({
+          success: true,
+          acked: true,
+          requestId: powerResult.requestId,
+          message: "Stop command completed by agent",
+        });
+      }
+
+      // Timeout: command was delivered; final state via server_state_update
+      return reply.status(202).send({
+        success: true,
+        accepted: true,
+        async: true,
+        timedOutWaitingForAck: powerResult.mode === "timeout",
+        requestId: "requestId" in powerResult ? powerResult.requestId : undefined,
+        message:
+          powerResult.mode === "timeout"
+            ? "Stop command sent; agent ack timed out — completion is asynchronous"
+            : "Stop command sent to agent; completion is asynchronous",
+      });
     }
   );
 
@@ -739,7 +906,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         return;
       }
 
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
+      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
         const access = await prisma.serverAccess.findFirst({
           where: {
             userId,
@@ -747,8 +914,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
             permissions: { has: "server.stop" },
           },
         });
-        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-        if (!access && !hasNodeAccessToServer) {
+        // Node assignment alone must not grant power ops; require ServerAccess or admin.write/*
+        if (!access) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }
@@ -785,22 +952,48 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         data: { status: "stopping" },
       });
 
-      const success = await gateway.sendToAgent(server.nodeId, {
-        type: "kill_server",
-        serverId: server.id,
-        serverUuid: server.uuid,
-        template: patchTemplateForRuntime(server.template),
-      });
+      const powerResult = await sendPowerCommand(
+        gateway,
+        server.nodeId,
+        {
+          type: "kill_server",
+          serverId: server.id,
+          serverUuid: server.uuid,
+          template: patchTemplateForRuntime(server.template),
+        },
+        POWER_ACK_TIMEOUT.kill,
+      );
 
-      if (!success) {
+      if (powerResult.mode === "failed") {
         await prisma.server.update({
           where: { id: serverId },
           data: { status: server.status },
         });
-        return reply.status(503).send({ error: "Failed to send command to agent" });
+        return reply.status(powerFailureStatus(powerResult)).send({
+          error: powerResult.error.message || "Failed to send command to agent",
+        });
       }
 
-      reply.send({ success: true, message: "Kill command sent to agent" });
+      if (powerResult.mode === "acked") {
+        return reply.send({
+          success: true,
+          acked: true,
+          requestId: powerResult.requestId,
+          message: "Kill command completed by agent",
+        });
+      }
+
+      return reply.status(202).send({
+        success: true,
+        accepted: true,
+        async: true,
+        timedOutWaitingForAck: powerResult.mode === "timeout",
+        requestId: "requestId" in powerResult ? powerResult.requestId : undefined,
+        message:
+          powerResult.mode === "timeout"
+            ? "Kill command sent; agent ack timed out — completion is asynchronous"
+            : "Kill command sent to agent; completion is asynchronous",
+      });
     }
   );
 
@@ -828,8 +1021,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         return;
       }
 
-      // Check permissions - restart requires both server.start and server.stop
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
+      // Check permissions - restart requires BOTH server.start AND server.stop
+      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
         const [startAccess, stopAccess] = await Promise.all([
           prisma.serverAccess.findFirst({
             where: { userId, serverId, permissions: { has: "server.start" } },
@@ -838,8 +1031,8 @@ export async function serverPowerRoutes(app: FastifyInstance) {
             where: { userId, serverId, permissions: { has: "server.stop" } },
           }),
         ]);
-        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-        if (!startAccess && !stopAccess && !hasNodeAccessToServer) {
+        // Require both start and stop; node assignment alone is not enough
+        if (!startAccess || !stopAccess) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }
@@ -863,18 +1056,14 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       }
       const runtimeTemplate = patchTemplateForRuntime(server.template);
 
-      // If running, stop first
+      // If running, stop first (best-effort; restart path still proceeds)
       if (currentState === ServerState.RUNNING) {
         await prisma.server.update({
           where: { id: serverId },
           data: { status: "stopping" },
         });
-        await gateway.sendToAgent(server.nodeId, {
-          type: "stop_server",
-          serverId: server.id,
-          serverUuid: server.uuid,
-          template: runtimeTemplate,
-        });
+        // Dedicated stop is not waited here — restart_server on the agent
+        // performs stop+wait+start. The restart request below carries the ack.
       }
 
       // Start after a delay (agent will handle the actual timing)
@@ -911,25 +1100,58 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         portBindings
       );
 
-      const success = await gateway.sendToAgent(server.nodeId, {
-        type: "restart_server",
-        serverId: server.id,
-        serverUuid: server.uuid,
-        template: runtimeTemplate,
-        environment: syncedEnvironment,
-        allocatedMemoryMb: server.allocatedMemoryMb,
-        allocatedCpuCores: server.allocatedCpuCores,
-        allocatedDiskMb: server.allocatedDiskMb,
-        primaryPort: server.primaryPort,
-        portBindings: portBindings,
-        networkMode: server.networkMode,
-      });
+      const powerResult = await sendPowerCommand(
+        gateway,
+        server.nodeId,
+        {
+          type: "restart_server",
+          serverId: server.id,
+          serverUuid: server.uuid,
+          template: runtimeTemplate,
+          environment: syncedEnvironment,
+          allocatedMemoryMb: server.allocatedMemoryMb,
+          allocatedCpuCores: server.allocatedCpuCores,
+          allocatedDiskMb: server.allocatedDiskMb,
+          primaryPort: server.primaryPort,
+          portBindings: portBindings,
+          networkMode: server.networkMode,
+        },
+        POWER_ACK_TIMEOUT.restart,
+      );
 
-      if (!success) {
-        return reply.status(503).send({ error: "Failed to send command to agent" });
+      if (powerResult.mode === "failed") {
+        return reply.status(powerFailureStatus(powerResult)).send({
+          error: powerResult.error.message || "Failed to send command to agent",
+        });
       }
 
-      reply.send({ success: true, message: "Restart command sent to agent" });
+      // Optimistic transitional state; final via server_state_update
+      await prisma.server.update({
+        where: { id: serverId },
+        data: { status: "starting" },
+      });
+
+      if (powerResult.mode === "acked") {
+        return reply.send({
+          success: true,
+          accepted: true,
+          acked: true,
+          requestId: powerResult.requestId,
+          message: "Restart command accepted by agent; completion is asynchronous",
+        });
+      }
+
+      return reply.status(202).send({
+        success: true,
+        accepted: true,
+        async: true,
+        timedOutWaitingForAck: powerResult.mode === "timeout",
+        requestId: "requestId" in powerResult ? powerResult.requestId : undefined,
+        message:
+          powerResult.mode === "timeout"
+            ? "Restart command sent; agent ack timed out — completion is asynchronous"
+            : "Restart command sent to agent; completion is asynchronous",
+      });
     }
   );
 

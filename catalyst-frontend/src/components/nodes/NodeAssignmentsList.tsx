@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -5,6 +6,7 @@ import { Shield, User, X } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { nodesApi } from '../../services/api/nodes';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import ConfirmDialog from '../shared/ConfirmDialog';
 import ServerTabCard from '../servers/tabs/ServerTabCard';
 import SectionHeader from '../servers/tabs/SectionHeader';
 import TabLoadingState from '../servers/tabs/TabLoadingState';
@@ -15,6 +17,7 @@ type Props = {
 };
 
 function NodeAssignmentsList({ nodeId, canManage }: Props) {
+ const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
 
  const { data: assignments = [], isLoading } = useQuery({
  queryKey: qk.nodeAssignments(nodeId),
@@ -28,6 +31,7 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
  },
  onSuccess: () => {
  notifySuccess('Assignment removed');
+ setPendingRemoveId(null);
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.nodeAssignments(nodeId) });
@@ -39,8 +43,12 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
  });
 
  const handleRemove = (assignmentId: string) => {
- if (confirm('Are you sure you want to remove this assignment?')) {
- removeMutation.mutate(assignmentId);
+ setPendingRemoveId(assignmentId);
+ };
+
+ const confirmRemove = () => {
+ if (pendingRemoveId) {
+ removeMutation.mutate(pendingRemoveId);
  }
  };
 
@@ -127,6 +135,19 @@ function NodeAssignmentsList({ nodeId, canManage }: Props) {
  ))}
  </div>
  )}
+
+ <ConfirmDialog
+ open={pendingRemoveId !== null}
+ title="Remove assignment"
+ message="Are you sure you want to remove this assignment? The user or role will lose node access."
+ confirmText="Remove"
+ variant="danger"
+ loading={removeMutation.isPending}
+ onConfirm={confirmRemove}
+ onCancel={() => {
+ if (!removeMutation.isPending) setPendingRemoveId(null);
+ }}
+ />
  </ServerTabCard>
  );
 }

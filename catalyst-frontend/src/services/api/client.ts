@@ -1,4 +1,5 @@
 import { useAuthStore } from '../../stores/authStore';
+import { queryClient } from '../../lib/queryClient';
 import { reportSystemError } from './systemErrors';
 
 /** Module-level guard set by authStore.login() to suppress the 401 interceptor
@@ -145,7 +146,7 @@ class ApiClient {
         errorData = { message: response.statusText || `HTTP ${response.status}` };
       }
 
-      // Global 401 handling — clears auth state and redirects to login
+      // Global 401 handling — clears auth state, privileged cache, and redirects
       if (response.status === 401 && !loginGuard.active) {
         const code = errorData.code;
         if (code !== 'TWO_FACTOR_REQUIRED' && code !== 'PASSKEY_REQUIRED') {
@@ -156,6 +157,17 @@ class ApiClient {
             isReady: true,
             rememberMe: false,
           });
+          // Drop any privileged React Query cache so stale admin/server data
+          // cannot flash after the session dies.
+          queryClient.clear();
+          if (typeof window !== 'undefined') {
+            const path = window.location.pathname + window.location.search;
+            // Avoid redirect loops on the login page itself.
+            if (!path.startsWith('/login') && !path.startsWith('/two-factor')) {
+              const returnTo = encodeURIComponent(path);
+              window.location.assign(`/login?from=${returnTo}`);
+            }
+          }
         }
       }
 

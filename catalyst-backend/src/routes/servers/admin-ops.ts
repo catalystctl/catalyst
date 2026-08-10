@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
-import { allocateIpForServer, checkIsAdmin, decryptBackupConfig, encryptBackupConfig, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, hasNodeAccess, path, redactBackupConfig, releaseIpForServer, shouldUseIpam } from './_helpers.js';
+import { allocateIpForServer, canAccessServer, checkIsAdmin, decryptBackupConfig, encryptBackupConfig, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, OWNER_SERVER_PERMISSIONS, path, redactBackupConfig, releaseIpForServer, ServerState, shouldUseIpam } from './_helpers.js';
 
 export async function serverAdminopsRoutes(app: FastifyInstance) {
   app.patch(
@@ -306,19 +306,22 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       }
 
 
-      // Check if user has permission
-      const hasExplicitAccess = await prisma.serverAccess.findFirst({
-        where: {
-          serverId: id,
-          userId: request.user.userId,
-        },
-      });
-
-      const hasNodeAccessToServer = await hasNodeAccess(prisma, request.user.userId, server.nodeId);
-
+      // Check permission: owner | ServerAccess(server.transfer) | node+node.update | admin.write/*
+      // Bare node assignment alone is NOT enough.
       if (server.ownerId !== request.user.userId) {
-        if (!hasExplicitAccess || !hasExplicitAccess.permissions.includes("server.transfer")) {
-          if (!hasNodeAccessToServer) {
+        const hasExplicitAccess = await prisma.serverAccess.findFirst({
+          where: {
+            serverId: id,
+            userId: request.user.userId,
+            permissions: { has: "server.transfer" },
+          },
+        });
+        if (!hasExplicitAccess) {
+          if (!(await canAccessServer(request.user.userId, {
+            id: server.id,
+            ownerId: server.ownerId,
+            nodeId: server.nodeId,
+          }))) {
             return reply.status(403).send({
               error: "You do not have permission to transfer this server",
             });
@@ -403,7 +406,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       // Update server status to transferring
       await prisma.server.update({
         where: { id },
-        data: { status: "transferring" },
+        data: { status: ServerState.TRANSFERRING },
       });
 
       // Get WebSocket gateway
@@ -650,14 +653,12 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
           create: {
             userId: newOwnerId,
             serverId,
-            permissions: [
-              "server.start", "server.stop", "server.read", "server.install",
-              "alert.read", "alert.create", "alert.update", "alert.delete",
-              "file.read", "file.write", "console.read", "console.write",
-              "server.delete",
-            ],
+            permissions: [...OWNER_SERVER_PERMISSIONS],
           },
-          update: {}, // Keep existing permissions
+          update: {
+            // Merge full owner set so transfer always grants reinstall/rebuild/backup/db/etc.
+            permissions: [...OWNER_SERVER_PERMISSIONS],
+          },
         });
         return s;
       });

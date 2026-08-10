@@ -568,7 +568,7 @@ function ThemeSettingsPage() {
  primaryColor,
  secondaryColor,
  accentColor,
- customCss: customCss.trim() || null,
+ customCss: (customCss.trim().slice(0, 100_000) || null),
  metadata: { themeColors: hasCustomColors ? themeColors : undefined },
  });
  };
@@ -1250,12 +1250,13 @@ function ThemeSettingsPage() {
  <div className="space-y-3">
  <textarea
  value={customCss}
- onChange={(e) => setCustomCss(e.target.value)}
+ onChange={(e) => setCustomCss(e.target.value.slice(0, 100_000))}
  placeholder="/* Your custom CSS here */&#10;.my-custom-class {&#10; color: red;&#10;}"
  rows={14}
  spellCheck={false}
  className="w-full rounded-lg border border-border/40 bg-card px-3 py-2.5 font-mono text-xs text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
  />
+ <p className="text-[11px] text-muted-foreground">{customCss.length.toLocaleString()} / 100,000 characters</p>
  <div className="flex items-center gap-2">
  <button
  type="button"

@@ -63,13 +63,25 @@ export function processEntry(entry: RawEntry, searchQuery: string): ProcessedEnt
   const cleaned = tsMatch ? data.replace(TIMESTAMP_RE, '') : data;
   const lines = cleaned.split('\n').filter((l, i, a) => !(i === a.length - 1 && l === ''));
 
+  // Allowlist mark tags so search highlights survive sanitization.
+  const purifyOpts = {
+    ADD_TAGS: ['mark'],
+    ADD_ATTR: ['class'],
+  };
+
   const htmlParts: string[] = [];
   for (const line of lines) {
     const display = line.length > 800 ? line.slice(0, 800) : line || ' ';
     let html = ansiConverter.toHtml(display);
     html = applySyntaxHighlighting(html);
-    if (searchQuery) html = highlightSearch(html, searchQuery);
-    html = DOMPurify.sanitize(html);
+    // Sanitize the ANSI/syntax HTML first…
+    html = DOMPurify.sanitize(html, purifyOpts);
+    // …then inject search marks on the already-safe HTML and re-sanitize
+    // so any residual markup from the query path cannot execute.
+    if (searchQuery) {
+      html = highlightSearch(html, searchQuery);
+      html = DOMPurify.sanitize(html, purifyOpts);
+    }
     htmlParts.push(html);
   }
 

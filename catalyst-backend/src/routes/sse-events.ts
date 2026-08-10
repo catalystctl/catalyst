@@ -21,7 +21,8 @@ import type { WebSocketGateway } from '../websocket/gateway';
 import { prisma } from '../db.js';
 import { auth } from '../auth.js';
 import { fromNodeHeaders } from 'better-auth/node';
-import { hasNodeAccess } from '../lib/permissions.js';
+import { hasNodeAccess, getUserAccessibleNodes } from '../lib/permissions.js';
+import { decideServerAccess, isFullAdminRole } from '../lib/server-access.js';
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const CLEANUP_INTERVAL_MS = 60_000;
@@ -116,8 +117,12 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
       }
 
       let serverNodeId: string | undefined;
+      let allowedServerIds: Set<string> | undefined;
+
       if (!isGlobal) {
-        // Per-server: verify access
+        // Per-server: same AuthZ as decideServerAccess / ensureServerAccess.
+        // Bare hasNodeAccess is NOT enough — need owner, ServerAccess,
+        // (node access + node.update), or admin.write/*.
         const server = await prisma.server.findUnique({
           where: { id: serverId },
           include: {
@@ -130,17 +135,76 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
           return;
         }
 
-        const allowedUsers = [server.ownerId, ...server.access.map((a) => a.userId)];
-        if (!userId || !allowedUsers.includes(userId)) {
-          const isAdmin = await hasNodeAccess(prisma, userId, server.nodeId);
-          if (!isAdmin) {
-            reply.status(403).send({ error: 'Access denied' });
-            return;
-          }
+        if (!userId) {
+          reply.status(401).send({ error: 'Unauthorized' });
+          return;
+        }
+
+        const { resolveUserPermissions } = await import('../lib/permissions-catalog.js');
+        const rolePerms = await resolveUserPermissions(userId);
+        const hasExplicitServerAccess = server.access.some((a) => a.userId === userId);
+        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
+        const decision = decideServerAccess({
+          isOwner: server.ownerId === userId,
+          hasExplicitServerAccess,
+          rolePermissions: rolePerms,
+          hasNodeAccess: hasNodeAccessToServer,
+        });
+
+        if (!decision.allowed) {
+          reply.status(403).send({ error: 'Access denied' });
+          return;
         }
         serverNodeId = server.nodeId;
+      } else {
+        // Global subscription: build the set of servers this user may observe.
+        // Contract matches decideServerAccess:
+        //   owner | ServerAccess | (hasNodeAccess AND node.update) | admin.write/*
+        // Do NOT fan out all servers on accessible nodes without node.update.
+        // admin.read alone is NOT full-admin for cross-tenant event fanout.
+        if (!userId) {
+          reply.status(401).send({ error: 'Unauthorized' });
+          return;
+        }
+
+        const { resolveUserPermissions } = await import('../lib/permissions-catalog.js');
+        const rolePerms = await resolveUserPermissions(userId);
+
+        if (isFullAdminRole(rolePerms)) {
+          // Full admins (*/admin.write) may receive all server lifecycle events.
+          allowedServerIds = undefined;
+        } else {
+          const [owned, shared, accessibleNodes] = await Promise.all([
+            prisma.server.findMany({
+              where: { ownerId: userId },
+              select: { id: true },
+            }),
+            prisma.serverAccess.findMany({
+              where: { userId },
+              select: { serverId: true },
+            }),
+            getUserAccessibleNodes(prisma, userId),
+          ]);
+
+          const ids = new Set<string>([
+            ...owned.map((s) => s.id),
+            ...shared.map((a) => a.serverId),
+          ]);
+
+          // Node-assigned servers only when role also holds node.update.
+          // Bare node assignment alone must NOT fan out every server on the node.
+          if (rolePerms.includes('node.update') && accessibleNodes.nodeIds.length > 0) {
+            const nodeServers = await prisma.server.findMany({
+              where: { nodeId: { in: accessibleNodes.nodeIds } },
+              select: { id: true },
+            });
+            for (const s of nodeServers) ids.add(s.id);
+          }
+
+          // Explicit set — empty means no server events (not unfiltered).
+          allowedServerIds = ids;
+        }
       }
-      // Global subscription (all-servers) — just verify userId exists
 
       // SSE headers — prevent proxy buffering with proper CORS using origin whitelist
       const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
@@ -180,10 +244,16 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
         return;
       }
 
-      // Per-server subscription OR global subscription for AppLayout
+      // Per-server subscription OR user-scoped global subscription for AppLayout.
+      // For non-admins always pass an explicit list (may be empty). Only full
+      // admins pass undefined (= unfiltered). Empty must NOT become unfiltered.
       const wasFirstSubscriber = !isGlobal && wsGateway.getSseEventSubscriberCount(serverId) === 0;
       const unsubscribe = isGlobal
-        ? wsGateway.addGlobalSseSubscriber(EVENT_TYPES, push)
+        ? wsGateway.addGlobalSseSubscriber(
+            EVENT_TYPES,
+            push,
+            allowedServerIds === undefined ? undefined : [...allowedServerIds],
+          )
         : wsGateway.addSseEventSubscriber(serverId, EVENT_TYPES, push);
 
       // Push cached latest metric immediately so the client doesn't wait for the next agent tick

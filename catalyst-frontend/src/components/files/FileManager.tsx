@@ -74,7 +74,7 @@ const itemVariants: Variants = {
  visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 350, damping: 26 } },
 };
 
-function FileManager({ serverId, isSuspended = false }: { serverId: string; isSuspended?: boolean }) {
+function FileManager({ serverId, isSuspended = false, canWrite = false }: { serverId: string; isSuspended?: boolean; canWrite?: boolean }) {
  const {
  path,
  setPath,
@@ -121,6 +121,8 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  } | null>(null);
  const [showSidebar, setShowSidebar] = useState(false);
  const [searchQuery, setSearchQuery] = useState('');
+
+ const writeDisabled = isSuspended || !canWrite;
 
  // Reset UI state when navigating to a different path
  useEffect(() => {
@@ -718,11 +720,13 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  <div className="hidden sm:block h-4 w-px bg-border/60" />
 
  {/* Create actions */}
+ {canWrite && (
+ <>
  <button
  type="button"
  className={tbtn}
  onClick={guardSuspended(() => setShowUpload((prev) => !prev))}
- disabled={isSuspended}
+ disabled={writeDisabled}
  >
  <Upload className="h-3.5 w-3.5" />
  <span className="hidden sm:inline">Upload</span>
@@ -731,7 +735,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  type="button"
  className={tbtn}
  onClick={guardSuspended(() => setCreateMode('file'))}
- disabled={isSuspended}
+ disabled={writeDisabled}
  >
  <FilePlus className="h-3.5 w-3.5" />
  <span className="hidden sm:inline">New File</span>
@@ -740,11 +744,13 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  type="button"
  className={tbtn}
  onClick={guardSuspended(() => setCreateMode('directory'))}
- disabled={isSuspended}
+ disabled={writeDisabled}
  >
  <FolderPlus className="h-3.5 w-3.5" />
  <span className="hidden sm:inline">New Folder</span>
  </button>
+ </>
+ )}
 
  <div className="hidden sm:block h-4 w-px bg-border/60" />
 
@@ -765,35 +771,39 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  <span className="text-xs font-medium text-primary tabular-nums">
  {selectedEntries.length}
  </span>
+ {canWrite && (
  <button
  type="button"
  className={tbtn}
  onClick={guardSuspended(() => setShowCompress(true))}
- disabled={isSuspended}
+ disabled={writeDisabled}
  >
  <Archive className="h-3.5 w-3.5" />
  <span className="hidden sm:inline">Compress</span>
  </button>
- {selectedArchive && (
+ )}
+ {canWrite && selectedArchive && (
  <button
  type="button"
  className={tbtn}
  onClick={guardSuspended(() => setShowDecompress(true))}
- disabled={isSuspended}
+ disabled={writeDisabled}
  >
  <ArchiveRestore className="h-3.5 w-3.5" />
  <span className="hidden sm:inline">Extract</span>
  </button>
  )}
+ {canWrite && (
  <button
  type="button"
  className={tbtnDanger}
  onClick={guardSuspended(() => setConfirmDelete(true))}
- disabled={isSuspended}
+ disabled={writeDisabled}
  >
  <Trash2 className="h-3.5 w-3.5" />
  <span className="hidden sm:inline">Delete</span>
  </button>
+ )}
  <button
  type="button"
  className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
@@ -838,7 +848,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  type="button"
  className={tbtnDanger}
  onClick={handleDeleteSelection}
- disabled={deleteMutation.isPending || isSuspended}
+ disabled={deleteMutation.isPending || writeDisabled}
  >
  {deleteMutation.isPending ? (
  <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -873,6 +883,10 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  onDownload={handleDownload}
  onCopyPath={handleCopyPath}
  onRename={(entry) => {
+ if (!canWrite) {
+ notifyError('You do not have permission to modify files');
+ return;
+ }
  if (isSuspended) {
  notifyError('Server is suspended');
  return;
@@ -882,6 +896,10 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  onRenameSubmit={handleRename}
  onRenameCancel={() => setRenamingEntry(null)}
  onDelete={(entry) => {
+ if (!canWrite) {
+ notifyError('You do not have permission to modify files');
+ return;
+ }
  if (isSuspended) {
  notifyError('Server is suspended');
  return;
@@ -890,6 +908,10 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  setConfirmDelete(true);
  }}
  onCompress={(entry) => {
+ if (!canWrite) {
+ notifyError('You do not have permission to modify files');
+ return;
+ }
  if (isSuspended) {
  notifyError('Server is suspended');
  return;
@@ -897,6 +919,10 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  handleBulkCompressFromEntry(entry);
  }}
  onDecompress={(entry) => {
+ if (!canWrite) {
+ notifyError('You do not have permission to modify files');
+ return;
+ }
  if (isSuspended) {
  notifyError('Server is suspended');
  return;
@@ -904,6 +930,10 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  handleBulkDecompressFromEntry(entry);
  }}
  onPermissions={(entry) => {
+ if (!canWrite) {
+ notifyError('You do not have permission to modify files');
+ return;
+ }
  if (isSuspended) {
  notifyError('Server is suspended');
  return;
@@ -942,14 +972,20 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  isSaving={saveMutation.isPending}
  isDirty={isDirty}
  onChange={updateActiveContent}
- onSave={() => saveMutation.mutate()}
+ onSave={() => {
+ if (!canWrite) {
+ notifyError('You do not have permission to modify files');
+ return;
+ }
+ saveMutation.mutate();
+ }}
  onDownload={() => activeFile && handleDownload(activeFile as unknown as FileEntry)}
  onReset={() => {
  if (!activeFile) return;
  updateActiveContent(activeFile.originalContent);
  }}
  onClose={closeActiveFile}
- isSuspended={isSuspended}
+ isSuspended={isSuspended || !canWrite}
  />
  </motion.div>
  </motion.div>
@@ -1024,7 +1060,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  <button
  type="submit"
  className={tbtnPrimary}
- disabled={permissionsMutation.isPending || isSuspended}
+ disabled={permissionsMutation.isPending || writeDisabled}
  >
  {permissionsMutation.isPending ? (
  <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1322,7 +1358,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  <button
  type="submit"
  className={tbtnPrimary}
- disabled={!createName.trim() || createMutation.isPending || isSuspended}
+ disabled={!createName.trim() || createMutation.isPending || writeDisabled}
  >
  {createMutation.isPending ? (
  <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1394,7 +1430,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  type="button"
  className={tbtnPrimary}
  onClick={handleCompress}
- disabled={!selectedEntries.length || compressMutation.isPending || isSuspended}
+ disabled={!selectedEntries.length || compressMutation.isPending || writeDisabled}
  >
  {compressMutation.isPending ? (
  <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1470,7 +1506,7 @@ function FileManager({ serverId, isSuspended = false }: { serverId: string; isSu
  type="button"
  className={tbtnPrimary}
  onClick={handleDecompress}
- disabled={decompressMutation.isPending || isSuspended}
+ disabled={decompressMutation.isPending || writeDisabled}
  >
  {decompressMutation.isPending ? (
  <Loader2 className="h-3.5 w-3.5 animate-spin" />

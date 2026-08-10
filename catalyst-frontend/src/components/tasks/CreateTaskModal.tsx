@@ -8,6 +8,12 @@ import { reportSystemError } from '../../services/api/systemErrors';
 import type { Task } from '../../types/task';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
+function toLocalDateTimeInputValue(date: Date) {
+ const pad = (n: number) => String(n).padStart(2, '0');
+ return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+
 export const actionOptions: Array<{ value: Task['action']; label: string }> = [
  { value: 'restart', label: 'Restart server' },
  { value: 'start', label: 'Start server' },
@@ -24,7 +30,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
  const now = new Date();
  now.setMinutes(0, 0, 0);
  now.setHours(now.getHours() + 1);
- return now.toISOString().slice(0, 16);
+ return toLocalDateTimeInputValue(now);
  });
  const [weekday, setWeekday] = useState('0');
  const [action, setAction] = useState<Task['action']>('restart');
@@ -40,21 +46,23 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
  }
  }, []);
 
+ // Build cron in the user's *local* timezone to match the datetime-local
+ // input and the UI copy. Weekday math also uses local getDay().
  const buildCron = (isoValue: string, cadence: typeof repeat, dayOfWeek: string) => {
  const base = new Date(isoValue);
  if (Number.isNaN(base.getTime())) return '';
  if (cadence === 'minute') return '* * * * *';
- if (cadence === 'hour') return `${base.getUTCMinutes()} * * * *`;
- if (cadence === 'daily') return `${base.getUTCMinutes()} ${base.getUTCHours()} * * *`;
+ if (cadence === 'hour') return `${base.getMinutes()} * * * *`;
+ if (cadence === 'daily') return `${base.getMinutes()} ${base.getHours()} * * *`;
  if (cadence === 'weekly') {
  const targetWeekday = Number(dayOfWeek);
  const currentWeekday = base.getDay();
  const delta = (targetWeekday - currentWeekday + 7) % 7;
  const target = new Date(base);
  target.setDate(base.getDate() + delta);
- return `${target.getUTCMinutes()} ${target.getUTCHours()} * * ${target.getUTCDay()}`;
+ return `${target.getMinutes()} ${target.getHours()} * * ${target.getDay()}`;
  }
- return `${base.getUTCMinutes()} ${base.getUTCHours()} ${base.getUTCDate()} * *`;
+ return `${base.getMinutes()} ${base.getHours()} ${base.getDate()} * *`;
  };
 
  const mutation = useMutation({
@@ -81,7 +89,7 @@ function CreateTaskModal({ serverId, disabled = false }: { serverId: string; dis
  const now = new Date();
  now.setMinutes(0, 0, 0);
  now.setHours(now.getHours() + 1);
- return now.toISOString().slice(0, 16);
+ return toLocalDateTimeInputValue(now);
  });
  setAction('restart');
  setCommand('');

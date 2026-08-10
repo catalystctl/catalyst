@@ -107,6 +107,15 @@ export async function alertRoutes(app: FastifyInstance) {
         });
       }
 
+      // resource_threshold rules with target=global are not implemented (no fleet aggregation).
+      // Reject at create time so operators don't configure silent no-ops.
+      if (type === 'resource_threshold' && target === 'global') {
+        return reply.status(400).send({
+          error:
+            'resource_threshold rules with target "global" are not supported; use target "server" or "node"',
+        });
+      }
+
       // Validate targetId
       if ((target === 'server' || target === 'node') && !targetId) {
         return reply.status(400).send({ error: 'targetId is required for server or node rules' });

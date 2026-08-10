@@ -259,7 +259,118 @@ impl AgentConfig {
             );
         }
 
+        config.apply_env_overrides();
         Ok(config)
+    }
+
+    /// Overlay selected environment variables on top of a file-loaded config.
+    /// Env vars always win when set, matching the documented container contract.
+    pub fn apply_env_overrides(&mut self) {
+        if let Ok(v) = std::env::var("BACKEND_URL") {
+            if !v.trim().is_empty() {
+                self.server.backend_url = v;
+            }
+        }
+        if let Ok(v) = std::env::var("NODE_ID") {
+            if !v.trim().is_empty() {
+                self.server.node_id = v;
+            }
+        }
+        if let Ok(v) = std::env::var("NODE_API_KEY") {
+            if !v.trim().is_empty() {
+                self.server.api_key = v;
+            }
+        }
+        if let Ok(v) = std::env::var("HOSTNAME") {
+            if !v.trim().is_empty() {
+                self.server.hostname = v;
+            }
+        }
+        if let Ok(v) = std::env::var("DATA_DIR") {
+            if !v.trim().is_empty() {
+                self.server.data_dir = PathBuf::from(v);
+            }
+        }
+        if let Ok(v) = std::env::var("CONSOLE_LOG_DIR") {
+            if !v.trim().is_empty() {
+                self.server.console_log_dir = PathBuf::from(v);
+            }
+        }
+        if let Ok(v) = std::env::var("MAX_CONNECTIONS") {
+            if let Ok(n) = v.parse::<usize>() {
+                self.server.max_connections = std::cmp::min(n, 1000);
+            }
+        }
+        if let Ok(v) = std::env::var("CONTAINERD_SOCKET") {
+            if !v.trim().is_empty() {
+                self.containerd.socket_path = PathBuf::from(v);
+            }
+        }
+        if let Ok(v) = std::env::var("CONTAINERD_NAMESPACE") {
+            if !v.trim().is_empty() {
+                self.containerd.namespace = v;
+            }
+        }
+        if let Ok(v) = std::env::var("CNI_DIR") {
+            if !v.trim().is_empty() {
+                self.containerd.cni_dir = PathBuf::from(v);
+            }
+        }
+        if let Ok(v) = std::env::var("CNI_BIN_DIR") {
+            if !v.trim().is_empty() {
+                self.containerd.cni_bin_dir = PathBuf::from(v);
+            }
+        }
+        if let Ok(v) = std::env::var("CNI_DATA_DIR") {
+            if !v.trim().is_empty() {
+                self.containerd.cni_data_dir = PathBuf::from(v);
+            }
+        }
+        if let Ok(v) = std::env::var("CNI_RESULTS_DIR") {
+            if !v.trim().is_empty() {
+                self.containerd.cni_results_dir = PathBuf::from(v);
+            }
+        }
+        if let Ok(v) = std::env::var("CNI_BRIDGE_NAME") {
+            if !v.trim().is_empty() {
+                self.containerd.cni_bridge_name = v;
+            }
+        }
+        if let Ok(v) = std::env::var("CNI_BRIDGE_SUBNET") {
+            if !v.trim().is_empty() {
+                self.containerd.cni_bridge_subnet = v;
+            }
+        }
+        if let Ok(v) = std::env::var("SYSTEMD_OVERRIDE_DIR") {
+            if !v.trim().is_empty() {
+                self.containerd.systemd_override_dir = PathBuf::from(v);
+            }
+        }
+        if let Ok(v) = std::env::var("LOG_LEVEL") {
+            if !v.trim().is_empty() {
+                self.logging.level = v;
+            }
+        }
+        if let Ok(v) = std::env::var("CATALYST_CONFIG_PATH") {
+            if !v.trim().is_empty() {
+                self.agent.config_path = PathBuf::from(v);
+            }
+        }
+        if let Ok(v) = std::env::var("AGENT_RELEASE_REPO") {
+            if !v.trim().is_empty() {
+                self.agent.release_repo = v;
+            }
+        }
+        if let Ok(v) = std::env::var("SFTP_PORT") {
+            if let Ok(port) = v.parse::<u16>() {
+                self.sftp.port = port;
+            }
+        }
+        if let Ok(v) = std::env::var("SFTP_HOST_KEY") {
+            if !v.trim().is_empty() {
+                self.sftp.host_key_path = PathBuf::from(v);
+            }
+        }
     }
 
     pub fn from_env() -> Result<Self, String> {
@@ -374,9 +485,15 @@ impl AgentConfig {
 }
 
 fn hostname() -> Result<String, std::io::Error> {
-    let raw = std::process::Command::new("hostname")
-        .output()
-        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())?;
+    // hostname(1) is a blocking subprocess; run it on a dedicated thread so any
+    // future async caller of config load does not stall the runtime worker.
+    let raw = std::thread::spawn(|| {
+        std::process::Command::new("hostname")
+            .output()
+            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+    })
+    .join()
+    .map_err(|_| std::io::Error::other("hostname thread panicked"))??;
     // Sanitize hostname: allow only alphanumeric, hyphens, and dots.
     // This prevents any shell metacharacters from the hostname command
     // from propagating into config values, even though JSON serialization

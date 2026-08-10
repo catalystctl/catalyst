@@ -70,7 +70,20 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
       loginGuard.enter();
       (set as AuthSet)({ isLoading: true, error: null });
       try {
-        const { user } = await authApi.login(values);
+        let { user } = await authApi.login(values);
+        // If login returned an empty permission set, await a refresh before
+        // resolving so ProtectedRoute / Sidebar see real grants immediately
+        // (avoids the empty-permissions race on first navigation).
+        if (!user.permissions || user.permissions.length === 0) {
+          try {
+            const hydrated = await authApi.refresh();
+            if (hydrated.user.permissions && hydrated.user.permissions.length > 0) {
+              user = hydrated.user;
+            }
+          } catch {
+            // Best-effort — keep the login user object as-is.
+          }
+        }
         // Cookie-based authentication - tokens stored in HttpOnly cookies
         (set as AuthSet)({
           user: { ...user, image: sanitizeImageUrl(user.image) },
@@ -81,34 +94,16 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
           isReady: true,
           error: null,
         });
-        // If the inline refresh inside authApi.login failed, the user object
-        // may lack Catalyst permissions.  Kick off a background refresh so
-        // permission-gated UI (admin routes, etc.) works without a reload.
-        // Keep the login-in-progress flag true during this window so transient
-        // 401s from a stale sign-out don't bounce the user.
-        const clearFlag = () => { loginGuard.exit(); };
-        if (user.permissions && user.permissions.length === 0) {
-          setTimeout(async () => {
-            try {
-              const { user: hydrated } = await authApi.refresh();
-              if (hydrated.permissions && hydrated.permissions.length > 0) {
-                (set as AuthSet)({ user: hydrated });
-              }
-            } catch {
-              // Best-effort — will retry on next navigation
-            } finally {
-              clearFlag();
-            }
-          }, 2_000);
-        } else {
-          // No delayed refresh needed — clear after a short grace period for
-          // any in-flight page-level API calls that might 401 transiently.
-          setTimeout(clearFlag, 3_000);
-        }
+        // Keep the login-in-progress flag true briefly so transient 401s from
+        // a stale sign-out don't bounce the user after navigation.
+        setTimeout(() => { loginGuard.exit(); }, 3_000);
       } catch (err: unknown) {
         const error = err as { code?: string; response?: { data?: { error?: unknown } }; message?: string };
         if (error.code === 'TWO_FACTOR_REQUIRED' || error.code === 'PASSKEY_REQUIRED') {
           (set as AuthSet)({ isLoading: false, error: null, token: null, rememberMe: Boolean(values.rememberMe) });
+          // Release guard so subsequent 2FA / passkey flows aren't blocked, but
+          // keep a short grace window for any in-flight cookie handoff.
+          setTimeout(() => { loginGuard.exit(); }, 3_000);
           reportSystemError({
             level: 'error',
             component: 'AuthStore:login',
@@ -221,6 +216,14 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
     logout: async () => {
       localStorage.removeItem('catalyst-auth');
       (set as AuthSet)({ user: null, token: null, isAuthenticated: false, isReady: true, rememberMe: false });
+      // Drop privileged React Query cache so admin/server data cannot flash
+      // if the user signs back in as a different principal.
+      try {
+        const { queryClient } = await import('../lib/queryClient');
+        queryClient.clear();
+      } catch {
+        // queryClient may not be available in rare bootstrap failures
+      }
       const bc = (get as AuthGet)()._broadcast;
       if (bc) bc.postMessage({ type: 'logout' });
       // Fire-and-forget server sign-out, but abort it if the user logs back in
@@ -231,8 +234,13 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
       try {
         await authApi.logout({ signal: controller.signal });
       } catch {
-        // If server logout fails, cookie may still be valid — force reload
-        window.location.reload();
+        // Network/sign-out failure after local clear: do NOT reload (that can
+        // rehydrate a still-valid cookie and bounce the user back in). Navigate
+        // to login instead.
+      } finally {
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+          window.location.assign('/login');
+        }
       }
     },
     setUser: (user) => (set as AuthSet)({ user, isAuthenticated: Boolean(user) }),
@@ -305,6 +313,10 @@ if (typeof window !== 'undefined') {
       useAuthStore.setState({
         user: null, token: null, isAuthenticated: false, isReady: true, rememberMe: false,
       });
+      // Best-effort cache clear so other tabs don't flash privileged data.
+      import('../lib/queryClient')
+        .then(({ queryClient }) => queryClient.clear())
+        .catch(() => {});
       window.location.href = '/login';
     }
   };

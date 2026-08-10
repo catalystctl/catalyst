@@ -32,6 +32,7 @@ import {
   shouldUseIpam,
 } from "../../utils/ipam";
 import { hasNodeAccess, getUserAccessibleNodes } from "../../lib/permissions";
+import { decideServerAccess } from "../../lib/server-access";
 import { serverCreateSchema, validateRequestBody } from "../../lib/validation";
 import {
   DatabaseProvisioningError,
@@ -75,6 +76,10 @@ export const DEFAULT_PERMISSION_PRESETS = {
     "database.create",
     "database.rotate",
     "database.delete",
+    "backup.read",
+    "backup.create",
+    "backup.restore",
+    "backup.delete",
   ],
   full: [
     "server.read",
@@ -84,6 +89,7 @@ export const DEFAULT_PERMISSION_PRESETS = {
     "server.reinstall",
     "server.rebuild",
     "server.transfer",
+    "server.schedule",
     "alert.read",
     "alert.create",
     "alert.update",
@@ -96,9 +102,18 @@ export const DEFAULT_PERMISSION_PRESETS = {
     "database.create",
     "database.rotate",
     "database.delete",
+    "backup.read",
+    "backup.create",
+    "backup.restore",
+    "backup.delete",
     "server.delete",
   ],
 };
+
+/** Permissions granted to the server owner on create/clone/ownership transfer. */
+export const OWNER_SERVER_PERMISSIONS = [
+  ...DEFAULT_PERMISSION_PRESETS.full,
+] as const;
 
 export const parsePortValue = (value: unknown) => {
   const parsed = typeof value === "string" ? Number(value) : value;
@@ -503,6 +518,10 @@ export const resolveTemplateImage = (
   return template.image;
 };
 
+// Re-export pure access decision helper for unit tests / callers.
+export { decideServerAccess } from "../../lib/server-access";
+export type { ServerAccessDecision } from "../../lib/server-access";
+
 export const ensureServerAccess = async (
   serverId: string,
   userId: string,
@@ -520,6 +539,9 @@ export const ensureServerAccess = async (
   if (!ensureNotSuspended(server, reply)) {
     return null;
   }
+
+  // Explicit per-server permission grant (only needed for non-owners)
+  let hasExplicitServerAccess = false;
   if (server.ownerId !== userId) {
     const access = await prisma.serverAccess.findFirst({
       where: {
@@ -528,11 +550,27 @@ export const ensureServerAccess = async (
         permissions: { has: permission },
       },
     });
-    const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-    if (!access && !hasNodeAccessToServer) {
-      reply.status(403).send({ error: "Forbidden" });
-      return null;
-    }
+    hasExplicitServerAccess = Boolean(access);
+  }
+
+  const { resolveUserPermissions } = await import("../../lib/permissions-catalog.js");
+  const rolePerms =
+    server.ownerId === userId ? [] : await resolveUserPermissions(userId);
+  const hasNodeAccessToServer =
+    server.ownerId === userId
+      ? false
+      : await hasNodeAccess(prisma, userId, server.nodeId);
+
+  const decision = decideServerAccess({
+    isOwner: server.ownerId === userId,
+    hasExplicitServerAccess,
+    rolePermissions: rolePerms,
+    hasNodeAccess: hasNodeAccessToServer,
+  });
+
+  if (!decision.allowed) {
+    reply.status(403).send({ error: "Forbidden" });
+    return null;
   }
   return server;
 };
@@ -1161,24 +1199,44 @@ export const isAdminUser = async (userId: string, required: "admin.read" | "admi
   return roles.some((role) => role.name.toLowerCase() === "administrator");
 };
 
-// Check if user can access a server - either as owner, admin, or via node assignment
-export const canAccessServer = async (userId: string, server: { ownerId: string; nodeId: string }): Promise<boolean> => {
-  // Owner can always access
+/**
+ * Check if user can access a server.
+ * Aligns with decideServerAccess / ensureServerAccess:
+ *   owner OR ServerAccess OR (hasNodeAccess AND node.update) OR admin.write/*
+ * Node assignment alone is NOT enough.
+ */
+export const canAccessServer = async (
+  userId: string,
+  server: { id?: string; ownerId: string; nodeId: string },
+): Promise<boolean> => {
   if (server.ownerId === userId) return true;
 
-  // Admin can access all servers
-  if (await isAdminUser(userId, "admin.write")) return true;
+  let hasExplicitServerAccess = false;
+  if (server.id) {
+    const access = await prisma.serverAccess.findFirst({
+      where: { serverId: server.id, userId },
+      select: { userId: true },
+    });
+    hasExplicitServerAccess = Boolean(access);
+  }
 
-  // User with node assignment can access all servers on that node
-  if (await hasNodeAccess(prisma, userId, server.nodeId)) return true;
+  const { resolveUserPermissions } = await import("../../lib/permissions-catalog.js");
+  const rolePermissions = await resolveUserPermissions(userId);
+  const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
 
-  return false;
+  return decideServerAccess({
+    isOwner: false,
+    hasExplicitServerAccess,
+    rolePermissions,
+    hasNodeAccess: hasNodeAccessToServer,
+  }).allowed;
 };
 
 // Compute the effective permissions a user has on a specific server.
 // Returns a string[] of permission identifiers (e.g. ['server.read', 'server.start', ...]).
 export const ALL_SERVER_PERMISSIONS = [
   'server.read', 'server.start', 'server.stop', 'server.install',
+  'server.reinstall', 'server.rebuild',
   'server.transfer', 'server.delete', 'server.schedule',
   'console.read', 'console.write',
   'file.read', 'file.write',
@@ -1187,6 +1245,16 @@ export const ALL_SERVER_PERMISSIONS = [
   'alert.read', 'alert.create', 'alert.update', 'alert.delete',
 ];
 
+/**
+ * Effective server-scoped permissions.
+ * Same AuthZ contract as decideServerAccess:
+ * - owner / admin.write|`*` / (node access + node.update) → ALL_SERVER_PERMISSIONS
+ * - explicit ServerAccess → that row's permissions only
+ * - bare node assignment → [] (NOT a grant)
+ *
+ * preComputedNodeAccess only means "user is assigned to the node"; it does NOT
+ * imply full server powers. Callers must not treat it as a bypass.
+ */
 export const getEffectiveServerPermissions = async (
   userId: string,
   server: { ownerId: string; nodeId: string },
@@ -1195,37 +1263,36 @@ export const getEffectiveServerPermissions = async (
   preComputedExplicitAccess?: boolean,
   preComputedNodeAccess?: boolean,
 ): Promise<string[]> => {
-  // Owner gets all server-scoped permissions
   if (preComputedOwner ?? server.ownerId === userId) {
     return ALL_SERVER_PERMISSIONS;
   }
 
-  // Explicit server access entry — return their granted permissions
-  if (preComputedExplicitAccess) {
+  const { resolveUserPermissions } = await import("../../lib/permissions-catalog.js");
+  const rolePermissions = await resolveUserPermissions(userId);
+
+  const hasExplicitServerAccess =
+    preComputedExplicitAccess ??
+    Boolean(serverAccess?.some((a) => a.userId === userId));
+
+  const hasNodeAccessToServer =
+    preComputedNodeAccess ?? (await hasNodeAccess(prisma, userId, server.nodeId));
+
+  // Full-admin / node-manage win full permission sets even if a narrower
+  // ServerAccess row also exists (manage paths are superset grants).
+  if (
+    rolePermissions.includes("*") ||
+    rolePermissions.includes("admin.write") ||
+    (hasNodeAccessToServer && rolePermissions.includes("node.update"))
+  ) {
+    return ALL_SERVER_PERMISSIONS;
+  }
+
+  if (hasExplicitServerAccess) {
     const access = serverAccess?.find((a) => a.userId === userId);
     return access ? [...access.permissions] : [];
   }
 
-  // Pre-computed node access (already verified by caller)
-  if (preComputedNodeAccess) {
-    return ALL_SERVER_PERMISSIONS;
-  }
-
-  // Fallback: admin / wildcard role check (single DB query)
-  const roles = await prisma.role.findMany({
-    where: { users: { some: { id: userId } } },
-    select: { permissions: true },
-  });
-  const rolePermissions = roles.flatMap((r) => r.permissions);
-  if (rolePermissions.includes('*')) {
-    return ALL_SERVER_PERMISSIONS;
-  }
-
-  // Last resort: check node access (expensive, up to 6 DB queries)
-  if (await hasNodeAccess(prisma, userId, server.nodeId)) {
-    return ALL_SERVER_PERMISSIONS;
-  }
-
+  // Bare node assignment (or nothing) — no server powers.
   return [];
 };
 

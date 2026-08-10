@@ -19,7 +19,7 @@ import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
-import TwoFactorPage from './pages/auth/TwoFactorPage';
+
 import InvitesPage from './pages/InvitesPage';
 import NotFoundPage from './pages/NotFoundPage';
 import { PluginProvider } from './plugins/PluginProvider';
@@ -186,7 +186,8 @@ function App() {
  <Route path="/register" element={<RegisterPage />} />
  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
  <Route path="/reset-password" element={<ResetPasswordPage />} />
- <Route path="/two-factor" element={<TwoFactorPage />} />
+ {/* 2FA is handled inline on LoginPage (totp dialog) — keep a redirect for old links */}
+ <Route path="/two-factor" element={<Navigate to="/login" replace />} />
  <Route path="*" element={<Navigate to="/setup" replace />} />
  </Routes>
  </AnimatePresence>
@@ -209,7 +210,8 @@ function App() {
  <Route path="/register" element={<RegisterPage />} />
  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
  <Route path="/reset-password" element={<ResetPasswordPage />} />
- <Route path="/two-factor" element={<TwoFactorPage />} />
+ {/* 2FA is handled inline on LoginPage (totp dialog) — keep a redirect for old links */}
+ <Route path="/two-factor" element={<Navigate to="/login" replace />} />
  <Route path="/invites/:token" element={<InvitesPage />} />
 
  {/* Protected app shell — auth pages are NOT wrapped here */}

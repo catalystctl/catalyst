@@ -36,18 +36,19 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
         orderBy: { createdAt: "desc" },
       });
 
+      // List never returns plaintext passwords — only create/rotate do (once).
       reply.send({
         success: true,
         data: databases.map((db) => ({
           id: db.id,
           name: db.name,
           username: db.username,
-          password: db.password,
           host: db.host.host,
           port: db.host.port,
           hostId: db.hostId,
           hostName: db.host.name,
           createdAt: db.createdAt,
+          hasPassword: Boolean(db.password),
         })),
       });
     }

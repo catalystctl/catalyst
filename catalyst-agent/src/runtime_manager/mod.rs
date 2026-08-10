@@ -217,7 +217,7 @@ struct PortForwardState {
     forwards: Vec<PortForward>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct PortForward {
     host_port: u16,
     container_port: u16,

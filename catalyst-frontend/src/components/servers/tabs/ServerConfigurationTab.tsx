@@ -44,7 +44,8 @@ type ConfigFileState = {
 interface Props {
  serverId: string | undefined;
  isSuspended: boolean;
- isAdmin: boolean;
+ /** True when the user may edit startup/env/config (admin, owner, or server.update). */
+ canEdit: boolean;
  server: {
  name?: string;
  template?: {
@@ -117,7 +118,7 @@ const toSections = (record: ConfigMap): ConfigSection[] => {
 export default function ServerConfigurationTab({
  serverId,
  isSuspended,
- isAdmin,
+ canEdit,
  server,
  startupCommand,
  onStartupCommandChange,
@@ -520,7 +521,7 @@ export default function ServerConfigurationTab({
  />
 
  {/* ── Startup & Environment ── */}
- {isAdmin && (
+ {canEdit && (
  <ServerTabCard>
  <div className="flex items-start justify-between gap-4">
  <div>
@@ -587,7 +588,7 @@ export default function ServerConfigurationTab({
  <ServerStartupVariablesSection
  serverId={serverId}
  isSuspended={isSuspended}
- canEdit={isAdmin}
+ canEdit={canEdit}
  />
  </section>
  )}

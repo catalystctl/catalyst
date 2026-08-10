@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { createHash } from "crypto";
 import { hashApiKey as hashApiKeyHmac } from "../services/api-key-service";
+import { broadcastCacheInvalidate, onCacheInvalidate } from "./cache-bus";
 
 function parseApiKeyMetadata(rawMetadata: unknown): Record<string, unknown> | null {
   if (rawMetadata && typeof rawMetadata === "object" && !Array.isArray(rawMetadata)) {
@@ -146,10 +147,16 @@ export async function verifyAgentApiKey(
  * Invalidate cached agent API key verifications.
  * Call this when an API key is revoked, disabled, or rotated.
  * If `nodeId` is provided, only clears cache entries for that node.
+ *
+ * Broadcasts to sibling workers when clustered (see lib/cache-bus.ts).
  */
 export function invalidateAgentApiKeyCache(nodeId?: string): void {
+  clearLocalAgentApiKeyCache(nodeId);
+  broadcastCacheInvalidate("agent-auth", nodeId ? { nodeId } : { flushAll: true });
+}
+
+function clearLocalAgentApiKeyCache(nodeId?: string): void {
   if (nodeId) {
-    // Clear only entries for the specific node
     const prefix = `${nodeId}:`;
     for (const key of verifiedKeyCache.keys()) {
       if (key.startsWith(prefix)) {
@@ -157,7 +164,15 @@ export function invalidateAgentApiKeyCache(nodeId?: string): void {
       }
     }
   } else {
-    // Clear all cached verifications
     verifiedKeyCache.clear();
   }
 }
+
+// Multi-worker: apply invalidations received from sibling workers via IPC.
+onCacheInvalidate("agent-auth", (payload) => {
+  if (payload.flushAll || !payload.nodeId) {
+    clearLocalAgentApiKeyCache();
+  } else {
+    clearLocalAgentApiKeyCache(payload.nodeId);
+  }
+});

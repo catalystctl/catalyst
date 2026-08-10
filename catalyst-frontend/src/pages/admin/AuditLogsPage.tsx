@@ -61,17 +61,23 @@ function formatAction(action: string): string {
  .join(' ');
 }
 
-function getResourceIcon(resource: string) {
- const icons: Record<string, React.ElementType> = {
- server: Server, node: HardDrive, user: User, role: Shield,
- api_key: Key, auth: User, alert: AlertTriangle, backup: HardDrive,
- template: Server, smtp: Zap, security: Shield, database: HardDrive,
- };
- return icons[resource] || Activity;
-}
+const RESOURCE_ICONS: Record<string, React.ElementType> = {
+  server: Server,
+  node: HardDrive,
+  user: User,
+  role: Shield,
+  api_key: Key,
+  auth: User,
+  alert: AlertTriangle,
+  backup: HardDrive,
+  template: Server,
+  smtp: Zap,
+  security: Shield,
+  database: HardDrive,
+};
 
 function ResourceIcon({ resource, className }: { resource: string; className?: string }) {
-  const Icon = getResourceIcon(resource);
+  const Icon = RESOURCE_ICONS[resource] ?? Activity;
   return <Icon className={className} />;
 }
 

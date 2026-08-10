@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
-import { allocateIpForServer, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, ensureNotSuspended, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, shouldUseIpam, uuidv4, validateRequestBody, withConnectionInfo, WILDCARD_HOST } from './_helpers.js';
+import { allocateIpForServer, ALL_SERVER_PERMISSIONS, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, DatabaseProvisioningError, dropDatabase, ensureNotSuspended, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, OWNER_SERVER_PERMISSIONS, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, ServerState, shouldUseIpam, uuidv4, validateRequestBody, withConnectionInfo, WILDCARD_HOST } from './_helpers.js';
 
 /**
  * Find the next available host port starting from `startPort`.
@@ -496,26 +496,12 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: error.message });
       }
 
-      // Grant owner full permissions
+      // Grant owner full permissions (consistent with DEFAULT_PERMISSION_PRESETS.full)
       await prisma.serverAccess.create({
         data: {
           userId: effectiveOwnerId,
           serverId: server.id,
-          permissions: [
-            "server.start",
-            "server.stop",
-            "server.read",
-            "server.install",
-            "alert.read",
-            "alert.create",
-            "alert.update",
-            "alert.delete",
-            "file.read",
-            "file.write",
-            "console.read",
-            "console.write",
-            "server.delete",
-          ],
+          permissions: [...OWNER_SERVER_PERMISSIONS],
         },
       });
 
@@ -595,8 +581,8 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'Source server not found' });
       }
 
-      // Check access to the source server
-      if (!(await canAccessServer(userId, sourceServer))) {
+      // Check access to the source server (owner / ServerAccess / node+node.update / admin.write)
+      if (!(await canAccessServer(userId, { id: sourceServer.id, ownerId: sourceServer.ownerId, nodeId: sourceServer.nodeId }))) {
         return reply.status(403).send({ error: 'Cannot access source server' });
       }
 
@@ -816,7 +802,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
 
       // For host network mode, no port mapping is needed
       // For other modes, we need to auto-assign fresh host ports
-      let clonePortBindings: Record<number, number> = {};
+      const clonePortBindings: Record<number, number> = {};
       let clonePrimaryPort: number;
 
       if (isHostNetwork) {
@@ -985,21 +971,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         data: {
           userId: effectiveOwnerId,
           serverId: server.id,
-          permissions: [
-            'server.start',
-            'server.stop',
-            'server.read',
-            'server.install',
-            'alert.read',
-            'alert.create',
-            'alert.update',
-            'alert.delete',
-            'file.read',
-            'file.write',
-            'console.read',
-            'console.write',
-            'server.delete',
-          ],
+          permissions: [...OWNER_SERVER_PERMISSIONS],
         },
       });
 
@@ -1023,7 +995,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       if (shouldCopyFiles) {
         await prisma.server.update({
           where: { id: server.id },
-          data: { status: 'cloning' },
+          data: { status: ServerState.CLONING },
         });
 
         // Broadcast the cloning status update immediately
@@ -1032,13 +1004,13 @@ export async function serverCoreRoutes(app: FastifyInstance) {
           wsGatewayCloning.pushToGlobalSubscribers('server_state_update', {
             type: 'server_state_update',
             serverId: server.id,
-            state: 'cloning',
+            state: ServerState.CLONING,
           });
         }
 
         reply.status(201).send({
           success: true,
-          data: withConnectionInfo({ ...server, status: 'cloning' }, node),
+          data: withConnectionInfo({ ...server, status: ServerState.CLONING }, node),
         });
       } else {
         reply.status(201).send({
@@ -1284,19 +1256,23 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       );
 
       // Pre-compute user's effective permissions for each server.
-      // Owners get all permissions, node-assigned users get all,
-      // explicit access users get their stored permissions.
-      // For the list, we compute this from the already-loaded data.
+      // Align with decideServerAccess / getEffectiveServerPermissions:
+      // owners + admin.write/* get full; explicit ServerAccess gets stored
+      // perms only; node assignment alone does NOT grant power controls.
       const isUserAdmin = checkIsAdmin(request, "admin.write");
-      const allServerPermissions = [
-        'server.read', 'server.start', 'server.stop', 'server.install',
-        'server.transfer', 'server.delete', 'server.schedule',
-        'console.read', 'console.write',
-        'file.read', 'file.write',
-        'backup.read', 'backup.create', 'backup.restore', 'backup.delete',
-        'database.read', 'database.create', 'database.rotate', 'database.delete',
-        'alert.read', 'alert.create', 'alert.update', 'alert.delete',
-      ];
+      const rolePermsForList: string[] = isUserAdmin || accessibleResult.hasWildcard
+        ? ['*']
+        : [];
+
+      // Load role perms once when not already elevated so node.update can be checked.
+      let listRolePermissions = rolePermsForList;
+      if (listRolePermissions.length === 0) {
+        const roles = await prisma.role.findMany({
+          where: { users: { some: { id: userId } } },
+          select: { permissions: true },
+        });
+        listRolePermissions = roles.flatMap((r) => r.permissions);
+      }
 
       reply.send(serialize({
         success: true,
@@ -1306,15 +1282,22 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             server.allocatedDiskMb && server.allocatedDiskMb > 0 ? server.allocatedDiskMb : null;
           const { access, ...serverData } = server;
 
-          // Compute effective permissions
+          const userAccess = (access as any[])?.find((a: any) => a.userId === userId);
+          const isOwner = server.ownerId === userId;
+          const hasExplicit = Boolean(userAccess);
+          const hasNode = accessibleResult.nodeIds.includes(server.nodeId);
+
           let effectivePermissions: string[];
-          if (isUserAdmin || server.ownerId === userId || accessibleResult.hasWildcard) {
-            effectivePermissions = allServerPermissions;
-          } else if (accessibleResult.nodeIds.includes(server.nodeId)) {
-            effectivePermissions = allServerPermissions;
+          if (isOwner || listRolePermissions.includes('*') || listRolePermissions.includes('admin.write')) {
+            effectivePermissions = [...ALL_SERVER_PERMISSIONS];
+          } else if (hasNode && listRolePermissions.includes('node.update')) {
+            // node-manage is a superset grant even if a narrower ServerAccess row exists
+            effectivePermissions = [...ALL_SERVER_PERMISSIONS];
+          } else if (hasExplicit) {
+            effectivePermissions = [...(userAccess.permissions as string[])];
           } else {
-            const userAccess = (access as any[])?.find((a: any) => a.userId === userId);
-            effectivePermissions = userAccess?.permissions ?? ['server.read'];
+            // Listed via bare node assignment without node.update, or other edge — no power.
+            effectivePermissions = [];
           }
 
           return {
@@ -1352,23 +1335,31 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Server not found" });
       }
 
-      // Determine access level with minimal DB queries:
-      //   1. Owner → skip hasNodeAccess entirely
-      //   2. Explicit access → skip hasNodeAccess entirely
-      //   3. Otherwise → call hasNodeAccess once and reuse result for permissions
+      // Determine access level with decideServerAccess contract:
+      //   owner | explicit ServerAccess | (node access + node.update) | admin.write/*
+      // Bare node assignment alone is NOT enough.
       let nodeAccessGranted = false;
       const isOwner = server.ownerId === userId;
       const hasExplicitAccess = server.access.some((a) => a.userId === userId);
 
       if (!isOwner && !hasExplicitAccess) {
+        const { resolveUserPermissions } = await import("../../lib/permissions-catalog.js");
+        const { decideServerAccess } = await import("../../lib/server-access.js");
+        const rolePerms = await resolveUserPermissions(userId);
         nodeAccessGranted = await hasNodeAccess(prisma, userId, server.nodeId);
-        if (!nodeAccessGranted) {
+        const decision = decideServerAccess({
+          isOwner: false,
+          hasExplicitServerAccess: false,
+          rolePermissions: rolePerms,
+          hasNodeAccess: nodeAccessGranted,
+        });
+        if (!decision.allowed) {
           return reply.status(403).send({ error: "Forbidden" });
         }
       }
 
       // Compute effective permissions — reuse the nodeAccessGranted result
-      // instead of calling hasNodeAccess a second time inside getEffectiveServerPermissions
+      // (assignment flag only; getEffectiveServerPermissions still requires node.update)
       const effectivePermissions = await getEffectiveServerPermissions(
         userId,
         { ownerId: server.ownerId, nodeId: server.nodeId },
@@ -1404,15 +1395,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         return;
       }
 
-      // Check permission - owner, admin, or node-assigned user can access
-      if (!(await canAccessServer(userId, server))) {
-        // Also check for explicit server access as fallback
-        const access = await prisma.serverAccess.findUnique({
-          where: { userId_serverId: { userId, serverId } },
-        });
-        if (!access) {
-          return reply.status(403).send({ error: "Forbidden" });
-        }
+      // Check permission - owner, admin.write/*, ServerAccess, or (node + node.update)
+      if (!(await canAccessServer(userId, { id: serverId, ownerId: server.ownerId, nodeId: server.nodeId }))) {
+        return reply.status(403).send({ error: "Forbidden" });
       }
 
       const {
@@ -1919,14 +1904,16 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         });
       }
 
-      // Check permission - owner, admin, node-assigned, or server.delete permission
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
+      // Check permission - owner, admin.write/*, ServerAccess(server.delete), or (node + node.update)
+      // Bare node assignment / admin.read alone is NOT enough.
+      if (server.ownerId !== userId) {
         const access = await prisma.serverAccess.findFirst({
           where: { serverId, userId, permissions: { has: "server.delete" } },
         });
-        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-        if (!access && !hasNodeAccessToServer) {
-          return reply.status(403).send({ error: "Forbidden" });
+        if (!access) {
+          if (!(await canAccessServer(userId, { id: serverId, ownerId: server.ownerId, nodeId: server.nodeId }))) {
+            return reply.status(403).send({ error: "Forbidden" });
+          }
         }
       }
 
@@ -1947,31 +1934,54 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         }).catch(() => {});
       }
 
-      await prisma.$transaction(async (tx) => {
-        await releaseIpForServer(tx, serverId);
-        await tx.server.delete({ where: { id: serverId } });
+      // Drop provisioned MySQL databases BEFORE cascade-deleting the Server row,
+      // otherwise host-side DB/user rows are orphaned permanently.
+      const serverDatabases = await prisma.serverDatabase.findMany({
+        where: { serverId },
+        include: { host: true },
       });
+      const dbDropFailures: Array<{ id: string; name: string; error: string }> = [];
+      for (const database of serverDatabases) {
+        try {
+          await dropDatabase(database.host, database.name, database.username);
+        } catch (error: any) {
+          const msg =
+            error instanceof DatabaseProvisioningError
+              ? error.message
+              : error?.message || String(error);
+          dbDropFailures.push({ id: database.id, name: database.name, error: msg });
+          app.log.warn(
+            { serverId, databaseId: database.id, error: msg },
+            'Failed to drop server database before delete — continuing',
+          );
+          captureSystemError({
+            level: 'warn',
+            component: 'ServerRoutes',
+            message: `dropDatabase failed during server delete: ${msg}`,
+            metadata: { serverId, databaseId: database.id, databaseName: database.name },
+          }).catch(() => {});
+        }
+      }
 
-      // Tell the agent to clean up the container and firewall rules.
-      // If the agent is offline, log a warning — the DB record is already gone,
-      // and the agent-side cleanup will be skipped. When the agent reconnects,
-      // the state sync will not find this server, so no stale state remains.
-      // For a full safety net, a future enhancement could use a "pending_deletion"
-      // pattern that defers the DB delete until agent acknowledgment.
+      // Best-effort agent cleanup BEFORE cascade delete when possible, so we can
+      // surface offline-agent warnings accurately. DB delete still proceeds
+      // (operator may clean node later) but response includes warning.
+      let agentCleanupSent: boolean | null = null;
+      let agentOfflineWarning: string | undefined;
       if (server.nodeId) {
         const gateway = (app as any).wsGateway;
         if (gateway) {
-          const sent = await gateway.sendToAgent(server.nodeId, {
+          agentCleanupSent = await gateway.sendToAgent(server.nodeId, {
             type: "delete_server",
             serverId: server.id,
             serverUuid: server.uuid,
           });
-          // Proactively remove from discovered containers cache so the deleted
-          // server doesn't temporarily re-appear in the node discovery section.
           if (gateway.removeDiscoveredContainer) {
             gateway.removeDiscoveredContainer(server.nodeId, server.id);
           }
-          if (!sent) {
+          if (!agentCleanupSent) {
+            agentOfflineWarning =
+              "Agent offline or unreachable — container/data cleanup was not confirmed. Manual cleanup may be required on the node.";
             captureSystemError({
               level: 'warn',
               component: 'ServerRoutes',
@@ -1984,10 +1994,31 @@ export async function serverCoreRoutes(app: FastifyInstance) {
               "Manual cleanup may be required on the node."
             );
           }
+        } else {
+          agentOfflineWarning = "WebSocket gateway unavailable — agent cleanup was not attempted.";
         }
       }
 
-      reply.send({ success: true });
+      await prisma.$transaction(async (tx) => {
+        await releaseIpForServer(tx, serverId);
+        await tx.server.delete({ where: { id: serverId } });
+      });
+
+      reply.send({
+        success: true,
+        ...(agentOfflineWarning ? { warning: agentOfflineWarning, agentCleanup: false } : { agentCleanup: agentCleanupSent !== false }),
+        ...(dbDropFailures.length > 0
+          ? {
+              databaseWarnings: dbDropFailures,
+              warning: [
+                agentOfflineWarning,
+                `${dbDropFailures.length} database(s) could not be dropped on the host and may need manual cleanup.`,
+              ]
+                .filter(Boolean)
+                .join(' '),
+            }
+          : {}),
+      });
 
       // Fire webhook for server deletion
       const webhookService: any = (app as any).webhookService;

@@ -39,6 +39,7 @@ import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { Skeleton } from '../../../components/ui/skeleton';
 import EmptyState from '../../shared/EmptyState';
+import ConfirmDialog from '../../shared/ConfirmDialog';
 import UpdateConfirmModal, {
  type UpdateItem,
 } from './UpdateConfirmModal';
@@ -319,6 +320,7 @@ export default function ServerModManagerTab({
  'all' | 'updates' | 'tracked' | 'untracked'
  >('all');
  const [updateConfirmMods, setUpdateConfirmMods] = useState<UpdateItem[]>([]);
+ const [pendingRemoveMods, setPendingRemoveMods] = useState<string[] | null>(null);
  const [isCheckingModUpdates, setIsCheckingModUpdates] = useState(false);
  const [isUpdatingMods, setIsUpdatingMods] = useState(false);
 
@@ -1148,16 +1150,7 @@ export default function ServerModManagerTab({
  size="sm"
  className="gap-1.5 border-danger/30 text-danger hover:bg-danger/10 hover:text-danger"
  onClick={() => {
- if (
- !confirm(
- `Remove ${selectedModFiles.size} selected mod${selectedModFiles.size !== 1 ? 's' : ''}?`,
- )
- )
- return;
- selectedModFiles.forEach((name) =>
- uninstallModMutation.mutate(name),
- );
- setSelectedModFiles(new Set());
+ setPendingRemoveMods(Array.from(selectedModFiles));
  }}
  >
  <Trash2 className="h-3.5 w-3.5" />
@@ -1410,12 +1403,7 @@ export default function ServerModManagerTab({
  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
  title="Remove"
  onClick={() => {
- if (
- confirm(
- `Remove ${mod.projectName || mod.name}?`,
- )
- )
- uninstallModMutation.mutate(mod.name);
+ setPendingRemoveMods([mod.name]);
  }}
  >
  <Trash2 className="h-4 w-4" />
@@ -1428,6 +1416,29 @@ export default function ServerModManagerTab({
  </motion.div>
  )}
  </div>
+
+ {/* Remove confirmation modal */}
+ <ConfirmDialog
+ open={pendingRemoveMods !== null && pendingRemoveMods.length > 0}
+ title={pendingRemoveMods?.length === 1 ? 'Remove mod' : 'Remove mods'}
+ message={
+ pendingRemoveMods?.length === 1
+ ? `Remove ${pendingRemoveMods[0]}? This cannot be undone.`
+ : `Remove ${pendingRemoveMods?.length ?? 0} selected mods? This cannot be undone.`
+ }
+ confirmText="Remove"
+ variant="danger"
+ loading={uninstallModMutation.isPending}
+ onConfirm={() => {
+ if (!pendingRemoveMods) return;
+ pendingRemoveMods.forEach((name) => uninstallModMutation.mutate(name));
+ setSelectedModFiles(new Set());
+ setPendingRemoveMods(null);
+ }}
+ onCancel={() => {
+ if (!uninstallModMutation.isPending) setPendingRemoveMods(null);
+ }}
+ />
 
  {/* Update confirmation modal */}
  <UpdateConfirmModal

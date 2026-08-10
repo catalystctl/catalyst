@@ -18,6 +18,30 @@ export const DEFAULT_GATE_CONFIG: Omit<PluginGateConfig, 'pluginName'> = {
 const activeRequests = new Map<string, number>();
 
 /**
+ * Plugins whose Fastify routes should hard-deny all traffic.
+ * Used on disable/unload because Fastify cannot easily unregister routes —
+ * handlers stay mounted but the gate rejects them until re-enabled (or forever
+ * after unload, including stale duplicate routes from hot-reload).
+ */
+const disabledPlugins = new Set<string>();
+
+/**
+ * Mark a plugin's gated routes as accepting or denying traffic.
+ * Call with enabled=false on disable/unload; enabled=true on enable.
+ */
+export function setPluginGateEnabled(pluginName: string, enabled: boolean): void {
+  if (enabled) {
+    disabledPlugins.delete(pluginName);
+  } else {
+    disabledPlugins.add(pluginName);
+  }
+}
+
+export function isPluginGateEnabled(pluginName: string): boolean {
+  return !disabledPlugins.has(pluginName);
+}
+
+/**
  * Creates a gated handler that enforces resource limits on plugin routes.
  */
 export function createGatedHandler(
@@ -26,7 +50,17 @@ export function createGatedHandler(
 ): (request: FastifyRequest, reply: FastifyReply) => Promise<any> {
   const { pluginName, requestTimeoutMs, memoryLimitMb, maxConcurrentRequests } = config;
 
+  // New/loaded plugins start denied until enablePlugin flips the gate on.
+  disabledPlugins.add(pluginName);
+
   return async (request: FastifyRequest, reply: FastifyReply) => {
+    if (disabledPlugins.has(pluginName)) {
+      return reply.status(503).send({
+        success: false,
+        error: 'Plugin is disabled or unloaded',
+      });
+    }
+
     const startTime = performance.now();
 
     // Check memory

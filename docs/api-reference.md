@@ -4610,7 +4610,7 @@ No content — the upload was sent as part of the poll request.
 **Query params:**
 - `arch` — `x86_64` (default) or `aarch64`/`arm64`
 
-Returns a musl static binary for Linux.
+Returns a **musl** static Linux binary (`catalyst-agent-{arch}-linux-musl`). Both architectures are published by the release workflow.
 
 #### GET `/api/deploy/:token`
 
@@ -4773,7 +4773,7 @@ Clients subscribe to server events:
 | `discovered_servers` | Agent → Backend | Auto-import container discovery |
 | `backup_stream_complete` | Agent → Backend | Backup stream finished |
 | `download_backup` | Agent → Backend | Binary backup download frames |
-| `file_operation_response` | Agent → Backend | File tunnel response |
+| `file_operation_response` | Agent → Backend | Response to a legacy WS `file_operation` (not used by the HTTP file tunnel) |
 
 ### Backend → Agent Messages
 
@@ -4789,7 +4789,7 @@ Clients subscribe to server events:
 | `create_backup` | Backend → Agent | Start backup |
 | `restore_backup` | Backend → Agent | Restore from backup |
 | `delete_server` | Backend → Agent | Remove server container |
-| `file_tunnel_request` | Backend → Agent | File tunnel operation |
+| `file_tunnel_request` | Backend → Agent | *(Not sent over WS — file ops use HTTP long-poll)* |
 | `request_immediate_stats` | Backend → Agent | Request live metrics |
 | `resume_console` | Backend → Agent | Resume console stream after reconnect |
 
@@ -4806,7 +4806,7 @@ Clients subscribe to server events:
 | `server_state_sync` | Container state reconciliation |
 | `server_state_sync_complete` | Reconciliation completion with missing container detection |
 | `discovered_servers` | Auto-import container discovery |
-| `file_operation` | File operation result |
+| `file_operation` | Legacy WS file-op result (HTTP file tunnel is the production path) |
 | `backup_status` | Backup progress/status |
 | `health_check` | Agent health report |
 

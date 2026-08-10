@@ -31,6 +31,12 @@ COPY catalyst-frontend/index.html ./catalyst-frontend/
 COPY catalyst-frontend/public ./catalyst-frontend/public
 COPY catalyst-frontend/src ./catalyst-frontend/src
 
+# External plugin frontends (vite alias @plugins → ../catalyst-plugins).
+# Required so import.meta.glob('@plugins/**/frontend/index.ts') and Tailwind
+# content scanning can see in-tree plugins at build time. Runtime-only plugin
+# drops still need a rebuild to ship new frontend assets.
+COPY catalyst-plugins ./catalyst-plugins
+
 # Build
 WORKDIR /app/catalyst-frontend
 RUN pnpm run build

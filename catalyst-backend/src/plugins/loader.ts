@@ -10,8 +10,7 @@ import { validateManifest, isVersionCompatible, validateDependencies } from './v
 import { createPluginContext, runMiddleware } from './context';
 import { captureSystemError } from '../services/error-logger';
 import { PluginRegistry } from './registry';
-import { createGatedHandler, DEFAULT_GATE_CONFIG } from './runtime/request-gate';
-import { PluginWorkerHost } from './runtime/plugin-worker-host';
+import { createGatedHandler, DEFAULT_GATE_CONFIG, setPluginGateEnabled } from './runtime/request-gate';
 import EventEmitter from 'events';
 
 const CATALYST_VERSION = '1.0.0';
@@ -350,27 +349,22 @@ export class PluginLoader {
         }
       }
 
-      // ── Isolated runtime: spawn worker thread ───────────────────────────
-      if (manifest.runtime === 'isolated' && manifest.backend?.entry) {
-        this.logger.info({ plugin: manifest.name }, 'Starting isolated runtime worker');
-        try {
-          const workerHost = new PluginWorkerHost(manifest, resolvedPath, (err) => {
-            captureSystemError({
-              level: 'error',
-              component: 'PluginWorker',
-              message: `Plugin worker crashed: ${err.message}`,
-              metadata: { plugin: manifest.name },
-            }).catch(() => {});
-            this.logger.error({ plugin: manifest.name, error: err.message }, 'Plugin worker crashed');
-          });
-          await workerHost.start();
-          loadedPlugin.workerHost = workerHost;
-          this.logger.info({ plugin: manifest.name }, 'Isolated runtime worker started');
-        } catch (err: any) {
-          this.logger.error({ plugin: manifest.name, error: err.message }, 'Failed to start isolated runtime');
-          // Fall back to legacy runtime
-          loadedPlugin.workerHost = undefined;
-        }
+      // ── Isolated runtime: intentionally disabled ─────────────────────────
+      // WHY: the PluginWorkerHost / worker.ts IPC path is incomplete — the
+      // worker never handles host `call` messages after init, so isolated
+      // plugins cannot invoke host APIs and appear "loaded" while broken.
+      // Until that contract is finished, force in-process (legacy) execution
+      // even when the manifest requests `runtime: "isolated"`. Do NOT spawn
+      // the worker: a half-started isolate is worse than no isolation claim.
+      if (manifest.runtime === 'isolated') {
+        this.logger.warn(
+          { plugin: manifest.name },
+          'Plugin requested runtime=isolated, but isolated worker IPC is not production-ready; forcing in-process runtime',
+        );
+        // Keep workerHost unset so lifecycle hooks use loadedPlugin.backend.
+        loadedPlugin.workerHost = undefined;
+        // Normalize manifest so downstream code does not branch on isolated.
+        (manifest as { runtime?: string }).runtime = 'legacy';
       }
 
       // ── Apply middleware wrapping to all routes ─────────────────────────
@@ -425,12 +419,9 @@ export class PluginLoader {
         };
         route.handler = createGatedHandler(gateConfig, coreHandler);
 
-        // Register route with Fastify, prefixing with /api/plugins/{name}
-        const prefixedRoute = {
-          ...route,
-          url: `/api/plugins/${manifest.name}${route.url}`,
-        };
-        this.fastify.route(prefixedRoute);
+        // registerRoute() in context.ts already prefixes with /api/plugins/{name}/…
+        // Do NOT prefix again here — that produced /api/plugins/{name}/api/plugins/{name}/…
+        this.fastify.route(route);
       }
 
       // Register plugin in registry
@@ -491,6 +482,8 @@ export class PluginLoader {
       if (plugin.enabledRef) {
         plugin.enabledRef.value = true;
       }
+      // Gate flag for Fastify routes that cannot be unregistered
+      setPluginGateEnabled(name, true);
 
       // Call onEnable lifecycle hook (legacy or isolated)
       if (plugin.workerHost) {
@@ -526,6 +519,7 @@ export class PluginLoader {
       if (plugin.enabledRef) {
         plugin.enabledRef.value = false;
       }
+      setPluginGateEnabled(name, false);
       throw error;
     }
   }
@@ -551,6 +545,8 @@ export class PluginLoader {
       if (plugin.enabledRef) {
         plugin.enabledRef.value = false;
       }
+      // Deny gated handlers (Fastify cannot remove routes cleanly)
+      setPluginGateEnabled(name, false);
 
       // Call onDisable lifecycle hook (legacy or isolated)
       if (plugin.workerHost) {
@@ -643,6 +639,12 @@ export class PluginLoader {
 
       // Remove exposed RPC APIs
       this.registry.removeExposedApis(name);
+
+      // Keep Fastify route handlers denied after unload (routes stay registered)
+      setPluginGateEnabled(name, false);
+      if (plugin.enabledRef) {
+        plugin.enabledRef.value = false;
+      }
 
       // Clear original handlers
       plugin.originalHandlers?.clear();

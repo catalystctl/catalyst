@@ -4,6 +4,10 @@ catalyst-frontend/playwright-report/
 catalyst-frontend/playwright-report/
 docs.md
 
+# Local architecture/review notes (not for commit)
+review-*.md
+EXHAUSTIVE_REVIEW_REPORT.md
+
 # Development-only scripts (keep these local)
 catalyst-backend/generate-better-auth-schema.ts
 catalyst-backend/inspect-auth.ts

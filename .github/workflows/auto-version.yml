@@ -343,12 +343,17 @@ jobs:
       image: rust:1.93-bookworm
 
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
             artifact_name: catalyst-agent-x86_64-linux-gnu
           - target: x86_64-unknown-linux-musl
             artifact_name: catalyst-agent-x86_64-linux-musl
+          - target: aarch64-unknown-linux-gnu
+            artifact_name: catalyst-agent-aarch64-linux-gnu
+          - target: aarch64-unknown-linux-musl
+            artifact_name: catalyst-agent-aarch64-linux-musl
 
     steps:
       - uses: actions/checkout@v6
@@ -370,9 +375,30 @@ jobs:
           unzip "protoc-${{ env.PROTOC_VERSION }}-${{ env.PROTOC_ARCH }}.zip" -d /usr/local
           chmod +x /usr/local/bin/protoc
 
-      - name: Install musl tools (for musl target)
-        if: matrix.target == 'x86_64-unknown-linux-musl'
-        run: apt-get update && apt-get install -y musl-tools musl-dev
+      - name: Install target linkers
+        run: |
+          set -euo pipefail
+          apt-get update
+          case "${{ matrix.target }}" in
+            x86_64-unknown-linux-musl)
+              apt-get install -y musl-tools musl-dev
+              ;;
+            aarch64-unknown-linux-gnu)
+              apt-get install -y gcc-aarch64-linux-gnu
+              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+              echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+              ;;
+            aarch64-unknown-linux-musl)
+              # Cross-compile musl aarch64 on the x86_64 builder (deploy + auto-update use this asset).
+              apt-get install -y wget xz-utils
+              wget -qO /tmp/aarch64-linux-musl-cross.tgz https://musl.cc/aarch64-linux-musl-cross.tgz
+              tar -C /opt -xzf /tmp/aarch64-linux-musl-cross.tgz
+              echo "/opt/aarch64-linux-musl-cross/bin" >> "$GITHUB_PATH"
+              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
+              echo "CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
+              echo "AR_aarch64_unknown_linux_musl=aarch64-linux-musl-ar" >> "$GITHUB_ENV"
+              ;;
+          esac
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

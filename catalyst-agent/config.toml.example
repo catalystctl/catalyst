@@ -1,8 +1,9 @@
 # =============================================================================
 # Catalyst Agent Configuration
 # =============================================================================
-# This file can be replaced entirely by environment variables when running
-# in containers. Env vars take precedence over this config file.
+# When a config file is loaded, matching environment variables still override
+# individual fields (see apply_env_overrides). Containers may also run with no
+# file and use pure env-var config via AgentConfig::from_env().
 #
 # Required environment variables:
 #   NODE_ID        - Unique node identifier (UUID from database)
@@ -23,7 +24,7 @@
 #   SYSTEMD_OVERRIDE_DIR - Systemd override dir for containerd (default: /etc/systemd/system/containerd.service.d)
 #   LOG_LEVEL            - Log level: trace, debug, info, warn, error (default: info)
 #   HOSTNAME             - Hostname of this server (default: auto-detected)
-#   MAX_CONNECTIONS      - Maximum concurrent WebSocket connections (default: 100)
+#   MAX_CONNECTIONS      - Maximum number of game servers on this node (default: 100, cap 1000)
 #   CATALYST_CONFIG_PATH - Path to config.toml for persistence (default: /opt/catalyst-agent/config.toml)
 #   AGENT_RELEASE_REPO   - GitHub repo for agent release binaries (default: catalystctl/catalyst)
 #
@@ -56,7 +57,7 @@ data_dir = "/var/lib/catalyst"
 # Override this to place console logs on a separate filesystem.
 # console_log_dir = "/var/log/catalyst/console"
 
-# Maximum concurrent WebSocket connections
+# Maximum number of game servers allowed on this node (not WebSocket connections)
 max_connections = 100
 
 [sftp]

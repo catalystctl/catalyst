@@ -39,7 +39,14 @@ function ServerFilesPage() {
  />
  ) : (
  <ServerTabCard>
- <FileManager serverId={serverId} isSuspended={server?.status === 'suspended'} />
+ <FileManager
+ serverId={serverId}
+ isSuspended={server?.status === 'suspended'}
+ canWrite={Boolean(
+ server?.effectivePermissions?.includes('*') ||
+ server?.effectivePermissions?.includes('file.write'),
+ )}
+ />
  </ServerTabCard>
  )}
  </div>

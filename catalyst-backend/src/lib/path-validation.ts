@@ -95,15 +95,32 @@ export function validateServerId(serverId: string): void {
 }
 
 /**
- * Normalize a user-provided path
- * This prevents basic path traversal by normalizing the path
+ * Normalize a user-provided path.
+ * Collapses "." and ".." segments so parent escapes cannot leave the logical root.
+ * Paths that attempt to escape above root (e.g. "../etc") resolve to a path still
+ * under "/" — never absolute host paths. Pair with validateAndNormalizePath for jail.
  */
 export function normalizeRequestPath(value?: string): string {
   if (!value) return "/";
   const cleaned = value.replace(/\\/g, "/").trim();
   if (!cleaned || cleaned === ".") return "/";
-  const parts = cleaned.split("/").filter(Boolean);
-  return `/${parts.join("/")}`;
+
+  const parts = cleaned.split("/");
+  const resolved: string[] = [];
+  for (const part of parts) {
+    if (!part || part === ".") continue;
+    if (part === "..") {
+      // Pop parent when possible; never escape above root
+      if (resolved.length > 0) resolved.pop();
+      continue;
+    }
+    // Reject null bytes in individual segments
+    if (part.includes("\0")) {
+      throw new Error("Invalid path");
+    }
+    resolved.push(part);
+  }
+  return resolved.length === 0 ? "/" : `/${resolved.join("/")}`;
 }
 
 /**
@@ -131,6 +148,9 @@ export function validateAndNormalizePath(
   serverId: string,
   userId?: string
 ): string {
+  // Validate server ID format first (UUID) — rejects path jail escapes via bad ids
+  validateServerId(serverId);
+
   // Default to root if no path provided
   const resolvedPath = userPath || '/';
 
@@ -139,9 +159,13 @@ export function validateAndNormalizePath(
 
   const serverBase = path.join(SERVER_FILES_ROOT, serverId);
 
-  // Normalize the requested path
+  // Normalize the requested path (collapses . and .. under logical root)
   const normalized = normalizeRequestPath(unicodeNormalized);
-  const fullPath = path.join(serverBase, normalized);
+
+  // Join relative to server base — strip leading "/" so path.join never
+  // treats the user path as absolute and discards the base.
+  const relative = normalized === "/" ? "" : normalized.replace(/^\/+/, "");
+  const fullPath = relative ? path.join(serverBase, relative) : serverBase;
 
   // Logical path traversal check (no filesystem access — files live on the agent)
   const resolved = path.resolve(fullPath);

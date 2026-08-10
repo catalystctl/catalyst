@@ -534,14 +534,38 @@ export const deleteBackupFromStorage = async (
 const BACKUP_CHUNK_SIZE = 256 * 1024; // 256 KB per binary frame
 
 /**
+ * Encode a backup binary-frame header for agent upload chunks.
+ *
+ * Current protocol (length-prefixed full requestId):
+ *   [u16 BE idLen][id UTF-8 bytes][payload]
+ *
+ * Legacy agents only understood a fixed 16-byte zero-padded prefix of the
+ * UUID. Length-prefixed frames are unambiguous for full UUIDs (36 chars)
+ * and are preferred by current agents; agents still accept the legacy
+ * 16-byte form for compatibility with older panels.
+ */
+export const encodeBackupBinaryHeader = (requestId: string): Buffer => {
+  const idBuf = Buffer.from(requestId, "utf-8");
+  if (idBuf.length === 0 || idBuf.length > 0xffff) {
+    throw new Error(`Invalid backup requestId length: ${idBuf.length}`);
+  }
+  const header = Buffer.allocUnsafe(2 + idBuf.length);
+  header.writeUInt16BE(idBuf.length, 0);
+  idBuf.copy(header, 2);
+  return header;
+};
+
+/**
  * Stream a backup file to an agent using binary WebSocket frames.
  *
- * Binary protocol:
- *   - First 16 bytes: requestId (UUID, UTF-8, zero-padded)
+ * Binary protocol (v2):
+ *   - u16 BE length of requestId
+ *   - requestId UTF-8 bytes (full UUID)
  *   - Remaining bytes: raw file data
  *
  * This avoids the 33% base64 overhead of JSON text frames and eliminates
- * per-chunk JSON parsing / ack round-trips.
+ * per-chunk JSON parsing / ack round-trips. It also fixes the legacy
+ * 16-byte truncation that could not uniquely address full UUID sessions.
  */
 export const uploadStreamToAgent = async (
   gateway: WebSocketGateway,
@@ -560,9 +584,8 @@ export const uploadStreamToAgent = async (
     backupPath: targetPath,
   });
 
-  // Encode requestId once as a 16-byte header for every binary frame
-  const header = Buffer.alloc(16, 0);
-  Buffer.from(requestId, "utf-8").copy(header);
+  // Length-prefixed full requestId header on every binary frame
+  const header = encodeBackupBinaryHeader(requestId);
 
   for await (const chunk of source) {
     if (!chunk || chunk.length === 0) continue;

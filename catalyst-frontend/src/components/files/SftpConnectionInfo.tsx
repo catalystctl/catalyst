@@ -53,7 +53,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  const [now, setNow] = useState(() => Date.now());
 
  const { data: sftpInfo, isLoading } = useQuery({
- queryKey: qk.sftpConnectionInfo(serverId),
+ queryKey: qk.sftpConnectionInfo(serverId, selectedTtl),
  queryFn: () => serversApi.getSftpConnectionInfo(serverId, selectedTtl),
  staleTime: 30_000,
  refetchInterval: 15_000,
@@ -174,7 +174,11 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  const fields = [
  { label: 'Host', value: sftpInfo.host, key: 'Host' },
  { label: 'Port', value: String(sftpInfo.port), key: 'Port' },
- { label: 'Username', value: serverId, key: 'Username' },
+ {
+ label: 'Username',
+ value: (sftpInfo.username && String(sftpInfo.username).trim()) || serverId,
+ key: 'Username',
+ },
  ];
 
  return (

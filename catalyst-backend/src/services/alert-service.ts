@@ -292,6 +292,13 @@ export class AlertService {
           }
         }
       }
+    } else if (rule.target === 'global') {
+      // Global resource_threshold is intentionally unsupported (no fleet aggregation).
+      // Existing rules are skipped; create endpoint rejects new ones with 400.
+      this.logger.debug(
+        { ruleId: rule.id },
+        'Skipping resource_threshold rule with unsupported target=global',
+      );
     }
   }
 

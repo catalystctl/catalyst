@@ -6,6 +6,13 @@ import cronParser from 'cron-parser';
 import { serialize } from '../utils/serialize';
 import { hasNodeAccess } from '../lib/permissions';
 
+/** Allowed scheduled-task actions (create + update). */
+const TASK_ACTIONS = ['restart', 'stop', 'start', 'backup', 'command'] as const;
+type TaskAction = (typeof TASK_ACTIONS)[number];
+
+function isValidTaskAction(action: string): action is TaskAction {
+  return (TASK_ACTIONS as readonly string[]).includes(action);
+}
 export async function taskRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
   const authenticate = (app as any).authenticate;
@@ -90,10 +97,9 @@ export async function taskRoutes(app: FastifyInstance) {
       }
 
       // Validate action
-      const validActions = ['restart', 'stop', 'start', 'backup', 'command'];
-      if (!validActions.includes(action)) {
+      if (!isValidTaskAction(action)) {
         return reply.status(400).send({
-          error: `Invalid action. Must be one of: ${validActions.join(', ')}`,
+          error: `Invalid action. Must be one of: ${TASK_ACTIONS.join(', ')}`,
         });
       }
 
@@ -232,6 +238,13 @@ export async function taskRoutes(app: FastifyInstance) {
         'You do not have permission to modify tasks for this server',
       );
       if (!canSchedule) return;
+
+      // Re-validate action against the same allowlist as create
+      if (action !== undefined && !isValidTaskAction(action)) {
+        return reply.status(400).send({
+          error: `Invalid action. Must be one of: ${TASK_ACTIONS.join(', ')}`,
+        });
+      }
 
       // Validate cron expression if provided
       if (schedule && !cron.validate(schedule)) {

@@ -220,10 +220,24 @@ describe('RBAC - Permission Utilities', () => {
  expect(ADMIN_PERMISSIONS).toContain('alert.delete');
  });
 
- it('should not contain basic server permissions', () => {
+ it('should not contain basic server operator permissions', () => {
  expect(ADMIN_PERMISSIONS).not.toContain('server.read');
  expect(ADMIN_PERMISSIONS).not.toContain('server.start');
  expect(ADMIN_PERMISSIONS).not.toContain('server.stop');
+ expect(ADMIN_PERMISSIONS).not.toContain('server.restart');
+ expect(ADMIN_PERMISSIONS).not.toContain('server.kill');
+ expect(ADMIN_PERMISSIONS).not.toContain('server.console');
+ expect(ADMIN_PERMISSIONS).not.toContain('file.read');
+ expect(ADMIN_PERMISSIONS).not.toContain('file.write');
+ });
+
+ it('must not treat ordinary power controls as admin-panel access', () => {
+ // Critical regression: server.start/stop historically lived in ADMIN_PERMISSIONS
+ // and let any operator reach /admin routes via requireAdmin.
+ expect(hasAnyAdminPermission(['server.start'])).toBe(false);
+ expect(hasAnyAdminPermission(['server.stop'])).toBe(false);
+ expect(hasAnyAdminPermission(['server.read', 'server.start', 'server.stop'])).toBe(false);
+ expect(hasAnyAdminPermission(['file.write', 'console.read'])).toBe(false);
  });
  });
 });

@@ -1,9 +1,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../db.js";
-import { hasNodeAccess } from "../../lib/permissions.js";
 import { createRbacMiddleware } from "../../middleware/rbac.js";
-import { checkIsAdmin, collectUsedHostPortsByIp, ensureNotSuspended, findPortConflict, parsePortValue, parseStoredPortBindings, shouldUseIpam, validateRequestBody } from './_helpers.js';
+import { canAccessServer, collectUsedHostPortsByIp, ensureNotSuspended, findPortConflict, parsePortValue, parseStoredPortBindings, shouldUseIpam, validateRequestBody } from './_helpers.js';
 
 /** Statuses that allow allocation changes. Stopped servers can always change allocations;
  *  running servers support hot-add / hot-remove (the agent will sync firewall rules). */
@@ -39,17 +38,13 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         return;
       }
 
-      // Admin bypass - admins can access any server
-      if (checkIsAdmin(request, 'admin.read')) {
-        // Admin bypass - proceed to return allocations
-      } else {
-        // Check if user is owner OR has server.read permission via access entry
-        const hasAccess = server.ownerId === userId || server.access.some(
-          (access) => access.userId === userId && access.permissions.includes("server.read")
-        );
-        if (!hasAccess) {
-          return reply.status(403).send({ error: "Forbidden" });
-        }
+      // decideServerAccess contract (owner | ServerAccess | node+node.update | admin.write/*)
+      if (!(await canAccessServer(userId, {
+        id: serverId,
+        ownerId: server.ownerId,
+        nodeId: server.nodeId,
+      }))) {
+        return reply.status(403).send({ error: "Forbidden" });
       }
 
       const bindings = parseStoredPortBindings(server.portBindings);
@@ -96,15 +91,20 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         return;
       }
 
-      const isAdmin = checkIsAdmin(request, 'admin.read');
+      // Write path: owner | ServerAccess(update/delete) | node+node.update | admin.write/*
+      // Bare node assignment / admin.read alone is NOT enough.
       const hasWriteAccess = server.access.some(
         (access) => access.userId === userId &&
           (access.permissions.includes('server.update') || access.permissions.includes('server.delete'))
       );
-      const hasNodeAccessResult = await hasNodeAccess(prisma, userId, server.nodeId);
-      const hasAccess = server.ownerId === userId || hasWriteAccess || isAdmin || hasNodeAccessResult;
-      if (!hasAccess) {
-        return reply.status(403).send({ error: "Forbidden" });
+      if (server.ownerId !== userId && !hasWriteAccess) {
+        if (!(await canAccessServer(userId, {
+          id: serverId,
+          ownerId: server.ownerId,
+          nodeId: server.nodeId,
+        }))) {
+          return reply.status(403).send({ error: "Forbidden" });
+        }
       }
 
       // Allow allocation changes on stopped, running, crashed, and error servers (hot-add)
@@ -263,15 +263,18 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         return;
       }
 
-      const isAdmin = checkIsAdmin(request, 'admin.read');
       const hasWriteAccess = server.access.some(
         (access) => access.userId === userId &&
           (access.permissions.includes('server.update') || access.permissions.includes('server.delete'))
       );
-      const hasNodeAccessResult = await hasNodeAccess(prisma, userId, server.nodeId);
-      const hasAccess = server.ownerId === userId || hasWriteAccess || isAdmin || hasNodeAccessResult;
-      if (!hasAccess) {
-        return reply.status(403).send({ error: "Forbidden" });
+      if (server.ownerId !== userId && !hasWriteAccess) {
+        if (!(await canAccessServer(userId, {
+          id: serverId,
+          ownerId: server.ownerId,
+          nodeId: server.nodeId,
+        }))) {
+          return reply.status(403).send({ error: "Forbidden" });
+        }
       }
 
       // Allow allocation removal on stopped, running, crashed, and error servers (hot-remove)
@@ -372,15 +375,18 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
         return;
       }
 
-      const isAdmin = checkIsAdmin(request, 'admin.read');
       const hasWriteAccess = server.access.some(
         (access) => access.userId === userId &&
           (access.permissions.includes('server.update') || access.permissions.includes('server.delete'))
       );
-      const hasNodeAccessResult = await hasNodeAccess(prisma, userId, server.nodeId);
-      const hasAccess = server.ownerId === userId || hasWriteAccess || isAdmin || hasNodeAccessResult;
-      if (!hasAccess) {
-        return reply.status(403).send({ error: "Forbidden" });
+      if (server.ownerId !== userId && !hasWriteAccess) {
+        if (!(await canAccessServer(userId, {
+          id: serverId,
+          ownerId: server.ownerId,
+          nodeId: server.nodeId,
+        }))) {
+          return reply.status(403).send({ error: "Forbidden" });
+        }
       }
 
       // Primary allocation change is allowed on stopped, running, crashed, and error servers

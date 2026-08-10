@@ -107,7 +107,7 @@ fi
 # ══════════════════════════════════════════════════════════════════
 separator "Backend (catalyst-backend)"
 
-if has_changes '^(catalyst-backend|catalyst-shared)/' || has_changes '^pnpm-lock\.yaml' || has_changes '^package\.json$'; then
+if has_changes '^catalyst-backend/' || has_changes '^pnpm-lock\.yaml' || has_changes '^package\.json$'; then
     if [ -d "catalyst-backend" ]; then
         run_check "Backend: install deps" pnpm install --frozen-lockfile
 

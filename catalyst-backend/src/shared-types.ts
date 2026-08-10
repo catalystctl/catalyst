@@ -19,6 +19,8 @@ export enum ServerState {
   ERROR = "error",
   RESTORING = "restoring",
   CREATING_BACKUP = "creating_backup",
+  TRANSFERRING = "transferring",
+  CLONING = "cloning",
 }
 
 export enum NetworkMode {

@@ -385,8 +385,6 @@ importers:
 
   catalyst-plugins/example-plugin: {}
 
-  catalyst-shared: {}
-
   packages/plugin-sdk:
     dependencies:
       fastify:

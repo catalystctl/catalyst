@@ -71,19 +71,28 @@ function BackupSection({
  const backupAllocationMb = server?.backupAllocationMb ?? 0;
  const backupBlocked = backupAllocationMb <= 0 && (storageMode === 'local' || storageMode === 'stream');
  const localDisabled = backupAllocationMb <= 0;
- const canWrite =
- user?.permissions?.includes('*') ||
- user?.permissions?.includes('admin.write') ||
- user?.permissions?.includes('file.write') ||
- user?.permissions?.includes('backup.create') ||
- Boolean(server && user?.id && server.ownerId === user.id) ||
- Boolean(server?.effectivePermissions?.includes('backup.create'));
+ const isOwner = Boolean(server && user?.id && server.ownerId === user.id);
+ const globalPerms = user?.permissions ?? [];
+ const serverPerms = server?.effectivePermissions ?? [];
+ const hasPerm = (perm: string) =>
+ globalPerms.includes('*') ||
+ globalPerms.includes(perm) ||
+ serverPerms.includes(perm) ||
+ isOwner;
+
+ // Backup ACL — never treat file.* as backup privileges
+ const canCreate = hasPerm('backup.create') || globalPerms.includes('admin.write');
+ const canRestore = hasPerm('backup.restore') || globalPerms.includes('admin.write');
+ const canDelete = hasPerm('backup.delete') || globalPerms.includes('admin.write');
  const canRead =
- user?.permissions?.includes('*') ||
- user?.permissions?.includes('admin.read') ||
- user?.permissions?.includes('admin.write') ||
- user?.permissions?.includes('file.read') ||
- Boolean(server && user?.id && server.ownerId === user.id);
+ hasPerm('backup.read') ||
+ canCreate ||
+ canRestore ||
+ canDelete ||
+ globalPerms.includes('admin.read') ||
+ globalPerms.includes('admin.write');
+ // Settings / create use create; list actions split restore vs delete
+ const canWrite = canCreate;
 
  const [prevServer, setPrevServer] = useState(server);
  if (server !== prevServer) {
@@ -526,6 +535,8 @@ function BackupSection({
  serverStatus={serverStatus}
  isSuspended={isSuspended}
  canWrite={canWrite}
+ canRestore={canRestore}
+ canDelete={canDelete}
  />
  </div>
  ) : (

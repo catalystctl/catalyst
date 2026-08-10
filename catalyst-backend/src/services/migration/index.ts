@@ -12,6 +12,26 @@ import { MIGRATION_PHASES } from "./types";
 import crypto from "node:crypto";
 import { captureSystemError } from "../../services/error-logger";
 
+/** Never expose sourceKey / clientApiKey in admin API responses. */
+export function redactMigrationJobSecrets<
+  T extends { sourceKey?: string | null; config?: unknown },
+>(job: T): T {
+  const config =
+    job.config && typeof job.config === "object"
+      ? {
+          ...(job.config as Record<string, unknown>),
+          clientApiKey: (job.config as any).clientApiKey
+            ? "********"
+            : (job.config as any).clientApiKey ?? null,
+        }
+      : job.config;
+  return {
+    ...job,
+    sourceKey: job.sourceKey ? "********" : job.sourceKey,
+    config,
+  };
+}
+
 interface MigrationEvents {
   progress: [data: {
     jobId: string;
@@ -111,8 +131,13 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
       await state.startJob(jobId);
       this.logger.info({ jobId, url: job.sourceUrl }, "Starting migration");
 
-      // Create client
-      const client = new PterodactylClient(job.sourceUrl, job.sourceKey, this.logger, config.clientApiKey, false);
+      // Create client — decrypt source keys if they were encrypted at rest.
+      const { decryptSecretValue } = await import("../backup-credentials.js");
+      const sourceKey = (decryptSecretValue(job.sourceKey) as string) || job.sourceKey;
+      const clientApiKeyRaw = config.clientApiKey
+        ? (decryptSecretValue(config.clientApiKey) as string) || config.clientApiKey
+        : undefined;
+      const client = new PterodactylClient(job.sourceUrl, sourceKey, this.logger, clientApiKeyRaw, false);
 
       try {
         await this.runMigration(jobId, client, config, state, activeFlag, job.bypassToken);
@@ -151,7 +176,12 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
     try {
       await state.updateJobStatus(jobId, "running");
       // Migration often targets panels with self-signed certs — explicitly opt out of strict validation
-      const client = new PterodactylClient(job.sourceUrl, job.sourceKey, this.logger, config.clientApiKey, false);
+      const { decryptSecretValue } = await import("../backup-credentials.js");
+      const sourceKey = (decryptSecretValue(job.sourceKey) as string) || job.sourceKey;
+      const clientApiKeyRaw = config.clientApiKey
+        ? (decryptSecretValue(config.clientApiKey) as string) || config.clientApiKey
+        : undefined;
+      const client = new PterodactylClient(job.sourceUrl, sourceKey, this.logger, clientApiKeyRaw, false);
       try {
         await this.runMigration(jobId, client, config, state, activeFlag, job.bypassToken);
       } finally {
@@ -175,12 +205,19 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
 
   async getMigrationStatus(jobId: string) {
     const state = new MigrationStateManager(this.prisma);
-    return state.getJob(jobId);
+    const job = await state.getJob(jobId);
+    return job ? this.redactMigrationJob(job) : null;
   }
 
   async listMigrations() {
     const state = new MigrationStateManager(this.prisma);
-    return state.listJobs();
+    const jobs = await state.listJobs();
+    return jobs.map((job) => this.redactMigrationJob(job));
+  }
+
+  /** Never expose sourceKey / clientApiKey in admin API responses. */
+  private redactMigrationJob<T extends { sourceKey?: string | null; config?: unknown }>(job: T): T {
+    return redactMigrationJobSecrets(job);
   }
 
   async retryStep(jobId: string, stepId: string): Promise<void> {
@@ -974,18 +1011,30 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
               userId: ownerId,
               serverId: targetId,
               permissions: [
+                "server.read",
                 "server.start",
                 "server.stop",
-                "server.read",
                 "server.install",
+                "server.reinstall",
+                "server.rebuild",
+                "server.transfer",
+                "server.schedule",
                 "alert.read",
                 "alert.create",
                 "alert.update",
                 "alert.delete",
-                "file.read",
-                "file.write",
                 "console.read",
                 "console.write",
+                "file.read",
+                "file.write",
+                "database.read",
+                "database.create",
+                "database.rotate",
+                "database.delete",
+                "backup.read",
+                "backup.create",
+                "backup.restore",
+                "backup.delete",
                 "server.delete",
               ],
             },

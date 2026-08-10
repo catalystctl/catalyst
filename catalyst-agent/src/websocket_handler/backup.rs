@@ -98,6 +98,49 @@ impl WebSocketHandler {
             backup_path.display()
         );
 
+        // Best-effort quiesce: warn if the server container is running (live backup),
+        // then run `sync` so dirty pages hit disk before tar. We deliberately do not
+        // stop the server — stopping is a panel/policy decision.
+        let container_id = self.resolve_container_id(server_id, server_uuid).await;
+        if !container_id.is_empty() {
+            match self.runtime.is_container_running(&container_id).await {
+                Ok(true) => {
+                    warn!(
+                        "Creating backup while container {} is running — archive may be inconsistent",
+                        container_id
+                    );
+                }
+                Ok(false) => {}
+                Err(e) => {
+                    warn!(
+                        "Could not check container running state before backup {}: {}",
+                        container_id, e
+                    );
+                }
+            }
+        }
+        match tokio::process::Command::new("sync").status().await {
+            Ok(status) if status.success() => {
+                debug!("fsync/sync completed before tar for backup {}", backup_name);
+            }
+            Ok(status) => {
+                warn!(
+                    "sync exited with status {} before backup {}; continuing",
+                    status, backup_name
+                );
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to run sync before backup {}: {}; continuing",
+                    backup_name, e
+                );
+            }
+        }
+        // Best-effort: fsync the server directory metadata so directory entries are durable.
+        if let Ok(dir) = std::fs::File::open(&server_dir) {
+            let _ = dir.sync_all();
+        }
+
         let archive_result = tokio::process::Command::new("tar")
             .arg("-czf")
             .arg(&backup_path)
@@ -793,13 +836,20 @@ impl WebSocketHandler {
             return Ok(());
         }
 
+        // Resolve full session key. Callers may pass either a full requestId
+        // (length-prefixed v2 frames) or a legacy 16-byte UUID prefix.
+        let resolved_id = {
+            let uploads = self.active_uploads.read().await;
+            resolve_backup_upload_request_id(request_id, uploads.keys().map(|k| k.as_str()))
+        };
+
         // Check size limit and write the chunk in-place using get_mut.
         // This avoids the remove/insert race where a concurrent chunk finds
         // the session temporarily missing from the map.
         let data_len = data.len() as u64;
         let write_result: Result<(), AgentError> = {
             let mut uploads = self.active_uploads.write().await;
-            match uploads.get_mut(request_id) {
+            match uploads.get_mut(&resolved_id) {
                 Some(session) => {
                     let next_total = session.bytes_written.saturating_add(data_len);
                     if next_total > MAX_BACKUP_UPLOAD_BYTES {
@@ -828,7 +878,7 @@ impl WebSocketHandler {
         if let Err(ref err) = write_result {
             let path_to_clean = {
                 let mut uploads = self.active_uploads.write().await;
-                uploads.remove(request_id).map(|s| s.path)
+                uploads.remove(&resolved_id).map(|s| s.path)
             };
             if let Some(path) = path_to_clean {
                 let _ = tokio::fs::remove_file(&path).await;
@@ -1132,14 +1182,20 @@ impl WebSocketHandler {
             }
         }
 
-        tokio::fs::create_dir_all(&server_dir).await.map_err(|e| {
-            AgentError::IoError(format!("Failed to create server directory: {}", e))
+        // Extract into a temp directory first (same pattern as non-streaming restore)
+        // so symlink validation can run before live server_dir is replaced.
+        let tmp_dir = server_dir.with_extension("tmp_restore_stream");
+        if tmp_dir.exists() {
+            let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
+        }
+        tokio::fs::create_dir_all(&tmp_dir).await.map_err(|e| {
+            AgentError::IoError(format!("Failed to create temp restore directory: {}", e))
         })?;
 
         info!(
-            "Preparing restore stream for {} into {}",
+            "Preparing restore stream for {} into temp dir {}",
             server_uuid,
-            server_dir.display()
+            tmp_dir.display()
         );
 
         // Spawn tar with stdin piped. stdin stays in the Child so
@@ -1148,7 +1204,7 @@ impl WebSocketHandler {
             .arg("-xf")
             .arg("-")
             .arg("-C")
-            .arg(&server_dir)
+            .arg(&tmp_dir)
             .stdin(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()
@@ -1258,6 +1314,7 @@ impl WebSocketHandler {
         });
 
         let server_dir = self.config.server.data_dir.join(server_uuid);
+        let tmp_dir = server_dir.with_extension("tmp_restore_stream");
 
         let status = child
             .wait()
@@ -1266,49 +1323,56 @@ impl WebSocketHandler {
 
         if !status.success() {
             let stderr_output = stderr_task.await.unwrap_or_default();
-            // Clean up partial extraction on failure, matching non-streaming behaviour
-            let _ = tokio::fs::remove_dir_all(&server_dir).await;
+            // Clean up temp extraction on failure — live server_dir untouched.
+            let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
             return Err(AgentError::IoError(format!(
                 "Restore tar failed: {}",
                 stderr_output
             )));
         }
 
-        // Security: validate that no symlinks in the restored data escape
-        // the server directory. This prevents a malicious backup from planting
-        // symlinks that point to host paths like /etc/shadow.
+        // Security: validate symlinks in the temp tree BEFORE replacing live data.
         // Same check used in non-streaming restore path (UF-01).
-        let canonical_base = tokio::fs::canonicalize(&server_dir)
-            .await
-            .unwrap_or_else(|_| server_dir.clone());
+        let canonical_tmp = match tokio::fs::canonicalize(&tmp_dir).await {
+            Ok(p) => p,
+            Err(e) => {
+                let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
+                return Err(AgentError::FileSystemError(format!(
+                    "Cannot resolve temp restore dir: {}",
+                    e
+                )));
+            }
+        };
         let mut dangerous = Vec::new();
         if let Err(e) = self
-            .check_restore_symlinks(&server_dir, &canonical_base, &mut dangerous)
+            .check_restore_symlinks(&tmp_dir, &canonical_tmp, &mut dangerous)
             .await
         {
             warn!("Symlink scan failed after restore stream: {}", e);
+            let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
+            return Err(AgentError::FileSystemError(format!(
+                "Symlink scan failed after restore stream: {}",
+                e
+            )));
         }
         if !dangerous.is_empty() {
-            warn!(
-                "Removing {} dangerous symlinks from restored server {}",
-                dangerous.len(),
-                server_uuid
-            );
             for link in &dangerous {
-                // Parse "path -> target" format from check_restore_symlinks
-                if let Some(link_path) = link.split(" -> ").next() {
-                    // tokio::fs::remove_file on a symlink removes the symlink itself,
-                    // not the target — this is the correct behavior.
-                    let _ = tokio::fs::remove_file(link_path).await;
-                }
+                warn!("Dangerous symlink in restored backup stream: {}", link);
             }
-            // Inconsistent data remains after removing individual symlinks.
-            // Clean up the entire directory to match non-streaming behaviour.
-            let _ = tokio::fs::remove_dir_all(&server_dir).await;
+            let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
             return Err(AgentError::SecurityViolation(format!(
-                "Backup contains {} symlink(s) that escape the server directory. \
-                 Restore aborted and directory cleaned up for security.",
+                "Backup contains {} symlink(s) that escape the server directory.                  Restore aborted and temp directory cleaned up for security.",
                 dangerous.len()
+            )));
+        }
+
+        // Validation passed — atomically replace server_dir with restored data.
+        let _ = tokio::fs::remove_dir_all(&server_dir).await;
+        if let Err(e) = tokio::fs::rename(&tmp_dir, &server_dir).await {
+            let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
+            return Err(AgentError::FileSystemError(format!(
+                "Failed to move restored directory into place: {}",
+                e
             )));
         }
 
@@ -1334,5 +1398,177 @@ impl WebSocketHandler {
             .await
             .map_err(|e| AgentError::NetworkError(e.to_string()))?;
         Ok(())
+    }
+}
+
+/// Resolve a binary-frame request id (full UUID or legacy 16-byte prefix) to the
+/// full session key used by `upload_backup_start`.
+///
+/// Prefer exact match, then a unique prefix/suffix relationship. Ambiguous
+/// matches keep the frame id so the write path fails cleanly rather than
+/// writing into an arbitrary session.
+pub(crate) fn resolve_backup_upload_request_id<'a, I>(request_id: &str, session_keys: I) -> String
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let keys: Vec<&str> = session_keys.into_iter().collect();
+    if keys.contains(&request_id) {
+        return request_id.to_string();
+    }
+
+    let prefix_matches: Vec<&str> = keys
+        .iter()
+        .copied()
+        .filter(|k| k.starts_with(request_id) || request_id.starts_with(k))
+        .collect();
+
+    match prefix_matches.as_slice() {
+        [only] => only.to_string(),
+        // Ambiguous or no match: keep the frame id so the write path fails cleanly
+        // rather than writing into an arbitrary session.
+        _ => request_id.to_string(),
+    }
+}
+
+/// Parse a backup upload binary frame into `(request_id, payload)`.
+///
+/// Supported layouts:
+/// 1. **Length-prefixed (v2)** — `[u16 BE id_len][id UTF-8 bytes][payload]`.
+///    Used by current backends so the full UUID is present on every chunk.
+/// 2. **Legacy fixed 16-byte header** — first 16 bytes are a zero-padded UTF-8
+///    prefix of the requestId; remainder is payload. Kept so older panels that
+///    still truncate still work when the agent can uniquely resolve the session.
+///
+/// Disambiguation: if the first two bytes decode as a BE length `L` such that
+/// `2 + L <= frame.len()` **and** the following `L` bytes are valid UTF-8 that
+/// looks like a request id (printable, no NULs), treat as v2. Otherwise fall
+/// back to the legacy 16-byte header when `frame.len() > 16`.
+pub(crate) fn parse_backup_binary_frame(data: &[u8]) -> Option<(String, &[u8])> {
+    if data.len() >= 2 {
+        let id_len = u16::from_be_bytes([data[0], data[1]]) as usize;
+        // Reject empty ids and frames that claim more bytes than available.
+        // Also require at least one payload byte for a meaningful chunk
+        // (empty payloads are no-ops upstream anyway).
+        if id_len > 0 && data.len() >= 2 + id_len {
+            let id_bytes = &data[2..2 + id_len];
+            if looks_like_request_id(id_bytes) {
+                if let Ok(id) = std::str::from_utf8(id_bytes) {
+                    return Some((id.to_string(), &data[2 + id_len..]));
+                }
+            }
+        }
+    }
+
+    // Legacy: fixed 16-byte zero-padded UTF-8 prefix.
+    if data.len() > 16 {
+        let header = String::from_utf8_lossy(&data[..16])
+            .trim_end_matches('\0')
+            .to_string();
+        if !header.is_empty() {
+            return Some((header, &data[16..]));
+        }
+    }
+
+    None
+}
+
+fn looks_like_request_id(bytes: &[u8]) -> bool {
+    // UUID / request ids are printable ASCII without control chars or NULs.
+    // Cap at 128 to reject pathological length claims that would otherwise
+    // swallow almost the entire frame as an "id".
+    if bytes.is_empty() || bytes.len() > 128 {
+        return false;
+    }
+    bytes
+        .iter()
+        .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' | b'-' | b'_' ))
+}
+
+#[cfg(test)]
+mod request_id_tests {
+    use super::{parse_backup_binary_frame, resolve_backup_upload_request_id};
+
+    #[test]
+    fn exact_match_preferred() {
+        let full = "abcdef0123456789fedcba9876543210";
+        let resolved = resolve_backup_upload_request_id(full, [full, "other-session"]);
+        assert_eq!(resolved, full);
+    }
+
+    #[test]
+    fn resolves_16_byte_prefix_to_full_uuid() {
+        let full = "abcdef0123456789-fedc-ba98-7654-3210abcd";
+        let prefix = &full[..16]; // historically truncated binary header
+        assert_eq!(prefix.len(), 16);
+        let resolved = resolve_backup_upload_request_id(prefix, [full, "zzzzzzzzzzzzzzzz-other"]);
+        assert_eq!(resolved, full);
+    }
+
+    #[test]
+    fn unknown_prefix_returns_input() {
+        let resolved =
+            resolve_backup_upload_request_id("deadbeefdeadbeef", ["session-a", "session-b"]);
+        assert_eq!(resolved, "deadbeefdeadbeef");
+    }
+
+    #[test]
+    fn ambiguous_prefix_does_not_pick_arbitrarily() {
+        // Two sessions share the same 8-char prefix — must not inject into either.
+        let a = "abcdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+        let b = "abcdef01-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+        let resolved = resolve_backup_upload_request_id("abcdef01", [a, b]);
+        assert_eq!(resolved, "abcdef01");
+    }
+
+    #[test]
+    fn empty_session_set_returns_input() {
+        let resolved = resolve_backup_upload_request_id("abcdef0123456789", std::iter::empty());
+        assert_eq!(resolved, "abcdef0123456789");
+    }
+
+    #[test]
+    fn longer_frame_id_matching_session_prefix_resolves() {
+        // Frame carries a longer id that starts with a shorter session key.
+        let session = "abcdef0123456789";
+        let frame = format!("{session}-extra-suffix");
+        let resolved = resolve_backup_upload_request_id(&frame, [session]);
+        assert_eq!(resolved, session);
+    }
+
+    #[test]
+    fn parse_length_prefixed_full_uuid() {
+        let id = "abcdef01-2345-6789-abcd-ef0123456789";
+        let payload = b"TARDATA";
+        let id_bytes = id.as_bytes();
+        let mut frame = Vec::with_capacity(2 + id_bytes.len() + payload.len());
+        let len = id_bytes.len() as u16;
+        frame.extend_from_slice(&len.to_be_bytes());
+        frame.extend_from_slice(id_bytes);
+        frame.extend_from_slice(payload);
+
+        let (parsed_id, parsed_payload) = parse_backup_binary_frame(&frame).expect("parse");
+        assert_eq!(parsed_id, id);
+        assert_eq!(parsed_payload, payload);
+    }
+
+    #[test]
+    fn parse_legacy_16_byte_prefix() {
+        let full = "abcdef0123456789-fedc-ba98-7654-3210abcd";
+        let mut header = [0u8; 16];
+        header.copy_from_slice(full.as_bytes()[..16].as_ref());
+        let payload = b"LEGACY";
+        let mut frame = Vec::with_capacity(16 + payload.len());
+        frame.extend_from_slice(&header);
+        frame.extend_from_slice(payload);
+
+        let (parsed_id, parsed_payload) = parse_backup_binary_frame(&frame).expect("parse");
+        assert_eq!(parsed_id, &full[..16]);
+        assert_eq!(parsed_payload, payload);
+    }
+
+    #[test]
+    fn parse_rejects_empty_frame() {
+        assert!(parse_backup_binary_frame(&[]).is_none());
+        assert!(parse_backup_binary_frame(&[0, 0]).is_none());
     }
 }

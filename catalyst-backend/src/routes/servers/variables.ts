@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
-import { checkIsAdmin, ensureNotSuspended, hasNodeAccess, validateVariableRule } from './_helpers.js';
+import { canAccessServer, ensureNotSuspended, validateVariableRule } from './_helpers.js';
 
 export async function serverVariablesRoutes(app: FastifyInstance) {
   app.get(
@@ -18,19 +18,9 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Server not found" });
       }
 
-      // Permission check
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.read")) {
-        const access = await prisma.serverAccess.findFirst({
-          where: {
-            userId,
-            serverId,
-            permissions: { has: "server.read" },
-          },
-        });
-        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-        if (!access && !hasNodeAccessToServer) {
-          return reply.status(403).send({ error: "Forbidden" });
-        }
+      // Permission check: owner | ServerAccess | node+node.update | admin.write/*
+      if (!(await canAccessServer(userId, { id: serverId, ownerId: server.ownerId, nodeId: server.nodeId }))) {
+        return reply.status(403).send({ error: "Forbidden" });
       }
 
       const templateVariables = (server.template?.variables as any[]) || [];
@@ -73,8 +63,8 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
         return;
       }
 
-      // Permission check: owner, admin, or server.rebuild (rebuild implies config change)
-      if (server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
+      // Permission check: owner | ServerAccess with server.rebuild | node+node.update | admin.write/*
+      if (server.ownerId !== userId) {
         const access = await prisma.serverAccess.findFirst({
           where: {
             userId,
@@ -82,9 +72,11 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
             permissions: { has: "server.rebuild" },
           },
         });
-        const hasNodeAccessToServer = await hasNodeAccess(prisma, userId, server.nodeId);
-        if (!access && !hasNodeAccessToServer) {
-          return reply.status(403).send({ error: "Forbidden" });
+        if (!access) {
+          // Fall back to full canAccessServer (admin.write / node.update manage path).
+          if (!(await canAccessServer(userId, { id: serverId, ownerId: server.ownerId, nodeId: server.nodeId }))) {
+            return reply.status(403).send({ error: "Forbidden" });
+          }
         }
       }
 

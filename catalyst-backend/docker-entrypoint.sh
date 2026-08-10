@@ -13,13 +13,24 @@ mkdir -p /var/lib/catalyst/servers \
          /tmp/catalyst-backup-stream \
          /tmp/catalyst-backup-transfer
 
-# Run pending migrations (non-destructive — safe to run on every start)
+# Run pending migrations (non-destructive — safe to run on every start).
+# NEVER fall back to `prisma db push --accept-data-loss` unless the operator
+# explicitly sets ALLOW_DATA_LOSS=1 (destructive schema repair only).
 if [ -n "$DATABASE_URL" ]; then
     echo "==> Running database migrations..."
-    npx prisma migrate deploy --config prisma/prisma.config.ts 2>/dev/null || \
-    npx prisma db push --config prisma/prisma.config.ts --accept-data-loss 2>/dev/null || \
-    echo "==> Warning: Could not run migrations. If this is a fresh database, run db:seed manually."
-    echo "==> Migrations complete."
+    if npx prisma migrate deploy --config prisma/prisma.config.ts; then
+        echo "==> Migrations complete."
+    else
+        if [ "${ALLOW_DATA_LOSS:-0}" = "1" ]; then
+            echo "==> migrate deploy failed; ALLOW_DATA_LOSS=1 set — running prisma db push --accept-data-loss"
+            npx prisma db push --config prisma/prisma.config.ts --accept-data-loss || \
+                echo "==> Warning: db push also failed. Manual intervention required."
+        else
+            echo "==> Warning: migrate deploy failed. Refusing destructive db push."
+            echo "==> Set ALLOW_DATA_LOSS=1 to allow prisma db push --accept-data-loss, or fix migrations manually."
+            echo "==> If this is a fresh database, run db:seed / migrate manually."
+        fi
+    fi
 else
     echo "==> Warning: DATABASE_URL not set, skipping migrations."
 fi

@@ -298,6 +298,10 @@ model SystemSetting {
   fileTunnelConcurrentMax     Int?
   // Email verification
   requireEmailVerification     Boolean  @default(true)
+  // Open self-registration (public /register + better-auth sign-up).
+  // Defaults false (invite/admin-created users only). Admins may enable via security settings.
+  // First setup also forces false after complete.
+  registrationEnabled          Boolean  @default(false)
   // DNS provider settings
   dnsProvider           String?
   dnsBaseDomain         String?

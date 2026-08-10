@@ -14,14 +14,20 @@ import '@fontsource-variable/dm-sans';
 import '@fontsource-variable/outfit';
 import '@fontsource-variable/jetbrains-mono';
 
-// Register service worker for caching
-if ('serviceWorker' in navigator) {
- window.addEventListener('load', () => {
- navigator.serviceWorker
- .register('/sw.js')
- .then((reg) => debugLog('[SW] Registered:', reg.scope))
- .catch((err) => console.warn('[SW] Registration failed:', err));
- });
+// Register service worker for static-asset caching (production only).
+// Dev registration causes stale hashed bundles and confuses HMR.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((reg) => debugLog('[SW] Registered:', reg.scope))
+      .catch((err) => console.warn('[SW] Registration failed:', err));
+  });
+} else if ('serviceWorker' in navigator) {
+  // Unregister any leftover SW from a previous production session while developing
+  navigator.serviceWorker.getRegistrations?.().then((regs) => {
+    regs.forEach((reg) => reg.unregister());
+  }).catch(() => {});
 }
 
 window.addEventListener('error', (event) => {

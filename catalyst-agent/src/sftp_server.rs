@@ -27,7 +27,7 @@
 //! call and the client caches them. Subsequent calls return EOF.
 //! (This matches how most SFTP server implementations work in practice.)
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::io::SeekFrom;
 use std::path::PathBuf;
@@ -185,12 +185,23 @@ static HANDLE_COUNTER: AtomicU64 = AtomicU64::new(0);
 static DIR_READ_STATE: once_cell::sync::Lazy<std::sync::Mutex<HashMap<String, bool>>> =
     once_cell::sync::Lazy::new(|| std::sync::Mutex::new(HashMap::new()));
 
+/// Recover from a poisoned mutex instead of panicking the SFTP task.
+fn dir_read_state_lock() -> std::sync::MutexGuard<'static, HashMap<String, bool>> {
+    DIR_READ_STATE.lock().unwrap_or_else(|poisoned| {
+        tracing::warn!("DIR_READ_STATE mutex was poisoned; recovering inner map");
+        poisoned.into_inner()
+    })
+}
+
 /// SFTP handler backed by FileManager.
 struct CatalystSftpHandler {
     file_manager: Arc<FileManager>,
     server_id: String,
     permissions: Vec<String>,
     max_file_size: u64,
+    /// Directory handles opened by this session; cleared on Drop so
+    /// DIR_READ_STATE does not leak if the client disconnects without close.
+    open_dir_handles: Arc<std::sync::Mutex<HashSet<String>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -223,6 +234,7 @@ impl CatalystSftpHandler {
             server_id,
             permissions,
             max_file_size,
+            open_dir_handles: Arc::new(std::sync::Mutex::new(HashSet::new())),
         }
     }
 
@@ -258,6 +270,23 @@ impl CatalystSftpHandler {
             status_code: StatusCode::Ok,
             error_message: String::new(),
             language_tag: String::new(),
+        }
+    }
+}
+
+impl Drop for CatalystSftpHandler {
+    fn drop(&mut self) {
+        // Session ended — purge any dir handles this handler still owns.
+        let handles = match self.open_dir_handles.lock() {
+            Ok(mut g) => g.drain().collect::<Vec<_>>(),
+            Err(poisoned) => poisoned.into_inner().drain().collect::<Vec<_>>(),
+        };
+        if handles.is_empty() {
+            return;
+        }
+        let mut state = dir_read_state_lock();
+        for h in handles {
+            state.remove(&h);
         }
     }
 }
@@ -304,18 +333,34 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
             }
 
             if is_write {
-                // Create parent dirs and the file itself
+                // Create parent dirs and the file itself only when CREATE/TRUNCATE require it.
+                // CREATE without TRUNCATE must not wipe an existing file (append/open-for-write).
                 if let Err(e) = fm.resolve_and_ensure_parent(&server_id, &filename).await {
                     return Err(SftpError(format!("Failed to resolve path: {}", e)));
                 }
-                if pflags.contains(OpenFlags::CREATE) || pflags.contains(OpenFlags::TRUNCATE) {
+                let full_path = fm
+                    .resolve_path(&server_id, &filename)
+                    .map_err(|e| SftpError(format!("Failed to resolve path: {}", e)))?;
+                let exists = tokio::fs::metadata(&full_path).await.is_ok();
+                if pflags.contains(OpenFlags::TRUNCATE)
+                    || (pflags.contains(OpenFlags::CREATE) && !exists)
+                {
+                    // Only wipe/create when TRUNCATE is set, or CREATE on a missing file.
                     let _ = fm.write_file(&server_id, &filename, "").await;
+                } else if pflags.contains(OpenFlags::CREATE) && exists {
+                    // CREATE without TRUNCATE on existing file: leave content intact.
+                } else if !exists {
+                    return Err(SftpError("No such file".into()));
                 }
             } else {
-                // Verify file exists and is readable
-                fm.read_file(&server_id, &filename)
+                // Verify file exists without loading content into memory.
+                let exists = fm
+                    .file_exists(&server_id, &filename)
                     .await
                     .map_err(|e| SftpError(format!("Failed to open file: {}", e)))?;
+                if !exists {
+                    return Err(SftpError("No such file".into()));
+                }
             }
 
             Ok(Handle {
@@ -328,8 +373,16 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
     async fn close(&mut self, id: u32, handle: String) -> Result<Status, Self::Error> {
         // Clean up directory read state
         {
-            let mut state = DIR_READ_STATE.lock().unwrap();
+            let mut state = dir_read_state_lock();
             state.remove(&handle);
+        }
+        match self.open_dir_handles.lock() {
+            Ok(mut owned) => {
+                owned.remove(&handle);
+            }
+            Err(poisoned) => {
+                poisoned.into_inner().remove(&handle);
+            }
         }
         Ok(Self::status_ok(id))
     }
@@ -420,9 +473,11 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
                     .map_err(|e| SftpError(format!("Write failed: {}", e)))?;
             }
 
+            // truncate(false): random-access seek+write; CREATE alone must not wipe.
             let mut file = tokio::fs::OpenOptions::new()
                 .create(true)
                 .write(true)
+                .truncate(false)
                 .open(&full_path)
                 .await
                 .map_err(|e| SftpError(format!("Write failed: {}", e)))?;
@@ -536,6 +591,7 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
         let fm = self.file_manager.clone();
         let server_id = self.server_id.clone();
         let permissions = self.permissions.clone();
+        let open_dirs = self.open_dir_handles.clone();
 
         async move {
             tracing::info!("SFTP opendir: path='{}', server_id='{}'", path, server_id);
@@ -552,10 +608,18 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
 
             let handle_str = Self::make_dir_handle(&path);
 
-            // Mark this handle as "not yet read"
+            // Mark this handle as "not yet read" and track for session Drop cleanup
             {
-                let mut state = DIR_READ_STATE.lock().unwrap();
+                let mut state = dir_read_state_lock();
                 state.insert(handle_str.clone(), false);
+            }
+            match open_dirs.lock() {
+                Ok(mut g) => {
+                    g.insert(handle_str.clone());
+                }
+                Err(poisoned) => {
+                    poisoned.into_inner().insert(handle_str.clone());
+                }
             }
 
             Ok(Handle {
@@ -579,7 +643,7 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
 
             // Check if this handle has already been read
             let already_read = {
-                let mut state = DIR_READ_STATE.lock().unwrap();
+                let mut state = dir_read_state_lock();
                 match state.get_mut(&handle) {
                     Some(done) => {
                         if *done {
@@ -648,7 +712,11 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
     ) -> impl Future<Output = Result<Status, Self::Error>> + Send {
         let fm = self.file_manager.clone();
         let server_id = self.server_id.clone();
+        let permissions = self.permissions.clone();
         async move {
+            if !Self::has_permission(&permissions, "file.write") {
+                return Err(SftpError("Permission denied".into()));
+            }
             fm.delete_file(&server_id, &filename)
                 .await
                 .map_err(|e| SftpError(format!("{}", e)))?;
@@ -664,7 +732,11 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
     ) -> impl Future<Output = Result<Status, Self::Error>> + Send {
         let fm = self.file_manager.clone();
         let server_id = self.server_id.clone();
+        let permissions = self.permissions.clone();
         async move {
+            if !Self::has_permission(&permissions, "file.write") {
+                return Err(SftpError("Permission denied".into()));
+            }
             fm.mkdir(&server_id, &path)
                 .await
                 .map_err(|e| SftpError(format!("{}", e)))?;
@@ -679,7 +751,11 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
     ) -> impl Future<Output = Result<Status, Self::Error>> + Send {
         let fm = self.file_manager.clone();
         let server_id = self.server_id.clone();
+        let permissions = self.permissions.clone();
         async move {
+            if !Self::has_permission(&permissions, "file.write") {
+                return Err(SftpError("Permission denied".into()));
+            }
             fm.delete_file(&server_id, &path)
                 .await
                 .map_err(|e| SftpError(format!("{}", e)))?;
@@ -763,6 +839,9 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
         oldpath: String,
         newpath: String,
     ) -> Result<Status, Self::Error> {
+        if !Self::has_permission(&self.permissions, "file.write") {
+            return Err(SftpError("Permission denied".into()));
+        }
         self.file_manager
             .rename_file(&self.server_id, &oldpath, &newpath)
             .await

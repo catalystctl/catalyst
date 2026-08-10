@@ -30,10 +30,40 @@ export async function dashboardRoutes(app: FastifyInstance) {
       const canReadServers = perms.includes('*') || perms.includes('server.read');
       const canReadNodes = perms.includes('*') || perms.includes('node.read');
       const canReadAlerts = perms.includes('*') || perms.includes('alert.read');
-      const isAdmin = perms.includes('*') || perms.some(p => ['admin.read', 'admin.write'].includes(p));
+      // Global server list / counts require admin.write or * — server.read alone is not global.
+      const isGlobalAdmin = perms.includes('*') || perms.includes('admin.write');
+      const isAdmin = isGlobalAdmin || perms.includes('admin.read');
 
-      // Get server count - for non-admins, only count their own servers
-      const serverWhere = isAdmin || canReadServers ? {} : { ownerId: user.userId };
+      // Scope server counts to accessible servers unless the caller has global admin write/*.
+      // server.read alone must NOT expose panel-wide inventory.
+      let serverWhere: Record<string, unknown>;
+      if (isGlobalAdmin) {
+        serverWhere = {};
+      } else {
+        const accessRows = await prisma.serverAccess.findMany({
+          where: { userId: user.userId },
+          select: { serverId: true },
+        });
+        const accessIds = accessRows.map((r) => r.serverId);
+        // Include nodes the user is assigned to (node operators managing those hosts).
+        const { getUserAccessibleNodes } = await import('../lib/permissions.js');
+        const accessible = await getUserAccessibleNodes(prisma, user.userId);
+        const orClauses: Array<Record<string, unknown>> = [{ ownerId: user.userId }];
+        if (accessIds.length > 0) {
+          orClauses.push({ id: { in: accessIds } });
+        }
+        if (accessible.hasWildcard) {
+          // Node wildcard still does not mean global panel admin for inventory —
+          // only count servers on assigned nodes when we have concrete ids; if
+          // hasWildcard with empty nodeIds, fall back to owner+access only.
+        } else if (accessible.nodeIds.length > 0) {
+          orClauses.push({ nodeId: { in: accessible.nodeIds } });
+        }
+        serverWhere = { OR: orClauses };
+      }
+
+      // canReadServers kept for backward-compat of other UI gates; counts always scoped above.
+      void canReadServers;
 
       const [serverCount, serversOnline, nodeCount, nodesOnline, alertCount, alertsUnacknowledged] = await Promise.all([
         prisma.server.count({ where: serverWhere }),

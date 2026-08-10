@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import EditTaskModal from '../../tasks/EditTaskModal';
 import CreateTaskModal from '../../tasks/CreateTaskModal';
 import ServerTabCard from './ServerTabCard';
@@ -5,6 +6,7 @@ import StatGrid from './StatGrid';
 import TabHeader from './TabHeader';
 import TabEmptyState from './TabEmptyState';
 import TabLoadingState from './TabLoadingState';
+import { ConfirmDialog } from '../../shared/ConfirmDialog';
 import { Clock } from 'lucide-react';
 import type { Task } from '../../../types/task';
 
@@ -32,6 +34,9 @@ export default function ServerTasksTab({
  onDelete,
  deletePending,
 }: Props) {
+ const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+ const pendingDeleteTask = tasks.find((task) => task.id === pendingDeleteId);
+
  return (
  <div className="space-y-4">
  <TabHeader
@@ -125,7 +130,7 @@ export default function ServerTasksTab({
  <button
  type="button"
  className="rounded-md border border-danger/20 px-3 py-1 text-[10px] font-semibold text-danger transition-all duration-200 hover:border-danger/40 hover:bg-danger/5"
- onClick={() => onDelete(task.id)}
+ onClick={() => setPendingDeleteId(task.id)}
  disabled={deletePending || isSuspended}
  >
  Delete
@@ -136,6 +141,26 @@ export default function ServerTasksTab({
  </div>
  )}
  </ServerTabCard>
+
+ <ConfirmDialog
+ open={Boolean(pendingDeleteId)}
+ title="Delete scheduled task?"
+ message={
+ pendingDeleteTask
+ ? `Delete task "${pendingDeleteTask.name}"? This cannot be undone.`
+ : 'Delete this scheduled task? This cannot be undone.'
+ }
+ confirmText="Delete"
+ cancelText="Cancel"
+ variant="danger"
+ loading={deletePending}
+ onConfirm={() => {
+ if (!pendingDeleteId) return;
+ onDelete(pendingDeleteId);
+ setPendingDeleteId(null);
+ }}
+ onCancel={() => setPendingDeleteId(null)}
+ />
  </div>
  );
 }

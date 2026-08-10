@@ -55,7 +55,8 @@ impl WebSocketHandler {
                 if prev != Some(healthy) {
                     health_states.insert(server_id.clone(), healthy);
                     drop(health_states); // Release lock before sending
-                    let status = "running";
+                                         // Distinguish unhealthy from running so the panel can surface failures.
+                    let status = if healthy { "running" } else { "unhealthy" };
                     let reason = if healthy {
                         Some("Health check passed".to_string())
                     } else {
@@ -521,7 +522,25 @@ impl WebSocketHandler {
             while let Some(entry) = entries.next_entry().await.map_err(|e| {
                 AgentError::IoError(format!("Failed to read directory entry: {}", e))
             })? {
-                tokio::fs::remove_dir_all(entry.path()).await?;
+                let path = entry.path();
+                // Use symlink_metadata so we don't follow links into unexpected trees.
+                let meta = tokio::fs::symlink_metadata(&path).await.map_err(|e| {
+                    AgentError::IoError(format!("Failed to stat {}: {}", path.display(), e))
+                })?;
+                if meta.is_dir() {
+                    tokio::fs::remove_dir_all(&path).await.map_err(|e| {
+                        AgentError::IoError(format!(
+                            "Failed to remove dir {}: {}",
+                            path.display(),
+                            e
+                        ))
+                    })?;
+                } else {
+                    // Files and symlinks: remove_file, never remove_dir_all.
+                    tokio::fs::remove_file(&path).await.map_err(|e| {
+                        AgentError::IoError(format!("Failed to remove {}: {}", path.display(), e))
+                    })?;
+                }
             }
             self.emit_console_output(server_id, "system", "[Catalyst] Server data wiped.\n")
                 .await?;
@@ -882,20 +901,13 @@ impl WebSocketHandler {
                     .write()
                     .await
                     .insert(server_id.to_string(), {
-                        // Strip sensitive fields before storing the restart message.
-                        // Auto-restart only needs the server config, not the install
-                        // script or environment secrets that could be extracted later.
+                        // Store a restart plan with real environment values so
+                        // auto-restart can recreate the container correctly.
+                        // Drop installScript (not needed for restart). Do NOT
+                        // redact env values here — redaction belongs in logs only.
                         let mut restart_msg = msg.clone();
                         if let Some(obj) = restart_msg.as_object_mut() {
                             obj.remove("installScript");
-                            if let Some(env) = obj.get_mut("environment") {
-                                if let Some(env_obj) = env.as_object_mut() {
-                                    // Keep keys for restart logic but redact values
-                                    for (_k, v) in env_obj.iter_mut() {
-                                        *v = json!("[redacted]");
-                                    }
-                                }
-                            }
                         }
                         restart_msg
                     });

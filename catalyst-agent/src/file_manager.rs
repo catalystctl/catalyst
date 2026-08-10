@@ -140,6 +140,19 @@ impl FileManager {
         Ok(content)
     }
 
+    /// Verify a path exists and is within the server root without loading content.
+    pub async fn file_exists(&self, server_id: &str, path: &str) -> AgentResult<bool> {
+        let full_path = self.resolve_path(server_id, path)?;
+        match fs::metadata(&full_path).await {
+            Ok(_) => Ok(true),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(e) => Err(AgentError::FileSystemError(format!(
+                "Cannot access file: {}",
+                e
+            ))),
+        }
+    }
+
     pub async fn write_file(&self, server_id: &str, path: &str, data: &str) -> AgentResult<()> {
         let full_path = self.resolve_path(server_id, path)?;
 
@@ -783,10 +796,7 @@ mod tests {
     use super::*;
 
     fn make_fm() -> FileManager {
-        let dir = std::env::temp_dir().join(format!(
-            "catalyst-fm-test-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let dir = std::env::temp_dir().join(format!("catalyst-fm-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         FileManager::new(dir)
     }
@@ -821,5 +831,29 @@ mod tests {
         let fm = make_fm();
         let result = fm.resolve_path("evil/../other", "file.txt");
         assert!(result.is_err(), "server_id with '/' must be rejected");
+    }
+
+    #[test]
+    fn rejects_nested_dotdot_segments() {
+        let fm = make_fm();
+        // Even mixed with legitimate segments, ParentDir must be rejected before join.
+        assert!(fm
+            .resolve_path("srv1", "world/../../../etc/passwd")
+            .is_err());
+        assert!(fm.resolve_path("srv1", "./../secret").is_err());
+    }
+
+    #[test]
+    fn accepts_simple_relative_path_under_server() {
+        let fm = make_fm();
+        // Base dir may not exist yet; resolve_path still returns a logical path under data_dir.
+        let result = fm.resolve_path("srv1", "server.properties");
+        assert!(
+            result.is_ok(),
+            "simple relative path should resolve: {:?}",
+            result.err()
+        );
+        let p = result.unwrap();
+        assert!(p.ends_with("srv1/server.properties") || p.ends_with("srv1\\server.properties"));
     }
 }

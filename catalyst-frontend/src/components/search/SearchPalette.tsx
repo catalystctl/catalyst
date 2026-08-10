@@ -44,6 +44,7 @@ import {
  Moon,
  MonitorDot,
  Package,
+ AlertTriangle,
  type LucideIcon,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
@@ -289,6 +290,18 @@ const STATIC_ITEMS: StaticItemDef[] = [
  permissions: ['admin.read'],
  badge: 'Admin',
  path: '/admin/audit-logs',
+ },
+ {
+ id: 'admin-system-errors',
+ label: 'System Errors',
+ description: 'Captured panel, agent, and frontend errors',
+ icon: AlertTriangle,
+ to: '/admin/system-errors',
+ category: 'Admin',
+ keywords: ['system errors', 'error log', 'exceptions', 'stack trace', 'crash', 'failures', 'sentry'],
+ permissions: ['admin.read'],
+ badge: 'Admin',
+ path: '/admin/system-errors',
  },
  {
  id: 'admin-api-keys',

@@ -207,6 +207,8 @@ export const serversApi = {
       enabled: boolean;
       host: string;
       port: number;
+      /** SFTP login username when provided by the API; otherwise clients use serverId. */
+      username?: string | null;
       sftpPassword: string | null;
       expiresAt: number;
       ttlMs: number;

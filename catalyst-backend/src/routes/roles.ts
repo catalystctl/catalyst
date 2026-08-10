@@ -14,7 +14,20 @@ import {
   getUserPermissions,
   PERMISSION_PRESETS,
   getNodeAssignments,
+  flushRbacCaches,
+  invalidateAdminUserCache,
+  invalidateNodeAccessCache,
 } from '../lib/permissions';
+import {
+  invalidateUserPermissions,
+  flushPermissionsCache,
+} from '../lib/permissions-catalog';
+
+/** Role permission mutations affect admin + node-access caches too. */
+function flushAllPermissionCaches(): void {
+  flushPermissionsCache();
+  flushRbacCaches();
+}
 import { serialize } from '../utils/serialize';
 
 export async function roleRoutes(app: FastifyInstance) {
@@ -269,6 +282,11 @@ export async function roleRoutes(app: FastifyInstance) {
         data: updateData,
       });
 
+      // Role permission changes affect all assigned users — flush cache
+      if (permissions !== undefined) {
+        flushAllPermissionCaches();
+      }
+
       await createAuditLog(userId, {
         action: 'role.update',
         resource: 'role',
@@ -401,6 +419,9 @@ export async function roleRoutes(app: FastifyInstance) {
         },
       });
 
+      // Permission set changed for all users with this role
+      flushAllPermissionCaches();
+
       await createAuditLog(userId, {
         action: 'role.permission.add',
         resource: 'role',
@@ -472,6 +493,8 @@ export async function roleRoutes(app: FastifyInstance) {
           permissions: role.permissions.filter((p) => p !== permission),
         },
       });
+
+      flushAllPermissionCaches();
 
       await createAuditLog(userId, {
         action: 'role.permission.remove',
@@ -563,6 +586,10 @@ export async function roleRoutes(app: FastifyInstance) {
         },
       });
 
+      invalidateUserPermissions(userId);
+      invalidateAdminUserCache(userId);
+      invalidateNodeAccessCache(userId);
+
       await createAuditLog(currentUserId, {
         action: 'user.role.assign',
         resource: 'user',
@@ -627,6 +654,10 @@ export async function roleRoutes(app: FastifyInstance) {
           roles: { disconnect: { id: roleId } },
         },
       });
+
+      invalidateUserPermissions(userId);
+      invalidateAdminUserCache(userId);
+      invalidateNodeAccessCache(userId);
 
       await createAuditLog(currentUserId, {
         action: 'user.role.remove',

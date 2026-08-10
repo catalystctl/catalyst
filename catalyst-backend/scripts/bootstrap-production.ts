@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 import { auth } from '../src/auth';
+import { withRegistrationBypass } from '../src/lib/registration-gate.js';
 
 const adminEmailEnv = process.env.CATALYST_ADMIN_EMAIL?.trim().toLowerCase();
 const adminUsernameEnv = process.env.CATALYST_ADMIN_USERNAME?.trim();
@@ -65,7 +66,7 @@ async function ensureAdministratorRole() {
 
 async function createAdminUser() {
   const origin = process.env.FRONTEND_URL || process.env.CORS_ORIGIN || process.env.BETTER_AUTH_URL;
-  const response = await auth.api.signUpEmail({
+  const response = await withRegistrationBypass(() => auth.api.signUpEmail({
     headers: new Headers({
       origin: origin || 'http://localhost:3000',
     }),
@@ -76,7 +77,7 @@ async function createAdminUser() {
       username: adminUsername,
     } as any,
     returnHeaders: true,
-  });
+  }));
 
   const data =
     'headers' in response && response.response ? response.response : (response as any);
