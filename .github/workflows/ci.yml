@@ -186,7 +186,7 @@ jobs:
           POSTGRES_PASSWORD: catalyst_dev_password
           POSTGRES_DB: catalyst_db
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U catalyst -d catalyst_db"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -196,6 +196,10 @@ jobs:
     env:
       # localhost is correct when NOT using container: (services bind to host)
       DATABASE_URL: postgresql://catalyst:catalyst_dev_password@localhost:5432/catalyst_db
+      # Required by api-key-service hashApiKey (no fallback secret since security review).
+      # agent-auth tests call createApiKey in beforeAll and fail hard without this.
+      API_KEY_SECRET: ci-test-api-key-secret-do-not-use-in-production
+      BETTER_AUTH_SECRET: ci-test-better-auth-secret-do-not-use-in-production
 
     steps:
       - uses: actions/checkout@v6

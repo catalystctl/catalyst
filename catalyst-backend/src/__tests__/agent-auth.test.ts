@@ -12,6 +12,11 @@ describe("Agent Auth - verifyAgentApiKey", () => {
   let apiKeyRaw: string;
 
   beforeAll(async () => {
+    // createApiKey → hashApiKey requires API_KEY_SECRET (no fallback).
+    if (!process.env.API_KEY_SECRET?.trim()) {
+      process.env.API_KEY_SECRET = "agent-auth-test-api-key-secret";
+    }
+
     // Create a test user (required for api-key-service foreign key)
     const user = await prisma.user.create({
       data: {

@@ -688,12 +688,21 @@ phase_configure() {
     NEW_PG_PASS=$(openssl rand -base64 48 | tr -d '/+=' | head -c 32)
     NEW_AUTH_SECRET=$(openssl rand -base64 32)
     NEW_REDIS_PASS=$(openssl rand -base64 48 | tr -d '/+=' | head -c 24)
+    NEW_API_KEY_SECRET=$(openssl rand -base64 32)
 
     sed -i "s~^POSTGRES_PASSWORD=.*~POSTGRES_PASSWORD=${NEW_PG_PASS}~" "$STAGING_ENV"
     sed -i "s~^BETTER_AUTH_SECRET=.*~BETTER_AUTH_SECRET=${NEW_AUTH_SECRET}~" "$STAGING_ENV"
     sed -i "s~^REDIS_PASSWORD=.*~REDIS_PASSWORD=${NEW_REDIS_PASS}~" "$STAGING_ENV"
+    # API_KEY_SECRET may be commented or absent in older .env.example copies.
+    if grep -q '^API_KEY_SECRET=' "$STAGING_ENV"; then
+        sed -i "s~^API_KEY_SECRET=.*~API_KEY_SECRET=${NEW_API_KEY_SECRET}~" "$STAGING_ENV"
+    elif grep -q '^# *API_KEY_SECRET=' "$STAGING_ENV"; then
+        sed -i "s~^# *API_KEY_SECRET=.*~API_KEY_SECRET=${NEW_API_KEY_SECRET}~" "$STAGING_ENV"
+    else
+        printf '\n# HMAC secret for panel/agent API keys\nAPI_KEY_SECRET=%s\n' "${NEW_API_KEY_SECRET}" >> "$STAGING_ENV"
+    fi
 
-    ok "Generated POSTGRES_PASSWORD, BETTER_AUTH_SECRET, REDIS_PASSWORD"
+    ok "Generated POSTGRES_PASSWORD, BETTER_AUTH_SECRET, REDIS_PASSWORD, API_KEY_SECRET"
 
     # ── Detect default PUBLIC_URL ─────────────────────────────────────────
     DETECTED_IP=""
@@ -859,6 +868,7 @@ print_summary() {
     echo -e "    POSTGRES_PASSWORD   ${GRN}✓ generated${RST}"
     echo -e "    BETTER_AUTH_SECRET  ${GRN}✓ generated${RST}"
     echo -e "    REDIS_PASSWORD      ${GRN}✓ generated${RST}"
+    echo -e "    API_KEY_SECRET      ${GRN}✓ generated${RST}"
     echo ""
     echo -e "  ${BLD}Next steps:${RST}"
     echo ""
